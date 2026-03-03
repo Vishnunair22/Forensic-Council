@@ -111,9 +111,18 @@ export default function EvidencePage() {
             try {
                 await connectWebSocket(res.session_id);
                 setIsUploading(false);
-            } catch (wsErr) {
+            } catch (wsErr: any) {
                 console.error("WS connect failed", wsErr);
                 setValidationError("Failed to connect to simulation streams");
+
+                // Also trigger the error overlay in development for backend errors
+                if (process.env.NODE_ENV === 'development') {
+                    window.dispatchEvent(new ErrorEvent('error', {
+                        error: wsErr,
+                        message: wsErr?.message || "Failed to connect to simulation streams"
+                    }));
+                }
+
                 setIsUploading(false);
                 resetSimulation();
             }
@@ -121,6 +130,15 @@ export default function EvidencePage() {
         } catch (err: any) {
             console.error(err);
             setValidationError(err.message || "Failed to start investigation");
+
+            // Also trigger the error overlay in development for backend errors
+            if (process.env.NODE_ENV === 'development') {
+                window.dispatchEvent(new ErrorEvent('error', {
+                    error: err,
+                    message: err.message || "Failed to start investigation"
+                }));
+            }
+
             setIsUploading(false);
             resetSimulation();
             playSound("error");
@@ -140,8 +158,17 @@ export default function EvidencePage() {
             });
             dismissCheckpoint();
             playSound("success");
-        } catch (err) {
+        } catch (err: any) {
             console.error("Failed to submit decision", err);
+
+            // Also trigger the error overlay in development for backend errors
+            if (process.env.NODE_ENV === 'development') {
+                window.dispatchEvent(new ErrorEvent('error', {
+                    error: err,
+                    message: err?.message || "Failed to submit decision"
+                }));
+            }
+
             playSound("error");
         }
     };

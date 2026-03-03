@@ -53,7 +53,7 @@ Following the initial audit, the system underwent deep hardening to address rema
 
 ## Historical Logs
 
-### [2026-03-03] - Custody Logger NoneType Error & Qdrant Healthcheck
+### [2026-03-03] - Custody Logger NoneType Error - COMPREHENSIVE FIX
 
 #### Issue: `'NoneType' object has no attribute 'log_entry'`
 - **Error:** Backend crashes during investigation with `'NoneType' object has no attribute 'log_entry'`
@@ -61,18 +61,36 @@ Following the initial audit, the system underwent deep hardening to address rema
   - File upload and investigation pipeline startup
   - HITL decision resolution
   - Report finalization and signing
-- **Root Cause:** Two related issues:
-  1. **Qdrant startup race condition:** The backend service starts before Qdrant is fully ready (only waited for `service_started`, not `service_healthy`). This caused infrastructure initialization to fail silently, leaving `custody_logger` as `None`.
-  2. **Missing null guards:** The pipeline code called `await self.custody_logger.log_entry()` without checking if `custody_logger` was initialized.
-- **Resolution:**
+  - All agent operations requiring custody logging
+  - Evidence store operations
+  - Inter-agent bus communication
+  - Tool registry execution
+  - ReAct loop execution
+- **Root Cause:** Race condition when infrastructure (Qdrant/PostgreSQL) fails to initialize:
+  1. **Infrastructure startup failure:** When Qdrant/PostgreSQL are unavailable, `custody_logger` remains `None`
+  2. **Incomplete null guards:** Only `pipeline.py` had null guards added in initial fix; 6 other files were still calling `log_entry()` without checking if `custody_logger` was `None`
+- **Comprehensive Resolution:**
+  1. Added null checks (`if custody_logger:`) before ALL `custody_logger.log_entry()` calls across the codebase
+  2. This enables graceful degradation - the investigation pipeline continues even if custody logging is unavailable
+- **Fix Locations (17 total call sites fixed):**
+  - `backend/agents/base_agent.py` (7 locations): Session start, tool availability, self-reflection, episodic memory read/write, HITL checkpoint, inter-agent calls
+  - `backend/core/react_loop.py` (3 locations): HITL checkpoint, human intervention, ReAct step logging
+  - `backend/infra/evidence_store.py` (2 locations): Artifact ingestion, derivative creation
+  - `backend/core/inter_agent_bus.py` (2 locations): Outgoing/incoming inter-agent call logging
+  - `backend/core/tool_registry.py` (3 locations): Tool unavailable (not found), tool unavailable (marked), tool execution
+
+### [2026-03-03] - Custody Logger NoneType Error & Qdrant Healthcheck (Initial Fix)
+
+#### Issue: `'NoneType' object has no attribute 'log_entry'`
+- **Error:** Backend crashes during investigation with `'NoneType' object has no attribute 'log_entry'`
+- **Root Cause:**
+  1. **Qdrant startup race condition:** The backend service starts before Qdrant is fully ready
+  2. **Missing null guards:** The pipeline code called `await self.custody_logger.log_entry()` without checking if `custody_logger` was initialized
+- **Initial Resolution:**
   1. Added proper healthcheck to Qdrant service in docker-compose.yml
   2. Changed backend `depends_on` from `service_started` to `service_healthy` for Qdrant
-  3. Added null checks (`if self.custody_logger:`) before all `custody_logger.log_entry()` calls in pipeline.py
-- **Fix Locations:**
-  - `docker-compose.yml` lines 27-33: Added healthcheck to Qdrant service (using `/dev/tcp` bash built-in for container compatibility)
-  - `docker-compose.yml` line 77: Changed `condition: service_started` to `condition: service_healthy`
-  - `backend/orchestration/pipeline.py` lines 281-291: Added null guard for REPORT_SIGNED log
-  - `backend/orchestration/pipeline.py` lines 495-504: Added null guard for HITL_DECISION log
+  3. Added null checks in pipeline.py
+- **Note:** This was an incomplete fix. See "COMPREHENSIVE FIX" entry above for the full resolution covering all 17 call sites.
 
 ### [2026-03-03] - Qdrant Query API Version Incompatibility
 

@@ -176,19 +176,20 @@ class EvidenceStore:
             await self._save_artifact(artifact)
             
             # Log to chain of custody
-            await self._custody_logger.log_entry(
-                agent_id=agent_id,
-                session_id=session_id,
-                entry_type=EntryType.ARTIFACT_VERSION,
-                content={
-                    "artifact_id": str(artifact.artifact_id),
-                    "root_id": str(artifact.root_id),
-                    "artifact_type": artifact.artifact_type.value,
-                    "content_hash": content_hash,
-                    "action": action,
-                    "file_path": stored_path,
-                },
-            )
+            if self._custody_logger:
+                await self._custody_logger.log_entry(
+                    agent_id=agent_id,
+                    session_id=session_id,
+                    entry_type=EntryType.ARTIFACT_VERSION,
+                    content={
+                        "artifact_id": str(artifact.artifact_id),
+                        "root_id": str(artifact.root_id),
+                        "artifact_type": artifact.artifact_type.value,
+                        "content_hash": content_hash,
+                        "action": action,
+                        "file_path": stored_path,
+                    },
+                )
             
             logger.info(
                 "Ingested evidence artifact",
@@ -260,20 +261,21 @@ class EvidenceStore:
             await self._save_artifact(artifact)
             
             # Log to chain of custody
-            await self._custody_logger.log_entry(
-                agent_id=agent_id,
-                session_id=artifact.session_id,
-                entry_type=EntryType.ARTIFACT_VERSION,
-                content={
-                    "artifact_id": str(artifact.artifact_id),
-                    "parent_id": str(artifact.parent_id),
-                    "root_id": str(artifact.root_id),
-                    "artifact_type": artifact.artifact_type.value,
-                    "content_hash": content_hash,
-                    "action": action,
-                    "file_path": stored_path,
-                },
-            )
+            if self._custody_logger:
+                await self._custody_logger.log_entry(
+                    agent_id=agent_id,
+                    session_id=artifact.session_id,
+                    entry_type=EntryType.ARTIFACT_VERSION,
+                    content={
+                        "artifact_id": str(artifact.artifact_id),
+                        "parent_id": str(artifact.parent_id),
+                        "root_id": str(artifact.root_id),
+                        "artifact_type": artifact.artifact_type.value,
+                        "content_hash": content_hash,
+                        "action": action,
+                        "file_path": stored_path,
+                    },
+                )
             
             logger.info(
                 "Created derivative artifact",

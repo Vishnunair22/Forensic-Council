@@ -222,34 +222,36 @@ class InterAgentBus:
         try:
             # 5. Log INTER_AGENT_CALL to caller's custody chain
             from core.custody_logger import EntryType
-            await custody_logger.log_entry(
-                entry_type=EntryType.INTER_AGENT_CALL,
-                agent_id=call.caller_agent_id,
-                session_id=call.call_id,  # Use call_id as session reference
-                content={
-                    "call_id": str(call.call_id),
-                    "direction": "OUTGOING",
-                    "callee_agent_id": call.callee_agent_id,
-                    "call_type": call.call_type.value,
-                    "artifact_id": str(call.artifact_id) if call.artifact_id else None,
-                    "payload": call.payload,
-                },
-            )
+            if custody_logger:
+                await custody_logger.log_entry(
+                    entry_type=EntryType.INTER_AGENT_CALL,
+                    agent_id=call.caller_agent_id,
+                    session_id=call.call_id,  # Use call_id as session reference
+                    content={
+                        "call_id": str(call.call_id),
+                        "direction": "OUTGOING",
+                        "callee_agent_id": call.callee_agent_id,
+                        "call_type": call.call_type.value,
+                        "artifact_id": str(call.artifact_id) if call.artifact_id else None,
+                        "payload": call.payload,
+                    },
+                )
             
             # 6. Log INTER_AGENT_CALL to callee's custody chain
-            await custody_logger.log_entry(
-                entry_type=EntryType.INTER_AGENT_CALL,
-                agent_id=call.callee_agent_id,
-                session_id=call.call_id,
-                content={
-                    "call_id": str(call.call_id),
-                    "direction": "INCOMING",
-                    "caller_agent_id": call.caller_agent_id,
-                    "call_type": call.call_type.value,
-                    "artifact_id": str(call.artifact_id) if call.artifact_id else None,
-                    "payload": call.payload,
-                },
-            )
+            if custody_logger:
+                await custody_logger.log_entry(
+                    entry_type=EntryType.INTER_AGENT_CALL,
+                    agent_id=call.callee_agent_id,
+                    session_id=call.call_id,
+                    content={
+                        "call_id": str(call.call_id),
+                        "direction": "INCOMING",
+                        "caller_agent_id": call.caller_agent_id,
+                        "call_type": call.call_type.value,
+                        "artifact_id": str(call.artifact_id) if call.artifact_id else None,
+                        "payload": call.payload,
+                    },
+                )
             
             # 7. Invoke callee's handle_inter_agent_call method
             response = await callee_agent.handle_inter_agent_call(call)
