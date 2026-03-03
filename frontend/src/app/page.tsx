@@ -117,10 +117,10 @@ export default function LandingPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.2, duration: 0.6 }}
-                className="relative p-8 rounded-3xl bg-slate-900/40 border border-white/10 backdrop-blur-2xl flex flex-col items-center text-center mt-6 group hover:border-cyan-500/30 hover:bg-cyan-900/10 hover:shadow-[0_0_40px_rgba(34,211,238,0.05)] transition-all overflow-hidden"
+                className="relative p-8 rounded-3xl bg-slate-900/40 border border-white/10 backdrop-blur-2xl flex flex-col items-center text-center mt-6 group hover:border-cyan-500/30 hover:bg-cyan-900/10 hover:shadow-[0_0_40px_rgba(34,211,238,0.05)] transition-all overflow-visible"
               >
                 {/* Subtle glass reflection */}
-                <div className="absolute inset-0 bg-gradient-to-b from-white/[0.05] to-transparent opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden="true" />
+                <div className="absolute inset-0 rounded-3xl bg-gradient-to-b from-white/[0.05] to-transparent opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden="true" />
                 <div className="absolute -top-8 w-16 h-16 rounded-full bg-[#050505] border border-cyan-500/30 flex items-center justify-center font-mono text-xl text-cyan-400 font-bold shadow-[0_0_20px_rgba(34,211,238,0.15)] group-hover:scale-110 transition-transform z-10" aria-hidden="true">
                   {item.step}
                 </div>
