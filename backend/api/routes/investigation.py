@@ -174,18 +174,24 @@ async def _wrap_pipeline_with_broadcasts(
             if mime not in supported_mimes:
                 msg = f"Skipping unsupported file type: {mime}"
                 # Brief delay to show 'checking file format...' instead of instant completion
-                await broadcast_update(
-                    ws_session_id,
-                    BriefUpdate(
-                        type="AGENT_UPDATE",
-                        session_id=ws_session_id,
-                        agent_id=agent_id,
-                        agent_name=agent_name,
-                        message=f"Checking file format compatibility...",
-                        data={"status": "running", "thinking": f"Analyzing if {mime} is supported..."},
+                unsupported_steps = [
+                    f"Initializing {agent_name} subsystems...",
+                    f"Inspecting file headers and MIME signature: {mime}",
+                    f"Cross-referencing {mime} against supported forensic analysis modules...",
+                ]
+                for step in unsupported_steps:
+                    await broadcast_update(
+                        ws_session_id,
+                        BriefUpdate(
+                            type="AGENT_UPDATE",
+                            session_id=ws_session_id,
+                            agent_id=agent_id,
+                            agent_name=agent_name,
+                            message=f"{agent_name} is processing...",
+                            data={"status": "running", "thinking": step},
+                        )
                     )
-                )
-                await asyncio.sleep(1.5)
+                    await asyncio.sleep(1.2)
                 await broadcast_update(
                     ws_session_id,
                     BriefUpdate(
@@ -240,7 +246,8 @@ async def _wrap_pipeline_with_broadcasts(
                 )
                 
                 # --- FORMATTING ENFORCEMENT ---
-                base_name = os.path.basename(evidence_file_path)
+                # Retrieve the original filename from metadata (fallback to os.path.basename if missing)
+                base_name = evidence_artifact.metadata.get("original_filename", os.path.basename(evidence_file_path))
                 prefix = f"The {agent_name} detected an {mime} file named {base_name}."
                 
                 is_unsupported = any(getattr(f, 'finding_type', '') == "Format not supported" for f in findings)
@@ -321,7 +328,7 @@ async def _wrap_pipeline_with_broadcasts(
                 confidence = sum(confidences) / len(confidences) if confidences else 0.5
                 for f in result.findings:
                     if isinstance(f, dict) and f.get("reasoning_summary"):
-                        finding_summary = f["reasoning_summary"][:200]
+                        finding_summary = f["reasoning_summary"]
                         break
             elif result.error:
                 finding_summary = f"{agent_name}: {result.error[:100]}"
@@ -345,10 +352,15 @@ async def _wrap_pipeline_with_broadcasts(
             )
             return result
 
-        # Run all agents concurrently
+        # Run each agent with a staggered start to ensure sequential activation in the UI
+        async def run_with_stagger(index, agent_id, agent_name, AgentClass, thinking_phrase):
+            # 0s, 1.5s, 3.0s, 4.5s, 6.0s delays
+            await asyncio.sleep(index * 1.5)
+            return await run_single_agent(agent_id, agent_name, AgentClass, thinking_phrase)
+
         tasks = [
-            run_single_agent(agent_id, agent_name, AgentClass, thinking_phrase)
-            for agent_id, agent_name, AgentClass, thinking_phrase in agent_configs
+            run_with_stagger(i, agent_id, agent_name, AgentClass, thinking_phrase)
+            for i, (agent_id, agent_name, AgentClass, thinking_phrase) in enumerate(agent_configs)
         ]
         results = await asyncio.gather(*tasks)
 

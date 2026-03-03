@@ -39,6 +39,7 @@ export default function EvidencePage() {
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [uploadSuccessModalOpen, setUploadSuccessModalOpen] = useState(false);
     const [isTransitioningToResults, setIsTransitioningToResults] = useState(false);
+    const [isSubmittingHITL, setIsSubmittingHITL] = useState(false);
 
     const {
         status,
@@ -59,18 +60,6 @@ export default function EvidencePage() {
     });
 
     const fileInputRef = useRef<HTMLInputElement>(null);
-
-    // Prompt user to pick file immediately if they haven't yet and haven't uploaded
-    useEffect(() => {
-        if (!file && status === "idle") {
-            const tmr = setTimeout(() => {
-                if (fileInputRef.current && status === "idle" && !file) {
-                    fileInputRef.current.click();
-                }
-            }, 100);
-            return () => clearTimeout(tmr);
-        }
-    }, [file, status]);
 
     // Validation
     const validateFile = (f: File): boolean => {
@@ -147,6 +136,7 @@ export default function EvidencePage() {
 
     const handleHITLDecision = async (decision: 'APPROVE' | 'REDIRECT' | 'TERMINATE') => {
         if (!hitlCheckpoint) return;
+        setIsSubmittingHITL(true);
         try {
             const { session_id, checkpoint_id, agent_id } = hitlCheckpoint;
             await submitHITLDecision({
@@ -170,6 +160,8 @@ export default function EvidencePage() {
             }
 
             playSound("error");
+        } finally {
+            setIsSubmittingHITL(false);
         }
     };
 
@@ -178,18 +170,31 @@ export default function EvidencePage() {
         setIsTransitioningToResults(true);
         setTimeout(() => {
             router.push("/result");
-        }, 2500); // Wait 2.5s for the cool animation to play before navigating
+        }, 1000); // 1s transition
     };
 
     const validAgentsData = AGENTS_DATA.filter(a => a.name !== "Council Arbiter");
 
     const progressPercentage = (completedAgents.length / validAgentsData.length) * 100;
 
+    const allAgentsDone = completedAgents.length >= validAgentsData.length;
+    const showCompletionBanner = status === "complete" || allAgentsDone;
+
+    const activeAgentId = Object.keys(activeAgents)[0] ?? null;
+    const activeAgentDef = activeAgentId
+        ? AGENTS_DATA.find(a => a.id === activeAgentId)
+        : null;
+
     let progressText = "Awaiting deployment operations...";
-    if (status === "initiating") progressText = "Agents are currently initializing...";
-    if (status === "analyzing") progressText = "Agents are actively analyzing evidence...";
-    if (completedAgents.length > 0 && status !== "complete") progressText = `Gathering findings... (${completedAgents.length}/${validAgentsData.length} Agents Complete)`;
-    if (status === "complete") progressText = "Analysis complete! Finalizing intelligence report.";
+    if (status === "initiating") {
+        progressText = "Agents are currently initializing...";
+    } else if (activeAgentDef) {
+        progressText = `${activeAgentDef.name} is analyzing evidence...`;
+    } else if (completedAgents.length > 0 && status !== "complete") {
+        progressText = `Gathering findings... (${completedAgents.length}/${validAgentsData.length} complete)`;
+    } else if (status === "complete") {
+        progressText = "Analysis complete. Finalizing intelligence report.";
+    }
 
     return (
         <div className="min-h-screen bg-[#050505] text-white p-6 pb-20 overflow-x-hidden relative">
@@ -478,11 +483,11 @@ export default function EvidencePage() {
                                                         <div className="text-sm text-emerald-400 font-mono mb-2 flex items-center animate-pulse">
                                                             <Activity className="w-4 h-4 mr-2" /> Processing Data Stream...
                                                         </div>
-                                                        <p className="text-xs text-slate-400 italic">"{isActive.thinking}"</p>
+                                                        <p className="text-xs text-slate-400 italic">"{isActive.thinking || agent.simulation.thinking}"</p>
                                                     </div>
                                                 ) : (
                                                     <div className="text-xs text-slate-600 font-mono tracking-widest uppercase flex flex-col items-center justify-center w-full h-full gap-2">
-                                                        <Scan className="w-6 h-6 opcaity-50" />
+                                                        <Scan className="w-6 h-6 opacity-50" />
                                                         Awaiting Deployment
                                                     </div>
                                                 )}
@@ -509,7 +514,7 @@ export default function EvidencePage() {
 
                             {/* Final Acceptance Banner */}
                             <AnimatePresence>
-                                {status === "complete" && (
+                                {showCompletionBanner && (
                                     <motion.div
                                         initial={{ opacity: 0, y: 20 }}
                                         animate={{ opacity: 1, y: 0 }}
@@ -611,21 +616,24 @@ export default function EvidencePage() {
                         <DialogFooter className="flex-col sm:flex-row gap-3 pt-4 border-t border-white/5">
                             <button
                                 onClick={() => handleHITLDecision('APPROVE')}
-                                className="flex-1 px-4 py-3 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 font-bold flex items-center justify-center transition-colors"
+                                disabled={isSubmittingHITL}
+                                className="flex-1 px-4 py-3 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 font-bold flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <Check className="w-4 h-4 mr-2" /> Approve
+                                {isSubmittingHITL ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />} Approve
                             </button>
                             <button
                                 onClick={() => handleHITLDecision('REDIRECT')}
-                                className="flex-1 px-4 py-3 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 font-bold flex items-center justify-center transition-colors"
+                                disabled={isSubmittingHITL}
+                                className="flex-1 px-4 py-3 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 font-bold flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <AlertCircle className="w-4 h-4 mr-2" /> Redirect
+                                {isSubmittingHITL ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <AlertCircle className="w-4 h-4 mr-2" />} Redirect
                             </button>
                             <button
                                 onClick={() => handleHITLDecision('TERMINATE')}
-                                className="flex-1 px-4 py-3 rounded-xl bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 font-bold flex items-center justify-center transition-colors"
+                                disabled={isSubmittingHITL}
+                                className="flex-1 px-4 py-3 rounded-xl bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 font-bold flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <X className="w-4 h-4 mr-2" /> Terminate
+                                {isSubmittingHITL ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <X className="w-4 h-4 mr-2" />} Terminate
                             </button>
                         </DialogFooter>
                     </DialogContent>

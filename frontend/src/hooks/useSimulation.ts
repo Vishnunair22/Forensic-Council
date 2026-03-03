@@ -27,6 +27,10 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
     const thinkingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const completedAgentsRef = useRef<AgentResult[]>([]);
 
+    // Sequential Activation Queue
+    const pendingActivationsRef = useRef<Array<{ agent_id: string; thinking: string }>>([]);
+    const currentlyActiveRef = useRef<string | null>(null);
+
     useEffect(() => {
         completedAgentsRef.current = completedAgents;
     }, [completedAgents]);
@@ -43,6 +47,33 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
         playSoundRef.current = playSound;
     }, [onAgentComplete, onComplete, playSound]);
 
+    // Cycle thinking phrases for the currently active agent to keep UI alive
+    useEffect(() => {
+        const activeIds = Object.keys(activeAgents);
+        if (activeIds.length === 0) return;
+
+        const activeId = activeIds[0]; // always one at a time now
+        const agentDef = AGENTS_DATA.find(a => a.id === activeId);
+        if (!agentDef || agentDef.simulation.thinkingPhrases.length === 0) return;
+
+        let phraseIndex = 0;
+        const interval = setInterval(() => {
+            phraseIndex = (phraseIndex + 1) % agentDef.simulation.thinkingPhrases.length;
+            setActiveAgents(prev => {
+                if (!prev[activeId]) return prev;
+                return {
+                    ...prev,
+                    [activeId]: {
+                        ...prev[activeId],
+                        thinking: agentDef.simulation.thinkingPhrases[phraseIndex],
+                    }
+                };
+            });
+        }, 2000);
+
+        return () => clearInterval(interval);
+    }, [Object.keys(activeAgents).join(",")]);
+
     // Connect WebSocket manually — returns a Promise that resolves once the WS is open.
     const connectWebSocket = useCallback((targetSessionId: string): Promise<void> => {
         return new Promise((resolve, reject) => {
@@ -54,6 +85,19 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
 
             const messageQueue: BriefUpdate[] = [];
             let isProcessingQueue = false;
+
+            const activateNextPending = () => {
+                if (pendingActivationsRef.current.length === 0) {
+                    currentlyActiveRef.current = null;
+                    return;
+                }
+                const next = pendingActivationsRef.current.shift()!;
+                currentlyActiveRef.current = next.agent_id;
+                setActiveAgents({
+                    [next.agent_id]: { status: "running", thinking: next.thinking }
+                });
+                setStatus("analyzing");
+            };
 
             const processQueue = async () => {
                 if (isProcessingQueue || messageQueue.length === 0) return;
@@ -69,27 +113,40 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                         case "AGENT_UPDATE":
                             if (update.agent_id && update.data) {
                                 const agentData = update.data as { status?: string; thinking?: string };
+                                const incomingId = update.agent_id;
 
-                                if (update.agent_id) {
-                                    setActiveAgents((prev: Record<string, { status: string; thinking: string }>) => ({
-                                        ...prev,
-                                        [update.agent_id!]: {
+                                if (
+                                    currentlyActiveRef.current === null &&
+                                    pendingActivationsRef.current.length === 0
+                                ) {
+                                    // Nothing active — activate immediately
+                                    currentlyActiveRef.current = incomingId;
+                                    setActiveAgents({
+                                        [incomingId]: {
                                             status: agentData.status || "running",
-                                            thinking: agentData.thinking || "Analyzing..."
+                                            thinking: agentData.thinking || "Analyzing...",
+                                        }
+                                    });
+                                    setStatus("analyzing");
+                                } else if (currentlyActiveRef.current === incomingId) {
+                                    // Update thinking text for the currently active agent only
+                                    setActiveAgents(prev => ({
+                                        ...prev,
+                                        [incomingId]: {
+                                            status: agentData.status || "running",
+                                            thinking: agentData.thinking || prev[incomingId]?.thinking || "Analyzing...",
                                         }
                                     }));
+                                } else if (!pendingActivationsRef.current.find(p => p.agent_id === incomingId)) {
+                                    // Queue it — don't activate yet
+                                    pendingActivationsRef.current.push({
+                                        agent_id: incomingId,
+                                        thinking: agentData.thinking || "Analyzing...",
+                                    });
                                 }
 
-                                if (agentData.status === "deliberating") {
-                                    setStatus("processing"); // We'll detect 'deliberating' in the UI via thinking phrase or agent_id
-                                } else {
-                                    setStatus("processing");
-                                }
-
-                                // Play subtle 'think' sound to sync with text update
                                 playSoundRef.current?.("think");
                             }
-                            // Minimal delay just for React state flushing
                             await new Promise(resolve => setTimeout(resolve, 50));
                             break;
 
@@ -112,7 +169,6 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                             if (update.agent_id) {
                                 const agent = AGENTS_DATA.find(a => a.id === update.agent_id);
                                 if (agent) {
-
                                     const confidence = (update.data as { confidence?: number })?.confidence ?? agent.simulation.confidence / 100;
                                     const result: AgentResult = {
                                         id: agent.id,
@@ -122,26 +178,44 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                         confidence,
                                         thinking: update.message,
                                     };
-                                    setActiveAgents((prev: Record<string, { status: string; thinking: string }>) => {
+
+                                    const nextCompleted = [...completedAgentsRef.current, result];
+                                    setCompletedAgents(nextCompleted);
+                                    onAgentCompleteRef.current?.(result);
+
+                                    // Clear this agent from active
+                                    setActiveAgents(prev => {
                                         const next = { ...prev };
                                         delete next[update.agent_id!];
                                         return next;
                                     });
-                                    setCompletedAgents((prev: AgentResult[]) => [...prev, result]);
-                                    onAgentCompleteRef.current?.(result);
-                                    playSoundRef.current?.("agent");
+
+                                    // Reset current tracking and drain queue
+                                    currentlyActiveRef.current = null;
+                                    activateNextPending();
+
+                                    // Check if all expected agents are done (sequential or fast parallel)
+                                    const totalExpected = AGENTS_DATA.length - 1; // Excluding Arbiter
+                                    if (nextCompleted.length >= totalExpected) {
+                                        setStatus("complete");
+                                        onCompleteRef.current?.();
+                                        playSoundRef.current?.("complete");
+                                    }
                                 }
                             }
-                            // Minimal delay just for React state flushing
                             await new Promise(resolve => setTimeout(resolve, 50));
                             break;
 
                         case "PIPELINE_COMPLETE":
-                            // Minimal delay for final agent render 
-                            await new Promise(resolve => setTimeout(resolve, 50));
-                            setStatus("complete");
-                            onCompleteRef.current?.();
-                            playSoundRef.current?.("complete");
+                            // Status is ideally already set to "complete" when last agent finished
+                            setStatus(prev => {
+                                if (prev !== "complete") {
+                                    playSoundRef.current?.("complete");
+                                    onCompleteRef.current?.();
+                                    return "complete";
+                                }
+                                return prev;
+                            });
                             break;
 
                         case "ERROR":

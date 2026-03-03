@@ -4,10 +4,10 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 export function AgentResponseText({ text, className = "text-sm text-slate-300 mt-1 leading-relaxed" }: { text: string, className?: string }) {
     const [isExpanded, setIsExpanded] = useState(false);
 
-    // Remove markdown **
-    const cleanText = typeof text === "string" ? text.replace(/\*\*/g, "") : String(text);
+    // Remove markdown characters like **, *, _, #, `, ~
+    const cleanText = typeof text === "string" ? text.replace(/[*_#`~]+/g, "").trim() : String(text);
 
-    const CHARACTER_LIMIT = 150;
+    const CHARACTER_LIMIT = 280;
     const isLong = cleanText.length > CHARACTER_LIMIT;
 
     return (
