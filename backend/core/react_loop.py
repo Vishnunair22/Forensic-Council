@@ -162,6 +162,9 @@ class AgentFinding(BaseModel):
     reasoning_summary: str = Field(
         default="", description="Summary of reasoning that led to finding"
     )
+    extracted_text: list[str] = Field(
+        default_factory=list, description="Text extracted from image via OCR"
+    )
 
 
 class ReActLoopResult(BaseModel):

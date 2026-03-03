@@ -72,12 +72,13 @@ Following the initial audit, the system underwent deep hardening to address rema
 - **Comprehensive Resolution:**
   1. Added null checks (`if custody_logger:`) before ALL `custody_logger.log_entry()` calls across the codebase
   2. This enables graceful degradation - the investigation pipeline continues even if custody logging is unavailable
-- **Fix Locations (17 total call sites fixed):**
+- **Fix Locations (18 total call sites fixed):**
   - `backend/agents/base_agent.py` (7 locations): Session start, tool availability, self-reflection, episodic memory read/write, HITL checkpoint, inter-agent calls
   - `backend/core/react_loop.py` (3 locations): HITL checkpoint, human intervention, ReAct step logging
   - `backend/infra/evidence_store.py` (2 locations): Artifact ingestion, derivative creation
   - `backend/core/inter_agent_bus.py` (2 locations): Outgoing/incoming inter-agent call logging
   - `backend/core/tool_registry.py` (3 locations): Tool unavailable (not found), tool unavailable (marked), tool execution
+  - `backend/api/routes/investigation.py` (1 location): Logger instrumentation hook
 
 ### [2026-03-03] - Custody Logger NoneType Error & Qdrant Healthcheck (Initial Fix)
 
@@ -130,6 +131,22 @@ Following the initial audit, the system underwent deep hardening to address rema
 - **Error:** API unresponsive after 10+ concurrent scans.
 - **Root Cause:** ML logic was heavily coupled to the FastAPI event loop.
 - **Resolution:** Decoupled into `ml_subprocess.py` standalone scripts with strict timeout controls.
+
+### [2026-03-03] - Frontend 401 Unauthorized Error on Investigation
+
+#### Issue: `/api/v1/investigate` returning 401 Unauthorized
+- **Error:** `Failed to load resource: the server responded with a status of 401 (Unauthorized)` / `Error: Not authenticated`
+- **Affected Operations:**
+  - Starting forensic investigation via `startInvestigation()`
+  - All subsequent API calls that require authentication
+- **Root Cause:** The backend `/api/v1/investigate` endpoint requires JWT authentication (`current_user: User = Depends(get_current_user)`), but the frontend was not including an `Authorization` header with a valid JWT token in API requests.
+- **Resolution:**
+  1. Added token management functions (`getAuthToken`, `setAuthToken`, `clearAuthToken`) to store JWT in localStorage
+  2. Added authentication functions (`login`, `autoLoginAsInvestigator`, `ensureAuthenticated`) to handle authentication flow
+  3. Updated all API functions (`startInvestigation`, `getReport`, `getBrief`, `getCheckpoints`, `submitHITLDecision`) to include `Authorization: Bearer <token>` header
+  4. Updated `createLiveSocket` to include token as query parameter for WebSocket authentication
+  5. Implemented auto-login as demo investigator when no token exists, enabling seamless UX for demo environment
+- **Fix Location:** `frontend/src/lib/api.ts` - Complete rewrite with authentication support
 
 ---
 

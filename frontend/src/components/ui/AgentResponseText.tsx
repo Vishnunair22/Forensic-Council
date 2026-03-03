@@ -12,8 +12,8 @@ export function AgentResponseText({ text, className = "text-sm text-slate-300 mt
 
     return (
         <div className={className}>
-            <p className="whitespace-pre-wrap">
-                {isExpanded || !isLong ? cleanText : `${cleanText.substring(0, CHARACTER_LIMIT)}...`}
+            <p className="whitespace-pre-wrap break-words">
+                {isExpanded || !isLong ? cleanText : `${cleanText.substring(0, CHARACTER_LIMIT).trim()}...`}
             </p>
             {isLong && (
                 <button

@@ -317,20 +317,23 @@ export default function ResultPage() {
 
                                             {/* Domain Breakdown */}
                                             <h4 className="text-sm font-bold text-slate-400 mb-5 uppercase tracking-widest font-mono">Domain Findings</h4>
-                                            <div className="space-y-4">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                 {domainData.length > 0 ? domainData.map((domain, i) => (
-                                                    <div key={i} className="flex flex-col sm:flex-row gap-4 p-5 rounded-2xl bg-black/40 border border-white/5">
-                                                        <div className={`flex items-center gap-3 shrink-0 sm:w-48 text-${domain.color}-400`}>
+                                                    <div key={i} className={`flex flex-col gap-4 p-5 rounded-2xl bg-black/40 border border-white/5 hover:border-${domain.color}-500/30 transition-colors shadow-inner`}>
+                                                        <div className={`flex items-center gap-3 shrink-0 text-${domain.color}-400 border-b border-white/5 pb-3`}>
                                                             <div className={`p-2 rounded-xl bg-${domain.color}-500/10 border border-${domain.color}-500/20`}>
                                                                 {domain.icon}
                                                             </div>
-                                                            <span className="font-bold text-sm">{domain.label}</span>
+                                                            <span className="font-bold text-sm tracking-wide">{domain.label}</span>
                                                         </div>
-                                                        <div className="flex-1 space-y-2">
+                                                        <div className="flex-1 space-y-3 pt-1">
                                                             {domain.points.map((pt, j) => (
-                                                                <p key={j} className="text-sm text-slate-300 leading-relaxed border-l-2 border-emerald-500/50 pl-4 py-1">
-                                                                    {pt}
-                                                                </p>
+                                                                <div key={j} className="flex gap-3 items-start">
+                                                                    <div className={`w-1.5 h-1.5 rounded-full bg-${domain.color}-500 mt-2 shrink-0 shadow-[0_0_8px_currentColor]`} />
+                                                                    <p className="text-sm text-slate-300 leading-relaxed">
+                                                                        {pt}
+                                                                    </p>
+                                                                </div>
                                                             ))}
                                                         </div>
                                                     </div>
@@ -407,18 +410,20 @@ export default function ResultPage() {
                                                     {realReport.cross_modal_confirmed.length} findings
                                                 </span>
                                             </div>
-                                            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
                                                 {realReport.cross_modal_confirmed.map((f: any, i: number) => (
-                                                    <div key={i} className="flex gap-4 p-4 rounded-2xl bg-black/30 border border-emerald-500/10 hover:border-emerald-500/30 transition-colors">
+                                                    <div key={i} className="flex gap-4 p-5 rounded-2xl bg-black/40 border border-emerald-500/10 hover:border-emerald-500/40 hover:bg-emerald-950/20 transition-all shadow-inner group">
                                                         <div className="mt-1 shrink-0">
-                                                            <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+                                                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.9)] mt-1.5 group-hover:scale-125 transition-transform" />
                                                         </div>
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="text-sm text-slate-200 leading-relaxed">{f.reasoning_summary}</p>
-                                                            <p className="text-[10px] font-mono text-emerald-500/60 mt-2 uppercase tracking-widest">{f.agent_name} · {f.finding_type}</p>
+                                                            <AgentResponseText text={f.reasoning_summary} className="text-sm text-slate-100 font-medium leading-relaxed" />
+                                                            <p className="text-[10px] font-mono text-emerald-500/80 mt-3 uppercase tracking-widest bg-emerald-500/5 inline-block px-2 py-1 rounded-md border border-emerald-500/10">
+                                                                {f.agent_name} · {f.finding_type}
+                                                            </p>
                                                         </div>
                                                         <div className="shrink-0 text-right">
-                                                            <span className="text-xs font-mono text-emerald-400 font-bold">
+                                                            <span className="text-xs font-mono text-emerald-400 font-black bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20">
                                                                 {Math.round((f.calibrated_probability ?? f.confidence_raw ?? 0) * 100)}%
                                                             </span>
                                                         </div>
@@ -450,13 +455,13 @@ export default function ResultPage() {
                                                             <span className="text-[10px] font-mono bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full uppercase tracking-widest">{cf.verdict}</span>
                                                         </div>
                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                            <div className="p-3 rounded-xl bg-black/40 border border-white/5">
-                                                                <p className="text-[10px] font-mono text-slate-500 mb-1 uppercase">{cf.finding_a?.agent_name}</p>
-                                                                <p className="text-xs text-slate-300">{cf.finding_a?.reasoning_summary}</p>
+                                                            <div className="p-4 rounded-xl bg-black/50 border border-white/5 shadow-inner flex flex-col h-full">
+                                                                <p className="text-[10px] font-mono text-slate-500 mb-2 uppercase tracking-widest bg-white/5 inline-table px-2 py-1 rounded self-start">{cf.finding_a?.agent_name}</p>
+                                                                <AgentResponseText text={cf.finding_a?.reasoning_summary} className="text-sm text-slate-200 mt-1" />
                                                             </div>
-                                                            <div className="p-3 rounded-xl bg-black/40 border border-white/5">
-                                                                <p className="text-[10px] font-mono text-slate-500 mb-1 uppercase">{cf.finding_b?.agent_name}</p>
-                                                                <p className="text-xs text-slate-300">{cf.finding_b?.reasoning_summary}</p>
+                                                            <div className="p-4 rounded-xl bg-black/50 border border-white/5 shadow-inner flex flex-col h-full">
+                                                                <p className="text-[10px] font-mono text-slate-500 mb-2 uppercase tracking-widest bg-white/5 inline-table px-2 py-1 rounded self-start">{cf.finding_b?.agent_name}</p>
+                                                                <AgentResponseText text={cf.finding_b?.reasoning_summary} className="text-sm text-slate-200 mt-1" />
                                                             </div>
                                                         </div>
                                                     </div>
@@ -492,75 +497,80 @@ export default function ResultPage() {
                                                     exit={{ height: 0, opacity: 0 }}
                                                     className="border-t border-white/10 bg-slate-950/50"
                                                 >
-                                                    <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                        {realReport?.per_agent_findings ? (Object.entries(realReport.per_agent_findings) as [string, AgentFindingDTO[]][])
-                                                            .filter(([_, findings]) => findings.length > 0 && VALID_AGENTS.has(findings[0].agent_name || ""))
-                                                            .map(([agentId, allFindings]: [string, AgentFindingDTO[]]) => {
-                                                                if (!allFindings || allFindings.length === 0) return null;
-                                                                const finding = allFindings[0];
-                                                                const uniqueFindingsText = Array.from(new Set(allFindings.map((f: AgentFindingDTO) => f.reasoning_summary)));
-                                                                const confidence = Math.round((finding.calibrated_probability || finding.confidence_raw || 0) * 100);
+                                                    <div className="p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-x-8 gap-y-10">
+                                                        {(() => {
+                                                            const uniqueAgents = new Map<string, { role: string; confidence: number; findings: Set<string> }>();
 
-                                                                return (
-                                                                    <div key={agentId} className="p-6 rounded-2xl bg-black/60 border border-white/5 hover:border-emerald-500/20 transition-colors flex flex-col h-full">
-                                                                        <div className="flex items-center gap-4 mb-5">
-                                                                            <AgentIcon role={finding.finding_type || "agent"} />
+                                                            if (realReport?.per_agent_findings) {
+                                                                Object.values(realReport.per_agent_findings).forEach((findingsArr: any) => {
+                                                                    findingsArr.forEach((f: any) => {
+                                                                        const agentName = f.agent_name || "Unknown Agent";
+                                                                        if (!VALID_AGENTS.has(agentName)) return;
+
+                                                                        if (!uniqueAgents.has(agentName)) {
+                                                                            uniqueAgents.set(agentName, {
+                                                                                role: f.finding_type || "analysis",
+                                                                                confidence: f.calibrated_probability ?? f.confidence_raw ?? 0,
+                                                                                findings: new Set()
+                                                                            });
+                                                                        }
+
+                                                                        const existing = uniqueAgents.get(agentName)!;
+                                                                        if (f.reasoning_summary) existing.findings.add(f.reasoning_summary);
+                                                                    });
+                                                                });
+                                                            } else if (currentReport?.agents) {
+                                                                currentReport.agents.forEach((agent: any) => {
+                                                                    if (!VALID_AGENTS.has(agent.name)) return;
+
+                                                                    if (!uniqueAgents.has(agent.name)) {
+                                                                        uniqueAgents.set(agent.name, {
+                                                                            role: agent.role,
+                                                                            confidence: agent.confidence,
+                                                                            findings: new Set()
+                                                                        });
+                                                                    }
+
+                                                                    const existing = uniqueAgents.get(agent.name)!;
+                                                                    if (agent.result) existing.findings.add(agent.result);
+                                                                });
+                                                            }
+
+                                                            return Array.from(uniqueAgents.entries()).map(([agentName, data], i) => (
+                                                                <div key={i} className="flex flex-col h-full bg-slate-900/40 rounded-3xl p-6 border border-white/5 shadow-[0_4px_20px_rgba(0,0,0,0.5)] hover:border-emerald-500/20 transition-colors group">
+                                                                    <div className="flex items-start justify-between mb-5 pb-5 border-b border-white/5 group-hover:border-emerald-500/10 transition-colors">
+                                                                        <div className="flex items-center gap-4">
+                                                                            <div className="w-12 h-12 rounded-2xl bg-black/60 border border-white/5 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                                                                                <AgentIcon role={data.role} />
+                                                                            </div>
                                                                             <div>
-                                                                                <h4 className="font-bold text-slate-100 text-lg">{finding.agent_name || agentId}</h4>
-                                                                                <p className="text-xs text-slate-500 uppercase font-mono tracking-widest mt-1">{finding.finding_type || 'analysis'}</p>
+                                                                                <h4 className="font-bold text-slate-100 text-lg tracking-tight">{agentName}</h4>
+                                                                                <p className="text-[10px] text-slate-400 uppercase font-mono tracking-widest mt-1 opacity-80">{data.role}</p>
                                                                             </div>
                                                                         </div>
-                                                                        <div className="flex-1 space-y-3 mb-6">
-                                                                            {uniqueFindingsText.map((text: string, idx: number) => (
-                                                                                <div key={idx} className="bg-slate-900/50 p-4 rounded-xl border border-white/5 text-sm text-slate-300 leading-relaxed">
-                                                                                    <AgentResponseText text={text} className="" />
+                                                                        <div className="text-right shrink-0">
+                                                                            <span className={`text-base font-mono font-black ${data.confidence >= 0.7 ? "text-emerald-400" : data.confidence >= 0.4 ? "text-amber-400" : "text-red-400"}`}>
+                                                                                {Math.round(data.confidence * 100)}%
+                                                                            </span>
+                                                                            <span className="text-[9px] text-slate-500 uppercase font-mono tracking-widest block mt-0.5">Confidence</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex-1 space-y-3 relative z-10 w-full">
+                                                                        {Array.from(data.findings).map((findingText, idx) => (
+                                                                            <div key={idx} className="flex items-start gap-4 p-4 rounded-2xl bg-black/30 border border-transparent hover:border-white/5 hover:bg-black/50 transition-all">
+                                                                                <div className="mt-1 shrink-0 text-emerald-400 font-mono font-bold text-[10px] select-none bg-emerald-500/10 border border-emerald-500/20 w-6 h-6 flex items-center justify-center rounded-lg shadow-sm">
+                                                                                    {String(idx + 1)}
                                                                                 </div>
-                                                                            ))}
-                                                                        </div>
-                                                                        <div className="mt-auto pt-4 border-t border-white/5">
-                                                                            <div className="flex justify-between items-center mb-2">
-                                                                                <span className="text-xs text-slate-400 uppercase font-mono tracking-widest font-semibold">Confidence</span>
-                                                                                <span className="text-xs text-emerald-400 font-mono font-bold">{confidence}%</span>
-                                                                            </div>
-                                                                            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                                                                                <div className="bg-emerald-500 h-full shadow-[0_0_10px_rgba(16,185,129,0.8)]" style={{ width: `${confidence}%` }} />
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                );
-                                                            }) : Object.values((currentReport?.agents || []).reduce((acc: AgentAccumulator, agent: AgentResult) => {
-                                                                if (!VALID_AGENTS.has(agent.name)) return acc;
-                                                                if (!acc[agent.name]) acc[agent.name] = { ...agent, findings: [] };
-                                                                if (!acc[agent.name].findings.includes(agent.result)) acc[agent.name].findings.push(agent.result);
-                                                                return acc;
-                                                            }, {} as AgentAccumulator)).map((agent: AgentResult & { findings: string[] }, i: number) => (
-                                                                <div key={i} className="p-6 rounded-2xl bg-black/60 border border-white/5 hover:border-emerald-500/20 transition-colors flex flex-col h-full">
-                                                                    <div className="flex items-center gap-4 mb-5">
-                                                                        <AgentIcon role={agent.role} />
-                                                                        <div>
-                                                                            <h4 className="font-bold text-slate-100 text-lg">{agent.name}</h4>
-                                                                            <p className="text-xs text-slate-500 uppercase font-mono tracking-widest mt-1">{agent.role}</p>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="flex-1 space-y-3 mb-6">
-                                                                        {agent.findings.map((findingText: string, idx: number) => (
-                                                                            <div key={idx} className="bg-slate-900/50 p-4 rounded-xl border border-white/5 text-sm text-slate-300 leading-relaxed">
-                                                                                <AgentResponseText text={findingText} className="" />
+                                                                                <div className="text-sm text-slate-300 leading-relaxed font-normal flex-1 w-full max-w-[calc(100%-3rem)] min-w-0 break-words">
+                                                                                    {/* Use AgentResponseText to elegantly handle "Show More" functionality without breaking grid bounds */}
+                                                                                    <AgentResponseText text={findingText} className="w-full" />
+                                                                                </div>
                                                                             </div>
                                                                         ))}
                                                                     </div>
-                                                                    <div className="mt-auto pt-4 border-t border-white/5">
-                                                                        <div className="flex justify-between items-center mb-2">
-                                                                            <span className="text-[10px] text-slate-400 uppercase font-mono tracking-widest font-semibold">Confidence</span>
-                                                                            <span className="text-xs text-emerald-400 font-mono font-bold">{Math.round(agent.confidence * 100)}%</span>
-                                                                        </div>
-                                                                        <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                                                                            <div className="bg-emerald-500 h-full shadow-[0_0_10px_rgba(16,185,129,0.8)]" style={{ width: `${agent.confidence * 100}%` }} />
-                                                                        </div>
-                                                                    </div>
                                                                 </div>
-                                                            ))
-                                                        }
+                                                            ));
+                                                        })()}
                                                     </div>
                                                 </motion.div>
                                             )}

@@ -30,6 +30,8 @@ from tools.metadata_tools import (
     file_structure_analysis as real_file_structure_analysis,
     timestamp_analysis as real_timestamp_analysis,
     hex_signature_scan as real_hex_signature_scan,
+    extract_deep_metadata as real_extract_deep_metadata,
+    get_physical_address as real_get_physical_address,
 )
 from tools.image_tools import (
     file_hash_verify as real_file_hash_verify,
@@ -180,7 +182,24 @@ class Agent5Metadata(ForensicAgent):
                 artifact=artifact,
                 evidence_store=evidence_store,
             )
-        
+
+        async def extract_deep_metadata_handler(input_data: dict) -> dict:
+            """Handle deep metadata extraction using ExifTool with input_data dict."""
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            return await real_extract_deep_metadata(artifact=artifact)
+
+        async def get_physical_address_handler(input_data: dict) -> dict:
+            """Handle reverse geocoding of GPS coordinates to physical address."""
+            lat = input_data.get("lat")
+            lon = input_data.get("lon")
+            if lat is None or lon is None:
+                return {
+                    "address": "",
+                    "success": False,
+                    "error": "Latitude and longitude required",
+                }
+            return await real_get_physical_address(lat=lat, lon=lon)
+
         # Mock tool handlers with realistic heuristics
         seed_val = int(hashlib.md5(str(self.evidence_artifact.artifact_id).encode()).hexdigest()[:8], 16)
         rng = random.Random(seed_val)
@@ -230,6 +249,8 @@ class Agent5Metadata(ForensicAgent):
         registry.register("reverse_image_search", reverse_image_search, "Reverse image search")
         registry.register("device_fingerprint_db", device_fingerprint_db, "Device fingerprint database lookup")
         registry.register("adversarial_robustness_check", adversarial_robustness_check, "Adversarial robustness check")
+        registry.register("extract_deep_metadata", extract_deep_metadata_handler, "Deep metadata extraction using ExifTool including MakerNotes")
+        registry.register("get_physical_address", get_physical_address_handler, "Reverse geocode GPS coordinates to physical address")
         
         return registry
     

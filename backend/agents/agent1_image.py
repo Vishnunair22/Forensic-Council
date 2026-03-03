@@ -29,6 +29,7 @@ from tools.image_tools import (
     file_hash_verify as real_file_hash_verify,
     frequency_domain_analysis as real_frequency_domain_analysis,
     compute_perceptual_hash as real_compute_perceptual_hash,
+    extract_text_from_image as real_extract_text_from_image,
 )
 
 
@@ -72,6 +73,7 @@ class Agent1Image(ForensicAgent):
             "Run frequency-domain GAN artifact detection",
             "Verify file hash against ingestion hash",
             "Run adversarial robustness check against known anti-ELA evasion techniques",
+            "Extract visible text via OCR for contextual analysis",
             "Self-reflection pass",
             "Submit calibrated findings to Arbiter",
         ]
@@ -198,7 +200,12 @@ class Agent1Image(ForensicAgent):
         async def deepfake_frequency_check_handler(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact
             return await run_ml_tool("deepfake_frequency.py", artifact.file_path, timeout=25.0)
-        
+
+        async def extract_text_from_image_handler(input_data: dict) -> dict:
+            """Handle OCR text extraction with input_data dict."""
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            return await real_extract_text_from_image(artifact=artifact)
+
         # Mock tool handlers with realistic heuristics
         seed_val = int(hashlib.md5(str(self.evidence_artifact.artifact_id).encode()).hexdigest()[:8], 16)
         rng = random.Random(seed_val)
@@ -229,6 +236,7 @@ class Agent1Image(ForensicAgent):
         registry.register("splicing_detect", splicing_detect_handler, "Detect image splicing via DCT quantization inconsistencies")
         registry.register("noise_fingerprint", noise_fingerprint_handler, "Detect camera noise fingerprint inconsistencies")
         registry.register("deepfake_frequency_check", deepfake_frequency_check_handler, "Detect GAN/deepfake artifacts in frequency domain")
+        registry.register("extract_text_from_image", extract_text_from_image_handler, "Extract visible text via OCR for contextual analysis")
         registry.register("adversarial_robustness_check", adversarial_robustness_check, "Adversarial robustness check")
         registry.register("sensor_db_query", sensor_db_query, "Camera sensor noise profile database query")
         

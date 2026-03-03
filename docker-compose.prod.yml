@@ -47,8 +47,34 @@ services:
       args:
         # Replace with your production API domain
         NEXT_PUBLIC_API_URL: ${API_URL:-https://api.forensic-council.example.com}
-    ports:
-      - "3000:3000"
     environment:
       - NODE_ENV=production
     restart: unless-stopped
+    # No direct port mapping - served through Caddy
+
+  # Caddy reverse proxy with automatic HTTPS
+  caddy:
+    image: caddy:2-alpine
+    container_name: forensic_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+    depends_on:
+      - backend
+      - frontend
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+
+volumes:
+  caddy_data:
+  caddy_config:

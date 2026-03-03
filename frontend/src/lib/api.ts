@@ -1,13 +1,16 @@
 /**
  * Forensic Council API Client
  * ==========================
- * 
+ *
  * Client module for communicating with the FastAPI backend.
  */
 
 // Use Next.js public runtime config for environment variables
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const WS_BASE = API_BASE.replace(/^http/, "ws");
+
+// Token storage key
+const TOKEN_KEY = "forensic_auth_token";
 
 /**
  * Types matching backend DTOs
@@ -86,6 +89,209 @@ export interface ReportResponse {
   report?: ReportDTO;
 }
 
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  user_id: string;
+  role: string;
+}
+
+export interface UserInfo {
+  user_id: string;
+  username: string;
+  role: string;
+}
+
+/**
+ * Authentication Functions
+ */
+
+/**
+ * Get the stored JWT token
+ */
+export function getAuthToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+/**
+ * Store the JWT token
+ */
+export function setAuthToken(token: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+/**
+ * Clear the stored JWT token
+ */
+export function clearAuthToken(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+/**
+ * Check if user is authenticated
+ */
+export function isAuthenticated(): boolean {
+  return !!getAuthToken();
+}
+
+/**
+ * Login with username and password
+ */
+export async function login(username: string, password: string): Promise<TokenResponse> {
+  const formData = new URLSearchParams();
+  formData.append("username", username);
+  formData.append("password", password);
+
+  const response = await fetch(`${API_BASE}/api/v1/auth/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: formData.toString(),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: "Login failed" }));
+    throw new Error(error.detail || "Authentication failed");
+  }
+
+  const data: TokenResponse = await response.json();
+  setAuthToken(data.access_token);
+  return data;
+}
+
+/**
+ * Auto-login as demo investigator
+ * Used for demo/development when no explicit login is performed
+ */
+export async function autoLoginAsInvestigator(): Promise<TokenResponse> {
+  try {
+    return await login("investigator", "inv123!");
+  } catch (error) {
+    console.warn("Auto-login as investigator failed, trying admin...");
+    return await login("admin", "admin123!");
+  }
+}
+
+/**
+ * Ensure user is authenticated (auto-login if needed)
+ */
+export async function ensureAuthenticated(): Promise<string> {
+  let token = getAuthToken();
+  if (!token) {
+    const authData = await autoLoginAsInvestigator();
+    token = authData.access_token;
+  }
+  return token;
+}
+
+/**
+ * Logout the current user
+ */
+export async function logout(): Promise<void> {
+  const token = getAuthToken();
+  if (token) {
+    try {
+      await fetch(`${API_BASE}/api/v1/auth/logout`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+    } catch (error) {
+      // Ignore errors during logout
+    }
+  }
+  clearAuthToken();
+}
+
+/**
+ * Get current user info
+ */
+export async function getCurrentUser(): Promise<UserInfo> {
+  const token = await ensureAuthenticated();
+  const response = await fetch(`${API_BASE}/api/v1/auth/me`, {
+    headers: {
+      "Authorization": `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: "Failed to get user info" }));
+    throw new Error(error.detail || "Failed to get user info");
+  }
+
+  return response.json();
+}
+
+/**
+ * Maximum number of retry attempts for authentication failures
+ */
+const MAX_AUTH_RETRIES = 1;
+
+/**
+ * Track retry attempts to prevent infinite loops
+ */
+let authRetryCount = 0;
+
+/**
+ * Reset retry count - should be called after successful requests
+ */
+function resetAuthRetry(): void {
+  authRetryCount = 0;
+}
+
+/**
+ * Handle authentication errors by clearing token and retrying
+ */
+async function handleAuthError<T>(
+  operation: () => Promise<T>,
+  errorMessage: string
+): Promise<T> {
+  try {
+    const result = await operation();
+    resetAuthRetry();
+    return result;
+  } catch (error) {
+    // Check if it's an authentication error
+    if (error instanceof Error && 
+        (error.message.includes("Invalid or expired token") || 
+         error.message.includes("401") ||
+         error.message.includes("Unauthorized"))) {
+      
+      if (authRetryCount < MAX_AUTH_RETRIES) {
+        authRetryCount++;
+        console.warn("Token invalid or expired, clearing and re-authenticating...");
+        clearAuthToken();
+        
+        // Retry the operation with fresh authentication
+        try {
+          const result = await operation();
+          resetAuthRetry();
+          return result;
+        } catch (retryError) {
+          throw retryError;
+        }
+      }
+    }
+    throw error;
+  }
+}
+
+/**
+ * Get default headers with authentication
+ */
+async function getAuthHeaders(): Promise<HeadersInit> {
+  const token = await ensureAuthenticated();
+  return {
+    "Authorization": `Bearer ${token}`,
+  };
+}
+
 /**
  * API Functions
  */
@@ -98,100 +304,123 @@ export async function startInvestigation(
   caseId: string,
   investigatorId: string
 ): Promise<InvestigationResponse> {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("case_id", caseId);
-  formData.append("investigator_id", investigatorId);
+  return handleAuthError(async () => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("case_id", caseId);
+    formData.append("investigator_id", investigatorId);
 
-  const response = await fetch(`${API_BASE}/api/v1/investigate`, {
-    method: "POST",
-    body: formData,
-  });
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_BASE}/api/v1/investigate`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: "Unknown error" }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
-  }
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: "Unknown error" }));
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
 
-  return response.json();
+    return response.json();
+  }, "Failed to start investigation");
 }
 
 /**
  * Get the report for a session
  */
 export async function getReport(sessionId: string): Promise<ReportResponse> {
-  const response = await fetch(`${API_BASE}/api/v1/sessions/${sessionId}/report`);
+  return handleAuthError(async () => {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_BASE}/api/v1/sessions/${sessionId}/report`, {
+      headers,
+    });
 
-  if (response.status === 404) {
-    throw new Error("Session not found");
-  }
+    if (response.status === 404) {
+      throw new Error("Session not found");
+    }
 
-  if (response.status === 202) {
-    return { status: "in_progress" };
-  }
+    if (response.status === 202) {
+      return { status: "in_progress" };
+    }
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: "Unknown error" }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
-  }
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: "Unknown error" }));
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
 
-  const report: ReportDTO = await response.json();
-  return { status: "complete", report };
+    const report: ReportDTO = await response.json();
+    return { status: "complete", report };
+  }, "Failed to get report");
 }
 
 /**
  * Get the brief for an agent in a session
  */
 export async function getBrief(sessionId: string, agentId: string): Promise<string> {
-  const response = await fetch(`${API_BASE}/api/v1/sessions/${sessionId}/brief/${agentId}`);
+  return handleAuthError(async () => {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_BASE}/api/v1/sessions/${sessionId}/brief/${agentId}`, {
+      headers,
+    });
 
-  if (response.status === 404) {
-    return "No brief available.";
-  }
+    if (response.status === 404) {
+      return "No brief available.";
+    }
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: "Unknown error" }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
-  }
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: "Unknown error" }));
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
 
-  const data = await response.json();
-  return data.brief || "No brief available.";
+    const data = await response.json();
+    return data.brief || "No brief available.";
+  }, "Failed to get brief");
 }
 
 /**
  * Get pending HITL checkpoints for a session
  */
 export async function getCheckpoints(sessionId: string): Promise<HITLCheckpoint[]> {
-  const response = await fetch(`${API_BASE}/api/v1/sessions/${sessionId}/checkpoints`);
+  return handleAuthError(async () => {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_BASE}/api/v1/sessions/${sessionId}/checkpoints`, {
+      headers,
+    });
 
-  if (response.status === 404) {
-    return [];
-  }
+    if (response.status === 404) {
+      return [];
+    }
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: "Unknown error" }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
-  }
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: "Unknown error" }));
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
 
-  return response.json();
+    return response.json();
+  }, "Failed to get checkpoints");
 }
 
 /**
  * Submit a HITL decision
  */
 export async function submitHITLDecision(decision: HITLDecisionRequest): Promise<void> {
-  const response = await fetch(`${API_BASE}/api/v1/hitl/decision`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(decision),
-  });
+  return handleAuthError(async () => {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_BASE}/api/v1/hitl/decision`, {
+      method: "POST",
+      headers: {
+        ...headers,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(decision),
+    });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: "Unknown error" }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
-  }
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: "Unknown error" }));
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+  }, "Failed to submit decision");
 }
 
 /**
@@ -202,7 +431,8 @@ export function createLiveSocket(
   onMessage: (update: BriefUpdate) => void,
   onClose: () => void
 ): WebSocket {
-  const wsUrl = `${WS_BASE}/api/v1/sessions/${sessionId}/live`;
+  const token = getAuthToken();
+  const wsUrl = `${WS_BASE}/api/v1/sessions/${sessionId}/live${token ? `?token=${encodeURIComponent(token)}` : ""}`;
   const ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {

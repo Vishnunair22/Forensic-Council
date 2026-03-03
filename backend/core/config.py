@@ -13,6 +13,18 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# Default credentials that must be changed in production
+INSECURE_DEFAULTS = {
+    "forensic_pass",
+    "postgres",
+    "password",
+    "admin",
+    "123456",
+    "change-me",
+    "changeme",
+}
+
+
 class Settings(BaseSettings):
     """
     Application settings loaded from environment variables.
@@ -73,6 +85,37 @@ class Settings(BaseSettings):
     postgres_password: str = Field(default="forensic_pass", description="PostgreSQL password")
     postgres_db: str = Field(default="forensic_council", description="PostgreSQL database name")
     
+    @field_validator("postgres_user")
+    @classmethod
+    def validate_postgres_user(cls, v: str, info) -> str:
+        """Block insecure default usernames in production."""
+        data = info.data if hasattr(info, 'data') else {}
+        env = data.get("app_env", "development")
+        if env == "production" and v.lower() in INSECURE_DEFAULTS:
+            raise ValueError(
+                f"POSTGRES_USER '{v}' is insecure for production! "
+                "Set a strong, unique username via the POSTGRES_USER environment variable."
+            )
+        return v
+    
+    @field_validator("postgres_password")
+    @classmethod
+    def validate_postgres_password(cls, v: str, info) -> str:
+        """Block insecure default passwords in production."""
+        data = info.data if hasattr(info, 'data') else {}
+        env = data.get("app_env", "development")
+        if env == "production":
+            if v.lower() in INSECURE_DEFAULTS:
+                raise ValueError(
+                    f"POSTGRES_PASSWORD '{v}' is insecure for production! "
+                    "Set a strong, unique password via the POSTGRES_PASSWORD environment variable."
+                )
+            if len(v) < 16:
+                raise ValueError(
+                    "POSTGRES_PASSWORD must be at least 16 characters in production!"
+                )
+        return v
+    
     @property
     def database_url(self) -> str:
         """Construct PostgreSQL connection URL from components."""
@@ -92,15 +135,50 @@ class Settings(BaseSettings):
     
     # Security Configuration
     signing_key: str = Field(default="change-me-in-production", description="Key for signing audit entries")
+    jwt_secret_key: Optional[str] = Field(default=None, description="Secret key for JWT token signing. If not set, uses SIGNING_KEY")
+    jwt_access_token_expire_minutes: int = Field(default=10080, description="JWT access token expiration in minutes (default: 7 days)")
+    jwt_algorithm: str = Field(default="HS256", description="JWT signing algorithm")
     cors_allowed_origins: list[str] = Field(
         default=["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"],
         description="Allowed CORS origins (comma-separated in env)",
     )
     
+    @property
+    def effective_jwt_secret(self) -> str:
+        """Get the effective JWT secret key."""
+        return self.jwt_secret_key or self.signing_key
+    
+    @field_validator("jwt_secret_key")
+    @classmethod
+    def validate_jwt_secret_key(cls, v: Optional[str], info) -> Optional[str]:
+        """Block insecure default JWT secret keys in production."""
+        if v is None:
+            return v
+        data = info.data if hasattr(info, 'data') else {}
+        env = data.get("app_env", "development")
+        if env == "production" and ("change" in v.lower() or "default" in v.lower() or "dev" in v.lower()):
+            raise ValueError(
+                "JWT_SECRET_KEY must be changed from the default for production! "
+                "Set a strong, unique key via the JWT_SECRET_KEY environment variable."
+            )
+        return v
+    
     # Agent Configuration
     default_iteration_ceiling: int = Field(default=20, description="Default iteration ceiling for agent loops")
     hitl_enabled: bool = Field(default=True, description="Enable Human-in-the-Loop checkpoints")
     investigation_timeout: int = Field(default=300, description="Max seconds for a single investigation")
+    investigation_max_retries: int = Field(default=3, description="Max retry attempts for failed investigations")
+    investigation_retry_delay: float = Field(default=5.0, description="Base delay between investigation retries (seconds)")
+    
+    # Retry Configuration
+    database_retry_max: int = Field(default=5, description="Max database connection retries")
+    database_retry_delay: float = Field(default=1.0, description="Base database retry delay (seconds)")
+    external_api_retry_max: int = Field(default=3, description="Max external API retries")
+    external_api_retry_delay: float = Field(default=1.0, description="Base external API retry delay (seconds)")
+    
+    # Session Persistence
+    session_ttl_hours: int = Field(default=24, description="Session state TTL in hours")
+    enable_session_persistence: bool = Field(default=True, description="Enable PostgreSQL session persistence")
     
     @field_validator("log_level")
     @classmethod
