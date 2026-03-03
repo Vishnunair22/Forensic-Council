@@ -479,17 +479,18 @@ class ReActLoopEngine:
         )
 
         # Log HITL checkpoint
-        await self.custody_logger.log_entry(
-            agent_id=self.agent_id,
-            session_id=self.session_id,
-            entry_type=EntryType.HITL_CHECKPOINT,
-            content={
-                "checkpoint_id": str(checkpoint.checkpoint_id),
-                "reason": reason.value,
-                "paused_at_iteration": self._current_iteration,
-                "brief": brief
-            }
-        )
+        if self.custody_logger:
+            await self.custody_logger.log_entry(
+                agent_id=self.agent_id,
+                session_id=self.session_id,
+                entry_type=EntryType.HITL_CHECKPOINT,
+                content={
+                    "checkpoint_id": str(checkpoint.checkpoint_id),
+                    "reason": reason.value,
+                    "paused_at_iteration": self._current_iteration,
+                    "brief": brief
+                }
+            )
 
         # Store checkpoint in Redis
         if self.redis_client is not None:
@@ -515,17 +516,18 @@ class ReActLoopEngine:
             decision: The human decision
         """
         # Log human intervention
-        await self.custody_logger.log_entry(
-            agent_id=self.agent_id,
-            session_id=self.session_id,
-            entry_type=EntryType.HUMAN_INTERVENTION,
-            content={
-                "checkpoint_id": str(checkpoint_id),
-                "decision_type": decision.decision_type,
-                "investigator_id": decision.investigator_id,
-                "notes": decision.notes
-            }
-        )
+        if self.custody_logger:
+            await self.custody_logger.log_entry(
+                agent_id=self.agent_id,
+                session_id=self.session_id,
+                entry_type=EntryType.HUMAN_INTERVENTION,
+                content={
+                    "checkpoint_id": str(checkpoint_id),
+                    "decision_type": decision.decision_type,
+                    "investigator_id": decision.investigator_id,
+                    "notes": decision.notes
+                }
+            )
 
         # Handle different decision types
         if decision.decision_type == "TERMINATE":
@@ -837,19 +839,20 @@ class ReActLoopEngine:
         entry_type = step_type_to_entry_type.get(
             step.step_type, EntryType.THOUGHT
         )
-        await self.custody_logger.log_entry(
-            agent_id=self.agent_id,
-            session_id=self.session_id,
-            entry_type=entry_type,
-            content={
-                "step_type": step.step_type,
-                "content": step.content,
-                "iteration": step.iteration,
-                "tool_name": step.tool_name,
-                "tool_input": step.tool_input,
-                "timestamp": step.timestamp_utc.isoformat()
-            }
-        )
+        if self.custody_logger:
+            await self.custody_logger.log_entry(
+                agent_id=self.agent_id,
+                session_id=self.session_id,
+                entry_type=entry_type,
+                content={
+                    "step_type": step.step_type,
+                    "content": step.content,
+                    "iteration": step.iteration,
+                    "tool_name": step.tool_name,
+                    "tool_input": step.tool_input,
+                    "timestamp": step.timestamp_utc.isoformat()
+                }
+            )
 
     def _build_readable_summary(
         self,

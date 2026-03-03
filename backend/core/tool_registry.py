@@ -149,17 +149,18 @@ class ToolRegistry:
                 error=f"Tool '{tool_name}' not found in registry"
             )
             # Log the unavailable call
-            await custody_logger.log_entry(
-                agent_id=agent_id,
-                session_id=session_id,
-                entry_type=EntryType.TOOL_CALL,
-                content={
-                    "tool_name": tool_name,
-                    "tool_input": input_data,
-                    "tool_output": result.model_dump(),
-                    "available": False
-                }
-            )
+            if custody_logger:
+                await custody_logger.log_entry(
+                    agent_id=agent_id,
+                    session_id=session_id,
+                    entry_type=EntryType.TOOL_CALL,
+                    content={
+                        "tool_name": tool_name,
+                        "tool_input": input_data,
+                        "tool_output": result.model_dump(),
+                        "available": False
+                    }
+                )
             return result
 
         # Tool explicitly marked unavailable
@@ -171,17 +172,18 @@ class ToolRegistry:
                 error=f"Tool '{tool_name}' is currently unavailable"
             )
             # Log the unavailable call
-            await custody_logger.log_entry(
-                agent_id=agent_id,
-                session_id=session_id,
-                entry_type=EntryType.TOOL_CALL,
-                content={
-                    "tool_name": tool_name,
-                    "tool_input": input_data,
-                    "tool_output": result.model_dump(),
-                    "available": False
-                }
-            )
+            if custody_logger:
+                await custody_logger.log_entry(
+                    agent_id=agent_id,
+                    session_id=session_id,
+                    entry_type=EntryType.TOOL_CALL,
+                    content={
+                        "tool_name": tool_name,
+                        "tool_input": input_data,
+                        "tool_output": result.model_dump(),
+                        "available": False
+                    }
+                )
             return result
 
         # Tool is available - execute it
@@ -201,16 +203,17 @@ class ToolRegistry:
             )
 
         # Log the tool call
-        await custody_logger.log_entry(
-            agent_id=agent_id,
-            session_id=session_id,
-            entry_type=EntryType.TOOL_CALL,
-            content={
-                "tool_name": tool_name,
-                "tool_input": input_data,
-                "tool_output": result.model_dump(),
-                "available": True
-            }
-        )
+        if custody_logger:
+            await custody_logger.log_entry(
+                agent_id=agent_id,
+                session_id=session_id,
+                entry_type=EntryType.TOOL_CALL,
+                content={
+                    "tool_name": tool_name,
+                    "tool_input": input_data,
+                    "tool_output": result.model_dump(),
+                    "available": True
+                }
+            )
 
         return result

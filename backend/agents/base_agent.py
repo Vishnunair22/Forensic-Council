@@ -201,17 +201,18 @@ class ForensicAgent(ABC):
         await self._initialize_working_memory()
         
         # Step 2: Log session start
-        await self.custody_logger.log_entry(
-            agent_id=self.agent_id,
-            session_id=self.session_id,
-            entry_type=EntryType.THOUGHT,  # Using THOUGHT as session marker
-            content={
-                "action": "session_start",
-                "agent_name": self.agent_name,
-                "evidence_artifact_id": str(self.evidence_artifact.artifact_id),
-                "task_count": len(self.task_decomposition),
-            }
-        )
+        if self.custody_logger:
+            await self.custody_logger.log_entry(
+                agent_id=self.agent_id,
+                session_id=self.session_id,
+                entry_type=EntryType.THOUGHT,  # Using THOUGHT as session marker
+                content={
+                    "action": "session_start",
+                    "agent_name": self.agent_name,
+                    "evidence_artifact_id": str(self.evidence_artifact.artifact_id),
+                    "task_count": len(self.task_decomposition),
+                }
+            )
         
         # Step 3: Build tool registry
         self._tool_registry = await self.build_tool_registry()
@@ -279,7 +280,7 @@ class ForensicAgent(ABC):
         tools = self._tool_registry.list_tools()
         unavailable_tools = [t for t in tools if not t.available]
         
-        if unavailable_tools:
+        if unavailable_tools and self.custody_logger:
             await self.custody_logger.log_entry(
                 agent_id=self.agent_id,
                 session_id=self.session_id,
@@ -385,18 +386,19 @@ class ForensicAgent(ABC):
         )
         
         # Log self-reflection
-        await self.custody_logger.log_entry(
-            agent_id=self.agent_id,
-            session_id=self.session_id,
-            entry_type=EntryType.SELF_REFLECTION,
-            content={
-                "all_tasks_complete": all_tasks_complete,
-                "incomplete_task_count": len(incomplete_tasks),
-                "overconfident_finding_count": len(overconfident_findings),
-                "court_defensible": court_defensible,
-                "reflection_notes": report.reflection_notes,
-            }
-        )
+        if self.custody_logger:
+            await self.custody_logger.log_entry(
+                agent_id=self.agent_id,
+                session_id=self.session_id,
+                entry_type=EntryType.SELF_REFLECTION,
+                content={
+                    "all_tasks_complete": all_tasks_complete,
+                    "incomplete_task_count": len(incomplete_tasks),
+                    "overconfident_finding_count": len(overconfident_findings),
+                    "court_defensible": court_defensible,
+                    "reflection_notes": report.reflection_notes,
+                }
+            )
         
         logger.info(
             "Self-reflection complete",
@@ -424,16 +426,17 @@ class ForensicAgent(ABC):
         Returns:
             List of matching EpisodicEntry objects
         """
-        await self.custody_logger.log_entry(
-            agent_id=self.agent_id,
-            session_id=self.session_id,
-            entry_type=EntryType.MEMORY_READ,
-            content={
-                "action": "query_episodic_memory",
-                "signature_type": signature_type.value,
-                "limit": limit,
-            }
-        )
+        if self.custody_logger:
+            await self.custody_logger.log_entry(
+                agent_id=self.agent_id,
+                session_id=self.session_id,
+                entry_type=EntryType.MEMORY_READ,
+                content={
+                    "action": "query_episodic_memory",
+                    "signature_type": signature_type.value,
+                    "limit": limit,
+                }
+            )
         
         results = await self.episodic_memory.query(
             signature_type=signature_type,
@@ -455,16 +458,17 @@ class ForensicAgent(ABC):
             entry: The episodic entry to store
             embedding: Vector embedding for the entry
         """
-        await self.custody_logger.log_entry(
-            agent_id=self.agent_id,
-            session_id=self.session_id,
-            entry_type=EntryType.MEMORY_WRITE,
-            content={
-                "action": "store_episodic_finding",
-                "signature_type": entry.signature_type.value,
-                "session_id": str(entry.session_id),
-            }
-        )
+        if self.custody_logger:
+            await self.custody_logger.log_entry(
+                agent_id=self.agent_id,
+                session_id=self.session_id,
+                entry_type=EntryType.MEMORY_WRITE,
+                content={
+                    "action": "store_episodic_finding",
+                    "signature_type": entry.signature_type.value,
+                    "session_id": str(entry.session_id),
+                }
+            )
         
         await self.episodic_memory.store(entry, embedding)
     
@@ -489,15 +493,16 @@ class ForensicAgent(ABC):
         
         # In production, this would trigger the actual HITL flow
         # For now, we just log it
-        await self.custody_logger.log_entry(
-            agent_id=self.agent_id,
-            session_id=self.session_id,
-            entry_type=EntryType.HITL_CHECKPOINT,
-            content={
-                "action": "flag_hitl",
-                "reason": reason.value,
-                "brief": brief,
-            }
+        if self.custody_logger:
+            await self.custody_logger.log_entry(
+                agent_id=self.agent_id,
+                session_id=self.session_id,
+                entry_type=EntryType.HITL_CHECKPOINT,
+                content={
+                    "action": "flag_hitl",
+                    "reason": reason.value,
+                    "brief": brief,
+                }
         )
     
     async def handle_inter_agent_call(
@@ -525,18 +530,19 @@ class ForensicAgent(ABC):
         )
         
         # Log the incoming call
-        await self.custody_logger.log_entry(
-            agent_id=self.agent_id,
-            session_id=self.session_id,
-            entry_type=EntryType.INTER_AGENT_CALL,
-            content={
-                "action": "handle_inter_agent_call",
-                "call_id": str(call.call_id),
-                "caller_agent_id": call.caller_agent_id,
-                "call_type": call.call_type.value,
-                "payload": call.payload,
-            }
-        )
+        if self.custody_logger:
+            await self.custody_logger.log_entry(
+                agent_id=self.agent_id,
+                session_id=self.session_id,
+                entry_type=EntryType.INTER_AGENT_CALL,
+                content={
+                    "action": "handle_inter_agent_call",
+                    "call_id": str(call.call_id),
+                    "caller_agent_id": call.caller_agent_id,
+                    "call_type": call.call_type.value,
+                    "payload": call.payload,
+                }
+            )
         
         # Default implementation: return a summary based on payload
         # Subclasses should override this for specialized handling
