@@ -21,7 +21,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ─── Stage 2: Production ─────────────────────────────────────────────────────
 FROM python:3.11-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    exiftool \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -32,6 +36,7 @@ COPY . .
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app"
+ENV NUMBA_CACHE_DIR="/tmp/numba_cache"
 
 EXPOSE 8000
 

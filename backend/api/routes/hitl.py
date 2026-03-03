@@ -7,17 +7,21 @@ Routes for human-in-the-loop decision handling.
 
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas import HITLDecisionRequest
 from api.routes.investigation import _active_pipelines
+from core.auth import get_current_user, User
 from core.react_loop import HumanDecision
 
 router = APIRouter(prefix="/api/v1/hitl", tags=["hitl"])
 
 
 @router.post("/decision")
-async def submit_decision(decision: HITLDecisionRequest):
+async def submit_decision(
+    decision: HITLDecisionRequest,
+    current_user: User = Depends(get_current_user),
+):
     """
     Submit a human-in-the-loop decision for a checkpoint.
     

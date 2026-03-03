@@ -25,14 +25,19 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "python-multipart>=0.0.9",
     "websockets>=13.0",
+    "python-jose[cryptography]>=3.3",
+    "passlib[bcrypt]>=1.7",
     # Image processing tools
     "Pillow>=10.0",
     "numpy>=1.26",
     "scipy>=1.11",
     "piexif>=1.1",
     "imagehash>=4.3",
+    "pytesseract>=0.3.10",
     # Metadata tools
     "timezonefinder>=6.2",
+    "pyexiftool>=0.5",
+    "geopy>=2.4",
     # Audio processing tools
     "librosa>=0.10",
     "soundfile>=0.12",

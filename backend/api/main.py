@@ -10,12 +10,21 @@ environment-aware configuration.
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
+import time
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from api.routes import hitl, investigation, sessions
+from api.routes import auth, hitl, investigation, metrics, sessions
+from api.routes.metrics import (
+    increment_error_count,
+    increment_request_count,
+    record_request_duration,
+    set_active_sessions,
+)
 from core.config import get_settings
+from core.migrations import run_migrations
 from scripts.init_db import init_database
 from core.logging import get_logger
 
@@ -43,6 +52,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("Database schema ready")
     except Exception as e:
         logger.error("DB init failed — continuing anyway", error=str(e))
+    
+    # Run versioned migrations
+    try:
+        from core.retry import with_retry
+        
+        @with_retry(max_retries=5, base_delay=1.0, retry_exceptions=(Exception,))
+        async def run_migrations_with_retry():
+            return await run_migrations()
+        
+        migration_success = await run_migrations_with_retry()
+        if migration_success:
+            logger.info("Database migrations completed")
+        else:
+            logger.error("Database migrations failed")
+    except Exception as e:
+        logger.error("Migration error", error=str(e))
 
     yield
 
@@ -88,6 +113,33 @@ async def security_headers_middleware(request: Request, call_next):
     return response
 
 
+# Metrics collection middleware
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    """Collect request metrics for monitoring."""
+    start_time = time.time()
+    
+    # Update active sessions count
+    set_active_sessions(len(investigation._active_pipelines))
+    
+    try:
+        response = await call_next(request)
+        
+        # Record metrics
+        increment_request_count()
+        duration_ms = (time.time() - start_time) * 1000
+        record_request_duration(duration_ms)
+        
+        # Track errors (4xx and 5xx)
+        if response.status_code >= 400:
+            increment_error_count()
+        
+        return response
+    except Exception:
+        increment_error_count()
+        raise
+
+
 # Diagnostic middleware — only in debug mode
 if settings.debug:
 
@@ -102,9 +154,11 @@ if settings.debug:
 
 
 # Include routers
+app.include_router(auth.router)
 app.include_router(investigation.router)
 app.include_router(hitl.router)
 app.include_router(sessions.router)
+app.include_router(metrics.router)
 
 
 @app.exception_handler(Exception)

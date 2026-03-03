@@ -12,6 +12,7 @@ from tools.image_tools import (
     file_hash_verify,
     compute_perceptual_hash,
     frequency_domain_analysis,
+    extract_text_from_image,
 )
 from tools.metadata_tools import (
     exif_extract,
@@ -19,6 +20,8 @@ from tools.metadata_tools import (
     steganography_scan,
     file_structure_analysis,
     timestamp_analysis,
+    extract_deep_metadata,
+    get_physical_address,
 )
 from tools.audio_tools import (
     speaker_diarize,
@@ -43,12 +46,15 @@ __all__ = [
     "file_hash_verify",
     "compute_perceptual_hash",
     "frequency_domain_analysis",
+    "extract_text_from_image",
     # Metadata tools
     "exif_extract",
     "gps_timezone_validate",
     "steganography_scan",
     "file_structure_analysis",
     "timestamp_analysis",
+    "extract_deep_metadata",
+    "get_physical_address",
     # Audio tools
     "speaker_diarize",
     "anti_spoofing_detect",

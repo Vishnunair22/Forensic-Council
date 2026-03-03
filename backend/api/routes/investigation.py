@@ -13,9 +13,16 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, Form
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Form
 from fastapi.responses import JSONResponse
 
+from core.auth import get_current_user, require_investigator, User
+
+from api.routes.metrics import (
+    increment_investigations_started,
+    increment_investigations_completed,
+    increment_investigations_failed,
+)
 from api.schemas import (
     AgentFindingDTO,
     BriefUpdate,
@@ -102,14 +109,14 @@ async def _wrap_pipeline_with_broadcasts(
 
         async def instrumented_log_entry(**kwargs):
             result = await original_log_entry(**kwargs)
-            
+
             entry_type = kwargs.get('entry_type')
             content = kwargs.get('content', {})
             agent_id = kwargs.get('agent_id')
-                
+
             # EntryType is usually an enum, but sometimes a string values depending on monkey-patch state
             type_val = getattr(entry_type, "value", str(entry_type))
-            
+
             if type_val == "THOUGHT" and isinstance(content, dict) and "text" in content:
                 if content.get("action") != "session_start":
                     agent_name = _AGENT_NAMES.get(agent_id, agent_id)
@@ -125,10 +132,11 @@ async def _wrap_pipeline_with_broadcasts(
                         )
                     )
             return result
-        
+
         logger_obj.log_entry = instrumented_log_entry
 
-    instrument_logger(pipeline.custody_logger)
+    if pipeline.custody_logger:
+        instrument_logger(pipeline.custody_logger)
     # -----------------------------------------------
 
     async def instrumented_run(evidence_artifact, session_id=None):
@@ -160,11 +168,12 @@ async def _wrap_pipeline_with_broadcasts(
 
         results = []
 
-        for agent_id, agent_name, AgentClass, thinking_phrase in agent_configs:
+        async def run_single_agent(agent_id, agent_name, AgentClass, thinking_phrase):
             # Check MIME compatibility
             supported_mimes = _AGENT_MIME_SUPPORT.get(agent_id, set())
             if mime not in supported_mimes:
                 msg = f"Skipping unsupported file type: {mime}"
+                # Brief delay to show 'checking file format...' instead of instant completion
                 await broadcast_update(
                     ws_session_id,
                     BriefUpdate(
@@ -172,11 +181,11 @@ async def _wrap_pipeline_with_broadcasts(
                         session_id=ws_session_id,
                         agent_id=agent_id,
                         agent_name=agent_name,
-                        message=f"Skipping {agent_name}...",
-                        data={"status": "running", "thinking": msg},
+                        message=f"Checking file format compatibility...",
+                        data={"status": "running", "thinking": f"Analyzing if {mime} is supported..."},
                     )
                 )
-                # broadcast complete immediately
+                await asyncio.sleep(1.5)
                 await broadcast_update(
                     ws_session_id,
                     BriefUpdate(
@@ -184,7 +193,7 @@ async def _wrap_pipeline_with_broadcasts(
                         session_id=ws_session_id,
                         agent_id=agent_id,
                         agent_name=agent_name,
-                        message=msg,
+                        message=f"Format not supported ({mime})",
                         data={
                             "status": "complete",
                             "confidence": 1.0,
@@ -193,13 +202,12 @@ async def _wrap_pipeline_with_broadcasts(
                         },
                     )
                 )
-                results.append(AgentLoopResult(
+                return AgentLoopResult(
                     agent_id=agent_id,
-                    findings=[{"finding_type": "MIME_UNSUPPORTED", "confidence_raw": 1.0, "status": "CONFIRMED", "reasoning_summary": msg, "agent_name": agent_name}],
+                    findings=[{"finding_type": "Format not supported", "confidence_raw": 1.0, "status": "CONFIRMED", "reasoning_summary": f"This agent does not support analyzing {mime} files.", "agent_name": agent_name}],
                     reflection_report={},
                     react_chain=[],
-                ))
-                continue
+                )
 
             # --- AGENT_UPDATE: agent is starting ---
             await broadcast_update(
@@ -231,6 +239,54 @@ async def _wrap_pipeline_with_broadcasts(
                     timeout=60.0
                 )
                 
+                # --- FORMATTING ENFORCEMENT ---
+                base_name = os.path.basename(evidence_file_path)
+                prefix = f"The {agent_name} detected an {mime} file named {base_name}."
+                
+                is_unsupported = any(getattr(f, 'finding_type', '') == "Format not supported" for f in findings)
+                
+                if is_unsupported:
+                    formatted_text = f"{prefix}\n{agent_name} can not analyse this file type so agent has no findings to show."
+                    for f in findings:
+                        f.reasoning_summary = formatted_text
+                else:
+                    confidences = [getattr(f, 'confidence_raw', 0.5) for f in findings]
+                    avg_conf = sum(confidences) / len(confidences) if confidences else 0.5
+                    
+                    doc_type = "standard configuration file"
+                    all_text = " ".join([getattr(f, 'reasoning_summary', '') for f in findings])
+                    if "screenshot" in all_text.lower() or "text extracted" in all_text.lower():
+                        doc_type = "screenshot"
+                    elif "document" in all_text.lower():
+                        doc_type = "document"
+                    elif "portrait" in all_text.lower() or "face" in all_text.lower():
+                        doc_type = "portrait photo"
+                    elif mime.startswith("image/"):
+                        doc_type = "image file"
+                    elif mime.startswith("video/"):
+                        doc_type = "video file"
+                    elif mime.startswith("audio/"):
+                        doc_type = "audio recording"
+                        
+                    middle_line = f"It appears to be a {doc_type}."
+                    final_line = f"{int(avg_conf * 100)}% sure of result."
+                    
+                    # Deduplicate generic texts safely
+                    unique_findings = []
+                    for f in findings:
+                        summary = getattr(f, 'reasoning_summary', '').strip()
+                        if summary and summary not in unique_findings:
+                            unique_findings.append(summary)
+                    
+                    findings_text = "\n".join(unique_findings)
+                    formatted_text = f"{prefix}\n{middle_line}\n{findings_text}\n{final_line}"
+                    
+                    if findings:
+                        findings[0].reasoning_summary = formatted_text
+                        findings[0].confidence_raw = avg_conf
+                        findings = [findings[0]]
+                # ------------------------------
+
                 # Make sure react step models are serialized back to dicts 
                 serialized_chain = []
                 for step in getattr(agent, '_react_chain', []):
@@ -287,8 +343,14 @@ async def _wrap_pipeline_with_broadcasts(
                     },
                 )
             )
-            results.append(result)
-            await asyncio.sleep(0.1)
+            return result
+
+        # Run all agents concurrently
+        tasks = [
+            run_single_agent(agent_id, agent_name, AgentClass, thinking_phrase)
+            for agent_id, agent_name, AgentClass, thinking_phrase in agent_configs
+        ]
+        results = await asyncio.gather(*tasks)
 
         return results
 
@@ -369,10 +431,14 @@ async def run_investigation_task(
 
         # Store the report for retrieval
         pipeline._final_report = report
+        
+        # Track successful completion
+        increment_investigations_completed()
 
     except asyncio.TimeoutError:
         error_msg = f"Investigation timed out after {settings.investigation_timeout}s"
         logger.error(error_msg, session_id=session_id)
+        increment_investigations_failed()
         await broadcast_update(
             session_id,
             BriefUpdate(
@@ -386,6 +452,7 @@ async def run_investigation_task(
         error_msg = str(e)
         # E1: Log with full traceback
         logger.error(f"Investigation failed: {e}", exc_info=True)
+        increment_investigations_failed()
         await broadcast_update(
             session_id,
             BriefUpdate(
@@ -432,6 +499,7 @@ async def investigate(
     file: UploadFile = File(...),
     case_id: str = Form(...),
     investigator_id: str = Form(...),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Start a forensic investigation on uploaded evidence.
@@ -485,6 +553,9 @@ async def investigate(
 
     # Create session ID
     session_id = str(uuid4())
+    
+    # Track investigation started
+    increment_investigations_started()
 
     # S6: Sanitize uploaded filename extension
     raw_ext = Path(file.filename or "").suffix
@@ -544,7 +615,10 @@ def _finding_to_dto(f: dict, fallback_agent_id: str = "") -> AgentFindingDTO:
 
 
 @router.get("/sessions/{session_id}/report")
-async def get_report(session_id: str):
+async def get_report(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+):
     """Get the report for a completed investigation."""
     
     report = None
@@ -598,7 +672,11 @@ async def get_report(session_id: str):
 
 
 @router.get("/sessions/{session_id}/brief/{agent_id}")
-async def get_brief(session_id: str, agent_id: str):
+async def get_brief(
+    session_id: str,
+    agent_id: str,
+    current_user: User = Depends(get_current_user),
+):
     """Get the current investigator brief for an agent."""
     if session_id not in _active_pipelines:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -620,7 +698,10 @@ async def get_brief(session_id: str, agent_id: str):
 
 
 @router.get("/sessions/{session_id}/checkpoints")
-async def get_checkpoints(session_id: str):
+async def get_checkpoints(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+):
     """Get pending HITL checkpoints for a session."""
     if session_id not in _active_pipelines:
         raise HTTPException(status_code=404, detail="Session not found")

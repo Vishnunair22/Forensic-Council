@@ -24,6 +24,10 @@ from core.evidence import ArtifactType, EvidenceArtifact
 from core.exceptions import ToolUnavailableError
 from infra.evidence_store import EvidenceStore
 
+# OCR imports
+import cv2
+import pytesseract
+
 
 @dataclass
 class BoundingBox:
@@ -555,3 +559,61 @@ async def frequency_domain_analysis(
         if isinstance(e, ToolUnavailableError):
             raise
         raise ToolUnavailableError(f"Frequency domain analysis failed: {str(e)}")
+
+
+async def extract_text_from_image(
+    artifact: EvidenceArtifact,
+) -> dict[str, Any]:
+    """
+    Extract visible text from an image using OCR (Tesseract).
+
+    Uses OpenCV preprocessing (grayscale conversion and thresholding)
+    to improve OCR accuracy, then applies Tesseract to extract text.
+
+    Args:
+        artifact: The evidence artifact to analyze
+
+    Returns:
+        Dictionary containing:
+        - extracted_text: List of non-empty text lines found in the image
+        - raw_text: Complete raw text output from OCR
+        - success: Boolean indicating if extraction was successful
+        - error: Error message if extraction failed (only on failure)
+    """
+    try:
+        original_path = artifact.file_path
+        if not os.path.exists(original_path):
+            raise ToolUnavailableError(f"File not found: {original_path}")
+
+        # Open with OpenCV to preprocess for better OCR
+        img = cv2.imread(original_path)
+        if img is None:
+            raise ToolUnavailableError(f"Could not load image: {original_path}")
+
+        # Convert to grayscale
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        # Apply thresholding to increase contrast
+        _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+
+        # Extract text via pytesseract
+        raw_text = pytesseract.image_to_string(thresh)
+
+        # Split into lines and filter out empty lines
+        lines = [line.strip() for line in raw_text.split('\n') if line.strip()]
+
+        return {
+            "extracted_text": lines,
+            "raw_text": raw_text.strip(),
+            "success": True,
+        }
+
+    except Exception as e:
+        if isinstance(e, ToolUnavailableError):
+            raise
+        return {
+            "extracted_text": [],
+            "raw_text": "",
+            "success": False,
+            "error": f"OCR Extraction Failed: {str(e)}",
+        }

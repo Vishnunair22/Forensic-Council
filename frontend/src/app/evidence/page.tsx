@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Upload, FileWarning, Fingerprint, Search, Shield, Activity,
-    Bot, Database, FileDigit, Scan, Zap, Crosshair, ChevronRight, CheckCircle2, AlertTriangle, AlertCircle, X, Check, Loader2
+    Bot, Database, FileDigit, Scan, Zap, Crosshair, ChevronRight, CheckCircle2, AlertTriangle, AlertCircle, X, Check, Loader2, Lightbulb
 } from "lucide-react";
 import clsx from "clsx";
+import { AgentResponseText } from "@/components/ui/AgentResponseText";
 import {
     Dialog,
     DialogContent,
@@ -36,6 +37,8 @@ export default function EvidencePage() {
     // Server states
     const [isUploading, setIsUploading] = useState(false);
     const [sessionId, setSessionId] = useState<string | null>(null);
+    const [uploadSuccessModalOpen, setUploadSuccessModalOpen] = useState(false);
+    const [isTransitioningToResults, setIsTransitioningToResults] = useState(false);
 
     const {
         status,
@@ -83,9 +86,6 @@ export default function EvidencePage() {
         if (validateFile(f)) {
             setFile(f);
             playSound("success");
-            setTimeout(() => {
-                triggerAnalysis(f);
-            }, 500);
         } else {
             playSound("error");
         }
@@ -175,10 +175,21 @@ export default function EvidencePage() {
 
     const handleAcceptAnalysis = () => {
         playSound("click");
-        router.push("/result");
+        setIsTransitioningToResults(true);
+        setTimeout(() => {
+            router.push("/result");
+        }, 2500); // Wait 2.5s for the cool animation to play before navigating
     };
 
     const validAgentsData = AGENTS_DATA.filter(a => a.name !== "Council Arbiter");
+
+    const progressPercentage = (completedAgents.length / validAgentsData.length) * 100;
+
+    let progressText = "Awaiting deployment operations...";
+    if (status === "initiating") progressText = "Agents are currently initializing...";
+    if (status === "analyzing") progressText = "Agents are actively analyzing evidence...";
+    if (completedAgents.length > 0 && status !== "complete") progressText = `Gathering findings... (${completedAgents.length}/${validAgentsData.length} Agents Complete)`;
+    if (status === "complete") progressText = "Analysis complete! Finalizing intelligence report.";
 
     return (
         <div className="min-h-screen bg-[#050505] text-white p-6 pb-20 overflow-x-hidden relative">
@@ -225,45 +236,85 @@ export default function EvidencePage() {
                                 </p>
                             </div>
 
-                            <div
-                                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                                onDragLeave={() => setIsDragging(false)}
-                                onDrop={(e) => {
-                                    e.preventDefault();
-                                    setIsDragging(false);
-                                    if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]);
-                                }}
-                                onClick={() => fileInputRef.current?.click()}
-                                className={clsx(
-                                    "w-full p-12 md:p-16 rounded-[2rem] border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all duration-300 group shadow-2xl backdrop-blur-sm relative overflow-hidden",
-                                    isDragging
-                                        ? "border-emerald-400 bg-emerald-500/5"
-                                        : "border-white/10 bg-slate-900/30 hover:border-emerald-500/50 hover:bg-slate-900/50"
-                                )}
-                            >
-                                <input
-                                    type="file"
-                                    ref={fileInputRef}
-                                    onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-                                    className="hidden"
-                                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
-                                />
-                                <div className="absolute inset-0 bg-emerald-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500 ease-out" />
-                                <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-black/50 border border-white/5 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 shadow-inner z-10">
-                                    <Fingerprint className={clsx("w-10 h-10 md:w-12 md:h-12", isDragging ? "text-emerald-400" : "text-emerald-500/50")} />
+                            {file ? (
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="w-full p-10 md:p-12 rounded-[2rem] border-2 border-emerald-500/30 bg-emerald-950/20 flex flex-col items-center justify-center transition-all shadow-[0_0_40px_rgba(16,185,129,0.1)] relative overflow-hidden backdrop-blur-md"
+                                >
+                                    <div className="absolute inset-0 bg-emerald-500/5 translate-y-full hover:translate-y-0 transition-transform duration-500 ease-out" />
+                                    <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mb-6 shadow-inner z-10">
+                                        <CheckCircle2 className="w-8 h-8" />
+                                    </div>
+                                    <h3 className="text-2xl font-bold text-white mb-2 z-10 text-center tracking-tight">Evidence Acquired</h3>
+                                    <p className="text-emerald-400 font-mono text-sm uppercase tracking-widest z-10 text-center mb-8 bg-black/40 px-4 py-2 rounded-lg border border-emerald-500/20 truncate max-w-full">
+                                        {file.name}
+                                    </p>
+
+                                    <div className="flex flex-col sm:flex-row gap-4 w-full max-w-sm z-10">
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setFile(null);
+                                                setValidationError(null);
+                                                if (fileInputRef.current) fileInputRef.current.value = '';
+                                            }}
+                                            className="flex-1 px-4 py-3 rounded-xl bg-slate-800/80 text-slate-300 hover:bg-slate-700 font-bold border border-white/10 hover:border-white/20 transition-colors flex items-center justify-center"
+                                        >
+                                            <Upload className="w-4 h-4 mr-2" /> New Upload
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                triggerAnalysis(file!);
+                                            }}
+                                            className="flex-1 px-4 py-3 rounded-xl bg-emerald-500 text-black hover:bg-emerald-400 font-extrabold flex items-center justify-center transition-all shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:shadow-[0_0_30px_rgba(16,185,129,0.6)] hover:scale-105"
+                                        >
+                                            <Activity className="w-4 h-4 mr-2" /> Analyze
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            ) : (
+                                <div
+                                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                                    onDragLeave={() => setIsDragging(false)}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        setIsDragging(false);
+                                        if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]);
+                                    }}
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className={clsx(
+                                        "w-full p-12 md:p-16 rounded-[2rem] border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all duration-300 group shadow-2xl backdrop-blur-sm relative overflow-hidden",
+                                        isDragging
+                                            ? "border-emerald-400 bg-emerald-500/5"
+                                            : "border-white/10 bg-slate-900/30 hover:border-emerald-500/50 hover:bg-slate-900/50"
+                                    )}
+                                >
+                                    <input
+                                        type="file"
+                                        ref={fileInputRef}
+                                        onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+                                        className="hidden"
+                                        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
+                                    />
+                                    <div className="absolute inset-0 bg-emerald-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500 ease-out" />
+                                    <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-black/50 border border-white/5 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 shadow-inner z-10">
+                                        <Fingerprint className={clsx("w-10 h-10 md:w-12 md:h-12", isDragging ? "text-emerald-400" : "text-emerald-500/50")} />
+                                    </div>
+                                    <h3 className="text-2xl font-bold text-white mb-3 z-10">Target Evidence Fragment</h3>
+                                    <p className="text-slate-400 text-center font-mono text-xs uppercase tracking-widest z-10">
+                                        Drag & drop or <span className="text-emerald-400 underline decoration-emerald-500/30 underline-offset-4">browse secure directory</span>
+                                    </p>
+                                    <div className="flex gap-4 mt-8 z-10">
+                                        {['JPG/PNG', 'MP4/MOV', 'WAV/MP3'].map(ext => (
+                                            <span key={ext} className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[10px] font-mono text-slate-500 tracking-wider">
+                                                {ext}
+                                            </span>
+                                        ))}
+                                    </div>
                                 </div>
-                                <h3 className="text-2xl font-bold text-white mb-3 z-10">Target Evidence Fragment</h3>
-                                <p className="text-slate-400 text-center font-mono text-xs uppercase tracking-widest z-10">
-                                    Drag & drop or <span className="text-emerald-400 underline decoration-emerald-500/30 underline-offset-4">browse secure directory</span>
-                                </p>
-                                <div className="flex gap-4 mt-8 z-10">
-                                    {['JPG/PNG', 'MP4/MOV', 'WAV/MP3'].map(ext => (
-                                        <span key={ext} className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[10px] font-mono text-slate-500 tracking-wider">
-                                            {ext}
-                                        </span>
-                                    ))}
-                                </div>
-                            </div>
+                            )}
 
                             <AnimatePresence>
                                 {(validationError || errorMessage || status === "error") && (
@@ -317,6 +368,60 @@ export default function EvidencePage() {
                                 </div>
                             </div>
 
+                            {/* Dynamic Progress Indicator */}
+                            <div className="w-full bg-slate-900/50 border border-white/10 p-5 rounded-2xl mb-8 flex flex-col gap-4 shadow-xl relative overflow-hidden">
+                                {/* Subtle animated background glow */}
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-[80px] -mr-10 -mt-10 pointer-events-none animate-pulse" />
+
+                                <div className="flex items-center gap-4 relative z-10 text-emerald-400">
+                                    <motion.div
+                                        animate={{
+                                            rotate: status === "analyzing" ? [0, 10, -10, 0] : 0,
+                                            scale: status === "complete" ? [1, 1.2, 1] : 1
+                                        }}
+                                        transition={{ duration: 2, repeat: status === "analyzing" ? Infinity : 0, ease: "easeInOut" }}
+                                        className={clsx(
+                                            "w-12 h-12 rounded-full flex items-center justify-center border shadow-lg transition-colors",
+                                            status === "complete" ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" : "bg-black/50 text-emerald-500 border-white/10"
+                                        )}
+                                    >
+                                        <Lightbulb className={clsx("w-6 h-6", status === "analyzing" ? "animate-pulse" : "")} />
+                                    </motion.div>
+
+                                    <div className="flex-1">
+                                        <AnimatePresence mode="wait">
+                                            <motion.p
+                                                key={progressText}
+                                                initial={{ opacity: 0, y: 5 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: -5 }}
+                                                transition={{ duration: 0.3 }}
+                                                className="text-lg md:text-xl font-bold text-white tracking-wide"
+                                            >
+                                                {progressText}
+                                            </motion.p>
+                                        </AnimatePresence>
+                                        <div className="flex items-center justify-between mt-1">
+                                            <span className="text-xs font-mono text-slate-400 uppercase tracking-widest">
+                                                System Progress
+                                            </span>
+                                            <span className="text-xs font-mono font-bold text-emerald-400">
+                                                {Math.round(progressPercentage)}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="w-full h-2 bg-black/60 rounded-full overflow-hidden border border-white/5 relative z-10">
+                                    <motion.div
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${progressPercentage}%` }}
+                                        transition={{ duration: 0.8, ease: "circOut" }}
+                                        className="h-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]"
+                                    />
+                                </div>
+                            </div>
+
                             {/* Concurrent Agent Grid */}
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
                                 {validAgentsData.map((agent, i) => {
@@ -359,11 +464,14 @@ export default function EvidencePage() {
                                                 </div>
                                             </div>
 
-                                            <div className="flex-1 rounded-xl bg-black/40 border border-white/5 p-4 relative overflow-hidden flex items-center mt-2 group">
+                                            <div className="flex-1 rounded-xl bg-black/40 border border-white/5 p-4 relative overflow-hidden flex items-start mt-2 group">
                                                 {isComplete ? (
-                                                    <div className="text-sm text-emerald-100/90 leading-relaxed max-h-32 overflow-y-auto pr-2 custom-scrollbar">
-                                                        <span className="text-emerald-500 mr-2 font-bold font-mono">▸</span>
-                                                        {isComplete.result || "No specific anomalies reported."}
+                                                    <div className="text-sm text-emerald-100/90 leading-relaxed pr-2 w-full">
+                                                        <span className="text-emerald-500 mr-2 font-bold font-mono inline-block mt-0.5 align-top">▸</span>
+                                                        <AgentResponseText
+                                                            text={isComplete.result || "No specific anomalies reported."}
+                                                            className="inline text-emerald-100/90"
+                                                        />
                                                     </div>
                                                 ) : isActive ? (
                                                     <div className="w-full">
@@ -413,15 +521,70 @@ export default function EvidencePage() {
                                             </h3>
                                             <p className="text-emerald-100/70 font-medium">All autonomous agents have completed operations and cryptographic signatures are verified.</p>
                                         </div>
-                                        <button
-                                            onClick={handleAcceptAnalysis}
-                                            className="px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-black rounded-full font-bold tracking-wide transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)] flex items-center whitespace-nowrap group hover:scale-[1.02]"
-                                        >
-                                            View Final Report <ChevronRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-                                        </button>
+                                        <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto mt-4 md:mt-0">
+                                            <button
+                                                onClick={() => { playSound("click"); window.location.reload(); }}
+                                                className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-full font-bold tracking-wide transition-all flex items-center justify-center whitespace-nowrap hover:scale-[1.02]"
+                                            >
+                                                Analyse Again
+                                            </button>
+                                            <button
+                                                onClick={handleAcceptAnalysis}
+                                                className="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-black rounded-full font-bold tracking-wide transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)] flex items-center justify-center whitespace-nowrap group hover:scale-[1.02]"
+                                            >
+                                                View Results <ChevronRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                                            </button>
+                                        </div>
                                     </motion.div>
                                 )}
                             </AnimatePresence>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* Transition Overlay to Results */}
+                <AnimatePresence>
+                    {isTransitioningToResults && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center"
+                        >
+                            <motion.div
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                transition={{ delay: 0.2, type: "spring" }}
+                                className="flex flex-col items-center text-center p-8 max-w-lg"
+                            >
+                                <div className="relative mb-8">
+                                    <div className="absolute inset-0 bg-emerald-500/20 blur-[50px] rounded-full animate-pulse" />
+                                    <Bot className="w-20 h-20 text-emerald-400 relative z-10" />
+                                </div>
+                                <motion.h2
+                                    initial={{ y: 10, opacity: 0 }}
+                                    animate={{ y: 0, opacity: 1 }}
+                                    transition={{ delay: 0.4 }}
+                                    className="text-3xl font-black text-white mb-4 tracking-tight"
+                                >
+                                    Synthesizing Intelligence
+                                </motion.h2>
+                                <motion.p
+                                    initial={{ y: 10, opacity: 0 }}
+                                    animate={{ y: 0, opacity: 1 }}
+                                    transition={{ delay: 0.6 }}
+                                    className="text-emerald-400 font-mono text-sm uppercase tracking-widest flex items-center justify-center gap-3"
+                                >
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Arbiter Agent is compiling analysis into final results...
+                                </motion.p>
+                                <motion.div
+                                    initial={{ width: 0 }}
+                                    animate={{ width: "100%" }}
+                                    transition={{ delay: 0.8, duration: 1.5, ease: "easeInOut" }}
+                                    className="h-1 bg-emerald-500 rounded-full mt-8 shadow-[0_0_15px_rgba(16,185,129,0.5)]"
+                                />
+                            </motion.div>
                         </motion.div>
                     )}
                 </AnimatePresence>

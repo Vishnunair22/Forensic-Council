@@ -1,0 +1,152 @@
+# ============================================================================
+# Forensic Council - Caddy Reverse Proxy Configuration
+# ============================================================================
+# This configuration provides:
+# - Automatic HTTPS with Let's Encrypt
+# - HTTP to HTTPS redirect
+# - Security headers
+# - Rate limiting
+# - Backend proxying
+# ============================================================================
+
+{
+    # Global options
+    auto_https off  # Disable auto HTTPS for now, configure manually
+    admin off       # Disable admin API in production
+    
+    # Logging
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10MB
+            roll_keep 10
+            roll_keep_for 720h
+        }
+        format json
+    }
+}
+
+# HTTP to HTTPS redirect (when domain is configured)
+:80 {
+    # Redirect all HTTP traffic to HTTPS
+    redir https://{host}{uri} permanent
+}
+
+# Production HTTPS configuration
+# Replace example.com with your actual domain
+# {
+#     tls admin@example.com  # Email for Let's Encrypt
+# }
+#
+# example.com {
+#     # Security headers
+#     header {
+#         # Enable HSTS
+#         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+#         # Disable content type sniffing
+#         X-Content-Type-Options "nosniff"
+#         # Enable XSS filter
+#         X-XSS-Protection "1; mode=block"
+#         # Prevent clickjacking
+#         X-Frame-Options "DENY"
+#         # Referrer policy
+#         Referrer-Policy "strict-origin-when-cross-origin"
+#         # Permissions policy
+#         Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+#         # Remove server header
+#         -Server
+#     }
+#
+#     # Rate limiting (requires caddy-rate-limit module)
+#     # rate_limit {
+#     #     zone static_example {
+#     #         key static
+#     #         events 100
+#     #         window 1m
+#     #     }
+#     # }
+#
+#     # Frontend static files
+#     root * /srv/frontend
+#     file_server
+#
+#     # API proxy
+#     handle /api/* {
+#         reverse_proxy backend:8000 {
+#             # Health checks
+#             health_uri /health
+#             health_interval 10s
+#             health_timeout 5s
+#             
+#             # Header handling
+#             header_up Host {host}
+#             header_up X-Real-IP {remote}
+#             header_up X-Forwarded-For {remote}
+#             header_up X-Forwarded-Proto {scheme}
+#             
+#             # Timeouts
+#             transport http {
+#                 read_buffer 64KB
+#                 write_buffer 64KB
+#                 dial_timeout 10s
+#                 response_header_timeout 300s
+#             }
+#         }
+#     }
+#
+#     # WebSocket support
+#     handle /ws/* {
+#         reverse_proxy backend:8000 {
+#             header_up Host {host}
+#             header_up X-Real-IP {remote}
+#             header_up X-Forwarded-For {remote}
+#             header_up X-Forwarded-Proto {scheme}
+#             header_up Upgrade {http_upgrade}
+#             header_up Connection "{http_connection}"
+#         }
+#     }
+# }
+
+# Local development configuration (HTTP only on port 81)
+:81 {
+    # Security headers (non-HSTS since HTTP)
+    header {
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+        -Server
+    }
+
+    # Frontend static files
+    root * /srv/frontend
+    try_files {path} /index.html
+    file_server
+
+    # API proxy
+    handle /api/* {
+        reverse_proxy backend:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+            
+            transport http {
+                dial_timeout 10s
+                response_header_timeout 300s
+            }
+        }
+    }
+
+    # WebSocket support
+    handle /ws/* {
+        reverse_proxy backend:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+            header_up Upgrade {http_upgrade}
+            header_up Connection "{http_connection}"
+        }
+    }
+}
