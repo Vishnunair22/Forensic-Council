@@ -1,0 +1,557 @@
+"""
+Image Forensic Tools
+====================
+
+Real forensic tool handlers for image integrity analysis.
+Implements ELA, ROI extraction, JPEG ghost detection, and hash verification.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import io
+import os
+import tempfile
+from dataclasses import dataclass
+from typing import Any, Optional
+
+import imagehash
+import numpy as np
+from PIL import Image
+from scipy import ndimage
+
+from core.evidence import ArtifactType, EvidenceArtifact
+from core.exceptions import ToolUnavailableError
+from infra.evidence_store import EvidenceStore
+
+
+@dataclass
+class BoundingBox:
+    """Bounding box for region of interest."""
+    x: int
+    y: int
+    w: int
+    h: int
+    
+    def to_dict(self) -> dict[str, int]:
+        return {"x": self.x, "y": self.y, "w": self.w, "h": self.h}
+
+
+async def ela_full_image(
+    artifact: EvidenceArtifact,
+    evidence_store: Optional[EvidenceStore] = None,
+    quality: int = 95,
+    anomaly_threshold: float = 10.0,
+) -> dict[str, Any]:
+    """
+    Perform Error Level Analysis (ELA) on an image.
+    
+    Opens image with Pillow, saves at specified quality, reloads,
+    and computes pixel difference to create ELA map.
+    
+    Args:
+        artifact: The evidence artifact to analyze
+        evidence_store: Optional evidence store for creating derivative artifacts
+        quality: JPEG quality level for re-saving (default 95)
+        anomaly_threshold: Threshold for flagging anomaly regions (default 10.0)
+    
+    Returns:
+        Dictionary containing:
+        - ela_map_array: 2D numpy array of ELA values (as list for serialization)
+        - max_anomaly: Maximum anomaly value detected
+        - anomaly_regions: List of BoundingBox regions with elevated anomaly
+        - mean_ela: Mean ELA value across image
+        - std_ela: Standard deviation of ELA values
+    
+    Raises:
+        ToolUnavailableError: If file cannot be opened or processed
+    """
+    try:
+        # Open the original image
+        original_path = artifact.file_path
+        if not os.path.exists(original_path):
+            raise ToolUnavailableError(f"File not found: {original_path}")
+        
+        original = Image.open(original_path)
+        
+        # Convert to RGB if necessary (for PNG with alpha, etc.)
+        if original.mode != "RGB":
+            original = original.convert("RGB")
+        
+        original_array = np.array(original, dtype=np.float64)
+        
+        # Save at specified quality and reload
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+            tmp_path = tmp.name
+        
+        try:
+            original.save(tmp_path, "JPEG", quality=quality)
+            resaved = Image.open(tmp_path)
+            resaved_array = np.array(resaved, dtype=np.float64)
+            
+            # Compute ELA map (absolute difference)
+            ela_map = np.abs(original_array - resaved_array)
+            
+            # Convert to grayscale intensity (average across RGB channels)
+            ela_gray = np.mean(ela_map, axis=2)
+            
+            # Calculate statistics
+            max_anomaly = float(np.max(ela_gray))
+            mean_ela = float(np.mean(ela_gray))
+            std_ela = float(np.std(ela_gray))
+            
+            # Find anomaly regions using threshold
+            anomaly_mask = ela_gray > anomaly_threshold
+            
+            # Label connected regions
+            labeled_array, num_features = ndimage.label(anomaly_mask)
+            
+            anomaly_regions = []
+            for i in range(1, num_features + 1):
+                # Find bounding box of this region
+                region_mask = labeled_array == i
+                rows = np.any(region_mask, axis=1)
+                cols = np.any(region_mask, axis=0)
+                
+                if np.any(rows) and np.any(cols):
+                    y_min, y_max = np.where(rows)[0][[0, -1]]
+                    x_min, x_max = np.where(cols)[0][[0, -1]]
+                    
+                    anomaly_regions.append(BoundingBox(
+                        x=int(x_min),
+                        y=int(y_min),
+                        w=int(x_max - x_min + 1),
+                        h=int(y_max - y_min + 1),
+                    ))
+            
+            # Create derivative artifact if evidence store provided
+            derivative_artifact = None
+            if evidence_store:
+                # Save ELA map as image
+                ela_image = Image.fromarray(
+                    (ela_gray / max(max_anomaly, 1) * 255).astype(np.uint8)
+                )
+                ela_path = os.path.join(
+                    os.path.dirname(original_path),
+                    f"ela_{artifact.artifact_id}.jpg"
+                )
+                ela_image.save(ela_path, "JPEG", quality=95)
+                
+                # Compute hash of ELA output
+                with open(ela_path, "rb") as f:
+                    ela_hash = hashlib.sha256(f.read()).hexdigest()
+                
+                derivative_artifact = EvidenceArtifact.create_derivative(
+                    parent=artifact,
+                    artifact_type=ArtifactType.ELA_OUTPUT,
+                    file_path=ela_path,
+                    content_hash=ela_hash,
+                    action="ela_analysis",
+                    agent_id="image_tools",
+                    metadata={
+                        "quality": quality,
+                        "max_anomaly": max_anomaly,
+                        "anomaly_threshold": anomaly_threshold,
+                    }
+                )
+            
+            return {
+                "max_anomaly": max_anomaly,
+                "anomaly_regions": [r.to_dict() for r in anomaly_regions],
+                "num_anomaly_regions": len(anomaly_regions),
+                "mean_ela": mean_ela,
+                "std_ela": std_ela,
+                "derivative_artifact": derivative_artifact.to_dict() if derivative_artifact else None,
+            }
+        
+        finally:
+            # Clean up temp file
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+    
+    except Exception as e:
+        if isinstance(e, ToolUnavailableError):
+            raise
+        raise ToolUnavailableError(f"ELA analysis failed: {str(e)}")
+
+
+async def roi_extract(
+    artifact: EvidenceArtifact,
+    bounding_box: dict[str, int],
+    evidence_store: Optional[EvidenceStore] = None,
+) -> dict[str, Any]:
+    """
+    Extract a Region of Interest (ROI) from an image.
+    
+    Crops the image to the specified bounding box and creates
+    a derivative artifact.
+    
+    Args:
+        artifact: The evidence artifact to crop
+        bounding_box: Dictionary with x, y, w, h keys
+        evidence_store: Optional evidence store for creating derivative
+    
+    Returns:
+        Dictionary containing:
+        - roi_artifact: New derivative EvidenceArtifact
+        - roi_path: Path to the cropped image
+        - dimensions: Width and height of ROI
+    
+    Raises:
+        ToolUnavailableError: If file cannot be opened or crop fails
+    """
+    try:
+        original_path = artifact.file_path
+        if not os.path.exists(original_path):
+            raise ToolUnavailableError(f"File not found: {original_path}")
+        
+        original = Image.open(original_path)
+        
+        # Convert to RGB if necessary
+        if original.mode != "RGB":
+            original = original.convert("RGB")
+        
+        # Extract bounding box parameters
+        x = bounding_box.get("x", 0)
+        y = bounding_box.get("y", 0)
+        w = bounding_box.get("w", 100)
+        h = bounding_box.get("h", 100)
+        
+        # Validate bounds
+        img_w, img_h = original.size
+        x = max(0, min(x, img_w - 1))
+        y = max(0, min(y, img_h - 1))
+        w = min(w, img_w - x)
+        h = min(h, img_h - y)
+        
+        # Crop using PIL (left, upper, right, lower)
+        roi = original.crop((x, y, x + w, y + h))
+        
+        # Save ROI
+        roi_path = os.path.join(
+            os.path.dirname(original_path),
+            f"roi_{artifact.artifact_id}_{x}_{y}_{w}x{h}.jpg"
+        )
+        roi.save(roi_path, "JPEG", quality=95)
+        
+        # Compute hash
+        with open(roi_path, "rb") as f:
+            roi_hash = hashlib.sha256(f.read()).hexdigest()
+        
+        # Create derivative artifact
+        derivative_artifact = EvidenceArtifact.create_derivative(
+            parent=artifact,
+            artifact_type=ArtifactType.ROI_CROP,
+            file_path=roi_path,
+            content_hash=roi_hash,
+            action="roi_extract",
+            agent_id="image_tools",
+            metadata={
+                "bounding_box": bounding_box,
+                "dimensions": {"width": w, "height": h},
+            }
+        )
+        
+        return {
+            "roi_artifact": derivative_artifact.to_dict() if derivative_artifact else None,
+            "roi_path": roi_path,
+            "dimensions": {"width": w, "height": h},
+        }
+    
+    except Exception as e:
+        if isinstance(e, ToolUnavailableError):
+            raise
+        raise ToolUnavailableError(f"ROI extraction failed: {str(e)}")
+
+
+async def jpeg_ghost_detect(
+    artifact: EvidenceArtifact,
+    quality_levels: Optional[list[int]] = None,
+    ghost_threshold: float = 5.0,
+) -> dict[str, Any]:
+    """
+    Detect JPEG ghost artifacts indicating double compression.
+    
+    Saves image at multiple quality levels and computes variance map
+    to detect regions with inconsistent compression history.
+    
+    Args:
+        artifact: The evidence artifact to analyze
+        quality_levels: List of quality levels to test (default [50,60,70,80,90])
+        ghost_threshold: Threshold for ghost detection confidence
+    
+    Returns:
+        Dictionary containing:
+        - ghost_detected: Boolean indicating if ghost artifacts found
+        - confidence: Confidence level (0.0 to 1.0)
+        - ghost_regions: List of BoundingBox regions with ghost artifacts
+        - variance_map: Variance map across quality levels
+    """
+    if quality_levels is None:
+        quality_levels = [50, 60, 70, 80, 90]
+    
+    try:
+        original_path = artifact.file_path
+        if not os.path.exists(original_path):
+            raise ToolUnavailableError(f"File not found: {original_path}")
+        
+        original = Image.open(original_path)
+        
+        # Convert to RGB if necessary
+        if original.mode != "RGB":
+            original = original.convert("RGB")
+        
+        original_array = np.array(original, dtype=np.float64)
+        
+        # Create compressed versions at different quality levels
+        compressed_arrays = []
+        temp_files = []
+        
+        try:
+            for quality in quality_levels:
+                with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                    tmp_path = tmp.name
+                    temp_files.append(tmp_path)
+                
+                original.save(tmp_path, "JPEG", quality=quality)
+                compressed = Image.open(tmp_path)
+                compressed_arrays.append(np.array(compressed, dtype=np.float64))
+            
+            # Stack all compressed versions
+            stacked = np.stack(compressed_arrays, axis=0)
+            
+            # Compute variance across quality levels for each pixel
+            variance_map = np.var(stacked, axis=0)
+            
+            # Convert to grayscale
+            variance_gray = np.mean(variance_map, axis=2)
+            
+            # Calculate statistics
+            max_variance = float(np.max(variance_gray))
+            mean_variance = float(np.mean(variance_gray))
+            
+            # Detect ghost regions (high variance indicates double compression)
+            ghost_mask = variance_gray > ghost_threshold
+            
+            # Label connected regions
+            labeled_array, num_features = ndimage.label(ghost_mask)
+            
+            ghost_regions = []
+            for i in range(1, num_features + 1):
+                region_mask = labeled_array == i
+                rows = np.any(region_mask, axis=1)
+                cols = np.any(region_mask, axis=0)
+                
+                if np.any(rows) and np.any(cols):
+                    y_min, y_max = np.where(rows)[0][[0, -1]]
+                    x_min, x_max = np.where(cols)[0][[0, -1]]
+                    
+                    ghost_regions.append(BoundingBox(
+                        x=int(x_min),
+                        y=int(y_min),
+                        w=int(x_max - x_min + 1),
+                        h=int(y_max - y_min + 1),
+                    ))
+            
+            # Calculate confidence based on variance distribution
+            # Higher variance in specific regions indicates likely manipulation
+            if max_variance > 0:
+                confidence = min(1.0, max_variance / 50.0)  # Normalize to 0-1
+            else:
+                confidence = 0.0
+            
+            ghost_detected = len(ghost_regions) > 0 and confidence > 0.3
+            
+            return {
+                "ghost_detected": ghost_detected,
+                "confidence": confidence,
+                "ghost_regions": [r.to_dict() for r in ghost_regions],
+                "variance_map": variance_gray.tolist(),
+                "max_variance": max_variance,
+                "mean_variance": mean_variance,
+            }
+        
+        finally:
+            # Clean up temp files
+            for tmp_path in temp_files:
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+    
+    except Exception as e:
+        if isinstance(e, ToolUnavailableError):
+            raise
+        raise ToolUnavailableError(f"JPEG ghost detection failed: {str(e)}")
+
+
+async def file_hash_verify(
+    artifact: EvidenceArtifact,
+    evidence_store: EvidenceStore,
+) -> dict[str, Any]:
+    """
+    Verify file hash against stored hash in evidence store.
+    
+    Args:
+        artifact: The evidence artifact to verify
+        evidence_store: Evidence store containing the original hash
+    
+    Returns:
+        Dictionary containing:
+        - hash_matches: Boolean indicating if hashes match
+        - original_hash: The stored hash
+        - current_hash: The computed hash
+    """
+    try:
+        # Verify integrity using evidence store
+        hash_matches = await evidence_store.verify_artifact_integrity(artifact)
+        
+        # Compute current hash for reporting
+        original_path = artifact.file_path
+        if os.path.exists(original_path):
+            with open(original_path, "rb") as f:
+                current_hash = hashlib.sha256(f.read()).hexdigest()
+        else:
+            current_hash = "file_not_found"
+        
+        return {
+            "hash_matches": hash_matches,
+            "original_hash": artifact.content_hash,
+            "current_hash": current_hash,
+        }
+    
+    except Exception as e:
+        return {
+            "hash_matches": False,
+            "original_hash": artifact.content_hash,
+            "current_hash": f"error: {str(e)}",
+        }
+
+
+async def compute_perceptual_hash(
+    artifact: EvidenceArtifact,
+    hash_size: int = 8,
+) -> dict[str, Any]:
+    """
+    Compute perceptual hash for image comparison.
+    
+    Uses multiple hash algorithms for robust comparison.
+    
+    Args:
+        artifact: The evidence artifact to hash
+        hash_size: Size of the hash (default 8 for 64-bit hash)
+    
+    Returns:
+        Dictionary containing:
+        - phash: Perceptual hash
+        - ahash: Average hash
+        - dhash: Difference hash
+        - whash: Wavelet hash
+    """
+    try:
+        original_path = artifact.file_path
+        if not os.path.exists(original_path):
+            raise ToolUnavailableError(f"File not found: {original_path}")
+        
+        original = Image.open(original_path)
+        
+        # Convert to RGB if necessary
+        if original.mode != "RGB":
+            original = original.convert("RGB")
+        
+        # Compute various perceptual hashes
+        phash = str(imagehash.phash(original, hash_size=hash_size))
+        ahash = str(imagehash.average_hash(original, hash_size=hash_size))
+        dhash = str(imagehash.dhash(original, hash_size=hash_size))
+        whash = str(imagehash.whash(original, hash_size=hash_size))
+        
+        return {
+            "phash": phash,
+            "ahash": ahash,
+            "dhash": dhash,
+            "whash": whash,
+        }
+    
+    except Exception as e:
+        if isinstance(e, ToolUnavailableError):
+            raise
+        raise ToolUnavailableError(f"Perceptual hash computation failed: {str(e)}")
+
+
+async def frequency_domain_analysis(
+    artifact: EvidenceArtifact,
+) -> dict[str, Any]:
+    """
+    Perform frequency domain analysis using DFT.
+    
+    Analyzes the Discrete Fourier Transform of the image to detect
+    anomalies that may indicate manipulation.
+    
+    Args:
+        artifact: The evidence artifact to analyze
+    
+    Returns:
+        Dictionary containing:
+        - frequency_spectrum: 2D frequency spectrum (as list)
+        - dominant_frequencies: List of dominant frequency components
+        - anomaly_score: Score indicating frequency domain anomalies
+    """
+    try:
+        original_path = artifact.file_path
+        if not os.path.exists(original_path):
+            raise ToolUnavailableError(f"File not found: {original_path}")
+        
+        original = Image.open(original_path)
+        
+        # Convert to grayscale
+        if original.mode != "L":
+            original = original.convert("L")
+        
+        img_array = np.array(original, dtype=np.float64)
+        
+        # Apply 2D DFT
+        dft = np.fft.fft2(img_array)
+        dft_shift = np.fft.fftshift(dft)
+        magnitude_spectrum = np.abs(dft_shift)
+        
+        # Log scale for visualization
+        magnitude_log = np.log1p(magnitude_spectrum)
+        
+        # Normalize
+        magnitude_normalized = (magnitude_log - np.min(magnitude_log)) / (
+            np.max(magnitude_log) - np.min(magnitude_log) + 1e-10
+        )
+        
+        # Find dominant frequencies (top 10 peaks)
+        flat_magnitude = magnitude_spectrum.flatten()
+        top_indices = np.argsort(flat_magnitude)[-10:][::-1]
+        
+        # Calculate anomaly score based on frequency distribution
+        # Natural images typically have more energy in low frequencies
+        center = np.array(magnitude_spectrum.shape) // 2
+        y, x = np.ogrid[:magnitude_spectrum.shape[0], :magnitude_spectrum.shape[1]]
+        distances = np.sqrt((x - center[1])**2 + (y - center[0])**2)
+        
+        # Energy in low vs high frequencies
+        low_freq_mask = distances < min(center)
+        high_freq_mask = ~low_freq_mask
+        
+        low_freq_energy = np.sum(magnitude_spectrum[low_freq_mask]**2)
+        high_freq_energy = np.sum(magnitude_spectrum[high_freq_mask]**2)
+        total_energy = low_freq_energy + high_freq_energy + 1e-10
+        
+        # Anomaly score: high frequency energy ratio
+        # Manipulated images often have unusual high-frequency content
+        high_freq_ratio = high_freq_energy / total_energy
+        anomaly_score = min(1.0, high_freq_ratio * 5)  # Scale to 0-1
+        
+        return {
+            "frequency_spectrum": magnitude_normalized.tolist(),
+            "dominant_frequencies": top_indices.tolist(),
+            "anomaly_score": anomaly_score,
+            "low_freq_ratio": low_freq_energy / total_energy,
+            "high_freq_ratio": high_freq_ratio,
+        }
+    
+    except Exception as e:
+        if isinstance(e, ToolUnavailableError):
+            raise
+        raise ToolUnavailableError(f"Frequency domain analysis failed: {str(e)}")
