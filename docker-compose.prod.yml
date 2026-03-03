@@ -1,0 +1,54 @@
+# ============================================================================
+# Forensic Council — Production Configuration
+# ============================================================================
+# Use this file explicitly for production deployments:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# This configuration:
+#   - Uses pre-built images from a registry (configure IMAGE_TAG)
+#   - Sets restart policies for high availability
+#   - Removes volume mounts (immutable containers)
+#   - Uses production environment variables
+#   - Configures proper domain for NEXT_PUBLIC_API_URL
+# ============================================================================
+
+services:
+  redis:
+    restart: unless-stopped
+    # No port mapping in production — internal only
+
+  qdrant:
+    restart: unless-stopped
+    # No port mapping in production — internal only
+
+  postgres:
+    restart: unless-stopped
+    # No port mapping in production — internal only
+
+  backend:
+    image: ${DOCKER_REGISTRY:-ghcr.io/yourorg}/forensic-council-backend:${IMAGE_TAG:-latest}
+    # No build context — use pre-built image
+    pull_policy: always
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=production
+      - DEBUG=false
+      - LOG_LEVEL=WARNING
+    restart: unless-stopped
+    # No volume mounts — immutable container
+
+  frontend:
+    image: ${DOCKER_REGISTRY:-ghcr.io/yourorg}/forensic-council-frontend:${IMAGE_TAG:-latest}
+    # No build context — use pre-built image
+    pull_policy: always
+    build:
+      args:
+        # Replace with your production API domain
+        NEXT_PUBLIC_API_URL: ${API_URL:-https://api.forensic-council.example.com}
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped

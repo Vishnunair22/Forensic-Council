@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""
+ela_anomaly_classifier.py
+=========================
+Classifies ELA anomaly regions using an IsolationForest trained on the
+image's own DCT block statistics. No external model download required.
+
+Usage:
+    python ela_anomaly_classifier.py --input /path/to/image.jpg [--quality 95]
+
+Output JSON:
+    {
+        "verdict": "SUSPICIOUS",          # NORMAL | SUSPICIOUS | HIGHLY_ANOMALOUS
+        "anomaly_score": 0.73,            # 0-1, higher = more anomalous
+        "num_anomalous_blocks": 12,
+        "total_blocks_analyzed": 240,
+        "anomalous_block_positions": [[x,y], ...],  # top 10
+        "ela_max": 18.4,
+        "ela_mean": 3.2,
+        "available": true
+    }
+"""
+
+import argparse
+import json
+import sys
+import numpy as np
+import cv2
+from PIL import Image
+import io
+import tempfile
+import os
+
+
+def extract_dct_features(block: np.ndarray) -> np.ndarray:
+    """Extract DCT coefficient statistics from a 16x16 block."""
+    if block.shape != (16, 16):
+        block = cv2.resize(block, (16, 16))
+    block_f = block.astype(np.float32)
+    dct = cv2.dct(block_f)
+    return np.array([
+        float(dct[0, 0]),           # DC coefficient
+        float(np.mean(np.abs(dct[1:4, 1:4]))),   # low-freq AC
+        float(np.mean(np.abs(dct[4:, 4:]))),      # high-freq AC
+        float(np.std(dct)),
+        float(np.max(np.abs(dct[1:, 1:]))),
+    ], dtype=np.float32)
+
+
+def run_ela(image_path: str, quality: int = 95) -> np.ndarray:
+    """Compute ELA array from image."""
+    orig = Image.open(image_path).convert("RGB")
+    buf = io.BytesIO()
+    orig.save(buf, format="JPEG", quality=quality)
+    buf.seek(0)
+    recompressed = Image.open(buf).convert("RGB")
+
+    orig_arr = np.array(orig, dtype=np.float32)
+    recomp_arr = np.array(recompressed, dtype=np.float32)
+    ela = np.abs(orig_arr - recomp_arr)
+    return ela.mean(axis=2)  # average across RGB channels
+
+
+def classify_ela(image_path: str, quality: int = 95) -> dict:
+    from sklearn.ensemble import IsolationForest
+
+    ela_map = run_ela(image_path, quality)
+    h, w = ela_map.shape
+    block_size = 16
+    
+    blocks = []
+    positions = []
+    
+    for y in range(0, h - block_size, block_size):
+        for x in range(0, w - block_size, block_size):
+            block = ela_map[y:y+block_size, x:x+block_size]
+            feats = extract_dct_features(block)
+            blocks.append(feats)
+            positions.append((x, y))
+
+    if len(blocks) < 20:
+        return {
+            "verdict": "INCONCLUSIVE",
+            "anomaly_score": 0.0,
+            "num_anomalous_blocks": 0,
+            "total_blocks_analyzed": len(blocks),
+            "anomalous_block_positions": [],
+            "ela_max": float(ela_map.max()),
+            "ela_mean": float(ela_map.mean()),
+            "available": True,
+            "note": "Image too small for block analysis",
+        }
+
+    X = np.array(blocks)
+    
+    # Train on all blocks — outliers are the anomalous ones
+    clf = IsolationForest(contamination=0.1, random_state=42, n_estimators=50)
+    clf.fit(X)
+    
+    scores = clf.decision_function(X)  # lower = more anomalous
+    labels = clf.predict(X)  # -1 = anomaly, 1 = normal
+    
+    anomalous_idx = np.where(labels == -1)[0]
+    num_anomalous = len(anomalous_idx)
+    
+    # Normalize anomaly score to 0-1
+    score_range = scores.max() - scores.min()
+    if score_range > 0:
+        normalized = 1.0 - (scores.min() - scores) / score_range  
+        anomaly_score = float(np.mean(normalized[anomalous_idx])) if len(anomalous_idx) > 0 else 0.0
+    else:
+        anomaly_score = 0.0
+
+    ratio = num_anomalous / len(blocks)
+    if ratio > 0.15 or (ela_map.max() > 25 and ratio > 0.05):
+        verdict = "HIGHLY_ANOMALOUS"
+    elif ratio > 0.05 or ela_map.max() > 12:
+        verdict = "SUSPICIOUS"
+    else:
+        verdict = "NORMAL"
+
+    top_positions = [list(positions[i]) for i in anomalous_idx[:10].tolist()]
+
+    return {
+        "verdict": verdict,
+        "anomaly_score": round(anomaly_score, 4),
+        "num_anomalous_blocks": int(num_anomalous),
+        "total_blocks_analyzed": len(blocks),
+        "anomalous_block_positions": top_positions,
+        "ela_max": round(float(ela_map.max()), 3),
+        "ela_mean": round(float(ela_map.mean()), 3),
+        "available": True,
+    }
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", required=True)
+    parser.add_argument("--quality", type=int, default=95)
+    args = parser.parse_args()
+
+    try:
+        result = classify_ela(args.input, args.quality)
+    except Exception as e:
+        result = {"error": str(e), "available": False}
+    
+    print(json.dumps(result))

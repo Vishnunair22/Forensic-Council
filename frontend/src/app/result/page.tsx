@@ -1,0 +1,684 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { FileCheck, Activity, Shield, ArrowRight, CheckCircle, Clock, Search, ShieldAlert, ShieldCheck, ShieldX, ShieldAlert as ShieldAlertIcon, Cpu, Lock, Archive, Database, Eye, Hash, FileSymlink, AlertTriangle, Trash2, Loader2, ChevronDown, MonitorPlay, Mic2, Image as ImageIcon, Binary, GitMerge, GitPullRequest, Zap } from "lucide-react";
+import { AGENTS_DATA } from "@/lib/constants";
+import { useRouter } from "next/navigation";
+import clsx from "clsx";
+import { AgentIcon } from "@/components/ui/AgentIcon";
+import { AgentResponseText } from "@/components/ui/AgentResponseText";
+import { useForensicData } from "@/hooks/useForensicData";
+import { useSound } from "@/hooks/useSound";
+import { getReport, type ReportDTO, type AgentFindingDTO } from "@/lib/api";
+import type { AgentResult, Report } from "@/types";
+
+const VALID_AGENTS = new Set([...AGENTS_DATA.map(a => a.name), "Council Arbiter"]);
+
+interface AgentAccumulator {
+    [key: string]: AgentResult & { findings: string[] };
+}
+
+// Map agent names/roles to Domains
+const DOMAIN_MAP: Record<string, { label: string, icon: React.ReactNode, color: string }> = {
+    "Agent1": { label: "Image Analysis", icon: <ImageIcon className="w-5 h-5" />, color: "emerald" },
+    "Agent2": { label: "Audio Analysis", icon: <Mic2 className="w-5 h-5" />, color: "cyan" },
+    "Agent3": { label: "Object Detection", icon: <Search className="w-5 h-5" />, color: "indigo" },
+    "Agent4": { label: "Video Analysis", icon: <MonitorPlay className="w-5 h-5" />, color: "pink" },
+    "Agent5": { label: "Metadata Forensics", icon: <Binary className="w-5 h-5" />, color: "amber" },
+    // Fallbacks
+    "Image Forensics": { label: "Image Analysis", icon: <ImageIcon className="w-5 h-5" />, color: "emerald" },
+    "Audio Forensics": { label: "Audio Analysis", icon: <Mic2 className="w-5 h-5" />, color: "cyan" },
+    "Video Forensics": { label: "Video Analysis", icon: <MonitorPlay className="w-5 h-5" />, color: "pink" },
+    "Metadata Forensics": { label: "Metadata Forensics", icon: <Binary className="w-5 h-5" />, color: "amber" },
+};
+
+export default function ResultPage() {
+    const router = useRouter();
+    const [activeTab, setActiveTab] = useState<"result" | "history">("result");
+    const [detailsExpanded, setDetailsExpanded] = useState(false);
+
+    // Use Hook
+    const { history, currentReport, deleteFromHistory, clearHistory, isLoading } = useForensicData();
+
+    // Real report data from API
+    const [realReport, setRealReport] = useState<ReportDTO | null>(null);
+    const [isLoadingRealReport, setIsLoadingRealReport] = useState(false);
+    const [mounted, setMounted] = useState(false);
+    const { playSound } = useSound();
+
+    // Fetch real report from API
+    useEffect(() => {
+        const fetchRealReport = async () => {
+            const sessionId = sessionStorage.getItem('forensic_session_id');
+
+            if (sessionId) {
+                setIsLoadingRealReport(true);
+                try {
+                    const response = await getReport(sessionId);
+                    if (response.status === 'complete' && response.report) {
+                        setRealReport(response.report);
+                    }
+                } catch (err) {
+                    console.error("Failed to fetch report:", err);
+                } finally {
+                    setIsLoadingRealReport(false);
+                }
+            }
+        };
+
+        fetchRealReport();
+    }, []);
+
+    // Prevent hydration mismatch
+    useEffect(() => {
+        setMounted(true);
+        playSound("success");
+    }, [playSound]);
+
+    const handleDeleteOne = (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        deleteFromHistory(id);
+    };
+
+    const handleClearAll = () => {
+        clearHistory();
+    };
+
+    const formatDate = (isoString: string) => {
+        return new Date(isoString).toLocaleString();
+    };
+
+    const getFileName = () => {
+        if (currentReport?.fileName) return currentReport.fileName;
+        const sessionName = sessionStorage.getItem('forensic_file_name');
+        if (sessionName) return sessionName;
+        if (realReport?.case_id) return realReport.case_id;
+        return "Analysis Result";
+    };
+
+    // Synthesize domain results
+    const synthesizeDomains = () => {
+        const domains: Record<string, { label: string, icon: React.ReactNode, color: string, points: string[] }> = {};
+
+        const ensureDomain = (idOrName: string) => {
+            const config = DOMAIN_MAP[idOrName] || { label: idOrName, icon: <Search className="w-5 h-5" />, color: "slate" };
+            if (!domains[config.label]) {
+                domains[config.label] = { ...config, points: [] };
+            }
+            return config.label;
+        };
+
+        // Populate from real report first
+        if (realReport?.cross_modal_confirmed) {
+            realReport.cross_modal_confirmed.forEach(finding => {
+                if (VALID_AGENTS.has(finding.agent_name || "")) {
+                    // Try to map by agent Id or Name
+                    const l = ensureDomain(finding.agent_name || "Unknown");
+                    domains[l].points.push(finding.reasoning_summary);
+                }
+            });
+        } else if (currentReport?.agents) {
+            currentReport.agents.forEach(agent => {
+                if (VALID_AGENTS.has(agent.name)) {
+                    const l = ensureDomain(agent.name);
+                    domains[l].points.push(agent.result);
+                }
+            });
+        }
+
+        // Deduplicate points per domain
+        Object.keys(domains).forEach(key => {
+            domains[key].points = Array.from(new Set(domains[key].points));
+        });
+
+        return Object.values(domains).filter(d => d.points.length > 0);
+    };
+
+    const domainData = synthesizeDomains();
+
+    // --- Compute overall verdict from agent data ---
+    const computeVerdict = () => {
+        let scores: number[] = [];
+
+        if (realReport?.per_agent_findings) {
+            (Object.values(realReport.per_agent_findings) as AgentFindingDTO[][]).forEach((findings: AgentFindingDTO[]) => {
+                findings.forEach((f: AgentFindingDTO) => {
+                    const c = f.calibrated_probability ?? f.confidence_raw ?? null;
+                    if (c !== null) scores.push(c);
+                });
+            });
+        } else if (currentReport?.agents) {
+            scores = currentReport.agents.map(a => a.confidence);
+        }
+
+        if (scores.length === 0) return null;
+        const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+        const contested = realReport?.contested_findings?.length ?? 0;
+
+        if (avg >= 0.75 && contested === 0) return { label: "AUTHENTIC", color: "emerald", icon: "check", score: avg };
+        if (avg >= 0.5 || contested <= 1) return { label: "REVIEW REQUIRED", color: "amber", icon: "warn", score: avg };
+        return { label: "MANIPULATION DETECTED", color: "red", icon: "alert", score: avg };
+    };
+
+    const verdict = computeVerdict();
+    const totalFindings = realReport
+        ? Object.values(realReport.per_agent_findings ?? {}).reduce((s: number, f: any) => s + f.length, 0)
+        : (currentReport?.agents?.length ?? 0);
+    const crossModalCount = realReport?.cross_modal_confirmed?.length ?? 0;
+    const contestedCount = realReport?.contested_findings?.length ?? 0;
+
+    if (!mounted) return null;
+
+    return (
+        <div className="min-h-screen bg-[#050505] text-white p-6 pb-20 overflow-x-hidden">
+            {/* --- Background --- */}
+            <div className="fixed inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-slate-900/40 via-black to-black -z-50" />
+
+            <header className="flex-shrink-0 w-full mb-10 border-b border-white/5 pb-6">
+                <div className="max-w-5xl mx-auto flex items-center justify-between">
+                    <div className="flex items-center space-x-3 cursor-pointer" onClick={() => router.push('/')}>
+                        <div className="w-10 h-10 bg-emerald-500/20 border border-emerald-500/40 rounded flex items-center justify-center font-bold text-emerald-400">FC</div>
+                        <span className="text-xl font-bold tracking-tight">Forensic Council</span>
+                    </div>
+                </div>
+            </header>
+
+            <main className="max-w-5xl mx-auto">
+                {/* --- Tabs --- */}
+                <div className="flex space-x-6 mb-8 border-b border-white/10">
+                    <button
+                        onClick={() => setActiveTab("result")}
+                        className={clsx(
+                            "pb-3 text-lg font-medium transition-all relative outline-none focus-visible:ring-2 ring-emerald-500",
+                            activeTab === "result" ? "text-emerald-400" : "text-slate-500 hover:text-slate-300"
+                        )}
+                    >
+                        Current Analysis
+                        {activeTab === "result" && (
+                            <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-0.5 bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]" />
+                        )}
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("history")}
+                        className={clsx(
+                            "pb-3 text-lg font-medium transition-all relative outline-none focus-visible:ring-2 ring-emerald-500",
+                            activeTab === "history" ? "text-emerald-400" : "text-slate-500 hover:text-slate-300"
+                        )}
+                    >
+                        History
+                        {activeTab === "history" && (
+                            <motion.div layoutId="tab" className="absolute bottom-0 left-0 w-full h-0.5 bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]" />
+                        )}
+                    </button>
+                </div>
+
+                <AnimatePresence mode="wait">
+                    {activeTab === "result" ? (
+                        <motion.div
+                            key="result"
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="flex flex-col gap-6"
+                        >
+                            {isLoading || isLoadingRealReport ? (
+                                <div className="p-12 text-center text-slate-500 bg-white/5 rounded-3xl border border-white/5 flex flex-col items-center">
+                                    <Loader2 className="w-10 h-10 animate-spin mb-4 text-emerald-500" />
+                                    <p className="font-mono text-lg tracking-widest uppercase">Synthesizing final report...</p>
+                                </div>
+                            ) : realReport || currentReport ? (
+                                <>
+                                    {/* --- TIER 1: Verdict Banner --- */}
+                                    {verdict && (
+                                        <motion.div
+                                            initial={{ opacity: 0, scale: 0.97 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            className={`relative overflow-hidden rounded-3xl border p-8 md:p-10 flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl
+                                                ${verdict.color === "emerald" ? "bg-emerald-950/30 border-emerald-500/40 shadow-[0_0_60px_rgba(16,185,129,0.08)]" :
+                                                    verdict.color === "amber" ? "bg-amber-950/30 border-amber-500/40 shadow-[0_0_60px_rgba(245,158,11,0.08)]" :
+                                                        "bg-red-950/30 border-red-500/40 shadow-[0_0_60px_rgba(239,68,68,0.08)]"}`}
+                                        >
+                                            <div className={`absolute inset-0 opacity-5 pointer-events-none
+                                                ${verdict.color === "emerald" ? "bg-[radial-gradient(circle_at_30%_50%,#10b981,transparent)]" :
+                                                    verdict.color === "amber" ? "bg-[radial-gradient(circle_at_30%_50%,#f59e0b,transparent)]" :
+                                                        "bg-[radial-gradient(circle_at_30%_50%,#ef4444,transparent)]"}`} />
+
+                                            {/* Left: icon + verdict label */}
+                                            <div className="flex items-center gap-6 relative z-10">
+                                                <div className={`w-20 h-20 rounded-2xl flex items-center justify-center border shrink-0
+                                                    ${verdict.color === "emerald" ? "bg-emerald-500/10 border-emerald-500/30" :
+                                                        verdict.color === "amber" ? "bg-amber-500/10 border-amber-500/30" :
+                                                            "bg-red-500/10 border-red-500/30"}`}>
+                                                    {verdict.icon === "check" && <ShieldCheck className={`w-10 h-10 text-${verdict.color}-400`} />}
+                                                    {verdict.icon === "warn" && <ShieldAlertIcon className={`w-10 h-10 text-${verdict.color}-400`} />}
+                                                    {verdict.icon === "alert" && <ShieldX className={`w-10 h-10 text-${verdict.color}-400`} />}
+                                                </div>
+                                                <div>
+                                                    <p className={`text-xs font-mono uppercase tracking-[0.2em] mb-1 text-${verdict.color}-400/70`}>Council Verdict</p>
+                                                    <h2 className={`text-3xl md:text-4xl font-black tracking-tight text-${verdict.color}-300`}>
+                                                        {verdict.label}
+                                                    </h2>
+                                                    <p className="text-slate-400 text-sm mt-1 font-mono truncate max-w-xs">{getFileName()}</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Right: stat chips */}
+                                            <div className="flex flex-wrap gap-3 relative z-10 justify-center md:justify-end">
+                                                <div className="px-5 py-3 rounded-2xl bg-black/40 border border-white/10 text-center min-w-[80px]">
+                                                    <p className="text-2xl font-black text-white">{Math.round(verdict.score * 100)}<span className="text-sm text-slate-400">%</span></p>
+                                                    <p className="text-[10px] uppercase tracking-widest text-slate-500 font-mono mt-0.5">Avg Conf</p>
+                                                </div>
+                                                <div className="px-5 py-3 rounded-2xl bg-black/40 border border-white/10 text-center min-w-[80px]">
+                                                    <p className="text-2xl font-black text-white">5</p>
+                                                    <p className="text-[10px] uppercase tracking-widest text-slate-500 font-mono mt-0.5">Agents</p>
+                                                </div>
+                                                <div className="px-5 py-3 rounded-2xl bg-black/40 border border-white/10 text-center min-w-[80px]">
+                                                    <p className="text-2xl font-black text-emerald-400">{crossModalCount}</p>
+                                                    <p className="text-[10px] uppercase tracking-widest text-slate-500 font-mono mt-0.5">Confirmed</p>
+                                                </div>
+                                                {contestedCount > 0 && (
+                                                    <div className="px-5 py-3 rounded-2xl bg-amber-950/40 border border-amber-500/20 text-center min-w-[80px]">
+                                                        <p className="text-2xl font-black text-amber-400">{contestedCount}</p>
+                                                        <p className="text-[10px] uppercase tracking-widest text-amber-500/70 font-mono mt-0.5">Contested</p>
+                                                    </div>
+                                                )}
+                                                <div className="px-5 py-3 rounded-2xl bg-black/40 border border-white/10 text-center min-w-[80px]">
+                                                    <p className="text-2xl font-black text-white">{totalFindings}</p>
+                                                    <p className="text-[10px] uppercase tracking-widest text-slate-500 font-mono mt-0.5">Findings</p>
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    )}
+
+                                    {/* File + timestamp sub-header */}
+                                    <div className="flex items-center justify-between px-2">
+                                        <p className="text-slate-500 font-mono text-xs">
+                                            <Clock className="w-3.5 h-3.5 inline mr-1.5" />
+                                            {realReport?.signed_utc ? formatDate(realReport.signed_utc) : currentReport?.timestamp ? formatDate(currentReport.timestamp) : "—"}
+                                        </p>
+                                        {realReport?.cryptographic_signature && (
+                                            <span className="text-[10px] font-mono text-emerald-500/60 flex items-center gap-1">
+                                                <ShieldCheck className="w-3 h-3" /> Cryptographically Signed
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* --- 2. Cohesive Executive Overview --- */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        {/* Main Summary */}
+                                        <div className="md:col-span-2 p-8 rounded-3xl bg-slate-950 border border-emerald-500/30 shadow-[0_4px_30px_rgba(16,185,129,0.05)] flex flex-col relative overflow-hidden">
+                                            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-3">
+                                                <FileCheck className="w-6 h-6 text-emerald-400" /> Consensus Report
+                                            </h3>
+                                            <p className="text-lg text-slate-300 leading-relaxed font-normal mb-8 border-b border-white/10 pb-8">
+                                                {realReport?.executive_summary || currentReport?.summary || 'Analysis complete. No major anomalies detected.'}
+                                            </p>
+
+                                            {/* Domain Breakdown */}
+                                            <h4 className="text-sm font-bold text-slate-400 mb-5 uppercase tracking-widest font-mono">Domain Findings</h4>
+                                            <div className="space-y-4">
+                                                {domainData.length > 0 ? domainData.map((domain, i) => (
+                                                    <div key={i} className="flex flex-col sm:flex-row gap-4 p-5 rounded-2xl bg-black/40 border border-white/5">
+                                                        <div className={`flex items-center gap-3 shrink-0 sm:w-48 text-${domain.color}-400`}>
+                                                            <div className={`p-2 rounded-xl bg-${domain.color}-500/10 border border-${domain.color}-500/20`}>
+                                                                {domain.icon}
+                                                            </div>
+                                                            <span className="font-bold text-sm">{domain.label}</span>
+                                                        </div>
+                                                        <div className="flex-1 space-y-2">
+                                                            {domain.points.map((pt, j) => (
+                                                                <p key={j} className="text-sm text-slate-300 leading-relaxed border-l-2 border-emerald-500/50 pl-4 py-1">
+                                                                    {pt}
+                                                                </p>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )) : (
+                                                    <p className="text-slate-500 italic text-sm">No specific domain details available.</p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Cryptography Sidebar */}
+                                        <div className="md:col-span-1 flex flex-col gap-6">
+                                            {realReport ? (
+                                                <div className="flex flex-col gap-4">
+                                                    <div className="p-6 rounded-3xl bg-slate-900 border border-white/10 hover:border-emerald-500/20 transition-colors">
+                                                        <h3 className="text-sm font-bold text-slate-300 mb-6 flex items-center gap-2 uppercase tracking-wide font-mono">
+                                                            <Hash className="w-4 h-4 text-emerald-400" /> Signature Chain
+                                                        </h3>
+                                                        <div className="space-y-5">
+                                                            <div>
+                                                                <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-2 font-bold flex justify-between">
+                                                                    <span>Report SHA-256</span>
+                                                                </p>
+                                                                <div className="bg-black/60 p-3 rounded-xl border border-white/5 relative group cursor-pointer overflow-hidden">
+                                                                    <p className="text-xs font-mono text-emerald-400/80 break-all leading-relaxed group-hover:text-emerald-400 transition-colors">
+                                                                        {realReport.report_hash || 'N/A'}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-2 font-bold flex justify-between">
+                                                                    <span>ECDSA Signature</span>
+                                                                </p>
+                                                                <div className="bg-black/60 p-3 rounded-xl border border-white/5 relative group cursor-pointer overflow-hidden">
+                                                                    <p className="text-xs font-mono text-emerald-400/80 break-all leading-relaxed group-hover:text-emerald-400 transition-colors opacity-70">
+                                                                        {realReport.cryptographic_signature ? `${realReport.cryptographic_signature.substring(0, 96)}...` : 'N/A'}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {realReport.uncertainty_statement && (
+                                                        <div className="p-6 rounded-3xl bg-amber-950/30 border border-amber-500/20">
+                                                            <h3 className="text-sm font-bold text-amber-500 mb-3 flex items-center gap-2 uppercase tracking-wide font-mono">
+                                                                <AlertTriangle className="w-4 h-4" /> Degree of Uncertainty
+                                                            </h3>
+                                                            <p className="text-sm text-amber-200/80 leading-relaxed">
+                                                                {realReport.uncertainty_statement}
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="flex-1 p-6 rounded-3xl bg-slate-900 border border-white/10 flex flex-col items-center justify-center text-center">
+                                                    <Lock className="w-10 h-10 text-slate-700 mb-4" />
+                                                    <p className="text-sm font-mono text-slate-500 uppercase tracking-widest leading-loose">Cryptography<br />Unavailable</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* --- TIER 4: Cross-Modal Confirmations --- */}
+                                    {realReport?.cross_modal_confirmed && realReport.cross_modal_confirmed.length > 0 && (
+                                        <div className="rounded-3xl bg-emerald-950/20 border border-emerald-500/20 overflow-hidden">
+                                            <div className="px-6 py-5 border-b border-emerald-500/10 flex items-center gap-3">
+                                                <div className="p-2 bg-emerald-500/10 rounded-xl">
+                                                    <GitMerge className="w-5 h-5 text-emerald-400" />
+                                                </div>
+                                                <div>
+                                                    <h3 className="font-bold text-white">Cross-Modal Confirmed Findings</h3>
+                                                    <p className="text-xs text-emerald-400/60 font-mono mt-0.5 uppercase tracking-widest">Corroborated by multiple independent agents — highest trust</p>
+                                                </div>
+                                                <span className="ml-auto text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full">
+                                                    {realReport.cross_modal_confirmed.length} findings
+                                                </span>
+                                            </div>
+                                            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {realReport.cross_modal_confirmed.map((f: any, i: number) => (
+                                                    <div key={i} className="flex gap-4 p-4 rounded-2xl bg-black/30 border border-emerald-500/10 hover:border-emerald-500/30 transition-colors">
+                                                        <div className="mt-1 shrink-0">
+                                                            <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm text-slate-200 leading-relaxed">{f.reasoning_summary}</p>
+                                                            <p className="text-[10px] font-mono text-emerald-500/60 mt-2 uppercase tracking-widest">{f.agent_name} · {f.finding_type}</p>
+                                                        </div>
+                                                        <div className="shrink-0 text-right">
+                                                            <span className="text-xs font-mono text-emerald-400 font-bold">
+                                                                {Math.round((f.calibrated_probability ?? f.confidence_raw ?? 0) * 100)}%
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* --- TIER 5: Contested Findings --- */}
+                                    {realReport?.contested_findings && realReport.contested_findings.length > 0 && (
+                                        <div className="rounded-3xl bg-amber-950/20 border border-amber-500/20 overflow-hidden">
+                                            <div className="px-6 py-5 border-b border-amber-500/10 flex items-center gap-3">
+                                                <div className="p-2 bg-amber-500/10 rounded-xl">
+                                                    <GitPullRequest className="w-5 h-5 text-amber-400" />
+                                                </div>
+                                                <div>
+                                                    <h3 className="font-bold text-white">Contested Findings</h3>
+                                                    <p className="text-xs text-amber-400/60 font-mono mt-0.5 uppercase tracking-widest">Agents reached conflicting conclusions — requires human review</p>
+                                                </div>
+                                                <span className="ml-auto text-xs font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20 px-3 py-1 rounded-full">
+                                                    {realReport.contested_findings.length} disputes
+                                                </span>
+                                            </div>
+                                            <div className="p-6 space-y-4">
+                                                {realReport.contested_findings.map((cf: any, i: number) => (
+                                                    <div key={i} className="p-4 rounded-2xl bg-black/30 border border-amber-500/10">
+                                                        <div className="flex items-center gap-2 mb-3">
+                                                            <span className="text-[10px] font-mono bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full uppercase tracking-widest">{cf.verdict}</span>
+                                                        </div>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                            <div className="p-3 rounded-xl bg-black/40 border border-white/5">
+                                                                <p className="text-[10px] font-mono text-slate-500 mb-1 uppercase">{cf.finding_a?.agent_name}</p>
+                                                                <p className="text-xs text-slate-300">{cf.finding_a?.reasoning_summary}</p>
+                                                            </div>
+                                                            <div className="p-3 rounded-xl bg-black/40 border border-white/5">
+                                                                <p className="text-[10px] font-mono text-slate-500 mb-1 uppercase">{cf.finding_b?.agent_name}</p>
+                                                                <p className="text-xs text-slate-300">{cf.finding_b?.reasoning_summary}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* --- 3. Collapsible Individual Agent Findings --- */}
+                                    <div className="mt-4 rounded-3xl bg-black border border-white/10 overflow-hidden shadow-2xl">
+                                        <button
+                                            onClick={() => setDetailsExpanded(!detailsExpanded)}
+                                            className="w-full p-6 flex justify-between items-center bg-slate-900/50 hover:bg-slate-800/80 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                                            aria-expanded={detailsExpanded}
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className="p-2.5 bg-white/5 rounded-xl text-slate-400">
+                                                    <Database className="w-5 h-5" />
+                                                </div>
+                                                <div className="text-left">
+                                                    <h3 className="text-lg font-bold text-white tracking-tight">Technical Audit Log</h3>
+                                                    <p className="text-xs text-slate-400 font-mono tracking-widest uppercase mt-1">Raw ReAct traces · Per-agent findings · Chain of custody</p>
+                                                </div>
+                                            </div>
+                                            <ChevronDown className={`w-6 h-6 text-slate-400 transition-transform duration-300 ${detailsExpanded ? 'rotate-180' : ''}`} />
+                                        </button>
+
+                                        <AnimatePresence>
+                                            {detailsExpanded && (
+                                                <motion.div
+                                                    initial={{ height: 0, opacity: 0 }}
+                                                    animate={{ height: "auto", opacity: 1 }}
+                                                    exit={{ height: 0, opacity: 0 }}
+                                                    className="border-t border-white/10 bg-slate-950/50"
+                                                >
+                                                    <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                        {realReport?.per_agent_findings ? (Object.entries(realReport.per_agent_findings) as [string, AgentFindingDTO[]][])
+                                                            .filter(([_, findings]) => findings.length > 0 && VALID_AGENTS.has(findings[0].agent_name || ""))
+                                                            .map(([agentId, allFindings]: [string, AgentFindingDTO[]]) => {
+                                                                if (!allFindings || allFindings.length === 0) return null;
+                                                                const finding = allFindings[0];
+                                                                const uniqueFindingsText = Array.from(new Set(allFindings.map((f: AgentFindingDTO) => f.reasoning_summary)));
+                                                                const confidence = Math.round((finding.calibrated_probability || finding.confidence_raw || 0) * 100);
+
+                                                                return (
+                                                                    <div key={agentId} className="p-6 rounded-2xl bg-black/60 border border-white/5 hover:border-emerald-500/20 transition-colors flex flex-col h-full">
+                                                                        <div className="flex items-center gap-4 mb-5">
+                                                                            <AgentIcon role={finding.finding_type || "agent"} />
+                                                                            <div>
+                                                                                <h4 className="font-bold text-slate-100 text-lg">{finding.agent_name || agentId}</h4>
+                                                                                <p className="text-xs text-slate-500 uppercase font-mono tracking-widest mt-1">{finding.finding_type || 'analysis'}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex-1 space-y-3 mb-6">
+                                                                            {uniqueFindingsText.map((text: string, idx: number) => (
+                                                                                <div key={idx} className="bg-slate-900/50 p-4 rounded-xl border border-white/5 text-sm text-slate-300 leading-relaxed">
+                                                                                    <AgentResponseText text={text} className="" />
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                        <div className="mt-auto pt-4 border-t border-white/5">
+                                                                            <div className="flex justify-between items-center mb-2">
+                                                                                <span className="text-xs text-slate-400 uppercase font-mono tracking-widest font-semibold">Confidence</span>
+                                                                                <span className="text-xs text-emerald-400 font-mono font-bold">{confidence}%</span>
+                                                                            </div>
+                                                                            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                                                                <div className="bg-emerald-500 h-full shadow-[0_0_10px_rgba(16,185,129,0.8)]" style={{ width: `${confidence}%` }} />
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            }) : Object.values((currentReport?.agents || []).reduce((acc: AgentAccumulator, agent: AgentResult) => {
+                                                                if (!VALID_AGENTS.has(agent.name)) return acc;
+                                                                if (!acc[agent.name]) acc[agent.name] = { ...agent, findings: [] };
+                                                                if (!acc[agent.name].findings.includes(agent.result)) acc[agent.name].findings.push(agent.result);
+                                                                return acc;
+                                                            }, {} as AgentAccumulator)).map((agent: AgentResult & { findings: string[] }, i: number) => (
+                                                                <div key={i} className="p-6 rounded-2xl bg-black/60 border border-white/5 hover:border-emerald-500/20 transition-colors flex flex-col h-full">
+                                                                    <div className="flex items-center gap-4 mb-5">
+                                                                        <AgentIcon role={agent.role} />
+                                                                        <div>
+                                                                            <h4 className="font-bold text-slate-100 text-lg">{agent.name}</h4>
+                                                                            <p className="text-xs text-slate-500 uppercase font-mono tracking-widest mt-1">{agent.role}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex-1 space-y-3 mb-6">
+                                                                        {agent.findings.map((findingText: string, idx: number) => (
+                                                                            <div key={idx} className="bg-slate-900/50 p-4 rounded-xl border border-white/5 text-sm text-slate-300 leading-relaxed">
+                                                                                <AgentResponseText text={findingText} className="" />
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                    <div className="mt-auto pt-4 border-t border-white/5">
+                                                                        <div className="flex justify-between items-center mb-2">
+                                                                            <span className="text-[10px] text-slate-400 uppercase font-mono tracking-widest font-semibold">Confidence</span>
+                                                                            <span className="text-xs text-emerald-400 font-mono font-bold">{Math.round(agent.confidence * 100)}%</span>
+                                                                        </div>
+                                                                        <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                                                            <div className="bg-emerald-500 h-full shadow-[0_0_10px_rgba(16,185,129,0.8)]" style={{ width: `${agent.confidence * 100}%` }} />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            ))
+                                                        }
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-10 pb-6">
+                                        <button
+                                            onClick={() => { playSound("click"); router.push('/evidence'); }}
+                                            className="px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-black rounded-full font-bold tracking-wide transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)] flex items-center gap-3 hover:scale-[1.02]"
+                                        >
+                                            <Zap className="w-5 h-5" /> Analyse Another File
+                                        </button>
+                                        <button
+                                            onClick={() => { playSound("click"); router.push('/'); }}
+                                            className="px-8 py-4 bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-full font-bold tracking-wide transition-all flex items-center gap-3 hover:scale-[1.02]"
+                                        >
+                                            Return to HQ <ArrowRight className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-center py-24 text-slate-500">
+                                    <Archive className="w-16 h-16 mx-auto mb-6 opacity-40" />
+                                    <h2 className="text-2xl font-bold text-white mb-2">No active analysis</h2>
+                                    <p className="mb-8 max-w-sm mx-auto">You haven't initiated an investigation yet, or the data has expired from memory.</p>
+                                    <button
+                                        onClick={() => router.push('/evidence')}
+                                        className="px-8 py-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full hover:bg-emerald-500/20 transition-colors font-bold tracking-wide"
+                                    >
+                                        Begin Investigation
+                                    </button>
+                                </div>
+                            )}
+                        </motion.div>
+                    ) : (
+                        /* --- History Tab Content --- */
+                        <motion.div
+                            key="history"
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                        >
+                            <div className="flex justify-between items-center mb-8 border-b border-white/5 pb-6">
+                                <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                                    <Archive className="w-5 h-5 text-emerald-400" />
+                                    Archived Sessions
+                                </h3>
+                                {history.length > 0 && (
+                                    <button onClick={handleClearAll} className="text-red-400 hover:text-red-300 text-sm font-bold flex items-center transition-colors px-4 py-2 hover:bg-red-500/10 rounded-lg">
+                                        <Trash2 className="w-4 h-4 mr-2" /> Format Archive
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="space-y-4">
+                                <AnimatePresence>
+                                    {history.length > 0 ? history.map((item: Report) => (
+                                        <motion.div
+                                            key={item.id}
+                                            layout
+                                            initial={{ opacity: 0, scale: 0.98 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, height: 0, marginBottom: 0, overflow: "hidden" }}
+                                            className="p-6 rounded-2xl bg-slate-900 border border-white/10 hover:border-emerald-500/30 transition-colors flex flex-col md:flex-row items-start md:items-center justify-between group gap-4"
+                                        >
+                                            <div className="flex items-center gap-5">
+                                                <div className="w-12 h-12 rounded-xl bg-slate-800 border border-white/5 shadow-inner flex items-center justify-center text-emerald-400 font-mono font-bold shrink-0">
+                                                    FC
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-bold text-white text-lg">{item.fileName}</h4>
+                                                    <div className="flex items-center text-sm text-slate-500 mt-1 font-mono">
+                                                        <Clock className="w-4 h-4 mr-2" /> {formatDate(item.timestamp)}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-6 self-end md:self-auto md:ml-auto w-full md:w-auto justify-between md:justify-end border-t border-white/10 md:border-0 pt-4 md:pt-0 mt-2 md:mt-0">
+                                                <div className="text-left md:text-right">
+                                                    {(() => {
+                                                        const avgConf = item.agents.length > 0
+                                                            ? Math.round(item.agents.reduce((sum: number, a: { confidence: number }) => sum + a.confidence * 100, 0) / item.agents.length)
+                                                            : 0;
+                                                        const label = avgConf >= 80 ? "HIGH CONF" : avgConf >= 50 ? "MODERATE" : "LOW CONF";
+                                                        const labelColor = avgConf >= 80 ? "text-emerald-400" : avgConf >= 50 ? "text-amber-400" : "text-red-400";
+                                                        const bgCol = avgConf >= 80 ? "bg-emerald-500/10" : avgConf >= 50 ? "bg-amber-500/10" : "bg-red-500/10";
+
+                                                        return (
+                                                            <div className={`px-4 py-2 ${bgCol} rounded-lg border border-white/5 inline-flex flex-col`}>
+                                                                <p className={`${labelColor} text-xs font-bold tracking-widest`}>{label}</p>
+                                                                <p className="text-xs font-mono text-slate-400 mt-0.5">AV. {avgConf}%</p>
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </div>
+                                                <button
+                                                    onClick={(e) => handleDeleteOne(item.id, e)}
+                                                    className="p-3 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all border border-transparent hover:border-red-500/20"
+                                                    title="Permanently Delete Evidence Record"
+                                                >
+                                                    <Trash2 className="w-5 h-5" />
+                                                </button>
+                                            </div>
+                                        </motion.div>
+                                    )) : (
+                                        <div className="text-center py-20 bg-slate-900/50 rounded-3xl border border-white/5 border-dashed">
+                                            <Archive className="w-12 h-12 mx-auto text-slate-600 mb-4" />
+                                            <p className="text-slate-400 font-medium">History archive is empty.</p>
+                                        </div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </main>
+        </div>
+    );
+}
