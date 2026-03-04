@@ -7,6 +7,25 @@ This log tracks significant errors, architectural flaws, and their subsequent re
 
 ---
 
+## 🐛 Docker & Build Configuration Fixes — March 04, 2026
+
+Following the comprehensive audit, these Docker and build configuration issues were identified and resolved.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 71 | docker-compose.yml missing build: context for backend + frontend | 🔴 Critical | **RESOLVED** | Added `build:` stanza with `context` and `dockerfile` for both backend and frontend services. |
+| 72 | read_only: true + evidence storage writes to /app/storage/evidence | 🔴 Critical | **RESOLVED** | Added `evidence_data:/app/storage/evidence` volume and `./backend/storage/keys:/app/storage/keys:ro` volume to backend service. Added `evidence_data` to volumes section. |
+| 73 | backend/Dockerfile missing libgl1 (OpenCV crashes) | 🔴 Critical | **RESOLVED** | Added `libgl1` and `libglib2.0-0` to apt-get install in runner stage. |
+| 74 | backend/Dockerfile uv pinned to 'latest' (non-deterministic) | 🔴 Critical | **RESOLVED** | Changed `ghcr.io/astral-sh/uv:latest` to `ghcr.io/astral-sh/uv:0.4.27`. |
+| 75 | docker-compose.prod.yml frontend has both image: and build: | 🔴 Critical | **RESOLVED** | Removed `build:` block from frontend; `NEXT_PUBLIC_API_URL` must now be baked at CI build time via `--build-arg`. |
+| 76 | SIGNING_KEY passes empty string if unset | 🔴 Critical | **RESOLVED** | Changed `${SIGNING_KEY}` to `${SIGNING_KEY:?SIGNING_KEY must be set}` to cause docker compose to abort with helpful message if unset. |
+| 77 | frontend/package.json R3F 9.x + React 19 no peer overrides | ⚠️ Important | **RESOLVED** | Added `overrides` block for `@react-three/fiber` and `@react-three/drei` to use `$react` and `$react-dom` aliases. |
+| 78 | backend/Dockerfile no HEALTHCHECK instruction | ⚠️ Important | **RESOLVED** | Added HEALTHCHECK with curl to http://localhost:8000/health. |
+| 79 | frontend/Dockerfile no HEALTHCHECK instruction | ⚠️ Important | **RESOLVED** | Added HEALTHCHECK with wget to http://localhost:3000/. |
+| 80 | Caddyfile /var/log/caddy directory not created | ⚠️ Important | **RESOLVED** | Added `caddy_logs:/var/log/caddy` volume to caddy service in docker-compose.prod.yml and added `caddy_logs` to volumes section. |
+
+---
+
 ## 🐛 Configuration & Test Fixes — March 04, 2026
 
 Following the comprehensive audit, these configuration and test issues were identified and resolved.
