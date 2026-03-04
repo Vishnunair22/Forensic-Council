@@ -23,6 +23,9 @@ Following the comprehensive audit, these Docker and build configuration issues w
 | 78 | backend/Dockerfile no HEALTHCHECK instruction | ⚠️ Important | **RESOLVED** | Added HEALTHCHECK with curl to http://localhost:8000/health. |
 | 79 | frontend/Dockerfile no HEALTHCHECK instruction | ⚠️ Important | **RESOLVED** | Added HEALTHCHECK with wget to http://localhost:3000/. |
 | 80 | Caddyfile /var/log/caddy directory not created | ⚠️ Important | **RESOLVED** | Added `caddy_logs:/var/log/caddy` volume to caddy service in docker-compose.prod.yml and added `caddy_logs` to volumes section. |
+| 81 | JWT_SECRET_KEY nested ${} interpolation broken (silently breaks auth) | 🔴 Critical | **RESOLVED** | Removed `JWT_SECRET_KEY` line entirely; `core/config.py` already falls back to `SIGNING_KEY` via `effective_jwt_secret` property. |
+| 82 | frontend service has no ports: mapping in base compose | 🔴 Critical | **RESOLVED** | Added `ports: - "3000:3000"` to frontend service in docker-compose.yml. |
+| 83 | HF_TOKEN missing from compose (pyannote.audio fails silently) | 🔴 Critical | **RESOLVED** | Added `HF_TOKEN=${HF_TOKEN:-}` to dev compose and `${HF_TOKEN:?HF_TOKEN is required}` to prod compose. |
 
 ---
 

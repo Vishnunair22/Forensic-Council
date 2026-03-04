@@ -36,6 +36,7 @@ services:
       - APP_ENV=production
       - DEBUG=false
       - LOG_LEVEL=WARNING
+      - HF_TOKEN=${HF_TOKEN:?HF_TOKEN is required for audio analysis}
     restart: unless-stopped
     # No volume mounts — immutable container
 
