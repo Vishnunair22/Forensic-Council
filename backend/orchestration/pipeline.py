@@ -710,11 +710,14 @@ class ForensicCouncilPipeline:
             ".gif": "image/gif",
             ".bmp": "image/bmp",
             ".tiff": "image/tiff",
+            ".webp": "image/webp",
             ".wav": "audio/wav",
             ".mp3": "audio/mpeg",
+            ".flac": "audio/flac",
             ".mp4": "video/mp4",
             ".avi": "video/x-msvideo",
             ".mov": "video/quicktime",
+            ".mkv": "video/x-matroska",
             ".pdf": "application/pdf",
         }
         return mime_types.get(ext, "application/octet-stream")
