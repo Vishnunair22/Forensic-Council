@@ -109,8 +109,8 @@ class AgentFactory:
             "evidence_store": self.evidence_store,
         }
         
-        # Add inter_agent_bus for Agent2
-        if agent_id == "Agent2" and self.inter_agent_bus:
+        # Add inter_agent_bus for Agent2, Agent3, and Agent4
+        if agent_id in ("Agent2", "Agent3", "Agent4") and self.inter_agent_bus:
             agent_kwargs["inter_agent_bus"] = self.inter_agent_bus
         
         # Create and run the agent
@@ -513,6 +513,7 @@ class ForensicCouncilPipeline:
                     episodic_memory=self.episodic_memory,
                     custody_logger=self.custody_logger,
                     evidence_store=self.evidence_store,
+                    inter_agent_bus=self.inter_agent_bus,
                 )
                 findings = await agent.run_investigation()
                 return AgentLoopResult(
@@ -537,6 +538,7 @@ class ForensicCouncilPipeline:
                     episodic_memory=self.episodic_memory,
                     custody_logger=self.custody_logger,
                     evidence_store=self.evidence_store,
+                    inter_agent_bus=self.inter_agent_bus,
                 )
                 findings = await agent.run_investigation()
                 return AgentLoopResult(
