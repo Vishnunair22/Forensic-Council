@@ -65,7 +65,7 @@ class Agent2Audio(ForensicAgent):
         episodic_memory: EpisodicMemory,
         custody_logger: CustodyLogger,
         evidence_store: EvidenceStore,
-        inter_agent_bus: Optional[Any] = None,
+        inter_agent_bus: Optional[InterAgentBus] = None,
     ) -> None:
         """Initialize Agent 2 with optional inter-agent bus."""
         super().__init__(

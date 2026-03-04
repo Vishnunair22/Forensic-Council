@@ -180,3 +180,16 @@ Following a comprehensive agent audit, the following issues were identified and 
 | 34 | Agent4 Inter-Agent Call Stub | 🟠 High | **RESOLVED** | Replaced stub with real `InterAgentBus` implementation - Agent4 now calls Agent2 for audio cross-verification. |
 | 35 | Dead RNG Variables | 🟡 Medium | **RESOLVED** | Removed unused `random.Random()` variables from Agent2, Agent3, and Agent5 (leftover from mocked tools). |
 | 36 | Docstring Task Count Mismatches | 🟡 Medium | **RESOLVED** | Corrected task count docstrings: Agent1 (8→13), Agent2 (10→11), Agent3 (9→11), Agent4 (9→10), Agent5 (11→13). |
+
+---
+
+## 🤖 Agent Inter-Agent Bus Fixes — March 04, 2026
+
+Following deployment testing, these additional issues were identified and resolved.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 37 | Pipeline Missing inter_agent_bus for Agent3 | 🔴 Critical | **RESOLVED** | Added `inter_agent_bus=self.inter_agent_bus` to `run_agent3()` in `pipeline.py`. |
+| 38 | Pipeline Missing inter_agent_bus for Agent4 | 🔴 Critical | **RESOLVED** | Added `inter_agent_bus=self.inter_agent_bus` to `run_agent4()` in `pipeline.py`. |
+| 39 | AgentFactory Missing inter_agent_bus | 🔴 Critical | **RESOLVED** | Changed condition from `Agent2` only to `("Agent2", "Agent3", "Agent4")` in `reinvae_agent()`. |
+| 40 | Agent2 Type Hint Weakened | 🟡 Medium | **RESOLVED** | Changed `inter_agent_bus: Optional[Any]` to `Optional[InterAgentBus]` in `agent2_audio.py`. |
