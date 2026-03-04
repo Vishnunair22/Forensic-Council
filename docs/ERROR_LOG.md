@@ -1,9 +1,22 @@
 # Forensic Council — Error Log & Resolution Audit
 
 **Date:** 2026-03-04
-**Status:** All Critical Runtime Errors & Silent Failures Resolved
+**Status:** All Critical Runtime Errors, Silent Failures, and Lint Issues Resolved
 
 This log tracks significant errors, architectural flaws, and their subsequent resolutions.
+
+---
+
+## ✅ Frontend Lint Fixes — March 04, 2026
+
+Fixed lint errors in `DevErrorOverlay.tsx`.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 61 | Unused `XCircle` Import | 🟡 Medium | **RESOLVED** | Removed unused `XCircle` from lucide-react imports (was never used; `AlertCircle` is used instead). |
+| 62 | Implicit `any` Type on tabs array | 🟡 Medium | **RESOLVED** | Added `import type { LucideIcon }` and typed the tabs array as `{ id: ...; label: string; icon: LucideIcon }[]`. |
+| 63 | JSX Comment Text Node (raw.stack) | 🟡 Medium | **RESOLVED** | Changed `{`//`} raw.stack` → `{"// "} raw.stack` to fix jsx-no-comment-textnodes rule. |
+| 64 | JSX Comment Text Node (component.stack) | 🟡 Medium | **RESOLVED** | Changed `{`//`} component.stack` → `{"// "} component.stack` to fix jsx-no-comment-textnodes rule. |
 
 ---
 
