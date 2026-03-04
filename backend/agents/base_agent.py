@@ -18,6 +18,7 @@ from core.custody_logger import CustodyLogger, EntryType
 from core.episodic_memory import EpisodicMemory, EpisodicEntry, ForensicSignatureType
 from core.evidence import EvidenceArtifact
 from core.inter_agent_bus import InterAgentCall, InterAgentCallType
+from core.llm_client import LLMClient
 from core.logging import get_logger
 from core.react_loop import (
     AgentFinding,
@@ -25,6 +26,7 @@ from core.react_loop import (
     HumanDecision,
     ReActLoopEngine,
     ReActLoopResult,
+    create_llm_step_generator,
 )
 from core.tool_registry import ToolRegistry
 from core.working_memory import WorkingMemory, WorkingMemoryState, Task, TaskStatus
@@ -233,10 +235,31 @@ class ForensicAgent(ABC):
             redis_client=None,  # HITL handled externally in production
         )
         
+        # Create LLM step generator if enabled
+        llm_generator = None
+        if self.config.llm_enable_react_reasoning and self.config.llm_api_key:
+            llm_client = LLMClient(self.config)
+            evidence_context = {
+                "mime_type": getattr(self.evidence_artifact, 'mime_type', 'unknown'),
+                "file_name": getattr(self.evidence_artifact, 'file_path', 'unknown'),
+            }
+            llm_generator = create_llm_step_generator(
+                llm_client=llm_client,
+                config=self.config,
+                agent_name=self.agent_name,
+                evidence_context=evidence_context,
+            )
+            logger.info(
+                "LLM reasoning enabled for ReAct loop",
+                agent_id=self.agent_id,
+                llm_provider=self.config.llm_provider,
+                llm_model=self.config.llm_model,
+            )
+        
         loop_result = await loop_engine.run(
             initial_thought=initial_thought,
             tool_registry=self._tool_registry,
-            llm_generator=None  # Use built-in task-decomposition driver
+            llm_generator=llm_generator  # Use LLM if configured, else task-decomposition driver
         )
         
         self._findings = loop_result.findings
@@ -331,6 +354,9 @@ class ForensicAgent(ABC):
             agent_id=self.agent_id
         )
         
+        # Get evidence artifact for context
+        evidence_context = await self._get_evidence_context_for_reflection()
+        
         # RT1: Check if all tasks are complete
         incomplete_tasks = []
         all_tasks_complete = True
@@ -349,13 +375,21 @@ class ForensicAgent(ABC):
                     f"{finding.finding_type}: {finding.confidence_raw:.2f}"
                 )
         
-        # RT3: Check for untreated absences (placeholder logic)
-        untreated_absences = []
-        # In a real implementation, this would check for missing expected data
+        # RT3: Check for untreated absences (absence as signal)
+        # Absence of expected data can itself be evidence
+        untreated_absences = await self._check_untreated_absences(
+            findings=findings,
+            state=state,
+            evidence_context=evidence_context,
+        )
         
-        # RT4: Check for deprioritized avenues (placeholder logic)
-        deprioritized_avenues = []
-        # In a real implementation, this would check investigation logs
+        # RT4: Check for deprioritized avenues
+        # Investigation paths that were skipped or deprioritized
+        deprioritized_avenues = await self._check_deprioritized_avenues(
+            findings=findings,
+            state=state,
+            evidence_context=evidence_context,
+        )
         
         # RT5: Check if confidence is court-defensible
         court_defensible = (
@@ -405,9 +439,212 @@ class ForensicAgent(ABC):
             agent_id=self.agent_id,
             all_tasks_complete=all_tasks_complete,
             court_defensible=court_defensible,
+            untreated_absence_count=len(untreated_absences),
+            deprioritized_avenue_count=len(deprioritized_avenues),
         )
         
         return report
+    
+    async def _get_evidence_context_for_reflection(self) -> dict[str, Any]:
+        """Get evidence context for reflection analysis."""
+        context = {
+            "mime_type": getattr(self.evidence_artifact, 'mime_type', 'unknown'),
+            "file_extension": '',
+            "has_exif": False,
+            "has_audio": False,
+            "has_video": False,
+            "has_gps": False,
+        }
+        
+        # Get file extension
+        file_path = getattr(self.evidence_artifact, 'file_path', '')
+        if file_path and '.' in file_path:
+            context["file_extension"] = file_path.lower().split('.')[-1]
+        
+        # Check for common metadata indicators
+        metadata = getattr(self.evidence_artifact, 'metadata', {}) or {}
+        if isinstance(metadata, dict):
+            context["has_exif"] = bool(metadata.get('exif'))
+            context["has_gps"] = bool(metadata.get('gps_latitude'))
+        
+        # Determine media type
+        mime = context["mime_type"].lower()
+        context["has_audio"] = any(x in mime for x in ['audio', 'wav', 'mp3', 'ogg'])
+        context["has_video"] = any(x in mime for x in ['video', 'mp4', 'avi', 'mov'])
+        
+        return context
+    
+    async def _check_untreated_absences(
+        self,
+        findings: list[AgentFinding],
+        state: WorkingMemoryState | None,
+        evidence_context: dict[str, Any],
+    ) -> list[str]:
+        """
+        RT3: Check for untreated absences - missing expected data that could be signals.
+        
+        Absence of expected forensic artifacts can itself be evidence of manipulation.
+        For example: missing EXIF in a camera-original, missing noise in a photo,
+        or missing codec metadata in a video.
+        """
+        absences = []
+        
+        # Get finding types we have
+        finding_types = {f.finding_type.lower() for f in findings}
+        
+        # Check for expected EXIF in image files
+        mime = evidence_context.get("mime_type", "").lower()
+        ext = evidence_context.get("file_extension", "").lower()
+        
+        is_image = any(x in mime for x in ['image', 'jpeg', 'jpg', 'png', 'tiff'])
+        is_image = is_image or ext in ['jpg', 'jpeg', 'png', 'tiff', 'bmp', 'gif']
+        
+        if is_image:
+            # Camera-original images should have EXIF
+            has_exif_analysis = any("exif" in ft for ft in finding_types)
+            has_metadata = evidence_context.get("has_exif", False)
+            
+            if has_exif_analysis and not has_metadata:
+                absences.append(
+                    "MISSING_EXIF_DATA: Image file lacks EXIF metadata, "
+                    "which is unusual for camera-original files. May indicate "
+                    "re-saving or metadata stripping."
+                )
+            
+            # Check for missing noise fingerprint analysis result
+            has_noise_analysis = any("noise" in ft or "fingerprint" in ft for ft in finding_types)
+            if not has_noise_analysis:
+                absences.append(
+                    "MISSING_PRNU_ANALYSIS: No camera sensor noise fingerprint analysis "
+                    "performed. This is a key technique for detecting region insertion."
+                )
+        
+        # Check for expected audio/video metadata
+        is_video = evidence_context.get("has_video", False)
+        is_audio = evidence_context.get("has_audio", False)
+        
+        if is_video or is_audio:
+            # Should have codec information
+            has_codec_analysis = any("codec" in ft for ft in finding_types)
+            if not has_codec_analysis:
+                absences.append(
+                    "MISSING_CODEC_FINGERPRINT: No codec fingerprinting analysis. "
+                    "Codec metadata changes can indicate re-encoding or editing."
+                )
+        
+        # Check for GPS-related absences
+        if evidence_context.get("has_gps"):
+            # If GPS exists, should validate it
+            has_gps_validation = any("gps" in ft or "timezone" in ft for ft in finding_types)
+            if not has_gps_validation:
+                absences.append(
+                    "UNTREATED_GPS_DATA: GPS coordinates present but not validated "
+                    "against timezone or astronomical data."
+                )
+        
+        # Check for missing hash verification
+        has_hash_verify = any("hash" in ft for ft in finding_types)
+        if not has_hash_verify:
+            absences.append(
+                "MISSING_HASH_VERIFICATION: No cryptographic hash verification performed. "
+                "Cannot establish chain-of-custody baseline."
+            )
+        
+        return absences
+    
+    async def _check_deprioritized_avenues(
+        self,
+        findings: list[AgentFinding],
+        state: WorkingMemoryState | None,
+        evidence_context: dict[str, Any],
+    ) -> list[str]:
+        """
+        RT4: Check for deprioritized investigation avenues.
+        
+        Tracks which lines of inquiry were identified but not pursued,
+        either due to time constraints, resource limitations, or tool unavailability.
+        """
+        deprioritized = []
+        
+        if not state:
+            return deprioritized
+        
+        # Check tasks that were never started or abandoned
+        for task in state.tasks:
+            if task.status == TaskStatus.PENDING:
+                # Task was never started - could be deprioritized
+                deprioritized.append(
+                    f"PENDING_TASK: '{task.description}' was never started. "
+                    f"This may indicate the investigation was cut short."
+                )
+            elif task.status == TaskStatus.IN_PROGRESS:
+                # Task started but not completed
+                deprioritized.append(
+                    f"INCOMPLETE_TASK: '{task.description}' was started but not completed. "
+                    f"Results may be partial or inconclusive."
+                )
+        
+        # Get finding types
+        finding_types = {f.finding_type.lower() for f in findings}
+        mime = evidence_context.get("mime_type", "").lower()
+        
+        # Check for high-value but unperformed analyses based on media type
+        is_image = any(x in mime for x in ['image', 'jpeg', 'jpg', 'png'])
+        is_video = evidence_context.get("has_video", False)
+        is_audio = evidence_context.get("has_audio", False)
+        
+        if is_image:
+            # ELA is foundational for image forensics
+            has_ela = any("ela" in ft for ft in finding_types)
+            if not has_ela:
+                deprioritized.append(
+                    "UNPERFORMED_ELA: Error Level Analysis not performed. "
+                    "This is a fundamental technique for detecting re-compression artifacts."
+                )
+            
+            # Copy-move detection
+            has_copymove = any("copy" in ft or "move" in ft or "clone" in ft for ft in finding_types)
+            if not has_copymove:
+                deprioritized.append(
+                    "UNPERFORMED_COPY_MOVE: Copy-move detection not performed. "
+                    "Cloned regions are a common manipulation technique."
+                )
+        
+        if is_video:
+            # Frame consistency is crucial for video
+            has_frame_check = any("frame" in ft for ft in finding_types)
+            if not has_frame_check:
+                deprioritized.append(
+                    "UNPERFORMED_FRAME_ANALYSIS: No frame-to-frame consistency analysis. "
+                    "Frame-level discontinuities can indicate splicing."
+                )
+            
+            # Deepfake detection
+            has_deepfake = any("deepfake" in ft or "face" in ft for ft in finding_types)
+            if not has_deepfake:
+                deprioritized.append(
+                    "UNPERFORMED_DEEPFAKE_CHECK: Deepfake detection not performed. "
+                    "Face-swap GAN artifacts have characteristic spectral signatures."
+                )
+        
+        if is_audio:
+            # Prosody analysis
+            has_prosody = any("prosody" in ft or "pitch" in ft or "rhythm" in ft for ft in finding_types)
+            if not has_prosody:
+                deprioritized.append(
+                    "UNPERFORMED_PROSODY_ANALYSIS: Prosody analysis not performed. "
+                    "Synthetic voices often show unnatural pitch patterns."
+                )
+        
+        # Check for adversarial/robustness testing (applies to all types)
+        has_robustness = any("adversarial" in ft or "robustness" in ft for ft in finding_types)
+        if not has_robustness:
+            deprioritized.append(
+                "UNPERFORMED_ROBUSTNESS_CHECK: No adversarial robustness testing. "
+                "Findings may not hold up against anti-forensic countermeasures."
+            )
+        
+        return deprioritized
     
     async def query_episodic_memory(
         self,
