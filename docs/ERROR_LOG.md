@@ -7,6 +7,22 @@ This log tracks significant errors, architectural flaws, and their subsequent re
 
 ---
 
+## 🐛 App Code Audit Fixes — March 04, 2026
+
+Following the comprehensive app code audit, these frontend bugs and quality issues were identified and resolved.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 84 | `startSimulation()` called with no argument — status never becomes `"initiating"` | 🔴 Critical | **RESOLVED** | Changed `startSimulation()` to `startSimulation("pending")` in `evidence/page.tsx` line 98 to trigger `setStatus("initiating")`. |
+| 85 | `URL.createObjectURL(file)` called inline on every render — memory leak | 🔴 Critical | **RESOLVED** | Added `useMemo` to derive URL once and `useEffect` to revoke on cleanup in `evidence/page.tsx`. |
+| 86 | `result/page.tsx` CSS typo: `linear_gradient` (underscore) instead of `linear-gradient` (hyphen) | 🔴 Critical | **RESOLVED** | Fixed typo on line 206 of `result/page.tsx` to use correct CSS function name. |
+| 87 | `--font-poppins` referenced in CSS but never loaded | 🔴 Critical | **RESOLVED** | Added `Poppins` font from `next/font/google` in `layout.tsx` and applied to `<html>` with variable. |
+| 88 | `constants.ts` unused `AgentResult` import | ⚠️ Important | **RESOLVED** | Removed unused import from `constants.ts` to fix TypeScript lint errors. |
+| 89 | `next.config.ts` redundant `env:` block | ℹ️ Info | **RESOLVED** | Removed redundant `env:` block since `NEXT_PUBLIC_API_URL` is already handled by Docker `ARG`/`ENV`. |
+| 90 | `"think"` sound fires on every WS `AGENT_UPDATE` message — audio spam | ⚠️ Important | **RESOLVED** | Throttled sound to only play when a NEW agent becomes active, removed from every update in `useSimulation.ts`. |
+
+---
+
 ## 🐛 Docker & Build Configuration Fixes — March 04, 2026
 
 Following the comprehensive audit, these Docker and build configuration issues were identified and resolved.

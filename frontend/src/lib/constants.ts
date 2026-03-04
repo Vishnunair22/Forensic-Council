@@ -1,5 +1,3 @@
-import { AgentResult } from "@/types";
-
 export type AgentDefinition = {
     id: string;
     name: string;
