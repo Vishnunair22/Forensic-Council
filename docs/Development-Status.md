@@ -1,9 +1,9 @@
 # Development Status
 
 **Last updated:** 2026-03-04  
-**Current version:** 0.7.0  
-**Overall health:** 🟡 Beta — pipeline functional, Docker build-ready, auth absent  
-**Actively working on:** Session authentication, HITL frontend modal  
+**Current version:** 0.7.1  
+**Overall health:** 🟢 Production-Ready (Phase 1) — security hardened, auth complete  
+**Actively working on:** Phase 2 Agent Quality improvements  
 **Blocked on:** Nothing currently  
 
 ---
@@ -25,7 +25,7 @@ Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [🟡] → 
 - HITL Checkpoint injection: [🟡 Backend complete, 🔴 UI incomplete]
 - WebSocket event stream: [✅ All 5 agent events + completion event]
 - Custody logging: [✅ Immutable append-only chain verified]
-- Session management: [🔴 No auth — all sessions publicly accessible]
+- Session management: [✅ Auth on all endpoints - JWT verified]
 
 ---
 

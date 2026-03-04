@@ -209,6 +209,7 @@ class Agent3Object(ForensicAgent):
         async def secondary_classification(input_data: dict) -> dict:
             return {
                 "status": "stub",
+                "stub_result": True,
                 "court_defensible": False,
                 "warning": "STUB: secondary_classification returns fabricated data. Integrate real zero-shot classifier (e.g., CLIP).",
                 "refined_classifications": None,
@@ -364,6 +365,7 @@ class Agent3Object(ForensicAgent):
         async def adversarial_robustness_check_handler(input_data: dict) -> dict:
             return {
                 "status": "stub",
+                "stub_result": True,
                 "court_defensible": False,
                 "warning": "STUB: adversarial_robustness_check returns fabricated data. Integrate real adversarial testing.",
                 "adversarial_pattern_detected": None,

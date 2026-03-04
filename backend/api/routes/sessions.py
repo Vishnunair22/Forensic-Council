@@ -1,14 +1,15 @@
 """
 Sessions Routes
-================
+===============
 
 Routes for managing investigation sessions.
 """
 
 from typing import List
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
+from core.auth import get_current_user, User, decode_token
 from api.routes.investigation import _active_pipelines, _active_tasks, _websocket_connections, register_websocket, unregister_websocket
 from api.schemas import SessionInfo
 
@@ -16,8 +17,8 @@ router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 
 
 @router.get("", response_model=List[SessionInfo])
-async def list_sessions():
-    """List all active sessions."""
+async def list_sessions(current_user: User = Depends(get_current_user)):
+    """List all active sessions. Requires authentication."""
     sessions = []
     for session_id, pipeline in _active_pipelines.items():
         status = "running" if not hasattr(pipeline, "_final_report") else "completed"
@@ -32,8 +33,8 @@ async def list_sessions():
 
 
 @router.delete("/{session_id}")
-async def terminate_session(session_id: str):
-    """Terminate a running session."""
+async def terminate_session(session_id: str, current_user: User = Depends(get_current_user)):
+    """Terminate a running session. Requires authentication."""
     if session_id not in _active_pipelines:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -58,10 +59,26 @@ async def terminate_session(session_id: str):
 
 @router.websocket("/{session_id}/live")
 async def live_updates(websocket: WebSocket, session_id: str):
-    """WebSocket endpoint for live investigation updates."""
+    """WebSocket endpoint for live investigation updates. Requires authentication via subprotocol."""
     # S4: Validate session exists before accepting
     if session_id not in _active_pipelines:
         await websocket.close(code=4004, reason="Session not found")
+        return
+
+    # Authenticate via subprotocol token
+    # Expected subprotocol: "Bearer <token>"
+    auth_header = websocket.headers.get("authorization", "")
+    if not auth_header.startswith("Bearer "):
+        await websocket.close(code=4001, reason="Missing or invalid authorization header")
+        return
+    
+    token = auth_header[7:]  # Remove "Bearer " prefix
+    
+    # Verify the token before accepting the connection
+    try:
+        token_data = await decode_token(token)
+    except Exception:
+        await websocket.close(code=4001, reason="Invalid or expired token")
         return
 
     await websocket.accept()
@@ -75,7 +92,7 @@ async def live_updates(websocket: WebSocket, session_id: str):
             "type": "AGENT_UPDATE",
             "session_id": session_id,
             "message": "Connected to live updates",
-            "data": {"status": "connected"}
+            "data": {"status": "connected", "user_id": token_data.user_id}
         })
 
         # Keep connection alive and handle incoming messages

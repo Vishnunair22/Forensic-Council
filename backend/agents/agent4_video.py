@@ -225,6 +225,7 @@ class Agent4Video(ForensicAgent):
         async def adversarial_robustness_check(input_data: dict) -> dict:
             return {
                 "status": "stub",
+                "stub_result": True,
                 "court_defensible": False,
                 "warning": "STUB: adversarial_robustness_check returns fabricated data. Integrate real adversarial testing.",
                 "adversarial_pattern_detected": None,

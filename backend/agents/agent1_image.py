@@ -225,6 +225,7 @@ class Agent1Image(ForensicAgent):
         async def adversarial_robustness_check(input_data: dict) -> dict:
             return {
                 "status": "stub",
+                "stub_result": True,
                 "court_defensible": False,
                 "warning": "STUB: adversarial_robustness_check returns fabricated data. Integrate real adversarial testing.",
                 "adversarial_pattern_detected": None,
@@ -234,6 +235,7 @@ class Agent1Image(ForensicAgent):
         async def sensor_db_query(input_data: dict) -> dict:
             return {
                 "status": "stub",
+                "stub_result": True,
                 "court_defensible": False,
                 "warning": "STUB: sensor_db_query returns fabricated data. Integrate real camera sensor database.",
                 "sensor_match_found": None,
