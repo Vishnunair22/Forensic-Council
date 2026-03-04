@@ -37,6 +37,7 @@ class EntryType(str, Enum):
     FINAL_FINDING = "FINAL_FINDING"
     TRIBUNAL_JUDGMENT = "TRIBUNAL_JUDGMENT"
     REPORT_SIGNED = "REPORT_SIGNED"
+    ERROR = "ERROR"
 
 
 @dataclass

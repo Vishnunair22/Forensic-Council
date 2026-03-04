@@ -159,12 +159,13 @@ class Agent4Video(ForensicAgent):
         
         async def face_swap_detection_handler(input_data: dict) -> dict:
             """Handle face swap detection with input_data dict."""
-            frames_artifact = input_data.get("frames_artifact")
-            if frames_artifact is None:
-                return {"error": "frames_artifact is required"}
+            # Use artifact directly - face_swap_detect_deepface expects EvidenceArtifact, not frames
+            artifact = input_data.get("artifact") or input_data.get("frames_artifact") or self.evidence_artifact
+            if artifact is None:
+                return {"error": "artifact is required"}
             confidence_threshold = input_data.get("confidence_threshold", 0.5)
             return await real_face_swap_detect(
-                frames_artifact=frames_artifact,
+                artifact=artifact,
                 confidence_threshold=confidence_threshold,
             )
         
@@ -211,14 +212,14 @@ class Agent4Video(ForensicAgent):
             from core.inter_agent_bus import InterAgentCall, InterAgentCallType
             call = InterAgentCall(
                 caller_agent_id=self.agent_id,
-                target_agent_id=input_data.get("target_agent", "agent2"),
-                call_type=InterAgentCallType.CROSS_VERIFY,
+                callee_agent_id=input_data.get("target_agent", "Agent2"),
+                call_type=InterAgentCallType.COLLABORATIVE,
                 payload={
                     "timestamp_ref": input_data.get("timestamp_ref"),
                     "question": input_data.get("question", "Confirm audio-visual sync at flagged timestamp"),
                 }
             )
-            response = await self._inter_agent_bus.send(call)
+            response = await self._inter_agent_bus.send(call, self._custody_logger)
             return response
         
         async def adversarial_robustness_check(input_data: dict) -> dict:

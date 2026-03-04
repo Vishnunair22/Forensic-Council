@@ -239,6 +239,7 @@ async def _wrap_pipeline_with_broadcasts(
                     episodic_memory=pipeline.episodic_memory,
                     custody_logger=pipeline.custody_logger,
                     evidence_store=pipeline.evidence_store,
+                    inter_agent_bus=pipeline.inter_agent_bus,
                 )
                 findings = await asyncio.wait_for(
                     agent.run_investigation(),
@@ -673,8 +674,8 @@ async def get_report(
         executive_summary=report.executive_summary,
         per_agent_findings=per_agent_findings,
         cross_modal_confirmed=[_finding_to_dto(f) for f in report.cross_modal_confirmed],
-        contested_findings=report.contested_findings,
-        tribunal_resolved=report.tribunal_resolved,
+        contested_findings=[f.model_dump() if hasattr(f, 'model_dump') else f for f in report.contested_findings],
+        tribunal_resolved=[t.model_dump() if hasattr(t, 'model_dump') else t for t in report.tribunal_resolved],
         incomplete_findings=[_finding_to_dto(f) for f in report.incomplete_findings],
         uncertainty_statement=report.uncertainty_statement,
         cryptographic_signature=report.cryptographic_signature,

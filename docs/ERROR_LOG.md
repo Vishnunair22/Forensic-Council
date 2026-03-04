@@ -1,9 +1,33 @@
 # Forensic Council — Error Log & Resolution Audit
 
-**Date:** 2026-03-02
-**Status:** All Critical/High Infrastructure Issues Resolved
+**Date:** 2026-03-04
+**Status:** All Critical Runtime Errors & Silent Failures Resolved
 
 This log tracks significant errors, architectural flaws, and their subsequent resolutions.
+
+---
+
+## 🚨 Additional Critical & Silent Fixes — March 04, 2026
+
+Following the exhaustive audit, these additional issues were identified and resolved.
+
+### Critical Runtime Errors Fixed
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 55 | EntryType.ERROR Not in Enum | 🔴 Critical | **RESOLVED** | Added `ERROR = "ERROR"` to `EntryType` enum in `custody_logger.py`. |
+| 56 | exif_extract_enhanced Missing GPS Keys | 🔴 Critical | **RESOLVED** | Added `_extract_gps_coordinates()` helper and returned `gps_coordinates` and `present_fields` keys for backward compatibility. |
+| 57 | run_single_agent Missing inter_agent_bus | 🔴 Critical | **RESOLVED** | Added `inter_agent_bus=pipeline.inter_agent_bus` to agent instantiation in `investigation.py`. |
+
+### Silent Failures Fixed
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 58 | Phantom Tool Names in deterministic_tools | 🟡 Silent | **RESOLVED** | Removed non-existent tool names (`ela_scan`, `fft_scan`, `metadata_deep_scan`, `optical_flow`) from set. |
+| 59 | Pydantic Models Not Serialized | 🟡 Silent | **RESOLVED** | Added `.model_dump()` serialization for `contested_findings` and `tribunal_resolved` in `get_report` route. |
+| 60 | Test Assertions Use Wrong Agent Format | 🟡 Silent | **RESOLVED** | Verified test files use correct short format (`Agent2` vs `Agent2_Audio`). |
+
+---
 
 ## 🏁 Full Infrastructure Audit — March 02, 2026
 
@@ -193,3 +217,35 @@ Following deployment testing, these additional issues were identified and resolv
 | 38 | Pipeline Missing inter_agent_bus for Agent4 | 🔴 Critical | **RESOLVED** | Added `inter_agent_bus=self.inter_agent_bus` to `run_agent4()` in `pipeline.py`. |
 | 39 | AgentFactory Missing inter_agent_bus | 🔴 Critical | **RESOLVED** | Changed condition from `Agent2` only to `("Agent2", "Agent3", "Agent4")` in `reinvae_agent()`. |
 | 40 | Agent2 Type Hint Weakened | 🟡 Medium | **RESOLVED** | Changed `inter_agent_bus: Optional[Any]` to `Optional[InterAgentBus]` in `agent2_audio.py`. |
+
+---
+
+## 🚨 Critical Runtime Errors Fix — March 04, 2026
+
+These bugs would cause crashes when cross-agent calls were attempted.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 41 | InterAgentBus.send() Does Not Exist | 🔴 Critical | **RESOLVED** | Added `send()` method to `InterAgentBus` class that creates callee agents on-demand and dispatches calls. |
+| 42 | InterAgentCall Wrong Field Name | 🔴 Critical | **RESOLVED** | Changed `target_agent_id` to `callee_agent_id` in all three agents (Agent2, Agent3, Agent4). |
+| 43 | InterAgentCallType.CROSS_VERIFY Does Not Exist | 🔴 Critical | **RESOLVED** | Changed from `CROSS_VERIFY` to `COLLABORATIVE` in all three agents. |
+| 44 | PERMITTED_CALL_PATHS Wrong Agent ID Format | 🔴 Critical | **RESOLVED** | Updated keys in `inter_agent_bus.py` from `"Agent2_Audio"` to `"Agent2"`, etc. |
+| 45 | face_swap_detect_deepface Wrong Argument | 🔴 Critical | **RESOLVED** | Changed `face_swap_detection_handler` to pass `artifact` instead of `frames_artifact`. |
+
+---
+
+## 🟡 Silent Failures Fix — March 04, 2026
+
+Missing task→tool override entries causing tasks to silently complete without findings.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 46 | Semantic Image Understanding Override Missing | 🟡 Silent | **RESOLVED** | Added `"semantic image understanding": "analyze_image_content"` to `_TASK_TOOL_OVERRIDES`. |
+| 47 | Copy-Move Forgery Override Missing | 🟡 Silent | **RESOLVED** | Added `"copy-move forgery": "copy_move_detect"` to `_TASK_TOOL_OVERRIDES`. |
+| 48 | OCR Text Extraction Override Missing | 🟡 Silent | **RESOLVED** | Added `"extract visible text": "extract_text_from_image"` to `_TASK_TOOL_OVERRIDES`. |
+| 49 | Audio-Visual Sync Override Missing | 🟡 Silent | **RESOLVED** | Added `"audio-visual sync": "audio_visual_sync"` to `_TASK_TOOL_OVERRIDES`. |
+| 50 | Image Splice Detection Override Missing | 🟡 Silent | **RESOLVED** | Added `"splicing detection on objects": "image_splice_check"` to `_TASK_TOOL_OVERRIDES`. |
+| 51 | Noise Fingerprint Analysis Override Missing | 🟡 Silent | **RESOLVED** | Added `"noise fingerprint analysis for region": "noise_fingerprint"` to `_TASK_TOOL_OVERRIDES`. |
+| 52 | Contraband Database Override Missing | 🟡 Silent | **RESOLVED** | Added `"contraband": "contraband_database"` to `_TASK_TOOL_OVERRIDES`. |
+| 53 | ML Metadata Anomaly Override Missing | 🟡 Silent | **RESOLVED** | Added `"ml metadata anomaly": "metadata_anomaly_score"` to `_TASK_TOOL_OVERRIDES`. |
+| 54 | Astronomical API Override Missing | 🟡 Silent | **RESOLVED** | Added `"astronomical api": "astronomical_api"` to `_TASK_TOOL_OVERRIDES`. |

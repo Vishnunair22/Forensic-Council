@@ -393,6 +393,16 @@ class ReActLoopEngine:
         "full-scene primary object detection": "object_detection",
         "lighting and shadow consistency": "lighting_consistency",
         "scene-level contextual incongruence": "scene_incongruence",
+        # Missing entries from bug report
+        "semantic image understanding": "analyze_image_content",
+        "copy-move forgery": "copy_move_detect",
+        "extract visible text": "extract_text_from_image",
+        "audio-visual sync": "audio_visual_sync",
+        "splicing detection on objects": "image_splice_check",
+        "noise fingerprint analysis for region": "noise_fingerprint",
+        "contraband": "contraband_database",
+        "ml metadata anomaly": "metadata_anomaly_score",
+        "astronomical api": "astronomical_api",
     }
 
     def __init__(
@@ -989,8 +999,7 @@ class ReActLoopEngine:
                 deterministic_tools = {
                     "exif_extract", "gps_timezone_validate", "steganography_scan", 
                     "file_structure_analysis", "timestamp_analysis", "file_hash_verify", 
-                    "hex_signature_scan", "ela_scan", "fft_scan", "metadata_deep_scan", 
-                    "optical_flow"
+                    "hex_signature_scan",
                 }
                 if best_tool.name in deterministic_tools:
                     confidence = 0.95

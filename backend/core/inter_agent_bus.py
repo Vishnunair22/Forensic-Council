@@ -59,14 +59,14 @@ class InterAgentCall(BaseModel):
 
 # Permitted call paths - defines which agents can call which
 PERMITTED_CALL_PATHS: dict[str, list[str]] = {
-    "Agent2_Audio": ["Agent4_Video"],
-    "Agent4_Video": ["Agent2_Audio"],
-    "Agent3_Object": ["Agent1_ImageIntegrity"],
-    "Arbiter": ["Agent1_ImageIntegrity", "Agent2_Audio", "Agent3_Object", "Agent4_Video", "Agent5_Metadata"],
+    "Agent2": ["Agent4"],
+    "Agent4": ["Agent2"],
+    "Agent3": ["Agent1"],
+    "Arbiter": ["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"],
 }
 
 # Agents that cannot initiate calls (can only receive)
-CALL_RECEIVERS_ONLY = ["Agent1_ImageIntegrity", "Agent5_Metadata"]
+CALL_RECEIVERS_ONLY = ["Agent1", "Agent5"]
 
 
 class PermittedCallViolationError(ForensicCouncilBaseException):
@@ -112,7 +112,25 @@ class InterAgentBus:
     circular dependencies.
     """
     
-    def __init__(self):
+    def __init__(
+        self,
+        config: Optional[Any] = None,
+        evidence_artifact: Optional[Any] = None,
+        session_id: Optional[UUID] = None,
+        working_memory: Optional[Any] = None,
+        episodic_memory: Optional[Any] = None,
+        custody_logger: Optional[Any] = None,
+        evidence_store: Optional[Any] = None,
+    ):
+        # Store components needed to create agents on demand
+        self._config = config
+        self._evidence_artifact = evidence_artifact
+        self._session_id = session_id
+        self._working_memory = working_memory
+        self._episodic_memory = episodic_memory
+        self._custody_logger = custody_logger
+        self._evidence_store = evidence_store
+        
         # Track active calls: (caller, callee, artifact_id) tuples
         self._active_calls: set[tuple[str, str, Optional[str]]] = set()
         # Track arbiter challenges: agent_id that have been challenged
@@ -278,6 +296,90 @@ class InterAgentBus:
         finally:
             # 10. Remove from active calls
             self._active_calls.discard((call.caller_agent_id, call.callee_agent_id, artifact_str))
+    
+    async def send(
+        self,
+        call: InterAgentCall,
+        custody_logger: Optional[Any] = None,
+    ) -> dict[str, Any]:
+        """
+        Convenience method to send an inter-agent call.
+        
+        Creates the callee agent on-demand and dispatches the call.
+        
+        Args:
+            call: The inter-agent call to send
+            custody_logger: Logger for custody chain entries
+            
+        Returns:
+            The response from the callee agent
+            
+        Raises:
+            PermittedCallViolationError: If call path is not permitted
+            CircularCallError: If circular dependency detected
+            ValueError: If bus was not initialized with required components
+        """
+        if self._config is None or self._evidence_artifact is None:
+            raise ValueError(
+                "InterAgentBus not properly initialized. "
+                "Need config, evidence_artifact, and other components to send calls."
+            )
+        
+        # Create the callee agent
+        callee_agent = self._create_agent(call.callee_agent_id)
+        
+        # Dispatch the call
+        return await self.dispatch(call, callee_agent, custody_logger)
+    
+    def _create_agent(self, agent_id: str) -> Any:
+        """
+        Create an agent instance for the given agent ID.
+        
+        Args:
+            agent_id: ID of the agent to create (Agent1-5)
+            
+        Returns:
+            An instance of the requested agent
+            
+        Raises:
+            ValueError: If agent_id is not recognized
+        """
+        from agents.agent1_image import Agent1Image
+        from agents.agent2_audio import Agent2Audio
+        from agents.agent3_object import Agent3Object
+        from agents.agent4_video import Agent4Video
+        from agents.agent5_metadata import Agent5Metadata
+        
+        agent_classes = {
+            "Agent1": Agent1Image,
+            "Agent2": Agent2Audio,
+            "Agent3": Agent3Object,
+            "Agent4": Agent4Video,
+            "Agent5": Agent5Metadata,
+        }
+        
+        if agent_id not in agent_classes:
+            raise ValueError(f"Unknown agent_id: {agent_id}. Must be one of {list(agent_classes.keys())}")
+        
+        agent_class = agent_classes[agent_id]
+        
+        # Build kwargs - only add inter_agent_bus for agents that need it
+        kwargs = {
+            "agent_id": agent_id,
+            "session_id": self._session_id,
+            "evidence_artifact": self._evidence_artifact,
+            "config": self._config,
+            "working_memory": self._working_memory,
+            "episodic_memory": self._episodic_memory,
+            "custody_logger": self._custody_logger,
+            "evidence_store": self._evidence_store,
+        }
+        
+        # Add inter_agent_bus for Agent2, Agent3, Agent4
+        if agent_id in ("Agent2", "Agent3", "Agent4"):
+            kwargs["inter_agent_bus"] = self
+        
+        return agent_class(**kwargs)
     
     def get_active_calls(self) -> list[tuple[str, str, Optional[str]]]:
         """Get list of currently active calls."""
