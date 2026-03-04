@@ -5,7 +5,7 @@
 # This is the fastest workflow — run the backend and frontend natively
 # with hot reload while keeping the databases in Docker.
 #
-#   docker compose -f docker-compose.infra.yml up -d
+#   docker compose -f docker/docker-compose.infra.yml --env-file .env up -d
 #
 # Then run backend and frontend separately:
 #   cd backend && uvicorn api.main:app --reload --port 8000

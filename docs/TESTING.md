@@ -12,7 +12,7 @@ The backend relies on Postgres, Redis, and Qdrant to function. Therefore, the te
 
 Instead of starting the full stack, start only the data stores:
 ```bash
-docker compose -f docker-compose.infra.yml up -d
+docker compose -f docker/docker-compose.infra.yml --env-file .env up -d
 ```
 
 ### B. Setup Python Virtual Environment

@@ -14,7 +14,7 @@ Generate a required signing key and set it in your environment:
 export SIGNING_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 export HF_TOKEN=hf_your_token_here  # Required for audio agent (pyannote.audio)
 ```
-Without `SIGNING_KEY`, `docker compose up` will abort immediately with an error message.
+Without `SIGNING_KEY`, `docker compose -f docker/docker-compose.yml --env-file .env up` will abort immediately with an error message.
 
 **Default Ports:**
 - Frontend: `3000`
@@ -45,10 +45,10 @@ This is the fastest workflow for daily development. Databases run in Docker whil
 
 ```bash
 # Start only Redis, Qdrant, and PostgreSQL
-docker compose -f docker-compose.infra.yml up -d
+docker compose -f docker/docker-compose.infra.yml --env-file .env up -d
 
 # Wait for health checks (~10 seconds)
-docker compose -f docker-compose.infra.yml ps
+docker compose -f docker/docker-compose.infra.yml --env-file .env ps
 ```
 
 You should see `forensic_redis` and `forensic_postgres` as `healthy`.
@@ -99,13 +99,13 @@ Use this when testing Docker builds or when you don't have Python/Node installed
 
 ```bash
 # Build and start all services (uses docker-compose.yml + docker-compose.override.yml)
-docker compose up --build -d
+docker compose -f docker/docker-compose.yml --env-file .env up --build -d
 
 # Wait for health checks (~30-60 seconds)
-docker compose ps
+docker compose -f docker/docker-compose.yml --env-file .env ps
 
 # Initialize the database schema (first run only)
-docker compose exec backend python scripts/init_db.py
+docker compose -f docker/docker-compose.yml --env-file .env exec backend python scripts/init_db.py
 ```
 
 ### Access Points
@@ -127,7 +127,7 @@ export IMAGE_TAG=v1.0.0
 export API_URL=https://api.yourdomain.com
 
 # Start production stack
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose -f docker/docker-compose.yml -f docker/docker-compose.prod.yml --env-file .env up -d
 ```
 
 ---
@@ -136,10 +136,10 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 | File | Purpose | When It's Used |
 |------|---------|----------------|
-| `docker-compose.yml` | Base service definitions | Always included |
-| `docker-compose.override.yml` | Development overrides (build contexts, ports, volumes) | Auto-loaded with base |
-| `docker-compose.infra.yml` | Infrastructure only (Redis, Qdrant, Postgres) | Explicit `-f` flag |
-| `docker-compose.prod.yml` | Production overrides (images, restart policies) | Explicit `-f` flag |
+| `docker/docker-compose.yml` | Base service definitions | Always included |
+| `docker/docker-compose.override.yml` | Development overrides (build contexts, ports, volumes) | Auto-loaded with base |
+| `docker/docker-compose.infra.yml` | Infrastructure only (Redis, Qdrant, Postgres) | Explicit `-f` flag |
+| `docker/docker-compose.prod.yml` | Production overrides (images, restart policies) | Explicit `-f` flag |
 
 ---
 
@@ -149,36 +149,36 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 ```bash
 # All services
-docker compose logs -f
+docker compose -f docker/docker-compose.yml --env-file .env logs -f
 
 # Specific service
-docker compose logs -f backend
-docker compose logs -f frontend
-docker compose -f docker-compose.infra.yml logs -f postgres
+docker compose -f docker/docker-compose.yml --env-file .env logs -f backend
+docker compose -f docker/docker-compose.yml --env-file .env logs -f frontend
+docker compose -f docker/docker-compose.infra.yml --env-file .env logs -f postgres
 ```
 
 ### Managing Services
 
 ```bash
 # Restart a service
-docker compose restart backend
+docker compose -f docker/docker-compose.yml --env-file .env restart backend
 
 # Stop everything (keep volumes)
-docker compose down
+docker compose -f docker/docker-compose.yml --env-file .env down
 
 # Stop infrastructure only
-docker compose -f docker-compose.infra.yml down
+docker compose -f docker/docker-compose.infra.yml --env-file .env down
 
 # Stop and remove all data (volumes)
-docker compose down -v
-docker compose -f docker-compose.infra.yml down -v
+docker compose -f docker/docker-compose.yml --env-file .env down -v
+docker compose -f docker/docker-compose.infra.yml --env-file .env down -v
 ```
 
 ### Database Management
 
 ```bash
 # Initialize schema (run once after fresh start)
-docker compose exec backend python scripts/init_db.py
+docker compose -f docker/docker-compose.yml --env-file .env exec backend python scripts/init_db.py
 
 # Or for native development
 cd backend && uv run python scripts/init_db.py
@@ -188,10 +188,10 @@ cd backend && uv run python scripts/init_db.py
 
 ```bash
 # Check all services
-docker compose ps
+docker compose -f docker/docker-compose.yml --env-file .env ps
 
 # Check specific service
-docker compose ps backend
+docker compose -f docker/docker-compose.yml --env-file .env ps backend
 
 # Test backend health endpoint
 curl http://localhost:8000/health
@@ -221,8 +221,8 @@ FRONTEND_PORT=3002
 
 ```bash
 # Reset database (WARNING: deletes all data)
-docker compose -f docker-compose.infra.yml down -v
-docker compose -f docker-compose.infra.yml up -d
+docker compose -f docker/docker-compose.infra.yml --env-file .env down -v
+docker compose -f docker/docker-compose.infra.yml --env-file .env up -d
 
 # Re-initialize schema
 cd backend && uv run python scripts/init_db.py
@@ -232,8 +232,8 @@ cd backend && uv run python scripts/init_db.py
 
 ```bash
 # Clean build with no cache
-docker compose build --no-cache
-docker compose up -d
+docker compose -f docker/docker-compose.yml --env-file .env build --no-cache
+docker compose -f docker/docker-compose.yml --env-file .env up -d
 ```
 
 ---

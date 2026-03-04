@@ -57,7 +57,7 @@ Forensic Council analyzes digital evidence through a structured ReAct reasoning 
 
 3. **Start infrastructure services**
    ```bash
-   docker compose -f ../docker-compose.infra.yml up -d
+   docker compose -f ../docker/docker-compose.infra.yml --env-file ../.env up -d
    ```
 
 4. **Configure environment**
