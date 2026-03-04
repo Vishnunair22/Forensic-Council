@@ -7,8 +7,17 @@
 - [Node.js 20+](https://nodejs.org/) (for native development)
 - [uv](https://docs.astral.sh/uv/) (for Python package management)
 
+## Before First Run
+
+Generate a required signing key and set it in your environment:
+```bash
+export SIGNING_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+export HF_TOKEN=hf_your_token_here  # Required for audio agent (pyannote.audio)
+```
+Without `SIGNING_KEY`, `docker compose up` will abort immediately with an error message.
+
 **Default Ports:**
-- Frontend: `3001`
+- Frontend: `3000`
 - Backend API: `8000`
 - PostgreSQL: `5432`
 - Qdrant: `6333`, `6334`
@@ -101,7 +110,7 @@ docker compose exec backend python scripts/init_db.py
 
 ### Access Points
 
-- 🌐 **Frontend:** http://localhost:3001
+- 🌐 **Frontend:** http://localhost:3000
 - 🔌 **Backend API:** http://localhost:8000
 - 📚 **API Docs:** http://localhost:8000/docs
 
@@ -188,7 +197,7 @@ docker compose ps backend
 curl http://localhost:8000/health
 
 # Test frontend
-curl http://localhost:3001
+curl http://localhost:3000
 ```
 
 ---

@@ -82,6 +82,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: forensic_api
+    ports:
+      - "8000:8000"  # optional — only needed for direct API access from host
     environment:
       - APP_NAME=forensic_council
       - APP_ENV=${APP_ENV:-development}

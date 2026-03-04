@@ -18,6 +18,7 @@ Following the test run execution, these issues were identified and resolved.
 | 93 | MIME types .webp, .mkv, .flac missing | 🟡 Medium | **RESOLVED** | Added missing MIME types to `_get_mime_type()` in pipeline.py |
 | 94 | EXIF bytes/string comparison error | 🟡 Medium | **RESOLVED** | Added proper bytes-to-string conversion in test_authentic_has_software_exif |
 | 95 | API test expects 422 but gets 401 | 🟡 Medium | **RESOLVED** | Modified test to accept both 401 and 422 (auth required) |
+| 96 | Backend service has no ports mapping | 🟡 Medium | **RESOLVED** | Added `ports: - "8000:8000"` to backend service in docker-compose.yml for direct API access |
 
 ---
 

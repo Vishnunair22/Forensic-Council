@@ -8,7 +8,7 @@ The system uses an ECDSA deterministic methodology to sign the final `Investigat
 
 ### 1. The Signing Key
 *   The system is seeded with a `SIGNING_KEY` 256-bit hexadecimal string defined in `.env`.
-*   This key is used to derive an Elliptic Curve private key (SECP256k1).
+*   This key is used to derive an Elliptic Curve private key (SECP256R1 / P-256).
 
 ### 2. The Custody Chain
 *   Upon the Council Arbiter reaching a final verdict, the entire JSON payload (including the verdict string, timestamp, and array of agent findings) is serialized.

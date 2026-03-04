@@ -80,8 +80,8 @@ The primary message payload structure (`BriefUpdate` schema):
 {
   "type": "AGENT_UPDATE",
   "session_id": "uuid-v4-string",
-  "agent_id": "agent-1-image",
-  "agent_name": "Image Forensics",
+  "agent_id": "Agent1",
+  "agent_name": "Image Integrity Expert",
   "message": "Analyzing EXIF metadata block...",
   "data": {
     "status": "deliberating",
