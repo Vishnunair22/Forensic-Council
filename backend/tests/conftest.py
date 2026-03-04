@@ -64,12 +64,8 @@ async def cleanup_singletons():
     yield
     await close_postgres_client()
     await close_qdrant_client()
-    # close_redis_client is synchronous or async? Let's assume async if others are. No, redis_client doesn't have a singleton usually, but let's check if close_redis_client exists
-    # If it is async:
-    try:
-        await close_redis_client()
-    except TypeError: # If it turns out synchronous
-        close_redis_client()
+    # close_redis_client is async - call it directly
+    await close_redis_client()
     
     import infra.storage
     infra.storage._storage_backend = None

@@ -5,14 +5,14 @@ WORKDIR /app
 # Copy package locks first
 COPY package.json package-lock.json ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies - use npm ci for deterministic builds
+RUN npm ci
 
 # Copy application code
 COPY . .
 
 # Build the Next.js application for production
-ARG NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+ARG NEXT_PUBLIC_API_URL=http://backend:8000
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 RUN npm run build
 
