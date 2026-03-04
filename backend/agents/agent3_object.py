@@ -223,38 +223,13 @@ class Agent3Object(ForensicAgent):
                 return {"error": f"Scale validation failed: {e}", "scale_consistent": True}
         
         async def lighting_consistency(input_data: dict) -> dict:
-            import cv2, numpy as np
-            from PIL import Image
+            """Lighting analysis using Hough shadow-direction detector."""
             artifact = input_data.get("artifact") or self.evidence_artifact
-            try:
-                img = np.array(Image.open(artifact.file_path).convert("RGB"))
-                gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY).astype(float)
-                h, w = gray.shape
-                # Split into 9 grid cells, measure brightness per cell
-                cells = []
-                for row in range(3):
-                    for col in range(3):
-                        cell = gray[row*h//3:(row+1)*h//3, col*w//3:(col+1)*w//3]
-                        cells.append(float(cell.mean()))
-                cell_std = float(np.std(cells))
-                # High std across cells means uneven lighting
-                # Compute Sobel gradient direction as proxy for shadow angle
-                sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=5)
-                sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=5)
-                angles = np.arctan2(sobely, sobelx) * (180 / np.pi)
-                # Dominant gradient angle
-                hist, bins = np.histogram(angles.flatten(), bins=36, range=(-180, 180))
-                dominant_angle = float(bins[np.argmax(hist)])
-                lighting_consistent = cell_std < 30.0
-                return {
-                    "lighting_consistent": lighting_consistent,
-                    "brightness_std_across_regions": round(cell_std, 2),
-                    "dominant_gradient_angle_deg": round(dominant_angle, 1),
-                    "region_brightness_values": [round(c, 1) for c in cells],
-                    "assessment": "uniform lighting" if lighting_consistent else "uneven lighting detected — possible compositing",
-                }
-            except Exception as e:
-                return {"error": f"Lighting consistency check failed: {e}", "lighting_consistent": True}
+            return await run_ml_tool(
+                "lighting_analyzer.py",
+                artifact.file_path,
+                timeout=20.0
+            )
         
         async def scene_incongruence(input_data: dict) -> dict:
             import cv2, numpy as np

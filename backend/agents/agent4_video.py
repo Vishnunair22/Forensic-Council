@@ -28,7 +28,7 @@ from tools.video_tools import (
     optical_flow_analyze as real_optical_flow_analyze,
     frame_window_extract as real_frame_window_extract,
     frame_consistency_analyze as real_frame_consistency_analyze,
-    face_swap_detect as real_face_swap_detect,
+    face_swap_detect_deepface as real_face_swap_detect,  # DeepFace embedding model
     video_metadata_extract as real_video_metadata_extract,
 )
 
@@ -159,20 +159,30 @@ class Agent4Video(ForensicAgent):
         rng = random.Random(seed_val)
         
         async def anomaly_classification(input_data: dict) -> dict:
-            categories = ["Spatial inconsistency", "Frame duplication", "Deepfake artifact", "Compression glitch", "None"]
-            return {
-                "status": "success",
-                "classification": rng.choice(categories),
-                "confidence": round(rng.uniform(0.5, 0.98), 2)
-            }
+            """Classify anomaly via SSIM + motion vector analysis."""
+            frame_a = input_data.get("frame_a_path")
+            frame_b = input_data.get("frame_b_path")
+            motion = input_data.get("motion_vector_magnitude", 0.0)
+            if not frame_a or not frame_b:
+                return {"classification": "INCONCLUSIVE", "court_defensible": True,
+                        "note": "frame_a_path and frame_b_path required"}
+            return await run_ml_tool(
+                "anomaly_classifier.py",
+                frame_a,
+                extra_args=["--frameB", frame_b, "--motion", str(motion)],
+                timeout=15.0
+            )
         
         async def rolling_shutter_validation(input_data: dict) -> dict:
-            return {
-                "status": "success",
-                "scanline_skew_detected": rng.choice([True, False]),
-                "physically_plausible": rng.choice([True, True, False]),
-                "estimated_readout_time_ms": round(rng.uniform(10.0, 30.0), 1)
-            }
+            """Validate rolling shutter via optical flow scanline skew analysis."""
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            sample = input_data.get("sample_seconds", 5.0)
+            return await run_ml_tool(
+                "rolling_shutter_validator.py",
+                artifact.file_path,
+                extra_args=["--sample", str(sample)],
+                timeout=30.0
+            )
         
         async def inter_agent_call(input_data: dict) -> dict:
             return {

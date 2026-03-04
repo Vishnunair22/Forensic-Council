@@ -24,7 +24,7 @@ from core.ml_subprocess import run_ml_tool
 from infra.evidence_store import EvidenceStore
 # Import real tool implementations
 from tools.metadata_tools import (
-    exif_extract as real_exif_extract,
+    exif_extract_enhanced as real_exif_extract,  # pyexiftool + hachoir
     gps_timezone_validate as real_gps_timezone_validate,
     steganography_scan as real_steganography_scan,
     file_structure_analysis as real_file_structure_analysis,
@@ -144,13 +144,28 @@ class Agent5Metadata(ForensicAgent):
                 return {"plausible": False, "issues": [str(e)], "timezone": "Unknown"}
         
         async def steganography_scan_handler(input_data: dict) -> dict:
-            """Handle steganography scan with input_data dict."""
+            """LSB chi-squared + stegano active decode."""
             artifact = input_data.get("artifact") or self.evidence_artifact
             lsb_threshold = input_data.get("lsb_threshold", 0.5)
-            return await real_steganography_scan(
+            result = await real_steganography_scan(
                 artifact=artifact,
                 lsb_threshold=lsb_threshold,
             )
+            
+            # Layer 2: attempt active LSB decode with stegano
+            try:
+                from stegano import lsb as stegano_lsb
+                hidden = stegano_lsb.reveal(artifact.file_path)
+                if hidden and len(hidden) > 3:
+                    result["lsb_hidden_text_found"] = True
+                    result["lsb_message_length"] = len(hidden)
+                    result["lsb_preview"] = hidden[:60]
+                    result["stego_suspected"] = True
+                    result["confidence"] = max(result.get("confidence", 0.0), 0.9)
+            except Exception:
+                result["lsb_hidden_text_found"] = False
+            
+            return result
         
         async def file_structure_analysis_handler(input_data: dict) -> dict:
             """Handle file structure analysis with input_data dict."""
