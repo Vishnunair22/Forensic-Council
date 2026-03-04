@@ -7,6 +7,18 @@ This log tracks significant errors, architectural flaws, and their subsequent re
 
 ---
 
+## 🐛 Docker Preflight Report Fixes — March 04, 2026
+
+Following the Docker preflight audit, these build and runtime issues were identified and resolved.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 121 | SIGNING_KEY is mandatory but .env file missing (docker compose aborts) | 🔴 BLOCKER | **RESOLVED** | .env file already exists with SIGNING_KEY configured. |
+| 122 | HF_HOME mismatch: Dockerfile uses /tmp/huggingface but volume mounts to /root/.cache/huggingface | 🟠 Runtime Bug | **RESOLVED** | Changed volume mount to `/tmp/huggingface` in docker-compose.yml line 137 to match Dockerfile ENV. |
+| 123 | Caddyfile serves static files from /srv/frontend but frontend is Next.js Node server | 🟠 Runtime Bug | **RESOLVED** | Changed Caddyfile to reverse_proxy frontend:3000 instead of root + file_server. |
+
+---
+
 ## 🐛 Docker Build/Runtime Bug Fixes — March 04, 2026
 
 Following the comprehensive Docker audit, these build and runtime issues were identified and resolved.
@@ -428,3 +440,38 @@ Following the Forensic Council Production Readiness assessment, Phase 1 security
 **Remaining items for full production readiness:**
 - Phase 2: Integrate YOLO for Agent 3, UnivFD weights for Agent 4, cross-modal correlation in Arbiter
 - Phase 3: Reduce JWT expiry, add refresh tokens, Redis persistence, CI/CD pipeline
+
+---
+
+## 🚨 v0.7.1 Production Readiness Review — March 04, 2026
+
+Following the comprehensive v0.7.1 review, these issues were identified requiring fixes before private beta deployment.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| PR-2 | WebSocket authentication broken for browsers | 🔴 Critical | **BROKEN** | Backend expects Authorization header during handshake, but browser WS API cannot send custom headers. Must accept connection first, then read AUTH message. |
+| PR-3 | Caddyfile TLS on_demand wrong directive | 🟡 Medium | **PARTIAL** | `on_demand` TLS is for multi-tenant/wildcard scenarios. For single domain, use standard ACME. Also removes `:-localhost` fallback (Let's Encrypt cannot issue for localhost). |
+| PR-4 | Demo credentials fallback in comments | 🟡 Medium | **PARTIAL** | DB schema and lookup path correct, but no bootstrap mechanism - fallback always used. |
+| R-1 | Caddyfile WebSocket path mismatch | 🟡 Medium | **BROKEN** | `/ws/*` handler defined but actual endpoint is `/api/v1/sessions/{id}/live` which falls into `/api/*` block without Upgrade headers. |
+| R-2 | No admin bootstrap mechanism | 🟡 Medium | **DOCUMENTED** | Users table empty on fresh deploy - always falls back to hardcoded credentials. Needs BOOTSTRAP_ADMIN_USERNAME/PASSWORD env-var in init_db.py. |
+| R-3 | Logout does not revoke tokens | 🟡 Medium | **NOT IMPL** | /auth/logout returns 200 but doesn't invalidate JWT. Redis blacklisting is commented out. |
+| R-4 | Development-Status.md contradictory | 🟡 Low | **NOT IMPL** | Top says "Production-Ready" but Known Issues/Backend Services table say opposite. Needs cleanup. |
+
+### Prioritised Fix List for v0.7.2
+
+| # | Fix | Effort | Priority |
+|:---|:---|:---:|:---|
+| 1 | Fix WebSocket auth: accept() first, then read AUTH message from frontend | 1-2 hrs | CRITICAL |
+| 2 | Fix Caddyfile TLS: replace on_demand with standard ACME; remove localhost fallback | 30 min | HIGH |
+| 3 | Fix Caddyfile WS routing: match /api/v1/sessions/*/live with Upgrade headers | 30 min | HIGH |
+| 4 | Add BOOTSTRAP_ADMIN_USERNAME/PASSWORD env-var seeding in init_db.py | 2-3 hrs | HIGH |
+| 5 | Implement logout token blacklisting with Redis | 1-2 hrs | MEDIUM |
+| 6 | Clean up Development-Status.md - move resolved items to ERROR_LOG.md | 15 min | LOW |
+
+### Updated Time Estimate to Private Beta Readiness
+
+Fixes #1-4: ~4-5 hours
+
+After those 4 fixes, the system meets the bar for a limited private beta with authenticated users on a proper domain.
+
+Full production readiness (Phase 2 + Phase 3) remains ~7-10 days as previously estimated.

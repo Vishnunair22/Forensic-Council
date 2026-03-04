@@ -134,7 +134,7 @@ services:
     volumes:
       - evidence_data:/app/storage/evidence
       - ./backend/storage/keys:/app/storage/keys:ro
-      - hf_cache:/root/.cache/huggingface
+      - hf_cache:/tmp/huggingface
 
   frontend:
     build:
