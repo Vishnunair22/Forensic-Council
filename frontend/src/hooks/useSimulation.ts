@@ -128,6 +128,8 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                         }
                                     });
                                     setStatus("analyzing");
+                                    // Only play sound when a NEW agent becomes active, not on every update
+                                    playSoundRef.current?.("think");
                                 } else if (currentlyActiveRef.current === incomingId) {
                                     // Update thinking text for the currently active agent only
                                     setActiveAgents(prev => ({
@@ -144,8 +146,6 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                         thinking: agentData.thinking || "Analyzing...",
                                     });
                                 }
-
-                                playSoundRef.current?.("think");
                             }
                             await new Promise(resolve => setTimeout(resolve, 50));
                             break;

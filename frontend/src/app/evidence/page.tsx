@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -61,6 +61,24 @@ export default function EvidencePage() {
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Memoize file preview URL to avoid memory leaks from creating new blob URLs on every render
+    const filePreviewUrl = useMemo(() => {
+        if (!file) return null;
+        if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
+            return URL.createObjectURL(file);
+        }
+        return null;
+    }, [file]);
+
+    // Cleanup blob URL on unmount or when file changes
+    useEffect(() => {
+        return () => {
+            if (filePreviewUrl) {
+                URL.revokeObjectURL(filePreviewUrl);
+            }
+        };
+    }, [filePreviewUrl]);
+
     // Pick up the file injected by the landing page modal
     useEffect(() => {
         const pending = (window as any).__forensic_pending_file as File | undefined;
@@ -95,7 +113,7 @@ export default function EvidencePage() {
         playSound("upload"); // Play upload sound at start
         setIsUploading(true);
         setValidationError(null);
-        startSimulation(); // sets to 'initiating'
+        startSimulation("pending"); // triggers setStatus("initiating")
 
         try {
             const investigatorId = localStorage.getItem("investigatorId") || "REQ-" + Math.floor(Math.random() * 90000 + 10000);
@@ -277,14 +295,14 @@ export default function EvidencePage() {
                                     <div className="relative w-full bg-black/40" style={{ minHeight: "200px" }}>
                                         {file.type.startsWith("image/") && (
                                             <img
-                                                src={URL.createObjectURL(file)}
+                                                src={filePreviewUrl ?? ""}
                                                 alt="Evidence"
                                                 className="w-full max-h-72 object-contain"
                                             />
                                         )}
                                         {file.type.startsWith("video/") && (
                                             <video
-                                                src={URL.createObjectURL(file)}
+                                                src={filePreviewUrl ?? ""}
                                                 className="w-full max-h-72 object-contain"
                                                 muted autoPlay loop playsInline
                                             />
