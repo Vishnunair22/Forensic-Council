@@ -65,6 +65,7 @@ class ForensicReport(BaseModel):
     contested_findings: list[FindingComparison] = Field(default_factory=list)
     tribunal_resolved: list[TribunalCase] = Field(default_factory=list)
     incomplete_findings: list[dict[str, Any]] = Field(default_factory=list)
+    stub_findings: list[dict[str, Any]] = Field(default_factory=list)  # Stub/implemented tool results
     case_linking_flags: list[dict[str, Any]] = Field(default_factory=list)
     chain_of_custody_log: list[dict[str, Any]] = Field(default_factory=list)
     evidence_version_trees: list[dict[str, Any]] = Field(default_factory=list)
@@ -142,11 +143,25 @@ class CouncilArbiter:
                 comparison.cross_modal_confirmed):
                 cross_modal_confirmed.append(comparison.finding_a)
         
-        # Incomplete findings
+        # Incomplete findings (excluding stub results which are not court-defensible)
         incomplete_findings = [
             f for f in all_findings 
             if f.get("status") == "INCOMPLETE"
         ]
+        
+        # Stub findings - results from unimplemented tools
+        # These are tracked separately and excluded from verdict calculation
+        stub_findings = [
+            f for f in all_findings
+            if f.get("stub_result") == True
+        ]
+        
+        # Log warning if stub findings are present
+        if stub_findings:
+            logger.warning(
+                f"Report contains {len(stub_findings)} stub findings that should not be used for verdicts",
+                stub_count=len(stub_findings),
+            )
         
         # Generate executive summary
         executive_summary = self._generate_executive_summary(
@@ -172,6 +187,7 @@ class CouncilArbiter:
             cross_modal_confirmed=cross_modal_confirmed,
             contested_findings=contested_findings,
             incomplete_findings=incomplete_findings,
+            stub_findings=stub_findings,  # Include stub findings for transparency
             uncertainty_statement=uncertainty_statement,
         )
         

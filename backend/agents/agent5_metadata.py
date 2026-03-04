@@ -297,6 +297,7 @@ class Agent5Metadata(ForensicAgent):
         async def reverse_image_search_handler(input_data: dict) -> dict:
             return {
                 "status": "stub",
+                "stub_result": True,
                 "court_defensible": False,
                 "warning": "STUB: reverse_image_search returns fabricated data. Integrate TinEye API.",
                 "prior_appearance_found": None,
@@ -305,6 +306,7 @@ class Agent5Metadata(ForensicAgent):
         async def device_fingerprint_db_handler(input_data: dict) -> dict:
             return {
                 "status": "stub",
+                "stub_result": True,
                 "court_defensible": False,
                 "warning": "STUB: device_fingerprint_db returns fabricated data. Integrate CameraV DB.",
                 "device_model_matched": None,
@@ -313,6 +315,7 @@ class Agent5Metadata(ForensicAgent):
         async def adversarial_robustness_check_handler(input_data: dict) -> dict:
             return {
                 "status": "stub",
+                "stub_result": True,
                 "court_defensible": False,
                 "warning": "STUB: adversarial_robustness_check returns fabricated data. Integrate real adversarial testing.",
                 "adversarial_pattern_detected": None,

@@ -407,3 +407,24 @@ Missing task→tool override entries causing tasks to silently complete without 
 | 52 | Contraband Database Override Missing | 🟡 Silent | **RESOLVED** | Added `"contraband": "contraband_database"` to `_TASK_TOOL_OVERRIDES`. |
 | 53 | ML Metadata Anomaly Override Missing | 🟡 Silent | **RESOLVED** | Added `"ml metadata anomaly": "metadata_anomaly_score"` to `_TASK_TOOL_OVERRIDES`. |
 | 54 | Astronomical API Override Missing | 🟡 Silent | **RESOLVED** | Added `"astronomical api": "astronomical_api"` to `_TASK_TOOL_OVERRIDES`. |
+
+---
+
+## 🚀 Production Readiness Phase 1 Fixes — March 04, 2026
+
+Following the Forensic Council Production Readiness assessment, Phase 1 security hardening tasks were completed. The system is now ready for limited private beta with authenticated users.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| PR-1 | Unauthenticated session endpoints | 🔴 Critical | **RESOLVED** | Added `Depends(get_current_user)` to `list_sessions` and `terminate_session` in `api/routes/sessions.py`. |
+| PR-2 | Unauthenticated WebSocket endpoint | 🔴 Critical | **RESOLVED** | Added JWT token verification via `authorization` header in `live_updates` WebSocket handler. |
+| PR-3 | HTTPS/TLS not configured | 🔴 Critical | **RESOLVED** | Uncommented HTTPS block in `Caddyfile`, removed `auto_https off`, enabled auto Let's Encrypt. |
+| PR-4 | Hardcoded demo credentials in source | 🔴 Critical | **RESOLVED** | Renamed `DEMO_USERS` to `_DEMO_USERS_FALLBACK`, added `get_user_from_db()` to fetch from PostgreSQL users table. |
+| PR-5 | Stub tool data not flagged | 🔴 Critical | **RESOLVED** | Added `stub_result: True` field to all stub tool responses in Agents 1-5. |
+| PR-6 | Stub findings in signed reports | 🔴 Critical | **RESOLVED** | Added `stub_findings` field to `ForensicReport` model, excluded from verdict calculation, tracked separately. |
+
+### Production Readiness Status: PHASE 1 COMPLETE
+
+**Remaining items for full production readiness:**
+- Phase 2: Integrate YOLO for Agent 3, UnivFD weights for Agent 4, cross-modal correlation in Arbiter
+- Phase 3: Reduce JWT expiry, add refresh tokens, Redis persistence, CI/CD pipeline

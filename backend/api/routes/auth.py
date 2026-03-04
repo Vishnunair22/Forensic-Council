@@ -48,7 +48,9 @@ class UserResponse(BaseModel):
 # Demo users - In production, use a database with hashed passwords
 # These are for initial setup and testing only
 # Hash generated with: python -c "from passlib.context import CryptContext; print(CryptContext(['bcrypt']).hash('password'))"
-DEMO_USERS = {
+# NOTE: DEMO_USERS is deprecated - users are now stored in PostgreSQL
+# Only used as fallback if database is unavailable
+_DEMO_USERS_FALLBACK = {
     "admin": {
         "user_id": "admin-001",
         "username": "admin",
@@ -64,6 +66,29 @@ DEMO_USERS = {
         "disabled": False,
     },
 }
+
+
+async def get_user_from_db(username: str) -> Optional[dict]:
+    """Fetch user from PostgreSQL database."""
+    from infra.postgres_client import get_postgres_client
+    try:
+        client = await get_postgres_client()
+        row = await client.fetch_one(
+            "SELECT user_id, username, hashed_password, role, is_disabled "
+            "FROM users WHERE username = $1 AND is_active = TRUE",
+            username
+        )
+        if row:
+            return {
+                "user_id": row["user_id"],
+                "username": row["username"],
+                "hashed_password": row["hashed_password"],
+                "role": UserRole(row["role"]),
+                "disabled": row["is_disabled"],
+            }
+    except Exception as e:
+        logger.warning("Database unavailable, using fallback auth", error=str(e))
+    return None
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -86,7 +111,12 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     # Verify password using bcrypt
     from core.auth import verify_password
     
-    user = DEMO_USERS.get(form_data.username)
+    # Try to fetch user from database first
+    user = await get_user_from_db(form_data.username)
+    
+    # Fallback to demo users if database is unavailable
+    if not user:
+        user = _DEMO_USERS_FALLBACK.get(form_data.username)
     
     if not user or not verify_password(form_data.password, user["hashed_password"]):
         logger.warning("Failed login attempt", username=form_data.username)
