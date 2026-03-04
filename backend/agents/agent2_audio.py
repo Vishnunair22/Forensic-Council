@@ -25,11 +25,12 @@ from core.ml_subprocess import run_ml_tool
 from infra.evidence_store import EvidenceStore
 # Import real tool implementations
 from tools.audio_tools import (
-    speaker_diarize as real_speaker_diarize,
-    anti_spoofing_detect as real_anti_spoofing_detect,
-    prosody_analyze as real_prosody_analyze,
+    speaker_diarize_pyannote as real_speaker_diarize,       # pyannote.audio 3.1
+    anti_spoofing_speechbrain as real_anti_spoofing_detect, # SpeechBrain ECAPA
+    prosody_praat as real_prosody_analyze,                  # praat-parselmouth
     background_noise_consistency as real_background_noise_consistency,
     codec_fingerprint as real_codec_fingerprint,
+    av_sync_verify as real_av_sync_verify,                  # moviepy+librosa
 )
 
 
@@ -177,13 +178,9 @@ class Agent2Audio(ForensicAgent):
         rng = random.Random(seed_val)
         
         async def audio_visual_sync_handler(input_data: dict) -> dict:
-            return {
-                "status": "stub",
-                "court_defensible": False,
-                "warning": "STUB: audio_visual_sync returns fabricated data. Integrate real AV sync detection.",
-                "sync_offset_ms": None,
-                "is_synchronized": None,
-            }
+            """Real AV sync using moviepy+librosa onset correlation."""
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            return await real_av_sync_verify(artifact=artifact)
 
         async def inter_agent_call_handler(input_data: dict) -> dict:
             """Real inter-agent call via InterAgentBus."""

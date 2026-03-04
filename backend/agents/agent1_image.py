@@ -71,6 +71,7 @@ class Agent1Image(ForensicAgent):
             "Run JPEG ghost detection on all flagged regions",
             "Run frequency domain analysis on contested regions",
             "Run frequency-domain GAN artifact detection",
+            "Detect copy-move forgery in flagged ROI regions",
             "Verify file hash against ingestion hash",
             "Run adversarial robustness check against known anti-ELA evasion techniques",
             "Extract visible text via OCR for contextual analysis",
@@ -201,6 +202,15 @@ class Agent1Image(ForensicAgent):
             artifact = input_data.get("artifact") or self.evidence_artifact
             return await run_ml_tool("deepfake_frequency.py", artifact.file_path, timeout=25.0)
 
+        async def copy_move_detect_handler(input_data: dict) -> dict:
+            """Detect copy-move forgery using SIFT feature matching."""
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            return await run_ml_tool(
+                "copy_move_detector.py",
+                artifact.file_path,
+                timeout=30.0
+            )
+
         async def extract_text_from_image_handler(input_data: dict) -> dict:
             """Handle OCR text extraction with input_data dict."""
             artifact = input_data.get("artifact") or self.evidence_artifact
@@ -237,6 +247,7 @@ class Agent1Image(ForensicAgent):
         registry.register("noise_fingerprint", noise_fingerprint_handler, "Detect camera noise fingerprint inconsistencies")
         registry.register("deepfake_frequency_check", deepfake_frequency_check_handler, "Detect GAN/deepfake artifacts in frequency domain")
         registry.register("extract_text_from_image", extract_text_from_image_handler, "Extract visible text via OCR for contextual analysis")
+        registry.register("copy_move_detect", copy_move_detect_handler, "Detect copy-move forgery via SIFT keypoint self-matching")
         registry.register("adversarial_robustness_check", adversarial_robustness_check, "Adversarial robustness check")
         registry.register("sensor_db_query", sensor_db_query, "Camera sensor noise profile database query")
         
