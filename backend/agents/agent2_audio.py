@@ -9,7 +9,7 @@ and audio-visual sync breaks.
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, Optional
 import random
 import hashlib
 
@@ -65,7 +65,7 @@ class Agent2Audio(ForensicAgent):
         episodic_memory: EpisodicMemory,
         custody_logger: CustodyLogger,
         evidence_store: EvidenceStore,
-        inter_agent_bus: Any = None,
+        inter_agent_bus: Optional[Any] = None,
     ) -> None:
         """Initialize Agent 2 with optional inter-agent bus."""
         super().__init__(
@@ -89,7 +89,7 @@ class Agent2Audio(ForensicAgent):
     def task_decomposition(self) -> list[str]:
         """
         List of tasks this agent performs.
-        Exact 10 tasks from architecture document.
+        Exact 11 tasks from architecture document.
         """
         return [
             "Run speaker diarization - establish voice count baseline",
@@ -172,10 +172,6 @@ class Agent2Audio(ForensicAgent):
             window = input_data.get("window", 1.0)
             return await run_ml_tool("audio_splice_detector.py", artifact.file_path,
                                       extra_args=["--window", str(window)], timeout=25.0)
-        
-        # Mock tool handlers with realistic heuristics
-        seed_val = int(hashlib.md5(str(self.evidence_artifact.artifact_id).encode()).hexdigest()[:8], 16)
-        rng = random.Random(seed_val)
         
         async def audio_visual_sync_handler(input_data: dict) -> dict:
             """Real AV sync using moviepy+librosa onset correlation."""

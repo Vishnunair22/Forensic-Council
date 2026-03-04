@@ -574,12 +574,9 @@ class ForensicCouncilPipeline:
                 logger.error("Agent5 failed", error=str(e))
                 return AgentLoopResult(agent_id="Agent5", findings=[], reflection_report={}, react_chain=[], error=str(e))
         
-        # Run all agents sequentially
-        results = []
-        for run_agent in [run_agent1, run_agent2, run_agent3, run_agent4, run_agent5]:
-            results.append(await run_agent())
-            
-        return results
+        # Run all agents concurrently
+        results = await asyncio.gather(run_agent1(), run_agent2(), run_agent3(), run_agent4(), run_agent5())
+        return list(results)
     
     async def handle_hitl_decision(
         self,

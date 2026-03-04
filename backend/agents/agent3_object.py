@@ -8,7 +8,7 @@ and contextually validating objects, weapons, and contraband.
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, Optional
 import random
 import hashlib
 
@@ -17,6 +17,7 @@ from core.config import Settings
 from core.custody_logger import CustodyLogger
 from core.episodic_memory import EpisodicMemory
 from core.evidence import EvidenceArtifact
+from core.inter_agent_bus import InterAgentBus, InterAgentCall, InterAgentCallType
 from core.tool_registry import ToolRegistry
 from core.working_memory import WorkingMemory
 from core.ml_subprocess import run_ml_tool
@@ -45,6 +46,31 @@ class Agent3Object(ForensicAgent):
     12. Submit calibrated findings to Arbiter
     """
     
+    def __init__(
+        self,
+        agent_id: str,
+        session_id: uuid.UUID,
+        evidence_artifact: EvidenceArtifact,
+        config: Settings,
+        working_memory: WorkingMemory,
+        episodic_memory: EpisodicMemory,
+        custody_logger: CustodyLogger,
+        evidence_store: EvidenceStore,
+        inter_agent_bus: Optional[Any] = None,
+    ) -> None:
+        """Initialize Agent 3 with optional inter-agent bus."""
+        super().__init__(
+            agent_id=agent_id,
+            session_id=session_id,
+            evidence_artifact=evidence_artifact,
+            config=config,
+            working_memory=working_memory,
+            episodic_memory=episodic_memory,
+            custody_logger=custody_logger,
+            evidence_store=evidence_store,
+        )
+        self._inter_agent_bus = inter_agent_bus
+    
     @property
     def agent_name(self) -> str:
         """Human-readable name of this agent."""
@@ -54,7 +80,7 @@ class Agent3Object(ForensicAgent):
     def task_decomposition(self) -> list[str]:
         """
         List of tasks this agent performs.
-        Exact 9 tasks from architecture document.
+        Exact 11 tasks from architecture document.
         """
         return [
             "Run full-scene primary object detection",
@@ -99,8 +125,6 @@ class Agent3Object(ForensicAgent):
                 _img_bytes = f.read(4096)  # first 4KB
         except Exception:
             _img_bytes = str(self.evidence_artifact.artifact_id).encode()
-        seed_val = int(hashlib.md5(_img_bytes).hexdigest()[:8], 16)
-        rng = random.Random(seed_val)
         
         async def object_detection(input_data: dict) -> dict:
             """
@@ -326,8 +350,23 @@ class Agent3Object(ForensicAgent):
             return await run_ml_tool("noise_fingerprint.py", artifact.file_path, 
                                       extra_args=["--regions", str(regions)], timeout=25.0)
         
-        async def inter_agent_call(input_data: dict) -> dict:
-            return {"status": "success", "response": "Acknowledged by target agent."}
+        async def inter_agent_call_handler(input_data: dict) -> dict:
+            """Real inter-agent call via InterAgentBus (calls Agent 1 for lighting inconsistencies)."""
+            if self._inter_agent_bus is None:
+                return {"status": "error", "message": "No inter_agent_bus injected"}
+
+            from core.inter_agent_bus import InterAgentCall, InterAgentCallType
+            call = InterAgentCall(
+                caller_agent_id=self.agent_id,
+                target_agent_id=input_data.get("target_agent", "agent1"),
+                call_type=InterAgentCallType.CROSS_VERIFY,
+                payload={
+                    "region": input_data.get("region"),
+                    "question": input_data.get("question", "Confirm lighting inconsistency in this region"),
+                }
+            )
+            response = await self._inter_agent_bus.send(call)
+            return response
         
         async def adversarial_robustness_check_handler(input_data: dict) -> dict:
             return {
@@ -347,7 +386,7 @@ class Agent3Object(ForensicAgent):
         registry.register("image_splice_check", image_splice_check, "Detect image splicing via DCT quantization inconsistencies")
         registry.register("noise_fingerprint", noise_fingerprint, "Detect camera noise fingerprint inconsistencies")
         registry.register("contraband_database", contraband_database_handler, "Contraband and weapons database cross-reference")
-        registry.register("inter_agent_call", inter_agent_call, "Inter-agent communication")
+        registry.register("inter_agent_call", inter_agent_call_handler, "Inter-agent communication")
         registry.register("adversarial_robustness_check", adversarial_robustness_check_handler, "Adversarial robustness check")
         
         return registry

@@ -69,7 +69,7 @@ class Agent5Metadata(ForensicAgent):
     def task_decomposition(self) -> list[str]:
         """
         List of tasks this agent performs.
-        Exact 11 tasks from architecture document.
+        Exact 13 tasks from architecture document.
         """
         return [
             "Extract all EXIF fields - explicitly log expected-but-absent fields",
@@ -134,7 +134,7 @@ class Agent5Metadata(ForensicAgent):
                 if not ts:
                     return {"plausible": None, "issues": ["No timestamp in EXIF"], "timezone": "N/A"}
                 
-                ts_iso = ts.replace(":", "-", 2) + "T00:00:00Z" if "T" not in ts else ts
+                ts_iso = ts.replace(":", "-", 2).replace(" ", "T") + "Z" if "T" not in ts else ts
                 return await real_gps_timezone_validate(
                     gps_lat=gps["latitude"],
                     gps_lon=gps["longitude"],
@@ -215,10 +215,6 @@ class Agent5Metadata(ForensicAgent):
                 }
             return await real_get_physical_address(lat=lat, lon=lon)
 
-        # Mock tool handlers with realistic heuristics
-        seed_val = int(hashlib.md5(str(self.evidence_artifact.artifact_id).encode()).hexdigest()[:8], 16)
-        rng = random.Random(seed_val)
-        
         async def astronomical_api_handler(input_data: dict) -> dict:
             """
             Real astronomical validation using astral library.

@@ -61,7 +61,7 @@ class Agent1Image(ForensicAgent):
     def task_decomposition(self) -> list[str]:
         """
         List of tasks this agent performs.
-        Exact 8 tasks from architecture document.
+        Exact 13 tasks from architecture document.
         """
         return [
             "Perform semantic image understanding to identify image type and context",
