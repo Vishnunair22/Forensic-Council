@@ -99,9 +99,10 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-forensic_council}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-forensic_user}:${POSTGRES_PASSWORD:-forensic_pass}@postgres:5432/${POSTGRES_DB:-forensic_council}
       - SIGNING_KEY=${SIGNING_KEY:?SIGNING_KEY must be set — run: python -c "import secrets; print(secrets.token_hex(32))"}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-${SIGNING_KEY}}
       - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-["http://localhost:3001","http://localhost:3000"]}
+      - HF_TOKEN=${HF_TOKEN:-}
+      - EVIDENCE_STORAGE_PATH=/app/storage/evidence
     depends_on:
       postgres:
         condition: service_healthy
@@ -132,14 +133,14 @@ services:
     volumes:
       - evidence_data:/app/storage/evidence
       - ./backend/storage/keys:/app/storage/keys:ro
-    environment:
-      - EVIDENCE_STORAGE_PATH=/app/storage/evidence
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: forensic_ui
+    ports:
+      - "3000:3000"
     depends_on:
       backend:
         condition: service_healthy
