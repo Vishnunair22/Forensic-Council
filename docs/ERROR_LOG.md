@@ -164,3 +164,19 @@ Following a comprehensive Tier 1/2/3 audit, these final issues preventing a stab
 | 27 | Compose Port Collision | 🟠 High | **RESOLVED** | Migrated `docker-compose.yml` frontend map natively to `"3001:3000"` preventing local development server blocks. |
 | 28 | CORS Origin Blocks | 🟠 High | **RESOLVED** | Injected `CORS_ALLOWED_ORIGINS=["http://localhost:3001","http://localhost:3000"]` securely within the docker-compose environment vars. |
 | 29 | submitHITLDecision Argument Layout | 🔴 Critical | **RESOLVED** | Replaced 4 positional string arguments with a single dictionary object aligning with the frontend hook signature. |
+
+---
+
+## 🤖 Agent Deep Dive Fixes — March 04, 2026
+
+Following a comprehensive agent audit, the following issues were identified and resolved.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 30 | Pipeline Sequential Execution | 🔴 Critical | **RESOLVED** | Changed from sequential `for` loop to `asyncio.gather()` in `pipeline.py` for concurrent agent execution (~5x speedup). |
+| 31 | GPS Timestamp Malformed | 🔴 Critical | **RESOLVED** | Fixed EXIF timestamp conversion in `agent5_metadata.py` - now correctly converts `YYYY:MM:DD HH:MM:SS` to ISO format. |
+| 32 | Agent4 Audio Filtering Missing | 🟠 High | **RESOLVED** | Added audio file short-circuit guard to `run_investigation()` - returns clean "not applicable" finding for `.wav`, `.mp3`, etc. |
+| 33 | Agent3 Inter-Agent Call Stub | 🟠 High | **RESOLVED** | Replaced stub with real `InterAgentBus` implementation - Agent3 now calls Agent1 for lighting inconsistencies. |
+| 34 | Agent4 Inter-Agent Call Stub | 🟠 High | **RESOLVED** | Replaced stub with real `InterAgentBus` implementation - Agent4 now calls Agent2 for audio cross-verification. |
+| 35 | Dead RNG Variables | 🟡 Medium | **RESOLVED** | Removed unused `random.Random()` variables from Agent2, Agent3, and Agent5 (leftover from mocked tools). |
+| 36 | Docstring Task Count Mismatches | 🟡 Medium | **RESOLVED** | Corrected task count docstrings: Agent1 (8→13), Agent2 (10→11), Agent3 (9→11), Agent4 (9→10), Agent5 (11→13). |

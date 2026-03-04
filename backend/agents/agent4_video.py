@@ -9,7 +9,7 @@ rolling shutter violations, and cross-modal temporal inconsistencies.
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, Optional
 
 from agents.base_agent import ForensicAgent
 from core.config import Settings
@@ -52,6 +52,31 @@ class Agent4Video(ForensicAgent):
     10. Submit calibrated findings to Arbiter with dual anomaly classification list preserved
     """
     
+    def __init__(
+        self,
+        agent_id: str,
+        session_id: uuid.UUID,
+        evidence_artifact: EvidenceArtifact,
+        config: Settings,
+        working_memory: WorkingMemory,
+        episodic_memory: EpisodicMemory,
+        custody_logger: CustodyLogger,
+        evidence_store: EvidenceStore,
+        inter_agent_bus: Optional[Any] = None,
+    ) -> None:
+        """Initialize Agent 4 with optional inter-agent bus."""
+        super().__init__(
+            agent_id=agent_id,
+            session_id=session_id,
+            evidence_artifact=evidence_artifact,
+            config=config,
+            working_memory=working_memory,
+            episodic_memory=episodic_memory,
+            custody_logger=custody_logger,
+            evidence_store=evidence_store,
+        )
+        self._inter_agent_bus = inter_agent_bus
+    
     @property
     def agent_name(self) -> str:
         """Human-readable name of this agent."""
@@ -61,7 +86,7 @@ class Agent4Video(ForensicAgent):
     def task_decomposition(self) -> list[str]:
         """
         List of tasks this agent performs.
-        Exact 9 tasks from architecture document.
+        Exact 10 tasks from architecture document.
         """
         return [
             "Run full-timeline optical flow analysis and generate temporal anomaly heatmap",
@@ -178,11 +203,23 @@ class Agent4Video(ForensicAgent):
                 timeout=30.0
             )
         
-        async def inter_agent_call(input_data: dict) -> dict:
-            return {
-                "status": "success",
-                "response": "Acknowledged by target agent."
-            }
+        async def inter_agent_call_handler(input_data: dict) -> dict:
+            """Real inter-agent call via InterAgentBus."""
+            if self._inter_agent_bus is None:
+                return {"status": "error", "message": "No inter_agent_bus injected"}
+
+            from core.inter_agent_bus import InterAgentCall, InterAgentCallType
+            call = InterAgentCall(
+                caller_agent_id=self.agent_id,
+                target_agent_id=input_data.get("target_agent", "agent2"),
+                call_type=InterAgentCallType.CROSS_VERIFY,
+                payload={
+                    "timestamp_ref": input_data.get("timestamp_ref"),
+                    "question": input_data.get("question", "Confirm audio-visual sync at flagged timestamp"),
+                }
+            )
+            response = await self._inter_agent_bus.send(call)
+            return response
         
         async def adversarial_robustness_check(input_data: dict) -> dict:
             return {
@@ -202,7 +239,7 @@ class Agent4Video(ForensicAgent):
         registry.register("video_metadata", video_metadata_handler, "Video metadata extraction")
         registry.register("anomaly_classification", anomaly_classification, "Anomaly classification")
         registry.register("rolling_shutter_validation", rolling_shutter_validation, "Rolling shutter validation")
-        registry.register("inter_agent_call", inter_agent_call, "Inter-agent communication")
+        registry.register("inter_agent_call", inter_agent_call_handler, "Inter-agent communication")
         registry.register("adversarial_robustness_check", adversarial_robustness_check, "Adversarial robustness check")
         
         return registry
@@ -234,8 +271,10 @@ class Agent4Video(ForensicAgent):
         file_path = self.evidence_artifact.file_path.lower()
         mime = (self.evidence_artifact.metadata or {}).get("mime_type", "").lower()
         image_exts = (".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp", ".svg")
+        audio_exts = (".wav", ".mp3", ".ogg", ".flac", ".m4a", ".aac", ".wma", ".aiff")
 
         is_image = any(file_path.endswith(ext) for ext in image_exts) or mime.startswith("image/")
+        is_audio = any(file_path.endswith(ext) for ext in audio_exts) or mime.startswith("audio/")
 
         if is_image:
             finding = AgentFinding(
@@ -249,6 +288,25 @@ class Agent4Video(ForensicAgent):
                     "Video analysis (optical flow, frame consistency, face-swap detection, "
                     "rolling shutter validation) is not applicable for image evidence. "
                     "No video frames were detected."
+                ),
+            )
+            self._findings = [finding]
+            self._react_chain = []
+            self._reflection_report = None
+            return self._findings
+
+        if is_audio:
+            finding = AgentFinding(
+                agent_id=self.agent_id,
+                finding_type="File type not applicable",
+                confidence_raw=1.0,
+                status="CONFIRMED",
+                evidence_refs=[],
+                reasoning_summary=(
+                    "Temporal Video Analysis — The uploaded evidence is an audio file. "
+                    "Video analysis (optical flow, frame consistency, face-swap detection, "
+                    "rolling shutter validation) is not applicable for audio evidence. "
+                    "No video track was detected."
                 ),
             )
             self._findings = [finding]
