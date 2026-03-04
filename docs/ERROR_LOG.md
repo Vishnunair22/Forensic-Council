@@ -7,6 +7,20 @@ This log tracks significant errors, architectural flaws, and their subsequent re
 
 ---
 
+## 🐛 Configuration & Test Fixes — March 04, 2026
+
+Following the comprehensive audit, these configuration and test issues were identified and resolved.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 66 | CORS syntax error in .env.example (trailing `}`) | 🔴 Critical | **RESOLVED** | Removed trailing `}` from `CORS_ALLOWED_ORIGINS` in `backend/.env.example` line 67. This would cause pydantic-settings JSON parsing to crash on startup. |
+| 67 | close_redis_client ambiguity in conftest.py | 🟡 Medium | **RESOLVED** | Simplified fragile try/except hack by using async `close_redis_client()` directly (function is async per redis_client.py:297). Removed TypeError catch block. |
+| 68 | startInvestigation test doesn't mock auth | 🟡 Medium | **RESOLVED** | Added `jest.spyOn(Storage.prototype, 'getItem').mockReturnValue('mock-token')` before calling `startInvestigation` in `frontend/src/__tests__/lib/api.test.ts`. |
+| 69 | Frontend Dockerfile uses npm install (not deterministic) | 🟠 High | **RESOLVED** | Changed `npm install` to `npm ci` in `frontend/Dockerfile` for deterministic builds. |
+| 70 | Frontend Dockerfile API URL points to localhost | 🔴 Critical | **RESOLVED** | Changed `NEXT_PUBLIC_API_URL` default from `http://127.0.0.1:8000` to `http://backend:8000` for Docker network connectivity. |
+
+---
+
 ## ✅ Frontend Lint Fixes — March 04, 2026
 
 Fixed lint errors in `DevErrorOverlay.tsx`.

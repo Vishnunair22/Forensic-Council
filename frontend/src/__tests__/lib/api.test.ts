@@ -25,6 +25,9 @@ describe('API Client', () => {
     const mockFile = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
 
     it('sends correct multipart form data', async () => {
+      // Mock auth token from storage BEFORE calling startInvestigation
+      jest.spyOn(Storage.prototype, 'getItem').mockReturnValue('mock-token');
+
       // Mock fetch to return success
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
