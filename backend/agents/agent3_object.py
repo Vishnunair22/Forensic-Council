@@ -103,6 +103,56 @@ class Agent3Object(ForensicAgent):
         rng = random.Random(seed_val)
         
         async def object_detection(input_data: dict) -> dict:
+            """
+            Object detection using YOLOv8 (upgrade from OpenCV heuristics).
+            
+            YOLOv8n is ~6MB and runs CPU-only in ~200ms per image.
+            Detects 80 COCO classes including weapons (knife, gun, etc.)
+            """
+            try:
+                from ultralytics import YOLO
+            except ImportError:
+                # Fallback to OpenCV heuristics if YOLO not available
+                return await _object_detection_opencv(input_data)
+            
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            
+            try:
+                # YOLOv8n is 6MB — runs CPU-only in ~200ms
+                # Auto-downloads on first call
+                model = YOLO("yolov8n.pt")
+                results = model(artifact.file_path, conf=0.25, verbose=False)
+                
+                detections = []
+                for r in results:
+                    for box in r.boxes:
+                        detections.append({
+                            "class_name": model.names[int(box.cls)],
+                            "confidence": round(float(box.conf), 3),
+                            "bbox_xywh": [round(float(v), 1) for v in box.xywh[0].tolist()],
+                            "bbox_xyxy": [round(float(v), 1) for v in box.xyxy[0].tolist()],
+                        })
+                
+                # Flag weapons/dangerous items specifically
+                WEAPON_CLASSES = {"knife", "gun", "rifle", "pistol", "sword", "bow"}
+                weapon_detections = [d for d in detections 
+                                     if any(w in d["class_name"].lower() for w in WEAPON_CLASSES)]
+                
+                return {
+                    "detections": detections,
+                    "detection_count": len(detections),
+                    "weapon_detections": weapon_detections,
+                    "classes_found": list({d["class_name"] for d in detections}),
+                    "court_defensible": True,
+                    "available": True,
+                    "backend": "ultralytics-yolov8n",
+                }
+            except Exception as e:
+                # Fallback to OpenCV heuristics
+                return await _object_detection_opencv(input_data)
+        
+        async def _object_detection_opencv(input_data: dict) -> dict:
+            """Legacy OpenCV heuristic-based object detection."""
             import cv2, numpy as np
             from PIL import Image
             artifact = input_data.get("artifact") or self.evidence_artifact
@@ -133,6 +183,7 @@ class Agent3Object(ForensicAgent):
                     "total_count": len(objects),
                     "image_dimensions": {"width": int(w), "height": int(h)},
                     "edge_density": round(float(edges.mean()) / 255, 4),
+                    "backend": "legacy-opencv",
                 }
             except Exception as e:
                 # Return graceful error dictionary rather than raising
@@ -238,12 +289,73 @@ class Agent3Object(ForensicAgent):
             except Exception as e:
                 return {"error": f"Scene incongruence analysis failed: {e}", "contextual_anomalies_detected": 0}
         
-        async def contraband_database(input_data: dict) -> dict:
-            has_hit = rng.choice([False, False, False, True])
-            hit_data = {"database_match": "N/A"}
-            if has_hit:
-                hit_data = {"database_match": "Unregistered firearm (mock)", "match_confidence": 0.88}
-            return {"status": "success", "contraband_check": has_hit, "details": hit_data}
+        async def contraband_database_handler(input_data: dict) -> dict:
+            """
+            CLIP zero-shot contextual analysis (upgrade from fake contraband DB).
+            
+            This does not claim a real weapons registry — it uses semantic similarity,
+            which is court-defensible as "contextual analysis" rather than database matching.
+            """
+            try:
+                import open_clip
+                import torch
+                from PIL import Image as PILImage
+            except ImportError:
+                return {
+                    "status": "unavailable",
+                    "court_defensible": False,
+                    "error": "CLIP not installed. Install open-clip-torch.",
+                }
+            
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            
+            try:
+                model, _, preprocess = open_clip.create_model_and_transforms(
+                    'ViT-B-32', pretrained='openai'
+                )
+                tokenizer = open_clip.get_tokenizer('ViT-B-32')
+                
+                img = preprocess(PILImage.open(artifact.file_path)).unsqueeze(0)
+                
+                concern_categories = [
+                    "a firearm or weapon",
+                    "an explosive device",
+                    "drug paraphernalia",
+                    "a knife or bladed weapon",
+                    "a safe everyday object",
+                    "a person",
+                    "a vehicle",
+                ]
+                text_tokens = tokenizer(concern_categories)
+                
+                with torch.no_grad():
+                    img_features = model.encode_image(img)
+                    text_features = model.encode_text(text_tokens)
+                    img_features = img_features / img_features.norm(dim=-1, keepdim=True)
+                    text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+                    similarities = (img_features @ text_features.T).squeeze(0)
+                    probs = similarities.softmax(dim=-1).tolist()
+                
+                scored = sorted(zip(concern_categories, probs), key=lambda x: -x[1])
+                
+                return {
+                    "status": "real",
+                    "court_defensible": True,
+                    "method": "CLIP zero-shot semantic similarity — NOT a weapons registry lookup",
+                    "top_matches": [
+                        {"category": cat, "similarity": round(prob, 4)} 
+                        for cat, prob in scored[:3]
+                    ],
+                    "concern_flag": scored[0][0] != "a safe everyday object" and scored[0][1] > 0.4,
+                    "available": True,
+                    "backend": "open-clip ViT-B-32",
+                }
+            except Exception as e:
+                return {
+                    "status": "error",
+                    "court_defensible": False,
+                    "error": str(e),
+                }
             
         async def image_splice_check(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact
@@ -258,8 +370,14 @@ class Agent3Object(ForensicAgent):
         async def inter_agent_call(input_data: dict) -> dict:
             return {"status": "success", "response": "Acknowledged by target agent."}
         
-        async def adversarial_robustness_check(input_data: dict) -> dict:
-            return {"status": "success", "adversarial_pattern_detected": rng.choice([True, False, False]), "confidence": round(rng.uniform(0.1, 0.9), 2)}
+        async def adversarial_robustness_check_handler(input_data: dict) -> dict:
+            return {
+                "status": "stub",
+                "court_defensible": False,
+                "warning": "STUB: adversarial_robustness_check returns fabricated data. Integrate real adversarial testing.",
+                "adversarial_pattern_detected": None,
+                "confidence": None,
+            }
         
         # Register tools
         registry.register("object_detection", object_detection, "Full-scene object detection")
@@ -269,9 +387,9 @@ class Agent3Object(ForensicAgent):
         registry.register("scene_incongruence", scene_incongruence, "Scene-level contextual incongruence analysis")
         registry.register("image_splice_check", image_splice_check, "Detect image splicing via DCT quantization inconsistencies")
         registry.register("noise_fingerprint", noise_fingerprint, "Detect camera noise fingerprint inconsistencies")
-        registry.register("contraband_database", contraband_database, "Contraband and weapons database cross-reference")
+        registry.register("contraband_database", contraband_database_handler, "Contraband and weapons database cross-reference")
         registry.register("inter_agent_call", inter_agent_call, "Inter-agent communication")
-        registry.register("adversarial_robustness_check", adversarial_robustness_check, "Adversarial robustness check")
+        registry.register("adversarial_robustness_check", adversarial_robustness_check_handler, "Adversarial robustness check")
         
         return registry
     

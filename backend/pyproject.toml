@@ -34,17 +34,34 @@ dependencies = [
     "piexif>=1.1",
     "imagehash>=4.3",
     "pytesseract>=0.3.10",
+    "opencv-contrib-python>=4.9",    # SIFT copy-move detection
+    "scikit-image>=0.22",             # Shadow/lighting Hough transform
+    "stegano>=0.11",                  # LSB steganography decode
+    "hachoir>=3.2",                   # Binary container metadata parser
     # Metadata tools
     "timezonefinder>=6.2",
     "pyexiftool>=0.5",
     "geopy>=2.4",
+    "astral>=3.2",                    # Astronomical validation
     # Audio processing tools
     "librosa>=0.10",
     "soundfile>=0.12",
+    "pyannote.audio>=3.1",            # Speaker diarization
+    "speechbrain>=1.0",               # Anti-spoofing AASIST
+    "praat-parselmouth>=0.4",         # Gold-standard prosody (F0, jitter, shimmer)
+    "moviepy>=1.0",                   # AV sync via video+audio correlation
+    "torch>=2.2",                     # PyTorch for ML models
+    "torchvision>=0.17",
+    "torchaudio>=2.2",                # PyTorch audio support
     # Video processing tools
     "opencv-python-headless>=4.8",
+    "deepface>=0.0.93",               # Face-swap via embedding discontinuity
+    "ultralytics>=8.2",               # YOLOv8 real object detection
+    "open-clip-torch>=2.24",          # CLIP zero-shot contextual analysis
     # ML tools
     "scikit-learn>=1.4",
+    "transformers>=4.35",             # HuggingFace transformers
+    "accelerate>=0.25",               # Model acceleration
 ]
 
 [project.optional-dependencies]
