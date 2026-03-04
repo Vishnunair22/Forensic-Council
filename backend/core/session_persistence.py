@@ -254,13 +254,15 @@ class SessionPersistence:
                 # Also update reports table with error
                 await self.client.execute(
                     """
-                    INSERT INTO session_reports (session_id, status, error_message)
-                    VALUES ($1, $2, $3)
+                    INSERT INTO session_reports (session_id, case_id, investigator_id, status, error_message)
+                    VALUES ($1, $2, $3, $4, $5)
                     ON CONFLICT (session_id) DO UPDATE SET
-                        status = $2,
-                        error_message = $3
+                        status = $4,
+                        error_message = $5
                     """,
                     UUID(session_id),
+                    "",  # case_id - NOT NULL but not available here
+                    "",  # investigator_id - NOT NULL but not available here
                     status,
                     error_message,
                 )
@@ -345,7 +347,7 @@ class SessionPersistence:
             result = await self.client.execute(
                 """
                 DELETE FROM investigation_state
-                WHERE expires_at < NOW() - INTERVAL '7 days'
+                WHERE expires_at < NOW()
                 """
             )
             

@@ -244,7 +244,7 @@ class InterAgentBus:
                 await custody_logger.log_entry(
                     entry_type=EntryType.INTER_AGENT_CALL,
                     agent_id=call.caller_agent_id,
-                    session_id=call.call_id,  # Use call_id as session reference
+                    session_id=self._session_id,  # Use actual session_id
                     content={
                         "call_id": str(call.call_id),
                         "direction": "OUTGOING",
@@ -260,7 +260,7 @@ class InterAgentBus:
                 await custody_logger.log_entry(
                     entry_type=EntryType.INTER_AGENT_CALL,
                     agent_id=call.callee_agent_id,
-                    session_id=call.call_id,
+                    session_id=self._session_id,  # Use actual session_id
                     content={
                         "call_id": str(call.call_id),
                         "direction": "INCOMING",

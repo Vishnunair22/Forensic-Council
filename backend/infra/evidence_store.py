@@ -18,7 +18,7 @@ from core.custody_logger import CustodyLogger, EntryType
 from core.logging import get_logger
 from core.exceptions import ForensicCouncilBaseException
 from infra.postgres_client import PostgresClient, get_postgres_client
-from infra.storage import StorageBackend
+from infra.storage import StorageBackend, LocalStorageBackend
 
 logger = get_logger(__name__)
 
@@ -83,7 +83,7 @@ class EvidenceStore:
         if self._postgres is None:
             self._postgres = await get_postgres_client()
         if self._storage is None:
-            self._storage = StorageBackend()
+            self._storage = LocalStorageBackend()
         if self._custody_logger is None:
             self._custody_logger = CustodyLogger(postgres_client=self._postgres)
         return self

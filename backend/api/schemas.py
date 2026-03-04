@@ -50,6 +50,7 @@ class ReportDTO(BaseModel):
     executive_summary: str
     per_agent_findings: dict[str, list[AgentFindingDTO]]
     cross_modal_confirmed: list[AgentFindingDTO]
+    # contested_findings and tribunal_resolved are serialized FindingComparison/TribunalCase objects
     contested_findings: list[dict]
     tribunal_resolved: list[dict]
     incomplete_findings: list[AgentFindingDTO]

@@ -64,14 +64,21 @@ def cleanup_connections():
     _active_tasks.clear()
     _websocket_connections.clear()
     _active_pipelines.clear()
+    _final_reports.clear()  # Prevent memory leak
 
-# Allowed MIME types
+# Allowed MIME types - includes common forensic evidence formats
 ALLOWED_MIME_TYPES = {
     "image/jpeg",
     "image/png",
+    "image/tiff",
+    "image/webp",
     "video/mp4",
+    "video/quicktime",  # .mov (iPhone)
+    "video/x-msvideo",  # .avi
     "audio/wav",
-    "audio/mpeg",
+    "audio/x-wav",
+    "audio/mpeg",       # .mp3
+    "audio/mp4",        # .m4a (iPhone)
 }
 
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB

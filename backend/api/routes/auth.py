@@ -47,18 +47,19 @@ class UserResponse(BaseModel):
 
 # Demo users - In production, use a database with hashed passwords
 # These are for initial setup and testing only
+# Hash generated with: python -c "from passlib.context import CryptContext; print(CryptContext(['bcrypt']).hash('password'))"
 DEMO_USERS = {
     "admin": {
         "user_id": "admin-001",
         "username": "admin",
-        "hashed_password": "$2b$12$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",  # placeholder
+        "hashed_password": "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYzS6aLW.yW",  # admin123!
         "role": UserRole.ADMIN,
         "disabled": False,
     },
     "investigator": {
         "user_id": "inv-001",
         "username": "investigator",
-        "hashed_password": "$2b$12$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",  # placeholder
+        "hashed_password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",  # inv123!
         "role": UserRole.INVESTIGATOR,
         "disabled": False,
     },
@@ -82,22 +83,12 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     Raises:
         HTTPException: If authentication fails
     """
-    # In production, verify against database with proper password hashing
-    # For demo, we use a simple check (DO NOT USE IN PRODUCTION)
+    # Verify password using bcrypt
     from core.auth import verify_password
     
     user = DEMO_USERS.get(form_data.username)
     
-    # Demo password check - In production use proper password verification
-    # Default passwords for demo:
-    #   admin: admin123!
-    #   investigator: inv123!
-    DEMO_PASSWORDS = {
-        "admin": "admin123!",
-        "investigator": "inv123!",
-    }
-    
-    if not user or form_data.password != DEMO_PASSWORDS.get(form_data.username):
+    if not user or not verify_password(form_data.password, user["hashed_password"]):
         logger.warning("Failed login attempt", username=form_data.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

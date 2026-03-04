@@ -678,7 +678,7 @@ class ForensicAgent(ABC):
         results = await self.episodic_memory.query(
             signature_type=signature_type,
             query_embedding=query_embedding,
-            limit=limit
+            top_k=limit
         )
         
         return results

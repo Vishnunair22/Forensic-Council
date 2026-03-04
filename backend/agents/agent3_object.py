@@ -80,7 +80,7 @@ class Agent3Object(ForensicAgent):
     def task_decomposition(self) -> list[str]:
         """
         List of tasks this agent performs.
-        Exact 11 tasks from architecture document.
+        Exact 12 tasks from architecture document.
         """
         return [
             "Run full-scene primary object detection",
@@ -94,6 +94,7 @@ class Agent3Object(ForensicAgent):
             "Issue inter-agent call to Agent 1 for any region showing lighting inconsistency",
             "Run adversarial robustness check against object detection evasion",
             "Self-reflection pass",
+            "Submit calibrated findings to Arbiter",
         ]
     
     @property
@@ -116,15 +117,6 @@ class Agent3Object(ForensicAgent):
         - adversarial_robustness_check: Adversarial robustness check
         """
         registry = ToolRegistry()
-        
-        # Make stub tools deterministic based on actual file content
-        import hashlib
-        from PIL import Image as _PILImg
-        try:
-            with open(self.evidence_artifact.file_path, "rb") as f:
-                _img_bytes = f.read(4096)  # first 4KB
-        except Exception:
-            _img_bytes = str(self.evidence_artifact.artifact_id).encode()
         
         async def object_detection(input_data: dict) -> dict:
             """
@@ -158,7 +150,8 @@ class Agent3Object(ForensicAgent):
                         })
                 
                 # Flag weapons/dangerous items specifically
-                WEAPON_CLASSES = {"knife", "gun", "rifle", "pistol", "sword", "bow"}
+                # Note: COCO-80 dataset only has "knife" as weapon class
+                WEAPON_CLASSES = {"knife"}
                 weapon_detections = [d for d in detections 
                                      if any(w in d["class_name"].lower() for w in WEAPON_CLASSES)]
                 
