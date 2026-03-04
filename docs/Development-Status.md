@@ -1,9 +1,9 @@
 # Development Status
 
-**Last updated:** 2026-03-03  
-**Current version:** 0.6.0  
-**Overall health:** 🟡 Beta — pipeline functional, HITL incomplete, auth absent  
-**Actively working on:** Qdrant integration stability  
+**Last updated:** 2026-03-04  
+**Current version:** 0.7.0  
+**Overall health:** 🟡 Beta — pipeline functional, Docker build-ready, auth absent  
+**Actively working on:** Session authentication, HITL frontend modal  
 **Blocked on:** Nothing currently  
 
 ---
@@ -18,7 +18,7 @@ Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [🟡] → 
 | Evidence Store | ✅ | Immutable storage with SHA-256 integrity verification |
 | Agent Dispatch | 🟡 | Sequential execution working, concurrent optimization pending |
 | Council Arbiter | 🟡 | Signing complete, cross-modal correlation WIP |
-| Signing | ✅ | HMAC-SHA256 signatures with key derivation from SIGNING_KEY |
+| Signing | ✅ | ECDSA (P-256/SHA-256) signatures with deterministic key derivation from SIGNING_KEY |
 | Report | ✅ | Multi-format rendering with custody chain verification |
 
 **Supporting Systems:**
@@ -38,7 +38,7 @@ Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [🟡] → 
 | PostgreSQL 16 | ✅ Production | Schema stable, migrations tracked |
 | Redis 7 | ✅ Production | Pub/Sub confirmed working for WS events, 24h TTL on working memory |
 | Qdrant v1.11.0 | ✅ Production | Upgraded from v1.9.2, query_points API functional |
-| Docker Compose | ✅ Production | Multi-stage build with `uv`, healthchecks passing |
+| Docker Compose | ✅ Production | Multi-stage build with `uv`, healthchecks passing, `uv` pinned to `0.4.27`, `libgl1` included, evidence volume mounted |
 | Evidence Store | ✅ Production | Upload, retrieval, integrity checks confirmed |
 
 ### Agents
@@ -75,7 +75,7 @@ Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [🟡] → 
 | Live analysis view | 🟡 Partial | Agent cards + WebSocket updates work, HITL modal missing |
 | Report page | ✅ Complete | Verdict badge, agent findings, signature verification displayed |
 | Error boundary | ✅ Complete | User-friendly fallback, no stack traces in production |
-| HITL decision modal | 🔴 Not started | Backend ready and waiting since v0.3 |
+| HITL decision modal | ✅ Complete | Modal implemented in evidence page; APPROVE / REDIRECT / TERMINATE decisions wired to backend |
 | Session expiry handling | 🔴 Not started | Currently shows blank page on invalid session |
 
 ---
@@ -122,18 +122,13 @@ Do not deploy publicly while these are incomplete:
 
 ## Current Focus
 
-**Qdrant Integration Stability**
-
-Fixed version incompatibility between Qdrant client (v1.17.0) and server (v1.9.2). The `query_points` API required server v1.10+, causing 404 errors on all vector similarity searches. Upgraded server to v1.11.0 and added `check_compatibility=False` to client initialization.
-
-Target: Ensure episodic memory and all Qdrant-dependent tests pass consistently.  
-Status: ✅ Complete — all 23 Qdrant-related tests now passing.
+**Docker Build Hardening** — Complete as of v0.7.0. All 13 build/infrastructure issues resolved. App is build-ready.
 
 ## Next Up
 
-1. **HITL modal — frontend** — Backend has been ready since v0.3, this is the last piece needed for the full HITL flow to work end-to-end
-2. **Session authentication** — JWT or API key, must be done before any non-local deployment
-3. **Agent 3 ML model integration** — Replace heuristics with a real object detection model (YOLO or equivalent)
+1. **Session authentication** — JWT or API key, must be done before any non-local deployment
+2. **Agent 3 ML model integration** — Replace heuristics with a real object detection model (YOLO)
+3. **Agent 4 deepfake tooling** — `frequency_gan_detect`, `rolling_shutter_validation`, `anomaly_classification` stubs need real implementations
 
 ---
 
@@ -168,7 +163,7 @@ Requires significant compute resources and specialized models. Current frame con
 | Qdrant | v1.11.0 | `query_points` API required for episodic memory search |
 | PostgreSQL | 16 | `pg_isready` flags used in healthchecks |
 | Redis | 7 | Pub/Sub improvements used for WS broadcasting |
-| uv | 0.5+ | Fast Python package management and virtual env |
+| uv | 0.4.27 (pinned) | Fast Python package management and virtual env — pinned in Dockerfile for deterministic builds |
 | LangGraph | 0.2.70 | Pinned — breaking changes between minor versions |
 
 ---

@@ -2,7 +2,7 @@
 
 Upload digital evidence. Five AI agents analyze it concurrently. Get a cryptographically signed forensic report in seconds.
 
-[![Status](https://img.shields.io/badge/status-alpha-yellow.svg)](#) [![Postgres](https://img.shields.io/badge/postgres-16-blue.svg)](#) [![License](https://img.shields.io/badge/license-MIT-green.svg)](#)
+[![Status](https://img.shields.io/badge/status-beta-orange.svg)](#) [![Postgres](https://img.shields.io/badge/postgres-16-blue.svg)](#) [![License](https://img.shields.io/badge/license-MIT-green.svg)](#)
 
 *A Multi-Agent Forensic Evidence Analysis System*
 
@@ -38,7 +38,7 @@ Forensic Council provides an automated, auditable pipeline for determining the a
    └──────┘      └────────┘     └────────┘
 ```
 
-The system is triggered via the frontend, uploading evidence to the FastAPI backend. A Redis session stores the real-time reasoning (ReAct loop state) of the five distinct agents executing concurrently. Agents utilize LangGraph and specialized mathematical subprocesses (out of the event loop) for heavy anomaly detection. The Council Arbiter cross-references their findings, generates an ECDSA-signed report, and logs the outcome immutably in PostgreSQL, while the UI receives live step-by-step updates via WebSockets.
+The system is triggered via the frontend, uploading evidence to the FastAPI backend. A Redis session stores the real-time reasoning (ReAct loop state) of the five distinct agents executing sequentially (Image → Audio → Object → Video → Metadata). Agents utilize LangGraph and specialized mathematical subprocesses (out of the event loop) for heavy anomaly detection. The Council Arbiter cross-references their findings, generates an ECDSA-signed report, and logs the outcome immutably in PostgreSQL, while the UI receives live step-by-step updates via WebSockets.
 
 ## The Agents
 
@@ -78,7 +78,8 @@ cd backend && uv run uvicorn api.main:app --reload --port 8000
 # Run frontend natively (in another terminal)
 cd frontend && npm run dev
 ```
-→ **Frontend:** http://localhost:3000
+→ **Frontend (native dev):** http://localhost:3000
+→ **Frontend (full Docker):** http://localhost:3000
 → **Backend:** http://localhost:8000
 
 *For Docker-based development and production deployment, see [`STARTUP.md`](docs/STARTUP.md).*
