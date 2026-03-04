@@ -98,7 +98,7 @@ The frontend will be available at http://localhost:3000
 Use this when testing Docker builds or when you don't have Python/Node installed locally.
 
 ```bash
-# Build and start all services (uses docker-compose.yml + docker-compose.override.yml)
+# Build and start all services (uses docker/docker-compose.yml)
 docker compose -f docker/docker-compose.yml --env-file .env up --build -d
 
 # Wait for health checks (~30-60 seconds)
