@@ -890,6 +890,23 @@ async def astronomical_validate_astral(
         }
 
 
+def _extract_gps_coordinates(all_metadata: dict) -> dict | None:
+    """Extract GPS coordinates from EXIF metadata."""
+    gps_lat = None
+    gps_lon = None
+    
+    for key, value in all_metadata.items():
+        key_lower = key.lower()
+        if "gpslatitude" in key_lower and "ref" not in key_lower:
+            gps_lat = value
+        elif "gpslongitude" in key_lower and "ref" not in key_lower:
+            gps_lon = value
+    
+    if gps_lat is not None or gps_lon is not None:
+        return {"latitude": gps_lat, "longitude": gps_lon}
+    return None
+
+
 async def exif_extract_enhanced(
     artifact: EvidenceArtifact,
 ) -> dict[str, Any]:
@@ -952,6 +969,9 @@ async def exif_extract_enhanced(
         "court_defensible": True,
         "available": True,
         "backend": "exiftool+hachoir",
+        # Legacy keys for backward compatibility with handlers expecting older format
+        "gps_coordinates": _extract_gps_coordinates(all_metadata),
+        "present_fields": all_metadata,
     }
 
 

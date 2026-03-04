@@ -358,14 +358,14 @@ class Agent3Object(ForensicAgent):
             from core.inter_agent_bus import InterAgentCall, InterAgentCallType
             call = InterAgentCall(
                 caller_agent_id=self.agent_id,
-                target_agent_id=input_data.get("target_agent", "agent1"),
-                call_type=InterAgentCallType.CROSS_VERIFY,
+                callee_agent_id=input_data.get("target_agent", "Agent1"),
+                call_type=InterAgentCallType.COLLABORATIVE,
                 payload={
                     "region": input_data.get("region"),
                     "question": input_data.get("question", "Confirm lighting inconsistency in this region"),
                 }
             )
-            response = await self._inter_agent_bus.send(call)
+            response = await self._inter_agent_bus.send(call, self._custody_logger)
             return response
         
         async def adversarial_robustness_check_handler(input_data: dict) -> dict:

@@ -342,6 +342,11 @@ class ForensicCouncilPipeline:
         if hasattr(self, 'agent_factory'):
             self.agent_factory.set_evidence_artifact(evidence_artifact)
         
+        # Set evidence artifact in inter-agent bus for on-demand agent creation
+        if hasattr(self, 'inter_agent_bus'):
+            self.inter_agent_bus._evidence_artifact = evidence_artifact
+            self.inter_agent_bus._session_id = session_id
+        
         # Create session in manager
         await self.session_manager.create_session(
             session_id=session_id,

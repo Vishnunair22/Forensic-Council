@@ -24,20 +24,20 @@ class TestPermittedCallPaths:
     """Test permitted call path definitions."""
 
     def test_agent2_can_call_agent4(self):
-        """Agent2_Audio can call Agent4_Video."""
-        assert "Agent4_Video" in PERMITTED_CALL_PATHS.get("Agent2_Audio", [])
+        """Agent2 can call Agent4."""
+        assert "Agent4" in PERMITTED_CALL_PATHS.get("Agent2", [])
 
     def test_agent4_can_call_agent2(self):
-        """Agent4_Video can call Agent2_Audio."""
-        assert "Agent2_Audio" in PERMITTED_CALL_PATHS.get("Agent4_Video", [])
+        """Agent4 can call Agent2."""
+        assert "Agent2" in PERMITTED_CALL_PATHS.get("Agent4", [])
 
     def test_agent3_can_call_agent1(self):
-        """Agent3_Object can call Agent1_ImageIntegrity."""
-        assert "Agent1_ImageIntegrity" in PERMITTED_CALL_PATHS.get("Agent3_Object", [])
+        """Agent3 can call Agent1."""
+        assert "Agent1" in PERMITTED_CALL_PATHS.get("Agent3", [])
 
     def test_arbiter_can_call_all_agents(self):
         """Arbiter can call all agents."""
-        expected = ["Agent1_ImageIntegrity", "Agent2_Audio", "Agent3_Object", "Agent4_Video", "Agent5_Metadata"]
+        expected = ["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"]
         for agent in expected:
             assert agent in PERMITTED_CALL_PATHS.get("Arbiter", [])
 
@@ -66,10 +66,10 @@ class TestInterAgentBus:
 
     @pytest.mark.asyncio
     async def test_permitted_call_agent2_to_agent4_succeeds(self, bus, mock_custody_logger, mock_agent):
-        """Test that Agent2_Audio can call Agent4_Video."""
+        """Test that Agent2 can call Agent4."""
         call = InterAgentCall(
-            caller_agent_id="Agent2_Audio",
-            callee_agent_id="Agent4_Video",
+            caller_agent_id="Agent2",
+            callee_agent_id="Agent4",
             call_type=InterAgentCallType.COLLABORATIVE,
             artifact_id=uuid4(),
             payload={"question": "Verify timestamp sync"},
@@ -82,10 +82,10 @@ class TestInterAgentBus:
 
     @pytest.mark.asyncio
     async def test_permitted_call_agent4_to_agent2_succeeds(self, bus, mock_custody_logger, mock_agent):
-        """Test that Agent4_Video can call Agent2_Audio."""
+        """Test that Agent4 can call Agent2."""
         call = InterAgentCall(
-            caller_agent_id="Agent4_Video",
-            callee_agent_id="Agent2_Audio",
+            caller_agent_id="Agent4",
+            callee_agent_id="Agent2",
             call_type=InterAgentCallType.COLLABORATIVE,
             artifact_id=uuid4(),
             payload={"context_finding": {"frame": 100}},
@@ -97,10 +97,10 @@ class TestInterAgentBus:
 
     @pytest.mark.asyncio
     async def test_permitted_call_agent3_to_agent1_succeeds(self, bus, mock_custody_logger, mock_agent):
-        """Test that Agent3_Object can call Agent1_ImageIntegrity."""
+        """Test that Agent3 can call Agent1."""
         call = InterAgentCall(
-            caller_agent_id="Agent3_Object",
-            callee_agent_id="Agent1_ImageIntegrity",
+            caller_agent_id="Agent3",
+            callee_agent_id="Agent1",
             call_type=InterAgentCallType.COLLABORATIVE,
             artifact_id=uuid4(),
             payload={"region_ref": {"x": 0, "y": 0, "w": 100, "h": 100}},
@@ -114,8 +114,8 @@ class TestInterAgentBus:
     async def test_unpermitted_call_agent1_to_agent3_raises_error(self, bus, mock_custody_logger, mock_agent):
         """Test that Agent1 cannot call Agent3 (not in permitted paths)."""
         call = InterAgentCall(
-            caller_agent_id="Agent1_ImageIntegrity",
-            callee_agent_id="Agent3_Object",
+            caller_agent_id="Agent1",
+            callee_agent_id="Agent3",
             call_type=InterAgentCallType.COLLABORATIVE,
             artifact_id=uuid4(),
             payload={},
@@ -124,15 +124,15 @@ class TestInterAgentBus:
         with pytest.raises(PermittedCallViolationError) as exc_info:
             await bus.dispatch(call, mock_agent, mock_custody_logger)
         
-        assert "Agent1_ImageIntegrity" in str(exc_info.value)
-        assert "Agent3_Object" in str(exc_info.value)
+        assert "Agent1" in str(exc_info.value)
+        assert "Agent3" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_unpermitted_call_agent1_to_agent2_raises_error(self, bus, mock_custody_logger, mock_agent):
         """Test that Agent1 cannot call Agent2 (not in permitted paths)."""
         call = InterAgentCall(
-            caller_agent_id="Agent1_ImageIntegrity",
-            callee_agent_id="Agent2_Audio",
+            caller_agent_id="Agent1",
+            callee_agent_id="Agent2",
             call_type=InterAgentCallType.COLLABORATIVE,
             artifact_id=uuid4(),
             payload={},
@@ -148,8 +148,8 @@ class TestInterAgentBus:
         
         # First call: Agent2 -> Agent4
         call1 = InterAgentCall(
-            caller_agent_id="Agent2_Audio",
-            callee_agent_id="Agent4_Video",
+            caller_agent_id="Agent2",
+            callee_agent_id="Agent4",
             call_type=InterAgentCallType.COLLABORATIVE,
             artifact_id=artifact_id,
             payload={},
@@ -161,8 +161,8 @@ class TestInterAgentBus:
         
         # Second call: Agent4 -> Agent2 on SAME artifact (circular!)
         call2 = InterAgentCall(
-            caller_agent_id="Agent4_Video",
-            callee_agent_id="Agent2_Audio",
+            caller_agent_id="Agent4",
+            callee_agent_id="Agent2",
             call_type=InterAgentCallType.COLLABORATIVE,
             artifact_id=artifact_id,
             payload={},
@@ -171,8 +171,8 @@ class TestInterAgentBus:
         with pytest.raises(CircularCallError) as exc_info:
             await bus.dispatch(call2, mock_agent, mock_custody_logger)
         
-        assert "Agent4_Video" in str(exc_info.value)
-        assert "Agent2_Audio" in str(exc_info.value)
+        assert "Agent4" in str(exc_info.value)
+        assert "Agent2" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_inter_agent_call_logged_to_both_custody_chains(self, bus, mock_custody_logger, mock_agent):
