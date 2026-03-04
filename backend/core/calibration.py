@@ -57,7 +57,7 @@ class CalibrationLayer:
     generating court-defensible statements.
     """
     
-    def __init__(self, models_path: str = "./storage/calibration_models"):
+    def __init__(self, models_path: str = "/tmp/calibration_models"):
         self.models_path = Path(models_path)
         self._loaded_models: dict[str, CalibrationModel] = {}
     

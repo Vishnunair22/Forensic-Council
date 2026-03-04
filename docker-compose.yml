@@ -99,8 +99,8 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-forensic_user}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-forensic_pass}
       - POSTGRES_DB=${POSTGRES_DB:-forensic_council}
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-forensic_user}:${POSTGRES_PASSWORD:-forensic_pass}@postgres:5432/${POSTGRES_DB:-forensic_council}
-      - SIGNING_KEY=${SIGNING_KEY:?SIGNING_KEY must be set — run: python -c "import secrets; print(secrets.token_hex(32))"}
+      # DATABASE_URL removed - not read by app (core/config.py builds URL from postgres_* vars)
+      - SIGNING_KEY=${SIGNING_KEY:?SIGNING_KEY must be set — run: python -c "import secrets; print(secrets.token_hex(32))"}}
       - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-["http://localhost:3001","http://localhost:3000"]}
       - HF_TOKEN=${HF_TOKEN:-}
@@ -127,14 +127,14 @@ services:
           memory: 512M
           cpus: '0.5'
     # Security hardening
-    security_opt:
-      - no-new-privileges:true
     read_only: true
     tmpfs:
-      - /tmp:noexec,nosuid,size=100m
+      - /tmp:nosuid,size=256m        # Numba needs to exec compiled code
+      - /root/.cache:nosuid,size=2g  # HuggingFace model cache
     volumes:
       - evidence_data:/app/storage/evidence
       - ./backend/storage/keys:/app/storage/keys:ro
+      - hf_cache:/root/.cache/huggingface
 
   frontend:
     build:
@@ -160,3 +160,4 @@ volumes:
   qdrant_data:
   postgres_data:
   evidence_data:
+  hf_cache:

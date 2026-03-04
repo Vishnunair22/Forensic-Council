@@ -256,12 +256,11 @@ class EpisodicMemory:
         # Ensure collection exists
         await self.ensure_collection()
         
-        # Query with case_id filter
-        results = await self._qdrant.query(
+        # Query with case_id filter using scroll (filter-only query)
+        results = await self._qdrant.scroll(
             collection_name=EPISODIC_MEMORY_COLLECTION,
-            query_vector=[0.0] * self._vector_size,  # Dummy vector for filter-only query
-            top_k=100,  # Get all entries for case
             filter_conditions={"case_id": case_id},
+            limit=100,  # Get all entries for case
         )
         
         # Convert to EpisodicEntry
@@ -294,12 +293,11 @@ class EpisodicMemory:
         # Ensure collection exists
         await self.ensure_collection()
         
-        # Query with session_id filter
-        results = await self._qdrant.query(
+        # Query with session_id filter using scroll (filter-only query)
+        results = await self._qdrant.scroll(
             collection_name=EPISODIC_MEMORY_COLLECTION,
-            query_vector=[0.0] * self._vector_size,  # Dummy vector for filter-only query
-            top_k=100,
             filter_conditions={"session_id": str(session_id)},
+            limit=100,
         )
         
         # Convert to EpisodicEntry

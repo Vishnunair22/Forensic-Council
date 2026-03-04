@@ -167,14 +167,18 @@ export async function login(username: string, password: string): Promise<TokenRe
 /**
  * Auto-login as demo investigator
  * Used for demo/development when no explicit login is performed
+ * NOTE: Credentials should be provided via environment variables in production
  */
 export async function autoLoginAsInvestigator(): Promise<TokenResponse> {
-  try {
-    return await login("investigator", "inv123!");
-  } catch (error) {
-    console.warn("Auto-login as investigator failed, trying admin...");
-    return await login("admin", "admin123!");
+  // Use credentials from environment variables or prompt (never hardcode)
+  const demoUsername = process.env.NEXT_PUBLIC_DEMO_USERNAME || "investigator";
+  const demoPassword = process.env.NEXT_PUBLIC_DEMO_PASSWORD;
+  
+  if (!demoPassword) {
+    throw new Error("Demo credentials not configured. Set NEXT_PUBLIC_DEMO_PASSWORD environment variable.");
   }
+  
+  return await login(demoUsername, demoPassword);
 }
 
 /**
@@ -425,18 +429,24 @@ export async function submitHITLDecision(decision: HITLDecisionRequest): Promise
 
 /**
  * Create a WebSocket connection for live updates
+ * Token is sent after connection via subprotocol to avoid logging in URL
  */
 export function createLiveSocket(
   sessionId: string,
-  onMessage: (update: BriefUpdate) => void,
+  onMessage: (update: BriefFind) => void,
   onClose: () => void
 ): WebSocket {
-  const token = getAuthToken();
-  const wsUrl = `${WS_BASE}/api/v1/sessions/${sessionId}/live${token ? `?token=${encodeURIComponent(token)}` : ""}`;
-  const ws = new WebSocket(wsUrl);
+  const wsUrl = `${WS_BASE}/api/v1/sessions/${sessionId}/live`;
+  // Use subprotocol for authentication to avoid token in URL (which gets logged)
+  const ws = new WebSocket(wsUrl, ["forensic-v1"]);
 
   ws.onopen = () => {
     console.log("WebSocket connected");
+    // Send authentication after connection established
+    const token = getAuthToken();
+    if (token) {
+      ws.send(JSON.stringify({ type: "AUTH", token }));
+    }
   };
 
   ws.onmessage = (event) => {

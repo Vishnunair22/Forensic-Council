@@ -131,11 +131,9 @@ class PostgresClient:
             raise DatabaseConnectionError("PostgreSQL pool not connected. Call connect() first.")
         return self._pool
     
-    async def acquire(self) -> AsyncGenerator[Connection, None]:
-        """Acquire a connection from the pool."""
-        async with self.pool.acquire() as conn:
-            yield conn
-    
+    # NOTE: acquire() method was removed - it was broken (async generator with yield inside async def)
+    # and never used. Use self.pool.acquire() directly or use the execute/fetch methods.
+
     async def execute(
         self,
         query: str,

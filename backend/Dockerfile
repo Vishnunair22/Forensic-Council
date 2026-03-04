@@ -39,6 +39,12 @@ COPY . .
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app"
 ENV NUMBA_CACHE_DIR="/tmp/numba_cache"
+# ML model cache directories - must be writable in read-only container
+ENV YOLO_CONFIG_DIR="/tmp/ultralytics"
+ENV TORCH_HOME="/tmp/torch"
+ENV HF_HOME="/tmp/huggingface"
+ENV DEEPFACE_HOME="/tmp/deepface"
+ENV TRANSFORMERS_CACHE="/tmp/huggingface/transformers"
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD curl -f http://localhost:8000/health || exit 1

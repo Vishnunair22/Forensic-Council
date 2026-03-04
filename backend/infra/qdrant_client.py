@@ -385,6 +385,52 @@ class QdrantClient:
             "points_count": info.points_count,
             "status": info.status.value,
         }
+    
+    async def scroll(
+        self,
+        collection_name: str,
+        filter_conditions: Optional[dict[str, Any]] = None,
+        limit: int = 100,
+        with_vectors: bool = False,
+    ) -> list[dict[str, Any]]:
+        """
+        Scroll through points with optional filters (filter-only query).
+        
+        This is the proper way to do filter-only queries in Qdrant,
+        instead of using query with a zero vector.
+        
+        Args:
+            collection_name: Name of the collection
+            filter_conditions: Optional filter conditions
+            limit: Maximum number of points to return
+            with_vectors: Whether to include vectors in results
+        
+        Returns:
+            List of results with id and payload
+        """
+        query_filter = None
+        if filter_conditions:
+            conditions = [
+                FieldCondition(key=k, match=MatchValue(value=v))
+                for k, v in filter_conditions.items()
+            ]
+            query_filter = Filter(must=conditions)
+        
+        results = await self.client.scroll(
+            collection_name=collection_name,
+            filter=query_filter,
+            limit=limit,
+            with_vectors=with_vectors,
+        )
+        
+        return [
+            {
+                "id": str(point.id),
+                "score": 1.0,  # Dummy score for consistency with query()
+                "payload": point.payload,
+            }
+            for point in results[0]
+        ]
 
 
 # Singleton instance

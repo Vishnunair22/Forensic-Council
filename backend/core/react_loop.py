@@ -413,7 +413,7 @@ class ReActLoopEngine:
         working_memory: WorkingMemory,
         custody_logger: CustodyLogger,
         redis_client: Any = None,  # Redis client for HITL checkpoint storage
-        hitl_timeout: float = 3600.0  # Timeout for HITL resume wait (1 hour default)
+        hitl_timeout: float = 300.0  # Timeout for HITL resume wait (5 minutes default)
     ) -> None:
         """
         Initialize the ReAct loop engine.
@@ -425,7 +425,7 @@ class ReActLoopEngine:
             working_memory: Working memory for task tracking
             custody_logger: Logger for chain of custody
             redis_client: Redis client for HITL checkpoint storage
-            hitl_timeout: Timeout in seconds for waiting on HITL resume
+            hitl_timeout: Timeout in seconds for waiting on HITL resume (default 300s = 5 min)
         """
         self.agent_id = agent_id
         self.session_id = session_id
@@ -885,6 +885,7 @@ class ReActLoopEngine:
             )
 
         # Generate a THOUGHT step about working on this task
+        # Don't add to react_chain here - let the main loop do it
         thought = ReActStep(
             step_type="THOUGHT",
             content=(
@@ -894,10 +895,10 @@ class ReActLoopEngine:
             ),
             iteration=self._current_iteration,
         )
-        self._react_chain.append(thought)
-        await self._log_step(thought)
+        return thought
 
         # Generate an ACTION step to call the tool
+        # Don't add to react_chain here - let the main loop do it
         action = ReActStep(
             step_type="ACTION",
             content=f"Calling tool '{best_tool.name}' for task: {pending_task.description}",
@@ -905,97 +906,9 @@ class ReActLoopEngine:
             tool_input={"artifact": None},   # handlers default to self.evidence_artifact
             iteration=self._current_iteration,
         )
-        self._react_chain.append(action)
-        await self._log_step(action)
-
-        # Execute the tool
-        tool_result = await tool_registry.call(
-            tool_name=best_tool.name,
-            input_data=action.tool_input or {},
-            agent_id=self.agent_id,
-            session_id=self.session_id,
-            custody_logger=self.custody_logger,
-        )
-
-        # Record observation
-        observation = ReActStep(
-            step_type="OBSERVATION",
-            content=self._format_tool_result(tool_result),
-            tool_name=best_tool.name,
-            tool_output=tool_result.model_dump(),
-            iteration=self._current_iteration,
-        )
-        self._react_chain.append(observation)
-        await self._log_step(observation)
-
-        # Check for follow-up actions based on tool results
-        output = tool_result.output or {}
-        followup_tool = await self._should_trigger_followup(pending_task.description, output)
-        if followup_tool:
-            # Create a follow-up thought step
-            followup_thought = ReActStep(
-                step_type="THOUGHT",
-                content=f"Tool result indicates need for follow-up analysis with '{followup_tool}'. Scheduling additional investigation.",
-                iteration=self._current_iteration,
-            )
-            self._react_chain.append(followup_thought)
-            await self._log_step(followup_thought)
-
-            # Try to find and trigger the follow-up tool if available
-            followup_match = next((t for t in tools if t.name == followup_tool), None)
-            if followup_match:
-                followup_action = ReActStep(
-                    step_type="ACTION",
-                    content=f"Calling follow-up tool '{followup_match.name}' based on previous findings",
-                    tool_name=followup_match.name,
-                    tool_input={"artifact": None},
-                    iteration=self._current_iteration,
-                )
-                self._react_chain.append(followup_action)
-                await self._log_step(followup_action)
-
-                # Execute follow-up tool
-                followup_result = await tool_registry.call(
-                    tool_name=followup_match.name,
-                    input_data=followup_action.tool_input or {},
-                    agent_id=self.agent_id,
-                    session_id=self.session_id,
-                    custody_logger=self.custody_logger,
-                )
-
-                # Record follow-up observation
-                followup_observation = ReActStep(
-                    step_type="OBSERVATION",
-                    content=self._format_tool_result(followup_result),
-                    tool_name=followup_match.name,
-                    tool_output=followup_result.model_dump(),
-                    iteration=self._current_iteration,
-                )
-                self._react_chain.append(followup_observation)
-                await self._log_step(followup_observation)
         
-        # Determine confidence
-        status = "CONFIRMED" if tool_result.success else "INCONCLUSIVE"
-        confidence = 0.7 if tool_result.success else 0.3
-
-        _TOOL_CONFIDENCE = {
-            "ela_full_image": lambda o: min(0.95, 0.5 + (o.get("max_anomaly", 0) / 100) * 0.45),
-            "jpeg_ghost_detect": lambda o: 0.9 if o.get("ghost_detected") else 0.85,
-            "exif_extract": lambda o: 0.95 if o.get("has_exif") else 0.6,
-            "steganography_scan": lambda o: 0.85 if o.get("stego_suspected") else 0.80,
-            "hex_signature_scan": lambda o: 0.95 if o.get("editing_software_detected") else 0.88,
-            "timestamp_analysis": lambda o: max(0.4, 0.95 - len(o.get("inconsistencies", [])) * 0.1),
-            "frequency_domain_analysis": lambda o: 0.5 + o.get("anomaly_score", 0) * 0.45,
-        }
-
-        if tool_result.success:
-            conf_fn = _TOOL_CONFIDENCE.get(best_tool.name)
-            if conf_fn:
-                try:
-                    confidence = conf_fn(output)
-                except Exception:
-                    confidence = 0.95
-            else:
+        # Note: The main loop will execute this action and create the observation
+        return action
                 deterministic_tools = {
                     "exif_extract", "gps_timezone_validate", "steganography_scan", 
                     "file_structure_analysis", "timestamp_analysis", "file_hash_verify", 

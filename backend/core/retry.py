@@ -9,6 +9,7 @@ Includes decorators and context managers for easy integration.
 import asyncio
 import functools
 import random
+import time
 from typing import Any, Callable, Optional, Tuple, Type, Union
 
 from core.logging import get_logger
@@ -279,7 +280,7 @@ class CircuitBreaker:
         if self._state == "OPEN":
             # Check if we should transition to half-open
             if self._last_failure_time:
-                elapsed = asyncio.get_event_loop().time() - self._last_failure_time
+                elapsed = time.monotonic() - self._last_failure_time
                 if elapsed >= self.recovery_timeout:
                     self._state = "HALF_OPEN"
                     self._half_open_calls = 0
@@ -300,7 +301,7 @@ class CircuitBreaker:
     def record_failure(self):
         """Record a failed call."""
         self._failure_count += 1
-        self._last_failure_time = asyncio.get_event_loop().time()
+        self._last_failure_time = time.monotonic()
         
         if self._state == "HALF_OPEN":
             logger.warning("Circuit breaker transitioning to OPEN")

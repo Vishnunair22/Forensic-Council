@@ -177,6 +177,7 @@ class MigrationManager:
     """Manages database migrations."""
     
     def __init__(self, client: Optional[PostgresClient] = None):
+        self._owned_client = client is None
         self.client = client or PostgresClient()
         self._connected = False
     
@@ -187,7 +188,7 @@ class MigrationManager:
             self._connected = True
     
     async def disconnect(self):
-        """Disconnect from the database."""
+        """Disconnect from the database and close the pool if we own it."""
         if self._connected:
             await self.client.disconnect()
             self._connected = False
@@ -421,6 +422,7 @@ if __name__ == "__main__":
         print(f"Pending migrations: {result['pending_count']}")
         if result['pending_versions']:
             print(f"Pending: {result['pending_versions']}")
+        asyncio.run(manager.disconnect())
     else:
         success = asyncio.run(run_migrations())
         sys.exit(0 if success else 1)

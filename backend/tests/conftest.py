@@ -71,6 +71,19 @@ async def cleanup_singletons():
     infra.storage._storage_backend = None
 
 
+# Autouse fixture to clear settings cache between tests
+@pytest.fixture(autouse=True)
+def clear_settings_cache():
+    """Clear lru_cache on get_settings before and after each test.
+    
+    This ensures tests can change environment variables and have them
+    take effect, and prevents test isolation issues.
+    """
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 # Redis fixtures
 @pytest_asyncio.fixture(scope="function")
 async def redis_client() -> AsyncGenerator[RedisClient, None]:

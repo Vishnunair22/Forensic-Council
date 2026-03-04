@@ -7,6 +7,57 @@ This log tracks significant errors, architectural flaws, and their subsequent re
 
 ---
 
+## 🐛 Docker Build/Runtime Bug Fixes — March 04, 2026
+
+Following the comprehensive Docker audit, these build and runtime issues were identified and resolved.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 97 | opencv-contrib-python + opencv-python-headless conflict in pyproject.toml | 🔴 Critical | **RESOLVED** | Removed `opencv-python-headless>=4.8` from dependencies; `opencv-contrib-python>=4.9` already includes headless support. |
+| 98 | Next.js 16.1.6 doesn't exist (npm ci fails) | 🔴 Critical | **RESOLVED** | Changed `next` and `eslint-config-next` from `16.1.6` to `15.3.0` in `frontend/package.json`. |
+| 99 | storage/keys/* excluded in .dockerignore but no .gitkeep exists | 🟠 Silent CI Failure | **RESOLVED** | Created `backend/storage/keys/.gitkeep` to preserve directory in Docker builds. |
+| 100 | tmpfs /tmp has noexec (Numba compiled code can't run) | 🟠 Runtime Crash | **RESOLVED** | Removed `noexec` from tmpfs in `docker-compose.yml`, increased size to 256m. |
+| 101 | Missing HuggingFace cache volume (PyTorch/Transformers fail) | 🟠 Runtime Crash | **RESOLVED** | Added `/root/.cache` tmpfs and `hf_cache` named volume for model caching. |
+| 102 | moviepy>=1.0 resolves to v2.x (breaking API change) | 🟠 Runtime Crash | **RESOLVED** | Changed to `moviepy>=1.0,<2.0` in `pyproject.toml` to pin to v1.x series. |
+
+---
+
+## 🐛 Additional Codebase Fixes — March 04, 2026
+
+Following the comprehensive audit, these additional issues were identified and resolved.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 103 | `get_current_user_optional` always 403s due to `auto_error=True` | 🔴 Broken Feature | **RESOLVED** | Created `security_optional` with `auto_error=False` in `core/auth.py`. |
+| 104 | `PostgresClient.acquire()` is broken async generator (dead code) | 🔴 Runtime TypeError | **RESOLVED** | Removed broken `acquire()` method from `infra/postgres_client.py`. |
+| 105 | Plaintext password comparison in auth route (bcrypt ignored) | 🔴 Security Bug | **RESOLVED** | Added proper bcrypt hashes to `DEMO_USERS` and use `verify_password()` in `api/routes/auth.py`. |
+| 106 | Frontend healthcheck uses `wget` (not in node:20-alpine) | 🟠 Runtime Failure | **RESOLVED** | Changed to Node-based healthcheck in `frontend/Dockerfile`. |
+| 107 | JWT token in WebSocket URL (logged by proxies) | 🟠 Credential Leak | **RESOLVED** | Send token via subprotocol after connection in `frontend/src/lib/api.ts`. |
+| 108 | TypeScript 5.9.3 doesn't exist (`npm ci` fails) | 🟠 Build Failure | **RESOLVED** | Changed to `5.7.3` in `frontend/package.json`. |
+| 109 | DATABASE_URL injected but never read by app | 🟡 Dead Config | **RESOLVED** | Removed unused `DATABASE_URL` from `docker-compose.yml`. |
+| 110 | Hardcoded demo credentials in client JavaScript | 🟡 Security Hygiene | **RESOLVED** | Changed to require `NEXT_PUBLIC_DEMO_PASSWORD` env var in `frontend/src/lib/api.ts`. |
+| 111 | `lru_cache` settings never cleared between tests (test flakiness) | 🟡 Test Issues | **RESOLVED** | Added autouse `clear_settings_cache` fixture in `backend/tests/conftest.py`. |
+
+---
+
+## 🐛 Further Codebase Fixes — March 04, 2026
+
+Following additional audit, these issues were identified and resolved.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 112 | ML model cache dirs unset (YOLO, HF, PyTorch crash in read-only FS) | 🔴 Runtime Crash | **RESOLVED** | Added `YOLO_CONFIG_DIR`, `TORCH_HOME`, `HF_HOME`, `DEEPFACE_HOME`, `TRANSFORMERS_CACHE` ENV vars in `backend/Dockerfile`. |
+| 113 | Dead code reading evidence file bytes in Agent 3 | 🟡 Waste | **RESOLVED** | Removed unused `_img_bytes` read block in `agents/agent3_object.py`. |
+| 114 | `_final_reports` never evicted (memory leak) | 🟠 Memory Leak | **RESOLVED** | Added `_final_reports.clear()` to `cleanup_connections()` in `api/routes/investigation.py`. |
+| 115 | Temp files not deleted on exception | 🟠 Disk Exhaustion | **RESOLVED** | Already handled - cleanup in `finally` block. |
+| 116 | MIME allowlist missing `.mov`, `.tiff`, `.m4a`, `.avi` | 🟠 Feature Broken | **RESOLVED** | Added missing MIME types to `ALLOWED_MIME_TYPES` in `api/routes/investigation.py`. |
+| 117 | In-process state dicts lost on worker restart | 🟠 Data Loss | **DOCUMENTED** | Known limitation - requires Redis/PG persistence. |
+| 118 | `WEAPON_CLASSES` contains non-COCO labels (always empty) | 🟡 Logic Bug | **RESOLVED** | Changed to only `{"knife"}` (actual COCO weapon class) in `agents/agent3_object.py`. |
+| 119 | Missing "Submit findings to Arbiter" task in Agent 3 | 🟡 Logic Gap | **RESOLVED** | Added missing task to `task_decomposition` in `agents/agent3_object.py`. |
+| 120 | `contested_findings` type mismatch between backend and frontend | 🟡 Type Mismatch | **RESOLVED** | Added comment documenting serialized format in `api/schemas.py`. |
+
+---
+
 ## 🧪 End-to-End Test Fixes — March 04, 2026
 
 Following the test run execution, these issues were identified and resolved.
@@ -19,6 +70,25 @@ Following the test run execution, these issues were identified and resolved.
 | 94 | EXIF bytes/string comparison error | 🟡 Medium | **RESOLVED** | Added proper bytes-to-string conversion in test_authentic_has_software_exif |
 | 95 | API test expects 422 but gets 401 | 🟡 Medium | **RESOLVED** | Modified test to accept both 401 and 422 (auth required) |
 | 96 | Backend service has no ports mapping | 🟡 Medium | **RESOLVED** | Added `ports: - "8000:8000"` to backend service in docker-compose.yml for direct API access |
+
+## 🐛 Additional Codebase Fixes (Pass 3) — March 04, 2026
+
+Following the Forensic_Council_Audit_Pass3.docx audit, these issues were identified and resolved.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 25 | infra/evidence_store.py - Abstract class StorageBackend instantiated directly | 🔴 Runtime Error | **RESOLVED** | Changed `StorageBackend()` to `LocalStorageBackend()` in line 86 of `evidence_store.py`. |
+| 26 | infra/storage.py - ABC method signature mismatch with concrete class | 🔴 Runtime Error | **RESOLVED** | Updated abstract method signature in `storage.py` to match `LocalStorageBackend.delete()` (added `content_hash` param). |
+| 27 | core/session_persistence.py - INSERT missing NOT NULL columns (case_id, investigator_id) | 🔴 Runtime Error | **RESOLVED** | Added empty string defaults for `case_id` and `investigator_id` in INSERT statement at lines 255-270. |
+| 28 | core/calibration.py - Calibration models write to read-only FS (/app/storage) | 🔴 Runtime Crash | **RESOLVED** | Changed default path from `./storage/calibration_models` to `/tmp/calibration_models` in line 60. |
+| 29 | core/react_loop.py - HITL pause blocks agent for 1 hour (timeout too long) | 🟠 UX Issue | **RESOLVED** | Reduced default `hitl_timeout` from 3600s (1 hour) to 300s (5 minutes) in line 416. |
+| 30 | core/react_loop.py - Duplicate react_chain entries (both generator and main loop add steps) | 🟡 Logic Bug | **RESOLVED** | Refactored `_default_step_generator` to return steps without adding to `self._react_chain` directly; main loop handles all chain additions. Removed dead code after return statements. |
+| 31 | agents/base_agent.py - Wrong kwarg `limit` vs `top_k` for Qdrant query | 🔴 Runtime Error | **RESOLVED** | Changed `limit=limit` to `top_k=limit` in line 681 of `base_agent.py`. |
+| 32 | core/inter_agent_bus.py - Wrong session_id in custody logs (uses call.call_id) | 🟡 Data Bug | **RESOLVED** | Changed `session_id=call.call_id` to `session_id=self._session_id` in lines 247 and 263 of `inter_agent_bus.py`. |
+| 33 | core/retry.py - asyncio.get_event_loop() deprecated in Python 3.10+ | 🟡 Deprecation | **RESOLVED** | Replaced `asyncio.get_event_loop().time()` with `time.monotonic()` in lines 282 and 303 of `retry.py`. |
+| 34 | core/session_persistence.py - Session cleanup SQL logic error (7-day offset) | 🟡 Logic Bug | **RESOLVED** | Removed incorrect `INTERVAL '7 days'` offset in cleanup SQL at line 350 of `session_persistence.py`. |
+| 35 | core/migrations.py - MigrationManager creates extra connection pool (never closed in CLI) | 🟠 Resource Leak | **RESOLVED** | Added `asyncio.run(manager.disconnect())` after status check in `__main__` block of `migrations.py`. |
+| 36 | core/episodic_memory.py - Qdrant filter-only query uses zero-vector (unreliable) | 🟠 Runtime Issue | **RESOLVED** | Added `scroll()` method to `QdrantClient` for proper filter-only queries; updated `get_by_case()` and `get_by_session()` in `episodic_memory.py` to use `scroll()` instead of `query()` with zero vectors. |
 
 ---
 

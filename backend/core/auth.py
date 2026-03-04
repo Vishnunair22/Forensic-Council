@@ -37,6 +37,13 @@ security = HTTPBearer(
     auto_error=True,
 )
 
+# Separate scheme for optional auth (doesn't raise error if no token)
+security_optional = HTTPBearer(
+    scheme_name="JWT",
+    description="Enter your JWT token (optional)",
+    auto_error=False,
+)
+
 
 class UserRole(str, Enum):
     """User roles for role-based access control."""
@@ -205,7 +212,7 @@ require_investigator = require_role(UserRole.INVESTIGATOR)
 
 
 async def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_optional),
 ) -> Optional[User]:
     """
     Dependency to optionally get the current user (allows anonymous access).

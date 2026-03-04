@@ -49,12 +49,12 @@ dependencies = [
     "pyannote.audio>=3.1",            # Speaker diarization
     "speechbrain>=1.0",               # Anti-spoofing AASIST
     "praat-parselmouth>=0.4",         # Gold-standard prosody (F0, jitter, shimmer)
-    "moviepy>=1.0",                   # AV sync via video+audio correlation
+    "moviepy>=1.0,<2.0",                   # AV sync via video+audio correlation
     "torch>=2.2",                     # PyTorch for ML models
     "torchvision>=0.17",
     "torchaudio>=2.2",                # PyTorch audio support
     # Video processing tools
-    "opencv-python-headless>=4.8",
+    # "opencv-python-headless>=4.8",  # REMOVED: conflicts with opencv-contrib-python
     "deepface>=0.0.93",               # Face-swap via embedding discontinuity
     "ultralytics>=8.2",               # YOLOv8 real object detection
     "open-clip-torch>=2.24",          # CLIP zero-shot contextual analysis

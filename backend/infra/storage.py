@@ -32,17 +32,21 @@ class StorageBackend(ABC):
     @abstractmethod
     async def store(
         self,
-        file_path: str,
         root_id: UUID,
         artifact_id: UUID,
+        data: Optional[bytes] = None,
+        file_path: Optional[str] = None,
+        extension: str = ".bin",
     ) -> str:
         """
-        Store a file in immutable storage.
+        Store a file or data in immutable storage.
         
         Args:
-            file_path: Path to the source file
             root_id: Root artifact ID for directory organization
             artifact_id: Artifact ID for the stored file
+            data: Optional bytes data to store
+            file_path: Path to the source file (if data not provided)
+            extension: File extension to use
         
         Returns:
             Path to the stored file
