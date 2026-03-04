@@ -1,7 +1,8 @@
 "use client";
 
 import React, { Component, ErrorInfo, ReactNode, useEffect, useState } from "react";
-import { AlertTriangle, Terminal, Cpu, Network, WifiOff, XCircle, AlertCircle, FileJson, Bug, X } from "lucide-react";
+import { AlertTriangle, Terminal, Cpu, Network, WifiOff, AlertCircle, FileJson, Bug, X } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 // =========================================================================
 // Error Classification Logic
@@ -237,24 +238,27 @@ export function DevErrorOverlay({ errorData, onDismiss }: { errorData: ParsedErr
       <div className="flex-1 min-h-0 flex flex-col">
         {/* Tabs */}
         <div className="flex px-6 bg-neutral-900 border-b border-neutral-800 pt-2 gap-1">
-          {[
-            { id: "guides", label: "Fix Guides", icon: Terminal },
-            { id: "stack", label: "Smart Stack", icon: FileJson },
-            { id: "tree", label: "Component Tree", icon: Cpu },
-            { id: "raw", label: "Raw Output", icon: Terminal },
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as "guides" | "stack" | "tree" | "raw")}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id
-                ? "border-rose-500 text-rose-400 bg-rose-500/5"
-                : "border-transparent text-neutral-400 hover:text-neutral-200 hover:bg-white/5"
+          {(() => {
+            const tabs: { id: "guides" | "stack" | "tree" | "raw"; label: string; icon: LucideIcon }[] = [
+              { id: "guides", label: "Fix Guides", icon: Terminal },
+              { id: "stack", label: "Smart Stack", icon: FileJson },
+              { id: "tree", label: "Component Tree", icon: Cpu },
+              { id: "raw", label: "Raw Output", icon: Terminal },
+            ];
+            return tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as "guides" | "stack" | "tree" | "raw")}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id
+                  ? "border-rose-500 text-rose-400 bg-rose-500/5"
+                  : "border-transparent text-neutral-400 hover:text-neutral-200 hover:bg-white/5"
                 }`}
-            >
-              <tab.icon className="w-4 h-4" />
-              {tab.label}
-            </button>
-          ))}
+              >
+                <tab.icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            ));
+          })()}
         </div>
 
         {/* Tab Content */}
@@ -317,12 +321,12 @@ export function DevErrorOverlay({ errorData, onDismiss }: { errorData: ParsedErr
 
           {activeTab === "raw" && (
             <div className="p-6 h-full font-mono text-xs text-neutral-400 leading-relaxed overflow-auto">
-              <h3 className="text-neutral-500 mb-2">{`//`} raw.stack</h3>
+              <h3 className="text-neutral-500 mb-2">{"// "} raw.stack</h3>
               {errorData.stack}
 
               {errorData.componentStack && (
                 <>
-                  <h3 className="text-neutral-500 mt-8 mb-2">{`//`} component.stack</h3>
+                  <h3 className="text-neutral-500 mt-8 mb-2">{"// "} component.stack</h3>
                   {errorData.componentStack}
                 </>
               )}

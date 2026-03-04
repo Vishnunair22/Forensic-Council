@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Upload, FileWarning, Fingerprint, Search, Shield, Activity,
-    Bot, Database, FileDigit, Scan, Zap, Crosshair, ChevronRight, CheckCircle2, AlertTriangle, AlertCircle, X, Check, Loader2, Lightbulb
+    Bot, Database, FileDigit, Scan, Zap, Crosshair, ChevronRight, CheckCircle2, AlertTriangle, AlertCircle, X, Check, Loader2, Lightbulb, RotateCcw, ArrowRight, UploadCloud
 } from "lucide-react";
 import clsx from "clsx";
 import { AgentResponseText } from "@/components/ui/AgentResponseText";
@@ -61,6 +61,16 @@ export default function EvidencePage() {
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Pick up the file injected by the landing page modal
+    useEffect(() => {
+        const pending = (window as any).__forensic_pending_file as File | undefined;
+        if (pending) {
+            delete (window as any).__forensic_pending_file;
+            handleFile(pending);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     // Validation
     const validateFile = (f: File): boolean => {
         setValidationError(null);
@@ -82,6 +92,7 @@ export default function EvidencePage() {
 
     const triggerAnalysis = async (targetFile: File) => {
         if (!targetFile) return;
+        playSound("upload"); // Play upload sound at start
         setIsUploading(true);
         setValidationError(null);
         startSimulation(); // sets to 'initiating'
@@ -232,68 +243,120 @@ export default function EvidencePage() {
                             exit={{ opacity: 0, y: -20 }}
                             className="flex flex-col items-center justify-center min-h-[60vh] max-w-2xl mx-auto"
                         >
+                            {/* The file was not picked on the landing page – show a slim inline upload */}
                             <div className="text-center mb-10">
-                                <h1 className="text-4xl md:text-5xl font-black mb-4 tracking-tight drop-shadow-lg">
+                                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm text-cyan-400 backdrop-blur-md mb-6">
+                                    <span className="relative flex h-2 w-2">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
+                                    </span>
+                                    Evidence Intake Terminal
+                                </div>
+                                <h1 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">
                                     Initiate Investigation.
                                 </h1>
-                                <p className="text-slate-400 text-lg md:text-xl font-light">
-                                    Upload cryptographic evidence to deploy the <span className="text-emerald-400 font-medium">Council Autonomous Parsing System</span>.
+                                <p className="text-slate-400 text-lg font-light max-w-md mx-auto">
+                                    Deploy the <span className="text-emerald-400 font-medium">Council Autonomous Parsing System</span> on your digital artifact.
                                 </p>
                             </div>
 
                             {file ? (
+                                /* File selected inline – preview + action buttons */
                                 <motion.div
                                     initial={{ opacity: 0, scale: 0.95 }}
                                     animate={{ opacity: 1, scale: 1 }}
-                                    className="w-full p-10 md:p-12 rounded-[2rem] border-2 border-emerald-500/30 bg-emerald-950/20 flex flex-col items-center justify-center transition-all shadow-[0_0_40px_rgba(16,185,129,0.1)] relative overflow-hidden backdrop-blur-md"
+                                    className="w-full rounded-[2rem] overflow-hidden
+                                        bg-gradient-to-b from-white/[0.05] to-black/60
+                                        border border-white/[0.10]
+                                        shadow-[0_24px_60px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.08)]
+                                        backdrop-blur-3xl relative"
                                 >
-                                    <div className="absolute inset-0 bg-emerald-500/5 translate-y-full hover:translate-y-0 transition-transform duration-500 ease-out" />
-                                    <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mb-6 shadow-inner z-10">
-                                        <CheckCircle2 className="w-8 h-8" />
-                                    </div>
-                                    <h3 className="text-2xl font-bold text-white mb-2 z-10 text-center tracking-tight">Evidence Acquired</h3>
-                                    <p className="text-emerald-400 font-mono text-sm uppercase tracking-widest z-10 text-center mb-8 bg-black/40 px-4 py-2 rounded-lg border border-emerald-500/20 truncate max-w-full">
-                                        {file.name}
-                                    </p>
+                                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
 
-                                    <div className="flex flex-col sm:flex-row gap-4 w-full max-w-sm z-10">
+                                    {/* Preview */}
+                                    <div className="relative w-full bg-black/40" style={{ minHeight: "200px" }}>
+                                        {file.type.startsWith("image/") && (
+                                            <img
+                                                src={URL.createObjectURL(file)}
+                                                alt="Evidence"
+                                                className="w-full max-h-72 object-contain"
+                                            />
+                                        )}
+                                        {file.type.startsWith("video/") && (
+                                            <video
+                                                src={URL.createObjectURL(file)}
+                                                className="w-full max-h-72 object-contain"
+                                                muted autoPlay loop playsInline
+                                            />
+                                        )}
+                                        {!file.type.startsWith("image/") && !file.type.startsWith("video/") && (
+                                            <div className="flex flex-col items-center justify-center h-52 gap-4">
+                                                <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.15)]">
+                                                    {file.type.startsWith("audio/")
+                                                        ? <span className="text-3xl">🎵</span>
+                                                        : <span className="text-3xl">📄</span>
+                                                    }
+                                                </div>
+                                                {file.type.startsWith("audio/") && (
+                                                    <div className="flex items-end gap-1 h-8">
+                                                        {[3, 7, 5, 9, 6, 4, 8, 5, 7, 3, 6, 8].map((h, i) => (
+                                                            <motion.div
+                                                                key={i}
+                                                                className="w-1 bg-emerald-500/60 rounded-full"
+                                                                animate={{ height: [`${h * 3}px`, `${h * 3 + 10}px`, `${h * 3}px`] }}
+                                                                transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.08, ease: "easeInOut" }}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        {/* File info overlay */}
+                                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent px-6 py-4">
+                                            <p className="text-sm font-mono text-white truncate font-semibold">{file.name}</p>
+                                            <p className="text-[11px] text-slate-400 mt-0.5">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Buttons */}
+                                    <div className="flex gap-3 p-6">
                                         <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setFile(null);
-                                                setValidationError(null);
-                                                if (fileInputRef.current) fileInputRef.current.value = '';
-                                            }}
-                                            className="flex-1 px-4 py-3 rounded-xl bg-slate-800/80 text-slate-300 hover:bg-slate-700 font-bold border border-white/10 hover:border-white/20 transition-colors flex items-center justify-center"
+                                            onClick={() => { setFile(null); setValidationError(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
+                                            className="flex-1 flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl
+                                                bg-white/[0.04] border border-white/[0.10] text-slate-300 font-semibold text-sm
+                                                hover:bg-white/[0.08] hover:border-white/20 hover:text-white
+                                                transition-all duration-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
                                         >
-                                            <Upload className="w-4 h-4 mr-2" /> New Upload
+                                            <RotateCcw className="w-4 h-4 text-slate-400" />
+                                            New Upload
                                         </button>
                                         <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                triggerAnalysis(file!);
-                                            }}
-                                            className="flex-1 px-4 py-3 rounded-xl bg-emerald-500 text-black hover:bg-emerald-400 font-extrabold flex items-center justify-center transition-all shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:shadow-[0_0_30px_rgba(16,185,129,0.6)] hover:scale-105"
+                                            onClick={() => triggerAnalysis(file!)}
+                                            className="flex-1 flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl
+                                                bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-bold text-sm
+                                                hover:from-emerald-400 hover:to-cyan-400
+                                                hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(16,185,129,0.4)]
+                                                transition-all duration-200
+                                                shadow-[0_4px_20px_rgba(16,185,129,0.25),inset_0_1px_0_rgba(255,255,255,0.2)]
+                                                border border-white/[0.15]"
                                         >
-                                            <Activity className="w-4 h-4 mr-2" /> Analyze
+                                            Initiate Analysis
+                                            <ArrowRight className="w-4 h-4" />
                                         </button>
                                     </div>
                                 </motion.div>
                             ) : (
+                                /* Drop zone */
                                 <div
                                     onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                                     onDragLeave={() => setIsDragging(false)}
-                                    onDrop={(e) => {
-                                        e.preventDefault();
-                                        setIsDragging(false);
-                                        if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]);
-                                    }}
+                                    onDrop={(e) => { e.preventDefault(); setIsDragging(false); if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]); }}
                                     onClick={() => fileInputRef.current?.click()}
                                     className={clsx(
-                                        "w-full p-12 md:p-16 rounded-[2rem] border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all duration-300 group shadow-2xl backdrop-blur-sm relative overflow-hidden",
+                                        "w-full py-20 rounded-[2rem] border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all duration-300 group relative overflow-hidden backdrop-blur-sm",
                                         isDragging
-                                            ? "border-emerald-400 bg-emerald-500/5"
-                                            : "border-white/10 bg-slate-900/30 hover:border-emerald-500/50 hover:bg-slate-900/50"
+                                            ? "border-cyan-400/60 bg-cyan-500/[0.04]"
+                                            : "border-white/10 bg-white/[0.02] hover:border-emerald-500/40 hover:bg-emerald-500/[0.02]"
                                     )}
                                 >
                                     <input
@@ -303,34 +366,28 @@ export default function EvidencePage() {
                                         className="hidden"
                                         accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
                                     />
-                                    <div className="absolute inset-0 bg-emerald-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500 ease-out" />
-                                    <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-black/50 border border-white/5 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 shadow-inner z-10">
-                                        <Fingerprint className={clsx("w-10 h-10 md:w-12 md:h-12", isDragging ? "text-emerald-400" : "text-emerald-500/50")} />
-                                    </div>
-                                    <h3 className="text-2xl font-bold text-white mb-3 z-10">Target Evidence Fragment</h3>
-                                    <p className="text-slate-400 text-center font-mono text-xs uppercase tracking-widest z-10">
-                                        Drag & drop or <span className="text-emerald-400 underline decoration-emerald-500/30 underline-offset-4">browse secure directory</span>
-                                    </p>
-                                    <div className="flex gap-4 mt-8 z-10">
-                                        {['JPG/PNG', 'MP4/MOV', 'WAV/MP3'].map(ext => (
-                                            <span key={ext} className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[10px] font-mono text-slate-500 tracking-wider">
-                                                {ext}
-                                            </span>
-                                        ))}
-                                    </div>
+                                    <motion.div
+                                        animate={{ scale: isDragging ? 1.12 : 1 }}
+                                        className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-500/15 to-cyan-600/10 border border-emerald-500/20 flex items-center justify-center mb-5 shadow-[0_0_30px_rgba(16,185,129,0.15)] relative"
+                                    >
+                                        <div className="absolute inset-[-8px] rounded-[24px] border border-emerald-500/10 border-dashed animate-[spin_8s_linear_infinite]" />
+                                        <UploadCloud className={clsx("w-9 h-9 transition-colors", isDragging ? "text-cyan-300" : "text-emerald-400 group-hover:text-emerald-300")} />
+                                    </motion.div>
+                                    <h3 className="text-xl font-bold text-white mb-2">Drop evidence file here</h3>
+                                    <p className="text-slate-500 text-sm font-mono">or click to browse</p>
                                 </div>
                             )}
 
                             <AnimatePresence>
-                                {(validationError || errorMessage || status === "error") && (
+                                {(validationError || errorMessage) && (
                                     <motion.div
-                                        initial={{ opacity: 0, y: 10 }}
+                                        initial={{ opacity: 0, y: 8 }}
                                         animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: -10 }}
-                                        className="mt-6 flex items-center text-red-400 bg-red-500/10 px-5 py-3 rounded-xl border border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.1)]"
+                                        exit={{ opacity: 0 }}
+                                        className="mt-5 flex items-center text-red-400 bg-red-500/10 px-5 py-3 rounded-xl border border-red-500/20"
                                     >
-                                        <FileWarning className="w-5 h-5 mr-3" />
-                                        <span className="font-medium text-sm">Target acquisition failed: {validationError || errorMessage}</span>
+                                        <FileWarning className="w-5 h-5 mr-3 shrink-0" />
+                                        <span className="text-sm font-medium">{validationError || errorMessage}</span>
                                     </motion.div>
                                 )}
                             </AnimatePresence>
@@ -342,202 +399,293 @@ export default function EvidencePage() {
                             key="analysis"
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="w-full flex flex-col pt-4"
+                            className="w-full flex flex-col pt-4 max-w-4xl mx-auto"
                         >
-                            {/* Header Panel */}
-                            <div className="bg-slate-900/40 border border-white/10 p-6 md:p-8 rounded-3xl backdrop-blur-xl mb-8 flex flex-col md:flex-row justify-between items-start md:items-center relative overflow-hidden shadow-2xl">
-                                <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-[100px] -mr-20 -mt-20 pointer-events-none" />
-                                <div className="relative z-10">
-                                    <p className="text-emerald-400 font-mono text-xs uppercase tracking-widest mb-3 flex items-center font-bold">
-                                        <Activity className="w-4 h-4 mr-2" /> Live Operation
-                                    </p>
-                                    <h2 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight break-all mb-1">
-                                        {file?.name || "Target System Data"}
-                                    </h2>
-                                    <p className="text-sm font-mono text-slate-500 tracking-wider">
-                                        Session ID: {sessionId || "Initializing..."}
-                                    </p>
-                                </div>
-
-                                <div className="relative z-10 flex flex-col items-end gap-3 mt-6 md:mt-0 ml-auto bg-black/40 p-5 rounded-2xl border border-white/5 shadow-inner">
-                                    <div className="flex items-center gap-3">
-                                        <Shield className={clsx("w-5 h-5", status === "complete" ? "text-emerald-400" : "text-amber-400")} />
-                                        <span className={clsx("font-bold text-sm tracking-widest uppercase font-mono", status === "complete" ? "text-emerald-400" : "text-amber-400")}>
-                                            {status === "complete" ? "ANALYSIS COMPLETE" : "PROCESSING ACTIVE"}
-                                        </span>
-                                    </div>
-                                    <div className="flex gap-2 text-xs font-mono">
-                                        <span className="text-slate-500">AGENTS DEPLOYED:</span>
-                                        <span className="text-slate-300 font-bold">{validAgentsData.length} UNITS</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Dynamic Progress Indicator */}
-                            <div className="w-full bg-slate-900/50 border border-white/10 p-5 rounded-2xl mb-8 flex flex-col gap-4 shadow-xl relative overflow-hidden">
-                                {/* Subtle animated background glow */}
-                                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-[80px] -mr-10 -mt-10 pointer-events-none animate-pulse" />
-
-                                <div className="flex items-center gap-4 relative z-10 text-emerald-400">
-                                    <motion.div
-                                        animate={{
-                                            rotate: status === "analyzing" ? [0, 10, -10, 0] : 0,
-                                            scale: status === "complete" ? [1, 1.2, 1] : 1
-                                        }}
-                                        transition={{ duration: 2, repeat: status === "analyzing" ? Infinity : 0, ease: "easeInOut" }}
-                                        className={clsx(
-                                            "w-12 h-12 rounded-full flex items-center justify-center border shadow-lg transition-colors",
-                                            status === "complete" ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" : "bg-black/50 text-emerald-500 border-white/10"
-                                        )}
+                            {/* ── TOP: Evidence Intake Title ── */}
+                            <div className="text-center mb-10">
+                                <motion.p
+                                    initial={{ opacity: 0, y: -8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="text-xs font-mono uppercase tracking-[0.3em] text-emerald-500/70 mb-3"
+                                >
+                                    ◈ Active Investigation
+                                </motion.p>
+                                <motion.h1
+                                    initial={{ opacity: 0, y: -8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.1 }}
+                                    className="text-4xl md:text-5xl font-black tracking-tight text-white mb-3"
+                                >
+                                    Evidence Intake
+                                </motion.h1>
+                                {file && (
+                                    <motion.p
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        transition={{ delay: 0.2 }}
+                                        className="text-slate-400 font-mono text-sm truncate max-w-md mx-auto bg-white/[0.04] border border-white/[0.08] px-4 py-2 rounded-full"
                                     >
-                                        <Lightbulb className={clsx("w-6 h-6", status === "analyzing" ? "animate-pulse" : "")} />
-                                    </motion.div>
-
-                                    <div className="flex-1">
-                                        <AnimatePresence mode="wait">
-                                            <motion.p
-                                                key={progressText}
-                                                initial={{ opacity: 0, y: 5 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, y: -5 }}
-                                                transition={{ duration: 0.3 }}
-                                                className="text-lg md:text-xl font-bold text-white tracking-wide"
-                                            >
-                                                {progressText}
-                                            </motion.p>
-                                        </AnimatePresence>
-                                        <div className="flex items-center justify-between mt-1">
-                                            <span className="text-xs font-mono text-slate-400 uppercase tracking-widest">
-                                                System Progress
-                                            </span>
-                                            <span className="text-xs font-mono font-bold text-emerald-400">
-                                                {Math.round(progressPercentage)}%
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="w-full h-2 bg-black/60 rounded-full overflow-hidden border border-white/5 relative z-10">
-                                    <motion.div
-                                        initial={{ width: 0 }}
-                                        animate={{ width: `${progressPercentage}%` }}
-                                        transition={{ duration: 0.8, ease: "circOut" }}
-                                        className="h-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]"
-                                    />
-                                </div>
+                                        📎 {file.name}
+                                    </motion.p>
+                                )}
                             </div>
 
-                            {/* Concurrent Agent Grid */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
+                            {/* ── DYNAMIC STATUS INDICATOR ── */}
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.96 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ delay: 0.15 }}
+                                className="relative rounded-2xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-xl p-6 mb-10 flex items-center gap-5 overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+                            >
+                                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
+                                {/* Animated glow behind indicator */}
+                                <div className="absolute left-0 top-0 bottom-0 w-32 bg-gradient-to-r from-emerald-500/10 to-transparent pointer-events-none" />
+
+                                {/* Multi-state icon */}
+                                <div className="relative shrink-0">
+                                    <AnimatePresence mode="wait">
+                                        {status === "complete" ? (
+                                            <motion.div
+                                                key="complete"
+                                                initial={{ scale: 0, rotate: -20 }}
+                                                animate={{ scale: 1, rotate: 0 }}
+                                                exit={{ scale: 0 }}
+                                                className="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+                                            >
+                                                <CheckCircle2 className="w-7 h-7 text-emerald-400" />
+                                            </motion.div>
+                                        ) : isUploading ? (
+                                            <motion.div
+                                                key="uploading"
+                                                initial={{ scale: 0 }}
+                                                animate={{ scale: 1 }}
+                                                exit={{ scale: 0 }}
+                                                className="w-14 h-14 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center"
+                                            >
+                                                <Loader2 className="w-7 h-7 text-cyan-400 animate-spin" />
+                                            </motion.div>
+                                        ) : (
+                                            <motion.div
+                                                key="thinking"
+                                                initial={{ scale: 0 }}
+                                                animate={{ scale: 1 }}
+                                                exit={{ scale: 0 }}
+                                                className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center relative"
+                                            >
+                                                {/* Pulsing rings */}
+                                                <motion.div
+                                                    animate={{ scale: [1, 1.5, 1], opacity: [0.3, 0, 0.3] }}
+                                                    transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
+                                                    className="absolute inset-0 rounded-2xl border border-amber-400/30"
+                                                />
+                                                <Lightbulb className="w-7 h-7 text-amber-400 animate-pulse" />
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
+
+                                {/* Dynamic text */}
+                                <div className="flex-1 min-w-0">
+                                    <AnimatePresence mode="wait">
+                                        <motion.p
+                                            key={progressText}
+                                            initial={{ opacity: 0, x: 10 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            exit={{ opacity: 0, x: -10 }}
+                                            transition={{ duration: 0.25 }}
+                                            className="text-white font-bold text-lg md:text-xl tracking-tight"
+                                        >
+                                            {progressText}
+                                        </motion.p>
+                                    </AnimatePresence>
+                                    {/* Progress bar */}
+                                    <div className="mt-3 w-full h-1.5 bg-black/60 rounded-full overflow-hidden border border-white/5">
+                                        <motion.div
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${progressPercentage}%` }}
+                                            transition={{ duration: 0.8, ease: "circOut" }}
+                                            className={`h-full rounded-full ${status === "complete" ? "bg-emerald-400" : "bg-gradient-to-r from-emerald-500 to-cyan-400"} shadow-[0_0_10px_rgba(16,185,129,0.5)]`}
+                                        />
+                                    </div>
+                                    <div className="flex justify-between mt-1">
+                                        <span className="text-[10px] font-mono text-slate-600 uppercase tracking-widest">Council Progress</span>
+                                        <span className="text-[10px] font-mono text-emerald-500 font-bold">{Math.round(progressPercentage)}%</span>
+                                    </div>
+                                </div>
+                            </motion.div>
+
+                            {/* ── AGENT CARDS — appear one by one as each completes ── */}
+                            <div className="space-y-4 mb-10">
                                 {validAgentsData.map((agent, i) => {
                                     const isComplete = completedAgents.find(a => a.id === agent.id);
                                     const isActive = activeAgents[agent.id];
-                                    const isIdle = !isComplete && !isActive;
 
                                     return (
-                                        <motion.div
-                                            key={agent.id}
-                                            initial={{ opacity: 0, y: 20 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            transition={{ delay: i * 0.05 }}
-                                            className={clsx(
-                                                "p-6 rounded-3xl border transition-all duration-500 ease-out flex flex-col h-full relative overflow-hidden backdrop-blur-md",
-                                                isComplete
-                                                    ? (isComplete.confidence >= 0.7
-                                                        ? "bg-emerald-950/20 border-emerald-500/40 shadow-[0_0_30px_rgba(16,185,129,0.05)]"
-                                                        : isComplete.confidence >= 0.4
-                                                            ? "bg-amber-950/20 border-amber-500/30 shadow-[0_0_30px_rgba(245,158,11,0.05)]"
-                                                            : "bg-red-950/20 border-red-500/30 shadow-[0_0_30px_rgba(239,68,68,0.05)]")
-                                                    : isActive
-                                                        ? "bg-slate-900 border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.05)]"
-                                                        : "bg-black/60 border-white/5 opacity-50 grayscale"
-                                            )}
-                                        >
-                                            {isActive && (
-                                                <div className="absolute top-0 right-0 p-4">
-                                                    <Loader2 className="w-5 h-5 text-emerald-400 animate-spin" />
-                                                </div>
-                                            )}
+                                        <AnimatePresence key={agent.id}>
+                                            {(isComplete || isActive) && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: 24, scale: 0.97 }}
+                                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                    transition={{ type: "spring", stiffness: 260, damping: 22 }}
+                                                    className={clsx(
+                                                        "relative rounded-2xl border overflow-hidden backdrop-blur-xl",
+                                                        "shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.06)]",
+                                                        isComplete
+                                                            ? (isComplete.confidence >= 0.7
+                                                                ? "bg-gradient-to-r from-emerald-950/40 to-black/60 border-emerald-500/25"
+                                                                : isComplete.confidence >= 0.4
+                                                                    ? "bg-gradient-to-r from-amber-950/40 to-black/60 border-amber-500/25"
+                                                                    : "bg-gradient-to-r from-red-950/40 to-black/60 border-red-500/25")
+                                                            : "bg-gradient-to-r from-white/[0.03] to-black/60 border-white/[0.08]"
+                                                    )}
+                                                >
+                                                    {/* Top shine */}
+                                                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
 
-                                            <div className="flex items-center gap-4 mb-4">
-                                                <AgentIcon role={agent.role} active={!!isActive} />
-                                                <div>
-                                                    <h3 className="text-lg font-bold text-white tracking-tight">{agent.name}</h3>
-                                                    <div className="text-[10px] font-mono tracking-widest text-slate-400 uppercase">
-                                                        {agent.role}
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="flex-1 rounded-xl bg-black/40 border border-white/5 p-4 relative overflow-hidden flex items-start mt-2 group">
-                                                {isComplete ? (
-                                                    <div className="text-sm text-emerald-100/90 leading-relaxed pr-2 w-full">
-                                                        <span className="text-emerald-500 mr-2 font-bold font-mono inline-block mt-0.5 align-top">▸</span>
-                                                        <AgentResponseText
-                                                            text={isComplete.result || "No specific anomalies reported."}
-                                                            className="inline text-emerald-100/90"
-                                                        />
-                                                    </div>
-                                                ) : isActive ? (
-                                                    <div className="w-full">
-                                                        <div className="text-sm text-emerald-400 font-mono mb-2 flex items-center animate-pulse">
-                                                            <Activity className="w-4 h-4 mr-2" /> Processing Data Stream...
+                                                    <div className="flex items-start gap-5 p-5 md:p-6">
+                                                        {/* Agent icon with completion ring */}
+                                                        <div className="relative shrink-0 mt-0.5">
+                                                            <div className={clsx(
+                                                                "w-12 h-12 rounded-xl border flex items-center justify-center",
+                                                                isComplete
+                                                                    ? isComplete.confidence >= 0.7 ? "bg-emerald-500/15 border-emerald-500/30" : "bg-amber-500/15 border-amber-500/30"
+                                                                    : "bg-white/[0.04] border-white/[0.08]"
+                                                            )}>
+                                                                <AgentIcon role={agent.role} active={!!isActive} />
+                                                            </div>
+                                                            {isComplete && (
+                                                                <motion.div
+                                                                    initial={{ scale: 0 }}
+                                                                    animate={{ scale: 1 }}
+                                                                    transition={{ type: "spring", delay: 0.15 }}
+                                                                    className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center border-2 border-[#050505]"
+                                                                >
+                                                                    <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
+                                                                </motion.div>
+                                                            )}
+                                                            {isActive && (
+                                                                <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-amber-500/80 flex items-center justify-center border-2 border-[#050505]">
+                                                                    <Loader2 className="w-2.5 h-2.5 text-white animate-spin" />
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                        <p className="text-xs text-slate-400 italic">"{isActive.thinking || agent.simulation.thinking}"</p>
-                                                    </div>
-                                                ) : (
-                                                    <div className="text-xs text-slate-600 font-mono tracking-widest uppercase flex flex-col items-center justify-center w-full h-full gap-2">
-                                                        <Scan className="w-6 h-6 opacity-50" />
-                                                        Awaiting Deployment
-                                                    </div>
-                                                )}
-                                            </div>
 
-                                            {isComplete && (
-                                                <div className="mt-4 pt-4 border-t border-white/10 flex justify-between items-center px-1">
-                                                    <span className="text-[10px] uppercase tracking-widest text-slate-500 font-mono font-bold">Confidence Rating</span>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs text-emerald-400 font-mono font-bold">{Math.round(isComplete.confidence * 100)}%</span>
-                                                        <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                                            <div
-                                                                className={`h-full ${isComplete.confidence >= 0.7 ? "bg-emerald-500" : isComplete.confidence >= 0.4 ? "bg-amber-500" : "bg-red-500"}`}
-                                                                style={{ width: `${isComplete.confidence * 100}%` }}
-                                                            />
+                                                        {/* Content */}
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center justify-between mb-2 gap-3">
+                                                                <div>
+                                                                    <h3 className="font-bold text-white text-base leading-tight">{agent.name}</h3>
+                                                                    <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mt-0.5">{agent.role}</p>
+                                                                </div>
+                                                                {isComplete && (
+                                                                    <motion.div
+                                                                        initial={{ opacity: 0, scale: 0.8 }}
+                                                                        animate={{ opacity: 1, scale: 1 }}
+                                                                        transition={{ delay: 0.3 }}
+                                                                        className="shrink-0 text-right"
+                                                                    >
+                                                                        <span className={clsx(
+                                                                            "text-sm font-mono font-black",
+                                                                            isComplete.confidence >= 0.7 ? "text-emerald-400" : isComplete.confidence >= 0.4 ? "text-amber-400" : "text-red-400"
+                                                                        )}>
+                                                                            {Math.round(isComplete.confidence * 100)}%
+                                                                        </span>
+                                                                        <p className="text-[9px] font-mono text-slate-600 uppercase tracking-widest mt-0.5">confidence</p>
+                                                                    </motion.div>
+                                                                )}
+                                                            </div>
+
+                                                            {isComplete ? (
+                                                                <motion.div
+                                                                    initial={{ opacity: 0 }}
+                                                                    animate={{ opacity: 1 }}
+                                                                    transition={{ delay: 0.2 }}
+                                                                    className="text-sm text-slate-200 leading-relaxed"
+                                                                >
+                                                                    <AgentResponseText
+                                                                        text={isComplete.result || "Analysis complete. No anomalies reported."}
+                                                                        className="text-slate-200"
+                                                                    />
+                                                                </motion.div>
+                                                            ) : (
+                                                                <div className="flex items-center gap-2 text-sm text-amber-400/80 font-mono animate-pulse">
+                                                                    <Activity className="w-3.5 h-3.5" />
+                                                                    <AnimatePresence mode="wait">
+                                                                        <motion.span
+                                                                            key={isActive?.thinking}
+                                                                            initial={{ opacity: 0 }}
+                                                                            animate={{ opacity: 1 }}
+                                                                            exit={{ opacity: 0 }}
+                                                                            transition={{ duration: 0.3 }}
+                                                                        >
+                                                                            {isActive?.thinking || agent.simulation.thinking}
+                                                                        </motion.span>
+                                                                    </AnimatePresence>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
-                                                </div>
+                                                </motion.div>
                                             )}
-                                        </motion.div>
+                                        </AnimatePresence>
                                     );
                                 })}
                             </div>
 
-                            {/* Final Acceptance Banner */}
+                            {/* ── COMPLETION BANNER ── */}
                             <AnimatePresence>
                                 {showCompletionBanner && (
                                     <motion.div
-                                        initial={{ opacity: 0, y: 20 }}
+                                        initial={{ opacity: 0, y: 24 }}
                                         animate={{ opacity: 1, y: 0 }}
-                                        className="bg-emerald-500/10 border border-emerald-500/40 p-8 rounded-3xl flex flex-col md:flex-row items-center justify-between shadow-[0_0_50px_rgba(16,185,129,0.1)] gap-6"
+                                        transition={{ type: "spring", stiffness: 200, damping: 22 }}
+                                        className="relative rounded-2xl border border-emerald-500/30 overflow-hidden
+                                            bg-gradient-to-br from-emerald-950/40 to-black/70 backdrop-blur-xl
+                                            shadow-[0_16px_60px_rgba(16,185,129,0.12),inset_0_1px_0_rgba(255,255,255,0.06)]
+                                            p-8 flex flex-col md:flex-row items-center justify-between gap-6"
                                     >
-                                        <div className="text-center md:text-left">
-                                            <h3 className="text-2xl font-black text-emerald-400 mb-2 flex items-center justify-center md:justify-start">
-                                                <CheckCircle2 className="w-7 h-7 mr-3" /> System Consensus Reached
-                                            </h3>
-                                            <p className="text-emerald-100/70 font-medium">All autonomous agents have completed operations and cryptographic signatures are verified.</p>
+                                        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent" />
+                                        {/* Radial glow */}
+                                        <div className="absolute top-0 left-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+                                        <div className="relative z-10 text-center md:text-left">
+                                            <div className="flex items-center gap-3 justify-center md:justify-start mb-2">
+                                                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
+                                                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                                </div>
+                                                <h3 className="text-xl font-black text-emerald-400">Council Consensus Reached</h3>
+                                            </div>
+                                            <p className="text-slate-400 text-sm font-medium">
+                                                All {validAgentsData.length} agents have completed analysis. Cryptographic signatures verified.
+                                            </p>
                                         </div>
-                                        <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto mt-4 md:mt-0">
+
+                                        <div className="relative z-10 flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                                            {/* Analyse Again */}
                                             <button
                                                 onClick={() => { playSound("click"); window.location.reload(); }}
-                                                className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-full font-bold tracking-wide transition-all flex items-center justify-center whitespace-nowrap hover:scale-[1.02]"
+                                                className="flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl
+                                                    bg-white/[0.04] border border-white/[0.10] text-slate-300 font-semibold
+                                                    hover:bg-white/[0.08] hover:border-white/20 hover:text-white
+                                                    transition-all duration-200 whitespace-nowrap
+                                                    shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
                                             >
+                                                <RotateCcw className="w-4 h-4 text-slate-400" />
                                                 Analyse Again
                                             </button>
+                                            {/* Accept Analysis */}
                                             <button
                                                 onClick={handleAcceptAnalysis}
-                                                className="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-black rounded-full font-bold tracking-wide transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)] flex items-center justify-center whitespace-nowrap group hover:scale-[1.02]"
+                                                className="flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl
+                                                    bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-bold
+                                                    hover:from-emerald-400 hover:to-cyan-400
+                                                    hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)]
+                                                    transition-all duration-200 whitespace-nowrap
+                                                    shadow-[0_4px_20px_rgba(16,185,129,0.3),inset_0_1px_0_rgba(255,255,255,0.2)]
+                                                    border border-white/[0.15]"
                                             >
-                                                View Results <ChevronRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                                                Accept Analysis
+                                                <ArrowRight className="w-4 h-4" />
                                             </button>
                                         </div>
                                     </motion.div>

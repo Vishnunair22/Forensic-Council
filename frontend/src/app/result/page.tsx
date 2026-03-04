@@ -199,13 +199,32 @@ export default function ResultPage() {
     return (
         <div className="min-h-screen bg-[#050505] text-white p-6 pb-20 overflow-x-hidden">
             {/* --- Background --- */}
-            <div className="fixed inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-slate-900/40 via-black to-black -z-50" />
+            <div className="fixed inset-0 -z-50">
+                <div className="absolute inset-0 bg-[#030303]" />
+                <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-emerald-900/15 rounded-full blur-[120px]" />
+                <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-cyan-900/10 rounded-full blur-[100px]" />
+                <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear_gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:40px_40px]" />
+            </div>
 
-            <header className="flex-shrink-0 w-full mb-10 border-b border-white/5 pb-6">
-                <div className="max-w-5xl mx-auto flex items-center justify-between">
-                    <div className="flex items-center space-x-3 cursor-pointer" onClick={() => router.push('/')}>
-                        <div className="w-10 h-10 bg-emerald-500/20 border border-emerald-500/40 rounded flex items-center justify-center font-bold text-emerald-400">FC</div>
-                        <span className="text-xl font-bold tracking-tight">Forensic Council</span>
+            <header className="flex-shrink-0 w-full mb-10">
+                <div className="max-w-5xl mx-auto flex items-center justify-between py-5 px-2 border-b border-white/[0.06]">
+                    <div
+                        className="flex items-center space-x-3 cursor-pointer group"
+                        onClick={() => { playSound("click"); router.push('/'); }}
+                    >
+                        <div className="w-9 h-9 bg-gradient-to-br from-emerald-400/20 to-cyan-500/10 border border-emerald-500/30 rounded-lg flex items-center justify-center font-bold text-emerald-400 text-sm group-hover:border-emerald-400/50 transition-colors">
+                            FC
+                        </div>
+                        <span className="text-lg font-bold tracking-tight text-white/80 group-hover:text-white transition-colors">
+                            Forensic Council
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs font-mono text-slate-600">
+                        <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-50" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                        </span>
+                        Analysis Complete
                     </div>
                 </div>
             </header>
@@ -265,6 +284,9 @@ export default function ResultPage() {
                                                     verdict.color === "amber" ? "bg-amber-950/30 border-amber-500/40 shadow-[0_0_60px_rgba(245,158,11,0.08)]" :
                                                         "bg-red-950/30 border-red-500/40 shadow-[0_0_60px_rgba(239,68,68,0.08)]"}`}
                                         >
+                                            {/* Glass shine on verdict banner */}
+                                            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
+                                            <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/[0.03] to-transparent pointer-events-none rounded-t-3xl" />
                                             <div className={`absolute inset-0 opacity-5 pointer-events-none
                                                 ${verdict.color === "emerald" ? "bg-[radial-gradient(circle_at_30%_50%,#10b981,transparent)]" :
                                                     verdict.color === "amber" ? "bg-[radial-gradient(circle_at_30%_50%,#f59e0b,transparent)]" :
@@ -339,7 +361,8 @@ export default function ResultPage() {
                                     {/* --- 2. Cohesive Executive Overview --- */}
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                         {/* Main Summary */}
-                                        <div className="md:col-span-2 p-8 rounded-3xl bg-slate-950 border border-emerald-500/30 shadow-[0_4px_30px_rgba(16,185,129,0.05)] flex flex-col relative overflow-hidden">
+                                        <div className="md:col-span-2 p-8 rounded-3xl bg-gradient-to-b from-white/[0.04] to-black/80 border border-white/[0.08] backdrop-blur-xl flex flex-col relative overflow-hidden">
+                                            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent rounded-t-3xl" />
                                             <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-3">
                                                 <FileCheck className="w-6 h-6 text-emerald-400" /> Consensus Report
                                             </h3>
@@ -661,15 +684,25 @@ export default function ResultPage() {
                                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-10 pb-6">
                                         <button
                                             onClick={() => { playSound("click"); router.push('/evidence'); }}
-                                            className="px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-black rounded-full font-bold tracking-wide transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)] flex items-center gap-3 hover:scale-[1.02]"
+                                            className="flex items-center gap-2.5 px-7 py-3.5 rounded-xl
+                                                bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-bold text-sm
+                                                hover:from-emerald-400 hover:to-cyan-400 hover:scale-[1.02]
+                                                transition-all duration-200
+                                                shadow-[0_4px_20px_rgba(16,185,129,0.25),inset_0_1px_0_rgba(255,255,255,0.2)]
+                                                border border-white/[0.15]"
                                         >
-                                            <Zap className="w-5 h-5" /> Analyse Another File
+                                            <Zap className="w-4 h-4" />
+                                            Analyse Another File
                                         </button>
                                         <button
                                             onClick={() => { playSound("click"); router.push('/'); }}
-                                            className="px-8 py-4 bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-full font-bold tracking-wide transition-all flex items-center gap-3 hover:scale-[1.02]"
+                                            className="flex items-center gap-2.5 px-7 py-3.5 rounded-xl
+                                                bg-white/[0.03] border border-white/[0.10] text-slate-300 font-semibold text-sm
+                                                hover:bg-white/[0.07] hover:border-white/20 hover:text-white
+                                                transition-all duration-200
+                                                shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
                                         >
-                                            Return to HQ <ArrowRight className="w-5 h-5" />
+                                            ← Back to Home
                                         </button>
                                     </div>
                                 </>
