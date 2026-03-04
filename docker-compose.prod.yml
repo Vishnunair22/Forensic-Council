@@ -42,11 +42,9 @@ services:
   frontend:
     image: ${DOCKER_REGISTRY:-ghcr.io/yourorg}/forensic-council-frontend:${IMAGE_TAG:-latest}
     # No build context — use pre-built image
+    # NEXT_PUBLIC_API_URL must be set at image build time via:
+    # docker build --build-arg NEXT_PUBLIC_API_URL=https://api.example.com ./frontend
     pull_policy: always
-    build:
-      args:
-        # Replace with your production API domain
-        NEXT_PUBLIC_API_URL: ${API_URL:-https://api.forensic-council.example.com}
     environment:
       - NODE_ENV=production
     restart: unless-stopped
@@ -64,6 +62,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+      - caddy_logs:/var/log/caddy
     environment:
       - DOMAIN=${DOMAIN:-localhost}
     depends_on:
@@ -78,3 +77,4 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  caddy_logs:

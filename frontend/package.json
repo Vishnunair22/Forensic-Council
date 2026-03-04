@@ -12,6 +12,16 @@
     "test:coverage": "jest --coverage",
     "type-check": "tsc --noEmit"
   },
+  "overrides": {
+    "@react-three/fiber": {
+      "react": "$react",
+      "react-dom": "$react-dom"
+    },
+    "@react-three/drei": {
+      "react": "$react",
+      "react-dom": "$react-dom"
+    }
+  },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.2",
     "@react-three/drei": "^10.7.7",
