@@ -170,6 +170,15 @@ class Settings(BaseSettings):
     investigation_max_retries: int = Field(default=3, description="Max retry attempts for failed investigations")
     investigation_retry_delay: float = Field(default=5.0, description="Base delay between investigation retries (seconds)")
     
+    # LLM Configuration
+    llm_provider: str = Field(default="openai", description="LLM provider: openai, anthropic, or none")
+    llm_api_key: Optional[str] = Field(default=None, description="API key for LLM provider")
+    llm_model: str = Field(default="gpt-4", description="LLM model to use for reasoning")
+    llm_temperature: float = Field(default=0.1, description="Temperature for LLM sampling (0.0-1.0)")
+    llm_max_tokens: int = Field(default=2048, description="Maximum tokens for LLM responses")
+    llm_timeout: float = Field(default=60.0, description="Timeout for LLM API calls in seconds")
+    llm_enable_react_reasoning: bool = Field(default=True, description="Enable LLM reasoning in ReAct loop")
+    
     # Retry Configuration
     database_retry_max: int = Field(default=5, description="Max database connection retries")
     database_retry_delay: float = Field(default=1.0, description="Base database retry delay (seconds)")

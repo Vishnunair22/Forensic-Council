@@ -16,9 +16,14 @@ from typing import Any, Callable, Coroutine, Literal
 
 from pydantic import BaseModel, Field
 
+from core.config import Settings
 from core.custody_logger import CustodyLogger, EntryType
+from core.llm_client import LLMClient, LLMResponse, parse_llm_step
+from core.logging import get_logger
 from core.tool_registry import ToolRegistry, ToolResult
 from core.working_memory import WorkingMemory, WorkingMemoryState
+
+logger = get_logger(__name__)
 
 
 class ReActStepType(str, Enum):
@@ -202,6 +207,154 @@ LLMStepGenerator = Callable[
     [list[ReActStep], WorkingMemoryState],
     Coroutine[Any, Any, ReActStep | None]
 ]
+
+
+def create_llm_step_generator(
+    llm_client: LLMClient,
+    config: Settings,
+    agent_name: str,
+    evidence_context: dict[str, Any],
+) -> LLMStepGenerator:
+    """
+    Create an LLM-based step generator for the ReAct loop.
+    
+    This factory creates a step generator that uses the LLM to reason about
+    tool outputs and decide the next action, enabling true ReAct reasoning
+    rather than just task decomposition.
+    
+    Args:
+        llm_client: Initialized LLM client
+        config: Application settings
+        agent_name: Name of the agent for context
+        evidence_context: Context about the evidence being analyzed
+        
+    Returns:
+        LLMStepGenerator function that can be passed to ReActLoopEngine.run()
+    """
+    
+    async def llm_step_generator(
+        react_chain: list[ReActStep],
+        state: WorkingMemoryState,
+    ) -> ReActStep | None:
+        """Generate next ReAct step using LLM reasoning."""
+        
+        # Skip if LLM is not enabled
+        if not config.llm_enable_react_reasoning or not config.llm_api_key:
+            return None
+        
+        # Build system prompt with forensic context
+        system_prompt = _build_forensic_system_prompt(
+            agent_name=agent_name,
+            evidence_context=evidence_context,
+            available_tasks=[t.description for t in state.tasks if t.status != "COMPLETE"],
+        )
+        
+        # Get available tools from state/tool registry context
+        available_tools = _get_available_tools_for_llm(state)
+        
+        # Get current task
+        current_task = None
+        for task in state.tasks:
+            if task.status == "IN_PROGRESS":
+                current_task = task.description
+                break
+        
+        try:
+            # Call LLM for reasoning
+            response: LLMResponse = await llm_client.generate_reasoning_step(
+                system_prompt=system_prompt,
+                react_chain=[step.model_dump() for step in react_chain],
+                available_tools=available_tools,
+                current_task=current_task,
+            )
+            
+            # Parse response into a ReAct step
+            parsed = parse_llm_step(response.content, response.tool_call)
+            
+            # Create the ReAct step
+            step = ReActStep(
+                step_type=parsed["step_type"],  # type: ignore
+                content=parsed["content"],
+                tool_name=parsed.get("tool_name"),
+                tool_input=parsed.get("tool_input"),
+                iteration=0,  # Will be set by the loop
+            )
+            
+            logger.info(
+                "LLM generated ReAct step",
+                agent_name=agent_name,
+                step_type=step.step_type,
+                tool_name=step.tool_name,
+            )
+            
+            return step
+            
+        except Exception as e:
+            logger.error(
+                "LLM step generation failed, falling back to default",
+                error=str(e),
+                agent_name=agent_name,
+            )
+            return None
+    
+    return llm_step_generator
+
+
+def _build_forensic_system_prompt(
+    agent_name: str,
+    evidence_context: dict[str, Any],
+    available_tasks: list[str],
+) -> str:
+    """Build system prompt for forensic reasoning."""
+    mime_type = evidence_context.get("mime_type", "unknown")
+    file_name = evidence_context.get("file_name", "unknown")
+    
+    prompt = f"""You are {agent_name}, a specialized forensic analysis agent in the Forensic Council system.
+
+You are analyzing evidence: {file_name} (type: {mime_type})
+
+Your role is to perform forensic analysis using a ReAct (Reasoning + Acting) loop:
+1. THINK about what you've learned from previous observations
+2. DECIDE on the next action (tool to use)
+3. OBSERVE the results and repeat
+
+Available tasks to complete:
+"""
+    
+    for task in available_tasks[:5]:  # Limit to avoid too long prompt
+        prompt += f"- {task}\n"
+    
+    prompt += """
+When deciding your next action:
+- Consider what evidence would strengthen your findings
+- Look for inconsistencies or anomalies
+- Choose tools that provide complementary analysis
+- If you have sufficient evidence, signal completion
+
+Output format:
+- If you want to use a tool: describe what tool and why
+- If you have completed analysis: state that you're done and summarize findings
+"""
+    
+    return prompt
+
+
+def _get_available_tools_for_llm(state: WorkingMemoryState) -> list[dict[str, Any]]:
+    """Get list of available tools formatted for LLM."""
+    # This is a simplified list - in production, would come from ToolRegistry
+    common_tools = [
+        {"name": "ela_full_image", "description": "Error Level Analysis for image manipulation detection"},
+        {"name": "jpeg_ghost_detect", "description": "Detect JPEG re-compression artifacts"},
+        {"name": "noise_fingerprint", "description": "Analyze camera sensor noise patterns"},
+        {"name": "file_hash_verify", "description": "Verify file integrity via cryptographic hash"},
+        {"name": "exif_extract", "description": "Extract metadata from files"},
+        {"name": "speaker_diarization", "description": "Separate and count speakers in audio"},
+        {"name": "optical_flow_analysis", "description": "Analyze motion between video frames"},
+        {"name": "face_swap_detection", "description": "Detect face swaps in video frames"},
+        {"name": "object_detection", "description": "Detect objects in images"},
+        {"name": "lighting_consistency", "description": "Check lighting consistency across scene"},
+    ]
+    return common_tools
 
 
 class ReActLoopEngine:

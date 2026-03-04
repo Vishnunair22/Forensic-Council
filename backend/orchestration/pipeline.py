@@ -37,6 +37,117 @@ from orchestration.session_manager import SessionManager, SessionStatus
 logger = get_logger(__name__)
 
 
+class AgentFactory:
+    """
+    Factory for creating and re-invoking forensic agents.
+    
+    Provides a clean interface for the Arbiter to re-invoke agents
+    during challenge loops without needing direct knowledge of agent
+    instantiation details.
+    """
+    
+    def __init__(
+        self,
+        config: Settings,
+        working_memory: WorkingMemory,
+        episodic_memory: EpisodicMemory,
+        custody_logger: CustodyLogger,
+        evidence_store: EvidenceStore,
+        inter_agent_bus: Optional[InterAgentBus] = None,
+    ):
+        self.config = config
+        self.working_memory = working_memory
+        self.episodic_memory = episodic_memory
+        self.custody_logger = custody_logger
+        self.evidence_store = evidence_store
+        self.inter_agent_bus = inter_agent_bus
+        self._evidence_artifact: Optional[EvidenceArtifact] = None
+    
+    def set_evidence_artifact(self, artifact: EvidenceArtifact) -> None:
+        """Set the evidence artifact for agent re-invocation."""
+        self._evidence_artifact = artifact
+    
+    async def reinvoke_agent(
+        self,
+        agent_id: str,
+        session_id: UUID,
+        challenge_context: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Re-invoke an agent with challenge context.
+        
+        Args:
+            agent_id: ID of the agent to re-invoke (Agent1-5)
+            session_id: Session ID for the investigation
+            challenge_context: Context from the contradicting finding
+            
+        Returns:
+            Agent results including findings and reflection report
+        """
+        if self._evidence_artifact is None:
+            raise ValueError("Evidence artifact not set - call set_evidence_artifact first")
+        
+        logger.info(
+            "Re-invoking agent for challenge loop",
+            agent_id=agent_id,
+            session_id=str(session_id),
+            challenge_id=challenge_context.get("challenge_id"),
+        )
+        
+        # Create the appropriate agent class
+        agent_class = self._get_agent_class(agent_id)
+        
+        # Build agent kwargs
+        agent_kwargs = {
+            "agent_id": agent_id,
+            "session_id": session_id,
+            "evidence_artifact": self._evidence_artifact,
+            "config": self.config,
+            "working_memory": self.working_memory,
+            "episodic_memory": self.episodic_memory,
+            "custody_logger": self.custody_logger,
+            "evidence_store": self.evidence_store,
+        }
+        
+        # Add inter_agent_bus for Agent2
+        if agent_id == "Agent2" and self.inter_agent_bus:
+            agent_kwargs["inter_agent_bus"] = self.inter_agent_bus
+        
+        # Create and run the agent
+        agent = agent_class(**agent_kwargs)
+        
+        # Run investigation
+        findings = await agent.run_investigation()
+        
+        # Return results in expected format
+        return {
+            "agent_id": agent_id,
+            "findings": [f.model_dump() for f in findings],
+            "reflection_report": (
+                agent._reflection_report.model_dump()
+                if hasattr(agent, '_reflection_report') and agent._reflection_report
+                else {}
+            ),
+            "react_chain": getattr(agent, '_react_chain', []),
+            "challenge_context": challenge_context,
+        }
+    
+    def _get_agent_class(self, agent_id: str) -> type:
+        """Get the agent class for a given agent ID."""
+        agent_map = {
+            "Agent1": Agent1Image,
+            "Agent2": Agent2Audio,
+            "Agent3": Agent3Object,
+            "Agent4": Agent4Video,
+            "Agent5": Agent5Metadata,
+        }
+        
+        if agent_id not in agent_map:
+            raise ValueError(f"Unknown agent_id: {agent_id}")
+        
+        return agent_map[agent_id]
+
+
 class AgentLoopResult:
     """Result from running an agent's investigation loop."""
     def __init__(
@@ -162,11 +273,22 @@ class ForensicCouncilPipeline:
         # Initialize session manager
         self.session_manager = SessionManager(redis_client=self._redis)
         
-        # Initialize arbiter
+        # Initialize agent factory for challenge loops
+        self.agent_factory = AgentFactory(
+            config=self.config,
+            working_memory=self.working_memory,
+            episodic_memory=self.episodic_memory,
+            custody_logger=self.custody_logger,
+            evidence_store=self.evidence_store,
+            inter_agent_bus=self.inter_agent_bus,
+        )
+        
+        # Initialize arbiter with agent factory
         self.arbiter = CouncilArbiter(
             session_id=session_id,
             custody_logger=self.custody_logger,
             inter_agent_bus=self.inter_agent_bus,
+            agent_factory=self.agent_factory,
         )
     
     async def run_investigation(
@@ -215,6 +337,10 @@ class ForensicCouncilPipeline:
             session_id,
             investigator_id,
         )
+        
+        # Set evidence artifact in agent factory for challenge loops
+        if hasattr(self, 'agent_factory'):
+            self.agent_factory.set_evidence_artifact(evidence_artifact)
         
         # Create session in manager
         await self.session_manager.create_session(

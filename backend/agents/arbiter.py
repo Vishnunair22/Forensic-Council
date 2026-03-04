@@ -88,11 +88,13 @@ class CouncilArbiter:
         custody_logger: Any = None,
         inter_agent_bus: Any = None,
         calibration_layer: Any = None,
+        agent_factory: Any = None,
     ):
         self.session_id = session_id
         self.custody_logger = custody_logger
         self.inter_agent_bus = inter_agent_bus
         self.calibration_layer = calibration_layer
+        self.agent_factory = agent_factory
         self._key_store = KeyStore()
         # Ensure arbiter has a key
         self._key_store.get_or_create("Arbiter")
@@ -243,13 +245,166 @@ class CouncilArbiter:
         agent_id: str,
         context_from_other: dict[str, Any],
     ) -> ChallengeResult:
-        """Run challenge loop for a contradiction."""
+        """
+        Run challenge loop for a contradiction.
+        
+        When agents disagree, the lower-confidence finding is challenged.
+        The challenged agent is re-invoked with the contradicting context
+        and asked to reconsider their finding.
+        
+        Args:
+            contradiction: The contradiction between two findings
+            agent_id: ID of the agent being challenged
+            context_from_other: The contradicting finding's data as context
+            
+        Returns:
+            ChallengeResult with the outcome of the challenge
+        """
+        from core.custody_logger import EntryType
+        from core.logging import get_logger
+        
+        logger = get_logger(__name__)
+        challenge_id = uuid4()
+        
+        logger.info(
+            "Starting challenge loop",
+            challenge_id=str(challenge_id),
+            challenged_agent=agent_id,
+            contradicting_agent=context_from_other.get("agent_id", "unknown"),
+        )
+        
+        # Log challenge initiation
+        if self.custody_logger:
+            await self.custody_logger.log_entry(
+                entry_type=EntryType.INTER_AGENT_CALL,
+                agent_id="Arbiter",
+                session_id=self.session_id,
+                content={
+                    "action": "challenge_initiated",
+                    "challenge_id": str(challenge_id),
+                    "challenged_agent": agent_id,
+                    "contradiction_type": contradiction.verdict.value,
+                    "original_finding_type": contradiction.finding_a.get("finding_type"),
+                    "contradicting_finding_type": contradiction.finding_b.get("finding_type"),
+                },
+            )
+        
+        # Try to re-invoke the challenged agent if factory is available
+        revised_finding = None
+        resolved = False
+        
+        if self.agent_factory:
+            try:
+                # Create challenge context for the agent
+                challenge_context = {
+                    "challenge_id": str(challenge_id),
+                    "challenged_finding": contradiction.finding_a,
+                    "contradicting_finding": context_from_other,
+                    "reason": "Cross-agent contradiction detected",
+                    "request": "Re-examine your finding considering the contradicting evidence",
+                }
+                
+                # Re-invoke the challenged agent
+                logger.info(
+                    "Re-invoking challenged agent",
+                    agent_id=agent_id,
+                    challenge_id=str(challenge_id),
+                )
+                
+                revised_result = await self.agent_factory.reinvoke_agent(
+                    agent_id=agent_id,
+                    session_id=self.session_id,
+                    challenge_context=challenge_context,
+                )
+                
+                if revised_result and "findings" in revised_result:
+                    # Find the revised finding matching the original
+                    original_type = contradiction.finding_a.get("finding_type")
+                    for finding in revised_result["findings"]:
+                        if finding.get("finding_type") == original_type:
+                            revised_finding = finding
+                            break
+                    
+                    # If no matching type, take the first finding
+                    if revised_finding is None and revised_result["findings"]:
+                        revised_finding = revised_result["findings"][0]
+                    
+                    # Check if contradiction is resolved
+                    if revised_finding:
+                        # Compare revised finding with the contradicting one
+                        revised_status = revised_finding.get("status", "")
+                        contradicting_status = context_from_other.get("status", "")
+                        
+                        # If both now agree, contradiction is resolved
+                        if revised_status == contradicting_status:
+                            resolved = True
+                            logger.info(
+                                "Challenge resolved - findings now agree",
+                                challenge_id=str(challenge_id),
+                                agreed_status=revised_status,
+                            )
+                        else:
+                            # Check if confidence changed significantly
+                            original_conf = contradiction.finding_a.get("confidence_raw", 0)
+                            revised_conf = revised_finding.get("confidence_raw", 0)
+                            
+                            if abs(revised_conf - original_conf) > 0.1:
+                                # Agent changed its confidence significantly
+                                # This is partial resolution - acknowledge the revision
+                                resolved = True
+                                logger.info(
+                                    "Challenge partially resolved - confidence adjusted",
+                                    challenge_id=str(challenge_id),
+                                    original_confidence=original_conf,
+                                    revised_confidence=revised_conf,
+                                )
+                
+                # Log the challenge outcome
+                if self.custody_logger:
+                    await self.custody_logger.log_entry(
+                        entry_type=EntryType.SELF_REFLECTION,
+                        agent_id=agent_id,
+                        session_id=self.session_id,
+                        content={
+                            "action": "challenge_completed",
+                            "challenge_id": str(challenge_id),
+                            "resolved": resolved,
+                            "has_revised_finding": revised_finding is not None,
+                        },
+                    )
+                
+            except Exception as e:
+                logger.error(
+                    "Challenge loop failed",
+                    challenge_id=str(challenge_id),
+                    error=str(e),
+                    agent_id=agent_id,
+                )
+                # Log failure but still return result
+                if self.custody_logger:
+                    await self.custody_logger.log_entry(
+                        entry_type=EntryType.ERROR,
+                        agent_id="Arbiter",
+                        session_id=self.session_id,
+                        content={
+                            "action": "challenge_failed",
+                            "challenge_id": str(challenge_id),
+                            "error": str(e),
+                        },
+                    )
+        else:
+            logger.warning(
+                "No agent factory available for challenge loop",
+                challenge_id=str(challenge_id),
+                agent_id=agent_id,
+            )
+        
         return ChallengeResult(
-            challenge_id=uuid4(),
+            challenge_id=challenge_id,
             challenged_agent=agent_id,
             original_finding=contradiction.finding_a,
-            revised_finding=None,
-            resolved=False,
+            revised_finding=revised_finding,
+            resolved=resolved,
         )
     
     async def trigger_tribunal(self, case: TribunalCase) -> None:
