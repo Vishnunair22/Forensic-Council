@@ -64,11 +64,11 @@ In the event that the PostgreSQL custody logs become corrupted:
 3.  **Complete Reset (Destructive):**
     ```bash
     # For infrastructure-only setup
-    docker compose -f docker-compose.infra.yml down -v
-    docker compose -f docker-compose.infra.yml up -d
+    docker compose -f docker/docker-compose.infra.yml down -v
+    docker compose -f docker/docker-compose.infra.yml up -d
     
     # For full Docker setup
-    docker compose down -v
-    docker compose up -d
+    docker compose -f docker/docker-compose.yml down -v
+    docker compose -f docker/docker-compose.yml up -d
     ```
     *(The `-v` flag removes the `postgres_data` volume, wiping all evidence custody trails and Qdrant similarities.)*
