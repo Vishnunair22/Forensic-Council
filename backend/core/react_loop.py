@@ -625,7 +625,7 @@ class ReActLoopEngine:
 
         # If GPS is present, validate timezone
         if task_description and "exif" in task_description.lower():
-            if tool_result.get("gps_latitude") is not None:
+            if tool_result.get("gps_coordinates") is not None:
                 return "gps_timezone_validate"
 
         return None
