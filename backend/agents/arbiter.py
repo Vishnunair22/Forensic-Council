@@ -114,11 +114,24 @@ class CouncilArbiter:
         # Run cross-agent comparison
         comparisons = await self.cross_agent_comparison(all_findings)
         
-        # Identify contradictions
+        # Identify contradictions and run challenge loop
         contested_findings = []
+        challenge_results = []
         for comparison in comparisons:
             if comparison.verdict == FindingVerdict.CONTRADICTION:
                 contested_findings.append(comparison)
+                # Run challenge loop for each contradiction
+                agent_a = comparison.finding_a.get("agent_id", "")
+                agent_b = comparison.finding_b.get("agent_id", "")
+                # Challenge the lower-confidence finding
+                conf_a = comparison.finding_a.get("confidence_raw", 0)
+                conf_b = comparison.finding_b.get("confidence_raw", 0)
+                challenged_agent = agent_b if conf_b < conf_a else agent_a
+                context_from_other = comparison.finding_b if challenged_agent == agent_a else comparison.finding_a
+                result = await self.challenge_loop(
+                    comparison, challenged_agent, context_from_other
+                )
+                challenge_results.append(result)
         
         # Cross-modal confirmed findings
         cross_modal_confirmed = []
@@ -182,7 +195,12 @@ class CouncilArbiter:
                 type_a = set(finding_a.get("finding_type", "").lower().replace("_", " ").split())
                 type_b = set(finding_b.get("finding_type", "").lower().replace("_", " ").split())
                 
-                stopwords = {"analysis", "scan", "extract", "detect", "validate", "verify", "full", "deep", "the", "a", "of", "to", "for", "in"}
+                stopwords = {
+                    "analysis", "scan", "extract", "detect", "validate", "verify",
+                    "full", "deep", "the", "a", "an", "of", "to", "for", "in",
+                    "and", "or", "image", "file", "run", "check", "region",
+                    "artifact", "evidence", "test", "result", "data"
+                }
                 keys_a = {k for k in type_a if k not in stopwords and len(k) > 2}
                 keys_b = {k for k in type_b if k not in stopwords and len(k) > 2}
                 

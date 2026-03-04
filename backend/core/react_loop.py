@@ -144,6 +144,10 @@ class AgentFinding(BaseModel):
         ..., ge=0.0, le=1.0,
         description="Raw confidence score (0-1)"
     )
+    calibrated_probability: float | None = Field(
+        default=None, ge=0.0, le=1.0,
+        description="Calibrated confidence probability (0-1), None if not calibrated"
+    )
     calibrated: bool = Field(
         default=False, description="Whether confidence has been calibrated"
     )
@@ -855,11 +859,29 @@ class ReActLoopEngine:
         # Check for stub annotation when building AgentFinding
         is_stub = output.get("status") == "stub" or output.get("court_defensible") is False
 
+        # Apply calibration to confidence score
+        calibrated_prob = None
+        try:
+            from core.calibration import get_calibration_layer
+            calibration_layer = get_calibration_layer()
+            if calibration_layer and not is_stub:
+                cal_result = calibration_layer.calibrate(
+                    agent_id=self.agent_id,
+                    raw_score=confidence,
+                    finding_class=pending_task.description[:50]
+                )
+                calibrated_prob = cal_result.calibrated_probability
+        except Exception:
+            # If calibration fails, proceed without it
+            pass
+
         finding = AgentFinding(
             agent_id=self.agent_id,
             agent_name=_AGENT_ID_TO_NAME.get(self.agent_id, self.agent_id),
             finding_type=pending_task.description[:80],
             confidence_raw=confidence,
+            calibrated_probability=calibrated_prob,
+            calibrated=calibrated_prob is not None,
             status=status,
             evidence_refs=[],
             reasoning_summary=self._build_readable_summary(
@@ -945,10 +967,8 @@ class ReActLoopEngine:
         if best_score >= 2:
             return best_tool
 
-        # Fallback: if only one tool, use it; otherwise pick the first tool
-        if tools:
-            return tools[0]
-
+        # No good match found - return None instead of falling back to first tool
+        # The caller handles None by marking the task as blocked
         return None
 
     async def _log_step(self, step: ReActStep) -> None:

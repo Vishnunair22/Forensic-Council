@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import uuid
 from typing import Any
-import random
-import hashlib
 
 from agents.base_agent import ForensicAgent
 from core.config import Settings
@@ -154,10 +152,6 @@ class Agent4Video(ForensicAgent):
             artifact = input_data.get("frames_artifact") or input_data.get("artifact") or self.evidence_artifact
             return await run_ml_tool("deepfake_frequency.py", artifact.file_path, timeout=25.0)
         
-        # Mock tool handlers with realistic heuristics
-        seed_val = int(hashlib.md5(str(self.evidence_artifact.artifact_id).encode()).hexdigest()[:8], 16)
-        rng = random.Random(seed_val)
-        
         async def anomaly_classification(input_data: dict) -> dict:
             """Classify anomaly via SSIM + motion vector analysis."""
             frame_a = input_data.get("frame_a_path")
@@ -192,9 +186,11 @@ class Agent4Video(ForensicAgent):
         
         async def adversarial_robustness_check(input_data: dict) -> dict:
             return {
-                "status": "success",
-                "adversarial_pattern_detected": rng.choice([True, False, False]),
-                "confidence": round(rng.uniform(0.1, 0.9), 2)
+                "status": "stub",
+                "court_defensible": False,
+                "warning": "STUB: adversarial_robustness_check returns fabricated data. Integrate real adversarial testing.",
+                "adversarial_pattern_detected": None,
+                "confidence": None,
             }
         
         # Register tools

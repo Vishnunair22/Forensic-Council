@@ -249,8 +249,8 @@ class TestForensicReport:
     async def test_contested_finding_never_silently_resolved(self, arbiter):
         """Test that contested findings are tracked."""
         findings = [
-            {"agent_id": "A1", "finding_type": "t", "status": "CONFIRMED", "evidence_refs": ["e1"]},
-            {"agent_id": "A2", "finding_type": "t", "status": "INCONCLUSIVE", "evidence_refs": ["e1"]},
+            {"agent_id": "A1", "finding_type": "tampering_detected", "status": "CONFIRMED", "evidence_refs": ["e1"]},
+            {"agent_id": "A2", "finding_type": "tampering_detected", "status": "INCONCLUSIVE", "evidence_refs": ["e1"]},
         ]
         
         comparisons = await arbiter.cross_agent_comparison(findings)

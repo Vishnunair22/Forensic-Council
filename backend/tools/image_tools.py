@@ -26,7 +26,6 @@ from infra.evidence_store import EvidenceStore
 
 # OCR imports
 import cv2
-import pytesseract
 
 
 @dataclass
@@ -597,10 +596,10 @@ async def extract_text_from_image(
     artifact: EvidenceArtifact,
 ) -> dict[str, Any]:
     """
-    Extract visible text from an image using OCR (Tesseract).
+    Extract visible text from an image using OCR (Tesseract/pytesseract).
 
-    Uses OpenCV preprocessing (grayscale conversion and thresholding)
-    to improve OCR accuracy, then applies Tesseract to extract text.
+    Uses OpenCV for preprocessing to improve OCR accuracy on forensic images,
+    including adaptive thresholding for handling varied lighting conditions.
 
     Args:
         artifact: The evidence artifact to analyze
@@ -611,41 +610,206 @@ async def extract_text_from_image(
         - raw_text: Complete raw text output from OCR
         - success: Boolean indicating if extraction was successful
         - error: Error message if extraction failed (only on failure)
+        - word_count: Number of words detected
+        - has_text: Boolean indicating if any text was found
+        - court_defensible: Boolean indicating if the extraction method is court-defensible
     """
     try:
+        import pytesseract
+        import cv2
+        import numpy as np
+        from PIL import Image as PILImage
+
         original_path = artifact.file_path
         if not os.path.exists(original_path):
             raise ToolUnavailableError(f"File not found: {original_path}")
 
-        # Open with OpenCV to preprocess for better OCR
-        img = cv2.imread(original_path)
-        if img is None:
-            raise ToolUnavailableError(f"Could not load image: {original_path}")
-
+        # Load image with PIL and convert to OpenCV format
+        pil_image = PILImage.open(original_path)
+        if pil_image.mode != "RGB":
+            pil_image = pil_image.convert("RGB")
+        
+        # Convert PIL to OpenCV (RGB to BGR)
+        img = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+        
+        # Preprocess for better OCR
         # Convert to grayscale
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-        # Apply thresholding to increase contrast
-        _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
-
-        # Extract text via pytesseract
-        raw_text = pytesseract.image_to_string(thresh)
-
-        # Split into lines and filter out empty lines
-        lines = [line.strip() for line in raw_text.split('\n') if line.strip()]
-
+        
+        # Apply adaptive thresholding to handle varying lighting
+        # This is particularly useful for forensic images which may have
+        # uneven lighting or be screenshots with different backgrounds
+        thresh = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
+        )
+        
+        # Also try with Otsu's thresholding as fallback
+        _, otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        
+        # Run OCR on both preprocessed versions and combine results
+        custom_config = r'--oem 3 --psm 6 -l eng'
+        
+        # OCR on adaptive threshold
+        text_adaptive = pytesseract.image_to_string(thresh, config=custom_config)
+        
+        # OCR on Otsu threshold
+        text_otsu = pytesseract.image_to_string(otsu, config=custom_config)
+        
+        # OCR on original grayscale (for natural images)
+        text_original = pytesseract.image_to_string(gray, config=custom_config)
+        
+        # Use the version with most content, or combine unique lines
+        texts = [text_adaptive, text_otsu, text_original]
+        
+        # Select the best result (longest non-empty text)
+        best_text = max(texts, key=lambda t: len(t.strip()))
+        
+        # Split into lines and filter empty ones
+        lines = [line.strip() for line in best_text.split('\n') if line.strip()]
+        
+        # Get word boxes for additional metadata
+        data = pytesseract.image_to_data(gray, output_type=pytesseract.Output.DICT)
+        word_count = sum(1 for text in data['text'] if text.strip())
+        
+        # Calculate confidence score
+        confidences = [conf for conf in data['conf'] if conf > 0]
+        avg_confidence = sum(confidences) / len(confidences) if confidences else 0
+        
         return {
+            "status": "real",
+            "court_defensible": True,
+            "method": "Tesseract OCR v4+ with adaptive preprocessing",
             "extracted_text": lines,
-            "raw_text": raw_text.strip(),
+            "raw_text": best_text,
+            "word_count": word_count,
+            "has_text": word_count > 0,
             "success": True,
+            "confidence": round(avg_confidence / 100, 4) if avg_confidence > 0 else None,
         }
-
-    except Exception as e:
-        if isinstance(e, ToolUnavailableError):
-            raise
+        
+    except ImportError:
         return {
+            "status": "unavailable",
+            "court_defensible": False,
+            "error": "pytesseract not installed. Install with: pip install pytesseract",
             "extracted_text": [],
             "raw_text": "",
+            "word_count": 0,
+            "has_text": False,
             "success": False,
-            "error": f"OCR Extraction Failed: {str(e)}",
+        }
+    except ToolUnavailableError:
+        raise
+    except Exception as e:
+        return {
+            "status": "error",
+            "court_defensible": False,
+            "error": f"OCR extraction failed: {str(e)}",
+            "extracted_text": [],
+            "raw_text": "",
+            "word_count": 0,
+            "has_text": False,
+            "success": False,
+        }
+
+
+async def analyze_image_content(
+    artifact: EvidenceArtifact,
+    custom_categories: Optional[list[str]] = None,
+) -> dict[str, Any]:
+    """
+    Analyze image content using CLIP for semantic understanding.
+
+    Uses zero-shot classification to determine what type of image this is,
+    providing context for forensic analysis. This helps the agent understand
+    whether it's analyzing a document screenshot, surveillance footage,
+    social media post, etc.
+
+    Args:
+        artifact: The evidence artifact to analyze
+        custom_categories: Optional list of custom category descriptions.
+                          If not provided, uses default forensic categories.
+
+    Returns:
+        Dictionary containing:
+        - image_type: Top classification result (what the image depicts)
+        - confidence: Confidence score for the top classification
+        - all_classifications: List of all category scores
+        - semantic_context: Human-readable description of image type
+        - available: Whether CLIP analysis was available
+        - court_defensible: Whether this method is court-defensible
+        - error: Error message if analysis failed
+    """
+    try:
+        from tools.clip_utils import get_clip_analyzer
+
+        original_path = artifact.file_path
+        if not os.path.exists(original_path):
+            raise ToolUnavailableError(f"File not found: {original_path}")
+
+        analyzer = get_clip_analyzer()
+        
+        categories = custom_categories if custom_categories else None
+        result = analyzer.analyze_image(original_path, categories=categories)
+        
+        if not result.available:
+            return {
+                "status": "unavailable",
+                "image_type": "unknown",
+                "confidence": 0.0,
+                "all_classifications": [],
+                "semantic_context": "Image content analysis unavailable",
+                "available": False,
+                "court_defensible": False,
+                "error": result.error or "CLIP model unavailable",
+            }
+        
+        # Generate semantic context based on top match
+        semantic_templates = {
+            "a screenshot of a document": "Document screenshot - text content expected",
+            "an outdoor photograph": "Outdoor scene - natural lighting analysis relevant",
+            "an indoor photograph": "Indoor scene - artificial lighting patterns",
+            "a social media post": "Social media content - metadata gaps expected",
+            "a surveillance camera frame": "Surveillance footage - low quality expected",
+            "a digitally generated or AI image": "Potentially AI-generated - deepfake check recommended",
+            "a scanned photograph": "Scanned photo - print artifacts may be present",
+            "a news article image": "News media - editorial context relevant",
+            "a passport or identification document": "Identity document - security features expected",
+            "a screenshot of a chat conversation": "Chat/messaging screenshot - authenticity check",
+            "a forensic evidence photograph": "Evidence photo - chain of custody critical",
+            "a product or commercial image": "Commercial image - possible manipulation for marketing",
+        }
+        
+        semantic_context = semantic_templates.get(
+            result.top_match,
+            f"Image classified as: {result.top_match}"
+        )
+        
+        return {
+            "status": "real",
+            "image_type": result.top_match,
+            "confidence": result.top_confidence,
+            "all_classifications": [
+                {"category": cat, "score": score}
+                for cat, score in result.all_scores
+            ],
+            "semantic_context": semantic_context,
+            "available": True,
+            "court_defensible": True,
+            "method": "CLIP ViT-B-32 zero-shot classification",
+            "error": None,
+        }
+        
+    except ToolUnavailableError:
+        raise
+    except Exception as e:
+        return {
+            "status": "error",
+            "image_type": "unknown",
+            "confidence": 0.0,
+            "all_classifications": [],
+            "semantic_context": "Image content analysis failed",
+            "available": False,
+            "court_defensible": False,
+            "error": str(e),
         }
