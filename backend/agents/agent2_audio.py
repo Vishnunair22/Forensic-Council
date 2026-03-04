@@ -36,10 +36,10 @@ from tools.audio_tools import (
 class Agent2Audio(ForensicAgent):
     """
     Agent 2 - Audio & Multimedia Forensics Agent.
-    
-    Mandate: Detect audio deepfakes, splices, re-encoding events, 
+
+    Mandate: Detect audio deepfakes, splices, re-encoding events,
     prosody anomalies, and audio-visual sync breaks.
-    
+
     Task Decomposition:
     1. Run speaker diarization - establish voice count baseline
     2. Run anti-spoofing detection on primary speaker segments
@@ -53,7 +53,32 @@ class Agent2Audio(ForensicAgent):
     10. Self-reflection pass
     11. Submit calibrated findings to Arbiter
     """
-    
+
+    def __init__(
+        self,
+        agent_id: str,
+        session_id: uuid.UUID,
+        evidence_artifact: EvidenceArtifact,
+        config: Settings,
+        working_memory: WorkingMemory,
+        episodic_memory: EpisodicMemory,
+        custody_logger: CustodyLogger,
+        evidence_store: EvidenceStore,
+        inter_agent_bus: Any = None,
+    ) -> None:
+        """Initialize Agent 2 with optional inter-agent bus."""
+        super().__init__(
+            agent_id=agent_id,
+            session_id=session_id,
+            evidence_artifact=evidence_artifact,
+            config=config,
+            working_memory=working_memory,
+            episodic_memory=episodic_memory,
+            custody_logger=custody_logger,
+            evidence_store=evidence_store,
+        )
+        self._inter_agent_bus = inter_agent_bus
+
     @property
     def agent_name(self) -> str:
         """Human-readable name of this agent."""
@@ -151,48 +176,40 @@ class Agent2Audio(ForensicAgent):
         seed_val = int(hashlib.md5(str(self.evidence_artifact.artifact_id).encode()).hexdigest()[:8], 16)
         rng = random.Random(seed_val)
         
-        async def audio_visual_sync(input_data: dict) -> dict:
+        async def audio_visual_sync_handler(input_data: dict) -> dict:
             return {
-                "status": "success",
-                "sync_offset_ms": round(rng.uniform(-100.0, 100.0), 1),
-                "is_synchronized": rng.choice([True, True, False])
+                "status": "stub",
+                "court_defensible": False,
+                "warning": "STUB: audio_visual_sync returns fabricated data. Integrate real AV sync detection.",
+                "sync_offset_ms": None,
+                "is_synchronized": None,
             }
-        
-        async def inter_agent_call(input_data: dict) -> dict:
-            """
-            Handle inter-agent communication to Agent4 (Video).
-            
-            Dispatches collaborative calls to Agent4 for flagged timestamps
-            that may have corresponding visual anomalies.
-            """
-            # Create inter-agent call
+
+        async def inter_agent_call_handler(input_data: dict) -> dict:
+            """Real inter-agent call via InterAgentBus."""
+            if self._inter_agent_bus is None:
+                return {"status": "error", "message": "No inter_agent_bus injected"}
+
+            from core.inter_agent_bus import InterAgentCall, InterAgentCallType
             call = InterAgentCall(
-                caller_agent_id="Agent2_Audio",
-                callee_agent_id="Agent4_Video",
-                call_type=InterAgentCallType.COLLABORATIVE,
-                artifact_id=self.evidence_artifact.artifact_id,
+                caller_agent_id=self.agent_id,
+                target_agent_id=input_data.get("target_agent", "agent4"),
+                call_type=InterAgentCallType.CROSS_VERIFY,
                 payload={
                     "timestamp_ref": input_data.get("timestamp_ref"),
-                    "region_ref": input_data.get("region_ref"),
-                    "context_finding": input_data.get("context_finding"),
-                    "question": input_data.get("question", "Please verify visual consistency at flagged timestamp"),
-                },
+                    "question": input_data.get("question", "Confirm audio-visual sync at flagged timestamp"),
+                }
             )
-            
-            # Return call info - actual dispatch happens via InterAgentBus
+            response = await self._inter_agent_bus.send(call)
+            return response
+
+        async def adversarial_robustness_check_handler(input_data: dict) -> dict:
             return {
-                "status": "call_prepared",
-                "call_id": str(call.call_id),
-                "callee": "Agent4_Video",
-                "call_type": "COLLABORATIVE",
-                "note": "Inter-agent call prepared for dispatch via InterAgentBus",
-            }
-        
-        async def adversarial_robustness_check(input_data: dict) -> dict:
-            return {
-                "status": "success",
-                "adversarial_pattern_detected": rng.choice([True, False, False]),
-                "confidence": round(rng.uniform(0.1, 0.9), 2)
+                "status": "stub",
+                "court_defensible": False,
+                "warning": "STUB: adversarial_robustness_check returns fabricated data. Integrate real adversarial testing.",
+                "adversarial_pattern_detected": None,
+                "confidence": None,
             }
         
         # Register tools
@@ -202,9 +219,9 @@ class Agent2Audio(ForensicAgent):
         registry.register("audio_splice_detect", audio_splice_detect_handler, "Run ML-based audio splice detection on segments")
         registry.register("background_noise_analysis", background_noise_analysis_handler, "Background noise consistency analysis")
         registry.register("codec_fingerprinting", codec_fingerprinting_handler, "Codec fingerprinting")
-        registry.register("audio_visual_sync", audio_visual_sync, "Audio-visual sync verification")
-        registry.register("inter_agent_call", inter_agent_call, "Inter-agent communication")
-        registry.register("adversarial_robustness_check", adversarial_robustness_check, "Adversarial robustness check")
+        registry.register("audio_visual_sync", audio_visual_sync_handler, "Audio-visual sync verification")
+        registry.register("inter_agent_call", inter_agent_call_handler, "Inter-agent communication")
+        registry.register("adversarial_robustness_check", adversarial_robustness_check_handler, "Adversarial robustness check")
         
         return registry
     

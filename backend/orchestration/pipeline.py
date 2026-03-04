@@ -362,6 +362,7 @@ class ForensicCouncilPipeline:
                     episodic_memory=self.episodic_memory,
                     custody_logger=self.custody_logger,
                     evidence_store=self.evidence_store,
+                    inter_agent_bus=self.inter_agent_bus,
                 )
                 findings = await agent.run_investigation()
                 return AgentLoopResult(

@@ -46,6 +46,7 @@ async def ela_full_image(
     evidence_store: Optional[EvidenceStore] = None,
     quality: int = 95,
     anomaly_threshold: float = 10.0,
+    multi_quality: bool = True,
 ) -> dict[str, Any]:
     """
     Perform Error Level Analysis (ELA) on an image.
@@ -53,11 +54,17 @@ async def ela_full_image(
     Opens image with Pillow, saves at specified quality, reloads,
     and computes pixel difference to create ELA map.
     
+    Multi-quality sweep: When enabled, re-saves at multiple quality levels
+    (70, 80, 90, 95) and fuses results by taking the maximum ELA across
+    all quality levels. This catches splices that may have survived
+    single re-compression.
+    
     Args:
         artifact: The evidence artifact to analyze
         evidence_store: Optional evidence store for creating derivative artifacts
-        quality: JPEG quality level for re-saving (default 95)
+        quality: JPEG quality level for re-saving (default 95, used when multi_quality=False)
         anomaly_threshold: Threshold for flagging anomaly regions (default 10.0)
+        multi_quality: Enable multi-quality sweep for enhanced detection (default True)
     
     Returns:
         Dictionary containing:
@@ -66,6 +73,8 @@ async def ela_full_image(
         - anomaly_regions: List of BoundingBox regions with elevated anomaly
         - mean_ela: Mean ELA value across image
         - std_ela: Standard deviation of ELA values
+        - quality_levels: List of quality levels used in analysis
+        - multi_quality_fusion: Whether multi-quality fusion was applied
     
     Raises:
         ToolUnavailableError: If file cannot be opened or processed
@@ -84,28 +93,46 @@ async def ela_full_image(
         
         original_array = np.array(original, dtype=np.float64)
         
-        # Save at specified quality and reload
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-            tmp_path = tmp.name
+        # Determine quality levels to use
+        if multi_quality:
+            quality_levels = [70, 80, 90, 95]
+        else:
+            quality_levels = [quality]
+        
+        # Multi-quality sweep: compute ELA at each quality level
+        ela_maps = []
+        temp_files = []
         
         try:
-            original.save(tmp_path, "JPEG", quality=quality)
-            resaved = Image.open(tmp_path)
-            resaved_array = np.array(resaved, dtype=np.float64)
+            for q in quality_levels:
+                # Save at quality level
+                with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                    tmp_path = tmp.name
+                    temp_files.append(tmp_path)
+                
+                original.save(tmp_path, "JPEG", quality=q)
+                resaved = Image.open(tmp_path)
+                resaved_array = np.array(resaved, dtype=np.float64)
+                
+                # Compute ELA map (absolute difference)
+                ela_map = np.abs(original_array - resaved_array)
+                # Convert to grayscale intensity (average across RGB channels)
+                ela_gray = np.mean(ela_map, axis=2)
+                ela_maps.append(ela_gray)
             
-            # Compute ELA map (absolute difference)
-            ela_map = np.abs(original_array - resaved_array)
-            
-            # Convert to grayscale intensity (average across RGB channels)
-            ela_gray = np.mean(ela_map, axis=2)
+            # Fuse: take max across quality levels — maximises sensitivity
+            if len(ela_maps) > 1:
+                combined_ela = np.max(np.stack(ela_maps, axis=0), axis=0)
+            else:
+                combined_ela = ela_maps[0]
             
             # Calculate statistics
-            max_anomaly = float(np.max(ela_gray))
-            mean_ela = float(np.mean(ela_gray))
-            std_ela = float(np.std(ela_gray))
+            max_anomaly = float(np.max(combined_ela))
+            mean_ela = float(np.mean(combined_ela))
+            std_ela = float(np.std(combined_ela))
             
             # Find anomaly regions using threshold
-            anomaly_mask = ela_gray > anomaly_threshold
+            anomaly_mask = combined_ela > anomaly_threshold
             
             # Label connected regions
             labeled_array, num_features = ndimage.label(anomaly_mask)
@@ -133,7 +160,7 @@ async def ela_full_image(
             if evidence_store:
                 # Save ELA map as image
                 ela_image = Image.fromarray(
-                    (ela_gray / max(max_anomaly, 1) * 255).astype(np.uint8)
+                    (combined_ela / max(max_anomaly, 1) * 255).astype(np.uint8)
                 )
                 ela_path = os.path.join(
                     os.path.dirname(original_path),
@@ -154,6 +181,8 @@ async def ela_full_image(
                     agent_id="image_tools",
                     metadata={
                         "quality": quality,
+                        "quality_levels": quality_levels,
+                        "multi_quality_fusion": multi_quality,
                         "max_anomaly": max_anomaly,
                         "anomaly_threshold": anomaly_threshold,
                     }
@@ -165,13 +194,16 @@ async def ela_full_image(
                 "num_anomaly_regions": len(anomaly_regions),
                 "mean_ela": mean_ela,
                 "std_ela": std_ela,
+                "quality_levels": quality_levels,
+                "multi_quality_fusion": multi_quality,
                 "derivative_artifact": derivative_artifact.to_dict() if derivative_artifact else None,
             }
         
         finally:
-            # Clean up temp file
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
+            # Clean up all temp files
+            for tmp_path in temp_files:
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
     
     except Exception as e:
         if isinstance(e, ToolUnavailableError):

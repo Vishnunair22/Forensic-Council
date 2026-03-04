@@ -204,36 +204,108 @@ class Agent5Metadata(ForensicAgent):
         seed_val = int(hashlib.md5(str(self.evidence_artifact.artifact_id).encode()).hexdigest()[:8], 16)
         rng = random.Random(seed_val)
         
-        async def astronomical_api(input_data: dict) -> dict:
+        async def astronomical_api_handler(input_data: dict) -> dict:
+            """
+            Real astronomical validation using astral library.
+            Validates if the claimed timestamp is consistent with sun position at GPS location.
+            """
+            from datetime import datetime
+            from astral import LocationInfo
+            from astral.sun import sun
+
+            try:
+                artifact = input_data.get("artifact") or self.evidence_artifact
+                exif_result = await real_exif_extract(artifact=artifact)
+                gps = exif_result.get("gps_coordinates")
+
+                if not gps:
+                    return {
+                        "status": "no_gps",
+                        "court_defensible": False,
+                        "warning": "No GPS data available for astronomical validation",
+                        "sun_elevation_valid": None,
+                        "moon_phase_consistent": None,
+                    }
+
+                ts = exif_result.get("present_fields", {}).get("DateTimeOriginal", "")
+                if not ts:
+                    return {
+                        "status": "no_timestamp",
+                        "court_defensible": False,
+                        "warning": "No timestamp available for astronomical validation",
+                        "sun_elevation_valid": None,
+                        "moon_phase_consistent": None,
+                    }
+
+                # Parse timestamp
+                try:
+                    # EXIF format: "2023:10:15 14:30:00"
+                    dt = datetime.strptime(ts, "%Y:%m:%d %H:%M:%S")
+                except ValueError:
+                    return {
+                        "status": "parse_error",
+                        "court_defensible": False,
+                        "warning": f"Could not parse timestamp: {ts}",
+                        "sun_elevation_valid": None,
+                        "moon_phase_consistent": None,
+                    }
+
+                # Use astral to calculate sun position
+                loc = LocationInfo(
+                    latitude=gps["latitude"],
+                    longitude=gps["longitude"]
+                )
+                s = sun(loc.observer, date=dt.date())
+
+                claimed_hour = dt.hour + dt.minute / 60.0
+                sunrise_hour = s["sunrise"].hour + s["sunrise"].minute / 60.0
+                sunset_hour = s["sunset"].hour + s["sunset"].minute / 60.0
+
+                is_daytime = sunrise_hour <= claimed_hour <= sunset_hour
+
+                return {
+                    "status": "real",
+                    "court_defensible": True,
+                    "sun_elevation_valid": is_daytime,
+                    "sunrise_utc": str(s["sunrise"]),
+                    "sunset_utc": str(s["sunset"]),
+                    "claimed_time": ts,
+                    "latitude": gps["latitude"],
+                    "longitude": gps["longitude"],
+                    "is_daytime_at_location": is_daytime,
+                }
+            except Exception as e:
+                return {
+                    "status": "error",
+                    "court_defensible": False,
+                    "warning": f"Astronomical calculation failed: {str(e)}",
+                    "sun_elevation_valid": None,
+                    "moon_phase_consistent": None,
+                }
+
+        async def reverse_image_search_handler(input_data: dict) -> dict:
             return {
-                "status": "success",
-                "sun_elevation_matched": rng.choice([True, True, False]),
-                "weather_consistent": rng.choice([True, False]),
-                "estimated_time_variance_mins": round(rng.uniform(0.0, 120.0), 1)
+                "status": "stub",
+                "court_defensible": False,
+                "warning": "STUB: reverse_image_search returns fabricated data. Integrate TinEye API.",
+                "prior_appearance_found": None,
             }
-        
-        async def reverse_image_search(input_data: dict) -> dict:
-            has_match = rng.choice([False, False, False, True])
+
+        async def device_fingerprint_db_handler(input_data: dict) -> dict:
             return {
-                "status": "success",
-                "prior_online_existence_found": has_match,
-                "first_seen_date": "2022-10-14" if has_match else None,
-                "match_urls": ["https://example.com/source_img"] if has_match else []
+                "status": "stub",
+                "court_defensible": False,
+                "warning": "STUB: device_fingerprint_db returns fabricated data. Integrate CameraV DB.",
+                "device_model_matched": None,
             }
-        
-        async def device_fingerprint_db(input_data: dict) -> dict:
+
+        async def adversarial_robustness_check_handler(input_data: dict) -> dict:
             return {
-                "status": "success",
-                "device_model_matched": rng.choice([True, False]),
-                "sensor_defects_found": rng.choice([0, 0, 1, 2]),
-                "prnu_signature_confidence": round(rng.uniform(0.4, 0.95), 2)
-            }
-        
-        async def adversarial_robustness_check(input_data: dict) -> dict:
-            return {
-                "status": "success", 
-                "adversarial_pattern_detected": rng.choice([True, False, False]), 
-                "confidence": round(rng.uniform(0.1, 0.9), 2)
+                "status": "stub",
+                "court_defensible": False,
+                "warning": "STUB: adversarial_robustness_check returns fabricated data. Integrate real adversarial testing.",
+                "adversarial_pattern_detected": None,
+                "confidence": None,
             }
         
         # Register tools
@@ -245,10 +317,10 @@ class Agent5Metadata(ForensicAgent):
         registry.register("hex_signature_scan", hex_signature_scan_handler, "Hexadecimal signature scan for detecting hidden editing software marks")
         registry.register("timestamp_analysis", timestamp_analysis_handler, "Timestamp analysis")
         registry.register("file_hash_verify", file_hash_verify_handler, "File hash verification")
-        registry.register("astronomical_api", astronomical_api, "Astronomical data API queries")
-        registry.register("reverse_image_search", reverse_image_search, "Reverse image search")
-        registry.register("device_fingerprint_db", device_fingerprint_db, "Device fingerprint database lookup")
-        registry.register("adversarial_robustness_check", adversarial_robustness_check, "Adversarial robustness check")
+        registry.register("astronomical_api", astronomical_api_handler, "Astronomical data API queries")
+        registry.register("reverse_image_search", reverse_image_search_handler, "Reverse image search")
+        registry.register("device_fingerprint_db", device_fingerprint_db_handler, "Device fingerprint database lookup")
+        registry.register("adversarial_robustness_check", adversarial_robustness_check_handler, "Adversarial robustness check")
         registry.register("extract_deep_metadata", extract_deep_metadata_handler, "Deep metadata extraction using ExifTool including MakerNotes")
         registry.register("get_physical_address", get_physical_address_handler, "Reverse geocode GPS coordinates to physical address")
         

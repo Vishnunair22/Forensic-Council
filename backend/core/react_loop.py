@@ -165,6 +165,9 @@ class AgentFinding(BaseModel):
     extracted_text: list[str] = Field(
         default_factory=list, description="Text extracted from image via OCR"
     )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Additional metadata including tool results and court_defensible flag"
+    )
 
 
 class ReActLoopResult(BaseModel):
@@ -200,13 +203,41 @@ LLMStepGenerator = Callable[
 class ReActLoopEngine:
     """
     Core ReAct (Reasoning + Acting) loop engine.
-    
+
     Implements the THOUGHT → ACTION → OBSERVATION cycle with:
     - Human-in-the-Loop checkpoints at trigger conditions
     - Graceful degradation on tool unavailability
     - Full audit logging to chain of custody
     """
-    
+
+    # Explicit task→tool mapping for reliable matching
+    _TASK_TOOL_OVERRIDES: dict[str, str] = {
+        "run full-image ela": "ela_full_image",
+        "ela anomaly block classification": "ela_anomaly_classify",
+        "jpeg ghost detection": "jpeg_ghost_detect",
+        "frequency domain analysis": "frequency_domain_analysis",
+        "frequency-domain gan": "deepfake_frequency_check",
+        "verify file hash": "file_hash_verify",
+        "noise footprint analysis": "noise_fingerprint",
+        "speaker diarization": "speaker_diarize",
+        "anti-spoofing detection": "anti_spoofing_detect",
+        "prosody analysis": "prosody_analyze",
+        "splice point detection": "audio_splice_detect",
+        "background noise consistency": "background_noise_analysis",
+        "codec fingerprinting": "codec_fingerprinting",
+        "optical flow": "optical_flow_analyze",
+        "frame-to-frame consistency": "frame_consistency_analysis",
+        "face-swap detection": "face_swap_detection",
+        "extract all exif": "exif_extract",
+        "gps coordinates against timestamp": "gps_timezone_validate",
+        "steganography scan": "steganography_scan",
+        "file structure forensic": "file_structure_analysis",
+        "hexadecimal software signature": "hex_signature_scan",
+        "full-scene primary object detection": "object_detection",
+        "lighting and shadow consistency": "lighting_consistency",
+        "scene-level contextual incongruence": "scene_incongruence",
+    }
+
     def __init__(
         self,
         agent_id: str,
@@ -408,8 +439,32 @@ class ReActLoopEngine:
             react_chain=self._react_chain
         )
 
+    async def _should_trigger_followup(self, task_description: str | None, tool_result: dict) -> str | None:
+        """
+        Return a follow-up tool name if the result warrants deeper analysis,
+        or None if the task can be marked complete.
+        """
+        result_str = str(tool_result).lower()
+
+        # If ELA finds anomalies, follow up with ROI extraction
+        if task_description and "ela" in task_description.lower():
+            if tool_result.get("anomaly_count", 0) > 0:
+                return "roi_extract"
+
+        # If splicing is detected, escalate to noise fingerprint
+        if task_description and "splicing" in task_description.lower():
+            if tool_result.get("splicing_detected", False):
+                return "noise_fingerprint"
+
+        # If GPS is present, validate timezone
+        if task_description and "exif" in task_description.lower():
+            if tool_result.get("gps_latitude") is not None:
+                return "gps_timezone_validate"
+
+        return None
+
     async def check_hitl_triggers(
-        self, 
+        self,
         state: WorkingMemoryState
     ) -> HITLCheckpointReason | None:
         """
@@ -706,7 +761,51 @@ class ReActLoopEngine:
         self._react_chain.append(observation)
         await self._log_step(observation)
 
+        # Check for follow-up actions based on tool results
         output = tool_result.output or {}
+        followup_tool = await self._should_trigger_followup(pending_task.description, output)
+        if followup_tool:
+            # Create a follow-up thought step
+            followup_thought = ReActStep(
+                step_type="THOUGHT",
+                content=f"Tool result indicates need for follow-up analysis with '{followup_tool}'. Scheduling additional investigation.",
+                iteration=self._current_iteration,
+            )
+            self._react_chain.append(followup_thought)
+            await self._log_step(followup_thought)
+
+            # Try to find and trigger the follow-up tool if available
+            followup_match = next((t for t in tools if t.name == followup_tool), None)
+            if followup_match:
+                followup_action = ReActStep(
+                    step_type="ACTION",
+                    content=f"Calling follow-up tool '{followup_match.name}' based on previous findings",
+                    tool_name=followup_match.name,
+                    tool_input={"artifact": None},
+                    iteration=self._current_iteration,
+                )
+                self._react_chain.append(followup_action)
+                await self._log_step(followup_action)
+
+                # Execute follow-up tool
+                followup_result = await tool_registry.call(
+                    tool_name=followup_match.name,
+                    input_data=followup_action.tool_input or {},
+                    agent_id=self.agent_id,
+                    session_id=self.session_id,
+                    custody_logger=self.custody_logger,
+                )
+
+                # Record follow-up observation
+                followup_observation = ReActStep(
+                    step_type="OBSERVATION",
+                    content=self._format_tool_result(followup_result),
+                    tool_name=followup_match.name,
+                    tool_output=followup_result.model_dump(),
+                    iteration=self._current_iteration,
+                )
+                self._react_chain.append(followup_observation)
+                await self._log_step(followup_observation)
         
         # Determine confidence
         status = "CONFIRMED" if tool_result.success else "INCONCLUSIVE"
@@ -753,6 +852,9 @@ class ReActLoopEngine:
             "Agent5": "Metadata Forensics",
         }
 
+        # Check for stub annotation when building AgentFinding
+        is_stub = output.get("status") == "stub" or output.get("court_defensible") is False
+
         finding = AgentFinding(
             agent_id=self.agent_id,
             agent_name=_AGENT_ID_TO_NAME.get(self.agent_id, self.agent_id),
@@ -763,6 +865,12 @@ class ReActLoopEngine:
             reasoning_summary=self._build_readable_summary(
                 best_tool.name, pending_task.description, tool_result, confidence, status
             ),
+            metadata={
+                "tool_name": best_tool.name,
+                "court_defensible": not is_stub,
+                "stub_warning": output.get("warning") if is_stub else None,
+                **output,  # Include all tool output for transparency
+            },
         )
         self._findings.append(finding)
 
@@ -798,9 +906,21 @@ class ReActLoopEngine:
         Match a task description to the best available tool using keyword
         overlap between the task text and tool name/description.
 
+        First checks explicit _TASK_TOOL_OVERRIDES mapping, then falls back
+        to keyword scoring.
+
         Returns the best-matching Tool, or None if no reasonable match.
         """
-        task_lower = task_description.lower()
+        task_lower = task_description.lower().strip()
+
+        # First check explicit overrides
+        for keyword, tool_name in ReActLoopEngine._TASK_TOOL_OVERRIDES.items():
+            if keyword in task_lower:
+                matched = next((t for t in tools if t.name == tool_name), None)
+                if matched:
+                    return matched
+
+        # Fall through to existing scoring logic
         best_tool = None
         best_score = 0
 
