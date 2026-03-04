@@ -20,6 +20,14 @@ Fixed lint errors in `DevErrorOverlay.tsx`.
 
 ---
 
+## 🐛 Backend GPS Key Mismatch — March 04, 2026
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 65 | GPS Key Mismatch in Reactive Follow-up | 🟡 Low | **RESOLVED** | Changed `react_loop.py` line 628 from `gps_latitude` to `gps_coordinates` to match the key returned by `exif_extract_enhanced`. This enables the automatic GPS→timezone follow-up tool call to fire after ELA/EXIF results. |
+
+---
+
 ## 🚨 Additional Critical & Silent Fixes — March 04, 2026
 
 Following the exhaustive audit, these additional issues were identified and resolved.
