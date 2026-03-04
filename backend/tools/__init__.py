@@ -13,6 +13,7 @@ from tools.image_tools import (
     compute_perceptual_hash,
     frequency_domain_analysis,
     extract_text_from_image,
+    analyze_image_content,
 )
 from tools.metadata_tools import (
     exif_extract,
@@ -47,6 +48,7 @@ __all__ = [
     "compute_perceptual_hash",
     "frequency_domain_analysis",
     "extract_text_from_image",
+    "analyze_image_content",
     # Metadata tools
     "exif_extract",
     "gps_timezone_validate",

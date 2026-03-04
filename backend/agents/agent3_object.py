@@ -190,7 +190,12 @@ class Agent3Object(ForensicAgent):
                 return {"error": f"Object detection failed: {e}", "objects_detected": [], "total_count": 0}
         
         async def secondary_classification(input_data: dict) -> dict:
-            return {"status": "success", "refined_classifications": {"person": "adult male", "vehicle": "sedan", "bag": "backpack"}}
+            return {
+                "status": "stub",
+                "court_defensible": False,
+                "warning": "STUB: secondary_classification returns fabricated data. Integrate real zero-shot classifier (e.g., CLIP).",
+                "refined_classifications": None,
+            }
         
         async def scale_validation(input_data: dict) -> dict:
             import cv2, numpy as np
@@ -268,62 +273,41 @@ class Agent3Object(ForensicAgent):
             """
             CLIP zero-shot contextual analysis (upgrade from fake contraband DB).
             
+            Uses shared CLIP utility to avoid loading the model multiple times.
             This does not claim a real weapons registry — it uses semantic similarity,
             which is court-defensible as "contextual analysis" rather than database matching.
             """
-            try:
-                import open_clip
-                import torch
-                from PIL import Image as PILImage
-            except ImportError:
-                return {
-                    "status": "unavailable",
-                    "court_defensible": False,
-                    "error": "CLIP not installed. Install open-clip-torch.",
-                }
+            from tools.clip_utils import get_clip_analyzer
             
             artifact = input_data.get("artifact") or self.evidence_artifact
             
             try:
-                model, _, preprocess = open_clip.create_model_and_transforms(
-                    'ViT-B-32', pretrained='openai'
+                analyzer = get_clip_analyzer()
+                
+                result = analyzer.analyze_image(
+                    artifact.file_path,
+                    categories=None,  # Use default concern categories
+                    check_concerns=True,
                 )
-                tokenizer = open_clip.get_tokenizer('ViT-B-32')
                 
-                img = preprocess(PILImage.open(artifact.file_path)).unsqueeze(0)
-                
-                concern_categories = [
-                    "a firearm or weapon",
-                    "an explosive device",
-                    "drug paraphernalia",
-                    "a knife or bladed weapon",
-                    "a safe everyday object",
-                    "a person",
-                    "a vehicle",
-                ]
-                text_tokens = tokenizer(concern_categories)
-                
-                with torch.no_grad():
-                    img_features = model.encode_image(img)
-                    text_features = model.encode_text(text_tokens)
-                    img_features = img_features / img_features.norm(dim=-1, keepdim=True)
-                    text_features = text_features / text_features.norm(dim=-1, keepdim=True)
-                    similarities = (img_features @ text_features.T).squeeze(0)
-                    probs = similarities.softmax(dim=-1).tolist()
-                
-                scored = sorted(zip(concern_categories, probs), key=lambda x: -x[1])
+                if not result.available:
+                    return {
+                        "status": "unavailable",
+                        "court_defensible": False,
+                        "error": result.error or "CLIP model unavailable",
+                    }
                 
                 return {
                     "status": "real",
                     "court_defensible": True,
-                    "method": "CLIP zero-shot semantic similarity — NOT a weapons registry lookup",
+                    "method": "CLIP zero-shot semantic similarity — NOT a weapons registry lookup (shared model)",
                     "top_matches": [
-                        {"category": cat, "similarity": round(prob, 4)} 
-                        for cat, prob in scored[:3]
+                        {"category": cat, "similarity": score} 
+                        for cat, score in result.all_scores[:3]
                     ],
-                    "concern_flag": scored[0][0] != "a safe everyday object" and scored[0][1] > 0.4,
+                    "concern_flag": result.concern_flag,
                     "available": True,
-                    "backend": "open-clip ViT-B-32",
+                    "backend": "open-clip ViT-B-32 (shared)",
                 }
             except Exception as e:
                 return {

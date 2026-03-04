@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import uuid
 from typing import Any
-import random
-import hashlib
 
 from agents.base_agent import ForensicAgent
 from core.config import Settings
@@ -30,6 +28,7 @@ from tools.image_tools import (
     frequency_domain_analysis as real_frequency_domain_analysis,
     compute_perceptual_hash as real_compute_perceptual_hash,
     extract_text_from_image as real_extract_text_from_image,
+    analyze_image_content as real_analyze_image_content,
 )
 
 
@@ -65,6 +64,7 @@ class Agent1Image(ForensicAgent):
         Exact 8 tasks from architecture document.
         """
         return [
+            "Perform semantic image understanding to identify image type and context",
             "Run full-image ELA and map anomaly regions",
             "Run ELA anomaly block classification on flagged blocks",
             "Isolate and re-analyze all flagged ROIs with noise footprint analysis",
@@ -216,26 +216,33 @@ class Agent1Image(ForensicAgent):
             artifact = input_data.get("artifact") or self.evidence_artifact
             return await real_extract_text_from_image(artifact=artifact)
 
-        # Mock tool handlers with realistic heuristics
-        seed_val = int(hashlib.md5(str(self.evidence_artifact.artifact_id).encode()).hexdigest()[:8], 16)
-        rng = random.Random(seed_val)
-        
+        async def analyze_image_content_handler(input_data: dict) -> dict:
+            """Handle CLIP-based semantic image understanding."""
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            return await real_analyze_image_content(artifact=artifact)
+
+        # Stub tool handlers - properly marked as incomplete
         async def adversarial_robustness_check(input_data: dict) -> dict:
             return {
-                "status": "success",
-                "adversarial_pattern_detected": rng.choice([True, False, False]),
-                "confidence": round(rng.uniform(0.1, 0.9), 2)
+                "status": "stub",
+                "court_defensible": False,
+                "warning": "STUB: adversarial_robustness_check returns fabricated data. Integrate real adversarial testing.",
+                "adversarial_pattern_detected": None,
+                "confidence": None,
             }
-        
+
         async def sensor_db_query(input_data: dict) -> dict:
             return {
-                "status": "success",
-                "sensor_match_found": rng.choice([True, False]),
-                "prnu_variance": round(rng.uniform(0.01, 0.15), 3),
-                "device_probability": round(rng.uniform(0.3, 0.95), 2)
+                "status": "stub",
+                "court_defensible": False,
+                "warning": "STUB: sensor_db_query returns fabricated data. Integrate real camera sensor database.",
+                "sensor_match_found": None,
+                "prnu_variance": None,
+                "device_probability": None,
             }
         
         # Register tools
+        registry.register("analyze_image_content", analyze_image_content_handler, "CLIP-based semantic image understanding for context")
         registry.register("ela_full_image", ela_full_image_handler, "Full-image Error Level Analysis")
         registry.register("roi_extract", roi_extract_handler, "Region of Interest extraction")
         registry.register("jpeg_ghost_detect", jpeg_ghost_detect_handler, "JPEG ghost detection")
@@ -263,8 +270,50 @@ class Agent1Image(ForensicAgent):
         return (
             f"Starting image integrity analysis for artifact "
             f"{self.evidence_artifact.artifact_id}. "
-            f"I will begin with full-image Error Level Analysis to identify "
-            f"potential manipulation regions, then proceed through ROI analysis, "
+            f"I will first perform semantic image understanding to establish context, "
+            f"then proceed with full-image Error Level Analysis to identify "
+            f"potential manipulation regions, followed by ROI analysis, "
             f"JPEG ghost detection, and frequency domain analysis. "
             f"Total tasks to complete: {len(self.task_decomposition)}."
         )
+
+    async def run_investigation(self):
+        """
+        Override to short-circuit when the evidence is not an image file.
+        Returns a clear finding instead of running tools that will fail on audio/video.
+        """
+        from core.react_loop import AgentFinding
+
+        file_path = self.evidence_artifact.file_path.lower()
+        mime = (self.evidence_artifact.metadata or {}).get("mime_type", "").lower()
+
+        # Define audio and video extensions
+        audio_exts = (".wav", ".mp3", ".flac", ".ogg", ".aac", ".m4a", ".wma")
+        video_exts = (".mp4", ".avi", ".mov", ".mkv", ".flv", ".wmv", ".webm")
+
+        is_audio_video = (
+            any(file_path.endswith(e) for e in audio_exts + video_exts)
+            or mime.startswith(("audio/", "video/"))
+        )
+
+        if is_audio_video:
+            finding = AgentFinding(
+                agent_id=self.agent_id,
+                finding_type="File type not applicable",
+                confidence_raw=1.0,
+                status="CONFIRMED",
+                evidence_refs=[],
+                reasoning_summary=(
+                    "Image Integrity Analysis — The uploaded evidence is an audio or video file. "
+                    "Image analysis (ELA, JPEG ghost detection, frequency domain analysis, "
+                    "noise fingerprinting) is not applicable for non-image evidence. "
+                    "No pixel-level analysis performed."
+                ),
+            )
+            self._findings = [finding]
+            self._react_chain = []
+            self._reflection_report = None
+            return self._findings
+
+        # For image files, run the full investigation
+        return await super().run_investigation()
