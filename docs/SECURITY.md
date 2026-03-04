@@ -19,7 +19,7 @@ The system uses an ECDSA deterministic methodology to sign the final `Investigat
 If the key must be rotated:
 1.  Generate a new 32-byte hex.
 2.  Update `SIGNING_KEY` in the `.env` root file.
-3.  Restart the backend container: `docker compose up -d --force-recreate backend`
+3.  Restart the backend container: `docker compose -f docker/docker-compose.yml --env-file .env up -d --force-recreate backend`
 **Note:** Old reports accessed via the API or stored in Postgres will fail signature verification against the new key. This is expected and ensures temporal separation of evidence custody boundaries.
 
 ## Reporting a Vulnerability

@@ -472,7 +472,7 @@
 **Path:** `tests/infra/` (shell scripts + docker-compose assertions)
 
 ### Service Health
-- [ ] `docker compose up -d` starts all 5 services without error
+- [ ] `docker compose -f docker/docker-compose.yml --env-file .env up -d` starts all 5 services without error
 - [ ] `forensic_redis` health check passes within 30s
 - [ ] `forensic_postgres` health check passes within 30s
 - [ ] `forensic_qdrant` is reachable at `localhost:6333`
@@ -484,9 +484,9 @@
 - [ ] Frontend does not start until backend health check passes
 
 ### Persistence
-- [ ] Data written to Postgres persists across `docker compose restart`
-- [ ] Data written to Qdrant persists across `docker compose restart`
-- [ ] Data written to Redis persists across `docker compose restart` (AOF/RDB enabled)
+- [ ] Data written to Postgres persists across `docker compose -f docker/docker-compose.yml --env-file .env restart`
+- [ ] Data written to Qdrant persists across `docker compose -f docker/docker-compose.yml --env-file .env restart`
+- [ ] Data written to Redis persists across `docker compose -f docker/docker-compose.yml --env-file .env restart` (AOF/RDB enabled)
 
 ### Environment Variables
 - [ ] `POSTGRES_USER` and `POSTGRES_PASSWORD` are read from env (not hardcoded)

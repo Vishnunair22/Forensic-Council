@@ -63,10 +63,18 @@ storage/keys/*
 
 # Docker
 Dockerfile*
-docker-compose*.yml
 .dockerignore
 
 # Misc
 *.log
 .DS_Store
 Thumbs.db
+
+# Tests (never needed in production image)
+tests/
+docs/
+
+# Root-level dev scripts
+test_exif.py
+test_exif_sync.py
+create_fixture.py

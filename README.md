@@ -70,7 +70,7 @@ cp .env.example .env
 cp backend/.env.example backend/.env
 
 # Start infrastructure (databases)
-docker compose -f docker-compose.infra.yml up -d
+docker compose -f docker/docker-compose.infra.yml --env-file .env up -d
 
 # Run backend natively (with hot reload)
 cd backend && uv run uvicorn api.main:app --reload --port 8000

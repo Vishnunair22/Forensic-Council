@@ -13,7 +13,7 @@ echo -e "${YELLOW}=== Forensic Council Smoke Test ===${NC}"
 
 # 1. Check infrastructure
 echo -e "\n${YELLOW}[1/8] Checking infrastructure containers...${NC}"
-docker compose -f ../docker-compose.yml ps | grep -E "forensic_(redis|qdrant|postgres)" | grep "healthy" | wc -l | xargs -I {} bash -c 'if [ {} -eq 3 ]; then echo -e "${GREEN}All 3 containers healthy${NC}"; else echo -e "${RED}Not all containers healthy — run: docker compose up -d${NC}"; exit 1; fi' || echo -e "${YELLOW}Note: Containers may not be running. Continuing...${NC}"
+docker compose -f ../../docker/docker-compose.yml ps | grep -E "forensic_(redis|qdrant|postgres)" | grep "healthy" | wc -l | xargs -I {} bash -c 'if [ {} -eq 3 ]; then echo -e "${GREEN}All 3 containers healthy${NC}"; else echo -e "${RED}Not all containers healthy — run: docker compose up -d${NC}"; exit 1; fi' || echo -e "${YELLOW}Note: Containers may not be running. Continuing...${NC}"
 
 # 2. Check DB schema
 echo -e "\n${YELLOW}[2/8] Verifying database schema...${NC}"

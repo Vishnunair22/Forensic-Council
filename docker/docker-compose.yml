@@ -4,9 +4,9 @@
 # This file defines shared service definitions. It is not meant to be used
 # directly. Use one of the following:
 #
-#   Development (native):  docker compose -f docker-compose.infra.yml up -d
-#   Development (Docker):  docker compose up --build
-#   Production:            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#   Development (native):  docker compose -f docker/docker-compose.infra.yml --env-file .env up -d
+#   Development (Docker):  docker compose -f docker/docker-compose.yml --env-file .env up --build
+#   Production:            docker compose -f docker/docker-compose.yml -f docker/docker-compose.prod.yml --env-file .env up -d
 # ============================================================================
 
 services:
@@ -79,7 +79,7 @@ services:
   # --------------------------------------------------------------------------
   backend:
     build:
-      context: ./backend
+      context: ../backend
       dockerfile: Dockerfile
     container_name: forensic_api
     ports:
@@ -100,7 +100,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-forensic_pass}
       - POSTGRES_DB=${POSTGRES_DB:-forensic_council}
       # DATABASE_URL removed - not read by app (core/config.py builds URL from postgres_* vars)
-      - SIGNING_KEY=${SIGNING_KEY:?SIGNING_KEY must be set — run: python -c "import secrets; print(secrets.token_hex(32))"}}
+      - SIGNING_KEY=${SIGNING_KEY:?SIGNING_KEY must be set — run: python -c "import secrets; print(secrets.token_hex(32))"}
       - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-["http://localhost:3001","http://localhost:3000"]}
       - HF_TOKEN=${HF_TOKEN:-}
@@ -133,12 +133,12 @@ services:
       - /root/.cache:nosuid,size=2g  # HuggingFace model cache
     volumes:
       - evidence_data:/app/storage/evidence
-      - ./backend/storage/keys:/app/storage/keys:ro
+      - ../backend/storage/keys:/app/storage/keys:ro
       - hf_cache:/tmp/huggingface
 
   frontend:
     build:
-      context: ./frontend
+      context: ../frontend
       dockerfile: Dockerfile
     container_name: forensic_ui
     ports:

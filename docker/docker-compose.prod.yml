@@ -3,7 +3,7 @@
 # ============================================================================
 # Use this file explicitly for production deployments:
 #
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#   docker compose -f docker/docker-compose.yml -f docker/docker-compose.prod.yml --env-file .env up -d
 #
 # This configuration:
 #   - Uses pre-built images from a registry (configure IMAGE_TAG)
