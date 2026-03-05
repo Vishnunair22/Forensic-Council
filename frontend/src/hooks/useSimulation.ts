@@ -150,7 +150,8 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                     });
                                 }
                             }
-                            await new Promise(resolve => setTimeout(resolve, 50));
+                            // Add a 5 second delay between agents instead of 50ms
+                            await new Promise(resolve => setTimeout(resolve, 5000));
                             break;
 
                         case "HITL_CHECKPOINT":
@@ -208,7 +209,8 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                     }
                                 }
                             }
-                            await new Promise(resolve => setTimeout(resolve, 50));
+                            // Ensure 5 second delay between completions
+                            await new Promise(resolve => setTimeout(resolve, 5000));
                             break;
 
                         case "PIPELINE_COMPLETE":

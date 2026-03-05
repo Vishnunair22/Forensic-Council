@@ -27,10 +27,15 @@ services:
     environment:
       - DEBUG=true
       - LOG_LEVEL=DEBUG
-    # Mount source for hot-reloadable development
-    # volumes:
-    #   - ../backend:/app   # Uncomment for hot reload (requires CMD override)
-    command: [ "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload" ]
+      - RELOAD=true
+    # Mount specific source directories for hot-reload (doesn't override .venv)
+    volumes:
+      - ../backend/api:/app/api
+      - ../backend/core:/app/core
+      - ../backend/orchestration:/app/orchestration
+      - ../backend/tools:/app/tools
+      - ../backend/scripts:/app/scripts
+    command: ["/app/.venv/bin/python", "scripts/run_api.py"]
 
   frontend:
     environment:
