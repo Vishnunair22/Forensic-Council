@@ -148,20 +148,6 @@ class Settings(BaseSettings):
         """Get the effective JWT secret key."""
         return self.jwt_secret_key or self.signing_key
     
-    @field_validator("signing_key")
-    @classmethod
-    def validate_signing_key(cls, v: str, info) -> str:
-        """Block empty or insecure signing keys."""
-        if not v or len(v.strip()) == 0:
-            raise ValueError(
-                "SIGNING_KEY cannot be empty. Generate one with: "
-                "python -c \"import secrets; print(secrets.token_hex(32))\""
-            )
-        data = info.data if hasattr(info, 'data') else {}
-        env = data.get("app_env", "development")
-        if env == "production" and ("change" in v.lower() or "default" in v.lower()):
-            raise ValueError("SIGNING_KEY must be changed from the default for production!")
-        return v
     
     @field_validator("jwt_secret_key")
     @classmethod
@@ -227,13 +213,20 @@ class Settings(BaseSettings):
     @field_validator("signing_key")
     @classmethod
     def validate_signing_key(cls, v: str, info) -> str:
-        """Block insecure default signing keys in production."""
-        data = info.data if hasattr(info, 'data') else {}
+        """Block empty or insecure signing keys in all environments."""
+        if not v or not v.strip():
+            raise ValueError(
+                "SIGNING_KEY cannot be empty. Generate one with: "
+                "python -c \"import secrets; print(secrets.token_hex(32))\""
+            )
+        data = info.data if hasattr(info, "data") else {}
         env = data.get("app_env", "development")
-        if env == "production" and ("change" in v.lower() or "default" in v.lower() or "dev" in v.lower()):
+        if env == "production" and any(
+            word in v.lower() for word in ("change", "default", "dev", "example")
+        ):
             raise ValueError(
                 "SIGNING_KEY must be changed from the default for production! "
-                "Set a strong, unique key via the SIGNING_KEY environment variable."
+                "Generate with: python -c \"import secrets; print(secrets.token_hex(32))\""
             )
         return v
 

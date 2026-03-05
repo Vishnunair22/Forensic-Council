@@ -7,6 +7,21 @@ This log tracks significant errors, architectural flaws, and their subsequent re
 
 ---
 
+## 🐛 Critical Dependency & Code Fixes — March 05, 2026
+
+Following the comprehensive dependency audit, these issues were identified and resolved.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 158 | uv.lock specifier mismatch — numpy>=1.26 vs >=1.26,<2.0 | 🔴 Build Blocker | **RESOLVED** | Ran `uv lock` in backend to regenerate lockfile with numpy capped at <2.0 for moviepy 1.x compat. |
+| 159 | package-lock.json resolves zod 4.3.6 despite package.json ^3.23.8 | 🔴 Wrong Dependency | **RESOLVED** | Ran `npm install` in frontend to regenerate lockfile with zod 3.x. |
+| 160 | Duplicate validate_signing_key — second overwrites first | 🔴 Security Bug | **RESOLVED** | Deleted first validator at line 151, merged with second validator at line 227 to include empty-string check in all environments. |
+| 161 | pyannote.audio 4.x removed use_auth_token= parameter | 🔴 Runtime Silent | **RESOLVED** | Changed `use_auth_token=` to `token=` in audio_tools.py line 686. |
+| 162 | ts-jest 29.4.6 incompatible with jest 30.2.0 | 🟠 Tests Broken | **RESOLVED** | Downgraded jest to ^29.7.0 and ts-jest to ^29.4.6 (compatible versions). |
+| 163 | metadata_tools.py duplicate import | 🟡 Code Quality | **RESOLVED** | Removed duplicate `from typing import Any, Optional` at line 17. |
+
+---
+
 ## 🐛 v0.7.2 Fixes — March 05, 2026
 
 Following the v0.7.1 review, these issues were identified and resolved.
