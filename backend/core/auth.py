@@ -6,6 +6,7 @@ JWT-based authentication using FastAPI security utilities.
 Provides token generation, validation, and dependency injection for protected routes.
 """
 
+import warnings
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Optional
@@ -15,6 +16,9 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
+
+# Suppress passlib warning about bcrypt.__version__ attribute removed in bcrypt>=4.0
+warnings.filterwarnings("ignore", ".*error reading bcrypt version.*", UserWarning)
 
 from core.config import get_settings
 from core.logging import get_logger

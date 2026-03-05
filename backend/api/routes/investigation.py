@@ -386,13 +386,13 @@ async def _wrap_pipeline_with_broadcasts(
 
 async def run_investigation_task(
     session_id: str,
+    pipeline: ForensicCouncilPipeline,  # R1 FIX: Accept pre-created pipeline
     evidence_file_path: str,
     case_id: str,
     investigator_id: str,
 ):
     """Background task to run the investigation with timeout protection."""
-    pipeline = ForensicCouncilPipeline()
-    _active_pipelines[session_id] = pipeline
+    # R1 FIX: Pipeline already registered in _active_pipelines by caller
     error_msg = None
 
     try:
@@ -592,9 +592,14 @@ async def investigate(
 
     try:
         # R2: Track background task for graceful shutdown
+        # R1 FIX: Register pipeline BEFORE creating task to avoid WebSocket race condition
+        pipeline = ForensicCouncilPipeline()
+        _active_pipelines[session_id] = pipeline
+        
         task = asyncio.create_task(
             run_investigation_task(
                 session_id=session_id,
+                pipeline=pipeline,               # Pass pre-created pipeline
                 evidence_file_path=evidence_file_path,
                 case_id=case_id,
                 investigator_id=investigator_id,

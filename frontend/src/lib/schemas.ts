@@ -6,6 +6,7 @@ export const AgentResultSchema = z.object({
     role: z.string(),
     result: z.string(),
     confidence: z.number(),
+    thinking: z.string().optional(),
 });
 
 export const ReportSchema = z.object({
