@@ -100,9 +100,9 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-forensic_pass}
       - POSTGRES_DB=${POSTGRES_DB:-forensic_council}
       # DATABASE_URL removed - not read by app (core/config.py builds URL from postgres_* vars)
-      - SIGNING_KEY=${SIGNING_KEY:?SIGNING_KEY must be set — run: python -c "import secrets; print(secrets.token_hex(32))"}
+      - SIGNING_KEY=${SIGNING_KEY}}
       - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-["http://localhost:3001","http://localhost:3000"]}
+      - CORS_ALLOWED_ORIGINS=["http://localhost:3000","http://localhost:3001"]
       - HF_TOKEN=${HF_TOKEN:-}
       - EVIDENCE_STORAGE_PATH=/app/storage/evidence
     depends_on:

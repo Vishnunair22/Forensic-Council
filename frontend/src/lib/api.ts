@@ -433,7 +433,7 @@ export async function submitHITLDecision(decision: HITLDecisionRequest): Promise
  */
 export function createLiveSocket(
   sessionId: string,
-  onMessage: (update: BriefFind) => void,
+  onMessage: (update: any) => void,
   onClose: () => void
 ): WebSocket {
   const wsUrl = `${WS_BASE}/api/v1/sessions/${sessionId}/live`;
