@@ -1,9 +1,46 @@
 # Forensic Council — Error Log & Resolution Audit
 
 **Date:** 2026-03-05
-**Status:** All v0.7.3 Issues Resolved - Ready for Private Beta
+**Status:** v1.0.0 — All Issues Resolved — Production Ready
 
 This log tracks significant errors, architectural flaws, and their subsequent resolutions.
+
+---
+
+## 🐛 Fresh Docker Build Fixes — March 05, 2026
+
+Following the fresh Docker build, these syntax errors were discovered and resolved.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 207 | Syntax error in `frontend/src/lib/api.ts` - malformed `\n` escape in code | 🔴 Build Failure | **RESOLVED** | Removed the escaped newline character from line 260 in the `handleAuthError` function - changed `operation();\n    resetAuthRetry()` to `operation();\n    resetAuthRetry()`. |
+| 208 | Syntax error in `backend/agents/agent5_metadata.py` - extra closing brace | 🔴 Build Failure | **RESOLVED** | Removed duplicate closing brace at line 297 in the astronomical calculation section. |
+
+---
+
+## ✅ v1.0.0 Production Readiness Audit — March 05, 2026
+
+Final comprehensive audit completed. All issues below were identified and resolved in this pass.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 195 | README.md says "Next.js 16" — actual version is 15.3.0 | 🟡 Documentation | **RESOLVED** | Changed to "Next.js 15" in architecture diagram and tech stack table. |
+| 196 | Backend Dockerfile pins `uv` to `latest` (non-deterministic) | 🟠 Build Reliability | **RESOLVED** | Pinned to `ghcr.io/astral-sh/uv:0.6.6`. |
+| 197 | ESLint flat config uses deprecated `extends` key | 🟠 Build Failure | **RESOLVED** | Converted to `FlatCompat` adapter from `@eslint/eslintrc`. |
+| 198 | `.gitignore` missing `node_modules/`, `.next/`, `coverage/` | 🟡 Hygiene | **RESOLVED** | Added all missing patterns. |
+| 199 | Development-Status.md says "Sequential execution" but code uses `asyncio.gather` | 🟡 Documentation | **RESOLVED** | Updated to "Concurrent execution via asyncio.gather". |
+| 200 | `docker-compose.override.yml` `command: --reload` conflicts with `read_only: true` | 🟠 Dev Workflow | **RESOLVED** | Added `read_only: false` override. |
+| 201 | Version fields inconsistent (0.1.0 in configs, 0.8.0 in docs) | 🟡 Consistency | **RESOLVED** | Aligned all to 1.0.0: pyproject.toml, package.json, Development-Status.md, CHANGELOG.md. |
+| 202 | `forensic-council-1.0-roadmap.docx` in source tree | 🟢 Cleanup | **RESOLVED** | Deleted — non-code planning artifact. |
+| 203 | `backend/docs/agent_capabilities.md` duplicates `docs/agent_capabilities.md` | 🟢 Cleanup | **RESOLVED** | Deleted `backend/docs/` directory. |
+| 204 | 5 scaffolding SVGs in `frontend/public/` | 🟢 Cleanup | **RESOLVED** | Deleted `file.svg`, `globe.svg`, `next.svg`, `vercel.svg`, `window.svg`. |
+| 205 | `hash_demo.py` trivial demo script in production tree | 🟢 Cleanup | **RESOLVED** | Deleted from `backend/scripts/`. |
+| 206 | `frontend/dev-guide.md` redundant with `docs/` | 🟢 Cleanup | **RESOLVED** | Deleted. |
+| 207 | Agent findings presented as raw code outputs | 🟠 UI Parsing | **RESOLVED** | Stripped markdown from `_build_readable_summary`; removed concatenation block in `investigation.py` to preserve pure lists of clean text per-agent summaries. |
+| 208 | Results page missing per-agent individual insights | 🟠 UI Feature | **RESOLVED** | Added collapsible 2-column "See Agent Findings" grid block to `result/page.tsx`, updating `AgentResponseText.tsx` character-clipping for cleanly framed layouts. |
+| 209 | Landing page "Initiate Analysis" CTA required double-click to navigate | 🟠 UX | **RESOLVED** | Added `isTransitioning` state in frontend `page.tsx` to prevent multiple rapid clicks and handle smooth route transitions. |
+| 210 | Evidence analysis page Agent cards stacked vertically, wasting space | 🟡 UI Layout | **RESOLVED** | Transformed standard stacked layout (`space-y-4`) into responsive 2-column CSS Grid (`grid-cols-1 md:grid-cols-2 gap-4`) in `evidence/page.tsx` for a more organized display. |
+| 211 | Missing auditory feedback for key events in analysis flow | 🟡 UX | **RESOLVED** | Added sound effect triggers across UI flow: `upload` sound on initiate CTA, `think` when a new agent activates in `useSimulation.ts`, `agent` on individual complete, `complete` on full completion, and `success` on result page load. |
 
 ---
 

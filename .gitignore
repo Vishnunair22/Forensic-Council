@@ -11,6 +11,8 @@ build/
 .venv/
 venv/
 *.so
+*.whl
+.pytest_cache/
 
 # Environment files
 .env
@@ -26,17 +28,21 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Node / Frontend
+node_modules/
+.next/
+out/
+coverage/
+
 # Docker
 
 # Storage (runtime data)
 backend/storage/evidence/
 backend/storage/calibration_models/
+backend/storage/keys/
 
 # Logs
 *.log
-
-# Private keys - NEVER commit these!
-backend/storage/keys/*.pem
 
 # Frontend lint artifacts
 frontend/lint.json

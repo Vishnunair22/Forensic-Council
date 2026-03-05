@@ -48,6 +48,7 @@ export default function ResultPage() {
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<"result" | "history">("result");
     const [detailsExpanded, setDetailsExpanded] = useState(false);
+    const [agentFindingsOpen, setAgentFindingsOpen] = useState(false);
 
     // Use Hook
     const { history, currentReport, deleteFromHistory, clearHistory, isLoading } = useForensicData();
@@ -577,108 +578,140 @@ export default function ResultPage() {
                                         </div>
                                     )}
 
-                                    {/* --- TIER 3: Primary Agent Findings Grid --- */}
-                                    <div className="mt-6 mb-8">
-                                        <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-3">
-                                            <Database className="w-6 h-6 text-emerald-400" /> Primary Agent Findings
-                                        </h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            {(() => {
-                                                const validCards: JSX.Element[] = [];
+                                    {/* --- Collapsible: See Agent Findings --- */}
+                                    {(() => {
+                                        const validCards: JSX.Element[] = [];
 
-                                                if (realReport?.per_agent_findings) {
-                                                    Object.entries(realReport.per_agent_findings).forEach(([agentId, findings]) => {
-                                                        findings.forEach((f: any, idx: number) => {
-                                                            if (!VALID_AGENTS.has(f.agent_name || "")) return;
+                                        if (realReport?.per_agent_findings) {
+                                            Object.entries(realReport.per_agent_findings).forEach(([agentId, findings]) => {
+                                                findings.forEach((f: any, idx: number) => {
+                                                    if (!VALID_AGENTS.has(f.agent_name || "")) return;
 
-                                                            const isComplete = f.status !== "INCOMPLETE";
-                                                            const conf = f.calibrated_probability ?? f.confidence_raw ?? 0;
-                                                            const confColor = conf >= 0.7 ? "text-emerald-400" : conf >= 0.4 ? "text-amber-400" : "text-red-400";
-                                                            const agentStyle = DOMAIN_STYLES[DOMAIN_MAP[agentId]?.color || "slate"];
+                                                    const isComplete = f.status !== "INCOMPLETE";
+                                                    const conf = f.calibrated_probability ?? f.confidence_raw ?? 0;
+                                                    const confColor = conf >= 0.7 ? "text-emerald-400" : conf >= 0.4 ? "text-amber-400" : "text-red-400";
+                                                    const domainInfo = DOMAIN_MAP[agentId];
+                                                    const color = domainInfo?.color || "slate";
+                                                    const dStyle = DOMAIN_STYLES[color] || DOMAIN_STYLES.slate;
 
-                                                            validCards.push(
-                                                                <div key={`${agentId}-${idx}`} className={`flex flex-col h-full rounded-3xl p-6 border transition-all ${isComplete ? "bg-slate-900/60 border-white/10 hover:border-emerald-500/30 shadow-[0_4px_20px_rgba(0,0,0,0.5)]" : "bg-slate-900/30 border-white/5 opacity-70 grayscale-[0.8]"}`}>
-                                                                    <div className="flex items-start justify-between mb-5 pb-5 border-b border-white/5">
-                                                                        <div className="flex items-center gap-4">
-                                                                            <div className={`w-12 h-12 rounded-2xl bg-black/60 border border-white/5 flex items-center justify-center shrink-0 shadow-inner ${isComplete ? 'group-hover:scale-105 transition-transform' : ''}`}>
-                                                                                <AgentIcon role={f.finding_type || "analysis"} />
-                                                                            </div>
-                                                                            <div>
-                                                                                <h4 className="font-bold text-slate-100 text-lg tracking-tight">{f.agent_name || agentId}</h4>
-                                                                                <p className="text-[10px] text-slate-400 uppercase font-mono tracking-widest mt-1 opacity-80">{f.finding_type || "Analysis"}</p>
-                                                                            </div>
-                                                                        </div>
-
-                                                                        <div className="text-right shrink-0">
-                                                                            {isComplete ? (
-                                                                                <>
-                                                                                    <span className={`text-base font-mono font-black ${confColor}`}>
-                                                                                        {Math.round(conf * 100)}%
-                                                                                    </span>
-                                                                                    <span className="text-[9px] text-slate-500 uppercase font-mono tracking-widest block mt-0.5">Confidence</span>
-                                                                                </>
-                                                                            ) : (
-                                                                                <span className="text-xs font-mono font-bold bg-slate-800 text-slate-400 px-3 py-1 rounded-full border border-white/10 uppercase tracking-widest">
-                                                                                    Incomplete
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
+                                                    validCards.push(
+                                                        <div key={`${agentId}-${idx}`} className={`flex flex-col h-full rounded-2xl p-5 border transition-all ${isComplete ? `bg-black/40 border-white/5 ${dStyle.borderHover} shadow-inner` : "bg-slate-900/30 border-white/5 opacity-70 grayscale-[0.8]"}`}>
+                                                            <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/5">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className={`w-10 h-10 rounded-xl ${dStyle.bgLight} border ${dStyle.borderLight} flex items-center justify-center shrink-0`}>
+                                                                        <AgentIcon role={f.finding_type || "analysis"} />
                                                                     </div>
-
-                                                                    <div className="flex-1 w-full min-w-0">
-                                                                        <AgentResponseText text={f.reasoning_summary || "No specific details provided."} className="text-sm text-slate-300 leading-relaxed font-normal w-full" />
-                                                                    </div>
-
-                                                                    {f.robustness_caveat && (
-                                                                        <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-                                                                            <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-1 flex items-center gap-1">
-                                                                                <AlertTriangle className="w-3 h-3" /> Robustness Caveat
-                                                                            </p>
-                                                                            <p className="text-xs text-amber-200/80 leading-snug">{f.robustness_caveat_detail || "Results may be subject to adversarial evasion."}</p>
-                                                                        </div>
-                                                                    )}
-
-                                                                    {f.court_statement && (
-                                                                        <div className="mt-4 p-4 bg-slate-950/60 border border-slate-700/50 rounded-xl relative overflow-hidden">
-                                                                            <div className="absolute top-0 left-0 w-1 h-full bg-slate-500/50" />
-                                                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5 ml-1">
-                                                                                <Shield className="w-3 h-3" /> External Court Statement
-                                                                            </p>
-                                                                            <p className="text-sm text-slate-300 italic font-medium leading-relaxed ml-1">{f.court_statement}</p>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            );
-                                                        });
-                                                    });
-                                                } else if (currentReport?.agents) {
-                                                    // Fallback for pre-DTO sessions
-                                                    currentReport.agents.forEach((agent: any, i: number) => {
-                                                        validCards.push(
-                                                            <div key={`legacy-${i}`} className="flex flex-col h-full rounded-3xl p-6 border bg-slate-900/60 border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
-                                                                <div className="flex items-start justify-between mb-5 pb-5 border-b border-white/5">
-                                                                    <div className="flex items-center gap-4">
-                                                                        <div className="w-12 h-12 rounded-2xl bg-black/60 border border-white/5 flex items-center justify-center shrink-0">
-                                                                            <AgentIcon role={agent.role} />
-                                                                        </div>
-                                                                        <div>
-                                                                            <h4 className="font-bold text-slate-100 text-lg">{agent.name}</h4>
-                                                                            <p className="text-[10px] text-slate-400 uppercase font-mono">{agent.role}</p>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="text-right shrink-0">
-                                                                        <span className="text-base font-mono font-black text-emerald-400">{Math.round((agent.confidence || 0) * 100)}%</span>
+                                                                    <div>
+                                                                        <h4 className="font-bold text-slate-100 text-sm tracking-tight">{f.agent_name || agentId}</h4>
+                                                                        <p className={`text-[10px] uppercase font-mono tracking-widest mt-0.5 ${dStyle.text}`}>{f.finding_type || "Analysis"}</p>
                                                                     </div>
                                                                 </div>
-                                                                <AgentResponseText text={agent.result || ""} className="text-sm text-slate-300 leading-relaxed font-normal w-full" />
+                                                                <div className="text-right shrink-0">
+                                                                    {isComplete ? (
+                                                                        <>
+                                                                            <span className={`text-sm font-mono font-black ${confColor}`}>
+                                                                                {Math.round(conf * 100)}%
+                                                                            </span>
+                                                                            <span className="text-[9px] text-slate-500 uppercase font-mono tracking-widest block mt-0.5">Conf</span>
+                                                                        </>
+                                                                    ) : (
+                                                                        <span className="text-[10px] font-mono font-bold bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-white/10 uppercase tracking-widest">
+                                                                            Incomplete
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                        );
-                                                    });
-                                                }
-                                                return validCards.length > 0 ? validCards : <p className="text-slate-500 italic px-4">No agent findings available.</p>;
-                                            })()}
-                                        </div>
-                                    </div>
+                                                            <div className="flex-1 w-full min-w-0">
+                                                                <AgentResponseText text={f.reasoning_summary || "No specific details provided."} className="text-sm text-slate-300 leading-relaxed font-normal w-full" />
+                                                            </div>
+
+                                                            {f.robustness_caveat && (
+                                                                <div className="mt-3 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                                                                    <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-0.5 flex items-center gap-1">
+                                                                        <AlertTriangle className="w-3 h-3" /> Robustness Caveat
+                                                                    </p>
+                                                                    <p className="text-xs text-amber-200/80 leading-snug">{f.robustness_caveat_detail || "Results may be subject to adversarial evasion."}</p>
+                                                                </div>
+                                                            )}
+
+                                                            {f.court_statement && (
+                                                                <div className="mt-3 p-3 bg-slate-950/60 border border-slate-700/50 rounded-lg relative overflow-hidden">
+                                                                    <div className="absolute top-0 left-0 w-1 h-full bg-slate-500/50" />
+                                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5 ml-1">
+                                                                        <Shield className="w-3 h-3" /> Court Statement
+                                                                    </p>
+                                                                    <p className="text-sm text-slate-300 italic font-medium leading-relaxed ml-1">{f.court_statement}</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                });
+                                            });
+                                        } else if (currentReport?.agents) {
+                                            currentReport.agents.forEach((agent: any, i: number) => {
+                                                validCards.push(
+                                                    <div key={`legacy-${i}`} className="flex flex-col h-full rounded-2xl p-5 border bg-black/40 border-white/5 hover:border-emerald-500/30 transition-colors shadow-inner">
+                                                        <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/5">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                                                                    <AgentIcon role={agent.role} />
+                                                                </div>
+                                                                <div>
+                                                                    <h4 className="font-bold text-slate-100 text-sm">{agent.name}</h4>
+                                                                    <p className="text-[10px] text-slate-400 uppercase font-mono tracking-widest">{agent.role}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right shrink-0">
+                                                                <span className="text-sm font-mono font-black text-emerald-400">{Math.round((agent.confidence || 0) * 100)}%</span>
+                                                            </div>
+                                                        </div>
+                                                        <AgentResponseText text={agent.result || ""} className="text-sm text-slate-300 leading-relaxed font-normal w-full" />
+                                                    </div>
+                                                );
+                                            });
+                                        }
+
+                                        if (validCards.length === 0) return null;
+
+                                        return (
+                                            <div className="rounded-3xl bg-slate-900/40 border border-white/10 overflow-hidden mt-6">
+                                                <button
+                                                    onClick={() => setAgentFindingsOpen(!agentFindingsOpen)}
+                                                    className="w-full px-6 py-5 border-b border-white/5 flex items-center gap-3 hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                                                    aria-expanded={agentFindingsOpen}
+                                                >
+                                                    <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                                                        <Database className="w-5 h-5 text-emerald-400" />
+                                                    </div>
+                                                    <div className="text-left">
+                                                        <h3 className="font-bold text-white text-base">See Agent Findings</h3>
+                                                        <p className="text-xs text-slate-500 font-mono mt-0.5 uppercase tracking-widest">Individual analysis from each specialist agent</p>
+                                                    </div>
+                                                    <span className="ml-auto text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full mr-3">
+                                                        {validCards.length} {validCards.length === 1 ? "finding" : "findings"}
+                                                    </span>
+                                                    <ChevronDown className={`w-5 h-5 text-slate-500 transition-transform duration-300 ${agentFindingsOpen ? 'rotate-180' : ''}`} />
+                                                </button>
+
+                                                <AnimatePresence>
+                                                    {agentFindingsOpen && (
+                                                        <motion.div
+                                                            initial={{ height: 0, opacity: 0 }}
+                                                            animate={{ height: "auto", opacity: 1 }}
+                                                            exit={{ height: 0, opacity: 0 }}
+                                                            transition={{ duration: 0.3 }}
+                                                        >
+                                                            <div className="p-6 bg-black/20">
+                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                    {validCards}
+                                                                </div>
+                                                            </div>
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </div>
+                                        );
+                                    })()}
 
                                     {/* Action Buttons */}
                                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-10 pb-6">

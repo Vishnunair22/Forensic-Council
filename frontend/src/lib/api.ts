@@ -257,7 +257,8 @@ async function handleAuthError<T>(
   errorMessage: string
 ): Promise<T> {
   try {
-    const result = await operation();\n    resetAuthRetry();
+    const result = await operation();
+    resetAuthRetry();
     return result;
   } catch (error) {
     // Check if it's an authentication error

@@ -254,52 +254,21 @@ async def _wrap_pipeline_with_broadcasts(
                 )
                 
                 # --- FORMATTING ENFORCEMENT ---
-                # Retrieve the original filename from metadata (fallback to os.path.basename if missing)
-                base_name = evidence_artifact.metadata.get("original_filename", os.path.basename(evidence_file_path))
-                prefix = f"The {agent_name} detected an {mime} file named {base_name}."
-                
+                # Keep individual findings intact so the frontend can display
+                # each one separately.  Only override for unsupported formats.
                 is_unsupported = any(getattr(f, 'finding_type', '') == "Format not supported" for f in findings)
-                
+
                 if is_unsupported:
-                    formatted_text = f"{prefix}\n{agent_name} can not analyse this file type so agent has no findings to show."
+                    base_name = evidence_artifact.metadata.get("original_filename", os.path.basename(evidence_file_path))
+                    clean_text = (
+                        f"{agent_name} cannot analyse this file type ({mime}). "
+                        f"No findings were produced for {base_name}."
+                    )
                     for f in findings:
-                        f.reasoning_summary = formatted_text
-                else:
-                    confidences = [getattr(f, 'confidence_raw', 0.5) for f in findings]
-                    avg_conf = sum(confidences) / len(confidences) if confidences else 0.5
-                    
-                    doc_type = "standard configuration file"
-                    all_text = " ".join([getattr(f, 'reasoning_summary', '') for f in findings])
-                    if "screenshot" in all_text.lower() or "text extracted" in all_text.lower():
-                        doc_type = "screenshot"
-                    elif "document" in all_text.lower():
-                        doc_type = "document"
-                    elif "portrait" in all_text.lower() or "face" in all_text.lower():
-                        doc_type = "portrait photo"
-                    elif mime.startswith("image/"):
-                        doc_type = "image file"
-                    elif mime.startswith("video/"):
-                        doc_type = "video file"
-                    elif mime.startswith("audio/"):
-                        doc_type = "audio recording"
-                        
-                    middle_line = f"It appears to be a {doc_type}."
-                    final_line = f"{int(avg_conf * 100)}% sure of result."
-                    
-                    # Deduplicate generic texts safely
-                    unique_findings = []
-                    for f in findings:
-                        summary = getattr(f, 'reasoning_summary', '').strip()
-                        if summary and summary not in unique_findings:
-                            unique_findings.append(summary)
-                    
-                    findings_text = "\n".join(unique_findings)
-                    formatted_text = f"{prefix}\n{middle_line}\n{findings_text}\n{final_line}"
-                    
-                    if findings:
-                        findings[0].reasoning_summary = formatted_text
-                        findings[0].confidence_raw = avg_conf
-                        findings = [findings[0]]
+                        f.reasoning_summary = clean_text
+                # For supported formats, each finding already has a clean
+                # reasoning_summary from _build_readable_summary — leave them
+                # as-is so per_agent_findings keeps every individual result.
                 # ------------------------------
 
                 # Make sure react step models are serialized back to dicts 
