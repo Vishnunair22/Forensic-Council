@@ -566,6 +566,64 @@ class ReActLoopEngine:
                     custody_logger=self.custody_logger
                 )
 
+                # --- Generate AgentFinding from Tool Result ---
+                if tool_result.success:
+                    output = tool_result.output or {}
+                    confidence = float(output.get("confidence", 0.75)) if isinstance(output, dict) else 0.75
+                    status_val = str(output.get("status", "CONFIRMED")).upper() if isinstance(output, dict) else "CONFIRMED"
+                    if status_val not in ("CONFIRMED", "CONTESTED", "INCONCLUSIVE", "INCOMPLETE"):
+                        status_val = "CONFIRMED"
+                    
+                    is_stub = isinstance(output, dict) and (output.get("status") == "stub" or output.get("court_defensible") is False)
+                    calibrated_prob = None
+                    
+                    try:
+                        from core.calibration import get_calibration_layer
+                        calibration_layer = get_calibration_layer()
+                        if calibration_layer and not is_stub:
+                            cal_result = calibration_layer.calibrate(
+                                agent_id=self.agent_id,
+                                raw_score=confidence,
+                                finding_class=next_step.tool_name
+                            )
+                            calibrated_prob = cal_result.calibrated_probability
+                    except Exception:
+                        pass
+    
+                    _AGENT_ID_TO_NAME = {
+                        "Agent1": "Image Forensics",
+                        "Agent2": "Audio Forensics",
+                        "Agent3": "Object Detection",
+                        "Agent4": "Video Forensics",
+                        "Agent5": "Metadata Forensics",
+                    }
+    
+                    task_desc = next_step.tool_name
+                    if len(self._react_chain) >= 1 and self._react_chain[-1].step_type == "THOUGHT":
+                        task_desc = self._react_chain[-1].content[:80]
+                    
+                    finding = AgentFinding(
+                        agent_id=self.agent_id,
+                        agent_name=_AGENT_ID_TO_NAME.get(self.agent_id, self.agent_id),
+                        finding_type=task_desc,
+                        confidence_raw=confidence,
+                        calibrated_probability=calibrated_prob,
+                        calibrated=calibrated_prob is not None,
+                        status=status_val,
+                        evidence_refs=[],
+                        reasoning_summary=self._build_readable_summary(
+                            next_step.tool_name, task_desc, tool_result, confidence, status_val
+                        ),
+                        metadata={
+                            "tool_name": next_step.tool_name,
+                            "court_defensible": not is_stub,
+                            "stub_warning": output.get("warning") if isinstance(output, dict) and is_stub else None,
+                            **(output if isinstance(output, dict) else {"raw_output": str(output)}),
+                        },
+                    )
+                    self._findings.append(finding)
+                # ----------------------------------------------
+
                 # Create OBSERVATION step
                 observation = ReActStep(
                     step_type="OBSERVATION",
@@ -910,77 +968,6 @@ class ReActLoopEngine:
         # Note: The main loop will execute this action and create the observation
         return action
 
-        _AGENT_ID_TO_NAME = {
-            "Agent1": "Image Forensics",
-            "Agent2": "Audio Forensics",
-            "Agent3": "Object Detection",
-            "Agent4": "Video Forensics",
-            "Agent5": "Metadata Forensics",
-        }
-
-        # Check for stub annotation when building AgentFinding
-        is_stub = output.get("status") == "stub" or output.get("court_defensible") is False
-
-        # Apply calibration to confidence score
-        calibrated_prob = None
-        try:
-            from core.calibration import get_calibration_layer
-            calibration_layer = get_calibration_layer()
-            if calibration_layer and not is_stub:
-                cal_result = calibration_layer.calibrate(
-                    agent_id=self.agent_id,
-                    raw_score=confidence,
-                    finding_class=pending_task.description[:50]
-                )
-                calibrated_prob = cal_result.calibrated_probability
-        except Exception:
-            # If calibration fails, proceed without it
-            pass
-
-        finding = AgentFinding(
-            agent_id=self.agent_id,
-            agent_name=_AGENT_ID_TO_NAME.get(self.agent_id, self.agent_id),
-            finding_type=pending_task.description[:80],
-            confidence_raw=confidence,
-            calibrated_probability=calibrated_prob,
-            calibrated=calibrated_prob is not None,
-            status=status,
-            evidence_refs=[],
-            reasoning_summary=self._build_readable_summary(
-                best_tool.name, pending_task.description, tool_result, confidence, status
-            ),
-            metadata={
-                "tool_name": best_tool.name,
-                "court_defensible": not is_stub,
-                "stub_warning": output.get("warning") if is_stub else None,
-                **output,  # Include all tool output for transparency
-            },
-        )
-        self._findings.append(finding)
-
-        # Mark task complete
-        try:
-            await self.working_memory.update_task(
-                session_id=self.session_id,
-                agent_id=self.agent_id,
-                task_id=pending_task.task_id,
-                status=TaskStatus.COMPLETE,
-                result_ref=str(finding.finding_id),
-            )
-        except Exception:
-            pass
-
-        # Return None to let the main loop re-check for next task naturally
-        # The loop will call us again on the next iteration
-        return ReActStep(
-            step_type="THOUGHT",
-            content=(
-                f"Completed task '{pending_task.description}' with "
-                f"confidence {confidence:.2f} ({status}). "
-                f"Moving to next task."
-            ),
-            iteration=self._current_iteration,
-        )
 
     @staticmethod
     def _match_tool_to_task(

@@ -99,6 +99,7 @@ class ForensicAgent(ABC):
         episodic_memory: EpisodicMemory,
         custody_logger: CustodyLogger,
         evidence_store: EvidenceStore,
+        inter_agent_bus: Any = None,
     ) -> None:
         """
         Initialize a forensic agent.
@@ -112,6 +113,7 @@ class ForensicAgent(ABC):
             episodic_memory: Episodic memory for forensic signatures
             custody_logger: Chain of custody logger
             evidence_store: Evidence store for artifact management
+            inter_agent_bus: Optional bus for inter-agent communication
         """
         self.agent_id = agent_id
         self.session_id = session_id
@@ -121,6 +123,7 @@ class ForensicAgent(ABC):
         self.episodic_memory = episodic_memory
         self.custody_logger = custody_logger
         self.evidence_store = evidence_store
+        self.inter_agent_bus = inter_agent_bus
         
         # Will be set during investigation
         self._tool_registry: ToolRegistry | None = None
