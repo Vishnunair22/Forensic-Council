@@ -294,8 +294,6 @@ class Agent5Metadata(ForensicAgent):
                     "moon_phase_consistent": None,
                 }
 
-                }
-
         async def reverse_image_search_handler(input_data: dict) -> dict:
             """
             Reverse image search via perceptual hash comparison against a

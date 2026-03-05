@@ -14,7 +14,7 @@ Forensic Council provides an automated, auditable pipeline for determining the a
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                  Frontend (Next.js 16)              │
+│                  Frontend (Next.js 15)              │
 │  Landing → Evidence Upload → Live Analysis → Report │
 │             WebSocket Live Updates                  │
 └─────────────────┬───────────────────────────────────┘
@@ -55,7 +55,7 @@ The system is triggered via the frontend, uploading evidence to the FastAPI back
 
 | Layer | Technology | Why |
 |-------|-----------|-----|
-| Frontend | Next.js 16, React 19 | Responsive UI, fluid animations via Framer Motion & Tailwind v4. |
+| Frontend | Next.js 15, React 19 | Responsive UI, fluid animations via Framer Motion & Tailwind v4. |
 | Backend | Python 3.11+, FastAPI, LangGraph | High-performance async API with structured agentic graph orchestration. |
 | Ledger | PostgreSQL 16 | ACID-compliant custody logging and final report storage. |
 | Memory | Redis 7 | High-speed pub/sub for WebSocket event broadcasting and working memory. |

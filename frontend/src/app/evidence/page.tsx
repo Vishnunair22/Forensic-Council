@@ -119,8 +119,8 @@ export default function EvidencePage() {
             const stored = localStorage.getItem("forensic_investigator_id");
             const validIdPattern = /^REQ-\d{5,10}$/;
             const investigatorId = (stored && validIdPattern.test(stored))
-              ? stored
-              : "REQ-" + (Math.floor(Math.random() * 900000) + 100000); // always 6 digits, safe range
+                ? stored
+                : "REQ-" + (Math.floor(Math.random() * 900000) + 100000); // always 6 digits, safe range
             localStorage.setItem("forensic_investigator_id", investigatorId);
             const caseId = "CASE-" + Date.now();
             const res = await startInvestigation(targetFile, caseId, investigatorId);
@@ -538,7 +538,7 @@ export default function EvidencePage() {
                             </motion.div>
 
                             {/* ── AGENT CARDS — appear one by one as each completes ── */}
-                            <div className="space-y-4 mb-10">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
                                 {validAgentsData.map((agent, i) => {
                                     const isComplete = completedAgents.find(a => a.id === agent.id);
                                     const isActive = activeAgents[agent.id];
@@ -551,7 +551,7 @@ export default function EvidencePage() {
                                                     animate={{ opacity: 1, y: 0, scale: 1 }}
                                                     transition={{ type: "spring", stiffness: 260, damping: 22 }}
                                                     className={clsx(
-                                                        "relative rounded-2xl border overflow-hidden backdrop-blur-xl",
+                                                        "relative rounded-2xl border overflow-hidden backdrop-blur-xl h-full flex flex-col",
                                                         "shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.06)]",
                                                         isComplete
                                                             ? (isComplete.confidence >= 0.7
@@ -565,7 +565,7 @@ export default function EvidencePage() {
                                                     {/* Top shine */}
                                                     <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
 
-                                                    <div className="flex items-start gap-5 p-5 md:p-6">
+                                                    <div className="flex items-start gap-5 p-5 md:p-6 flex-1">
                                                         {/* Agent icon with completion ring */}
                                                         <div className="relative shrink-0 mt-0.5">
                                                             <div className={clsx(

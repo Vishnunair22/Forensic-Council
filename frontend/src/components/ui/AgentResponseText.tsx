@@ -4,17 +4,54 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 export function AgentResponseText({ text, className = "text-sm text-slate-300 mt-1 leading-relaxed" }: { text: string, className?: string }) {
     const [isExpanded, setIsExpanded] = useState(false);
 
-    // Remove markdown characters like **, *, _, #, `, ~
-    const cleanText = typeof text === "string" ? text.replace(/[*_#`~]+/g, "").trim() : String(text);
+    // Normalise input to string and strip residual markdown formatting
+    const raw = typeof text === "string" ? text : String(text ?? "");
+    const cleanText = raw
+        .replace(/\*\*([^*]+)\*\*/g, "$1")   // **bold** → bold
+        .replace(/\*([^*]+)\*/g, "$1")        // *italic* → italic
+        .replace(/__([^_]+)__/g, "$1")        // __underline__ → underline
+        .replace(/~~([^~]+)~~/g, "$1")        // ~~strike~~ → strike
+        .replace(/^#{1,6}\s+/gm, "")          // heading markers
+        .replace(/`([^`]+)`/g, "$1")          // inline code
+        .trim();
 
-    const CHARACTER_LIMIT = 280;
-    const isLong = cleanText.length > CHARACTER_LIMIT;
+    // Split into meaningful paragraphs / bullet lines
+    const lines = cleanText
+        .split(/\n+/)
+        .map(l => l.trim())
+        .filter(Boolean);
+
+    const CHARACTER_LIMIT = 300;
+    const totalLength = cleanText.length;
+    const isLong = totalLength > CHARACTER_LIMIT;
+
+    // When collapsed, show only the first couple of lines (up to limit)
+    const visibleLines: string[] = [];
+    if (!isExpanded && isLong) {
+        let charCount = 0;
+        for (const line of lines) {
+            if (charCount + line.length > CHARACTER_LIMIT) {
+                // Add a truncated version of this line
+                const remaining = CHARACTER_LIMIT - charCount;
+                if (remaining > 30) {
+                    visibleLines.push(line.substring(0, remaining).trim() + "...");
+                }
+                break;
+            }
+            visibleLines.push(line);
+            charCount += line.length;
+        }
+    }
+
+    const displayLines = isExpanded || !isLong ? lines : visibleLines;
 
     return (
         <div className={className}>
-            <p className="whitespace-pre-wrap break-words">
-                {isExpanded || !isLong ? cleanText : `${cleanText.substring(0, CHARACTER_LIMIT).trim()}...`}
-            </p>
+            <div className="space-y-1.5">
+                {displayLines.map((line, i) => (
+                    <p key={i} className="whitespace-pre-wrap break-words">{line}</p>
+                ))}
+            </div>
             {isLong && (
                 <button
                     onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}

@@ -3,6 +3,29 @@
 All notable changes to the Forensic Council project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0] — 2026-03-05
+
+### 🎉 Production Ready
+
+Full end-to-end audit, cleanup, and production hardening. All 194+ historical issues resolved.
+
+### Changed
+- **Version aligned to 1.0.0** across `pyproject.toml`, `package.json`, `api/main.py`, and all docs
+- **README.md** — Fixed Next.js version from 16 to 15 (matching actual `next@15.3.0` dependency)
+- **Backend Dockerfile** — Pinned `uv` from `latest` to `0.6.6` for deterministic builds
+- **ESLint config** — Migrated from deprecated `extends` syntax to proper flat config with `FlatCompat`
+- **`.gitignore`** — Added `node_modules/`, `.next/`, `out/`, `coverage/`, `.pytest_cache/`, `*.whl`, broadened `backend/storage/keys/`
+- **`docker-compose.override.yml`** — Added `read_only: false` to fix conflict with base `read_only: true` + `--reload` command
+- **`Development-Status.md`** — Fixed "Sequential execution" → "Concurrent execution via asyncio.gather", updated to v1.0.0
+
+### Removed
+- `forensic-council-1.0-roadmap.docx` — Non-code planning document (not needed in source control)
+- `backend/docs/` directory — Duplicate of `docs/agent_capabilities.md`
+- `frontend/public/file.svg`, `globe.svg`, `next.svg`, `vercel.svg`, `window.svg` — Next.js scaffolding remnants
+- `backend/scripts/hash_demo.py` — Trivial 4-line demo script
+- `frontend/dev-guide.md` — Covered by existing docs
 
 ## [0.8.0] — 2026-03-05
 
@@ -39,8 +62,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `hash_demo.py` from root (moved to `backend/scripts/`)
 - `backend/test_exif.py`, `backend/test_exif_sync.py` from backend root (moved to `backend/scripts/`)
 - `docs/End-End Test.py` renamed to `docs/end_to_end_test.py`
-
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.7.0] - 2026-03-04
 

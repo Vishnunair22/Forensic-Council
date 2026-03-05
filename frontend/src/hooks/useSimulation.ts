@@ -49,7 +49,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
 
     // Cycle thinking phrases for the currently active agent to keep UI alive
     const activeAgentIds = Object.keys(activeAgents).sort().join(",");
-    
+
     useEffect(() => {
         const activeIds = Object.keys(activeAgents);
         if (activeIds.length === 0) return;
@@ -131,7 +131,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                         }
                                     });
                                     setStatus("analyzing");
-                                    // Only play sound when a NEW agent becomes active, not on every update
+                                    // Play sound when ANY new agent becomes active natively
                                     playSoundRef.current?.("think");
                                 } else if (currentlyActiveRef.current === incomingId) {
                                     // Update thinking text for the currently active agent only
@@ -185,6 +185,8 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                     const nextCompleted = [...completedAgentsRef.current, result];
                                     setCompletedAgents(nextCompleted);
                                     onAgentCompleteRef.current?.(result);
+                                    // Play sound when individual agent finishes
+                                    playSoundRef.current?.("agent");
 
                                     // Clear this agent from active
                                     setActiveAgents(prev => {
@@ -253,14 +255,14 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
             const handleClose = (event: CloseEvent) => {
                 console.log("[WebSocket] Connection closed:", event.code, event.reason);
                 wsRef.current = null;
-                
+
                 // If connection was never established, reject the promise
                 if (!wsConnectionReady) {
                     const reason = event.reason || `Connection failed (code ${event.code})`;
                     reject(new Error(reason));
                     return;
                 }
-                
+
                 // Connection was established but closed - notify status
                 setStatus((prev: SimulationStatus) => {
                     if (prev !== "complete" && prev !== "error" && prev !== "idle") {

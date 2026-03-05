@@ -1082,17 +1082,17 @@ class ReActLoopEngine:
                 err = err.replace(prefix, "").strip()
             err = err[:120] + ("..." if len(err) > 120 else "")
             return (
-                f"**{tool_label}:** The agent attempted to run a specialized scan but was unable to complete it successfully due to an operational hurdle: '{err}'. "
-                f"Consequently, diagnostic confidence has been appropriately adjusted to **{confidence:.0%}**."
+                f"{tool_label}: The agent attempted to run a specialized scan but was unable to complete it successfully due to an operational hurdle: '{err}'. "
+                f"Consequently, diagnostic confidence has been appropriately adjusted to {confidence:.0%}."
             )
 
         output = tool_result.output or {}
 
         if output.get("status") == "stub_response":
             return (
-                f"**{tool_label}:** The agent's external module returned a temporary placeholder response. "
+                f"{tool_label}: The agent's external module returned a temporary placeholder response. "
                 f"This indicates that advanced ML features are still structurally integrating. "
-                f"Current diagnostic stance evaluates to a **{status}** finding at **{confidence:.0%}** certainty."
+                f"Current diagnostic stance evaluates to a {status} finding at {confidence:.0%} certainty."
             )
 
         _TOOL_INTERPRETERS = {
@@ -1134,7 +1134,7 @@ class ReActLoopEngine:
         if interpreter and tool_result.success:
             try:
                 interpreted_msg = interpreter(output)
-                return f"**{tool_label}:** {interpreted_msg} This yields a **{status}** finding at **{confidence:.0%}** certainty."
+                return f"{tool_label}: {interpreted_msg} This yields a {status} finding at {confidence:.0%} certainty."
             except Exception:
                 pass  # fall through to generic path
 
@@ -1184,14 +1184,14 @@ class ReActLoopEngine:
                         detail = detail[:last_comma] + ", and" + detail[last_comma + 1:]
 
             return (
-                f"**{tool_label}:** The agent executed a specialized scan and successfully extracted the following metrics: "
+                f"{tool_label}: The agent executed a specialized scan and successfully extracted the following metrics: "
                 f"It identified {detail}. "
-                f"This data evaluates to a **{status}** finding with a diagnostic certainty of **{confidence:.0%}**."
+                f"This data evaluates to a {status} finding with a diagnostic certainty of {confidence:.0%}."
             )
         else:
             return (
-                f"**{tool_label}:** The agent executed a specialized scan and completely analyzed the evidence, finding no notable specific metrics to highlight. "
-                f"This yields a **{status}** status, maintaining a diagnostic certainty of **{confidence:.0%}**."
+                f"{tool_label}: The agent executed a specialized scan and completely analyzed the evidence, finding no notable specific metrics to highlight. "
+                f"This yields a {status} status, maintaining a diagnostic certainty of {confidence:.0%}."
             )
 
     def _format_tool_result(self, result: ToolResult) -> str:
