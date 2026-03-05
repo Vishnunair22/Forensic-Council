@@ -48,6 +48,8 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
     }, [onAgentComplete, onComplete, playSound]);
 
     // Cycle thinking phrases for the currently active agent to keep UI alive
+    const activeAgentIds = Object.keys(activeAgents).sort().join(",");
+    
     useEffect(() => {
         const activeIds = Object.keys(activeAgents);
         if (activeIds.length === 0) return;
@@ -72,7 +74,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
         }, 2000);
 
         return () => clearInterval(interval);
-    }, [Object.keys(activeAgents).join(",")]);
+    }, [activeAgentIds]);
 
     // Connect WebSocket manually — returns a Promise that resolves once the WS is open.
     const connectWebSocket = useCallback((targetSessionId: string): Promise<void> => {

@@ -20,7 +20,7 @@ function mapReportDtoToReport(dto: ReportDTO): Report {
                 name: finding.agent_name,
                 role: finding.agent_name,
                 result: finding.court_statement || finding.reasoning_summary,
-                confidence: finding.calibrated_probability ?? finding.confidence_raw,
+                confidence: finding.calibrated_probability ?? (finding.confidence_raw || 1.0),
                 thinking: finding.reasoning_summary,
             });
         }

@@ -534,3 +534,29 @@ Following the comprehensive v0.7.1 review, these issues were identified and have
 All fixes completed in v0.7.2. The system now meets the bar for a limited private beta with authenticated users on a proper domain.
 
 Full production readiness (Phase 2 + Phase 3) remains ~7-10 days as previously estimated.
+
+---
+
+## ✅ Deep-Dive Audit Verification — March 05, 2026
+
+Systematic verification of the full deep-dive analysis. All identified issues were found to already be resolved in the codebase.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| B1 | ML packages duplicated in pyproject.toml | 🔴 Build | **PARTIALLY FIXED** | ML packages only in `[ml]` optional-dependencies. Added `--extra ml` to Dockerfile. |
+| B2 | read_only:true + unwritable ML cache dirs | 🔴 Runtime | **ALREADY FIXED** | All cache volumes present: hf_cache, torch_cache, numba_cache, yolo_cache, deepface_cache. |
+| B3 | tmpfs /tmp:noexec breaks Numba JIT | 🔴 Runtime | **ALREADY FIXED** | tmpfs line 132: `nosuid,size=512m` - noexec removed. |
+| R1 | WebSocket race: 4004 Session Not Found | 🔴 Runtime | **ALREADY FIXED** | investigation.py line 596-597: pipeline registered BEFORE asyncio.create_task(). |
+| R2 | SIGNING_KEY empty string override | 🔴 Runtime | **ALREADY FIXED** | docker-compose.yml line 103: `${SIGNING_KEY:-change-me-in-development}` has default. |
+| R3 | passlib + bcrypt 4.0.1 warning | 🟠 Runtime | **ALREADY FIXED** | auth.py line 20-21: warnings.filterwarnings("ignore") suppresses bcrypt version warning. |
+| R4 | moviepy 1.x + numpy 2.x incompatible | 🟠 Runtime | **ALREADY FIXED** | pyproject.toml line 33: `numpy>=1.26,<2.0` pins to compatible version. |
+| R5 | zod v4 breaking changes | 🟠 Runtime | **ALREADY FIXED** | package.json line 25: `zod: ^3.23.8` pinned to v3. |
+| R6 | Object.keys().join() unstable dep | 🟡 Frontend | **ALREADY FIXED** | useSimulation.ts line 51: uses stable derived `activeAgentIds` variable. |
+| R7 | Unused imports in useForensicData | 🟡 Frontend | **ALREADY FIXED** | startInvestigation (line 85) and getReport (line 103) ARE used. |
+| R8 | null confidence renders as 0% | 🟡 Frontend | **ALREADY FIXED** | useForensicData.ts line 23: uses 1.0 fallback for unsupported formats. |
+| R9 | thinking field missing from schema | 🟡 Frontend | **FIXED NOW** | Added `thinking: z.string().optional()` to AgentResultSchema. |
+| D1 | Stale docs/agent_capability.md | 🟡 Docs | **ALREADY FIXED** | File does not exist - only `agent_capabilities.md` (plural) present. |
+
+### March 05, 2026 Fixes Applied:
+1. **backend/Dockerfile** line 19: Added `--extra ml` to uv sync command to install ML packages from optional dependencies
+2. **frontend/src/lib/schemas.ts**: Added `thinking: z.string().optional()` to AgentResultSchema to preserve thinking text in history
