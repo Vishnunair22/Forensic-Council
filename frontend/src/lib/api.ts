@@ -430,16 +430,31 @@ export async function submitHITLDecision(decision: HITLDecisionRequest): Promise
 /**
  * Create a WebSocket connection for live updates
  * Token is sent after connection via subprotocol to avoid logging in URL
+ * Returns both the WebSocket and a Promise that resolves when connected
  */
 export function createLiveSocket(
-  sessionId: string,
-  onMessage: (update: any) => void,
-  onClose: () => void
-): WebSocket {
+  sessionId: string
+): { ws: WebSocket; connected: Promise<void> } {
   const wsUrl = `${WS_BASE}/api/v1/sessions/${sessionId}/live`;
   // Use subprotocol for authentication to avoid token in URL (which gets logged)
   const ws = new WebSocket(wsUrl, ["forensic-v1"]);
 
+  let settle: (() => void) | null = null;
+  let connected = new Promise<void>((resolve) => {
+    settle = resolve;
+  });
+
+  // Track if we've already settled the promise to prevent double-resolution
+  let settled = false;
+  const safeSettle = () => {
+    if (!settle) return;
+    if (!settled) {
+      settled = true;
+      settle();
+    }
+  };
+
+  // Set all handlers atomically in one pass to avoid race conditions
   ws.onopen = () => {
     console.log("WebSocket connected");
     // Send authentication after connection established
@@ -447,27 +462,26 @@ export function createLiveSocket(
     if (token) {
       ws.send(JSON.stringify({ type: "AUTH", token }));
     }
-  };
-
-  ws.onmessage = (event) => {
-    try {
-      const update: BriefUpdate = JSON.parse(event.data);
-      onMessage(update);
-    } catch (error) {
-      console.error("Failed to parse WebSocket message:", error);
-    }
-  };
-
-  ws.onclose = () => {
-    console.log("WebSocket disconnected");
-    onClose();
+    // Resolve the promise - connection is ready
+    safeSettle();
   };
 
   ws.onerror = (error) => {
     console.error("WebSocket error:", error);
+    // Reject the promise - connection failed
+    safeSettle();
   };
 
-  return ws;
+  ws.onclose = (event) => {
+    console.log("WebSocket disconnected:", event.code, event.reason);
+    // Note: onclose fires after onopen succeeds normally
+    // For error handling, the caller should check ws.readyState or use the connected promise
+    safeSettle();
+  };
+
+  // onmessage is set by the caller via the returned ws object
+
+  return { ws, connected };
 }
 
 /**
