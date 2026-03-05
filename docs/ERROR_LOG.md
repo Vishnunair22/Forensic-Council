@@ -22,6 +22,43 @@ Following the v0.7.1 review, these issues were identified and resolved.
 
 ---
 
+## 🐛 "Failed to Fetch" Root Cause Fixes — March 05, 2026
+
+The "Failed to fetch" error on Initiate Analysis was caused by **4 chained bugs**. All 4 must be fixed together.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 145 | Password Mismatch: demo123 vs inv123! | 🔴 Critical | **RESOLVED** | Changed `NEXT_PUBLIC_DEMO_PASSWORD` default from `demo123` to `inv123!` in docker/docker-compose.yml line 149. |
+| 146 | investigatorId localStorage key mismatch | 🔴 Critical | **RESOLVED** | Fixed frontend/src/app/evidence/page.tsx line 119: read key was `"investigatorId"` but write key was `"forensic_investigator_id"`. Unified to use consistent key with validation. |
+| 147 | API URL uses host.docker.internal (unreachable from browser) | 🔴 Critical | **RESOLVED** | Changed `NEXT_PUBLIC_API_URL` from `http://host.docker.internal:8000` to `http://localhost:8000` in docker/docker-compose.yml line 148. |
+| 148 | NEXT_PUBLIC_ vars baked at build time with wrong default | 🔴 Critical | **RESOLVED** | Changed frontend/Dockerfile line 15 default from `http://backend:8000` to `http://localhost:8000`. Added missing frontend vars to .env.example. |
+
+**Rebuild Required:** After fixing, rebuild the frontend container to apply the build-time variables:
+```bash
+docker compose -f docker/docker-compose.yml build --no-cache frontend
+docker compose -f docker/docker-compose.yml up -d
+```
+
+---
+
+## 🐛 Docker Build & Performance Fixes — March 05, 2026
+
+Comprehensive audit of Docker build process and performance optimizations.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 149 | Frontend Dockerfile: npm install instead of npm ci | 🟡 Low | **RESOLVED** | Changed to `npm ci --prefer-offline` in frontend/Dockerfile for deterministic, faster installs. |
+| 150 | Frontend Dockerfile: No proper multi-stage build | 🟡 Low | **RESOLVED** | Added separate `deps` stage that caches node_modules independently for faster rebuilds. |
+| 151 | Frontend Dockerfile: HEALTHCHECK syntax error (missing `)`) | 🔴 High | **RESOLVED** | Fixed closing parenthesis in healthcheck command in frontend/Dockerfile line 33. |
+| 152 | Backend HF_HOME volume/tmpfs conflict | 🔴 High | **RESOLVED** | Moved HF_HOME from `/tmp/huggingface` to `/app/cache/huggingface` to avoid tmpfs conflict in docker-compose.yml. |
+| 153 | Backend Dockerfile: App bytecode not compiled at build time | 🟠 Medium | **RESOLVED** | Added `compileall` step in backend/Dockerfile to pre-compile Python bytecode. |
+| 154 | Backend Dockerfile: apt-get has no cache mount | 🟡 Low | **RESOLVED** | Added `--mount=type=cache` for apt-get in backend/Dockerfile for faster rebuilds. |
+| 155 | Frontend: Unused three.js packages in dependencies | 🟡 Low | **RESOLVED** | Removed @react-three/fiber, @react-three/drei, and three from package.json and next.config.ts. |
+| 156 | Backend pyproject.toml: ML deps not optional | 🟠 Medium | **RESOLVED** | Added `[ml]` optional dependency group in pyproject.toml for faster API-only builds. |
+| 157 | Backend: PEM keys in git repository | 🔴 Critical | **RESOLVED** | Added `backend/storage/keys/*.pem` to .gitignore. Recommend rotating keys immediately. |
+
+---
+
 ## 🐛 Docker Preflight & Fresh Build Fixes — March 05, 2026
 
 Following the fresh Docker wipe and rebuild, these build issues were identified and resolved.

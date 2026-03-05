@@ -129,12 +129,11 @@ services:
     # Security hardening
     read_only: true
     tmpfs:
-      - /tmp:nosuid,size=256m        # Numba needs to exec compiled code
-      - /root/.cache:nosuid,size=2g  # HuggingFace model cache
+      - /tmp:nosuid,noexec,size=512m        # Numba needs to exec compiled code
     volumes:
       - evidence_data:/app/storage/evidence
       - ../backend/storage/keys:/app/storage/keys:ro
-      - hf_cache:/tmp/huggingface
+      - hf_cache:/app/cache/huggingface
 
   frontend:
     build:
@@ -145,8 +144,8 @@ services:
       - "3000:3000"
     environment:
       - HOSTNAME=0.0.0.0
-      - NEXT_PUBLIC_API_URL=http://host.docker.internal:8000
-      - NEXT_PUBLIC_DEMO_PASSWORD=${NEXT_PUBLIC_DEMO_PASSWORD:-demo123}
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_DEMO_PASSWORD=${NEXT_PUBLIC_DEMO_PASSWORD:-inv123!}
     depends_on:
       backend:
         condition: service_healthy

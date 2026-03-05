@@ -116,7 +116,12 @@ export default function EvidencePage() {
         startSimulation("pending"); // triggers setStatus("initiating")
 
         try {
-            const investigatorId = localStorage.getItem("investigatorId") || "REQ-" + Math.floor(Math.random() * 90000 + 10000);
+            const stored = localStorage.getItem("forensic_investigator_id");
+            const validIdPattern = /^REQ-\d{5,10}$/;
+            const investigatorId = (stored && validIdPattern.test(stored))
+              ? stored
+              : "REQ-" + (Math.floor(Math.random() * 900000) + 100000); // always 6 digits, safe range
+            localStorage.setItem("forensic_investigator_id", investigatorId);
             const caseId = "CASE-" + Date.now();
             const res = await startInvestigation(targetFile, caseId, investigatorId);
 

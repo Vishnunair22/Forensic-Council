@@ -12,20 +12,8 @@
     "test:coverage": "jest --coverage",
     "type-check": "tsc --noEmit"
   },
-  "overrides": {
-    "@react-three/fiber": {
-      "react": "$react",
-      "react-dom": "$react-dom"
-    },
-    "@react-three/drei": {
-      "react": "$react",
-      "react-dom": "$react-dom"
-    }
-  },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.2",
-    "@react-three/drei": "^10.7.7",
-    "@react-three/fiber": "^9.5.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.29.2",
     "lucide-react": "^0.563.0",
@@ -34,7 +22,6 @@
     "react-dom": "19.2.3",
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
-    "three": "^0.182.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

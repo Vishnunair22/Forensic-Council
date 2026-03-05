@@ -66,6 +66,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+ml = [
+    "torch>=2.2",
+    "torchvision>=0.17",
+    "torchaudio>=2.2",
+    "deepface>=0.0.93",
+    "ultralytics>=8.2",
+    "open-clip-torch>=2.24",
+    "speechbrain>=1.0",
+    "pyannote.audio>=3.1",
+    "transformers>=4.35",
+    "accelerate>=0.25",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
