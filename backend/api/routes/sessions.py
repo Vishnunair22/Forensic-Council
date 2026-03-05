@@ -6,6 +6,7 @@ Routes for managing investigation sessions.
 """
 
 from typing import List
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
@@ -59,29 +60,42 @@ async def terminate_session(session_id: str, current_user: User = Depends(get_cu
 
 @router.websocket("/{session_id}/live")
 async def live_updates(websocket: WebSocket, session_id: str):
-    """WebSocket endpoint for live investigation updates. Requires authentication via subprotocol."""
+    """WebSocket endpoint for live investigation updates. Requires authentication via AUTH message after connection."""
     # S4: Validate session exists before accepting
     if session_id not in _active_pipelines:
         await websocket.close(code=4004, reason="Session not found")
         return
 
-    # Authenticate via subprotocol token
-    # Expected subprotocol: "Bearer <token>"
-    auth_header = websocket.headers.get("authorization", "")
-    if not auth_header.startswith("Bearer "):
-        await websocket.close(code=4001, reason="Missing or invalid authorization header")
-        return
-    
-    token = auth_header[7:]  # Remove "Bearer " prefix
-    
-    # Verify the token before accepting the connection
-    try:
-        token_data = await decode_token(token)
-    except Exception:
-        await websocket.close(code=4001, reason="Invalid or expired token")
-        return
-
+    # Accept the connection first (browser WebSocket API cannot send custom headers)
     await websocket.accept()
+
+    # Wait for authentication message from client
+    try:
+        auth_message = await websocket.receive_text()
+        auth_data = json.loads(auth_message)
+        
+        if auth_data.get("type") != "AUTH":
+            await websocket.close(code=4001, reason="Missing authentication message")
+            return
+            
+        token = auth_data.get("token")
+        if not token:
+            await websocket.close(code=4001, reason="Missing token")
+            return
+            
+        # Verify the token
+        try:
+            token_data = await decode_token(token)
+        except Exception:
+            await websocket.close(code=4001, reason="Invalid or expired token")
+            return
+            
+    except json.JSONDecodeError:
+        await websocket.close(code=4001, reason="Invalid JSON in authentication message")
+        return
+    except Exception:
+        await websocket.close(code=4001, reason="Authentication failed")
+        return
 
     # Register this connection
     register_websocket(session_id, websocket)

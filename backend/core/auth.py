@@ -125,6 +125,14 @@ async def decode_token(token: str) -> TokenData:
     Raises:
         HTTPException: If token is invalid or expired
     """
+    # Check if token is blacklisted
+    if await is_token_blacklisted(token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has been revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
@@ -150,6 +158,45 @@ async def decode_token(token: str) -> TokenData:
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+async def is_token_blacklisted(token: str) -> bool:
+    """
+    Check if a token is blacklisted.
+    
+    Args:
+        token: JWT token string
+    
+    Returns:
+        True if token is blacklisted, False otherwise
+    """
+    try:
+        from infra.redis_client import get_redis_client
+        redis = await get_redis_client()
+        if redis:
+            result = await redis.get(f"blacklist:{token}")
+            return result is not None
+    except Exception as e:
+        logger.warning("Failed to check token blacklist", error=str(e))
+    return False
+
+
+async def blacklist_token(token: str, expires_in_seconds: int) -> None:
+    """
+    Add a token to the blacklist.
+    
+    Args:
+        token: JWT token string
+        expires_in_seconds: How long to keep the token blacklisted
+    """
+    try:
+        from infra.redis_client import get_redis_client
+        redis = await get_redis_client()
+        if redis:
+            await redis.setex(f"blacklist:{token}", expires_in_seconds, "1")
+            logger.info("Token blacklisted", expires_in=expires_in_seconds)
+    except Exception as e:
+        logger.warning("Failed to blacklist token", error=str(e))
 
 
 async def get_current_user(

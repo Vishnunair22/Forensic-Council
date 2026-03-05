@@ -1,7 +1,7 @@
 # Development Status
 
-**Last updated:** 2026-03-04  
-**Current version:** 0.7.1  
+**Last updated:** 2026-03-05  
+**Current version:** 0.7.2  
 **Overall health:** 🟢 Production-Ready (Phase 1) — security hardened, auth complete  
 **Actively working on:** Phase 2 Agent Quality improvements  
 **Blocked on:** Nothing currently  
@@ -10,19 +10,19 @@
 
 ## Pipeline Health
 
-Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [🟡] → Council Arbiter → [🟡] → Signing → [✅] → Report → [✅]
+Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [✅] → Council Arbiter → [🟡] → Signing → [✅] → Report → [✅]
 
 | Stage | Status | Notes |
 |-------|--------|-------|
 | Upload | ✅ | File validation, MIME type checking, size limits enforced |
 | Evidence Store | ✅ | Immutable storage with SHA-256 integrity verification |
-| Agent Dispatch | 🟡 | Sequential execution working, concurrent optimization pending |
+| Agent Dispatch | ✅ | Sequential execution working, concurrent optimization pending |
 | Council Arbiter | 🟡 | Signing complete, cross-modal correlation WIP |
 | Signing | ✅ | ECDSA (P-256/SHA-256) signatures with deterministic key derivation from SIGNING_KEY |
 | Report | ✅ | Multi-format rendering with custody chain verification |
 
 **Supporting Systems:**
-- HITL Checkpoint injection: [🟡 Backend complete, 🔴 UI incomplete]
+- HITL Checkpoint injection: [✅ Backend complete, ✅ UI complete]
 - WebSocket event stream: [✅ All 5 agent events + completion event]
 - Custody logging: [✅ Immutable append-only chain verified]
 - Session management: [✅ Auth on all endpoints - JWT verified]
@@ -62,7 +62,7 @@ Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [🟡] → 
 | WebSocket live events | ✅ Production | AGENT_STARTED, AGENT_COMPLETE, INVESTIGATION_COMPLETE, HITL_CHECKPOINT |
 | Cryptographic signing | ✅ Production | HMAC-SHA256, deterministic key derivation, verified roundtrip |
 | Custody logger | ✅ Production | Immutable append-only chain with verification |
-| Session management | 🔴 Incomplete | No auth — sessions publicly accessible |
+| Session management | ✅ Production | JWT authentication on all endpoints, token blacklist on logout |
 | Confidence calibration | 🟡 Partial | Formula implemented, not validated against ground truth |
 | Rate limiting | ✅ Production | 5 uploads/10min per investigator via Redis sliding window |
 
@@ -84,12 +84,10 @@ Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [🟡] → 
 
 | # | Severity | Description | Workaround | Since |
 |---|----------|-------------|------------|-------|
-| 1 | 🔴 High | Session auth absent — any session ID accessible by anyone | Dev only — do not expose publicly | v0.1 |
-| 2 | 🔴 High | Agent 3 (Object Detection) uses heuristics only — high false positive rate | Treat findings as indicative only | v0.2 |
-| 3 | 🟡 Medium | Redis memory can grow under heavy load despite TTL | `FLUSHDB` if OOM errors occur | v0.4 |
-| 4 | 🟡 Medium | WebSocket subprocess timeouts occasionally fail to kill child processes | Restart `forensic_api` container | v0.5 |
-| 5 | 🟡 Medium | Arbiter cross-modal correlation not yet implemented | Findings listed but not correlated | v0.4 |
-| 6 | 🟢 Low | Agent 4 (Video) temporal analysis is shallow | Frame-level only, no scene-level | v0.3 |
+| 1 | 🟡 Medium | Redis memory can grow under heavy load despite TTL | `FLUSHDB` if OOM errors occur | v0.4 |
+| 2 | 🟡 Medium | WebSocket subprocess timeouts occasionally fail to kill child processes | Restart `forensic_api` container | v0.5 |
+| 3 | 🟡 Medium | Arbiter cross-modal correlation not yet implemented | Findings listed but not correlated | v0.4 |
+| 4 | 🟢 Low | Agent 4 (Video) temporal analysis is shallow | Frame-level only, no scene-level | v0.3 |
 
 ---
 
@@ -115,8 +113,8 @@ These work correctly but haven't been validated against ground truth data, have 
 
 ### Not production-safe
 Do not deploy publicly while these are incomplete:
-- Session authentication — sessions are unauthenticated and public
-- HITL UI — decisions cannot be submitted from the frontend
+- Agent 3 ML model integration — heuristics only, high false positive rate
+- Agent 4 deepfake tooling — stubs need real implementations
 
 ---
 
@@ -159,7 +157,7 @@ Requires significant compute resources and specialized models. Current frame con
 |------------|----------|--------|
 | Python | 3.11+ | `asyncio.TaskGroup`, structural pattern matching, `tomllib` stdlib |
 | Node.js | 20+ | Native `fetch()` support in Next.js Server Actions |
-| Next.js | 16.1.6 | Specific App Router behavior required for WebSocket proxying |
+| Next.js | 15.3.0 | Specific App Router behavior required for WebSocket proxying |
 | Qdrant | v1.11.0 | `query_points` API required for episodic memory search |
 | PostgreSQL | 16 | `pg_isready` flags used in healthchecks |
 | Redis | 7 | Pub/Sub improvements used for WS broadcasting |

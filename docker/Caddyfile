@@ -33,11 +33,9 @@
 # Production HTTPS configuration
 # Set DOMAIN environment variable to enable HTTPS
 # Example: export DOMAIN=forensic.yourdomain.com
-${DOMAIN:-localhost} {
-    # TLS configuration with automatic Let's Encrypt
-    tls {
-        on_demand
-    }
+localhost {
+    # TLS configuration for local development (self-signed)
+    tls self_signed
 
     # Security headers
     header {
@@ -60,7 +58,7 @@ ${DOMAIN:-localhost} {
     # Frontend reverse proxy (Next.js standalone server)
     reverse_proxy frontend:3000
 
-    # API proxy
+    # API + WebSocket proxy (combined to handle both HTTP and WS)
     handle /api/* {
         reverse_proxy backend:8000 {
             # Health checks
@@ -73,6 +71,8 @@ ${DOMAIN:-localhost} {
             header_up X-Real-IP {remote}
             header_up X-Forwarded-For {remote}
             header_up X-Forwarded-Proto {scheme}
+            header_up Upgrade {http_upgrade}
+            header_up Connection "{http_connection}"
             
             # Timeouts
             transport http {
@@ -84,7 +84,7 @@ ${DOMAIN:-localhost} {
         }
     }
 
-    # WebSocket support
+    # Legacy /ws/* path (redirects to /api/)
     handle /ws/* {
         reverse_proxy backend:8000 {
             header_up Host {host}
@@ -112,13 +112,15 @@ ${DOMAIN:-localhost} {
     # Frontend reverse proxy (Next.js standalone server)
     reverse_proxy frontend:3000
 
-    # API proxy
+    # API + WebSocket proxy (combined to handle both HTTP and WS)
     handle /api/* {
         reverse_proxy backend:8000 {
             header_up Host {host}
             header_up X-Real-IP {remote}
             header_up X-Forwarded-For {remote}
             header_up X-Forwarded-Proto {scheme}
+            header_up Upgrade {http_upgrade}
+            header_up Connection "{http_connection}"
             
             transport http {
                 dial_timeout 10s
@@ -127,7 +129,7 @@ ${DOMAIN:-localhost} {
         }
     }
 
-    # WebSocket support
+    # Legacy /ws/* path
     handle /ws/* {
         reverse_proxy backend:8000 {
             header_up Host {host}

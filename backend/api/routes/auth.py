@@ -8,7 +8,7 @@ Routes for user authentication and token management.
 from datetime import timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 
@@ -194,20 +194,40 @@ async def refresh_token(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/logout")
-async def logout(current_user: User = Depends(get_current_user)):
+async def logout(
+    current_user: User = Depends(get_current_user),
+    authorization: Optional[str] = Header(None)
+):
     """
     Logout endpoint.
     
-    Note: With JWT tokens, true logout requires token blacklisting.
-    In production, add the token to a blacklist (e.g., Redis) until expiry.
+    Adds the JWT token to a blacklist in Redis until it expires.
     
     Returns:
         Logout confirmation message
     """
-    logger.info("User logged out", user_id=current_user.user_id)
+    from core.auth import blacklist_token, decode_token
     
-    # In production: Add token to blacklist in Redis
-    # redis_client.setex(f"blacklist:{token}", token_expiry, "true")
+    # Extract token from Authorization header
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]
+    
+    # Blacklist the token if we have it
+    if token:
+        try:
+            # Get token expiry to set blacklist TTL
+            token_data = await decode_token(token)
+            if token_data.exp:
+                import time
+                expires_in = int(token_data.exp.timestamp() - time.time())
+                if expires_in > 0:
+                    await blacklist_token(token, expires_in)
+                    logger.info("Token blacklisted on logout", user_id=current_user.user_id)
+        except Exception as e:
+            logger.warning("Failed to blacklist token on logout", error=str(e))
+    
+    logger.info("User logged out", user_id=current_user.user_id)
     
     return {
         "status": "success",

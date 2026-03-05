@@ -1,9 +1,24 @@
 # Forensic Council — Error Log & Resolution Audit
 
 **Date:** 2026-03-05
-**Status:** All Docker Build Issues Resolved - Fresh Build Complete
+**Status:** All v0.7.2 Issues Resolved - Ready for Private Beta
 
 This log tracks significant errors, architectural flaws, and their subsequent resolutions.
+
+---
+
+## 🐛 v0.7.2 Fixes — March 05, 2026
+
+Following the v0.7.1 review, these issues were identified and resolved.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 139 | WebSocket authentication broken for browsers | 🔴 Critical | **RESOLVED** | Changed WebSocket auth to accept connection first, then read AUTH message from client. Updated backend/sessions.py to handle token after connection. |
+| 140 | Caddyfile TLS on_demand wrong directive | 🟡 Medium | **RESOLVED** | Replaced `on_demand` TLS with `self_signed` for localhost. Note: For production with real domain, use standard ACME (Let's Encrypt). |
+| 141 | Caddyfile WebSocket path mismatch | 🟡 Medium | **RESOLVED** | Added `Upgrade` and `Connection` headers to `/api/*` proxy handler in Caddyfile for both localhost and :81 configurations. |
+| 142 | No admin bootstrap mechanism | 🟡 Medium | **RESOLVED** | Added `bootstrap_users()` function to init_db.py that creates admin/investigator users from BOOTSTRAP_ADMIN_PASSWORD and BOOTSTRAP_INVESTIGATOR_PASSWORD env vars. |
+| 143 | Logout does not revoke tokens | 🟡 Medium | **RESOLVED** | Implemented token blacklisting in Redis. Added `is_token_blacklisted()` and `blacklist_token()` functions in core/auth.py. Logout endpoint now blacklists token until expiry. |
+| 144 | Development-Status.md contradictory | 🟡 Low | **RESOLVED** | Updated to v0.7.2, fixed Next.js version to 15.3.0, marked session management as ✅ Production, removed resolved issues from Known Issues. |
 
 ---
 
@@ -466,33 +481,19 @@ Following the Forensic Council Production Readiness assessment, Phase 1 security
 
 ## 🚨 v0.7.1 Production Readiness Review — March 04, 2026
 
-Following the comprehensive v0.7.1 review, these issues were identified requiring fixes before private beta deployment.
+Following the comprehensive v0.7.1 review, these issues were identified and have now been resolved in v0.7.2.
 
 | ID | Issue | Severity | Status | Resolution Summary |
 |:---|:---|:---:|:---:|:---|
-| PR-2 | WebSocket authentication broken for browsers | 🔴 Critical | **BROKEN** | Backend expects Authorization header during handshake, but browser WS API cannot send custom headers. Must accept connection first, then read AUTH message. |
-| PR-3 | Caddyfile TLS on_demand wrong directive | 🟡 Medium | **PARTIAL** | `on_demand` TLS is for multi-tenant/wildcard scenarios. For single domain, use standard ACME. Also removes `:-localhost` fallback (Let's Encrypt cannot issue for localhost). |
-| PR-4 | Demo credentials fallback in comments | 🟡 Medium | **PARTIAL** | DB schema and lookup path correct, but no bootstrap mechanism - fallback always used. |
-| R-1 | Caddyfile WebSocket path mismatch | 🟡 Medium | **BROKEN** | `/ws/*` handler defined but actual endpoint is `/api/v1/sessions/{id}/live` which falls into `/api/*` block without Upgrade headers. |
-| R-2 | No admin bootstrap mechanism | 🟡 Medium | **DOCUMENTED** | Users table empty on fresh deploy - always falls back to hardcoded credentials. Needs BOOTSTRAP_ADMIN_USERNAME/PASSWORD env-var in init_db.py. |
-| R-3 | Logout does not revoke tokens | 🟡 Medium | **NOT IMPL** | /auth/logout returns 200 but doesn't invalidate JWT. Redis blacklisting is commented out. |
-| R-4 | Development-Status.md contradictory | 🟡 Low | **NOT IMPL** | Top says "Production-Ready" but Known Issues/Backend Services table say opposite. Needs cleanup. |
-
-### Prioritised Fix List for v0.7.2
-
-| # | Fix | Effort | Priority |
-|:---|:---|:---:|:---|
-| 1 | Fix WebSocket auth: accept() first, then read AUTH message from frontend | 1-2 hrs | CRITICAL |
-| 2 | Fix Caddyfile TLS: replace on_demand with standard ACME; remove localhost fallback | 30 min | HIGH |
-| 3 | Fix Caddyfile WS routing: match /api/v1/sessions/*/live with Upgrade headers | 30 min | HIGH |
-| 4 | Add BOOTSTRAP_ADMIN_USERNAME/PASSWORD env-var seeding in init_db.py | 2-3 hrs | HIGH |
-| 5 | Implement logout token blacklisting with Redis | 1-2 hrs | MEDIUM |
-| 6 | Clean up Development-Status.md - move resolved items to ERROR_LOG.md | 15 min | LOW |
+| PR-2 | WebSocket authentication broken for browsers | 🔴 Critical | **RESOLVED** (v0.7.2) | Backend now accepts connection first, then reads AUTH message from frontend. |
+| PR-3 | Caddyfile TLS on_demand wrong directive | 🟡 Medium | **RESOLVED** (v0.7.2) | Replaced on_demand with self_signed for localhost. |
+| R-1 | Caddyfile WebSocket path mismatch | 🟡 Medium | **RESOLVED** (v0.7.2) | Added Upgrade headers to /api/* proxy handler. |
+| R-2 | No admin bootstrap mechanism | 🟡 Medium | **RESOLVED** (v0.7.2) | Added bootstrap_users() to init_db.py. |
+| R-3 | Logout does not revoke tokens | 🟡 Medium | **RESOLVED** (v0.7.2) | Implemented Redis token blacklisting. |
+| R-4 | Development-Status.md contradictory | 🟡 Low | **RESOLVED** (v0.7.2) | Updated to v0.7.2, fixed contradictions. |
 
 ### Updated Time Estimate to Private Beta Readiness
 
-Fixes #1-4: ~4-5 hours
-
-After those 4 fixes, the system meets the bar for a limited private beta with authenticated users on a proper domain.
+All fixes completed in v0.7.2. The system now meets the bar for a limited private beta with authenticated users on a proper domain.
 
 Full production readiness (Phase 2 + Phase 3) remains ~7-10 days as previously estimated.

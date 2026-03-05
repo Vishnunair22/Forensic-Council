@@ -11,6 +11,7 @@ Usage:
 """
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -215,6 +216,9 @@ async def init_database() -> bool:
                 logger.error("Missing table", table=table)
                 return False
         
+        # Bootstrap users if environment variables are set
+        await bootstrap_users(client)
+        
         logger.info("Schema initialized successfully")
         return True
         
@@ -223,6 +227,78 @@ async def init_database() -> bool:
         return False
     finally:
         await client.disconnect()
+
+
+async def bootstrap_users(client: PostgresClient) -> None:
+    """
+    Bootstrap admin and investigator users from environment variables.
+    
+    Environment Variables:
+        BOOTSTRAP_ADMIN_USERNAME: Username for admin user (default: admin)
+        BOOTSTRAP_ADMIN_PASSWORD: Password for admin user (required for admin creation)
+        BOOTSTRAP_INVESTIGATOR_USERNAME: Username for investigator (default: investigator)
+        BOOTSTRAP_INVESTIGATOR_PASSWORD: Password for investigator (required for investigator creation)
+    """
+    from passlib.context import CryptContext
+    
+    pwd_context = CryptContext(["bcrypt"], deprecated="auto")
+    
+    # Check if users table exists
+    tables = await client.fetch("""
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name = 'users'
+    """)
+    
+    if not tables:
+        logger.info("Users table not found, skipping bootstrap")
+        return
+    
+    # Get admin credentials from environment
+    admin_username = os.environ.get("BOOTSTRAP_ADMIN_USERNAME", "admin")
+    admin_password = os.environ.get("BOOTSTRAP_ADMIN_PASSWORD")
+    
+    # Get investigator credentials from environment
+    investigator_username = os.environ.get("BOOTSTRAP_INVESTIGATOR_USERNAME", "investigator")
+    investigator_password = os.environ.get("BOOTSTRAP_INVESTIGATOR_PASSWORD")
+    
+    # Create admin user if password is provided
+    if admin_password:
+        admin_exists = await client.fetch_one(
+            "SELECT 1 FROM users WHERE username = $1", admin_username
+        )
+        
+        if not admin_exists:
+            hashed = pwd_context.hash(admin_password)
+            await client.execute(
+                """
+                INSERT INTO users (user_id, username, hashed_password, role, is_active)
+                VALUES ($1, $2, $3, 'admin', TRUE)
+                """,
+                f"admin-{admin_username}", admin_username, hashed
+            )
+            logger.info("Admin user created", username=admin_username)
+        else:
+            logger.info("Admin user already exists", username=admin_username)
+    
+    # Create investigator user if password is provided
+    if investigator_password:
+        investigator_exists = await client.fetch_one(
+            "SELECT 1 FROM users WHERE username = $1", investigator_username
+        )
+        
+        if not investigator_exists:
+            hashed = pwd_context.hash(investigator_password)
+            await client.execute(
+                """
+                INSERT INTO users (user_id, username, hashed_password, role, is_active)
+                VALUES ($1, $2, $3, 'investigator', TRUE)
+                """,
+                f"inv-{investigator_username}", investigator_username, hashed
+            )
+            logger.info("Investigator user created", username=investigator_username)
+        else:
+            logger.info("Investigator user already exists", username=investigator_username)
 
 
 def main():
