@@ -19,6 +19,15 @@ Following the fresh Docker wipe and rebuild, these build issues were identified 
 | 127 | Frontend TypeScript build error: BriefFind type not found | 🔴 BUILD FAILURE | **RESOLVED** | Changed `BriefFind` type to `any` in frontend/src/lib/api.ts createLiveSocket function. |
 | 128 | Frontend ESLint config uses old flat config format | 🔴 BUILD FAILURE | **RESOLVED** | Updated eslint.config.mjs to use flat config with disabled rules for production builds. |
 | 129 | Backend react_loop.py has IndentationError at line 912 | 🔴 RUNTIME CRASH | **RESOLVED** | Removed orphaned code block (deterministic_tools) after return statement in backend/core/react_loop.py. |
+| 130 | Demo credentials not configured - NEXT_PUBLIC_DEMO_PASSWORD missing | 🟠 Runtime Error | **RESOLVED** | Added `NEXT_PUBLIC_DEMO_PASSWORD=demo123` to .env and docker-compose.yml. |
+| 131 | Frontend needs ARG for NEXT_PUBLIC_DEMO_PASSWORD at build time | 🟠 Runtime Error | **RESOLVED** | Added ARG and ENV for NEXT_PUBLIC_DEMO_PASSWORD in frontend/Dockerfile to embed during build. |
+| 132 | Frontend trying to connect to localhost:8000 (ERR_NAME_NOT_RESOLVED) | 🔴 Runtime Error | **RESOLVED** | Changed NEXT_PUBLIC_API_URL to use Docker internal hostname `http://backend:8000` in frontend Dockerfile and docker-compose.yml. |
+| 133 | Frontend health check failing - Next.js listening on wrong interface | 🟠 Healthcheck Fail | **RESOLVED** | Added HOSTNAME=0.0.0.0 environment variable in docker-compose.yml. Next.js now binds to all interfaces. |
+| 134 | CORS not allowing frontend container hostname | 🔴 Runtime Error | **RESOLVED** | Added `http://frontend:3000` to CORS_ALLOWED_ORIGINS in docker-compose.yml. |
+| 135 | Database not initialized after fresh Docker build | 🟠 Setup Step | **RESOLVED** | Ran `docker compose exec backend python scripts/init_db.py` to create all tables. |
+| 136 | Frontend API URL - Docker internal hostname not resolving from browser | 🔴 Runtime Error | **RESOLVED** | Changed NEXT_PUBLIC_API_URL to use `host.docker.internal:8000` to allow browser to access backend from host machine. |
+| 137 | Demo user missing in database | 🟠 Setup Step | **RESOLVED** | Added demo user with password hash to database. |
+| 138 | Login failing - passlib/bcrypt version incompatibility | 🔴 Runtime Error | **RESOLVED** | Fixed by downgrading bcrypt to 4.0.1, truncating passwords to 72 bytes in verify_password(), and regenerating password hashes in auth.py. Also fixed Windows localhost issue (use 127.0.0.1 instead of localhost). |
 
 Following the Docker preflight audit, these build and runtime issues were identified and resolved.
 
