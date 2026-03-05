@@ -14,7 +14,6 @@ import struct
 from datetime import datetime, timezone
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
-from typing import Any, Optional
 
 import numpy as np
 from PIL import Image

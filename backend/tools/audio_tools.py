@@ -683,7 +683,7 @@ async def speaker_diarize_pyannote(
         
         pipeline = Pipeline.from_pretrained(
             "pyannote/speaker-diarization-3.1",
-            use_auth_token=hf_token
+            token=hf_token
         )
         
         diarization = pipeline(artifact.file_path, num_speakers=num_speakers)
