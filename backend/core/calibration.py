@@ -17,6 +17,8 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
+from core.config import get_settings
+
 
 class CalibrationMethod(str, Enum):
     """Calibration methods available."""
@@ -57,7 +59,10 @@ class CalibrationLayer:
     generating court-defensible statements.
     """
     
-    def __init__(self, models_path: str = "/tmp/calibration_models"):
+    def __init__(self, models_path: Optional[str] = None):
+        if models_path is None:
+            settings = get_settings()
+            models_path = settings.calibration_models_path
         self.models_path = Path(models_path)
         self._loaded_models: dict[str, CalibrationModel] = {}
     

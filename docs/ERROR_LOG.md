@@ -1,9 +1,25 @@
 # Forensic Council — Error Log & Resolution Audit
 
 **Date:** 2026-03-05
-**Status:** All v0.7.2 Issues Resolved - Ready for Private Beta
+**Status:** All v0.7.3 Issues Resolved - Ready for Private Beta
 
 This log tracks significant errors, architectural flaws, and their subsequent resolutions.
+
+---
+
+## 🐛 Critical Dependency & Code Fixes — March 05, 2026 (v0.7.3)
+
+Following the comprehensive dependency audit and docker rebuild, these issues were identified and resolved.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 166 | SIGNING_KEY empty in backend/.env.example crashes config validator | 🔴 Build Blocker | **RESOLVED** | Changed SIGNING_KEY to `dev-signing-key-replace-in-production` in backend/.env.example. |
+| 167 | SIGNING_KEY=your_secure_hex_key_here bypasses production guard | 🔴 Security Bug | **RESOLVED** | Changed to `dev-placeholder-replace-before-production` which contains "dev" and triggers production validator. |
+| 168 | Missing docker-compose.override.yml | 🟡 Medium | **RESOLVED** | Created docker/docker-compose.override.yml with dev port bindings for Redis (6379), PostgreSQL (5432), Qdrant (6333-6334). |
+| 169 | Calibration models lost on container restart | 🟠 Runtime Degradation | **RESOLVED** | Fixed calibration.py to use settings.calibration_models_path, added CALIBRATION_MODELS_PATH env var and calibration_models volume in docker-compose.yml. |
+| 170 | Native backend install command wrong | 🟡 Documentation | **RESOLVED** | Changed `uv pip install -e ".[dev]"` to `uv sync --extra dev` in STARTUP.md. |
+| 171 | init_db.py manual run documented but auto-runs | 🟡 Documentation | **RESOLVED** | Updated STARTUP.md to clarify auto-init behavior and that manual runs are optional. |
+| 172 | Redis port listed confusingly (6380 vs 6379) | 🟡 Documentation | **RESOLVED** | Added ports-reference table in STARTUP.md explaining which compose file exposes each port. |
 
 ---
 
