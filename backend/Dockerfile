@@ -21,7 +21,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ─── Stage 2: Production ─────────────────────────────────────────────────────
 FROM python:3.11-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install system dependencies with apt cache mount for faster rebuilds
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     curl \
     tesseract-ocr \
     tesseract-ocr-eng \
@@ -38,13 +41,17 @@ COPY . .
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app"
-ENV NUMBA_CACHE_DIR="/tmp/numba_cache"
-# ML model cache directories - must be writable in read-only container
-ENV YOLO_CONFIG_DIR="/tmp/ultralytics"
-ENV TORCH_HOME="/tmp/torch"
-ENV HF_HOME="/tmp/huggingface"
-ENV DEEPFACE_HOME="/tmp/deepface"
-ENV TRANSFORMERS_CACHE="/tmp/huggingface/transformers"
+
+# ML model cache directories - moved to /app/cache to avoid tmpfs conflict
+ENV NUMBA_CACHE_DIR="/app/cache/numba_cache"
+ENV YOLO_CONFIG_DIR="/app/cache/ultralytics"
+ENV TORCH_HOME="/app/cache/torch"
+ENV HF_HOME="/app/cache/huggingface"
+ENV DEEPFACE_HOME="/app/cache/deepface"
+ENV TRANSFORMERS_CACHE="/app/cache/huggingface/transformers"
+
+# Pre-compile app bytecode at build time (not at runtime)
+RUN /app/.venv/bin/python -m compileall -q api/ core/ orchestration/ scripts/ 2>/dev/null || true
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD curl -f http://localhost:8000/health || exit 1

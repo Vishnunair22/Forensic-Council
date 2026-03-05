@@ -35,3 +35,6 @@ backend/storage/calibration_models/
 
 # Logs
 *.log
+
+# Private keys - NEVER commit these!
+backend/storage/keys/*.pem
