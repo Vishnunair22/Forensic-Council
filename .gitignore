@@ -27,7 +27,6 @@ venv/
 Thumbs.db
 
 # Docker
-docker-compose.override.yml
 
 # Storage (runtime data)
 backend/storage/evidence/
@@ -38,3 +37,7 @@ backend/storage/calibration_models/
 
 # Private keys - NEVER commit these!
 backend/storage/keys/*.pem
+
+# Frontend lint artifacts
+frontend/lint.json
+frontend/lint_output.txt

@@ -257,8 +257,7 @@ async function handleAuthError<T>(
   errorMessage: string
 ): Promise<T> {
   try {
-    const result = await operation();
-    resetAuthRetry();
+    const result = await operation();\n    resetAuthRetry();
     return result;
   } catch (error) {
     // Check if it's an authentication error
@@ -278,7 +277,18 @@ async function handleAuthError<T>(
           resetAuthRetry();
           return result;
         } catch (retryError) {
+          // Retried and still failing — redirect to session-expired page
+          clearAuthToken();
+          if (typeof window !== "undefined") {
+            window.location.href = "/session-expired";
+          }
           throw retryError;
+        }
+      } else {
+        // Retry limit exhausted — redirect to session-expired page
+        clearAuthToken();
+        if (typeof window !== "undefined") {
+          window.location.href = "/session-expired";
         }
       }
     }

@@ -608,3 +608,28 @@ Systematic verification of the full deep-dive analysis. All identified issues we
 ### March 05, 2026 Fixes Applied:
 1. **backend/Dockerfile** line 19: Added `--extra ml` to uv sync command to install ML packages from optional dependencies
 2. **frontend/src/lib/schemas.ts**: Added `thinking: z.string().optional()` to AgentResultSchema to preserve thinking text in history
+
+---
+
+## 🔧 Agent Stub Replacement & Production Hardening — March 05, 2026 (v0.8.0)
+
+Full replacement of all `stub_result: true` entries across all five forensic agents. Session expiry, Docker override, and project structure cleaned.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 179 | Agent 1 `adversarial_robustness_check` was a stub | 🟠 Quality | **RESOLVED** | Replaced with ELA perturbation stability: Gaussian noise, double JPEG recompression, colour jitter. Reports `adversarial_pattern_detected` based on ELA map stability. |
+| 180 | Agent 1 `sensor_db_query` was a stub | 🟠 Quality | **RESOLVED** | Replaced with PRNU residual heuristics: Gaussian detrended block variance + EXIF make/model cross-check. Detects GAN-level PRNU collapse (<0.8 variance). |
+| 181 | Agent 2 `adversarial_robustness_check` was a stub | 🟠 Quality | **RESOLVED** | Replaced with spectral perturbation stability: low-pass filter (4kHz), additive white noise (-40dB), time-stretch (2%). Reports feature shift deltas. |
+| 182 | Agent 3 `secondary_classification` was a stub | 🔴 Finding Gap | **RESOLVED** | Replaced with real CLIP ViT-B-32 zero-shot classification via shared CLIPImageAnalyzer singleton. Supports optional ROI crop via bbox input. |
+| 183 | Agent 3 `adversarial_robustness_check` was a stub | 🟠 Quality | **RESOLVED** | Replaced with YOLO perturbation stability: Gaussian blur, brightness +20%, salt-and-pepper noise. Reports Jaccard class similarity under perturbation. |
+| 184 | Agent 4 `adversarial_robustness_check` was a stub | 🟠 Quality | **RESOLVED** | Replaced with optical flow perturbation stability: per-frame Gaussian noise, brightness shift. Reports relative flow delta under each perturbation. |
+| 185 | Agent 5 `reverse_image_search` was a stub | 🔴 Finding Gap | **RESOLVED** | Replaced with PHash (16×16) perceptual hash comparison against local evidence store. Reports Hamming distance and similarity % for near-duplicate matches. |
+| 186 | Agent 5 `device_fingerprint_db` was a stub | 🟠 Quality | **RESOLVED** | Replaced with EXIF manufacturer signature rules + PRNU cross-validation. Detects make/model inconsistencies and GAN-level noise profiles. |
+| 187 | Agent 5 `adversarial_robustness_check` was a stub | 🟠 Quality | **RESOLVED** | Replaced with metadata anomaly score perturbation stability: GPS jitter, timestamp shift. Reports score delta from minor metadata perturbations. |
+| 188 | `docker-compose.override.yml` missing | 🟡 Dev UX | **RESOLVED** | Created `docker/docker-compose.override.yml` with dev port bindings for Redis (6379), Postgres (5432), Qdrant (6333/6334) and debug mode. |
+| 189 | Session expiry showed blank page | 🟠 UX | **RESOLVED** | Added `/session-expired` page. Updated `handleAuthError` in `api.ts` to redirect to `/session-expired` when auth retry limit exhausted. |
+| 190 | `LLM_PROVIDER`/`LLM_API_KEY`/`LLM_MODEL` missing from docker-compose | 🟡 Config | **RESOLVED** | Added `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL` env vars to backend service in `docker-compose.yml`. Default `LLM_PROVIDER=none` for deterministic mode. |
+| 191 | `HF_TOKEN` not a typed Settings field | 🟡 Config | **RESOLVED** | Added `hf_token: Optional[str]` field to Settings class in `core/config.py`. Previously only read via `os.getenv()` directly. |
+| 192 | `DATABASE_URL` in backend `.env.example` misleading | 🟡 Docs | **RESOLVED** | Removed `DATABASE_URL` from `backend/.env.example` — app builds URL from individual `POSTGRES_*` vars and never reads `DATABASE_URL`. |
+| 193 | Stray scripts at root level | 🟢 Structure | **RESOLVED** | Moved `hash_demo.py`, `test_exif.py`, `test_exif_sync.py` to `backend/scripts/`. Moved `End-End Test.py` to `docs/end_to_end_test.py`. |
+| 194 | No root-level Makefile | 🟢 Dev UX | **RESOLVED** | Created `Makefile` with targets: `make infra`, `make up`, `make down`, `make logs`, `make backend`, `make frontend`, `make test`, `make clean`, etc. |
