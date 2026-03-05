@@ -909,19 +909,6 @@ class ReActLoopEngine:
         
         # Note: The main loop will execute this action and create the observation
         return action
-                deterministic_tools = {
-                    "exif_extract", "gps_timezone_validate", "steganography_scan", 
-                    "file_structure_analysis", "timestamp_analysis", "file_hash_verify", 
-                    "hex_signature_scan",
-                }
-                if best_tool.name in deterministic_tools:
-                    confidence = 0.95
-                else:
-                    confidence = 0.65
-
-            if output.get("status") == "stub_response":
-                confidence = 0.45
-                status = "INCOMPLETE"
 
         _AGENT_ID_TO_NAME = {
             "Agent1": "Image Forensics",
