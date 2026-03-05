@@ -6,6 +6,7 @@ Routes for managing investigation sessions.
 """
 
 from typing import List
+import asyncio
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
@@ -61,25 +62,47 @@ async def terminate_session(session_id: str, current_user: User = Depends(get_cu
 @router.websocket("/{session_id}/live")
 async def live_updates(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for live investigation updates. Requires authentication via AUTH message after connection."""
-    # S4: Validate session exists before accepting
+    # First accept the connection to avoid HTTP error on the upgrade request
+    # Use subprotocol to acknowledge the client's protocol request
+    await websocket.accept(subprotocol="forensic-v1")
+    
+    # Validate session exists AFTER accepting but before processing
     if session_id not in _active_pipelines:
+        await websocket.send_json({
+            "type": "ERROR",
+            "session_id": session_id,
+            "message": "Session not found",
+            "agent_id": None,
+            "agent_name": None
+        })
         await websocket.close(code=4004, reason="Session not found")
         return
 
-    # Accept the connection first (browser WebSocket API cannot send custom headers)
-    await websocket.accept()
-
-    # Wait for authentication message from client
+    # Wait for authentication message from client with timeout
     try:
-        auth_message = await websocket.receive_text()
+        auth_message = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
         auth_data = json.loads(auth_message)
         
         if auth_data.get("type") != "AUTH":
+            await websocket.send_json({
+                "type": "ERROR",
+                "session_id": session_id,
+                "message": "Missing authentication message",
+                "agent_id": None,
+                "agent_name": None
+            })
             await websocket.close(code=4001, reason="Missing authentication message")
             return
             
         token = auth_data.get("token")
         if not token:
+            await websocket.send_json({
+                "type": "ERROR",
+                "session_id": session_id,
+                "message": "Missing token",
+                "agent_id": None,
+                "agent_name": None
+            })
             await websocket.close(code=4001, reason="Missing token")
             return
             
@@ -87,13 +110,44 @@ async def live_updates(websocket: WebSocket, session_id: str):
         try:
             token_data = await decode_token(token)
         except Exception:
+            await websocket.send_json({
+                "type": "ERROR",
+                "session_id": session_id,
+                "message": "Invalid or expired token",
+                "agent_id": None,
+                "agent_name": None
+            })
             await websocket.close(code=4001, reason="Invalid or expired token")
             return
             
+    except asyncio.TimeoutError:
+        await websocket.send_json({
+            "type": "ERROR",
+            "session_id": session_id,
+            "message": "Authentication timeout",
+            "agent_id": None,
+            "agent_name": None
+        })
+        await websocket.close(code=4001, reason="Authentication timeout")
+        return
     except json.JSONDecodeError:
+        await websocket.send_json({
+            "type": "ERROR",
+            "session_id": session_id,
+            "message": "Invalid JSON in authentication message",
+            "agent_id": None,
+            "agent_name": None
+        })
         await websocket.close(code=4001, reason="Invalid JSON in authentication message")
         return
     except Exception:
+        await websocket.send_json({
+            "type": "ERROR",
+            "session_id": session_id,
+            "message": "Authentication failed",
+            "agent_id": None,
+            "agent_name": None
+        })
         await websocket.close(code=4001, reason="Authentication failed")
         return
 
@@ -101,10 +155,12 @@ async def live_updates(websocket: WebSocket, session_id: str):
     register_websocket(session_id, websocket)
 
     try:
-        # Send welcome message
+        # Send welcome message with all required fields
         await websocket.send_json({
             "type": "AGENT_UPDATE",
             "session_id": session_id,
+            "agent_id": None,
+            "agent_name": None,
             "message": "Connected to live updates",
             "data": {"status": "connected", "user_id": token_data.user_id}
         })

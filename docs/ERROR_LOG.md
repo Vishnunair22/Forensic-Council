@@ -23,6 +23,21 @@ Following the comprehensive dependency audit and docker rebuild, these issues we
 
 ---
 
+## 🐛 WebSocket Root Cause Fixes — March 05, 2026 (v0.7.3 cont.)
+
+Fixed 3 compounding WebSocket bugs that caused stuck uploads and silent failures.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 173 | Frontend handler override race condition | 🔴 Critical | **RESOLVED** | api.ts: createLiveSocket now returns `{ws, connected}` with atomic handler setup. No more overriding. |
+| 174 | Frontend onclose never rejected Promise | 🔴 Critical | **RESOLVED** | useSimulation.ts: handleClose now rejects promise if closed before connection established. |
+| 175 | Backend close() before accept() | 🔴 Critical | **RESOLVED** | sessions.py: Moved accept() before session validation. Added subprotocol="forensic-v1". |
+| 176 | Backend receive_text() no timeout | 🟡 Medium | **RESOLVED** | sessions.py: Added asyncio.wait_for(..., timeout=10.0) for AUTH message. |
+| 177 | Backend rejection missing typed message | 🟡 Medium | **RESOLVED** | sessions.py: All rejection paths now send typed {"type": "ERROR", ...} before close. |
+| 178 | Backend welcome missing agent fields | 🟡 Low | **RESOLVED** | sessions.py: Welcome message now includes agent_id:null, agent_name:null per BriefUpdate schema. |
+
+---
+
 ## 🐛 Critical Dependency & Code Fixes — March 05, 2026
 
 Following the comprehensive dependency audit, these issues were identified and resolved.

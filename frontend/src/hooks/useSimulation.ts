@@ -87,6 +87,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
 
             const messageQueue: BriefUpdate[] = [];
             let isProcessingQueue = false;
+            let wsConnectionReady = false;
 
             const activateNextPending = () => {
                 if (pendingActivationsRef.current.length === 0) {
@@ -230,15 +231,37 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                 isProcessingQueue = false;
             };
 
-            const handleMessage = (update: BriefUpdate) => {
-                console.log("[WebSocket] Received update, adding to queue:", update);
-                messageQueue.push(update);
-                processQueue();
+            const handleMessage = (event: MessageEvent) => {
+                try {
+                    const update: BriefUpdate = JSON.parse(event.data);
+                    console.log("[WebSocket] Received update, adding to queue:", update);
+                    messageQueue.push(update);
+                    processQueue();
+                } catch (error) {
+                    console.error("[WebSocket] Failed to parse message:", error);
+                }
             };
 
-            const handleClose = () => {
-                console.log("[WebSocket] Connection closed");
+            // Create socket and get the connection promise
+            const { ws, connected } = createLiveSocket(targetSessionId);
+            wsRef.current = ws;
+
+            // Wire up message handler
+            ws.onmessage = handleMessage;
+
+            // Handle close - reject if closed before/during connection, otherwise notify
+            const handleClose = (event: CloseEvent) => {
+                console.log("[WebSocket] Connection closed:", event.code, event.reason);
                 wsRef.current = null;
+                
+                // If connection was never established, reject the promise
+                if (!wsConnectionReady) {
+                    const reason = event.reason || `Connection failed (code ${event.code})`;
+                    reject(new Error(reason));
+                    return;
+                }
+                
+                // Connection was established but closed - notify status
                 setStatus((prev: SimulationStatus) => {
                     if (prev !== "complete" && prev !== "error" && prev !== "idle") {
                         setErrorMessage("Connection to server lost.");
@@ -247,23 +270,21 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                     return prev;
                 });
             };
+            ws.onclose = handleClose;
 
-            const ws = createLiveSocket(targetSessionId, handleMessage, handleClose);
-            wsRef.current = ws;
-
-            // Override onopen to resolve the promise
-            const origOnOpen = ws.onopen;
-            ws.onopen = (ev) => {
-                if (origOnOpen && typeof origOnOpen === 'function') origOnOpen.call(ws, ev);
-                setWsReady(true);
-                resolve();
-            };
-            // Override onerror to reject the promise
-            const origOnError = ws.onerror;
-            ws.onerror = (ev) => {
-                if (origOnError && typeof origOnError === 'function') origOnError.call(ws, ev);
-                reject(new Error("WebSocket connection failed"));
-            };
+            // Wait for connection - resolve or reject based on outcome
+            connected
+                .then(() => {
+                    wsConnectionReady = true;
+                    setWsReady(true);
+                    resolve();
+                })
+                .catch(() => {
+                    // connected promise settled (either onerror or onclose before open)
+                    if (!wsConnectionReady) {
+                        reject(new Error("WebSocket connection failed"));
+                    }
+                });
         });
     }, []);
 
