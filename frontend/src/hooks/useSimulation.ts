@@ -197,7 +197,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                     activateNextPending();
 
                                     // Check if all expected agents are done (sequential or fast parallel)
-                                    const totalExpected = AGENTS_DATA.length - 1; // Excluding Arbiter
+                                    const totalExpected = AGENTS_DATA.length; // All 5 specialist agents (Arbiter is not in AGENTS_DATA)
                                     if (nextCompleted.length >= totalExpected) {
                                         setStatus("complete");
                                         onCompleteRef.current?.();
