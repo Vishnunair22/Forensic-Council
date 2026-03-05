@@ -29,6 +29,7 @@ coverage/
 *.spec.tsx
 jest.config.js
 jest.config.ts
+src/__tests__/
 
 # IDE
 .vscode/
@@ -53,3 +54,5 @@ Dockerfile*
 *.log
 .DS_Store
 Thumbs.db
+lint.json
+lint_output.txt
