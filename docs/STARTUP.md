@@ -9,12 +9,28 @@
 
 ## Before First Run
 
-Generate a required signing key and set it in your environment:
+### 1. Create Environment File
+
+On a fresh clone, you must create a `.env` file before running any Docker commands. The `SIGNING_KEY` variable has a required guard that will abort the build if missing.
+
 ```bash
-export SIGNING_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
-export HF_TOKEN=hf_your_token_here  # Required for audio agent (pyannote.audio)
+# Copy the example environment file
+cp .env.example .env
+
+# Generate a secure signing key (run this command and copy the output to SIGNING_KEY in .env)
+python -c "import secrets; print(secrets.token_hex(32))"
 ```
-Without `SIGNING_KEY`, `docker compose -f docker/docker-compose.yml --env-file .env up` will abort immediately with an error message.
+
+Edit `.env` and set `SIGNING_KEY` to the generated value. You may also set:
+- `HF_TOKEN=hf_your_token_here`  # Required for audio agent (pyannote.audio)
+
+### 2. Enable BuildKit (Recommended)
+
+```bash
+export DOCKER_BUILDKIT=1
+```
+
+---
 
 **Default Ports:**
 - Frontend: `3000`
