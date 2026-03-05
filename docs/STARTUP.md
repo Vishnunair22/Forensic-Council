@@ -33,11 +33,16 @@ export DOCKER_BUILDKIT=1
 ---
 
 **Default Ports:**
-- Frontend: `3000`
-- Backend API: `8000`
-- PostgreSQL: `5432`
-- Qdrant: `6333`, `6334`
-- Redis: `6380`
+
+| Service | Port | Notes |
+|---------|------|-------|
+| Frontend | 3000 | Always exposed in all compose files |
+| Backend API | 8000 | Always exposed |
+| PostgreSQL | 5432 | Only in override/prod compose files |
+| Qdrant | 6333, 6334 | Only in override/prod compose files |
+| Redis | 6379 | Only in override/prod compose files |
+
+> **Note:** Redis port 6380 mentioned in some docs was incorrect. The actual Redis port is 6379. The base `docker-compose.yml` does not expose infrastructure ports to the host - use `docker-compose.override.yml` (auto-loaded) or `docker-compose.infra.yml` for host access.
 
 ---
 
@@ -74,11 +79,11 @@ You should see `forensic_redis` and `forensic_postgres` as `healthy`.
 ```bash
 cd backend
 
-# Create virtual environment and install dependencies
+# Create virtual environment and install dependencies from lockfile
 uv venv
-uv pip install -e ".[dev]"
+uv sync --extra dev
 
-# Initialize database schema
+# Initialize database schema (optional - auto-runs on first API startup)
 uv run python scripts/init_db.py
 
 # Start backend with hot reload
@@ -115,13 +120,15 @@ Use this when testing Docker builds or when you don't have Python/Node installed
 
 ```bash
 # Build and start all services (uses docker/docker-compose.yml)
+# Note: docker-compose.override.yml is auto-loaded for dev port bindings
 docker compose -f docker/docker-compose.yml --env-file .env up --build -d
 
 # Wait for health checks (~30-60 seconds)
 docker compose -f docker/docker-compose.yml --env-file .env ps
 
-# Initialize the database schema (first run only)
-docker compose -f docker/docker-compose.yml --env-file .env exec backend python scripts/init_db.py
+# Database schema is auto-initialized on first startup
+# Only run manually to verify connectivity:
+# docker compose -f docker/docker-compose.yml --env-file .env exec backend python scripts/init_db.py
 ```
 
 ### Access Points
