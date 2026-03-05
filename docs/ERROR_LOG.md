@@ -49,6 +49,7 @@ Following the comprehensive audit, these additional issues were identified and r
 | 109 | DATABASE_URL injected but never read by app | 🟡 Dead Config | **RESOLVED** | Removed unused `DATABASE_URL` from `docker-compose.yml`. |
 | 110 | Hardcoded demo credentials in client JavaScript | 🟡 Security Hygiene | **RESOLVED** | Changed to require `NEXT_PUBLIC_DEMO_PASSWORD` env var in `frontend/src/lib/api.ts`. |
 | 111 | `lru_cache` settings never cleared between tests (test flakiness) | 🟡 Test Issues | **RESOLVED** | Added autouse `clear_settings_cache` fixture in `backend/tests/conftest.py`. |
+| 112 | `.env.example` line 73 references wrong path `docker-compose.yml` | 🟡 Cosmetic | **RESOLVED** | Changed to `docker/docker-compose.yml` in `.env.example`. |
 
 ---
 
