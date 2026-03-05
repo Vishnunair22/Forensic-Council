@@ -197,7 +197,7 @@ async def blacklist_token(token: str, expires_in_seconds: int) -> None:
         from infra.redis_client import get_redis_client
         redis = await get_redis_client()
         if redis:
-            await redis.setex(f"blacklist:{token}", expires_in_seconds, "1")
+            await redis.set(f"blacklist:{token}", "1", ex=expires_in_seconds)
             logger.info("Token blacklisted", expires_in=expires_in_seconds)
     except Exception as e:
         logger.warning("Failed to blacklist token", error=str(e))

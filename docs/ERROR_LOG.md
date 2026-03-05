@@ -19,6 +19,8 @@ Following the comprehensive dependency audit, these issues were identified and r
 | 161 | pyannote.audio 4.x removed use_auth_token= parameter | 🔴 Runtime Silent | **RESOLVED** | Changed `use_auth_token=` to `token=` in audio_tools.py line 686. |
 | 162 | ts-jest 29.4.6 incompatible with jest 30.2.0 | 🟠 Tests Broken | **RESOLVED** | Downgraded jest to ^29.7.0 and ts-jest to ^29.4.6 (compatible versions). |
 | 163 | metadata_tools.py duplicate import | 🟡 Code Quality | **RESOLVED** | Removed duplicate `from typing import Any, Optional` at line 17. |
+| 164 | blacklist_token() uses setex() but RedisClient has no setex() method | 🔴 Security Bug | **RESOLVED** | Changed `setex()` to `set(..., ex=)` in auth.py line 200 to use RedisClient API correctly. |
+| 165 | useSimulation.ts fires "complete" after 4 of 5 agents | 🟠 UI Glitch | **RESOLVED** | Removed `-1` from `totalExpected` calculation in useSimulation.ts line 200. |
 
 ---
 
