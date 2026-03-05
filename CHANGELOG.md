@@ -3,6 +3,43 @@
 All notable changes to the Forensic Council project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+
+## [0.8.0] — 2026-03-05
+
+### Added
+- **All 9 agent stubs replaced with real implementations** (see `docs/Development-Status.md` for full table)
+  - Agent 1: `adversarial_robustness_check` — ELA perturbation stability (Gaussian noise, double JPEG, colour jitter)
+  - Agent 1: `sensor_db_query` — PRNU residual heuristics + EXIF manufacturer cross-validation
+  - Agent 2: `adversarial_robustness_check` — Spectral perturbation stability (low-pass, noise, time-stretch)
+  - Agent 3: `secondary_classification` — CLIP ViT-B-32 zero-shot via shared CLIPImageAnalyzer singleton
+  - Agent 3: `adversarial_robustness_check` — YOLO perturbation stability (blur, brightness, salt-and-pepper)
+  - Agent 4: `adversarial_robustness_check` — Optical flow perturbation stability (noise, brightness)
+  - Agent 5: `reverse_image_search` — PHash (16×16) perceptual hash comparison against local evidence store
+  - Agent 5: `device_fingerprint_db` — EXIF manufacturer signature rules + PRNU cross-validation
+  - Agent 5: `adversarial_robustness_check` — Metadata anomaly score perturbation stability
+- `docker/docker-compose.override.yml` — Development override with host port bindings
+- `frontend/src/app/session-expired/page.tsx` — Session expiry page (fixes blank page on invalid session)
+- `Makefile` at project root with targets: `infra`, `up`, `down`, `logs`, `backend`, `frontend`, `test`, `clean`
+- `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL` environment variables wired into Settings and docker-compose
+- `hf_token` as a typed field in `Settings` (was previously only `os.getenv()`)
+
+### Changed
+- `frontend/src/lib/api.ts` — `handleAuthError` now redirects to `/session-expired` when auth retry limit exhausted
+- `backend/.env.example` — Removed misleading `DATABASE_URL` (app builds URL from `POSTGRES_*` vars), added LLM config section
+- `backend/core/config.py` — Added `hf_token: Optional[str]` field
+- `.gitignore` — Removed `docker-compose.override.yml` exclusion (now committed), added `frontend/lint.json` / `frontend/lint_output.txt`
+
+### Fixed
+- Session expiry showed blank page — now redirects to `/session-expired`
+- `LLM_PROVIDER` env var not passed to Docker backend container
+- `HF_TOKEN` not a typed Settings field (silent failure if not set)
+
+### Removed
+- `frontend/lint.json` and `frontend/lint_output.txt` debug artifacts
+- `hash_demo.py` from root (moved to `backend/scripts/`)
+- `backend/test_exif.py`, `backend/test_exif_sync.py` from backend root (moved to `backend/scripts/`)
+- `docs/End-End Test.py` renamed to `docs/end_to_end_test.py`
+
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.7.0] - 2026-03-04

@@ -179,6 +179,9 @@ class Settings(BaseSettings):
     llm_max_tokens: int = Field(default=2048, description="Maximum tokens for LLM responses")
     llm_timeout: float = Field(default=60.0, description="Timeout for LLM API calls in seconds")
     llm_enable_react_reasoning: bool = Field(default=True, description="Enable LLM reasoning in ReAct loop")
+
+    # HuggingFace Token (for pyannote.audio speaker diarization and other HF models)
+    hf_token: Optional[str] = Field(default=None, description="HuggingFace API token for model downloads")
     
     # Retry Configuration
     database_retry_max: int = Field(default=5, description="Max database connection retries")
