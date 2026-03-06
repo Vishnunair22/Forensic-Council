@@ -59,6 +59,7 @@ class UserRole(str, Enum):
 class TokenData(BaseModel):
     """Token payload data."""
     user_id: str
+    username: str
     role: UserRole
     exp: Optional[datetime] = None
 
@@ -86,6 +87,7 @@ def create_access_token(
     user_id: str,
     role: UserRole,
     expires_delta: Optional[timedelta] = None,
+    username: Optional[str] = None,
 ) -> str:
     """
     Create a JWT access token.
@@ -105,6 +107,7 @@ def create_access_token(
     
     to_encode = {
         "sub": user_id,
+        "username": username or user_id,
         "role": role.value,
         "exp": expire,
         "iat": datetime.now(timezone.utc),
@@ -140,6 +143,7 @@ async def decode_token(token: str) -> TokenData:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
+        username: str = payload.get("username", user_id)
         role_str: str = payload.get("role")
         exp = payload.get("exp")
         
@@ -153,7 +157,7 @@ async def decode_token(token: str) -> TokenData:
         role = UserRole(role_str)
         exp_datetime = datetime.fromtimestamp(exp, tz=timezone.utc) if exp else None
         
-        return TokenData(user_id=user_id, role=role, exp=exp_datetime)
+        return TokenData(user_id=user_id, username=username, role=role, exp=exp_datetime)
     
     except JWTError as e:
         logger.warning("JWT decode error", error=str(e))
@@ -180,9 +184,12 @@ async def is_token_blacklisted(token: str) -> bool:
         if redis:
             result = await redis.get(f"blacklist:{token}")
             return result is not None
+        else:
+            logger.error("Redis unavailable — cannot verify token revocation, denying")
+            return True
     except Exception as e:
-        logger.warning("Failed to check token blacklist", error=str(e))
-    return False
+        logger.error("Redis unavailable — cannot verify token revocation, denying", error=str(e))
+        return True
 
 
 async def blacklist_token(token: str, expires_in_seconds: int) -> None:
@@ -222,18 +229,27 @@ async def get_current_user(
     token_data = await decode_token(token)
     
     # In production, fetch user from database
-    # For now, construct user from token data
+    try:
+        from infra.postgres_client import get_postgres_client
+        postgres = await get_postgres_client()
+        if postgres:
+            query = "SELECT is_disabled FROM users WHERE user_id = $1"
+            row = await postgres.fetch_one(query, token_data.user_id)
+            if row and row.get("is_disabled"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="User account is disabled",
+                )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning("Failed to check database for disabled user", error=str(e))
+    
     user = User(
         user_id=token_data.user_id,
-        username=token_data.user_id,  # Could be different in DB
+        username=token_data.username,
         role=token_data.role,
     )
-    
-    if user.disabled:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is disabled",
-        )
     
     return user
 

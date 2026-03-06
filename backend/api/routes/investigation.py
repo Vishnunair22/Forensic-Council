@@ -797,8 +797,8 @@ async def get_brief(
         )
         if brief:
             return {"brief": brief}
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error("Failed to retrieve brief", session_id=session_id, agent_id=agent_id, error=str(e))
 
     return {"brief": "No brief available yet."}
 

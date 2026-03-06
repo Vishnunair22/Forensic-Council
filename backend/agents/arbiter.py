@@ -65,7 +65,7 @@ class ForensicReport(BaseModel):
     executive_summary: str
     per_agent_findings: dict[str, list[dict[str, Any]]]
     cross_modal_confirmed: list[dict[str, Any]] = Field(default_factory=list)
-    contested_findings: list[FindingComparison] = Field(default_factory=list)
+    contested_findings: list[dict[str, Any]] = Field(default_factory=list)
     tribunal_resolved: list[TribunalCase] = Field(default_factory=list)
     incomplete_findings: list[dict[str, Any]] = Field(default_factory=list)
     stub_findings: list[dict[str, Any]] = Field(default_factory=list)  # Stub/implemented tool results
@@ -126,7 +126,7 @@ class CouncilArbiter:
         challenge_results = []
         for comparison in comparisons:
             if comparison.verdict == FindingVerdict.CONTRADICTION:
-                contested_findings.append(comparison)
+                contested_findings.append(comparison.model_dump(mode="json"))
                 # Run challenge loop for each contradiction
                 agent_a = comparison.finding_a.get("agent_id", "")
                 agent_b = comparison.finding_b.get("agent_id", "")
@@ -141,11 +141,15 @@ class CouncilArbiter:
                 challenge_results.append(result)
         
         # Cross-modal confirmed findings
+        seen_ids = set()
         cross_modal_confirmed = []
         for comparison in comparisons:
             if (comparison.verdict == FindingVerdict.AGREEMENT and 
                 comparison.cross_modal_confirmed):
-                cross_modal_confirmed.append(comparison.finding_a)
+                fid = comparison.finding_a.get("finding_id")
+                if fid not in seen_ids:
+                    seen_ids.add(fid)
+                    cross_modal_confirmed.append(comparison.finding_a)
         
         # Incomplete findings (excluding stub results which are not court-defensible)
         incomplete_findings = [
@@ -195,10 +199,7 @@ class CouncilArbiter:
             uncertainty_statement=uncertainty_statement,
         )
         
-        # Sign the report
-        signed_report = await self.sign_report(report)
-        
-        return signed_report
+        return report
     
     async def cross_agent_comparison(
         self,
@@ -218,10 +219,8 @@ class CouncilArbiter:
                 type_b = set(finding_b.get("finding_type", "").lower().replace("_", " ").split())
                 
                 stopwords = {
-                    "analysis", "scan", "extract", "detect", "validate", "verify",
-                    "full", "deep", "the", "a", "an", "of", "to", "for", "in",
-                    "and", "or", "image", "file", "run", "check", "region",
-                    "artifact", "evidence", "test", "result", "data"
+                    "the", "a", "an", "of", "to", "for", "in", "and", "or",
+                    "full", "deep", "run", "check", "test", "result", "data", "file"
                 }
                 keys_a = {k for k in type_a if k not in stopwords and len(k) > 2}
                 keys_b = {k for k in type_b if k not in stopwords and len(k) > 2}

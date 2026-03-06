@@ -106,9 +106,9 @@ class EvidenceStore:
         """
         return hashlib.sha256(data).hexdigest()
     
-    def _read_file(self, file_path: str) -> bytes:
+    async def _read_file(self, file_path: str) -> bytes:
         """
-        Read file contents.
+        Read file contents asynchronously.
         
         Args:
             file_path: Path to file
@@ -116,8 +116,11 @@ class EvidenceStore:
         Returns:
             File contents as bytes
         """
-        with open(file_path, "rb") as f:
-            return f.read()
+        import asyncio
+        def _read():
+            with open(file_path, "rb") as f:
+                return f.read()
+        return await asyncio.to_thread(_read)
     
     async def ingest(
         self,
@@ -149,8 +152,8 @@ class EvidenceStore:
             EvidenceStoreError: If ingestion fails
         """
         try:
-            # Read and hash file
-            data = self._read_file(file_path)
+            # Read and hash file asynchronously 
+            data = await self._read_file(file_path)
             content_hash = self._compute_hash(data)
             
             # Create artifact record (root_id will be set to artifact_id)

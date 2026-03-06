@@ -198,6 +198,8 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                             break;
 
                         case "PIPELINE_COMPLETE":
+                            // Clear any remaining active agents (e.g. Arbiter)
+                            setActiveAgents({});
                             // Status is ideally already set to "complete" when last agent finished
                             setStatus(prev => {
                                 if (prev !== "complete") {
@@ -223,6 +225,10 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                 try {
                     const update: BriefUpdate = JSON.parse(event.data);
                     console.log("[WebSocket] Received update, adding to queue:", update);
+                    if (messageQueue.length >= 500) {
+                        messageQueue.shift();
+                        console.warn("[WebSocket] Queue limit reached, dropped oldest message");
+                    }
                     messageQueue.push(update);
                     processQueue();
                 } catch (error) {
@@ -296,8 +302,8 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
         setWsReady(false);
         if (newSessionId) {
             setSessionId(newSessionId);
-            setStatus("initiating");
         }
+        setStatus("initiating");
     }, []);
 
     const resetSimulation = useCallback(() => {
