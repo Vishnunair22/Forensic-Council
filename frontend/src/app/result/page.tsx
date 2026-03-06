@@ -105,8 +105,10 @@ export default function ResultPage() {
         clearHistory();
     };
 
-    const formatDate = (isoString: string) => {
-        return new Date(isoString).toLocaleString();
+    const formatDate = (isoString: string | null | undefined) => {
+        if (!isoString) return "N/A";
+        const d = new Date(isoString);
+        return isNaN(d.getTime()) ? "N/A" : d.toLocaleString();
     };
 
     const getFileName = () => {

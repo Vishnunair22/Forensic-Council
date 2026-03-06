@@ -131,25 +131,27 @@ services:
           memory: 512M
           cpus: '0.5'
     # Security hardening
-    read_only: false
+    read_only: true
     tmpfs:
       - /tmp:nosuid,size=512m # Remove noexec — Numba dlopen() requires exec on /tmp
+      - /app/cache:nosuid,size=4g # ML model cache (writable)
+      - /app/storage/evidence:nosuid,size=2g # Evidence storage (writable)
     volumes:
-      - evidence_data:/app/storage/evidence
+      - evidence_data:/app/storage/evidence:rw
       - ../../backend/storage/keys:/app/storage/keys:ro
-      - hf_cache:/app/cache/huggingface
-      - torch_cache:/app/cache/torch
-      - numba_cache:/app/cache/numba_cache
-      - yolo_cache:/app/cache/ultralytics
-      - deepface_cache:/app/cache/deepface
-      - calibration_models:/app/cache/calibration_models
+      - hf_cache:/app/cache/huggingface:rw
+      - torch_cache:/app/cache/torch:rw
+      - numba_cache:/app/cache/numba_cache:rw
+      - yolo_cache:/app/cache/ultralytics:rw
+      - deepface_cache:/app/cache/deepface:rw
+      - calibration_models:/app/cache/calibration_models:rw
 
   frontend:
     build:
       context: ../../frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_DEMO_PASSWORD: ${NEXT_PUBLIC_DEMO_PASSWORD:-inv123!}
+        NEXT_PUBLIC_DEMO_PASSWORD: "${NEXT_PUBLIC_DEMO_PASSWORD:?Error: NEXT_PUBLIC_DEMO_PASSWORD not set}"
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     container_name: forensic_ui
     ports:

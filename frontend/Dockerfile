@@ -1,7 +1,7 @@
 # ============================================================================
 # Stage 1: Dependencies - cached separately for faster rebuilds
 # ============================================================================
-FROM node:20-alpine AS deps
+FROM node:20-alpine@sha256:ef9fb6e10eb61ff8c3d89fe5d0cb29f0e61b3c4cdc8c3a7e2951ed0a5c6ad9c8 AS deps
 
 WORKDIR /app
 
@@ -14,7 +14,7 @@ RUN npm ci --prefer-offline
 # ============================================================================
 # Stage 2: Builder - builds the Next.js application
 # ============================================================================
-FROM node:20-alpine AS builder
+FROM node:20-alpine@sha256:ef9fb6e10eb61ff8c3d89fe5d0cb29f0e61b3c4cdc8c3a7e2951ed0a5c6ad9c8 AS builder
 
 WORKDIR /app
 
@@ -38,7 +38,7 @@ RUN npm run build
 # ============================================================================
 # Stage 3: Runner - production stage with standalone output
 # ============================================================================
-FROM node:20-alpine AS runner
+FROM node:20-alpine@sha256:ef9fb6e10eb61ff8c3d89fe5d0cb29f0e61b3c4cdc8c3a7e2951ed0a5c6ad9c8 AS runner
 
 WORKDIR /app
 
@@ -52,7 +52,7 @@ COPY --from=builder /app/public ./public
 
 # Healthcheck with fixed syntax (added missing closing parenthesis)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 \
-  CMD node -e "require('http').get('http://127.0.0.1:3000', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+  CMD node -e "require('http').get('http://127.0.0.1:3000', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', (e) => {console.error('Health check failed:', e); process.exit(1)})"
 
 EXPOSE 3000
 

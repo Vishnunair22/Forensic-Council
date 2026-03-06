@@ -12,7 +12,7 @@ from typing import AsyncIterator
 
 import time
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -93,6 +93,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Initialize distributed tracing in production
+from core.observability import setup_observability
+setup_observability(app, settings)
+
 # Configure CORS — restricted methods and headers
 _cors_origins = settings.cors_allowed_origins
 app.add_middleware(
@@ -132,6 +136,35 @@ async def correlation_id_middleware(request: Request, call_next):
     response.headers["X-Request-ID"] = request_id
     request_id_ctx.reset(token)
     return response
+
+@app.middleware("http")
+async def add_cache_headers(request: Request, call_next):
+    """Add cache control headers."""
+    response = await call_next(request)
+    
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store, must-revalidate"
+    elif request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    
+    return response
+
+MAX_BODY_SIZE = 55 * 1024 * 1024  # 55MB (to allow 50MB uploads + overhead)
+
+@app.middleware("http")
+async def limit_upload_size(request: Request, call_next):
+    """Limit request body size to prevent DoS."""
+    if request.method in ["POST", "PUT", "PATCH"]:
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > MAX_BODY_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Request body too large (max {MAX_BODY_SIZE // (1024 * 1024)}MB)"
+            )
+    return await call_next(request)
 
 
 # Metrics collection middleware

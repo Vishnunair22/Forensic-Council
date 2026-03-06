@@ -160,7 +160,10 @@ class PostgresClient:
         args_list: list[tuple[Any, ...]],
     ) -> None:
         """
-        Execute a query multiple times with different parameters.
+        execute a query multiple times with different parameters.
+        
+        CRITICAL SECURITY: Use $1, $2, etc. placeholders for parameters.
+        NEVER use f-strings or string formatting for queries!
         
         Args:
             query: SQL query with $1, $2, ... placeholders

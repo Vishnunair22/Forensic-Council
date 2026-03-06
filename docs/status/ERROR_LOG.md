@@ -765,3 +765,7 @@ The absolute final 14 High/Critical priority issues.
 | 260 | Missing Frontend Input Assertions | 🟠 Architecture | **RESOLVED** | Synced regex match structures directly out of Python to React fetch payloads natively. |
 | 261 | Undocumented Microservice Process Spans | 🟠 Debuggability | **RESOLVED** | Inserted transparent `X-Request-ID` API middleware propagation over structlog ContextVars globally. |
 
+| 262 | Floating Image Dependency Pins | 🔴 Architecture | **RESOLVED** | Hard-locked `node:20-alpine` and `python:3.11-slim` image hashes. |
+| 263 | Ambiguous File Constraints API Responses | 🟡 UX Bug | **RESOLVED** | Interpolated accurate filesize conversions dynamically into `HTTP 413` responses. |
+| 264 | Missing OpenTelemetry Tracing Setup | 🟠 Debuggability | **RESOLVED** | Engineered an automated Jaeger exporter hook strapped to the FastAPI ASGI middleware via PyPI optional metrics layer. |
+| 265 | Missing Content-Length Validation | 🟠 Security Risk | **RESOLVED** | Read unbuffered HTTP headers to break execution prior to reading dangerous file streams directly into memory in Python. |

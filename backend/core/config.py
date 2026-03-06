@@ -148,9 +148,13 @@ class Settings(BaseSettings):
     @field_validator("cors_allowed_origins", mode="before")
     @classmethod
     def parse_cors(cls, v):
+        import json
         if isinstance(v, str):
             if v.startswith("["):
-                return v
+                try:
+                    return json.loads(v)
+                except json.JSONDecodeError:
+                    raise ValueError(f"Invalid CORS_ALLOWED_ORIGINS JSON: {v}")
             return [i.strip() for i in v.split(",") if i.strip()]
         return v
     
@@ -178,6 +182,18 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "JWT_SECRET_KEY must be at least 32 characters in production!"
                 )
+            
+            # Entropy check - must have diversity
+            has_upper = any(c.isupper() for c in v)
+            has_lower = any(c.islower() for c in v)
+            has_digit = any(c.isdigit() for c in v)
+            has_special = any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in v)
+            
+            entropy_score = sum([has_upper, has_lower, has_digit, has_special])
+            if entropy_score < 3:
+                raise ValueError(
+                    "JWT_SECRET_KEY must contain at least 3 of: uppercase, lowercase, digits, special chars"
+                )
         return v
     
     # Agent Configuration
@@ -199,15 +215,35 @@ class Settings(BaseSettings):
     # HuggingFace Token (for pyannote.audio speaker diarization and other HF models)
     hf_token: Optional[str] = Field(default=None, description="HuggingFace API token for model downloads")
     
-    @field_validator("hf_token", "llm_api_key")
+    @field_validator("hf_token")
     @classmethod
-    def validate_keys(cls, v: Optional[str], info) -> Optional[str]:
+    def validate_hf_token(cls, v: Optional[str], info) -> Optional[str]:
+        """Warn if HuggingFace token is missing when needed."""
+        if v is None:
+            import warnings
+            warnings.warn(
+                "HF_TOKEN not set. Agent 2 speaker diarization will fail gracefully. "
+                "Get a free token at https://hf.co/settings/tokens",
+                UserWarning
+            )
+        return v
+    
+    @field_validator("llm_api_key")
+    @classmethod
+    def validate_llm_api_key(cls, v: Optional[str], info) -> Optional[str]:
+        """Validate LLM API key when LLM provider is enabled."""
         data = info.data if hasattr(info, 'data') else {}
-        env = data.get("app_env", "development")
         provider = data.get("llm_provider", "none")
-        if env == "production":
-            if info.field_name == "llm_api_key" and provider != "none" and not v:
-                raise ValueError(f"LLM_API_KEY is required in production when llm_provider is '{provider}'")
+        
+        if provider != "none" and not v:
+            raise ValueError(
+                f"LLM_API_KEY is required when LLM_PROVIDER='{provider}'. "
+                f"Set LLM_PROVIDER='none' or provide LLM_API_KEY."
+            )
+        
+        if v and provider != "none" and len(v) < 20:
+            raise ValueError(f"LLM_API_KEY appears invalid (too short)")
+        
         return v
     
     # Retry Configuration
