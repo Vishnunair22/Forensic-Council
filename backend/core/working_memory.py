@@ -68,6 +68,14 @@ class WorkingMemoryState(BaseModel):
     current_iteration: int = 0
     iteration_ceiling: int = 10
     hitl_state: Optional[str] = None
+    # Live tool catalogue injected by base_agent before loop starts.
+    # Each entry: {name, description, available, parameters}.
+    # Passed to _get_available_tools_for_llm() so the LLM sees the
+    # actual registered tools (not the static fallback catalogue).
+    tool_registry_snapshot: Optional[list] = Field(
+        default=None,
+        description="Live tool catalogue from this agent's ToolRegistry"
+    )
     
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -90,6 +98,7 @@ class WorkingMemoryState(BaseModel):
             current_iteration=data.get("current_iteration", 0),
             iteration_ceiling=data.get("iteration_ceiling", 10),
             hitl_state=data.get("hitl_state"),
+            tool_registry_snapshot=data.get("tool_registry_snapshot"),
         )
 
 

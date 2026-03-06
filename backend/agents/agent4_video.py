@@ -29,6 +29,10 @@ from tools.video_tools import (
     face_swap_detect_deepface as real_face_swap_detect,  # DeepFace embedding model
     video_metadata_extract as real_video_metadata_extract,
 )
+from tools.mediainfo_tools import (
+    profile_av_container as real_profile_av_container,
+    get_av_file_identity as real_get_av_file_identity,
+)
 
 
 class Agent4Video(ForensicAgent):
@@ -328,6 +332,20 @@ class Agent4Video(ForensicAgent):
                     "confidence": None,
                     "error": str(e),
                 }
+
+        async def mediainfo_profile_handler(input_data: dict) -> dict:
+            """Deep container profiling via MediaInfo: codec, frame rate mode, encoding tool,
+            creation date, VFR flag, container/codec mismatch, and editing software signals.
+            Fast (<20ms) — should be called first on every video/audio file."""
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            return await real_profile_av_container(artifact=artifact)
+
+        async def av_file_identity_handler(input_data: dict) -> dict:
+            """Lightweight pre-screening: format, primary codec, duration, resolution,
+            and any HIGH severity forensic flags only. Call before heavier ML tools."""
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            return await real_get_av_file_identity(artifact=artifact)
+
         registry.register("frame_extraction", frame_extraction_handler, "Frame window extraction")
         registry.register("frame_consistency_analysis", frame_consistency_analysis_handler, "Frame-to-frame consistency analysis")
         registry.register("face_swap_detection", face_swap_detection_handler, "Face-swap detection")
@@ -337,24 +355,56 @@ class Agent4Video(ForensicAgent):
         registry.register("rolling_shutter_validation", rolling_shutter_validation, "Rolling shutter validation")
         registry.register("inter_agent_call", inter_agent_call_handler, "Inter-agent communication")
         registry.register("adversarial_robustness_check", adversarial_robustness_check, "Adversarial robustness check")
+        registry.register("mediainfo_profile", mediainfo_profile_handler, "Deep AV container profiling: codec, frame rate mode, encoding tool, VFR flag, forensic flags")
+        registry.register("av_file_identity", av_file_identity_handler, "Lightweight AV pre-screen: format, codec, duration, high-severity flags")
         
         return registry
     
     async def build_initial_thought(self) -> str:
         """
-        Build the initial thought for the ReAct loop.
-        
-        Returns:
-            Opening thought for temporal video analysis investigation
+        Build the contextually-grounded initial thought for the ReAct loop.
+
+        Pre-screens with av_file_identity (MediaInfo, <20ms) to get
+        container format, codec, duration, resolution, and any high-severity
+        forensic flags before running heavy optical flow or face-swap models.
         """
+        context_lines = []
+        flags = []
+        try:
+            if self._tool_registry:
+                handler = self._tool_registry._handlers.get("av_file_identity")
+                if handler:
+                    result = await handler({"artifact": self.evidence_artifact})
+                    fmt = result.get("format", "")
+                    codec = result.get("primary_video_codec", result.get("codec", ""))
+                    duration = result.get("duration_seconds", "")
+                    resolution = result.get("resolution", "")
+                    fps = result.get("frame_rate", "")
+                    if fmt:
+                        context_lines.append(
+                            f"Container: {fmt}, codec: {codec}, "
+                            f"duration: {duration}s, resolution: {resolution}, fps: {fps}"
+                        )
+                    high_flags = result.get("high_severity_flags", [])
+                    if high_flags:
+                        flags = high_flags
+                        context_lines.append("HIGH-SEVERITY FLAGS: " + ", ".join(high_flags))
+        except Exception:
+            pass
+
+        context = " | ".join(context_lines) if context_lines else "Container pre-screen unavailable."
+        flag_note = (
+            " IMMEDIATE PRIORITY: investigate flags " + str(flags) + " in first 3 iterations."
+            if flags else ""
+        )
         return (
-            f"Starting temporal video analysis for artifact "
-            f"{self.evidence_artifact.artifact_id}. "
-            f"I will begin with full-timeline optical flow analysis to generate a temporal anomaly heatmap, "
-            f"then proceed through frame extraction, consistency analysis, anomaly classification, "
-            f"face-swap detection, and rolling shutter validation. "
-            f"Total tasks to complete: {len(self.task_decomposition)}. "
-            f"Note: I will maintain two distinct lists: EXPLAINABLE ANOMALIES and SUSPICIOUS ANOMALIES."
+            f"Starting temporal video analysis. Evidence: {self.evidence_artifact.artifact_id}. "
+            f"Container pre-screen — {context}.{flag_note} "
+            f"Proceeding through {len(self.task_decomposition)} tasks: "
+            "optical flow analysis, frame extraction, frame consistency, "
+            "deepfake frequency check, face-swap detection, and rolling shutter validation. "
+            "I will maintain EXPLAINABLE ANOMALIES and SUSPICIOUS ANOMALIES lists "
+            "and cross-reference temporal signals with the container metadata above."
         )
 
     async def run_investigation(self):

@@ -572,19 +572,43 @@ class Agent3Object(ForensicAgent):
     
     async def build_initial_thought(self) -> str:
         """
-        Build the initial thought for the ReAct loop.
-        
-        Returns:
-            Opening thought for object/weapon analysis investigation
+        Build the contextually-grounded initial thought for the ReAct loop.
+
+        Pre-screens with scene_incongruence (CLIP semantic analysis, fast) to
+        get immediate scene-level context — what type of scene/environment this
+        is, what objects are expected vs unexpected — before running YOLO
+        object detection and lighting consistency checks.
         """
+        context_lines = []
+        try:
+            if self._tool_registry:
+                handler = self._tool_registry._handlers.get("scene_incongruence")
+                if handler:
+                    result = await handler({"artifact": self.evidence_artifact})
+                    scene_type = result.get("scene_type", result.get("scene_label", ""))
+                    incongruent = result.get("incongruent_objects", result.get("anomalous_elements", []))
+                    confidence = result.get("confidence", 0)
+                    if scene_type:
+                        context_lines.append(
+                            f"Scene type: {scene_type} (confidence: {confidence:.0%})"
+                        )
+                    if incongruent:
+                        context_lines.append(
+                            "Semantic incongruences detected: " + ", ".join(str(x) for x in incongruent[:4])
+                        )
+        except Exception:
+            pass
+
+        context = " | ".join(context_lines) if context_lines else "Scene pre-screen unavailable."
         return (
-            f"Starting object and weapon analysis for artifact "
-            f"{self.evidence_artifact.artifact_id}. "
-            f"I will begin with full-scene primary object detection, "
-            f"then proceed through secondary classification for low-confidence objects, "
-            f"scale validation, lighting consistency checks, and database cross-referencing. "
-            f"Total tasks to complete: {len(self.task_decomposition)}. "
-            f"Note: Conservative threshold principle applies - every finding must be court-defensible."
+            f"Starting scene and object analysis. Evidence: {self.evidence_artifact.artifact_id}. "
+            f"Scene pre-screen — {context} "
+            f"Proceeding through {len(self.task_decomposition)} tasks: "
+            "full-scene object detection, secondary classification, scale validation, "
+            "lighting and shadow consistency, scene incongruence, image splice check, "
+            "noise fingerprint, and contraband database cross-reference. "
+            "Conservative threshold principle applies throughout: "
+            "every finding must be court-defensible before it is recorded."
         )
 
     async def run_investigation(self):

@@ -216,12 +216,12 @@ class Settings(BaseSettings):
     investigation_retry_delay: float = Field(default=5.0, description="Base delay between investigation retries (seconds)")
     
     # LLM Configuration
-    llm_provider: str = Field(default="openai", description="LLM provider: openai, anthropic, or none")
+    llm_provider: str = Field(default="groq", description="LLM provider: groq (recommended), openai, anthropic, or none")
     llm_api_key: Optional[str] = Field(default=None, description="API key for LLM provider")
-    llm_model: str = Field(default="gpt-4", description="LLM model to use for reasoning")
+    llm_model: str = Field(default="llama-3.3-70b-versatile", description="LLM model. Groq: llama-3.3-70b-versatile. OpenAI: gpt-4o. Anthropic: claude-3-5-sonnet-20241022")
     llm_temperature: float = Field(default=0.1, description="Temperature for LLM sampling (0.0-1.0)")
-    llm_max_tokens: int = Field(default=2048, description="Maximum tokens for LLM responses")
-    llm_timeout: float = Field(default=60.0, description="Timeout for LLM API calls in seconds")
+    llm_max_tokens: int = Field(default=4096, description="Maximum tokens for LLM responses (Groq: up to 32768)")
+    llm_timeout: float = Field(default=30.0, description="Timeout for LLM API calls in seconds (Groq is fast; 30s is safe)")
     llm_enable_react_reasoning: bool = Field(default=True, description="Enable LLM reasoning in ReAct loop")
 
     # HuggingFace Token (for pyannote.audio speaker diarization and other HF models)
@@ -247,10 +247,16 @@ class Settings(BaseSettings):
         data = info.data if hasattr(info, 'data') else {}
         provider = data.get("llm_provider", "none")
         
+        valid_providers = {"groq", "openai", "anthropic", "none"}
+        if provider not in valid_providers:
+            raise ValueError(
+                f"LLM_PROVIDER must be one of {sorted(valid_providers)}, got '{provider}'. "
+                "Recommended: groq (fastest, free tier available at console.groq.com)"
+            )
         if provider != "none" and not v:
             raise ValueError(
                 f"LLM_API_KEY is required when LLM_PROVIDER='{provider}'. "
-                f"Set LLM_PROVIDER='none' or provide LLM_API_KEY."
+                "Get a free Groq API key at https://console.groq.com/keys"
             )
         
         if v and provider != "none" and len(v) < 20:

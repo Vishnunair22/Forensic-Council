@@ -1,7 +1,7 @@
 # Forensic Council — Error Log & Resolution Audit
 
 **Date:** 2026-03-06
-**Status:** v1.0.0 — All Issues Resolved — Production Ready
+**Status:** v0.8.0 — All Known Issues Resolved
 
 This log tracks significant errors, architectural flaws, and their subsequent resolutions.
 
@@ -128,7 +128,7 @@ Following the fresh Docker build, these syntax errors were discovered and resolv
 
 ---
 
-## ✅ v1.0.0 Production Readiness Audit — March 05, 2026
+## ✅ v0.8.0 Release Audit — March 06, 2026
 
 Final comprehensive audit completed. All issues below were identified and resolved in this pass.
 
@@ -140,7 +140,7 @@ Final comprehensive audit completed. All issues below were identified and resolv
 | 198 | `.gitignore` missing `node_modules/`, `.next/`, `coverage/` | 🟡 Hygiene | **RESOLVED** | Added all missing patterns. |
 | 199 | Development-Status.md says "Sequential execution" but code uses `asyncio.gather` | 🟡 Documentation | **RESOLVED** | Updated to "Concurrent execution via asyncio.gather". |
 | 200 | `docker-compose.override.yml` `command: --reload` conflicts with `read_only: true` | 🟠 Dev Workflow | **RESOLVED** | Added `read_only: false` override. |
-| 201 | Version fields inconsistent (0.1.0 in configs, 0.8.0 in docs) | 🟡 Consistency | **RESOLVED** | Aligned all to 1.0.0: pyproject.toml, package.json, Development-Status.md, CHANGELOG.md. |
+| 201 | Version fields inconsistent (0.1.0 in configs, 0.8.0 in docs) | 🟡 Consistency | **RESOLVED** | Aligned all to 0.8.0: pyproject.toml, package.json, Development-Status.md, CHANGELOG.md. |
 | 202 | `forensic-council-1.0-roadmap.docx` in source tree | 🟢 Cleanup | **RESOLVED** | Deleted — non-code planning artifact. |
 | 203 | `backend/docs/agent_capabilities.md` duplicates `docs/agent_capabilities.md` | 🟢 Cleanup | **RESOLVED** | Deleted `backend/docs/` directory. |
 | 204 | 5 scaffolding SVGs in `frontend/public/` | 🟢 Cleanup | **RESOLVED** | Deleted `file.svg`, `globe.svg`, `next.svg`, `vercel.svg`, `window.svg`. |

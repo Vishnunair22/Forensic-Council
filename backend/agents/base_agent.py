@@ -71,6 +71,100 @@ class SelfReflectionReport(BaseModel):
     )
 
 
+
+def _attach_llm_reasoning_to_findings(
+    findings: list,
+    react_chain: list,
+) -> list:
+    """
+    Attach LLM THOUGHT reasoning to the AgentFinding that followed it.
+
+    When the LLM drives the ReAct loop, each ACTION step is typically
+    preceded by a THOUGHT step containing the LLM's interpretation of
+    previous observations and its reasoning for choosing the next tool.
+
+    This function matches each finding (created from a tool ACTION+OBSERVATION)
+    to the THOUGHT step that immediately preceded that ACTION in the chain, and
+    stores the LLM reasoning text in finding.metadata["llm_reasoning"].
+
+    It also scans THOUGHT steps for explicit anomaly language and appends
+    those insights to finding.reasoning_summary so they appear in the
+    per-agent report cards.
+
+    Args:
+        findings: List of AgentFinding objects from the loop
+        react_chain: Full list of ReActStep objects from the loop
+
+    Returns:
+        The same findings list with llm_reasoning populated where available
+    """
+    if not findings or not react_chain:
+        return findings
+
+    # Build index: tool_name -> list of THOUGHT contents that preceded it
+    # Walk the chain and collect (thought_content, action_tool_name) pairs
+    thought_before_action: list[tuple[str, str]] = []
+    prev_thought = ""
+    for step in react_chain:
+        stype = step.step_type if hasattr(step, "step_type") else step.get("step_type", "")
+        if stype == "THOUGHT":
+            content = step.content if hasattr(step, "content") else step.get("content", "")
+            prev_thought = content
+        elif stype == "ACTION" and prev_thought:
+            tool = step.tool_name if hasattr(step, "tool_name") else step.get("tool_name", "")
+            if tool:
+                thought_before_action.append((prev_thought, tool))
+            prev_thought = ""
+
+    # Map tool_name -> list of reasoning snippets (in order of occurrence)
+    tool_reasoning: dict[str, list[str]] = {}
+    for thought, tool in thought_before_action:
+        tool_reasoning.setdefault(tool, []).append(thought)
+
+    # Usage counters so we consume each reasoning entry at most once per finding
+    tool_usage: dict[str, int] = {}
+
+    # Anomaly signal words — thoughts containing these are especially important
+    _ANOMALY_SIGNALS = (
+        "anomal", "manipulat", "inconsisten", "suspicious", "unusual",
+        "mismatch", "artifact", "synthetic", "deepfake", "edited",
+        "absent", "missing", "unexpected", "flag",
+    )
+
+    for finding in findings:
+        tool_name = finding.metadata.get("tool_name", "") if hasattr(finding, "metadata") else ""
+        if not tool_name:
+            continue
+
+        idx = tool_usage.get(tool_name, 0)
+        reasoning_list = tool_reasoning.get(tool_name, [])
+
+        if idx < len(reasoning_list):
+            thought_text = reasoning_list[idx]
+            tool_usage[tool_name] = idx + 1
+
+            # Store full LLM thought in metadata
+            if hasattr(finding, "metadata") and isinstance(finding.metadata, dict):
+                finding.metadata["llm_reasoning"] = thought_text
+
+            # If the thought contains anomaly language, prepend a note to
+            # reasoning_summary so it surfaces in the report card
+            thought_lower = thought_text.lower()
+            has_anomaly_signal = any(sig in thought_lower for sig in _ANOMALY_SIGNALS)
+            if has_anomaly_signal and thought_text.strip():
+                # Take the most relevant sentence (the one with the signal word)
+                sentences = [s.strip() for s in thought_text.replace("\n", " ").split(".") if s.strip()]
+                relevant = [s for s in sentences if any(sig in s.lower() for sig in _ANOMALY_SIGNALS)]
+                if relevant:
+                    insight = relevant[0][:200]
+                    if hasattr(finding, "reasoning_summary"):
+                        existing = finding.reasoning_summary or ""
+                        if insight not in existing:
+                            finding.reasoning_summary = f"[LLM] {insight}. {existing}".strip()
+
+    return findings
+
+
 class ForensicAgent(ABC):
     """
     Abstract base class for all forensic specialist agents.
@@ -221,7 +315,40 @@ class ForensicAgent(ABC):
         
         # Step 3: Build tool registry
         self._tool_registry = await self.build_tool_registry()
-        
+
+        # Step 3b: Inject live tool catalogue into working memory state so
+        # the LLM always sees the actual registered tools (not a static list).
+        # Unavailable tools are marked but included — the LLM should know
+        # which tools exist even if they cannot be called right now.
+        try:
+            if self._tool_registry is not None:
+                snapshot = [
+                    {
+                        "name": t.name,
+                        "description": t.description,
+                        "available": t.available,
+                        "parameters": {
+                            "type": "object",
+                            "properties": {"artifact": {"type": "object", "description": "Evidence artifact to analyse"}},
+                            "required": [],
+                        },
+                    }
+                    for t in self._tool_registry.list_tools()
+                ]
+                await self.working_memory.update_state(
+                    session_id=self.session_id,
+                    agent_id=self.agent_id,
+                    updates={"tool_registry_snapshot": snapshot},
+                )
+                logger.debug(
+                    "Tool registry snapshot injected into working memory",
+                    agent_id=self.agent_id,
+                    tool_count=len(snapshot),
+                    unavailable=[t["name"] for t in snapshot if not t["available"]],
+                )
+        except Exception as _snap_err:
+            logger.warning("Could not inject tool registry snapshot: %s", _snap_err)
+
         # Step 4: Check tool availability
         await self._check_tool_availability()
         
@@ -243,8 +370,10 @@ class ForensicAgent(ABC):
         if self.config.llm_enable_react_reasoning and self.config.llm_api_key:
             llm_client = LLMClient(self.config)
             evidence_context = {
-                "mime_type": getattr(self.evidence_artifact, 'mime_type', 'unknown'),
-                "file_name": getattr(self.evidence_artifact, 'file_path', 'unknown'),
+                "mime_type": getattr(self.evidence_artifact, "mime_type", "unknown"),
+                "file_name": getattr(self.evidence_artifact, "file_path", "unknown"),
+                "file_size_bytes": getattr(self.evidence_artifact, "file_size", ""),
+                "sha256": getattr(self.evidence_artifact, "sha256_hash", ""),
             }
             llm_generator = create_llm_step_generator(
                 llm_client=llm_client,
@@ -268,7 +397,21 @@ class ForensicAgent(ABC):
         self._findings = loop_result.findings
         self._react_chain = loop_result.react_chain
         self._loop_result = loop_result
-        
+
+        # Step 6b: Attach LLM reasoning notes to findings.
+        # When the LLM is enabled, THOUGHT steps contain rich analytical
+        # reasoning that is NOT currently stored in the findings — it only
+        # lives in the ReAct chain log. This pass matches each finding to
+        # the THOUGHT step that immediately preceded its ACTION step and
+        # stores the LLM's interpretation in finding.metadata["llm_reasoning"].
+        # This makes LLM insights visible in the per-agent findings section
+        # of the final report, not just in the raw chain log.
+        if self.config.llm_api_key and self.config.llm_provider != "none":
+            self._findings = _attach_llm_reasoning_to_findings(
+                findings=self._findings,
+                react_chain=loop_result.react_chain,
+            )
+
         # Step 7: Run self-reflection pass
         self._reflection_report = await self.self_reflection_pass(self._findings)
         

@@ -141,6 +141,7 @@ services:
       - ../../backend/storage/keys:/app/storage/keys:ro
       - hf_cache:/app/cache/huggingface:rw
       - torch_cache:/app/cache/torch:rw
+      - easyocr_cache:/app/cache/easyocr:rw
       - numba_cache:/app/cache/numba_cache:rw
       - yolo_cache:/app/cache/ultralytics:rw
       - deepface_cache:/app/cache/deepface:rw
@@ -163,6 +164,12 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3000', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     deploy:
       resources:
         limits:
@@ -183,4 +190,5 @@ volumes:
   yolo_cache:
   deepface_cache:
   calibration_models:
+  easyocr_cache:
   cache_scratch:

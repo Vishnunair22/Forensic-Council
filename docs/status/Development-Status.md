@@ -1,8 +1,8 @@
 # Development Status
 
-**Last updated:** 2026-03-05  
-**Current version:** 1.0.0  
-**Overall health:** 🟢 Production-Ready — all agent stubs replaced, full audit complete  
+**Last updated:** 2026-03-06  
+**Current version:** 0.8.0  
+**Overall health:** 🟢 Beta — all agent stubs replaced, full Docker stack verified  
 **Actively working on:** Phase 3 — LLM reasoning integration  
 **Blocked on:** Nothing currently  
 
@@ -25,7 +25,7 @@ Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [✅] → C
 
 ## Component Status
 
-### Agents (v1.0.0 — all stubs replaced)
+### Agents (v0.8.0 — all stubs replaced)
 
 | Agent | Implementation | Stubs Remaining | Notes |
 |-------|----------------|-----------------|-------|
@@ -36,7 +36,7 @@ Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [✅] → C
 | Agent 5 — Metadata | ✅ Complete | **0** | EXIF/XMP + PHash provenance + device fingerprint |
 | Council Arbiter | ✅ Complete | 0 | Signing + cross-modal correlation |
 
-### Stub Replacement Summary (v0.8.0 → v1.0.0)
+### Stub Replacement Summary (v0.8.0)
 
 | Agent | Tool Replaced | Real Implementation |
 |-------|--------------|---------------------|
@@ -75,12 +75,12 @@ Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [✅] → C
 
 ---
 
-## New in v1.0.0
+## New in v0.8.0
 
 - All 9 agent stubs replaced with real implementations
 - Full deep-dive audit completed (237+ issues resolved)
 - Production structural audit and Next.js `npm run build` passed with zero errors
-- Version aligned to 1.0.0 across all config files
+- Version aligned to 0.8.0 across all config files
 - Backend Dockerfile `uv` pinned to stable version (0.6.6)
 - ESLint config migrated to proper flat config format
 - `.gitignore` expanded with missing patterns

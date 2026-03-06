@@ -1,6 +1,6 @@
 [project]
 name = "forensic_council"
-version = "1.0.0"
+version = "0.9.1"
 description = "Multi-Agent Forensic Evidence Analysis System"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -20,6 +20,7 @@ dependencies = [
     "cryptography>=42",
     "python-dotenv>=1.0",
     "httpx>=0.27",
+    "groq>=0.9",                      # Groq LLM API client (Llama 3.3 70B)
     # API Server
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
@@ -51,6 +52,13 @@ dependencies = [
     "moviepy>=1.0,<2.0",             # AV sync via video+audio correlation
     # ML tools (lightweight)
     "scikit-learn>=1.4",
+    # File type detection
+    "python-magic>=0.4.27",
+    # OCR & document extraction (three-tier pipeline: PyMuPDF -> EasyOCR -> Tesseract)
+    "PyMuPDF>=1.24",                  # Lossless PDF text/image/metadata extraction (fitz)
+    "easyocr>=1.7",                   # Neural OCR: handles curved text, low-res, 80+ langs
+    # AV container profiling
+    "pymediainfo>=6.1",               # Deep container analysis: codec, fps mode, writing app
 ]
 
 [project.optional-dependencies]
