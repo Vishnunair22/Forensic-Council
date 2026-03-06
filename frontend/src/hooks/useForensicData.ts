@@ -146,6 +146,9 @@ export const useForensicData = () => {
 
     // Add to history
     const addToHistory = useCallback((report: Report) => {
+        // Guard against duplicates — same report_id shouldn't appear twice
+        if (history.some(h => h.id === report.id)) return;
+
         const newHistory = [report, ...history];
         setHistory(newHistory);
         if (typeof window !== 'undefined') {

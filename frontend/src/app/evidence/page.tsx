@@ -27,7 +27,7 @@ import { AgentIcon } from "@/components/ui/AgentIcon";
 
 export default function EvidencePage() {
     const router = useRouter();
-    const { addToHistory, isLoading: isDataLoading } = useForensicData();
+    const { addToHistory } = useForensicData();
     const { playSound } = useSound();
 
     const [file, setFile] = useState<File | null>(null);
