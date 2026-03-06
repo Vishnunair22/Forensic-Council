@@ -502,13 +502,38 @@ async def run_investigation_task(
             for ws in _websocket_connections[session_id]:
                 try:
                     await ws.close()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Failed to close WebSocket connection: {e}", exc_info=True)
             _websocket_connections.pop(session_id, None)
+
+def validate_case_id(case_id: str) -> bool:
+    """Validate case ID format - CASE-<timestamp> or CASE-<uuid>"""
+    if not case_id.startswith("CASE-"):
+        return False
+    remainder = case_id[5:]
+    
+    # Try UUID validation
+    try:
+        UUID(remainder)
+        return True
+    except ValueError:
+        pass
+    
+    # Try timestamp format (10-14 digits)
+    return remainder.isdigit() and 10 <= len(remainder) <= 14
+
+def validate_investigator_id(investigator_id: str) -> bool:
+    """Validate investigator ID format - REQ-<5-10 digits>"""
+    if not investigator_id.startswith("REQ-"):
+        return False
+    remainder = investigator_id[4:]
+    return remainder.isdigit() and 5 <= len(remainder) <= 10
+
 
 
 @router.post("/investigate", response_model=InvestigationResponse)
 async def investigate(
+    request: Request,
     file: UploadFile = File(...),
     case_id: str = Form(...),
     investigator_id: str = Form(...),
@@ -520,36 +545,47 @@ async def investigate(
     SEC 2 & SEC 3: Implements rate limiting and strict input validation.
     """
     # 1. Input Validation (SEC 3)
-    if not re.match(r"^CASE-(?:\d{10,14}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$", case_id, re.I):
-        raise HTTPException(status_code=400, detail="Invalid case_id format. Expected CASE-[timestamp] or CASE-[uuid].")
+    if not validate_case_id(case_id):
+        raise HTTPException(status_code=400, detail="Invalid case_id format. Expected CASE-<timestamp> or CASE-<uuid>.")
     
-    if not re.match(r"^REQ-\d{5,10}$", investigator_id):
-        raise HTTPException(status_code=400, detail="Invalid investigator_id format. Expected REQ-[5-10 digits].")
+    if not validate_investigator_id(investigator_id):
+        raise HTTPException(status_code=400, detail="Invalid investigator_id format. Expected REQ-<5-10 digits>.")
 
-    # 2. Rate Limiting (SEC 2) - Fault tolerant
+    # 2. Rate Limiting (SEC 2) - Fault tolerant atomic operations
     try:
         from infra.redis_client import get_redis_client
         redis = await get_redis_client()
         rate_limit_key = f"rate_limit:upload:{investigator_id}"
         
-        # Fix rate limit TOCTOU race condition with atomic pipeline
-        async with redis.client.pipeline() as pipe:
-            pipe.incr(rate_limit_key)
-            pipe.ttl(rate_limit_key)
-            results = await pipe.execute()
-            
-        current_count = results[0]
-        ttl = results[1]
+        rate_limit_script = """
+        local key = KEYS[1]
+        local limit = tonumber(ARGV[1])
+        local ttl = tonumber(ARGV[2])
+
+        local count = redis.call('GET', key)
+        if count == false then
+            redis.call('SET', key, 1, 'EX', ttl)
+            return {0, ttl}
+        end
+
+        count = tonumber(count)
+        if count >= limit then
+            local remaining = redis.call('TTL', key)
+            return {1, remaining}
+        end
+
+        redis.call('INCR', key)
+        return {0, ttl}
+        """
         
-        # Set expiration on the first increment
-        if current_count == 1:
-            await redis.client.expire(rate_limit_key, 600)
-            
-        if current_count > 5:
-            wait_time = ttl if ttl > 0 else 600
+        # eval(script, numkeys, *keys_and_args)
+        result = await redis.client.eval(rate_limit_script, 1, rate_limit_key, 5, 600)
+        
+        if result[0] == 1:
             raise HTTPException(
                 status_code=429, 
-                detail=f"Rate limit exceeded. Please wait {wait_time} seconds."
+                detail=f"Rate limit exceeded. Please wait {result[1]} seconds.",
+                headers={"Retry-After": str(result[1])}
             )
     except HTTPException:
         raise
@@ -557,14 +593,31 @@ async def investigate(
         logger.warning("Rate limiter unavailable, proceeding without limit", error=str(e))
 
     # 3. File Size Validation
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > MAX_FILE_SIZE:
+        max_mb = MAX_FILE_SIZE // (1024 * 1024)
+        actual_mb = round(int(content_length) / (1024 * 1024), 2)
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"File size ({actual_mb}MB) exceeds maximum ({max_mb}MB). "
+                f"Please compress or split your evidence file and try again."
+            )
+        )
+
     file.file.seek(0, 2)
     file_size = file.file.tell()
     file.file.seek(0)
 
     if file_size > MAX_FILE_SIZE:
+        max_mb = MAX_FILE_SIZE // (1024 * 1024)
+        actual_mb = round(file_size / (1024 * 1024), 2)
         raise HTTPException(
             status_code=413,
-            detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB"
+            detail=(
+                f"File size ({actual_mb}MB) exceeds maximum ({max_mb}MB). "
+                f"Please compress or split your evidence file and try again."
+            )
         )
 
     # 4. MIME type validation

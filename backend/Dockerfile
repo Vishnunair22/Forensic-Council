@@ -1,5 +1,5 @@
 # ─── Stage 1: Build ──────────────────────────────────────────────────────────
-FROM python:3.11-slim AS builder
+FROM python:3.11-slim@sha256:d39b4b17ff5e6acb5d61262e3e8cfbbe1f62f4e1cd8fcee4cf0a5a8e1abc5d9b AS builder
 
 # Install build tools (only in this stage)
 RUN apt-get update && apt-get install -y --no-install-recommends gcc \
@@ -19,7 +19,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project --extra ml
 
 # ─── Stage 2: Production ─────────────────────────────────────────────────────
-FROM python:3.11-slim
+FROM python:3.11-slim@sha256:d39b4b17ff5e6acb5d61262e3e8cfbbe1f62f4e1cd8fcee4cf0a5a8e1abc5d9b
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -52,7 +52,8 @@ ENV TRANSFORMERS_CACHE="/app/cache/huggingface/transformers"
 RUN /app/.venv/bin/python -m compileall -q api/ core/ orchestration/ scripts/ 2>/dev/null || true
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f -s http://localhost:8000/health || \
+    (echo "Health check failed at $$(date)" >&2 && exit 1)
 
 EXPOSE 8000
 
