@@ -164,21 +164,19 @@ export async function login(username: string, password: string): Promise<TokenRe
   return data;
 }
 
-/**
- * Auto-login as demo investigator
- * Used for demo/development when no explicit login is performed
- * NOTE: Credentials should be provided via environment variables in production
- */
 export async function autoLoginAsInvestigator(): Promise<TokenResponse> {
-  // Use credentials from environment variables or prompt (never hardcode)
-  const demoUsername = process.env.NEXT_PUBLIC_DEMO_USERNAME || "investigator";
-  const demoPassword = process.env.NEXT_PUBLIC_DEMO_PASSWORD;
+  const response = await fetch("/api/auth/demo", {
+    method: "POST",
+  });
 
-  if (!demoPassword) {
-    throw new Error("Demo credentials not configured. Set NEXT_PUBLIC_DEMO_PASSWORD environment variable.");
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: "Demo auth failed" }));
+    throw new Error(error.error || "Authentication failed");
   }
 
-  return await login(demoUsername, demoPassword);
+  const data: TokenResponse = await response.json();
+  setAuthToken(data.access_token);
+  return data;
 }
 
 /**

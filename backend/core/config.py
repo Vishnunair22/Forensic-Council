@@ -43,6 +43,17 @@ class Settings(BaseSettings):
     # Application Settings
     app_name: str = Field(default="forensic_council", description="Application name")
     app_env: str = Field(default="development", description="Environment: development, staging, production")
+    
+    @field_validator("app_env")
+    @classmethod
+    def validate_app_env(cls, v: str) -> str:
+        """Validate application environment."""
+        allowed = ["development", "staging", "production", "testing"]
+        v_lower = v.lower()
+        if v_lower not in allowed:
+            raise ValueError(f"Environment must be one of {allowed}, got {v}")
+        return v_lower
+        
     debug: bool = Field(default=False, description="Debug mode flag")
     log_level: str = Field(default="INFO", description="Logging level")
     
@@ -138,7 +149,8 @@ class Settings(BaseSettings):
     # Security Configuration
     signing_key: str = Field(default="change-me-in-production", description="Key for signing audit entries")
     jwt_secret_key: Optional[str] = Field(default=None, description="Secret key for JWT token signing. If not set, uses SIGNING_KEY")
-    jwt_access_token_expire_minutes: int = Field(default=10080, description="JWT access token expiration in minutes (default: 7 days)")
+    jwt_access_token_expire_minutes: int = Field(default=60, description="JWT access token expiration in minutes (default: 1 hour)")
+    jwt_refresh_token_expire_days: int = Field(default=7, description="JWT refresh token expiration in days")
     jwt_algorithm: str = Field(default="HS256", description="JWT signing algorithm")
     cors_allowed_origins: list[str] = Field(
         default=["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"],
@@ -266,15 +278,6 @@ class Settings(BaseSettings):
             raise ValueError(f"Log level must be one of {allowed}, got {v}")
         return v_upper
     
-    @field_validator("app_env")
-    @classmethod
-    def validate_app_env(cls, v: str) -> str:
-        """Validate application environment."""
-        allowed = ["development", "staging", "production", "testing"]
-        v_lower = v.lower()
-        if v_lower not in allowed:
-            raise ValueError(f"Environment must be one of {allowed}, got {v}")
-        return v_lower
     
     @field_validator("signing_key")
     @classmethod

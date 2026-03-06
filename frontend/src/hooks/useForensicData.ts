@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Report, AgentResult } from "@/types";
 import { HistorySchema, ReportSchema } from "@/lib/schemas";
 import { startInvestigation, getReport, ReportDTO, AgentFindingDTO } from "@/lib/api";
+import { ALLOWED_MIME_TYPES } from "@/lib/constants";
 
 const HISTORY_KEY = "fc_history";
 const CURRENT_REPORT_KEY = "fc_current_report";
@@ -98,7 +99,20 @@ export const useForensicData = () => {
             clearInterval(pollIntervalRef.current);
         }
 
+        const MAX_POLL_ATTEMPTS = 60; // 5 min at 5s interval
+        let attempts = 0;
+
         pollIntervalRef.current = setInterval(async () => {
+            attempts++;
+            if (attempts > MAX_POLL_ATTEMPTS) {
+                if (pollIntervalRef.current) {
+                    clearInterval(pollIntervalRef.current);
+                    pollIntervalRef.current = null;
+                }
+                setIsAnalyzing(false);
+                return;
+            }
+
             try {
                 const result = await getReport(sessionId);
 
@@ -146,15 +160,15 @@ export const useForensicData = () => {
 
     // Add to history
     const addToHistory = useCallback((report: Report) => {
-        // Guard against duplicates — same report_id shouldn't appear twice
-        if (history.some(h => h.id === report.id)) return;
-
-        const newHistory = [report, ...history];
-        setHistory(newHistory);
-        if (typeof window !== 'undefined') {
-            localStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
-        }
-    }, [history]);
+        setHistory(prev => {
+            if (prev.some(h => h.id === report.id)) return prev;
+            const next = [report, ...prev];
+            if (typeof window !== 'undefined') {
+                localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+            }
+            return next;
+        });
+    }, []);
 
     // Delete from history
     const deleteFromHistory = useCallback((id: string) => {
@@ -176,17 +190,12 @@ export const useForensicData = () => {
     // Client-side file validation
     const validateFile = useCallback((file: File): { valid: boolean; error?: string } => {
         const MAX_SIZE = 50 * 1024 * 1024; // 50MB
-        const ALLOWED_TYPES = [
-            "image/jpeg", "image/png", "image/webp", "image/gif",
-            "video/mp4", "video/webm", "video/quicktime",
-            "audio/wav", "audio/mpeg"
-        ];
 
         if (file.size > MAX_SIZE) {
             return { valid: false, error: "File exceeds 50MB limit." };
         }
-        if (!ALLOWED_TYPES.includes(file.type)) {
-            return { valid: false, error: "Unsupported format. Use JPG, PNG, MP4, WAV, or MPEG." };
+        if (!ALLOWED_MIME_TYPES.has(file.type)) {
+            return { valid: false, error: "Unsupported format." };
         }
         return { valid: true };
     }, []);

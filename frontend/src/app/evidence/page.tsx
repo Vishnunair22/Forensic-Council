@@ -47,7 +47,7 @@ export default function EvidencePage() {
         completedAgents,
         startSimulation,
         connectWebSocket,
-        resetSimulation,
+        resetSimulation: resetSimulationHook,
         hitlCheckpoint,
         errorMessage,
         dismissCheckpoint,
@@ -78,6 +78,11 @@ export default function EvidencePage() {
             }
         };
     }, [filePreviewUrl]);
+
+    const resetSimulation = useCallback(() => {
+        setIsUploading(false);
+        resetSimulationHook();
+    }, [resetSimulationHook]);
 
     const triggerAnalysis = useCallback(async (targetFile: File) => {
         if (!targetFile) return;
@@ -151,6 +156,9 @@ export default function EvidencePage() {
                 sessionStorage.removeItem("forensic_auto_start");
                 triggerAnalysis(pending);
             }
+        } else if (sessionStorage.getItem("forensic_auto_start") === "true") {
+            setValidationError("File was not received. Please re-select your evidence file.");
+            sessionStorage.removeItem("forensic_auto_start");
         }
     }, [triggerAnalysis]);
 
