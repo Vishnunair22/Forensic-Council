@@ -1,28 +1,58 @@
-.venv
-__pycache__
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.env
-.pytest_cache/
+# ============================================================================
+# Backend .dockerignore
+# ============================================================================
+# Prevents unnecessary files from being sent as Docker build context.
+# This dramatically speeds up builds and prevents secrets from leaking.
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*.so
 .mypy_cache/
 .ruff_cache/
+.pytest_cache/
 .coverage
 htmlcov/
-storage/
+
+# Virtual environments (Docker installs its own via uv)
+.venv/
+venv/
+env/
+
+# Development / test files
+tests/
+*.test.*
+.env
+.env.*
+!.env.example
+
+# Storage and model caches (injected via Docker volumes at runtime)
+storage/evidence/
+storage/keys/
 cache/
-*.log
-.DS_Store
-Thumbs.db
+
+# Version control
 .git/
 .gitignore
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# IDE
 .vscode/
 .idea/
+
+# Documentation
 *.md
-*.h5
-*.pt
-*.onnx
-tests/
+docs/
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+*.whl

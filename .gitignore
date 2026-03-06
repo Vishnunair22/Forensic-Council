@@ -1,51 +1,79 @@
-# Forensic Council — Root .gitignore
+# ============================================================================
+# Forensic Council — .gitignore
+# ============================================================================
+
+# Environment files — NEVER commit secrets
+.env
+backend/.env
 
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
+*$py.class
+*.so
+*.egg
 *.egg-info/
 dist/
 build/
-*.egg
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.whl
+*.pth
+
+# Virtual environments
 .venv/
 venv/
-*.so
-*.whl
-.pytest_cache/
+env/
 
-# Environment files
-.env
-.env.local
+# uv
+.python-version
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-$null
-
-# Node / Frontend
+# Node.js / Next.js
 node_modules/
 .next/
 out/
+frontend/.next/
+frontend/out/
+frontend/node_modules/
+frontend/lint.json
+frontend/lint_output.txt
+
+# TypeScript
+*.tsbuildinfo
+
+# Test output
 coverage/
+test-results/
 
 # Docker
+docker-compose.override.yml.bak
 
-# Storage (runtime data)
+# Storage & model caches (large binary files)
 backend/storage/evidence/
-backend/storage/calibration_models/
-backend/storage/keys/*.pem
-!backend/storage/keys/.gitkeep
+backend/storage/keys/
+backend/cache/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 
 # Logs
 *.log
+logs/
 
-# Frontend lint artifacts
-frontend/lint.json
-frontend/lint_output.txt
+# Temporary files
+*.tmp
+*.bak
+$null

@@ -30,6 +30,7 @@ from tools.image_tools import (
     extract_text_from_image as real_extract_text_from_image,
     analyze_image_content as real_analyze_image_content,
 )
+from tools.ocr_tools import extract_evidence_text as real_extract_evidence_text
 
 
 class Agent1Image(ForensicAgent):
@@ -215,6 +216,14 @@ class Agent1Image(ForensicAgent):
             """Handle OCR text extraction with input_data dict."""
             artifact = input_data.get("artifact") or self.evidence_artifact
             return await real_extract_text_from_image(artifact=artifact)
+
+        async def extract_evidence_text_handler(input_data: dict) -> dict:
+            """Auto-dispatching text extraction: PDF->PyMuPDF, Image->EasyOCR->Tesseract.
+            Returns extracted text, word count, confidence, and a one-line summary
+            giving the agent immediate context about what the evidence file contains.
+            """
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            return await real_extract_evidence_text(artifact=artifact)
 
         async def analyze_image_content_handler(input_data: dict) -> dict:
             """Handle CLIP-based semantic image understanding."""
@@ -430,6 +439,7 @@ class Agent1Image(ForensicAgent):
         registry.register("noise_fingerprint", noise_fingerprint_handler, "Detect camera noise fingerprint inconsistencies")
         registry.register("deepfake_frequency_check", deepfake_frequency_check_handler, "Detect GAN/deepfake artifacts in frequency domain")
         registry.register("extract_text_from_image", extract_text_from_image_handler, "Extract visible text via OCR for contextual analysis")
+        registry.register("extract_evidence_text", extract_evidence_text_handler, "Auto-dispatching text extraction: PDF (PyMuPDF lossless) -> EasyOCR -> Tesseract fallback")
         registry.register("copy_move_detect", copy_move_detect_handler, "Detect copy-move forgery via SIFT keypoint self-matching")
         registry.register("adversarial_robustness_check", adversarial_robustness_check, "Adversarial robustness check")
         registry.register("sensor_db_query", sensor_db_query, "Camera sensor noise profile database query")
@@ -438,19 +448,52 @@ class Agent1Image(ForensicAgent):
     
     async def build_initial_thought(self) -> str:
         """
-        Build the initial thought for the ReAct loop.
-        
-        Returns:
-            Opening thought for image integrity investigation
+        Build the contextually-grounded initial thought for the ReAct loop.
+
+        Runs two fast pre-screen tools before the loop starts:
+        1. file_hash_verify — establishes chain-of-custody baseline
+        2. extract_evidence_text — extracts any embedded text (e.g. document
+           images, screenshots with text) for immediate contextual awareness
+
+        The results are incorporated into the opening thought so the LLM
+        starts reasoning from real data, not a cold-start generic prompt.
         """
+        context_lines = []
+        # Fast pre-screen: file hash
+        try:
+            if self._tool_registry:
+                hash_handler = self._tool_registry._handlers.get("file_hash_verify")
+                if hash_handler:
+                    result = await hash_handler({"artifact": self.evidence_artifact})
+                    h = result.get("sha256_hash", result.get("sha256", ""))
+                    if h:
+                        context_lines.append(f"SHA-256: {h[:16]}...")
+        except Exception:
+            pass
+        # Fast pre-screen: OCR text
+        try:
+            if self._tool_registry:
+                ocr_handler = self._tool_registry._handlers.get("extract_evidence_text")
+                if ocr_handler:
+                    result = await ocr_handler({"artifact": self.evidence_artifact})
+                    word_count = result.get("word_count", 0)
+                    summary = result.get("summary", "")
+                    if word_count and word_count > 0:
+                        context_lines.append(f"OCR pre-screen: {word_count} words detected. {summary}")
+                    else:
+                        context_lines.append("OCR pre-screen: no text content detected in image.")
+        except Exception:
+            pass
+
+        context = " | ".join(context_lines) if context_lines else "Pre-screen tools unavailable."
         return (
-            f"Starting image integrity analysis for artifact "
-            f"{self.evidence_artifact.artifact_id}. "
-            f"I will first perform semantic image understanding to establish context, "
-            f"then proceed with full-image Error Level Analysis to identify "
-            f"potential manipulation regions, followed by ROI analysis, "
-            f"JPEG ghost detection, and frequency domain analysis. "
-            f"Total tasks to complete: {len(self.task_decomposition)}."
+            f"Starting image integrity analysis. Evidence: {self.evidence_artifact.artifact_id}. "
+            f"Pre-screen results — {context} "
+            f"I will now proceed through {len(self.task_decomposition)} tasks: "
+            f"semantic context analysis, full-image ELA, ROI extraction, "
+            f"JPEG ghost detection, frequency domain analysis, splicing detection, "
+            f"noise fingerprinting, perceptual hashing, and copy-move detection. "
+            f"I will flag any anomalies immediately and cross-reference findings across tools."
         )
 
     async def run_investigation(self):

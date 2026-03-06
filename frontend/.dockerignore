@@ -1,22 +1,39 @@
-node_modules
-.next
-out
-build
-dist
-coverage
-__tests__
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.vercel
+# ============================================================================
+# Frontend .dockerignore
+# ============================================================================
+# Prevents unnecessary files from being sent as Docker build context.
+
+# Node modules (Docker installs its own via npm ci)
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Development artifacts
 *.log
-.DS_Store
-Thumbs.db
+lint.json
+lint_output.txt
+
+# Version control
 .git/
 .gitignore
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# IDE
 .vscode/
 .idea/
-*.md
-Dockerfile
-Dockerfile.*
+
+# Test artifacts
+coverage/
+
+# TypeScript build info
+*.tsbuildinfo

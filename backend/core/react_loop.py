@@ -305,56 +305,139 @@ def _build_forensic_system_prompt(
     evidence_context: dict[str, Any],
     available_tasks: list[str],
 ) -> str:
-    """Build system prompt for forensic reasoning."""
+    """
+    Build a forensic-grade system prompt for the ReAct loop.
+
+    The prompt:
+    - Establishes the agent's exact forensic mandate and role identity
+    - Gives structured guidance on evidence interpretation
+    - Lists ALL outstanding tasks (not capped at 5)
+    - Specifies court-admissible reasoning standards
+    - Tells the model how to signal completion
+    """
     mime_type = evidence_context.get("mime_type", "unknown")
     file_name = evidence_context.get("file_name", "unknown")
-    
-    prompt = f"""You are {agent_name}, a specialized forensic analysis agent in the Forensic Council system.
+    file_size = evidence_context.get("file_size_bytes", "")
+    file_hash = evidence_context.get("sha256", "")
 
-You are analyzing evidence: {file_name} (type: {mime_type})
+    # Build agent-specific mandate from name
+    mandates = {
+        "Agent1": "pixel-level image integrity — ELA, splicing, copy-move, noise fingerprinting, perceptual hashing",
+        "Agent2": "audio authenticity — speaker diarization, anti-spoofing, prosody, splice detection, codec fingerprinting",
+        "Agent3": "scene and object integrity — lighting consistency, shadow direction, semantic incongruence, object detection",
+        "Agent4": "temporal video integrity — optical flow, frame consistency, face-swap detection, rolling shutter, deepfake frequency analysis",
+        "Agent5": "metadata and provenance — EXIF extraction, GPS-timestamp validation, steganography, file structure, hex signatures",
+        "Arbiter": "cross-modal deliberation — synthesising all agent findings into a court-admissible verdict",
+    }
+    agent_key = next((k for k in mandates if k.lower() in agent_name.lower()), None)
+    mandate = mandates.get(agent_key, "multi-modal forensic analysis of the submitted evidence")
 
-Your role is to perform forensic analysis using a ReAct (Reasoning + Acting) loop:
-1. THINK about what you've learned from previous observations
-2. DECIDE on the next action (tool to use)
-3. OBSERVE the results and repeat
+    size_line = f"  File size: {file_size} bytes\n" if file_size else ""
+    hash_line = f"  SHA-256:   {file_hash}\n" if file_hash else ""
 
-Available tasks to complete:
-"""
-    
-    for task in available_tasks[:5]:  # Limit to avoid too long prompt
-        prompt += f"- {task}\n"
-    
-    prompt += """
-When deciding your next action:
-- Consider what evidence would strengthen your findings
-- Look for inconsistencies or anomalies
-- Choose tools that provide complementary analysis
-- If you have sufficient evidence, signal completion
+    tasks_block = "\n".join(f"  {i+1}. {t}" for i, t in enumerate(available_tasks))
 
-Output format:
-- If you want to use a tool: describe what tool and why
-- If you have completed analysis: state that you're done and summarize findings
-"""
-    
+    prompt = f"""You are {agent_name}, a specialist forensic analysis agent in the Forensic Council multi-agent system.
+
+== EVIDENCE UNDER ANALYSIS ==
+  File:      {file_name}
+  MIME type: {mime_type}
+{size_line}{hash_line}
+== YOUR MANDATE ==
+Your specialisation is {mandate}.
+
+You operate in a legally accountable context. Your findings may be used in court proceedings.
+Every conclusion must be grounded in tool output. Never speculate beyond what the evidence shows.
+
+== REASONING PROTOCOL (ReAct) ==
+Each turn you MUST do exactly ONE of:
+  A) THINK — reason about what the current observations tell you and what the next
+     most informative tool call would be. Be specific about WHY you are choosing
+     the next tool. Reference previous observations explicitly.
+  B) ACT   — call a tool using the function-calling interface. Pass the correct
+     arguments. Do not hallucinate tool names; only use tools in the provided list.
+  C) CONCLUDE — when all tasks are complete or you have sufficient evidence, write
+     a concise summary of your findings. State: finding type, confidence (0.0-1.0),
+     supporting evidence, and any limitations. Then signal completion.
+
+== OUTSTANDING TASKS ==
+{tasks_block}
+
+== FORENSIC STANDARDS ==
+- Confidence scores must reflect actual tool output, not intuition.
+- If a tool returns an error or unavailable result, log it and move on.
+- Cross-reference findings across tools where possible.
+- Distinguish CONFIRMED (multiple tools agree) from INDICATIVE (single tool) findings.
+- Never fabricate data. If evidence is ambiguous, say so explicitly.
+- When complete, begin your response with: "ANALYSIS COMPLETE:" followed by a
+  structured summary covering: (1) key findings, (2) confidence levels,
+  (3) anomalies detected, (4) limitations."""
+
     return prompt
 
 
 def _get_available_tools_for_llm(state: WorkingMemoryState) -> list[dict[str, Any]]:
-    """Get list of available tools formatted for LLM."""
-    # This is a simplified list - in production, would come from ToolRegistry
-    common_tools = [
-        {"name": "ela_full_image", "description": "Error Level Analysis for image manipulation detection"},
-        {"name": "jpeg_ghost_detect", "description": "Detect JPEG re-compression artifacts"},
-        {"name": "noise_fingerprint", "description": "Analyze camera sensor noise patterns"},
-        {"name": "file_hash_verify", "description": "Verify file integrity via cryptographic hash"},
-        {"name": "exif_extract", "description": "Extract metadata from files"},
-        {"name": "speaker_diarization", "description": "Separate and count speakers in audio"},
-        {"name": "optical_flow_analysis", "description": "Analyze motion between video frames"},
-        {"name": "face_swap_detection", "description": "Detect face swaps in video frames"},
-        {"name": "object_detection", "description": "Detect objects in images"},
-        {"name": "lighting_consistency", "description": "Check lighting consistency across scene"},
+    """
+    Return the full set of tools registered in the current agent's tool registry,
+    formatted for LLM function-calling.
+
+    Reads from state.tool_registry_snapshot if available (populated by base_agent
+    before the ReAct loop starts). Falls back to a comprehensive static catalogue
+    so the LLM always has accurate tool names even without a live registry.
+    """
+    # Use live registry snapshot if the base agent injected it
+    registry_snapshot: list[dict] | None = getattr(state, "tool_registry_snapshot", None)
+    if registry_snapshot:
+        return registry_snapshot
+
+    # Comprehensive fallback catalogue — covers all real tools across all 5 agents
+    return [
+        # Agent 1 — Image
+        {"name": "ela_full_image",            "description": "Full-image Error Level Analysis — detects re-saved or spliced regions"},
+        {"name": "ela_anomaly_classify",       "description": "IsolationForest classification of ELA anomaly blocks"},
+        {"name": "roi_extract",               "description": "Extract Region of Interest bounding boxes from anomaly map"},
+        {"name": "jpeg_ghost_detect",         "description": "Detect JPEG re-compression ghosts (double-save artifacts)"},
+        {"name": "frequency_domain_analysis", "description": "FFT spectral analysis — detect GAN/Stable Diffusion frequency artifacts"},
+        {"name": "splicing_detect",           "description": "DCT quantization table inconsistency — identifies spliced regions"},
+        {"name": "noise_fingerprint",         "description": "PRNU camera noise fingerprint — detects inconsistent sensor patterns"},
+        {"name": "deepfake_frequency_check",  "description": "GAN deepfake artifact detection in frequency domain"},
+        {"name": "file_hash_verify",          "description": "SHA-256 hash verification — confirms file integrity"},
+        {"name": "perceptual_hash",           "description": "pHash perceptual similarity hash for near-duplicate detection"},
+        {"name": "copy_move_detect",          "description": "SIFT keypoint self-matching — detects copy-move forgery"},
+        {"name": "extract_text_from_image",   "description": "Tesseract OCR — extract visible text from image evidence"},
+        {"name": "extract_evidence_text",     "description": "Auto-dispatching OCR: PDF->PyMuPDF, Image->EasyOCR->Tesseract"},
+        {"name": "analyze_image_content",     "description": "CLIP semantic understanding — identify objects, scenes, context"},
+        # Agent 2 — Audio
+        {"name": "speaker_diarize",           "description": "Pyannote speaker diarization — count and segment speakers"},
+        {"name": "anti_spoofing_detect",      "description": "SpeechBrain anti-spoofing — detect synthetic/replayed speech"},
+        {"name": "prosody_analyze",           "description": "Praat prosody analysis — F0, jitter, shimmer, HNR"},
+        {"name": "audio_splice_detect",       "description": "ML splice point detection in audio waveform"},
+        {"name": "background_noise_analysis", "description": "Background noise consistency across audio segments"},
+        {"name": "codec_fingerprinting",      "description": "Audio codec and encoding chain fingerprinting"},
+        # Agent 3 — Scene
+        {"name": "object_detection",          "description": "YOLOv8 object detection on full scene"},
+        {"name": "lighting_consistency",      "description": "Shadow direction and lighting consistency validation"},
+        {"name": "scene_incongruence",        "description": "CLIP semantic incongruence — objects that do not belong in scene"},
+        {"name": "image_splice_check",        "description": "Splicing detection on detected object regions"},
+        # Agent 4 — Video
+        {"name": "optical_flow_analyze",      "description": "Dense optical flow analysis — detect frame discontinuities"},
+        {"name": "frame_window_extract",      "description": "Extract frame window for per-frame analysis"},
+        {"name": "frame_consistency_analysis","description": "Frame-to-frame histogram and edge consistency"},
+        {"name": "face_swap_detection",       "description": "DeepFace embedding comparison — detect face swap events"},
+        {"name": "video_metadata_extract",    "description": "Extract video container metadata"},
+        {"name": "mediainfo_profile",         "description": "Deep AV container profiling: codec, VFR flag, encoding tool, forensic flags"},
+        {"name": "av_file_identity",          "description": "Lightweight AV pre-screen: format, codec, duration, high-severity flags"},
+        # Agent 5 — Metadata
+        {"name": "exif_extract",              "description": "Full EXIF extraction via ExifTool + hachoir including MakerNotes"},
+        {"name": "metadata_anomaly_score",    "description": "IsolationForest ML anomaly score on metadata fields"},
+        {"name": "gps_timezone_validate",     "description": "Cross-validate GPS coordinates against claimed timestamp timezone"},
+        {"name": "steganography_scan",        "description": "LSB steganography detection in image data"},
+        {"name": "file_structure_analysis",   "description": "Binary file structure forensic analysis — detect appended data"},
+        {"name": "hex_signature_scan",        "description": "Hex signature scan for hidden editing software watermarks"},
+        {"name": "timestamp_analysis",        "description": "Timestamp consistency analysis across all metadata fields"},
+        {"name": "extract_deep_metadata",     "description": "Deep metadata extraction including MakerNotes and XMP"},
+        {"name": "get_physical_address",      "description": "Reverse geocode GPS coordinates to physical address"},
     ]
-    return common_tools
 
 
 class ReActLoopEngine:
@@ -403,6 +486,19 @@ class ReActLoopEngine:
         "contraband": "contraband_database",
         "ml metadata anomaly": "metadata_anomaly_score",
         "astronomical api": "astronomical_api",
+        # OCR
+        "extract evidence text": "extract_evidence_text",
+        "ocr text extraction": "extract_evidence_text",
+        "text from pdf": "extract_evidence_text",
+        "extract text from pdf": "extract_evidence_text",
+        "extract text from image": "extract_text_from_image",
+        # AV container
+        "mediainfo": "mediainfo_profile",
+        "av container profiling": "mediainfo_profile",
+        "container profile": "mediainfo_profile",
+        "av file identity": "av_file_identity",
+        "av pre-screen": "av_file_identity",
+        "variable frame rate": "mediainfo_profile",
     }
 
     def __init__(
@@ -598,9 +694,64 @@ class ReActLoopEngine:
                         "Agent5": "Metadata Forensics",
                     }
     
-                    task_desc = next_step.tool_name
-                    if len(self._react_chain) >= 2 and self._react_chain[-2].step_type == "THOUGHT":
-                        task_desc = self._react_chain[-2].content[:80]
+                    # Build a clean, human-readable finding type.
+                    # Priority: tool label > task description > tool name.
+                    # We avoid using raw LLM THOUGHT text (which can be 80+
+                    # chars of verbose reasoning) as the finding_type label.
+                    _TOOL_LABELS = {
+                        "ela_full_image": "ELA — Image Manipulation",
+                        "ela_anomaly_classify": "ELA Anomaly Classification",
+                        "jpeg_ghost_detect": "JPEG Ghost Detection",
+                        "frequency_domain_analysis": "Frequency Domain Analysis",
+                        "deepfake_frequency_check": "GAN/Deepfake Frequency Check",
+                        "noise_fingerprint": "PRNU Noise Fingerprint",
+                        "copy_move_detect": "Copy-Move Forgery Detection",
+                        "extract_evidence_text": "OCR Text Extraction",
+                        "extract_text_from_image": "OCR Text Extraction",
+                        "analyze_image_content": "Semantic Image Analysis",
+                        "perceptual_hash": "Perceptual Hash (pHash)",
+                        "file_hash_verify": "File Hash Verification",
+                        "splicing_detect": "Splicing Detection",
+                        "roi_extract": "Region of Interest Extraction",
+                        "speaker_diarize": "Speaker Diarization",
+                        "anti_spoofing_detect": "Anti-Spoofing Detection",
+                        "prosody_analyze": "Prosody Analysis",
+                        "audio_splice_detect": "Audio Splice Detection",
+                        "background_noise_analysis": "Background Noise Consistency",
+                        "codec_fingerprinting": "Codec Fingerprinting",
+                        "audio_visual_sync": "Audio-Visual Sync Check",
+                        "object_detection": "Object Detection (YOLO)",
+                        "lighting_consistency": "Lighting & Shadow Consistency",
+                        "scene_incongruence": "Scene Incongruence (CLIP)",
+                        "image_splice_check": "Image Splice Check",
+                        "secondary_classification": "Secondary Object Classification",
+                        "scale_validation": "Scale & Proportion Validation",
+                        "optical_flow_analyze": "Optical Flow Analysis",
+                        "frame_window_extract": "Frame Window Extraction",
+                        "frame_consistency_analysis": "Frame Consistency Analysis",
+                        "face_swap_detection": "Face-Swap Detection",
+                        "video_metadata_extract": "Video Metadata Extraction",
+                        "mediainfo_profile": "MediaInfo Container Profile",
+                        "av_file_identity": "AV File Identity Pre-Screen",
+                        "exif_extract": "EXIF Metadata Extraction",
+                        "metadata_anomaly_score": "Metadata Anomaly Score (ML)",
+                        "gps_timezone_validate": "GPS-Timezone Validation",
+                        "steganography_scan": "Steganography Scan",
+                        "file_structure_analysis": "File Structure Analysis",
+                        "hex_signature_scan": "Hex Signature Scan",
+                        "timestamp_analysis": "Timestamp Consistency Analysis",
+                        "extract_deep_metadata": "Deep Metadata Extraction",
+                        "astronomical_api": "Astronomical Timestamp Validation",
+                        "contraband_database": "Contraband Database Cross-Reference",
+                    }
+                    tool_label = _TOOL_LABELS.get(
+                        next_step.tool_name,
+                        next_step.tool_name.replace("_", " ").title()
+                    )
+                    # Use the tool label as the canonical finding type.
+                    # Attach the preceding LLM thought (if any) separately
+                    # via the llm_reasoning metadata key — not as the label.
+                    task_desc = tool_label
                     
 
                     finding = AgentFinding(
@@ -1127,6 +1278,73 @@ class ReActLoopEngine:
                 f"Frequency domain analysis yielded anomaly score {o.get('anomaly_score', 0):.3f} "
                 f"(high-freq ratio: {o.get('high_freq_ratio', 0):.3f}, "
                 f"{'anomalous high-frequency content detected' if o.get('anomaly_score', 0) > 0.4 else 'frequency distribution appears natural'})."
+            ),
+            # OCR tools (v0.8.1)
+            "extract_evidence_text": lambda o: (
+                "OCR extracted " + str(o.get('word_count', 0)) + " word(s) "
+                "via " + str(o.get('method', 'OCR')) + " "
+                "(confidence: " + f"{o.get('confidence', 0):.0%}" + "). "
+                + ("Preview: '" + str(o.get('full_text', ''))[:120] + "...'" if o.get('full_text') else "No text content detected.")
+            ),
+            "extract_text_from_image": lambda o: (
+                "Tesseract OCR extracted " + str(o.get('word_count', 0)) + " word(s). "
+                + ("Preview: '" + str(o.get('text', o.get('full_text', '')))[:100] + "...'" if o.get('text') or o.get('full_text') else "No visible text found.")
+            ),
+            # MediaInfo tools (v0.8.1)
+            "mediainfo_profile": lambda o: (
+                "MediaInfo profiled: " + str(o.get('format', 'unknown'))
+                + " / " + str(o.get('video_codec', o.get('codec', 'unknown')))
+                + ". Forensic flags: " + str(len(o.get('forensic_flags', [])))
+                + (" — " + "; ".join(o.get('forensic_flags', []))[:200] if o.get('forensic_flags') else " — none detected.")
+            ),
+            "av_file_identity": lambda o: (
+                "AV pre-screen: " + str(o.get('format', 'unknown'))
+                + " / " + str(o.get('primary_video_codec', o.get('codec', 'unknown')))
+                + " " + str(o.get('duration_seconds', '?')) + "s "
+                + str(o.get('resolution', '')) + ". "
+                + ("HIGH-SEVERITY FLAGS: " + ", ".join(o.get('high_severity_flags', [])) if o.get('high_severity_flags') else "No high-severity flags.")
+            ),
+            # Additional tool interpreters
+            "noise_fingerprint": lambda o: (
+                f"PRNU noise analysis: inconsistency score {o.get('inconsistency_score', o.get('noise_inconsistency', 0)):.3f}. "
+                + ("Region-level noise mismatch detected." if o.get('inconsistency_score', o.get('noise_inconsistency', 0)) > 0.3 else "Noise pattern consistent across image.")
+            ),
+            "copy_move_detect": lambda o: (
+                f"Copy-move detection: {o.get('match_count', o.get('num_matches', 0))} keypoint match(es). "
+                + ("Copy-move forgery detected." if o.get('copy_move_detected') else "No copy-move cloning detected.")
+            ),
+            "face_swap_detection": lambda o: (
+                f"Face-swap: {o.get('faces_detected', 0)} face(s) analysed. "
+                + ("Face-swap event detected." if o.get('face_swap_detected') else "No face-swap artifacts found.")
+                + f" Max embedding distance: {o.get('max_distance', 0):.3f}."
+            ),
+            "optical_flow_analyze": lambda o: (
+                f"Optical flow: {o.get('anomaly_frame_count', 0)} anomalous frame(s). "
+                f"Mean magnitude: {o.get('mean_flow_magnitude', 0):.3f}. "
+                + ("Temporal discontinuity detected." if o.get('discontinuity_detected') else "Flow is temporally consistent.")
+            ),
+            "gps_timezone_validate": lambda o: (
+                ("INCONSISTENCY — timezone does not match GPS." if o.get('inconsistent') else "GPS consistent with claimed timezone.")
+                + f" Distance from expected zone: {o.get('distance_km', 0):.1f} km."
+            ),
+            "metadata_anomaly_score": lambda o: (
+                f"ML anomaly score: {o.get('anomaly_score', 0):.3f} "
+                + ("(ANOMALOUS). " if o.get('is_anomalous') else "(within normal range). ")
+                + ("Anomalous fields: " + ", ".join(o.get('anomalous_fields', [])[:5]) if o.get('anomalous_fields') else "")
+            ),
+            "speaker_diarize": lambda o: (
+                f"Speaker diarization: {o.get('num_speakers', 0)} speaker(s), "
+                f"{o.get('num_segments', 0)} segment(s), "
+                f"{o.get('total_speech_duration', 0):.1f}s total speech."
+            ),
+            "anti_spoofing_detect": lambda o: (
+                f"Anti-spoofing score: {o.get('spoof_score', 0):.3f}. "
+                + ("SYNTHETIC/REPLAYED speech detected." if o.get('is_spoofed') else "Speech appears genuine.")
+            ),
+            "file_hash_verify": lambda o: (
+                f"Hash verification: {o.get('algorithm', 'SHA-256')} = "
+                + str(o.get('sha256_hash', o.get('hash', '')))[:20] + "... "
+                + ("Hash matches stored record." if o.get('matches') else "WARNING: hash mismatch detected.")
             ),
         }
 

@@ -18,7 +18,9 @@ import logging
 from dataclasses import dataclass
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 # Global singleton instance
 _clip_analyzer_instance: Optional[CLIPImageAnalyzer] = None

@@ -2,7 +2,7 @@
 
 Upload digital evidence. Five AI agents analyze it concurrently. Get a cryptographically signed forensic report in seconds.
 
-[![Status](https://img.shields.io/badge/status-beta-orange.svg)](#) [![Postgres](https://img.shields.io/badge/postgres-16-blue.svg)](#) [![License](https://img.shields.io/badge/license-MIT-green.svg)](#)
+[![Version](https://img.shields.io/badge/version-v0.9.1-blue.svg)](#) [![Status](https://img.shields.io/badge/status-beta-orange.svg)](#) [![Postgres](https://img.shields.io/badge/postgres-16-blue.svg)](#) [![License](https://img.shields.io/badge/license-MIT-green.svg)](#)
 
 *A Multi-Agent Forensic Evidence Analysis System*
 
@@ -65,13 +65,15 @@ The system is triggered via the frontend, uploading evidence to the FastAPI back
 ## Quick Start
 
 ```bash
-# Provide environment variables
+# 1. Copy environment templates (required)
 cp .env.example .env
 cp backend/.env.example backend/.env
 
-# Start infrastructure (databases)
-docker compose -f docs/docker/docker-compose.infra.yml --env-file .env up -d
+# 2. Start full Docker stack (builds images + starts all services)
+docker compose -f docs/docker/docker-compose.yml --env-file .env up -d --build
 ```
+
+**→ For complete step-by-step instructions, see [`docs/start/STARTUP.md`](docs/start/STARTUP.md).**
 
 ## 🚀 Development with Hot Reload
 

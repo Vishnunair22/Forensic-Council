@@ -17,6 +17,8 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
+from core.config import Settings, get_settings
+from core.llm_client import LLMClient
 from core.logging import get_logger
 from core.signing import KeyStore, sign_content
 
@@ -93,12 +95,14 @@ class CouncilArbiter:
         inter_agent_bus: Any = None,
         calibration_layer: Any = None,
         agent_factory: Any = None,
+        config: Settings | None = None,
     ):
         self.session_id = session_id
         self.custody_logger = custody_logger
         self.inter_agent_bus = inter_agent_bus
         self.calibration_layer = calibration_layer
         self.agent_factory = agent_factory
+        self.config = config or get_settings()
         self._key_store = KeyStore()
         # Ensure arbiter has a key
         self._key_store.get_or_create("Arbiter")
@@ -471,40 +475,208 @@ class CouncilArbiter:
         contested: int,
         all_findings: list[dict[str, Any]] = None,
     ) -> str:
-        """Generate plain-language executive summary."""
-        lines = []
-        lines.append(f"This report presents findings from a multi-agent forensic analysis conducted by {num_agents} specialized agents, resulting in {num_findings} individual findings.")
-        
+        """
+        Generate an executive summary.
+
+        When LLM is configured (Groq recommended), uses the model to write
+        a structured, plain-language summary from actual finding data.
+        Falls back to a deterministic template if LLM is unavailable.
+        """
+        import asyncio
+
+        if self.config.llm_api_key and self.config.llm_provider != "none":
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as pool:
+                        future = pool.submit(
+                            asyncio.run,
+                            self._llm_executive_summary(
+                                num_agents, num_findings, cross_modal_confirmed,
+                                contested, all_findings or []
+                            )
+                        )
+                        result = future.result(timeout=25)
+                        if result:
+                            return result
+                else:
+                    result = loop.run_until_complete(
+                        self._llm_executive_summary(
+                            num_agents, num_findings, cross_modal_confirmed,
+                            contested, all_findings or []
+                        )
+                    )
+                    if result:
+                        return result
+            except Exception as exc:
+                logger.warning("LLM executive summary failed, using template: %s", exc)
+
+        return self._template_executive_summary(
+            num_agents, num_findings, cross_modal_confirmed, contested, all_findings
+        )
+
+    async def _llm_executive_summary(
+        self,
+        num_agents: int,
+        num_findings: int,
+        cross_modal_confirmed: int,
+        contested: int,
+        all_findings: list[dict[str, Any]],
+    ) -> str:
+        """Generate executive summary using LLM synthesis."""
+        client = LLMClient(self.config)
+
+        # Build structured findings digest for the model
+        top_findings = sorted(
+            [f for f in all_findings if not f.get("stub_result")],
+            key=lambda f: f.get("confidence_raw", 0),
+            reverse=True,
+        )[:8]
+
+        findings_digest = []
+        for f in top_findings:
+            findings_digest.append({
+                "agent": f.get("agent_id", "unknown"),
+                "type": f.get("finding_type", "unknown"),
+                "confidence": round(f.get("confidence_raw", 0), 3),
+                "summary": f.get("reasoning_summary", ""),
+                "status": f.get("status", ""),
+                "cross_modal": f.get("cross_modal_confirmed", False),
+            })
+
+        system_prompt = """You are the Council Arbiter writing the Executive Summary section of a court-admissible forensic evidence report.
+
+Your summary must be:
+- Factual and grounded only in the structured findings data provided
+- Written in formal, precise legal/forensic language
+- 3-5 paragraphs covering: (1) scope of analysis, (2) key confirmed findings with confidence levels, (3) contested or inconclusive findings, (4) overall evidential weight and recommended next steps
+- Free of speculation — only state what the data shows
+- Explicit about limitations and uncertainties
+
+Do NOT use bullet points. Write in continuous prose paragraphs."""
+
+        user_content = f"""Forensic analysis statistics:
+- Agents deployed: {num_agents}
+- Total findings: {num_findings}
+- Cross-modal confirmed (multiple agents agree): {cross_modal_confirmed}
+- Contested findings (agents disagree): {contested}
+
+Top findings by confidence:
+{json.dumps(findings_digest, indent=2)}
+
+Write the Executive Summary for this forensic report."""
+
+        return await client.generate_synthesis(
+            system_prompt=system_prompt,
+            user_content=user_content,
+            max_tokens=800,
+        )
+
+    def _template_executive_summary(
+        self,
+        num_agents: int,
+        num_findings: int,
+        cross_modal_confirmed: int,
+        contested: int,
+        all_findings: list[dict[str, Any]] | None,
+    ) -> str:
+        """Deterministic template fallback when LLM is not configured."""
+        lines = [
+            f"This report presents findings from a multi-agent forensic analysis conducted by "
+            f"{num_agents} specialized agents, resulting in {num_findings} individual findings.",
+        ]
         if cross_modal_confirmed > 0:
-            lines.append(f"Cross-modal confirmation was achieved for {cross_modal_confirmed} findings, where multiple independent agents using different analysis techniques arrived at the same conclusion.")
-        
+            lines.append(
+                f"Cross-modal confirmation was achieved for {cross_modal_confirmed} findings, "
+                "where multiple independent agents using different analysis techniques arrived "
+                "at the same conclusion."
+            )
         if contested > 0:
-            lines.append(f"{contested} findings were identified as contested, requiring further review or tribunal resolution.")
-        
+            lines.append(
+                f"{contested} finding(s) were identified as contested, requiring further "
+                "review or tribunal resolution."
+            )
         if all_findings:
-            # Pick top findings by confidence
             top = sorted(all_findings, key=lambda f: f.get("confidence_raw", 0), reverse=True)[:3]
             highlights = [f.get("reasoning_summary", "") for f in top if f.get("reasoning_summary")]
             if highlights:
                 lines.append("Key findings include: " + " ".join(highlights[:2]))
-
-        lines.append("The full analysis chain is preserved in the chain of custody log and react chains sections of this report.")
-        
+        lines.append(
+            "The full analysis chain is preserved in the chain of custody log and "
+            "ReAct chains sections of this report."
+        )
         return " ".join(lines)
     
     def _generate_uncertainty_statement(self, incomplete: int, contested: int) -> str:
-        """Generate uncertainty statement for the report."""
+        """
+        Generate the uncertainty and limitations statement.
+
+        Uses LLM to produce a nuanced, legally-aware statement when configured.
+        Falls back to deterministic template otherwise.
+        """
+        import asyncio
+
+        if self.config.llm_api_key and self.config.llm_provider != "none" and (incomplete > 0 or contested > 0):
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as pool:
+                        future = pool.submit(
+                            asyncio.run,
+                            self._llm_uncertainty_statement(incomplete, contested)
+                        )
+                        result = future.result(timeout=15)
+                        if result:
+                            return result
+                else:
+                    result = loop.run_until_complete(
+                        self._llm_uncertainty_statement(incomplete, contested)
+                    )
+                    if result:
+                        return result
+            except Exception as exc:
+                logger.warning("LLM uncertainty statement failed, using template: %s", exc)
+
+        return self._template_uncertainty_statement(incomplete, contested)
+
+    async def _llm_uncertainty_statement(self, incomplete: int, contested: int) -> str:
+        """Generate uncertainty statement using LLM."""
+        client = LLMClient(self.config)
+
+        system_prompt = """You are the Council Arbiter writing the Limitations and Uncertainty section of a forensic report.
+
+Be specific and legally precise. Explain what the uncertainties mean for the evidential value of the report.
+Write 2-3 sentences only. Do not use bullet points."""
+
+        user_content = (
+            f"Incomplete findings (tools unavailable or evidence insufficient): {incomplete}\n"
+            f"Contested findings (agents disagree, not yet resolved): {contested}\n\n"
+            "Write the uncertainty and limitations statement."
+        )
+
+        return await client.generate_synthesis(
+            system_prompt=system_prompt,
+            user_content=user_content,
+            max_tokens=200,
+        )
+
+    def _template_uncertainty_statement(self, incomplete: int, contested: int) -> str:
+        """Deterministic uncertainty template fallback."""
         statements = []
-        
         if incomplete > 0:
-            statements.append(f"{incomplete} finding(s) remain incomplete due to unavailable tools or insufficient evidence.")
-        
+            statements.append(
+                f"{incomplete} finding(s) remain incomplete due to unavailable tools "
+                "or insufficient evidence."
+            )
         if contested > 0:
-            statements.append(f"{contested} finding(s) are contested and require tribunal resolution or human judgment.")
-        
+            statements.append(
+                f"{contested} finding(s) are contested and require tribunal resolution "
+                "or human judgment."
+            )
         if not statements:
             statements.append("All findings have been resolved. No significant uncertainties remain.")
-        
         return " ".join(statements)
 
 

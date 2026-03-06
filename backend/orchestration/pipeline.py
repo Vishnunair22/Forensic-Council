@@ -289,6 +289,7 @@ class ForensicCouncilPipeline:
             custody_logger=self.custody_logger,
             inter_agent_bus=self.inter_agent_bus,
             agent_factory=self.agent_factory,
+            config=self.config,
         )
     
     async def run_investigation(
@@ -716,23 +717,34 @@ class ForensicCouncilPipeline:
             return []
     
     def _get_mime_type(self, file_path: str) -> str:
-        """Get MIME type from file extension."""
-        ext = Path(file_path).suffix.lower()
-        mime_types = {
-            ".jpg": "image/jpeg",
-            ".jpeg": "image/jpeg",
-            ".png": "image/png",
-            ".gif": "image/gif",
-            ".bmp": "image/bmp",
-            ".tiff": "image/tiff",
-            ".webp": "image/webp",
-            ".wav": "audio/wav",
-            ".mp3": "audio/mpeg",
-            ".flac": "audio/flac",
-            ".mp4": "video/mp4",
-            ".avi": "video/x-msvideo",
-            ".mov": "video/quicktime",
-            ".mkv": "video/x-matroska",
-            ".pdf": "application/pdf",
-        }
-        return mime_types.get(ext, "application/octet-stream")
+        """
+        Detect MIME type from file magic bytes (not extension).
+
+        Uses python-magic (libmagic) to read the actual file header bytes,
+        so a renamed or extension-spoofed file is identified correctly.
+        Falls back to extension-based mapping if libmagic is unavailable.
+        """
+        try:
+            import magic  # python-magic — already a project dependency
+            return magic.from_file(file_path, mime=True)
+        except Exception:
+            # Extension-based fallback — kept for robustness
+            ext = Path(file_path).suffix.lower()
+            mime_types = {
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".png": "image/png",
+                ".gif": "image/gif",
+                ".bmp": "image/bmp",
+                ".tiff": "image/tiff",
+                ".webp": "image/webp",
+                ".wav": "audio/wav",
+                ".mp3": "audio/mpeg",
+                ".flac": "audio/flac",
+                ".mp4": "video/mp4",
+                ".avi": "video/x-msvideo",
+                ".mov": "video/quicktime",
+                ".mkv": "video/x-matroska",
+                ".pdf": "application/pdf",
+            }
+            return mime_types.get(ext, "application/octet-stream")

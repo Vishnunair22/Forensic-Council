@@ -299,18 +299,43 @@ class Agent2Audio(ForensicAgent):
     
     async def build_initial_thought(self) -> str:
         """
-        Build the initial thought for the ReAct loop.
-        
-        Returns:
-            Opening thought for audio forensics investigation
+        Build the contextually-grounded initial thought for the ReAct loop.
+
+        Pre-screens with codec_fingerprinting — a fast, lightweight tool that
+        identifies the audio codec, encoding chain, and sample rate before
+        heavier diarization or anti-spoofing models run.
         """
+        context_lines = []
+        try:
+            if self._tool_registry:
+                handler = self._tool_registry._handlers.get("codec_fingerprinting")
+                if handler:
+                    result = await handler({"artifact": self.evidence_artifact})
+                    codec = result.get("codec") or result.get("audio_codec", "")
+                    sample_rate = result.get("sample_rate", "")
+                    duration = result.get("duration_seconds", result.get("duration", ""))
+                    channels = result.get("channels", "")
+                    if codec:
+                        context_lines.append(
+                            f"Codec: {codec}, sample rate: {sample_rate}Hz, "
+                            f"duration: {duration}s, channels: {channels}"
+                        )
+                    bit_depth = result.get("bit_depth", "")
+                    encoding_chain = result.get("encoding_chain", result.get("encoding_history", ""))
+                    if encoding_chain:
+                        context_lines.append(f"Encoding chain: {encoding_chain}")
+        except Exception:
+            pass
+
+        context = " | ".join(context_lines) if context_lines else "Codec pre-screen unavailable."
         return (
-            f"Starting audio and multimedia forensics analysis for artifact "
-            f"{self.evidence_artifact.artifact_id}. "
-            f"I will begin with speaker diarization to establish voice count baseline, "
-            f"then proceed through anti-spoofing detection, prosody analysis, "
-            f"background noise consistency, codec fingerprinting, and audio-visual sync verification. "
-            f"Total tasks to complete: {len(self.task_decomposition)}."
+            f"Starting audio forensics analysis. Evidence: {self.evidence_artifact.artifact_id}. "
+            f"Codec pre-screen — {context} "
+            f"Proceeding through {len(self.task_decomposition)} tasks: "
+            f"speaker diarization, anti-spoofing detection, prosody analysis (F0/jitter/shimmer), "
+            f"splice point detection, background noise consistency, and codec fingerprinting. "
+            f"I will pay particular attention to encoding chain anomalies and "
+            f"spectral discontinuities that indicate splicing or re-encoding."
         )
 
     async def run_investigation(self):

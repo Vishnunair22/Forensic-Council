@@ -36,6 +36,11 @@ from tools.metadata_tools import (
 from tools.image_tools import (
     file_hash_verify as real_file_hash_verify,
 )
+from tools.ocr_tools import extract_evidence_text as real_extract_evidence_text
+from tools.mediainfo_tools import (
+    profile_av_container as real_profile_av_container,
+    get_av_file_identity as real_get_av_file_identity,
+)
 
 
 class Agent5Metadata(ForensicAgent):
@@ -582,23 +587,89 @@ class Agent5Metadata(ForensicAgent):
         registry.register("adversarial_robustness_check", adversarial_robustness_check_handler, "Adversarial robustness check")
         registry.register("extract_deep_metadata", extract_deep_metadata_handler, "Deep metadata extraction using ExifTool including MakerNotes")
         registry.register("get_physical_address", get_physical_address_handler, "Reverse geocode GPS coordinates to physical address")
+
+        # ── OCR & Container Profiling ─────────────────────────────────────────
+
+        async def extract_evidence_text_handler(input_data: dict) -> dict:
+            """Auto-dispatching text extraction.
+            PDF -> PyMuPDF (lossless embedded text + doc metadata).
+            Image -> EasyOCR -> Tesseract fallback.
+            """
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            return await real_extract_evidence_text(artifact=artifact)
+
+        async def mediainfo_profile_handler(input_data: dict) -> dict:
+            """Deep AV container profiling: codec, frame rate mode, encoding tool,
+            creation/tagged dates, VFR flag, container-codec mismatch,
+            and editing software detection. Fast (<20ms). No model weights.
+            """
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            return await real_profile_av_container(artifact=artifact)
+
+        async def av_file_identity_handler(input_data: dict) -> dict:
+            """Lightweight AV pre-screen: format, primary codec, duration,
+            resolution, and only HIGH-severity forensic flags.
+            """
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            return await real_get_av_file_identity(artifact=artifact)
+
+        registry.register("extract_evidence_text", extract_evidence_text_handler, "Auto-dispatching text extraction: PDF (PyMuPDF lossless) -> EasyOCR -> Tesseract fallback")
+        registry.register("mediainfo_profile", mediainfo_profile_handler, "Deep AV container profiling: codec, frame rate mode, encoding tools, forensic flags")
+        registry.register("av_file_identity", av_file_identity_handler, "Lightweight AV pre-screen: format, codec, duration, high-severity flags only")
         
         return registry
     
     async def build_initial_thought(self) -> str:
         """
-        Build the initial thought for the ReAct loop.
-        
-        Returns:
-            Opening thought for metadata analysis investigation
+        Build the contextually-grounded initial thought for the ReAct loop.
+
+        Pre-screens with exif_extract to get device model, GPS presence,
+        software tags, and absent fields count before deeper forensic analysis.
+        This grounds the entire investigation in the actual metadata state
+        of the file rather than a generic opening statement.
         """
+        context_lines = []
+        absent_fields = []
+        try:
+            if self._tool_registry:
+                handler = self._tool_registry._handlers.get("exif_extract")
+                if handler:
+                    result = await handler({"artifact": self.evidence_artifact})
+                    device = result.get("device_model", result.get("make", ""))
+                    software = result.get("software", "")
+                    gps = result.get("gps_coordinates", result.get("has_gps", False))
+                    total_tags = result.get("total_exif_tags", result.get("tag_count", 0))
+                    absent_fields = result.get("absent_fields", [])
+                    created = result.get("datetime_original", result.get("date_created", ""))
+                    if device or total_tags:
+                        context_lines.append(
+                            f"Device: {device or 'Unknown'}, software: {software or 'None'}, "
+                            f"EXIF tags: {total_tags}, GPS: {'Present' if gps else 'ABSENT'}, "
+                            f"Created: {created or 'Unknown'}"
+                        )
+                    if absent_fields:
+                        context_lines.append(
+                            f"ABSENT expected fields ({len(absent_fields)}): "
+                            + ", ".join(str(f) for f in absent_fields[:6])
+                        )
+                    elif total_tags == 0:
+                        context_lines.append("WARNING: No EXIF metadata found — possible metadata stripping")
+        except Exception:
+            pass
+
+        context = " | ".join(context_lines) if context_lines else "EXIF pre-screen unavailable."
+        absence_note = (
+            f" ABSENCE AS SIGNAL: {len(absent_fields)} expected EXIF fields are missing — "
+            "each absence is a mandatory investigation trigger."
+            if absent_fields else ""
+        )
         return (
-            f"Starting metadata and context analysis for artifact "
-            f"{self.evidence_artifact.artifact_id}. "
-            f"I will begin with full EXIF extraction, explicitly logging expected-but-absent fields, "
-            f"then proceed through GPS-timestamp validation, astronomical API checks, "
-            f"reverse image search, steganography scan, and file structure analysis. "
-            f"Total tasks to complete: {len(self.task_decomposition)}. "
-            f"Note: Absence as Signal principle applies - every expected-but-absent EXIF field "
-            f"is a mandatory Thought trigger."
+            f"Starting metadata and provenance analysis. Evidence: {self.evidence_artifact.artifact_id}. "
+            f"EXIF pre-screen — {context}.{absence_note} "
+            f"Proceeding through {len(self.task_decomposition)} tasks: "
+            "full EXIF extraction, GPS-timestamp cross-validation, ML metadata anomaly scoring, "
+            "steganography scan, file structure analysis, hex signature scan, "
+            "timestamp analysis, and deep metadata extraction. "
+            "ABSENCE AS SIGNAL principle applies throughout: "
+            "every expected-but-absent field is a mandatory Thought trigger."
         )
