@@ -27,6 +27,7 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+$null
 
 # Node / Frontend
 node_modules/

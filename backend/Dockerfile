@@ -36,6 +36,8 @@ COPY . .
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app"
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 # 6. ML model cache directories
 ENV NUMBA_CACHE_DIR="/app/cache/numba_cache"
@@ -44,6 +46,8 @@ ENV TORCH_HOME="/app/cache/torch"
 ENV HF_HOME="/app/cache/huggingface"
 ENV DEEPFACE_HOME="/app/cache/deepface"
 ENV TRANSFORMERS_CACHE="/app/cache/huggingface/transformers"
+
+RUN mkdir -p /app/storage/evidence /app/storage/keys /app/cache/huggingface /app/cache/torch /app/cache/numba_cache /app/cache/ultralytics /app/cache/deepface /app/cache/calibration_models
 
 # Pre-compile app bytecode
 RUN /app/.venv/bin/python -m compileall -q api/ core/ orchestration/ scripts/ 2>/dev/null || true

@@ -95,10 +95,11 @@ services:
       - QDRANT_PORT=6333
       - QDRANT_GRPC_PORT=6334
       - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-forensic_user}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-forensic_pass}
       - POSTGRES_DB=${POSTGRES_DB:-forensic_council}
+      - BOOTSTRAP_INVESTIGATOR_PASSWORD=${NEXT_PUBLIC_DEMO_PASSWORD:-inv123!}
+      - BOOTSTRAP_ADMIN_PASSWORD=${BOOTSTRAP_ADMIN_PASSWORD:-admin123!}
       # DATABASE_URL removed - not read by app (core/config.py builds URL from postgres_* vars)
       - SIGNING_KEY=${SIGNING_KEY:-change-me-in-development}
       - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
@@ -134,9 +135,9 @@ services:
     read_only: true
     tmpfs:
       - /tmp:nosuid,size=512m # Remove noexec — Numba dlopen() requires exec on /tmp
-      - /app/cache:nosuid,size=4g # ML model cache (writable)
     volumes:
       - evidence_data:/app/storage/evidence:rw
+      - cache_scratch:/app/cache:rw
       - ../../backend/storage/keys:/app/storage/keys:ro
       - hf_cache:/app/cache/huggingface:rw
       - torch_cache:/app/cache/torch:rw
@@ -182,3 +183,4 @@ volumes:
   yolo_cache:
   deepface_cache:
   calibration_models:
+  cache_scratch:

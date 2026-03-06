@@ -64,7 +64,8 @@ docker compose -f docs/docker/docker-compose.yml --env-file .env down --remove-o
 docker compose -f docs/docker/docker-compose.infra.yml --env-file .env down --remove-orphans 2>$null
 
 # Force stop + remove any remaining forensic containers
-docker ps -aq --filter "name=forensic_" | ForEach-Object { docker stop $_; docker rm $_ } 2>$null
+docker ps -aq --filter "name=forensic_" | xargs -r docker stop | xargs -r docker rm
+# (Windows PowerShell alternative: docker ps -aq --filter "name=forensic_" | ForEach-Object { docker stop $_; docker rm $_ } 2>$null)
 ```
 
 ⏱️ **Wait:** ~10 seconds.
@@ -125,11 +126,11 @@ docker compose -f docs/docker/docker-compose.yml --env-file .env up -d --build
 
 | Service | Image | Build Time |
 |---------|-------|-----------|
-| `backend` | `python:3.11-slim` (Unified Stage) | ~2-3 min |
-| `frontend` | `node:20-alpine` (Unified Stage) | ~1-2 min |
-| `redis` | `redis:7-alpine` (pre-built) | ~5 sec |
-| `postgres` | `postgres:16-alpine` (pre-built) | ~5 sec |
-| `qdrant` | `qdrant/qdrant:v1.11.0` (pre-built) | ~10 sec |
+| `backend` | `python:3.11-slim` (Unified Stage) | ~2-3 min | (Does not re-download ML models if volumes exist) |
+| `frontend` | `node:20-alpine` (Unified Stage) | ~1-2 min | |
+| `redis` | `redis:7-alpine` (pre-built) | ~5 sec | |
+| `postgres` | `postgres:16-alpine` (pre-built) | ~5 sec | |
+| `qdrant` | `qdrant/qdrant:v1.11.0` (pre-built) | ~10 sec | |
 
 **Startup order** (enforced by `depends_on` + healthchecks):
 ```
@@ -189,6 +190,8 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:3000
 ## Section 2: No-Cache Rebuild (Frontend / Backend)
 
 > Use this when you've changed `package.json`, `pyproject.toml`, Dockerfile, or need to force a clean rebuild of specific services **without wiping database data.**
+> 
+> **💡 Model Cache Preserved:** Using `--no-cache` only clears the Docker build cache (like pip/apt installs). It does **not** delete named volumes. Your downloaded ML models (HuggingFace, PyTorch, YOLO) in `hf_cache`, `torch_cache`, etc. are safe and will NOT be re-downloaded. Models only re-download if you explicitly run `docker compose down -v`.
 
 ### Rebuild Frontend Only (no cache)
 
