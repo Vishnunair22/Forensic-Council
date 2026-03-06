@@ -162,6 +162,9 @@ class CustodyLogger:
         Returns:
             Content hash of last entry, or None if no entries
         """
+        if self._postgres is None:
+            return None
+            
         query = """
             SELECT content_hash
             FROM chain_of_custody
@@ -195,6 +198,10 @@ class CustodyLogger:
         Returns:
             UUID of the created entry
         """
+        if self._postgres is None:
+            logger.warning("CustodyLogger: no postgres client, skipping entry")
+            return uuid4()
+            
         # Sign the content
         signed = sign_content(agent_id, content)
         

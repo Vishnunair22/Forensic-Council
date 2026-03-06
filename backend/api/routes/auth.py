@@ -8,7 +8,7 @@ Routes for user authentication and token management.
 from datetime import timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Header
+from fastapi import APIRouter, Depends, HTTPException, status, Header, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 
@@ -92,7 +92,7 @@ async def get_user_from_db(username: str) -> Optional[dict]:
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     """
     Authenticate user and return JWT token.
     
@@ -119,7 +119,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         user = _DEMO_USERS_FALLBACK.get(form_data.username)
     
     if not user or not verify_password(form_data.password, user["hashed_password"]):
-        logger.warning("Failed login attempt", username=form_data.username)
+        client_ip = request.client.host if request.client else "unknown"
+        logger.warning("Failed login attempt", username=form_data.username, ip=client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -137,6 +138,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         user_id=user["user_id"],
         role=user["role"],
         expires_delta=access_token_expires,
+        username=user["username"],
     )
     
     logger.info("User logged in successfully", user_id=user["user_id"], role=user["role"].value)
@@ -180,6 +182,7 @@ async def refresh_token(current_user: User = Depends(get_current_user)):
         user_id=current_user.user_id,
         role=current_user.role,
         expires_delta=access_token_expires,
+        username=current_user.username,
     )
     
     logger.info("Token refreshed", user_id=current_user.user_id)

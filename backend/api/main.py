@@ -54,11 +54,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
 
     # Auto-initialize DB schema on every startup (idempotent — uses IF NOT EXISTS)
-    try:
-        await init_database()
-        logger.info("Database schema ready")
-    except Exception as e:
-        logger.error("DB init failed — continuing anyway", error=str(e))
+    # This is handled by run_migrations(), so we no longer call init_database() here.
     
     # Run versioned migrations
     try:

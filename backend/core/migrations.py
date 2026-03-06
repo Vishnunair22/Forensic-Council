@@ -217,6 +217,7 @@ class MigrationManager:
         )
         
         try:
+            await self.client.execute("BEGIN")
             await self.client.execute(migration.sql)
             
             execution_time = int((time.time() - start_time) * 1000)
@@ -234,6 +235,7 @@ class MigrationManager:
                 migration.description,
                 execution_time,
             )
+            await self.client.execute("COMMIT")
             
             logger.info(
                 "Migration applied successfully",
@@ -244,6 +246,10 @@ class MigrationManager:
             return True
             
         except Exception as e:
+            try:
+                await self.client.execute("ROLLBACK")
+            except Exception:
+                pass
             logger.error(
                 "Migration failed",
                 version=migration.version,
@@ -376,19 +382,23 @@ class MigrationManager:
     
     async def status(self) -> dict:
         """Get current migration status."""
-        await self.connect()
-        
-        applied = await self.get_applied_migrations()
-        pending = [m.version for m in MIGRATIONS if m.version not in applied]
-        
-        return {
-            "current_version": max(applied) if applied else 0,
-            "latest_version": max(m.version for m in MIGRATIONS),
-            "applied_count": len(applied),
-            "pending_count": len(pending),
-            "pending_versions": pending,
-            "is_current": len(pending) == 0,
-        }
+        try:
+            await self.connect()
+            
+            applied = await self.get_applied_migrations()
+            pending = [m.version for m in MIGRATIONS if m.version not in applied]
+            
+            return {
+                "current_version": max(applied) if applied else 0,
+                "latest_version": max(m.version for m in MIGRATIONS),
+                "applied_count": len(applied),
+                "pending_count": len(pending),
+                "pending_versions": pending,
+                "is_current": len(pending) == 0,
+            }
+        finally:
+            if self._owned_client:
+                await self.disconnect()
 
 
 async def run_migrations():
