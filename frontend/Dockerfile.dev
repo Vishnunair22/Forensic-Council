@@ -1,0 +1,28 @@
+# ============================================================================
+# Forensic Council — Frontend Development Dockerfile
+# ============================================================================
+# This Dockerfile is optimized for development with hot-reload.
+# It keeps all dependencies and runs the Next.js dev server.
+# ============================================================================
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files first for better caching
+COPY package.json package-lock.json ./
+
+# Install dependencies
+RUN npm ci --prefer-offline
+
+# Copy application code
+COPY . .
+
+# Disable Next.js telemetry
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Expose the development server port
+EXPOSE 3000
+
+# Run the development server with hot reload
+CMD ["npm", "run", "dev"]

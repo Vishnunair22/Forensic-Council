@@ -106,7 +106,7 @@ class Agent3Object(ForensicAgent):
         """
         Build and return the tool registry for this agent.
         
-        Registers stub tools for:
+        Registers real tool implementations for:
         - object_detection: Full-scene object detection
         - secondary_classification: Secondary classification pass
         - scale_validation: Scale and proportion validation

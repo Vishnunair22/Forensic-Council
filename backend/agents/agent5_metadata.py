@@ -103,10 +103,10 @@ class Agent5Metadata(ForensicAgent):
         - file_structure_analysis: File structure forensic analysis
         - timestamp_analysis: Timestamp analysis
         - file_hash_verify: File hash verification
-        - astronomical_api: Astronomical data API queries (stub)
-        - reverse_image_search: Reverse image search (stub)
-        - device_fingerprint_db: Device fingerprint database lookup (stub)
-        - adversarial_robustness_check: Adversarial robustness check (stub)
+        - astronomical_api: Astronomical sun-position validation via astral
+        - reverse_image_search: PHash perceptual hash comparison against local evidence store
+        - device_fingerprint_db: EXIF + PRNU cross-validation device fingerprint analysis
+        - adversarial_robustness_check: Metadata perturbation stability analysis
         """
         registry = ToolRegistry()
         

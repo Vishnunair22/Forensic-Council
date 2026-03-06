@@ -108,7 +108,7 @@ Full end-to-end audit, cleanup, and production hardening. All 194+ historical is
 ### Changed
 - **Memory Management**: Redis models updated with 24-hour TTLs (`ex=86400`) to remedy memory leak issues during heavy load.
 - **Container Architecture**: Optimized multi-stage Docker builds using `uv` to drastically reduce image sizes.
-- **UI Aesthetics**: Adopted "cyber-analytic" framework complete with Tailwind v4, Framer Motion, and 3D visualization grids via `@react-three/fiber`.
+- **UI Aesthetics**: Adopted "cyber-analytic" framework complete with Tailwind v4 and Framer Motion.
 
 ### Fixed
 - CORS blocking bugs resolved by standardizing `NEXT_PUBLIC_API_URL` during Next.js standalone build.

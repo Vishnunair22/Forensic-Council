@@ -116,10 +116,10 @@ class Agent4Video(ForensicAgent):
         - frame_consistency_analysis: Frame-to-frame consistency analysis
         - face_swap_detection: Face-swap detection
         - video_metadata: Video metadata extraction
-        - anomaly_classification: Anomaly classification (stub)
-        - rolling_shutter_validation: Rolling shutter validation (stub)
-        - inter_agent_call: Inter-agent communication (stub)
-        - adversarial_robustness_check: Adversarial robustness check (stub)
+        - anomaly_classification: SSIM + motion vector anomaly classification
+        - rolling_shutter_validation: Optical flow scanline skew validation
+        - inter_agent_call: Inter-agent communication via InterAgentBus
+        - adversarial_robustness_check: Optical flow perturbation stability analysis
         """
         registry = ToolRegistry()
         

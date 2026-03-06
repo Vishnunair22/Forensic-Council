@@ -1,11 +1,34 @@
 # Forensic Council — Error Log & Resolution Audit
 
-**Date:** 2026-03-05
+**Date:** 2026-03-06
 **Status:** v1.0.0 — All Issues Resolved — Production Ready
 
 This log tracks significant errors, architectural flaws, and their subsequent resolutions.
 
 ---
+
+## 🔧 Deep Dive Project Audit — March 06, 2026
+
+Comprehensive project-wide trace of all Docker files, imports, paths, configs, and documentation.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 212 | Backend Dockerfile uses `--mount=type=cache` (requires BuildKit) | 🔴 Build Failure | **RESOLVED** | Removed 3 `--mount=type=cache` directives from `backend/Dockerfile`. Builds now work without BuildKit enabled. |
+| 213 | Frontend `Dockerfile.dev` has Windows CRLF line endings | 🔴 Build Failure | **RESOLVED** | Rewrote `frontend/Dockerfile.dev` with Unix (LF) line endings. CRLF causes `exec format error` on Alpine. |
+| 214 | Both `.dockerignore` files missing `.git/` exclusion | 🟠 Build Performance | **RESOLVED** | Added `.git/`, `.vscode/`, `.idea/`, `Dockerfile*`, and more to both `frontend/.dockerignore` and `backend/.dockerignore`. |
+| 215 | `docker-compose.override.yml` frontend uses production Dockerfile | 🟠 Build Performance | **RESOLVED** | Added `build.dockerfile: Dockerfile.dev` to frontend service in override compose for fast dev builds. |
+| 216 | Stray `$null` file at project root | 🟢 Cleanup | **RESOLVED** | Deleted — artifact from a failed PowerShell `docker stop` command. |
+| 217 | `README.md` Quick Start has broken code fence | 🟡 Documentation | **RESOLVED** | The opening ` ```bash ` at line 67 was never closed before markdown headers at line 75, causing everything through line 108 to render as code. Fixed by properly closing the fence and restructuring the section. |
+| 218 | `Makefile` missing `dev` target for hot-reload | 🟡 Dev UX | **RESOLVED** | Added `DEV` compose variable and `make dev` target that uses `docker-compose.dev.yml` for proper hot-reload. |
+| 219 | `CHANGELOG.md` references deleted `@react-three/fiber` | 🟢 Documentation | **RESOLVED** | Removed stale `@react-three/fiber` reference from v0.6.0 entry (package was removed in v0.8.0). |
+| 220 | `STARTUP.md` lacks clear structure for fresh/rebuild/dev workflows | 🟡 Documentation | **RESOLVED** | Rewrote entire `STARTUP.md` into 3 clear sections: Fresh Build, No-Cache Rebuild, Dev Mode with hot-reload. Each with step-by-step commands and timing. |
+| 221 | `docker-compose.dev.yml` has Windows CRLF line endings | 🟡 Build Risk | **RESOLVED** | Rewrote with Unix (LF) line endings. CRLF in YAML compose files can cause parsing issues on Linux containers. |
+| 222 | `__pycache__/` directories present in backend | 🟢 Cleanup | **RESOLVED** | Deleted all `__pycache__/` directories from backend. Already in `.gitignore` but existed locally. |
+| 223 | Project root cluttered — `docker/`, `CONTRIBUTING.md` at root level | 🟢 Structure | **RESOLVED** | Moved `docker/` → `docs/docker/`, `CONTRIBUTING.md` → `docs/`, `STARTUP.md` → `docs/start/`, `TESTING.md` → `docs/test/`. Updated all 5 compose files, Makefile, README, STARTUP with new paths. |
+| 224 | `retry.py` redundant `import time` inside `retry_sync()` | 🟢 Code Quality | **RESOLVED** | Removed inner `import time` (line 191) — `time` already imported at module level (line 12). |
+
+---
+
 
 ## 🐛 Fresh Docker Build Fixes — March 05, 2026
 
@@ -120,8 +143,8 @@ The "Failed to fetch" error on Initiate Analysis was caused by **4 chained bugs*
 
 **Rebuild Required:** After fixing, rebuild the frontend container to apply the build-time variables:
 ```bash
-docker compose -f docker/docker-compose.yml build --no-cache frontend
-docker compose -f docker/docker-compose.yml up -d
+docker compose -f docs/docker/docker-compose.yml build --no-cache frontend
+docker compose -f docs/docker/docker-compose.yml up -d
 ```
 
 ---

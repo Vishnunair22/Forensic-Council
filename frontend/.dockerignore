@@ -2,7 +2,9 @@ node_modules
 .next
 out
 build
+dist
 coverage
+__tests__
 .env.local
 .env.development.local
 .env.test.local
@@ -10,3 +12,11 @@ coverage
 .vercel
 *.log
 .DS_Store
+Thumbs.db
+.git/
+.gitignore
+.vscode/
+.idea/
+*.md
+Dockerfile
+Dockerfile.*

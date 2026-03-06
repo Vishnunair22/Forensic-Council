@@ -51,6 +51,7 @@ export default function LandingPage() {
     setIsTransitioning(true);
     playSound("upload");
     sessionStorage.setItem("forensic_pending_file_name", file.name);
+    sessionStorage.setItem("forensic_auto_start", "true");
     (window as any).__forensic_pending_file = file;
     // Don't close modal immediately, wait for route transition to start
     router.push("/evidence");

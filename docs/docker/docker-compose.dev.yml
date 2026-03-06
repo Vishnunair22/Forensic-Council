@@ -1,0 +1,55 @@
+# ============================================================================
+# Forensic Council — Development Docker Compose
+# ============================================================================
+# This file enables full hot-reload for both Backend and Frontend.
+# Run with: docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml up -d
+# ============================================================================
+
+services:
+  # --------------------------------------------------------------------------
+  # Backend - Development configuration with hot-reload
+  # --------------------------------------------------------------------------
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    read_only: false
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - RELOAD=true
+    # Mount source directories for hot-reload
+    volumes:
+      - ../../backend/api:/app/api
+      - ../../backend/core:/app/core
+      - ../../backend/agents:/app/agents
+      - ../../backend/infra:/app/infra
+      - ../../backend/orchestration:/app/orchestration
+      - ../../backend/tools:/app/tools
+      - ../../backend/scripts:/app/scripts
+    command: [ "/app/.venv/bin/python", "scripts/run_api.py" ]
+
+  # --------------------------------------------------------------------------
+  # Frontend - Development configuration with hot-reload
+  # --------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    environment:
+      - HOSTNAME=0.0.0.0
+      - NEXT_TELEMETRY_DISABLED=1
+      - NODE_ENV=development
+      - WATCHPACK_POLLING=true
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_DEMO_PASSWORD=inv123!
+    volumes:
+      - ../../frontend/src:/app/src
+      - ../../frontend/public:/app/public
+      - ../../frontend/next.config.ts:/app/next.config.ts
+      - ../../frontend/tsconfig.json:/app/tsconfig.json
+      - ../../frontend/package.json:/app/package.json
+      - ../../frontend/package-lock.json:/app/package-lock.json
+    command: [ "npm", "run", "dev" ]
