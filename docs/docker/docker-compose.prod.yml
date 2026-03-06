@@ -3,7 +3,7 @@
 # ============================================================================
 # Use this file explicitly for production deployments:
 #
-#   docker compose -f docker/docker-compose.yml -f docker/docker-compose.prod.yml --env-file .env up -d
+#   docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.prod.yml --env-file .env up -d
 #
 # This configuration:
 #   - Uses pre-built images from a registry (configure IMAGE_TAG)
@@ -51,7 +51,7 @@ services:
     restart: unless-stopped
     # No direct port mapping - served through Caddy
 
-  # Caddy reverse proxy with automatic HTTPS
+    # Caddy reverse proxy with automatic HTTPS
   caddy:
     image: caddy:2-alpine
     container_name: forensic_caddy

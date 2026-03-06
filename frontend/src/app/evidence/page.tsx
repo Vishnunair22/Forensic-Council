@@ -84,7 +84,13 @@ export default function EvidencePage() {
         const pending = (window as any).__forensic_pending_file as File | undefined;
         if (pending) {
             delete (window as any).__forensic_pending_file;
-            handleFile(pending);
+            setFile(pending);
+            // Auto-start analysis if the landing page requested it
+            const autoStart = sessionStorage.getItem("forensic_auto_start");
+            if (autoStart === "true") {
+                sessionStorage.removeItem("forensic_auto_start");
+                triggerAnalysis(pending);
+            }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -223,11 +229,18 @@ export default function EvidencePage() {
     if (status === "initiating") {
         progressText = "Agents are currently initializing...";
     } else if (activeAgentDef) {
-        progressText = `${activeAgentDef.name} is analyzing evidence...`;
+        // Show the active agent's current thinking text for richer feedback
+        const activeData = activeAgents[activeAgentDef.id];
+        const thinkingSnippet = activeData?.thinking;
+        if (thinkingSnippet && thinkingSnippet !== "Analyzing...") {
+            progressText = `${activeAgentDef.name}: ${thinkingSnippet}`;
+        } else {
+            progressText = `${activeAgentDef.name} is analyzing evidence...`;
+        }
     } else if (completedAgents.length > 0 && status !== "complete") {
         progressText = `Gathering findings... (${completedAgents.length}/${validAgentsData.length} complete)`;
     } else if (status === "complete") {
-        progressText = "Analysis complete. Finalizing intelligence report.";
+        progressText = "All agents have reported. Council Consensus reached.";
     }
 
     return (
@@ -620,9 +633,10 @@ export default function EvidencePage() {
 
                                                             {isComplete ? (
                                                                 <motion.div
-                                                                    initial={{ opacity: 0 }}
-                                                                    animate={{ opacity: 1 }}
-                                                                    transition={{ delay: 0.2 }}
+                                                                    key="findings"
+                                                                    initial={{ opacity: 0, y: 6 }}
+                                                                    animate={{ opacity: 1, y: 0 }}
+                                                                    transition={{ duration: 0.5, ease: "easeOut" }}
                                                                     className="text-sm text-slate-200 leading-relaxed"
                                                                 >
                                                                     <AgentResponseText
@@ -631,8 +645,15 @@ export default function EvidencePage() {
                                                                     />
                                                                 </motion.div>
                                                             ) : (
-                                                                <div className="flex items-center gap-2 text-sm text-amber-400/80 font-mono animate-pulse">
-                                                                    <Activity className="w-3.5 h-3.5" />
+                                                                <motion.div
+                                                                    key="thinking"
+                                                                    initial={{ opacity: 0 }}
+                                                                    animate={{ opacity: 1 }}
+                                                                    exit={{ opacity: 0, y: -4 }}
+                                                                    transition={{ duration: 0.3 }}
+                                                                    className="flex items-center gap-2 text-sm text-amber-400/80 font-mono"
+                                                                >
+                                                                    <Activity className="w-3.5 h-3.5 animate-pulse" />
                                                                     <AnimatePresence mode="wait">
                                                                         <motion.span
                                                                             key={isActive?.thinking}
@@ -644,7 +665,7 @@ export default function EvidencePage() {
                                                                             {isActive?.thinking || agent.simulation.thinking}
                                                                         </motion.span>
                                                                     </AnimatePresence>
-                                                                </div>
+                                                                </motion.div>
                                                             )}
                                                         </div>
                                                     </div>

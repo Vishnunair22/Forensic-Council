@@ -13,18 +13,15 @@ WORKDIR /app
 # Copy only dependency files first (cache layer)
 COPY pyproject.toml uv.lock ./
 
-# Sync production deps only, use lockfile, cache wheels across builds
+# Sync production deps only, use lockfile
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_HTTP_TIMEOUT=300
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-install-project --extra ml
+RUN uv sync --frozen --no-dev --no-install-project --extra ml
 
 # ─── Stage 2: Production ─────────────────────────────────────────────────────
 FROM python:3.11-slim
 
-# Install system dependencies with apt cache mount for faster rebuilds
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends \
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     tesseract-ocr \
     tesseract-ocr-eng \
@@ -54,7 +51,7 @@ ENV TRANSFORMERS_CACHE="/app/cache/huggingface/transformers"
 RUN /app/.venv/bin/python -m compileall -q api/ core/ orchestration/ scripts/ 2>/dev/null || true
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:8000/health || exit 1
 
 EXPOSE 8000
 

@@ -120,9 +120,9 @@ class Agent2Audio(ForensicAgent):
         - prosody_analysis: Prosody analysis
         - background_noise_analysis: Background noise consistency analysis
         - codec_fingerprinting: Codec fingerprinting
-        - audio_visual_sync: Audio-visual sync verification (stub)
-        - inter_agent_call: Inter-agent communication (stub)
-        - adversarial_robustness_check: Adversarial robustness check (stub)
+        - audio_visual_sync: Audio-visual sync verification via moviepy+librosa
+        - inter_agent_call: Inter-agent communication via InterAgentBus
+        - adversarial_robustness_check: Spectral perturbation stability analysis
         """
         registry = ToolRegistry()
         

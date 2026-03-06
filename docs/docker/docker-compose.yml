@@ -4,9 +4,9 @@
 # This file defines shared service definitions. It is not meant to be used
 # directly. Use one of the following:
 #
-#   Development (native):  docker compose -f docker/docker-compose.infra.yml --env-file .env up -d
-#   Development (Docker):  docker compose -f docker/docker-compose.yml --env-file .env up --build
-#   Production:            docker compose -f docker/docker-compose.yml -f docker/docker-compose.prod.yml --env-file .env up -d
+#   Development (native):  docker compose -f docs/docker/docker-compose.infra.yml --env-file .env up -d
+#   Development (Docker):  docker compose -f docs/docker/docker-compose.yml --env-file .env up --build
+#   Production:            docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.prod.yml --env-file .env up -d
 # ============================================================================
 
 services:
@@ -19,7 +19,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -38,7 +38,7 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD-SHELL", "bash -c 'cat < /dev/null > /dev/tcp/localhost/6333'"]
+      test: [ "CMD-SHELL", "bash -c 'cat < /dev/null > /dev/tcp/localhost/6333'" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -61,7 +61,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-forensic_user} -d ${POSTGRES_DB:-forensic_council}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-forensic_user} -d ${POSTGRES_DB:-forensic_council}" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -79,11 +79,11 @@ services:
   # --------------------------------------------------------------------------
   backend:
     build:
-      context: ../backend
+      context: ../../backend
       dockerfile: Dockerfile
     container_name: forensic_api
     ports:
-      - "8000:8000"  # optional — only needed for direct API access from host
+      - "8000:8000" # optional — only needed for direct API access from host
     environment:
       - APP_NAME=forensic_council
       - APP_ENV=${APP_ENV:-development}
@@ -117,7 +117,7 @@ services:
       qdrant:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -133,10 +133,10 @@ services:
     # Security hardening
     read_only: true
     tmpfs:
-      - /tmp:nosuid,size=512m        # Remove noexec — Numba dlopen() requires exec on /tmp
+      - /tmp:nosuid,size=512m # Remove noexec — Numba dlopen() requires exec on /tmp
     volumes:
       - evidence_data:/app/storage/evidence
-      - ../backend/storage/keys:/app/storage/keys:ro
+      - ../../backend/storage/keys:/app/storage/keys:ro
       - hf_cache:/app/cache/huggingface
       - torch_cache:/app/cache/torch
       - numba_cache:/app/cache/numba_cache
@@ -146,7 +146,7 @@ services:
 
   frontend:
     build:
-      context: ../frontend
+      context: ../../frontend
       dockerfile: Dockerfile
     container_name: forensic_ui
     ports:

@@ -2,7 +2,7 @@
 # Forensic Council — Developer Makefile
 # ============================================================================
 # Convenience targets for common development operations.
-# All docker commands reference the canonical docker/ directory.
+# All docker commands reference the canonical docs/docker/ directory.
 #
 # Usage:
 #   make infra        — Start databases only (Redis, Postgres, Qdrant)
@@ -16,11 +16,12 @@
 #   make clean        — Remove all Docker volumes (destructive!)
 # ============================================================================
 
-COMPOSE     = docker compose -f docker/docker-compose.yml --env-file .env
-INFRA       = docker compose -f docker/docker-compose.infra.yml --env-file .env
-PROD        = docker compose -f docker/docker-compose.yml -f docker/docker-compose.prod.yml --env-file .env
+COMPOSE     = docker compose -f docs/docker/docker-compose.yml --env-file .env
+DEV         = docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml --env-file .env
+INFRA       = docker compose -f docs/docker/docker-compose.infra.yml --env-file .env
+PROD        = docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.prod.yml --env-file .env
 
-.PHONY: help infra up down logs backend frontend test lint clean rebuild env-check
+.PHONY: help infra up dev down logs backend frontend test lint clean rebuild env-check
 
 help:
 	@echo "Forensic Council — available targets:"
@@ -35,9 +36,13 @@ infra: env-check ## Start infrastructure containers (Redis, Postgres, Qdrant) on
 	$(INFRA) up -d
 	@echo "✅  Infra running — Redis :6379 | Postgres :5432 | Qdrant :6333"
 
-up: env-check ## Build and start the full stack in Docker
+up: env-check ## Build and start the full stack in Docker (production mode)
 	$(COMPOSE) up --build -d
 	@echo "✅  Stack running — Frontend :3000 | API :8000"
+
+dev: env-check ## Build and start dev stack with hot-reload for backend + frontend
+	$(DEV) up --build -d
+	@echo "✅  Dev stack running (hot reload) — Frontend :3000 | API :8000"
 
 down: ## Stop all containers
 	$(COMPOSE) down

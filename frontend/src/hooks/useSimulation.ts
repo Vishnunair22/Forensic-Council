@@ -142,16 +142,20 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                             thinking: agentData.thinking || prev[incomingId]?.thinking || "Analyzing...",
                                         }
                                     }));
-                                } else if (!pendingActivationsRef.current.find(p => p.agent_id === incomingId)) {
-                                    // Queue it — don't activate yet
-                                    pendingActivationsRef.current.push({
-                                        agent_id: incomingId,
-                                        thinking: agentData.thinking || "Analyzing...",
-                                    });
+                                } else {
+                                    const existingPending = pendingActivationsRef.current.find(p => p.agent_id === incomingId);
+                                    if (existingPending) {
+                                        // Update the queued thinking text so it's fresh when activated
+                                        existingPending.thinking = agentData.thinking || existingPending.thinking;
+                                    } else {
+                                        // Queue it — don't activate yet
+                                        pendingActivationsRef.current.push({
+                                            agent_id: incomingId,
+                                            thinking: agentData.thinking || "Analyzing...",
+                                        });
+                                    }
                                 }
                             }
-                            // Add a 5 second delay between agents instead of 50ms
-                            await new Promise(resolve => setTimeout(resolve, 5000));
                             break;
 
                         case "HITL_CHECKPOINT":
@@ -186,31 +190,31 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                     const nextCompleted = [...completedAgentsRef.current, result];
                                     setCompletedAgents(nextCompleted);
                                     onAgentCompleteRef.current?.(result);
-                                    // Play sound when individual agent finishes
                                     playSoundRef.current?.("agent");
 
-                                    // Clear this agent from active
                                     setActiveAgents(prev => {
                                         const next = { ...prev };
                                         delete next[update.agent_id!];
                                         return next;
                                     });
 
-                                    // Reset current tracking and drain queue
+                                    // Reset current tracking
                                     currentlyActiveRef.current = null;
-                                    activateNextPending();
 
-                                    // Check if all expected agents are done (sequential or fast parallel)
-                                    const totalExpected = AGENTS_DATA.length; // All 5 specialist agents (Arbiter is not in AGENTS_DATA)
+                                    // Check if all agents are done
+                                    const totalExpected = AGENTS_DATA.length;
                                     if (nextCompleted.length >= totalExpected) {
                                         setStatus("complete");
                                         onCompleteRef.current?.();
                                         playSoundRef.current?.("complete");
+                                    } else {
+                                        // Delay next agent appearance by 3s to achieve stagger effect without blocking socket queue
+                                        setTimeout(() => {
+                                            activateNextPending();
+                                        }, 3000);
                                     }
                                 }
                             }
-                            // Ensure 5 second delay between completions
-                            await new Promise(resolve => setTimeout(resolve, 5000));
                             break;
 
                         case "PIPELINE_COMPLETE":

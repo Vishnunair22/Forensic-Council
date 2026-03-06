@@ -188,7 +188,6 @@ def retry_sync(
                 config.on_retry(e, attempt)
             
             # For sync, use time.sleep
-            import time
             time.sleep(delay)
     
     raise last_exception or Exception("Retry failed without exception")

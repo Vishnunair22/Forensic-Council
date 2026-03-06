@@ -70,19 +70,51 @@ cp .env.example .env
 cp backend/.env.example backend/.env
 
 # Start infrastructure (databases)
-docker compose -f docker/docker-compose.infra.yml --env-file .env up -d
+docker compose -f docs/docker/docker-compose.infra.yml --env-file .env up -d
+```
 
+## 🚀 Development with Hot Reload
+
+Run the full stack with hot-reload enabled for both Backend and Frontend:
+
+```bash
+# From project root
+docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml up -d
+```
+
+### What's Enabled:
+
+| Service | Hot Reload | Port |
+|---------|-------------|------|
+| **Backend** (Python/Uvicorn) | ✅ Auto-restart on file save | 8000 |
+| **Frontend** (Next.js) | ✅ Fast Refresh | 3000 |
+| **PostgreSQL** | - | 5432 |
+| **Redis** | - | 6379 |
+| **Qdrant** | - | 6333 |
+
+### Common Commands:
+
+| Action | Command |
+|:-------|:--------|
+| **View logs** | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml logs -f` |
+| **Stop all** | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml down` |
+| **Force rebuild** | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml build --no-cache` |
+| **Restart backend** | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml restart backend` |
+
+### Native Development (without Docker):
+
+```bash
 # Run backend natively (with hot reload)
 cd backend && uv run uvicorn api.main:app --reload --port 8000
 
 # Run frontend natively (in another terminal)
 cd frontend && npm run dev
 ```
-→ **Frontend (native dev):** http://localhost:3000
-→ **Frontend (full Docker):** http://localhost:3000
+
+→ **Frontend:** http://localhost:3000
 → **Backend:** http://localhost:8000
 
-*For Docker-based development and production deployment, see [`STARTUP.md`](docs/STARTUP.md).*
+*For Docker-based development and production deployment, see [`STARTUP.md`](docs/start/STARTUP.md).*
 
 ## Project Structure
 
@@ -97,7 +129,12 @@ Forensic-Council/
 │   ├── tools/           # Custom analytical integrations for agents
 │   └── scripts/         # Standalone ML subprocesses (out-of-loop execution)
 ├── frontend/            # Next.js web application
-└── docs/                # Comprehensive architectural, API, and process docs
+├── docs/                # Documentation, Docker configs, and operational guides
+│   ├── docker/          # Docker Compose files (base, dev, prod, infra)
+│   ├── start/           # Startup and operations guides
+│   ├── test/            # Testing guides and checklists
+│   └── status/          # Development status and error logs
+└── Makefile             # Convenience targets (make up / make dev / make down)
 ```
 
 ## API Summary
@@ -113,7 +150,7 @@ Forensic-Council/
 
 ## Development Status
 
-Current development status, known limitations, and roadmap → [`docs/Development-Status.md`](docs/Development-Status.md)
+Current development status, known limitations, and roadmap → [`docs/status/Development-Status.md`](docs/status/Development-Status.md)
 
 ## License
 

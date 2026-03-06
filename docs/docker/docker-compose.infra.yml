@@ -5,7 +5,7 @@
 # This is the fastest workflow — run the backend and frontend natively
 # with hot reload while keeping the databases in Docker.
 #
-#   docker compose -f docker/docker-compose.infra.yml --env-file .env up -d
+#   docker compose -f docs/docker/docker-compose.infra.yml --env-file .env up -d
 #
 # Then run backend and frontend separately:
 #   cd backend && uvicorn api.main:app --reload --port 8000
@@ -21,7 +21,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -49,7 +49,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-forensic_user} -d ${POSTGRES_DB:-forensic_council}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-forensic_user} -d ${POSTGRES_DB:-forensic_council}" ]
       interval: 5s
       timeout: 3s
       retries: 5

@@ -95,8 +95,8 @@ class Agent1Image(ForensicAgent):
         - frequency_domain_analysis: Frequency domain analysis
         - file_hash_verify: File hash verification
         - perceptual_hash: Perceptual hash computation
-        - adversarial_robustness_check: Adversarial robustness check (stub)
-        - sensor_db_query: Camera sensor noise profile database query (stub)
+        - adversarial_robustness_check: ELA perturbation stability analysis
+        - sensor_db_query: Camera sensor noise profile analysis via EXIF + PRNU heuristics
         """
         registry = ToolRegistry()
         
@@ -221,7 +221,7 @@ class Agent1Image(ForensicAgent):
             artifact = input_data.get("artifact") or self.evidence_artifact
             return await real_analyze_image_content(artifact=artifact)
 
-        # Real tool handlers replacing previous stubs
+        # Adversarial and sensor analysis handlers
         async def adversarial_robustness_check(input_data: dict) -> dict:
             """
             Adversarial robustness check for ELA evasion.

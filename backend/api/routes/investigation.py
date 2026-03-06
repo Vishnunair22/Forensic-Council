@@ -124,20 +124,31 @@ async def _wrap_pipeline_with_broadcasts(
             # EntryType is usually an enum, but sometimes a string values depending on monkey-patch state
             type_val = getattr(entry_type, "value", str(entry_type))
 
-            if type_val == "THOUGHT" and isinstance(content, dict) and "text" in content:
-                if content.get("action") != "session_start":
-                    agent_name = _AGENT_NAMES.get(agent_id, agent_id)
-                    await broadcast_update(
-                        ws_session_id,
-                        BriefUpdate(
-                            type="AGENT_UPDATE",
-                            session_id=ws_session_id,
-                            agent_id=agent_id,
-                            agent_name=agent_name,
-                            message=f"{agent_name} is analyzing...",
-                            data={"status": "running", "thinking": content["text"]},
-                        )
+            if type_val in ("THOUGHT", "ACTION") and isinstance(content, dict):
+                # Skip session_start entries
+                if content.get("action") == "session_start":
+                    return result
+
+                agent_name = _AGENT_NAMES.get(agent_id, agent_id)
+
+                # For ACTION entries, show the tool name being called
+                if type_val == "ACTION" and content.get("tool_name"):
+                    tool_label = content["tool_name"].replace("_", " ").title()
+                    thinking_text = f"Calling {tool_label}..."
+                else:
+                    thinking_text = content.get("text", "Analyzing...")
+
+                await broadcast_update(
+                    ws_session_id,
+                    BriefUpdate(
+                        type="AGENT_UPDATE",
+                        session_id=ws_session_id,
+                        agent_id=agent_id,
+                        agent_name=agent_name,
+                        message=f"{agent_name} is analyzing...",
+                        data={"status": "running", "thinking": thinking_text},
                     )
+                )
             return result
 
         logger_obj.log_entry = instrumented_log_entry
@@ -180,25 +191,20 @@ async def _wrap_pipeline_with_broadcasts(
             supported_mimes = _AGENT_MIME_SUPPORT.get(agent_id, set())
             if mime not in supported_mimes:
                 msg = f"Skipping unsupported file type: {mime}"
-                # Brief delay to show 'checking file format...' instead of instant completion
-                unsupported_steps = [
-                    f"Initializing {agent_name} subsystems...",
-                    f"Inspecting file headers and MIME signature: {mime}",
-                    f"Cross-referencing {mime} against supported forensic analysis modules...",
-                ]
-                for step in unsupported_steps:
-                    await broadcast_update(
-                        ws_session_id,
-                        BriefUpdate(
-                            type="AGENT_UPDATE",
-                            session_id=ws_session_id,
-                            agent_id=agent_id,
-                            agent_name=agent_name,
-                            message=f"{agent_name} is processing...",
-                            data={"status": "running", "thinking": step},
-                        )
+                # Brief update to show identifying process before skipping
+                await broadcast_update(
+                    ws_session_id,
+                    BriefUpdate(
+                        type="AGENT_UPDATE",
+                        session_id=ws_session_id,
+                        agent_id=agent_id,
+                        agent_name=agent_name,
+                        message=f"{agent_name} is checking file compatibility...",
+                        data={"status": "running", "thinking": f"Identifying file format: {mime}"},
                     )
-                    await asyncio.sleep(1.2)
+                )
+                
+                # Signal completion immediately for unsupported types to save time
                 await broadcast_update(
                     ws_session_id,
                     BriefUpdate(
@@ -206,7 +212,7 @@ async def _wrap_pipeline_with_broadcasts(
                         session_id=ws_session_id,
                         agent_id=agent_id,
                         agent_name=agent_name,
-                        message=f"Format not supported ({mime})",
+                        message=f"Forensic Analysis Skipped: {agent_name} does not support {mime} files.",
                         data={
                             "status": "complete",
                             "confidence": 1.0,
@@ -303,10 +309,13 @@ async def _wrap_pipeline_with_broadcasts(
                     for f in result.findings
                 ]
                 confidence = sum(confidences) / len(confidences) if confidences else 0.5
+                # Collect ALL finding summaries so the frontend can show complete results
+                finding_summaries = []
                 for f in result.findings:
                     if isinstance(f, dict) and f.get("reasoning_summary"):
-                        finding_summary = f["reasoning_summary"]
-                        break
+                        finding_summaries.append(f["reasoning_summary"])
+                if finding_summaries:
+                    finding_summary = "\n\n".join(finding_summaries)
             elif result.error:
                 finding_summary = f"{agent_name}: {result.error[:100]}"
 

@@ -1,0 +1,58 @@
+# ============================================================================
+# Forensic Council — Development Override
+# ============================================================================
+# ⚠️ DEPRECATED: This file is no longer recommended for hot-reload development.
+# Use docker-compose.dev.yml instead for full hot-reload support.
+#
+# For full hot-reload support, use:
+#   docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml up -d
+#
+# This file is kept for backwards compatibility but frontend hot-reload may not work.
+# ============================================================================
+
+services:
+  redis:
+    ports:
+      - "6379:6379" # Expose Redis to host for native backend dev
+
+  postgres:
+    ports:
+      - "5432:5432" # Expose Postgres to host for native backend dev
+
+  qdrant:
+    ports:
+      - "6333:6333" # Expose Qdrant REST to host
+      - "6334:6334" # Expose Qdrant gRPC to host
+
+  backend:
+    read_only: false # Override base read_only:true — reload needs to write .pyc files
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - RELOAD=true
+    # Mount specific source directories for hot-reload
+    volumes:
+      - ../../backend/api:/app/api
+      - ../../backend/core:/app/core
+      - ../../backend/agents:/app/agents
+      - ../../backend/infra:/app/infra
+      - ../../backend/orchestration:/app/orchestration
+      - ../../backend/tools:/app/tools
+      - ../../backend/scripts:/app/scripts
+    command: [ "/app/.venv/bin/python", "scripts/run_api.py" ]
+
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile.dev
+    environment:
+      - NEXT_TELEMETRY_DISABLED=1
+      - NODE_ENV=development
+      - WATCHPACK_POLLING=true # Enables hot-reload in Docker on Windows/WSL
+    volumes:
+      - ../../frontend/src:/app/src
+      - ../../frontend/public:/app/public
+      - ../../frontend/next.config.ts:/app/next.config.ts
+      - ../../frontend/tsconfig.json:/app/tsconfig.json
+      - ../../frontend/package.json:/app/package.json
+    command: [ "npm", "run", "dev" ]
