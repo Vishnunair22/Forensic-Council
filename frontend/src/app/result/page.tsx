@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { AgentIcon } from "@/components/ui/AgentIcon";
 import { AgentResponseText } from "@/components/ui/AgentResponseText";
-import { useForensicData } from "@/hooks/useForensicData";
+import { useForensicData, mapReportDtoToReport } from "@/hooks/useForensicData";
 import { useSound } from "@/hooks/useSound";
 import { getReport, type ReportDTO, type AgentFindingDTO } from "@/lib/api";
 import type { AgentResult, Report } from "@/types";
@@ -51,7 +51,7 @@ export default function ResultPage() {
     const [agentFindingsOpen, setAgentFindingsOpen] = useState(false);
 
     // Use Hook
-    const { history, currentReport, deleteFromHistory, clearHistory, isLoading } = useForensicData();
+    const { history, currentReport, deleteFromHistory, clearHistory, addToHistory, isLoading } = useForensicData();
 
     // Real report data from API
     const [realReport, setRealReport] = useState<ReportDTO | null>(null);
@@ -70,6 +70,9 @@ export default function ResultPage() {
                     const response = await getReport(sessionId);
                     if (response.status === 'complete' && response.report) {
                         setRealReport(response.report);
+                        // Map and save to history
+                        const mapped = mapReportDtoToReport(response.report);
+                        addToHistory(mapped);
                     }
                 } catch (err) {
                     console.error("Failed to fetch report:", err);

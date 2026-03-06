@@ -511,25 +511,30 @@ async def investigate(
     if not re.match(r"^REQ-\d{5,10}$", investigator_id):
         raise HTTPException(status_code=400, detail="Invalid investigator_id format. Expected REQ-[5-10 digits].")
 
-    # 2. Rate Limiting (SEC 2)
-    from infra.redis_client import get_redis_client
-    redis = await get_redis_client()
-    rate_limit_key = f"rate_limit:upload:{investigator_id}"
-    
-    # 5 uploads per 10 minutes
-    current_count = await redis.client.get(rate_limit_key)
-    if current_count and int(current_count) >= 5:
-        ttl = await redis.client.ttl(rate_limit_key)
-        raise HTTPException(
-            status_code=429, 
-            detail=f"Rate limit exceeded. Please wait {ttl} seconds."
-        )
-    
-    async with redis.client.pipeline() as pipe:
-        await pipe.incr(rate_limit_key)
-        if not current_count:
-            await pipe.expire(rate_limit_key, 600)
-        await pipe.execute()
+    # 2. Rate Limiting (SEC 2) - Fault tolerant
+    try:
+        from infra.redis_client import get_redis_client
+        redis = await get_redis_client()
+        rate_limit_key = f"rate_limit:upload:{investigator_id}"
+        
+        # 5 uploads per 10 minutes
+        current_count = await redis.client.get(rate_limit_key)
+        if current_count and int(current_count) >= 5:
+            ttl = await redis.client.ttl(rate_limit_key)
+            raise HTTPException(
+                status_code=429, 
+                detail=f"Rate limit exceeded. Please wait {ttl} seconds."
+            )
+        
+        async with redis.client.pipeline() as pipe:
+            await pipe.incr(rate_limit_key)
+            if not current_count:
+                await pipe.expire(rate_limit_key, 600)
+            await pipe.execute()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning("Rate limiter unavailable, proceeding without limit", error=str(e))
 
     # 3. File Size Validation
     file.file.seek(0, 2)

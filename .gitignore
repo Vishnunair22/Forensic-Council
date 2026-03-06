@@ -39,7 +39,8 @@ coverage/
 # Storage (runtime data)
 backend/storage/evidence/
 backend/storage/calibration_models/
-backend/storage/keys/
+backend/storage/keys/*.pem
+!backend/storage/keys/.gitkeep
 
 # Logs
 *.log
