@@ -12,6 +12,9 @@ import sys
 from datetime import datetime, timezone
 from typing import Any, Optional
 from functools import lru_cache
+import contextvars
+
+request_id_ctx: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="")
 
 
 class StructuredFormatter(logging.Formatter):
@@ -45,6 +48,11 @@ class StructuredFormatter(logging.Formatter):
         # Add any extra fields passed to the logger
         if hasattr(record, "extra_fields") and record.extra_fields:
             log_data["extra"] = record.extra_fields
+            
+        # Add correlation ID
+        req_id = request_id_ctx.get()
+        if req_id:
+            log_data["request_id"] = req_id
         
         # Add exception info if present
         if record.exc_info:

@@ -470,7 +470,10 @@ class ForensicCouncilPipeline:
                     custody_logger=self.custody_logger,
                     evidence_store=self.evidence_store,
                 )
-                findings = await agent.run_investigation()
+                findings = await asyncio.wait_for(
+                    agent.run_investigation(),
+                    timeout=self.config.investigation_timeout
+                )
                 return AgentLoopResult(
                     agent_id="Agent1",
                     findings=[f.model_dump() for f in findings],
@@ -495,7 +498,10 @@ class ForensicCouncilPipeline:
                     evidence_store=self.evidence_store,
                     inter_agent_bus=self.inter_agent_bus,
                 )
-                findings = await agent.run_investigation()
+                findings = await asyncio.wait_for(
+                    agent.run_investigation(),
+                    timeout=self.config.investigation_timeout
+                )
                 return AgentLoopResult(
                     agent_id="Agent2",
                     findings=[f.model_dump() for f in findings],
@@ -520,7 +526,10 @@ class ForensicCouncilPipeline:
                     evidence_store=self.evidence_store,
                     inter_agent_bus=self.inter_agent_bus,
                 )
-                findings = await agent.run_investigation()
+                findings = await asyncio.wait_for(
+                    agent.run_investigation(),
+                    timeout=self.config.investigation_timeout
+                )
                 return AgentLoopResult(
                     agent_id="Agent3",
                     findings=[f.model_dump() for f in findings],
@@ -545,7 +554,10 @@ class ForensicCouncilPipeline:
                     evidence_store=self.evidence_store,
                     inter_agent_bus=self.inter_agent_bus,
                 )
-                findings = await agent.run_investigation()
+                findings = await asyncio.wait_for(
+                    agent.run_investigation(),
+                    timeout=self.config.investigation_timeout
+                )
                 return AgentLoopResult(
                     agent_id="Agent4",
                     findings=[f.model_dump() for f in findings],
@@ -569,7 +581,10 @@ class ForensicCouncilPipeline:
                     custody_logger=self.custody_logger,
                     evidence_store=self.evidence_store,
                 )
-                findings = await agent.run_investigation()
+                findings = await asyncio.wait_for(
+                    agent.run_investigation(),
+                    timeout=self.config.investigation_timeout
+                )
                 return AgentLoopResult(
                     agent_id="Agent5",
                     findings=[f.model_dump() for f in findings],

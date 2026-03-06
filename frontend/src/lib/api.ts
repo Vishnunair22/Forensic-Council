@@ -173,11 +173,11 @@ export async function autoLoginAsInvestigator(): Promise<TokenResponse> {
   // Use credentials from environment variables or prompt (never hardcode)
   const demoUsername = process.env.NEXT_PUBLIC_DEMO_USERNAME || "investigator";
   const demoPassword = process.env.NEXT_PUBLIC_DEMO_PASSWORD;
-  
+
   if (!demoPassword) {
     throw new Error("Demo credentials not configured. Set NEXT_PUBLIC_DEMO_PASSWORD environment variable.");
   }
-  
+
   return await login(demoUsername, demoPassword);
 }
 
@@ -262,16 +262,16 @@ async function handleAuthError<T>(
     return result;
   } catch (error) {
     // Check if it's an authentication error
-    if (error instanceof Error && 
-        (error.message.includes("Invalid or expired token") || 
-         error.message.includes("401") ||
-         error.message.includes("Unauthorized"))) {
-      
+    if (error instanceof Error &&
+      (error.message.includes("Invalid or expired token") ||
+        error.message.includes("401") ||
+        error.message.includes("Unauthorized"))) {
+
       if (authRetryCount < MAX_AUTH_RETRIES) {
         authRetryCount++;
         console.warn("Token invalid or expired, clearing and re-authenticating...");
         clearAuthToken();
-        
+
         // Retry the operation with fresh authentication
         try {
           const result = await operation();
@@ -319,6 +319,18 @@ export async function startInvestigation(
   caseId: string,
   investigatorId: string
 ): Promise<InvestigationResponse> {
+  // Client-side Input Validation
+  const caseIdRegex = /^CASE-(?:\d{10,14}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i;
+  const investigatorIdRegex = /^REQ-\d{5,10}$/i;
+
+  if (!caseIdRegex.test(caseId)) {
+    throw new Error("Invalid Case ID format. Expected CASE-[timestamp] or CASE-[uuid].");
+  }
+
+  if (!investigatorIdRegex.test(investigatorId)) {
+    throw new Error("Invalid Investigator ID format. Expected REQ-[5-10 digits].");
+  }
+
   return handleAuthError(async () => {
     const formData = new FormData();
     formData.append("file", file);

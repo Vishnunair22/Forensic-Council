@@ -131,7 +131,7 @@ services:
           memory: 512M
           cpus: '0.5'
     # Security hardening
-    read_only: true
+    read_only: false
     tmpfs:
       - /tmp:nosuid,size=512m # Remove noexec — Numba dlopen() requires exec on /tmp
     volumes:
@@ -157,7 +157,7 @@ services:
     environment:
       - HOSTNAME=0.0.0.0
       - NEXT_PUBLIC_API_URL=http://localhost:8000
-      - NEXT_PUBLIC_DEMO_PASSWORD=${NEXT_PUBLIC_DEMO_PASSWORD:-inv123!}
+      - NEXT_PUBLIC_DEMO_PASSWORD=${NEXT_PUBLIC_DEMO_PASSWORD}
     depends_on:
       backend:
         condition: service_healthy

@@ -26,7 +26,8 @@ from api.routes.metrics import (
 from core.config import get_settings
 from core.migrations import run_migrations
 from scripts.init_db import init_database
-from core.logging import get_logger
+from core.logging import get_logger, request_id_ctx
+import uuid
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -119,6 +120,20 @@ async def security_headers_middleware(request: Request, call_next):
     return response
 
 
+@app.middleware("http")
+async def correlation_id_middleware(request: Request, call_next):
+    """Inject a correlation ID (Request ID) for distributed tracing."""
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    token = request_id_ctx.set(request_id)
+    
+    request.state.request_id = request_id
+    response = await call_next(request)
+    
+    response.headers["X-Request-ID"] = request_id
+    request_id_ctx.reset(token)
+    return response
+
+
 # Metrics collection middleware
 @app.middleware("http")
 async def metrics_middleware(request: Request, call_next):
@@ -126,7 +141,7 @@ async def metrics_middleware(request: Request, call_next):
     start_time = time.time()
     
     # Update active sessions count
-    set_active_sessions(len(investigation._active_pipelines))
+    set_active_sessions(investigation.get_active_pipelines_count())
     
     try:
         response = await call_next(request)
@@ -201,5 +216,5 @@ async def health_check():
     return {
         "status": "healthy",
         "environment": settings.app_env,
-        "active_sessions": len(investigation._active_pipelines),
+        "active_sessions": investigation.get_active_pipelines_count(),
     }

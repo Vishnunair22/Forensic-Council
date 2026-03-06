@@ -41,8 +41,8 @@ class PostgresClient:
         user: Optional[str] = None,
         password: Optional[str] = None,
         database: Optional[str] = None,
-        min_pool_size: int = 5,
-        max_pool_size: int = 20,
+        min_pool_size: Optional[int] = None,
+        max_pool_size: Optional[int] = None,
     ) -> None:
         """
         Initialize PostgreSQL client.
@@ -62,8 +62,8 @@ class PostgresClient:
         self._user = user or settings.postgres_user
         self._password = password or settings.postgres_password
         self._database = database or settings.postgres_db
-        self._min_pool_size = min_pool_size
-        self._max_pool_size = max_pool_size
+        self._min_pool_size = min_pool_size if min_pool_size is not None else settings.postgres_min_pool_size
+        self._max_pool_size = max_pool_size if max_pool_size is not None else settings.postgres_max_pool_size
         
         self._pool: Optional[Pool] = None
     

@@ -741,3 +741,27 @@ The absolute final four minor issues raised during the last pass.
 | 245 | Agent 2 has incorrect fallback icon | 🟢 Cosmetic | **RESOLVED** | Hardwired the `Mic2` component in `AgentIcon.tsx` mapped to `audio` / `multimedia` agent roles. |
 | 246 | Dev compose password plaintext | 🟡 Security Hygiene | **RESOLVED** | Relayed `NEXT_PUBLIC_DEMO_PASSWORD` to an interpolated `.env` fallback explicitly in `docker-compose.dev.yml`. |
 | 247 | Unused `isDataLoading` import | 🟢 Code Quality | **RESOLVED** | Discarded dead destructured import from `evidence/page.tsx` for clean ESLint parsing. |
+
+---
+
+## 🎯 Deep Dive System Audit Fixes — March 06, 2026
+
+The absolute final 14 High/Critical priority issues.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 248 | Private Attribute Access in Middleware | 🔴 Runtime Crash | **RESOLVED** | Abstracted `_active_pipelines` to singleton access methods. |
+| 249 | Uninitialized Variable in Exception Handler | 🔴 Runtime Crash | **RESOLVED** | Pre-initialized `error_msg = None` before try block. |
+| 250 | Weak Request Case ID Validation | 🔴 Security Risk | **RESOLVED** | Strictly enforced UUID schema using restrictive regex matching. |
+| 251 | Rate Limiting TOCTOU Race | 🔴 Security Risk | **RESOLVED** | Switched logic flow to atomic Redis `INCR` commands before checks. |
+| 252 | Weak JWT Secret Validation Constraints | 🔴 Security Risk | **RESOLVED** | Enforced 32 character hardware requirements on `SIGNING_KEY` configs. |
+| 253 | Exposed Demo Passwords in Compose | 🔴 Security Risk | **RESOLVED** | Purged static inline passwords mapping defaults across compose files. |
+| 254 | Bypassed Next.js TS ESLint configurations | 🔴 Code Quality | **RESOLVED** | Imposed warning barriers against explicit-any overrides in `eslint.config.mjs`. |
+| 255 | Docker Read-Only Cache File Conflicts | 🔴 Orchestration | **RESOLVED** | Relaxed read-only file configurations to support dynamically generated pycache targets. |
+| 256 | Broken Array String Parameter Conversion | 🟠 Orchestration | **RESOLVED** | Parsed CORS target environment variable natively through an automatic string splitter mapping validation field. |
+| 257 | Missing Production Environment Tokens | 🟠 Architecture | **RESOLVED** | Checked active LLM configurations and hard-faulted out of generation on detached integrations natively. |
+| 258 | Agents Lack Process Timeouts | 🟠 Compute Costs | **RESOLVED** | Fenced the orchestration execution queues behind hard `asyncio.wait_for` triggers. |
+| 259 | Database Connections Maxing Out Resources | 🟠 Subsystems | **RESOLVED** | Forwarded connection sizing caps dynamically out to configuration settings. |
+| 260 | Missing Frontend Input Assertions | 🟠 Architecture | **RESOLVED** | Synced regex match structures directly out of Python to React fetch payloads natively. |
+| 261 | Undocumented Microservice Process Spans | 🟠 Debuggability | **RESOLVED** | Inserted transparent `X-Request-ID` API middleware propagation over structlog ContextVars globally. |
+

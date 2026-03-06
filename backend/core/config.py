@@ -84,6 +84,8 @@ class Settings(BaseSettings):
     postgres_user: str = Field(default="forensic_user", description="PostgreSQL username")
     postgres_password: str = Field(default="forensic_pass", description="PostgreSQL password")
     postgres_db: str = Field(default="forensic_council", description="PostgreSQL database name")
+    postgres_min_pool_size: int = Field(default=5, description="Min DB connection pool size")
+    postgres_max_pool_size: int = Field(default=20, description="Max DB connection pool size")
     
     @field_validator("postgres_user")
     @classmethod
@@ -143,6 +145,15 @@ class Settings(BaseSettings):
         description="Allowed CORS origins (comma-separated in env)",
     )
     
+    @field_validator("cors_allowed_origins", mode="before")
+    @classmethod
+    def parse_cors(cls, v):
+        if isinstance(v, str):
+            if v.startswith("["):
+                return v
+            return [i.strip() for i in v.split(",") if i.strip()]
+        return v
+    
     @property
     def effective_jwt_secret(self) -> str:
         """Get the effective JWT secret key."""
@@ -157,11 +168,16 @@ class Settings(BaseSettings):
             return v
         data = info.data if hasattr(info, 'data') else {}
         env = data.get("app_env", "development")
-        if env == "production" and ("change" in v.lower() or "default" in v.lower() or "dev" in v.lower()):
-            raise ValueError(
-                "JWT_SECRET_KEY must be changed from the default for production! "
-                "Set a strong, unique key via the JWT_SECRET_KEY environment variable."
-            )
+        if env == "production":
+            if any(word in v.lower() for word in ("change", "default", "dev")):
+                raise ValueError(
+                    "JWT_SECRET_KEY must be changed from the default for production! "
+                    "Set a strong, unique key via the JWT_SECRET_KEY environment variable."
+                )
+            if len(v) < 32:
+                raise ValueError(
+                    "JWT_SECRET_KEY must be at least 32 characters in production!"
+                )
         return v
     
     # Agent Configuration
@@ -182,6 +198,17 @@ class Settings(BaseSettings):
 
     # HuggingFace Token (for pyannote.audio speaker diarization and other HF models)
     hf_token: Optional[str] = Field(default=None, description="HuggingFace API token for model downloads")
+    
+    @field_validator("hf_token", "llm_api_key")
+    @classmethod
+    def validate_keys(cls, v: Optional[str], info) -> Optional[str]:
+        data = info.data if hasattr(info, 'data') else {}
+        env = data.get("app_env", "development")
+        provider = data.get("llm_provider", "none")
+        if env == "production":
+            if info.field_name == "llm_api_key" and provider != "none" and not v:
+                raise ValueError(f"LLM_API_KEY is required in production when llm_provider is '{provider}'")
+        return v
     
     # Retry Configuration
     database_retry_max: int = Field(default=5, description="Max database connection retries")
@@ -224,13 +251,16 @@ class Settings(BaseSettings):
             )
         data = info.data if hasattr(info, "data") else {}
         env = data.get("app_env", "development")
-        if env == "production" and any(
-            word in v.lower() for word in ("change", "default", "dev", "example")
-        ):
-            raise ValueError(
-                "SIGNING_KEY must be changed from the default for production! "
-                "Generate with: python -c \"import secrets; print(secrets.token_hex(32))\""
-            )
+        if env == "production":
+            if any(word in v.lower() for word in ("change", "default", "dev", "example")):
+                raise ValueError(
+                    "SIGNING_KEY must be changed from the default for production! "
+                    "Generate with: python -c \"import secrets; print(secrets.token_hex(32))\""
+                )
+            if len(v) < 32:
+                raise ValueError(
+                    "SIGNING_KEY must be at least 32 characters in production!"
+                )
         return v
 
 
