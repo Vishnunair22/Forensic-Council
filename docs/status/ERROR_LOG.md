@@ -7,6 +7,73 @@ This log tracks significant errors, architectural flaws, and their subsequent re
 
 ---
 
+## 🔍 Full Audit — All Errors & Fixes
+
+### 🔴 BUG 1 — `$null` File in Project Root (Windows PowerShell Artifact)
+**File:** `$null` (root directory)
+**Problem:** The STARTUP.md contained `2>$null` in cleanup commands. On Windows, when someone ran those commands in a non-PowerShell shell, a literal file named `$null` (127 bytes) was created in the project root containing Docker error output. This file gets sent to Docker as build context and pollutes the repo.
+**Fix:** Deleted the file. Added `$null` to `.gitignore`.
+
+---
+
+### 🔴 BUG 2 — CRITICAL: `anomaly_classifier.py` CLI Argument Mismatch (Runtime Crash)
+**Files:** `backend/scripts/ml_tools/anomaly_classifier.py`, `backend/agents/agent4_video.py`
+**Problem:** `run_ml_tool()` in `ml_subprocess.py` **always** prepends `--input <path>` to every script call. But `anomaly_classifier.py` has no `--input` argument — it expects `--frameA`. The actual command built was:
+`python anomaly_classifier.py --input /frame_a.png --frameB /frame_b.png --motion 3.5`
+This causes argparse to throw `unrecognized arguments: --input`, which gets returned as `{"error": "...", "available": False}` for every video anomaly classification call. Agent 4's anomaly detection was silently broken.
+**Fix:** Updated `anomaly_classifier.py` argparse to accept `--input` as an alias for `--frameA` using `add_argument("--frameA", "--input", dest="frameA", ...)`.
+
+---
+
+### 🔴 BUG 3 — Inline Comment Corrupts Demo Password in `.env.example`
+**File:** `.env.example`
+**Problem:** The line `NEXT_PUBLIC_DEMO_PASSWORD=inv123!   # change this` — depending on how the shell or Docker reads the env file, the comment may be included in the value, making the password literally `inv123!   # change this`. Login would then fail with 401.
+**Fix:** Split to separate comment line, value is now clean: `NEXT_PUBLIC_DEMO_PASSWORD=inv123!`
+
+---
+
+### 🟠 BUG 4 — `PYTHONDONTWRITEBYTECODE` Missing (Read-Only Filesystem Noise + Errors)
+**File:** `backend/Dockerfile`
+**Problem:** The container runs with `read_only: true`. When Python encounters un-compiled modules at runtime, it tries to write `.pyc` files to the read-only `/app` filesystem. This causes runtime warnings/errors for any code path not covered by the `compileall` step in the Dockerfile.
+**Fix:** Added `ENV PYTHONDONTWRITEBYTECODE=1` and `ENV PYTHONUNBUFFERED=1` to the Dockerfile and docker-compose backend environment.
+
+---
+
+### 🟠 BUG 5 — `/app/cache` tmpfs Shadowing Named Volumes (Model Cache Wiped on Every Restart)
+**File:** `docs/docker/docker-compose.yml`
+**Problem:** The compose file mounted `/app/cache` as a tmpfs AND then mounted named volumes (`hf_cache`, `torch_cache`, etc.) as subdirectories under it. On some Docker versions/Linux kernels, the parent tmpfs can shadow child volume mounts, meaning downloaded ML models were wiped on every container restart — defeating the entire purpose of the named volumes.
+**Fix:** Removed the `/app/cache` tmpfs. Added a `cache_scratch` named volume at `/app/cache` for the base path (persistent, not ephemeral). All the specific named volumes (`hf_cache`, `torch_cache`, etc.) continue to overlay their respective subdirs cleanly.
+
+---
+
+### 🟠 BUG 6 — `BOOTSTRAP_*` Credentials Never Injected → DB Users Never Created
+**File:** `docs/docker/docker-compose.yml`
+**Problem:** `init_db.py` reads `BOOTSTRAP_INVESTIGATOR_PASSWORD` / `BOOTSTRAP_ADMIN_PASSWORD` from env to create database users. These were **never set** in docker-compose. Result: PostgreSQL's `users` table stayed empty. Auth worked only because of hardcoded bcrypt hashes in `auth.py` as a fallback — fragile and undocumented. Any password rotation would break login silently.
+**Fix:** Added `BOOTSTRAP_INVESTIGATOR_PASSWORD=${NEXT_PUBLIC_DEMO_PASSWORD:-inv123!}` and `BOOTSTRAP_ADMIN_PASSWORD` to the backend service environment, so DB users are properly seeded on first startup.
+
+---
+
+### 🟠 BUG 7 — Missing `mkdir` for Cache Directories in Dockerfile
+**File:** `backend/Dockerfile`
+**Problem:** The Dockerfile set `ENV TORCH_HOME`, `ENV HF_HOME`, etc., but never created those directories. At container start, if the named volumes are empty (fresh install), the ML libraries may fail to write to directories that don't exist yet, especially under the read-only root filesystem where they can't create parent dirs.
+**Fix:** Added `RUN mkdir -p /app/storage/evidence /app/storage/keys /app/cache/huggingface /app/cache/torch /app/cache/numba_cache /app/cache/ultralytics /app/cache/deepface /app/cache/calibration_models` so all required paths exist in the base image layer.
+
+---
+
+### 🟡 BUG 8 — STARTUP.md Uses Windows PowerShell Syntax in Cross-Platform Cleanup Commands
+**File:** `docs/start/STARTUP.md` — Step 2/7
+**Problem:** The cleanup script used `ForEach-Object { docker stop $_; docker rm $_ } 2>$null` — pure PowerShell. This is also what created the `$null` artifact file (Bug 1). Running these commands on Linux/macOS would error or silently create junk files.
+**Fix:** Replaced with bash-compatible `xargs -r` pattern. PowerShell alternative noted in a comment for Windows users.
+
+---
+
+### 🟡 BUG 9 — STARTUP.md Section 2 (Rebuild) Missing Model Cache Documentation
+**File:** `docs/start/STARTUP.md`
+**Problem:** The `--no-cache` rebuild section said nothing about whether ML model downloads (HuggingFace, PyTorch, YOLO — potentially GBs) would be re-downloaded. Users would assume `--no-cache` = full re-download and either avoid rebuilding or waste hours re-downloading.
+**Fix:** Added a callout box to Section 2 and the build table in Section 1 explicitly documenting: `--no-cache` only clears the Docker layer build cache, **not named volumes**. ML models cached in `hf_cache`, `torch_cache`, `yolo_cache`, `deepface_cache` volumes survive all rebuilds. Models only re-download on `docker compose down -v`.
+
+---
+
 ## 🔧 Deep Dive Project Audit — March 06, 2026
 
 Comprehensive project-wide trace of all Docker files, imports, paths, configs, and documentation.

@@ -150,7 +150,7 @@ def visualize_anomaly(image_path_a: str, image_path_b: str, output_path: str) ->
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Classify video anomaly using SSIM")
-    parser.add_argument("--frameA", required=True, help="Path to first frame")
+    parser.add_argument("--frameA", "--input", dest="frameA", required=True, help="Path to first frame (or input proxy)")
     parser.add_argument("--frameB", required=True, help="Path to second frame")
     parser.add_argument("--motion", type=float, default=0.0,
                         help="Motion vector magnitude between frames")
