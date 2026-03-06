@@ -78,7 +78,8 @@ Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [✅] → C
 ## New in v1.0.0
 
 - All 9 agent stubs replaced with real implementations
-- Full production readiness audit completed (194+ issues resolved)
+- Full deep-dive audit completed (237+ issues resolved)
+- Production structural audit and Next.js `npm run build` passed with zero errors
 - Version aligned to 1.0.0 across all config files
 - Backend Dockerfile `uv` pinned to stable version (0.6.6)
 - ESLint config migrated to proper flat config format

@@ -13,9 +13,10 @@ WORKDIR /app
 # Copy only dependency files first (cache layer)
 COPY pyproject.toml uv.lock ./
 
-# Sync production deps only, use lockfile
+# Sync production deps only, use lockfile (cached)
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_HTTP_TIMEOUT=300
-RUN uv sync --frozen --no-dev --no-install-project --extra ml
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-install-project --extra ml
 
 # ─── Stage 2: Production ─────────────────────────────────────────────────────
 FROM python:3.11-slim
