@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Form
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Form, Request
 from fastapi.responses import JSONResponse
 
 from core.auth import get_current_user, require_investigator, User

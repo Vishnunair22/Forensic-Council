@@ -125,8 +125,8 @@ docker compose -f docs/docker/docker-compose.yml --env-file .env up -d --build
 
 | Service | Image | Build Time |
 |---------|-------|-----------|
-| `backend` | `python:3.11-slim` (2-stage) | ~2-3 min |
-| `frontend` | `node:20-alpine` (3-stage) | ~1-2 min |
+| `backend` | `python:3.11-slim` (Unified Stage) | ~2-3 min |
+| `frontend` | `node:20-alpine` (Unified Stage) | ~1-2 min |
 | `redis` | `redis:7-alpine` (pre-built) | ~5 sec |
 | `postgres` | `postgres:16-alpine` (pre-built) | ~5 sec |
 | `qdrant` | `qdrant/qdrant:v1.11.0` (pre-built) | ~10 sec |
@@ -252,7 +252,7 @@ docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.d
 
 | Feature | Production Build | Dev Mode |
 |---------|-----------------|----------|
-| **Frontend Dockerfile** | `Dockerfile` (3-stage, `next build`) | `Dockerfile.dev` (1-stage, `npm run dev`) |
+| **Frontend Dockerfile** | `Dockerfile` (Unified Stage, `next build`) | `Dockerfile.dev` (1-stage, `npm run dev`) |
 | **Frontend Hot Reload** | ❌ No | ✅ Yes (edit `src/` → instant browser refresh) |
 | **Backend Hot Reload** | ❌ No | ✅ Yes (edit `.py` → Uvicorn auto-restarts) |
 | **Backend Debug Mode** | `DEBUG=false` | `DEBUG=true`, `LOG_LEVEL=DEBUG` |
@@ -400,9 +400,16 @@ docker inspect forensic_postgres --format='{{.State.Health.Status}}'
 docker logs forensic_postgres --tail=20
 ```
 
-### Slow Docker Build
+### Slow Docker Build / "Exporting Layers" Freeze
 
-Ensure `.dockerignore` files exist in both `backend/` and `frontend/` directories. Without them, Docker sends the entire project (including `node_modules/`, `.git/`, etc.) as build context.
+If your build appears to hang (especially during Python `uv` or Node `npm` installations), **view the live download stream**:
+
+```bash
+docker compose -f docs/docker/docker-compose.yml --env-file .env build --progress=plain
+```
+The Dockerfiles have been heavily unified and optimized to stream `verbose` download progress directly to `stdout`.
+
+Also, ensure `.dockerignore` files exist in both `backend/` and `frontend/` directories. Without them, Docker sends the entire project (including `node_modules/`, `.git/`, etc.) as build context to the daemon.
 
 ---
 

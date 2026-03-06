@@ -135,7 +135,6 @@ services:
     tmpfs:
       - /tmp:nosuid,size=512m # Remove noexec — Numba dlopen() requires exec on /tmp
       - /app/cache:nosuid,size=4g # ML model cache (writable)
-      - /app/storage/evidence:nosuid,size=2g # Evidence storage (writable)
     volumes:
       - evidence_data:/app/storage/evidence:rw
       - ../../backend/storage/keys:/app/storage/keys:ro
