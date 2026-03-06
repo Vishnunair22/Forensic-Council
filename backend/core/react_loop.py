@@ -599,9 +599,10 @@ class ReActLoopEngine:
                     }
     
                     task_desc = next_step.tool_name
-                    if len(self._react_chain) >= 1 and self._react_chain[-1].step_type == "THOUGHT":
-                        task_desc = self._react_chain[-1].content[:80]
+                    if len(self._react_chain) >= 2 and self._react_chain[-2].step_type == "THOUGHT":
+                        task_desc = self._react_chain[-2].content[:80]
                     
+
                     finding = AgentFinding(
                         agent_id=self.agent_id,
                         agent_name=_AGENT_ID_TO_NAME.get(self.agent_id, self.agent_id),
@@ -942,9 +943,35 @@ class ReActLoopEngine:
                 iteration=self._current_iteration,
             )
 
-        # Generate a THOUGHT step about working on this task
-        # Don't add to react_chain here - let the main loop do it
-        thought = ReActStep(
+        last_step = self._react_chain[-1] if self._react_chain else None
+        
+        is_thought_emitted = (
+            last_step is not None and
+            last_step.step_type == "THOUGHT" and
+            pending_task.description in last_step.content
+        )
+
+        if is_thought_emitted:
+            try:
+                await self.working_memory.update_task(
+                    session_id=self.session_id,
+                    agent_id=self.agent_id,
+                    task_id=pending_task.task_id,
+                    status=TaskStatus.COMPLETE,
+                    result_ref=best_tool.name,
+                )
+            except Exception:
+                pass
+
+            return ReActStep(
+                step_type="ACTION",
+                content=f"Calling tool '{best_tool.name}' for task: {pending_task.description}",
+                tool_name=best_tool.name,
+                tool_input={"artifact": None},
+                iteration=self._current_iteration,
+            )
+
+        return ReActStep(
             step_type="THOUGHT",
             content=(
                 f"Working on task: {pending_task.description}. "
@@ -953,20 +980,6 @@ class ReActLoopEngine:
             ),
             iteration=self._current_iteration,
         )
-        return thought
-
-        # Generate an ACTION step to call the tool
-        # Don't add to react_chain here - let the main loop do it
-        action = ReActStep(
-            step_type="ACTION",
-            content=f"Calling tool '{best_tool.name}' for task: {pending_task.description}",
-            tool_name=best_tool.name,
-            tool_input={"artifact": None},   # handlers default to self.evidence_artifact
-            iteration=self._current_iteration,
-        )
-        
-        # Note: The main loop will execute this action and create the observation
-        return action
 
 
     @staticmethod
