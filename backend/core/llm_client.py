@@ -203,9 +203,10 @@ class LLMClient:
         payload = {
             "model": self.model,
             "max_tokens": self.max_tokens,
-            "temperature": self.temperature,
             "messages": chat_messages,
         }
+        if self.temperature > 0:
+            payload["temperature"] = self.temperature
         
         if system_message:
             payload["system"] = system_message

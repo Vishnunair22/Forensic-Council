@@ -62,21 +62,14 @@ async def terminate_session(session_id: str, current_user: User = Depends(get_cu
 @router.websocket("/{session_id}/live")
 async def live_updates(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for live investigation updates. Requires authentication via AUTH message after connection."""
-    # First accept the connection to avoid HTTP error on the upgrade request
-    # Use subprotocol to acknowledge the client's protocol request
-    await websocket.accept(subprotocol="forensic-v1")
-    
-    # Validate session exists AFTER accepting but before processing
+    # Validate session exists BEFORE accepting to prevent session enumeration attacks
     if not get_active_pipeline(session_id):
-        await websocket.send_json({
-            "type": "ERROR",
-            "session_id": session_id,
-            "message": "Session not found",
-            "agent_id": None,
-            "agent_name": None
-        })
         await websocket.close(code=4004, reason="Session not found")
         return
+
+    # First accept the connection
+    # Use subprotocol to acknowledge the client's protocol request
+    await websocket.accept(subprotocol="forensic-v1")
 
     # Wait for authentication message from client with timeout
     try:

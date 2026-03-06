@@ -117,6 +117,13 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' blob: data:; "
+        "connect-src 'self' ws: wss:;"
+    )
     if settings.app_env == "production":
         response.headers["Strict-Transport-Security"] = (
             "max-age=31536000; includeSubDomains"
@@ -142,14 +149,13 @@ async def add_cache_headers(request: Request, call_next):
     """Add cache control headers."""
     response = await call_next(request)
     
-    if request.url.path.startswith("/api/"):
-        response.headers["Cache-Control"] = "no-store, must-revalidate"
-    elif request.url.path.startswith("/static/"):
+    if request.url.path.startswith("/static/"):
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
-    
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
-    
+    else:
+        response.headers["Cache-Control"] = "no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        
     return response
 
 MAX_BODY_SIZE = 55 * 1024 * 1024  # 55MB (to allow 50MB uploads + overhead)

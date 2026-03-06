@@ -54,14 +54,14 @@ _DEMO_USERS_FALLBACK = {
     "admin": {
         "user_id": "admin-001",
         "username": "admin",
-        "hashed_password": "$2b$12$HN9puMv2yozjg5Hn.i88Eez/fcBwNItF7asF6vOTBGO00ECugvDd.",  # admin123!
+        "hashed_password": "$2b$12$HN9puMv2yozjg5Hn.i88Eez/fcBwNItF7asF6vOTBGO00ECugvDd.",
         "role": UserRole.ADMIN,
         "disabled": False,
     },
     "investigator": {
         "user_id": "inv-001",
         "username": "investigator",
-        "hashed_password": "$2b$12$w6XehNzJ9h8Jr95Yg6Qp3u0d0NpuqXdfpxC9j7c7v374veCaMWw2G",  # inv123!
+        "hashed_password": "$2b$12$w6XehNzJ9h8Jr95Yg6Qp3u0d0NpuqXdfpxC9j7c7v374veCaMWw2G",
         "role": UserRole.INVESTIGATOR,
         "disabled": False,
     },

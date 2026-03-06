@@ -43,8 +43,9 @@ router = APIRouter(prefix="/api/v1", tags=["investigation"])
 # Store active pipelines, WebSocket connections, background tasks, and cached reports
 _active_pipelines: dict[str, ForensicCouncilPipeline] = {}
 _websocket_connections: dict[str, list] = {}
+from datetime import datetime, timezone, timedelta
 _active_tasks: dict[str, asyncio.Task] = {}
-_final_reports: dict[str, Any] = {}
+_final_reports: dict[str, tuple[Any, datetime]] = {}
 
 # Agent IDs in execution order
 _AGENT_IDS = ["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"]
@@ -257,20 +258,23 @@ async def _wrap_pipeline_with_broadcasts(
 
             # --- Run the single agent ---
             try:
-                agent = AgentClass(
-                    agent_id=agent_id,
-                    session_id=session_id or evidence_artifact.artifact_id,
-                    evidence_artifact=evidence_artifact,
-                    config=pipeline.config,
-                    working_memory=pipeline.working_memory,
-                    episodic_memory=pipeline.episodic_memory,
-                    custody_logger=pipeline.custody_logger,
-                    evidence_store=pipeline.evidence_store,
-                    inter_agent_bus=pipeline.inter_agent_bus,
-                )
+                agent_kwargs = {
+                    "agent_id": agent_id,
+                    "session_id": session_id or evidence_artifact.artifact_id,
+                    "evidence_artifact": evidence_artifact,
+                    "config": pipeline.config,
+                    "working_memory": pipeline.working_memory,
+                    "episodic_memory": pipeline.episodic_memory,
+                    "custody_logger": pipeline.custody_logger,
+                    "evidence_store": pipeline.evidence_store,
+                }
+                if agent_id in ("Agent2", "Agent3", "Agent4"):
+                    agent_kwargs["inter_agent_bus"] = pipeline.inter_agent_bus
+                agent = AgentClass(**agent_kwargs)
+                
                 findings = await asyncio.wait_for(
                     agent.run_investigation(),
-                    timeout=60.0
+                    timeout=pipeline.config.investigation_timeout
                 )
                 
                 # --- FORMATTING ENFORCEMENT ---
@@ -492,8 +496,8 @@ async def run_investigation_task(
         # Free memory and cache report if generated
         report = getattr(pipeline, "_final_report", None)
         if report:
-             _final_reports[session_id] = report
-        
+             from datetime import datetime, timezone
+             _final_reports[session_id] = (report, datetime.now(timezone.utc))
         
         remove_active_pipeline(session_id)
         
@@ -553,8 +557,14 @@ async def investigate(
 
     # 2. Rate Limiting (SEC 2) - Fault tolerant atomic operations
     try:
-        from infra.redis_client import get_redis_client
-        redis = await get_redis_client()
+        from infra.redis_client import RedisClient
+        redis = RedisClient(
+            host=settings.redis_host,
+            port=settings.redis_port,
+            db=settings.redis_db,
+            password=settings.redis_password
+        )
+        await redis.connect()
         rate_limit_key = f"rate_limit:upload:{investigator_id}"
         
         rate_limit_script = """
@@ -579,7 +589,10 @@ async def investigate(
         """
         
         # eval(script, numkeys, *keys_and_args)
-        result = await redis.client.eval(rate_limit_script, 1, rate_limit_key, 5, 600)
+        try:
+            result = await redis.client.eval(rate_limit_script, 1, rate_limit_key, 5, 600)
+        finally:
+            await redis.disconnect()
         
         if result[0] == 1:
             raise HTTPException(
@@ -621,10 +634,19 @@ async def investigate(
         )
 
     # 4. MIME type validation
-    if file.content_type not in ALLOWED_MIME_TYPES:
+    content = await file.read()
+    import magic
+    def get_actual_mime_type(file_bytes: bytes) -> str:
+        try:
+            return magic.from_buffer(file_bytes[:2048], mime=True)
+        except Exception:
+            return ""
+            
+    actual_mime = await asyncio.to_thread(get_actual_mime_type, content)
+    if actual_mime not in ALLOWED_MIME_TYPES:
         raise HTTPException(
             status_code=422,
-            detail=f"Invalid file type. Allowed types: {', '.join(ALLOWED_MIME_TYPES)}"
+            detail=f"File content type mismatch: {actual_mime}"
         )
 
     # Create session ID
@@ -636,8 +658,6 @@ async def investigate(
     # S6: Sanitize uploaded filename extension
     raw_ext = Path(file.filename or "").suffix
     safe_ext = re.sub(r'[^a-zA-Z0-9.]', '', raw_ext) or ".bin"
-
-    content = await file.read()
     
     def write_temp_file(data: bytes, ext: str) -> str:
         with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_file:
@@ -650,8 +670,6 @@ async def investigate(
         # R2: Track background task for graceful shutdown
         # R1 FIX: Register pipeline BEFORE creating task to avoid WebSocket race condition
         pipeline = ForensicCouncilPipeline()
-        # Wait until accessor can be mapped into active pipelines dict correctly. (Using internal for init because accessor is in this module)
-        from api.routes.investigation import _active_pipelines
         _active_pipelines[session_id] = pipeline
         
         task = asyncio.create_task(
@@ -706,8 +724,14 @@ async def get_report(
     
     report = None
     
-    if session_id in _final_reports:
-        report = _final_reports[session_id]
+    from datetime import datetime, timezone, timedelta
+    entry = _final_reports.get(session_id)
+    if entry:
+        report_data, stored_at = entry
+        if datetime.now(timezone.utc) - stored_at > timedelta(hours=1):
+            del _final_reports[session_id]
+            raise HTTPException(status_code=404, detail="Report expired")
+        report = report_data
     elif get_active_pipeline(session_id):
         pipeline = get_active_pipeline(session_id)
         
@@ -785,10 +809,9 @@ async def get_checkpoints(
     current_user: User = Depends(get_current_user),
 ):
     """Get pending HITL checkpoints for a session."""
-    if session_id not in _active_pipelines:
+    pipeline = get_active_pipeline(session_id)
+    if not pipeline:
         raise HTTPException(status_code=404, detail="Session not found")
-
-    # pipeline is already captured above
 
     try:
         checkpoints = await pipeline.session_manager.get_active_checkpoints(
