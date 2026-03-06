@@ -17,7 +17,10 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
+from core.logging import get_logger
 from core.signing import KeyStore, sign_content
+
+logger = get_logger(__name__)
 
 
 class FindingVerdict(str, Enum):
@@ -102,7 +105,8 @@ class CouncilArbiter:
     
     async def deliberate(
         self,
-        agent_results: dict[str, dict[str, Any]]
+        agent_results: dict[str, dict[str, Any]],
+        case_id: str = "",
     ) -> ForensicReport:
         """Deliberate on agent results and generate a forensic report."""
         # Collect all findings
@@ -181,7 +185,7 @@ class CouncilArbiter:
         # Build report
         report = ForensicReport(
             session_id=self.session_id,
-            case_id=f"case_{self.session_id}",
+            case_id=case_id or f"case_{self.session_id}",
             executive_summary=executive_summary,
             per_agent_findings=per_agent_findings,
             cross_modal_confirmed=cross_modal_confirmed,

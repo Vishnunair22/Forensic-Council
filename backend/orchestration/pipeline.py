@@ -383,7 +383,7 @@ class ForensicCouncilPipeline:
                 }
         
         # Run deliberation
-        report = await self.arbiter.deliberate(arbiter_results)
+        report = await self.arbiter.deliberate(arbiter_results, case_id=case_id)
         
         # Add additional fields to report
         report.case_linking_flags = await self._collect_case_linking_flags(

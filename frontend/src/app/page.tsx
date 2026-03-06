@@ -57,6 +57,12 @@ export default function LandingPage() {
     router.push("/evidence");
   };
 
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
   // Force scroll to top on mount
   useEffect(() => {
     window.scrollTo(0, 0);

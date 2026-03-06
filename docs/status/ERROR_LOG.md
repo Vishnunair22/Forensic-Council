@@ -713,3 +713,18 @@ Full replacement of all `stub_result: true` entries across all five forensic age
 | 192 | `DATABASE_URL` in backend `.env.example` misleading | 🟡 Docs | **RESOLVED** | Removed `DATABASE_URL` from `backend/.env.example` — app builds URL from individual `POSTGRES_*` vars and never reads `DATABASE_URL`. |
 | 193 | Stray scripts at root level | 🟢 Structure | **RESOLVED** | Moved `hash_demo.py`, `test_exif.py`, `test_exif_sync.py` to `backend/scripts/`. Moved `End-End Test.py` to `docs/end_to_end_test.py`. |
 | 194 | No root-level Makefile | 🟢 Dev UX | **RESOLVED** | Created `Makefile` with targets: `make infra`, `make up`, `make down`, `make logs`, `make backend`, `make frontend`, `make test`, `make clean`, etc. |
+
+---
+
+## 🔍 Deep-Dive Audit Verification (Part 2) — March 06, 2026
+
+Systematic verification of the second phase deep-dive analysis. All identified deeper architectural issues were resolved.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 238 | `NameError: logger is not defined` in `arbiter.py` | 🔴 Runtime Crash | **RESOLVED** | Added `from core.logging import get_logger` module import to `backend/agents/arbiter.py`. |
+| 239 | Wrong Case ID format stamped on all reports | 🟠 Logic Bug | **RESOLVED** | Passed actual `case_id` string to `arbiter.deliberate()` in `backend/orchestration/pipeline.py`. |
+| 240 | Rate limiter causes 500s when Redis drops | 🟠 Runtime Crash | **RESOLVED** | Wrapped Redis `rate_limit_key` block in a resilient `try/except` inside `investigation.py` to fail open. |
+| 241 | Result page misses `addToHistory` on refresh | 🟡 Logic Bug | **RESOLVED** | Exported `mapReportDtoToReport` and invoked `addToHistory()` in `frontend/src/app/result/page.tsx`. |
+| 242 | Blob URL leak when navigating away from Landing page | 🟡 Memory Leak | **RESOLVED** | Attached `useEffect` cleanup hook mapped to `previewUrl` in `frontend/src/app/page.tsx`. |
+| 243 | `.pem` private keys tracked in Git & lack of template hint | 🔴 Security Risk | **RESOLVED** | Removed `.pem` files via `git rm --cached`, updated `.gitignore` strictly, and added password comment to `.env.example`. |

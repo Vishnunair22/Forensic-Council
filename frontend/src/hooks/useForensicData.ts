@@ -9,7 +9,7 @@ const HISTORY_KEY = "fc_history";
 const CURRENT_REPORT_KEY = "fc_current_report";
 
 // Map backend ReportDTO to frontend Report format
-function mapReportDtoToReport(dto: ReportDTO): Report {
+export function mapReportDtoToReport(dto: ReportDTO): Report {
     const agentResults: AgentResult[] = [];
 
     // Flatten per-agent findings
