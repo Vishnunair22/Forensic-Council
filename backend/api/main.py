@@ -46,6 +46,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         debug=settings.debug,
     )
 
+    if settings.signing_key.startswith("dev-"):
+        logger.warning(
+            "SIGNING_KEY is using a development placeholder. "
+            "Never use this in production."
+        )
+
     # Auto-initialize DB schema on every startup (idempotent — uses IF NOT EXISTS)
     try:
         await init_database()

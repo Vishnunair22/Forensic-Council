@@ -79,47 +79,12 @@ export default function EvidencePage() {
         };
     }, [filePreviewUrl]);
 
-    // Pick up the file injected by the landing page modal
-    useEffect(() => {
-        const pending = (window as any).__forensic_pending_file as File | undefined;
-        if (pending) {
-            delete (window as any).__forensic_pending_file;
-            setFile(pending);
-            // Auto-start analysis if the landing page requested it
-            const autoStart = sessionStorage.getItem("forensic_auto_start");
-            if (autoStart === "true") {
-                sessionStorage.removeItem("forensic_auto_start");
-                triggerAnalysis(pending);
-            }
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    // Validation
-    const validateFile = (f: File): boolean => {
-        setValidationError(null);
-        if (f.size > 50 * 1024 * 1024) {
-            setValidationError("File must be under 50MB");
-            return false;
-        }
-        return true;
-    };
-
-    const handleFile = (f: File) => {
-        if (validateFile(f)) {
-            setFile(f);
-            playSound("success");
-        } else {
-            playSound("error");
-        }
-    };
-
-    const triggerAnalysis = async (targetFile: File) => {
+    const triggerAnalysis = useCallback(async (targetFile: File) => {
         if (!targetFile) return;
         playSound("upload"); // Play upload sound at start
         setIsUploading(true);
         setValidationError(null);
-        startSimulation("pending"); // triggers setStatus("initiating")
+        startSimulation(); // triggers setStatus("initiating") without setting a garbage ID
 
         try {
             const stored = localStorage.getItem("forensic_investigator_id");
@@ -170,6 +135,40 @@ export default function EvidencePage() {
 
             setIsUploading(false);
             resetSimulation();
+            playSound("error");
+        }
+    }, [playSound, startSimulation, connectWebSocket, resetSimulation]);
+
+    // Pick up the file injected by the landing page modal
+    useEffect(() => {
+        const pending = (window as any).__forensic_pending_file as File | undefined;
+        if (pending) {
+            delete (window as any).__forensic_pending_file;
+            setFile(pending);
+            // Auto-start analysis if the landing page requested it
+            const autoStart = sessionStorage.getItem("forensic_auto_start");
+            if (autoStart === "true") {
+                sessionStorage.removeItem("forensic_auto_start");
+                triggerAnalysis(pending);
+            }
+        }
+    }, [triggerAnalysis]);
+
+    // Validation
+    const validateFile = (f: File): boolean => {
+        setValidationError(null);
+        if (f.size > 50 * 1024 * 1024) {
+            setValidationError("File must be under 50MB");
+            return false;
+        }
+        return true;
+    };
+
+    const handleFile = (f: File) => {
+        if (validateFile(f)) {
+            setFile(f);
+            playSound("success");
+        } else {
             playSound("error");
         }
     };

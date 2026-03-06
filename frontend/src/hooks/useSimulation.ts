@@ -73,7 +73,12 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
             });
         }, 2000);
 
-        return () => clearInterval(interval);
+        thinkingIntervalRef.current = interval;
+
+        return () => {
+            clearInterval(interval);
+            thinkingIntervalRef.current = null;
+        };
     }, [activeAgentIds]);
 
     // Connect WebSocket manually — returns a Promise that resolves once the WS is open.

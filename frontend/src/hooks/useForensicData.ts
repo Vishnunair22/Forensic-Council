@@ -11,7 +11,7 @@ const CURRENT_REPORT_KEY = "fc_current_report";
 // Map backend ReportDTO to frontend Report format
 function mapReportDtoToReport(dto: ReportDTO): Report {
     const agentResults: AgentResult[] = [];
-    
+
     // Flatten per-agent findings
     for (const [agentId, findings] of Object.entries(dto.per_agent_findings)) {
         for (const finding of findings) {
@@ -80,7 +80,7 @@ export const useForensicData = () => {
         investigatorId: string
     ): Promise<string> => {
         setIsAnalyzing(true);
-        
+
         try {
             const result = await startInvestigation(file, caseId, investigatorId);
             setCurrentSessionId(result.session_id);
@@ -101,7 +101,7 @@ export const useForensicData = () => {
         pollIntervalRef.current = setInterval(async () => {
             try {
                 const result = await getReport(sessionId);
-                
+
                 if (result.status === "complete" && result.report) {
                     // Stop polling
                     if (pollIntervalRef.current) {
@@ -112,8 +112,9 @@ export const useForensicData = () => {
                     // Map to frontend format
                     const report = mapReportDtoToReport(result.report);
                     setCurrentReport(report);
+                    addToHistory(report); // Save to History tab
                     setIsAnalyzing(false);
-                    
+
                     // Save to localStorage for backward compatibility
                     if (typeof window !== 'undefined') {
                         localStorage.setItem(CURRENT_REPORT_KEY, JSON.stringify(report));

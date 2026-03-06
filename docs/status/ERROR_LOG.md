@@ -29,6 +29,26 @@ Comprehensive project-wide trace of all Docker files, imports, paths, configs, a
 
 ---
 
+## 🔍 Deep-Dive Audit Fixes — March 06, 2026
+
+Completed a comprehensive code audit to resolve final blockers before production deployment.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 225 | `frontend/public/` directory missing | 🔴 Build Failure | **RESOLVED** | Created directory with `.gitkeep` so Docker `COPY` in production build succeeds. |
+| 226 | `tailwindcss-animate` incompatible with Tailwind v4 | 🔴 Build Failure | **RESOLVED** | Registered legacy plugin using `@plugin` directive in `globals.css` and added missing CSS variables required by Radix UI. |
+| 227 | `@types/jest@30.0.0` incompatible with `jest@29.7.0` | 🔴 Build Failure | **RESOLVED** | Downgraded definition to `^29.5.14` and locked via `npm install` to fix suite TS compilation. |
+| 228 | `NEXT_PUBLIC_DEMO_PASSWORD` missing in Compose `build.args` | 🔴 Run Failure | **RESOLVED** | Added arg forwarding to base compose file so value is baked into Next.js client-side bundle. |
+| 229 | `addToHistory` unused, History tab empty | 🟠 Logic Bug | **RESOLVED** | Called `addToHistory(report)` immediately after `setCurrentReport` inside `pollForReport` in `useForensicData.ts`. |
+| 230 | `thinkingIntervalRef` unassigned — memory leak | 🟠 Logic Bug | **RESOLVED** | Saved setInterval reference to ref in `useSimulation.ts` to ensure cleanup on unmount/reset. |
+| 231 | `triggerAnalysis` stale closure risk | 🟠 Logic Bug | **RESOLVED** | Wrapped in `useCallback` and added to `useEffect` dependency array, fixing exhaustiveness lint. |
+| 232 | `startSimulation("pending")` set garbage ID | 🟠 Logic Bug | **RESOLVED** | Removed string argument. State now handles uninitialized session ID correctly. |
+| 233 | `framer-motion` in `optimizePackageImports` | 🟡 Dependency | **RESOLVED** | Removed config to prevent SSR hydration mismatches with library's internal lazy loading strategy. |
+| 234 | `bcrypt==4.0.1` statically pinned | 🟡 Dependency | **RESOLVED** | Loosened to `>=4.0.1,<5.0` in `pyproject.toml` to allow upstream security patches while preserving `passlib` compatibility. |
+| 235 | ML dependency installation extremely slow in Docker | 🟡 Dependency | **RESOLVED** | Added `--mount=type=cache,target=/root/.cache/uv` to production Dockerfile to speed up `torch` fetching across builds. |
+| 236 | Demo credentials defaulted in Dockerfile/compose | 🔵 Security | **RESOLVED** | Removed default values from public tracked files to enforce `.env` usage (fail-fast architecture). |
+| 237 | `SIGNING_KEY` default insecure | 🔵 Security | **RESOLVED** | Added `logger.warning()` in `main.py` lifespan block if server boots using the `dev-` placeholder key. |
+
 
 ## 🐛 Fresh Docker Build Fixes — March 05, 2026
 
