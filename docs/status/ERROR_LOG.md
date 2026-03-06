@@ -728,3 +728,16 @@ Systematic verification of the second phase deep-dive analysis. All identified d
 | 241 | Result page misses `addToHistory` on refresh | 🟡 Logic Bug | **RESOLVED** | Exported `mapReportDtoToReport` and invoked `addToHistory()` in `frontend/src/app/result/page.tsx`. |
 | 242 | Blob URL leak when navigating away from Landing page | 🟡 Memory Leak | **RESOLVED** | Attached `useEffect` cleanup hook mapped to `previewUrl` in `frontend/src/app/page.tsx`. |
 | 243 | `.pem` private keys tracked in Git & lack of template hint | 🔴 Security Risk | **RESOLVED** | Removed `.pem` files via `git rm --cached`, updated `.gitignore` strictly, and added password comment to `.env.example`. |
+
+---
+
+## 🎯 Final Re-Audit Minor Polish fixes — March 06, 2026
+
+The absolute final four minor issues raised during the last pass.
+
+| ID | Issue | Severity | Status | Resolution Summary |
+|:---|:---|:---:|:---:|:---|
+| 244 | History tab duplicates on every visit | 🟡 UX Bug | **RESOLVED** | Added deductive guard inside `addToHistory` hook to verify `id` uniqueness before updating `localStorage`. |
+| 245 | Agent 2 has incorrect fallback icon | 🟢 Cosmetic | **RESOLVED** | Hardwired the `Mic2` component in `AgentIcon.tsx` mapped to `audio` / `multimedia` agent roles. |
+| 246 | Dev compose password plaintext | 🟡 Security Hygiene | **RESOLVED** | Relayed `NEXT_PUBLIC_DEMO_PASSWORD` to an interpolated `.env` fallback explicitly in `docker-compose.dev.yml`. |
+| 247 | Unused `isDataLoading` import | 🟢 Code Quality | **RESOLVED** | Discarded dead destructured import from `evidence/page.tsx` for clean ESLint parsing. |
