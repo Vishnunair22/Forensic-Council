@@ -212,11 +212,25 @@ export default function EvidencePage() {
         }, 1000); // 1s transition
     };
 
-    const validAgentsData = AGENTS_DATA.filter(a => a.name !== "Council Arbiter");
+    const validAgentsData = useMemo(() => {
+        const baseAgents = AGENTS_DATA.filter(a => a.name !== "Council Arbiter");
+        if (!file) return baseAgents;
 
-    const progressPercentage = (completedAgents.length / validAgentsData.length) * 100;
+        const mime = file.type;
+        return baseAgents.filter(a => {
+            if (a.id === "Agent1") return mime.startsWith("image/");
+            if (a.id === "Agent2") return mime.startsWith("audio/") || mime.startsWith("video/");
+            if (a.id === "Agent3") return mime.startsWith("image/") || mime.startsWith("video/");
+            if (a.id === "Agent4") return mime.startsWith("video/");
+            if (a.id === "Agent5") return mime.startsWith("image/") || mime.startsWith("video/") || mime.startsWith("audio/");
+            return true;
+        });
+    }, [file]);
 
-    const allAgentsDone = completedAgents.length >= validAgentsData.length;
+    const validCompletedAgents = completedAgents.filter(c => validAgentsData.some(v => v.id === c.id));
+    const progressPercentage = validAgentsData.length > 0 ? (validCompletedAgents.length / validAgentsData.length) * 100 : 0;
+
+    const allAgentsDone = validAgentsData.length > 0 && validCompletedAgents.length >= validAgentsData.length;
     const showCompletionBanner = status === "complete" || allAgentsDone;
 
     const activeAgentId = Object.keys(activeAgents)[0] ?? null;
@@ -236,8 +250,8 @@ export default function EvidencePage() {
         } else {
             progressText = `${activeAgentDef.name} is analyzing evidence...`;
         }
-    } else if (completedAgents.length > 0 && status !== "complete") {
-        progressText = `Gathering findings... (${completedAgents.length}/${validAgentsData.length} complete)`;
+    } else if (validCompletedAgents.length > 0 && status !== "complete") {
+        progressText = `Gathering findings... (${validCompletedAgents.length}/${validAgentsData.length} complete)`;
     } else if (status === "complete") {
         progressText = "All agents have reported. Council Consensus reached.";
     }

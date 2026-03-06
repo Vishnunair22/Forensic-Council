@@ -51,34 +51,9 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
     const activeAgentIds = Object.keys(activeAgents).sort().join(",");
 
     useEffect(() => {
-        const activeIds = Object.keys(activeAgents);
-        if (activeIds.length === 0) return;
-
-        const activeId = activeIds[0]; // always one at a time now
-        const agentDef = AGENTS_DATA.find(a => a.id === activeId);
-        if (!agentDef || agentDef.simulation.thinkingPhrases.length === 0) return;
-
-        let phraseIndex = 0;
-        const interval = setInterval(() => {
-            phraseIndex = (phraseIndex + 1) % agentDef.simulation.thinkingPhrases.length;
-            setActiveAgents(prev => {
-                if (!prev[activeId]) return prev;
-                return {
-                    ...prev,
-                    [activeId]: {
-                        ...prev[activeId],
-                        thinking: agentDef.simulation.thinkingPhrases[phraseIndex],
-                    }
-                };
-            });
-        }, 2000);
-
-        thinkingIntervalRef.current = interval;
-
-        return () => {
-            clearInterval(interval);
-            thinkingIntervalRef.current = null;
-        };
+        // Backend now sends real-time thinking updates via AGENT_UPDATE WebSocket messages.
+        // We no longer need to cycle fake phrases from AGENTS_DATA.
+        // The text will naturally update as the agent's task progresses.
     }, [activeAgentIds]);
 
     // Connect WebSocket manually — returns a Promise that resolves once the WS is open.
