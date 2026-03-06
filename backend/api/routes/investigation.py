@@ -63,6 +63,20 @@ def cleanup_connections():
         task.cancel()
     _active_tasks.clear()
     _websocket_connections.clear()
+# Expose accessors instead of direct private attribute access
+def get_active_pipelines_count() -> int:
+    return len(_active_pipelines)
+
+def get_active_pipeline(session_id: str) -> Optional[ForensicCouncilPipeline]:
+    return _active_pipelines.get(session_id)
+
+def get_all_active_pipelines() -> dict:
+    return _active_pipelines.copy()
+
+def remove_active_pipeline(session_id: str):
+    _active_pipelines.pop(session_id, None)
+
+def clear_active_pipelines():
     _active_pipelines.clear()
     _final_reports.clear()  # Prevent memory leak
 
@@ -480,7 +494,8 @@ async def run_investigation_task(
         if report:
              _final_reports[session_id] = report
         
-        _active_pipelines.pop(session_id, None)
+        
+        remove_active_pipeline(session_id)
         
         # Close WebSocket connections
         if session_id in _websocket_connections:
@@ -505,7 +520,7 @@ async def investigate(
     SEC 2 & SEC 3: Implements rate limiting and strict input validation.
     """
     # 1. Input Validation (SEC 3)
-    if not re.match(r"^CASE-\d+$", case_id) and not re.match(r"^CASE-[a-f0-9-]+$", case_id, re.I):
+    if not re.match(r"^CASE-(?:\d{10,14}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$", case_id, re.I):
         raise HTTPException(status_code=400, detail="Invalid case_id format. Expected CASE-[timestamp] or CASE-[uuid].")
     
     if not re.match(r"^REQ-\d{5,10}$", investigator_id):
@@ -517,20 +532,25 @@ async def investigate(
         redis = await get_redis_client()
         rate_limit_key = f"rate_limit:upload:{investigator_id}"
         
-        # 5 uploads per 10 minutes
-        current_count = await redis.client.get(rate_limit_key)
-        if current_count and int(current_count) >= 5:
-            ttl = await redis.client.ttl(rate_limit_key)
+        # Fix rate limit TOCTOU race condition with atomic pipeline
+        async with redis.client.pipeline() as pipe:
+            pipe.incr(rate_limit_key)
+            pipe.ttl(rate_limit_key)
+            results = await pipe.execute()
+            
+        current_count = results[0]
+        ttl = results[1]
+        
+        # Set expiration on the first increment
+        if current_count == 1:
+            await redis.client.expire(rate_limit_key, 600)
+            
+        if current_count > 5:
+            wait_time = ttl if ttl > 0 else 600
             raise HTTPException(
                 status_code=429, 
-                detail=f"Rate limit exceeded. Please wait {ttl} seconds."
+                detail=f"Rate limit exceeded. Please wait {wait_time} seconds."
             )
-        
-        async with redis.client.pipeline() as pipe:
-            await pipe.incr(rate_limit_key)
-            if not current_count:
-                await pipe.expire(rate_limit_key, 600)
-            await pipe.execute()
     except HTTPException:
         raise
     except Exception as e:
@@ -577,6 +597,8 @@ async def investigate(
         # R2: Track background task for graceful shutdown
         # R1 FIX: Register pipeline BEFORE creating task to avoid WebSocket race condition
         pipeline = ForensicCouncilPipeline()
+        # Wait until accessor can be mapped into active pipelines dict correctly. (Using internal for init because accessor is in this module)
+        from api.routes.investigation import _active_pipelines
         _active_pipelines[session_id] = pipeline
         
         task = asyncio.create_task(
@@ -633,8 +655,8 @@ async def get_report(
     
     if session_id in _final_reports:
         report = _final_reports[session_id]
-    elif session_id in _active_pipelines:
-        pipeline = _active_pipelines[session_id]
+    elif get_active_pipeline(session_id):
+        pipeline = get_active_pipeline(session_id)
         
         # E1: Surface pipeline errors to the client
         if hasattr(pipeline, "_error") and pipeline._error:
@@ -686,10 +708,9 @@ async def get_brief(
     current_user: User = Depends(get_current_user),
 ):
     """Get the current investigator brief for an agent."""
-    if session_id not in _active_pipelines:
+    pipeline = get_active_pipeline(session_id)
+    if not pipeline:
         raise HTTPException(status_code=404, detail="Session not found")
-
-    pipeline = _active_pipelines[session_id]
 
     # Get brief from session manager (not working memory — it doesn't have this method)
     try:
@@ -714,7 +735,7 @@ async def get_checkpoints(
     if session_id not in _active_pipelines:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    pipeline = _active_pipelines[session_id]
+    # pipeline is already captured above
 
     try:
         checkpoints = await pipeline.session_manager.get_active_checkpoints(

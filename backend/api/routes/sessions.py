@@ -12,7 +12,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
 from core.auth import get_current_user, User, decode_token
-from api.routes.investigation import _active_pipelines, _active_tasks, _websocket_connections, register_websocket, unregister_websocket
+from api.routes.investigation import get_all_active_pipelines, get_active_pipeline, remove_active_pipeline, _active_tasks, _websocket_connections, register_websocket, unregister_websocket
 from api.schemas import SessionInfo
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
@@ -22,7 +22,7 @@ router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 async def list_sessions(current_user: User = Depends(get_current_user)):
     """List all active sessions. Requires authentication."""
     sessions = []
-    for session_id, pipeline in _active_pipelines.items():
+    for session_id, pipeline in get_all_active_pipelines().items():
         status = "running" if not hasattr(pipeline, "_final_report") else "completed"
         session_info = SessionInfo(
             session_id=session_id,
@@ -37,7 +37,7 @@ async def list_sessions(current_user: User = Depends(get_current_user)):
 @router.delete("/{session_id}")
 async def terminate_session(session_id: str, current_user: User = Depends(get_current_user)):
     """Terminate a running session. Requires authentication."""
-    if session_id not in _active_pipelines:
+    if not get_active_pipeline(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
 
     # Cancel the background task if still running
@@ -54,7 +54,7 @@ async def terminate_session(session_id: str, current_user: User = Depends(get_cu
                 pass
         _websocket_connections[session_id] = []
 
-    del _active_pipelines[session_id]
+    remove_active_pipeline(session_id)
 
     return {"status": "terminated", "session_id": session_id}
 
@@ -67,7 +67,7 @@ async def live_updates(websocket: WebSocket, session_id: str):
     await websocket.accept(subprotocol="forensic-v1")
     
     # Validate session exists AFTER accepting but before processing
-    if session_id not in _active_pipelines:
+    if not get_active_pipeline(session_id):
         await websocket.send_json({
             "type": "ERROR",
             "session_id": session_id,
