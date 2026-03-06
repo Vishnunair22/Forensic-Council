@@ -1,25 +1,16 @@
 # ============================================================================
-# Stage 1: Dependencies - cached separately for faster rebuilds
+# Stage 1: Builder - builds the Next.js application (Unified with Deps to fix Layer Export hanging)
 # ============================================================================
-FROM node:20-alpine@sha256:ef9fb6e10eb61ff8c3d89fe5d0cb29f0e61b3c4cdc8c3a7e2951ed0a5c6ad9c8 AS deps
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
 # Copy package locks first for better caching
 COPY package.json package-lock.json ./
 
-# Install dependencies - use npm ci for deterministic, faster builds
-RUN npm ci --prefer-offline
-
-# ============================================================================
-# Stage 2: Builder - builds the Next.js application
-# ============================================================================
-FROM node:20-alpine@sha256:ef9fb6e10eb61ff8c3d89fe5d0cb29f0e61b3c4cdc8c3a7e2951ed0a5c6ad9c8 AS builder
-
-WORKDIR /app
-
-# Copy deps from previous stage (avoids reinstall)
-COPY --from=deps /app/node_modules ./node_modules
+# Install dependencies - we use --loglevel verbose so you can see live connection progress
+RUN --mount=type=cache,target=/root/.npm \
+  npm ci --prefer-offline --no-audit --no-fund --loglevel verbose
 
 # Copy application code
 COPY . .
@@ -33,12 +24,14 @@ ENV NEXT_PUBLIC_DEMO_PASSWORD=${NEXT_PUBLIC_DEMO_PASSWORD}
 # Disable Next.js telemetry during build
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN npm run build
+# Persist Next.js compiler cache between Docker builds for instantaneous recompilation
+RUN --mount=type=cache,target=/app/.next/cache \
+  npm run build
 
 # ============================================================================
 # Stage 3: Runner - production stage with standalone output
 # ============================================================================
-FROM node:20-alpine@sha256:ef9fb6e10eb61ff8c3d89fe5d0cb29f0e61b3c4cdc8c3a7e2951ed0a5c6ad9c8 AS runner
+FROM node:20-alpine AS runner
 
 WORKDIR /app
 

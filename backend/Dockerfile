@@ -1,46 +1,43 @@
-# ─── Stage 1: Build ──────────────────────────────────────────────────────────
-FROM python:3.11-slim@sha256:d39b4b17ff5e6acb5d61262e3e8cfbbe1f62f4e1cd8fcee4cf0a5a8e1abc5d9b AS builder
+# ─── Unified Build & Runtime Stage ──────────────────────────────────────────
+FROM python:3.11-slim
 
-# Install build tools (only in this stage)
-RUN apt-get update && apt-get install -y --no-install-recommends gcc \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install uv via binary directly
-COPY --from=ghcr.io/astral-sh/uv:0.6.6 /uv /uvx /bin/
-
-WORKDIR /app
-
-# Copy only dependency files first (cache layer)
-COPY pyproject.toml uv.lock ./
-
-# Sync production deps only, use lockfile (cached)
-ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_HTTP_TIMEOUT=300
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-install-project --extra ml
-
-# ─── Stage 2: Production ─────────────────────────────────────────────────────
-FROM python:3.11-slim@sha256:d39b4b17ff5e6acb5d61262e3e8cfbbe1f62f4e1cd8fcee4cf0a5a8e1abc5d9b
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 1. Install system dependencies (including gcc for building wheels if needed)
+# Leverages BuildKit APT cache so rebuilding the OS layer doesn't re-download binaries
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     curl \
     tesseract-ocr \
     tesseract-ocr-eng \
     exiftool \
     libgl1 \
     libglib2.0-0 \
+    gcc \
     && rm -rf /var/lib/apt/lists/*
+
+# 2. Install uv package manager natively
+COPY --from=ghcr.io/astral-sh/uv:0.6.6 /uv /uvx /bin/
 
 WORKDIR /app
 
-# Copy only the built venv and app code (no gcc, no build tools)
-COPY --from=builder /app/.venv /app/.venv
+# 3. Cache and install dependencies FIRST
+COPY pyproject.toml uv.lock ./
+
+# Use -v (verbose) to stream the download progress to the terminal
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_HTTP_TIMEOUT=300
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-install-project --extra ml -v
+
+# 4. Remove compiler toolchain to flatten the image size
+RUN apt-get purge -y gcc && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
+# 5. Bring in application payload
 COPY . .
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app"
 
-# ML model cache directories - moved to /app/cache to avoid tmpfs conflict
+# 6. ML model cache directories
 ENV NUMBA_CACHE_DIR="/app/cache/numba_cache"
 ENV YOLO_CONFIG_DIR="/app/cache/ultralytics"
 ENV TORCH_HOME="/app/cache/torch"
@@ -48,7 +45,7 @@ ENV HF_HOME="/app/cache/huggingface"
 ENV DEEPFACE_HOME="/app/cache/deepface"
 ENV TRANSFORMERS_CACHE="/app/cache/huggingface/transformers"
 
-# Pre-compile app bytecode at build time (not at runtime)
+# Pre-compile app bytecode
 RUN /app/.venv/bin/python -m compileall -q api/ core/ orchestration/ scripts/ 2>/dev/null || true
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
