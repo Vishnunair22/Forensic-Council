@@ -36,6 +36,26 @@ const nextConfig: NextConfig = {
     minimumCacheTTL: 31_536_000,
   },
 
+  // ── Backend API Proxy (CORS FIX) ──────────────────────────────────────────
+  // All /api/v1/* browser requests are rewritten to the backend by the
+  // Next.js server — the browser never makes a cross-origin request, so CORS
+  // is entirely bypassed.
+  //
+  // INTERNAL_API_URL uses the Docker-internal service name (http://forensic_api:8000)
+  // so this works both inside Docker and on localhost (falls back gracefully).
+  async rewrites() {
+    const backendUrl =
+      process.env.INTERNAL_API_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      "http://localhost:8000";
+    return [
+      {
+        source: "/api/v1/:path*",
+        destination: `${backendUrl}/api/v1/:path*`,
+      },
+    ];
+  },
+
   // ── HTTP response headers ─────────────────────────────────────────────────
   async headers() {
     return [

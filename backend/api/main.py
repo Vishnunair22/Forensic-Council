@@ -222,8 +222,24 @@ async def global_exception_handler(request: Request, exc: Exception):
     """
     Global exception handler.
     Logs the full error but only exposes details in development.
+
+    NOTE: FastAPI's built-in HTTPException handler runs first (it is registered
+    during FastAPI.__init__ with higher MRO priority), so HTTPException instances
+    should NEVER reach this handler in normal operation.  If they do (e.g. a bug
+    re-raises an HTTPException outside of Starlette's ExceptionMiddleware), we
+    honour the original status code instead of blindly returning 500 so that
+    4xx errors are not silently promoted to 5xx.
     """
+    from fastapi import HTTPException as _HTTPException
     logger.error(f"Global Exception Caught: {exc}", exc_info=True)
+
+    # If an HTTPException somehow leaked here, preserve its status code and detail.
+    if isinstance(exc, _HTTPException):
+        content: dict = {"detail": exc.detail}
+        if settings.app_env != "production":
+            content["message"] = str(exc)
+        return JSONResponse(status_code=exc.status_code, content=content)
+
     content = {"detail": "An internal server error occurred."}
     # Only expose error details in non-production environments
     if settings.app_env != "production":

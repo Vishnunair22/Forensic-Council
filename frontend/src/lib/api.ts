@@ -5,9 +5,34 @@
  * Client module for communicating with the FastAPI backend.
  */
 
-// Use Next.js public runtime config for environment variables
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const WS_BASE = API_BASE.replace(/^https?/, (m) => (m === "https" ? "wss" : "ws"));
+// ── API Base URL ─────────────────────────────────────────────────────────────
+//
+// CORS FIX: browser requests use an empty string (relative URL) so they hit
+// /api/v1/... on the same origin (localhost:3000).  Next.js rewrites in
+// next.config.ts then proxy those requests server-side to the backend via
+// the Docker-internal INTERNAL_API_URL — the browser never makes a
+// cross-origin request and CORS is bypassed entirely.
+//
+// Server-side (SSR / Next.js API routes) use the absolute internal URL so
+// they can reach the backend container directly without going through a port.
+const API_BASE =
+  typeof window === "undefined"
+    ? // Server-side: use Docker-internal service name or fall back to localhost
+      process.env.INTERNAL_API_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      "http://localhost:8000"
+    : // Browser: empty string → relative path → no cross-origin request
+      "";
+
+// WebSocket requires an absolute URL — derive from the public-facing API URL.
+// This remains cross-origin but browsers don't apply the same CORS rules to
+// WS upgrades; the backend validates via its AUTH message handshake instead.
+const _WS_HTTP_BASE =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const WS_BASE = _WS_HTTP_BASE.replace(
+  /^https?/,
+  (m) => (m === "https" ? "wss" : "ws")
+);
 
 // Token storage key
 const TOKEN_KEY = "forensic_auth_token";
@@ -284,8 +309,12 @@ export async function startInvestigation(
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: "Unknown error" }));
-      throw new Error(error.detail || `HTTP ${response.status}`);
+      const errorBody = await response.json().catch(() => ({ detail: "Unknown error" }));
+      // In dev mode the backend also sets `message` with the real Python exception.
+      // Surface it so stack traces are visible in the browser console.
+      const detail = errorBody.detail || `HTTP ${response.status}`;
+      const devHint = errorBody.message ? ` — ${errorBody.message}` : "";
+      throw new Error(`${detail}${devHint}`);
     }
 
     return response.json();

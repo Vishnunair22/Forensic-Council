@@ -628,19 +628,37 @@ async def investigate(
         )
 
     # 4. MIME type validation
+    # Use python-magic for byte-level detection (most reliable).
+    # Falls back to file-extension → declared content-type mapping when libmagic
+    # is not available, so a missing system library never causes a bare 500.
     content = await file.read()
-    import magic
-    def get_actual_mime_type(file_bytes: bytes) -> str:
+
+    _EXT_MIME_MAP: dict[str, str] = {
+        ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".png": "image/png", ".tif": "image/tiff", ".tiff": "image/tiff",
+        ".webp": "image/webp", ".mp4": "video/mp4", ".mov": "video/quicktime",
+        ".avi": "video/x-msvideo", ".wav": "audio/wav", ".mp3": "audio/mpeg",
+        ".m4a": "audio/mp4",
+    }
+
+    def get_actual_mime_type(file_bytes: bytes, fallback_ext: str) -> str:
+        # Try libmagic first (byte-level, most accurate)
         try:
+            import magic  # python-magic package
             return magic.from_buffer(file_bytes[:2048], mime=True)
         except Exception:
-            return ""
-            
-    actual_mime = await asyncio.to_thread(get_actual_mime_type, content)
+            pass
+        # Fallback: derive from sanitised file extension
+        return _EXT_MIME_MAP.get(fallback_ext.lower(), "")
+
+    actual_mime = await asyncio.to_thread(get_actual_mime_type, content, Path(file.filename or "").suffix)
     if actual_mime not in ALLOWED_MIME_TYPES:
         raise HTTPException(
             status_code=422,
-            detail=f"File content type mismatch: {actual_mime}"
+            detail=(
+                f"Unsupported file type '{actual_mime}'. "
+                f"Allowed types: JPEG, PNG, TIFF, WebP, MP4, MOV, AVI, WAV, MP3, M4A."
+            )
         )
 
     # Create session ID
@@ -652,15 +670,22 @@ async def investigate(
     # S6: Sanitize uploaded filename extension
     raw_ext = Path(file.filename or "").suffix
     safe_ext = re.sub(r'[^a-zA-Z0-9.]', '', raw_ext) or ".bin"
-    
-    def write_temp_file(data: bytes, ext: str) -> str:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_file:
-            tmp_file.write(data)
-            return tmp_file.name
-            
-    evidence_file_path = await asyncio.to_thread(write_temp_file, content, safe_ext)
+
+    # BUG-290 FIX: evidence_file_path is now created INSIDE the try block so that
+    # any OS-level failures (permissions, tmpfs limits, etc.) are properly caught
+    # and returned as a meaningful HTTP error instead of a bare 500 from the
+    # global exception handler.
+    evidence_file_path: Optional[str] = None
 
     try:
+        # Write content to temp file (must be inside try so cleanup works on error)
+        def write_temp_file(data: bytes, ext: str) -> str:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_file:
+                tmp_file.write(data)
+                return tmp_file.name
+
+        evidence_file_path = await asyncio.to_thread(write_temp_file, content, safe_ext)
+
         # R2: Track background task for graceful shutdown
         # R1 FIX: Register pipeline BEFORE creating task to avoid WebSocket race condition
         pipeline = ForensicCouncilPipeline()
@@ -685,8 +710,9 @@ async def investigate(
         )
 
     except Exception as e:
+        logger.error("Failed to start investigation", error=str(e), exc_info=True)
         # Clean up temp file on error
-        if os.path.exists(evidence_file_path):
+        if evidence_file_path and os.path.exists(evidence_file_path):
             os.remove(evidence_file_path)
         raise HTTPException(status_code=500, detail=str(e))
 
