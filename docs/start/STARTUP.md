@@ -1,9 +1,11 @@
 # Forensic Council — Startup Guide
 
-> **Version:** v0.8.0 | **Last Updated:** 2026-03-06
+> **Version:** v1.0.0 | **Last Updated:** 2026-03-07
 >
 > This is the single source of truth for building and running Forensic Council in Docker.
 > Follow it step-by-step for a guaranteed working deployment from scratch.
+>
+> 📖 For detailed build/rebuild/caching strategies, see **[docs/docker/DOCKER_BUILD.md](../docker/DOCKER_BUILD.md)**.
 
 ---
 
@@ -40,9 +42,9 @@ Before doing anything, verify the required tools are installed.
 
 | Tool | Version | Check Command |
 |------|---------|---------------|
-| Python | 3.11+ | `python --version` |
-| Node.js | 20+ | `node --version` |
-| uv | 0.6+ | `uv --version` |
+| Python | 3.12+ | `python --version` |
+| Node.js | 22+ | `node --version` |
+| uv | 0.7+ | `uv --version` |
 
 ---
 
@@ -192,7 +194,7 @@ forensic_qdrant    Up (healthy)
 # Backend health — expect: {"status": "healthy", ...}
 curl http://localhost:8000/health
 
-# Backend root — expect: {"name": "Forensic Council API", "version": "0.8.0", ...}
+# Backend root — expect: {"name": "Forensic Council API", "version": "1.0.0", ...}
 curl http://localhost:8000/
 
 # Frontend — expect: 200
@@ -422,18 +424,38 @@ Forensic Council downloads large ML models (HuggingFace transformers, PyTorch we
 | `deepface_cache` | `/app/cache/deepface` | DeepFace models |
 | `numba_cache` | `/app/cache/numba_cache` | Numba JIT compilation cache |
 | `calibration_models` | `/app/cache/calibration_models` | Calibration model weights |
-| `easyocr_cache` | `/app/cache/easyocr` | EasyOCR neural OCR model (~100MB, downloads once) |
+| `easyocr_cache` | `/app/cache/easyocr` | EasyOCR neural OCR model (~100MB) |
+
+### Dev and prod share the same volumes
+
+All compose files pin `name: forensic-council` and all `.env` files set
+`COMPOSE_PROJECT_NAME=forensic-council`. This guarantees that `make dev` and `make up`
+use identical volume names — models downloaded in dev are available in prod and vice versa.
+**Models are never downloaded twice.**
+
+```bash
+# Check which model volumes exist and their sizes
+make cache-status
+```
+
+### Startup cache check
+
+Every container start runs `scripts/model_cache_check.py` before the API server.
+It reports the state of every cache directory and verifies core Python imports (~3s).
+Empty caches are reported as warnings — the API still starts normally and models
+download on first use.
 
 **These volumes persist across:**
 - `docker compose down` (stop without `-v`)
 - `docker compose up --build` (rebuild images)
 - `--no-cache` rebuilds
 - Container restarts
+- Switching between `make dev` and `make up`
 
-**These volumes are wiped by:**
+**These volumes are wiped only by:**
 - `docker compose down -v` (the `-v` flag)
 - `docker system prune --volumes`
-- `make clean` (asks for confirmation)
+- `make down-clean` (asks for confirmation)
 
 > **First investigation after fresh install** will be slower as models download. Subsequent investigations are fast.
 
@@ -478,21 +500,32 @@ All compose files are in `docs/docker/`. Always run compose commands from the **
 Run from the **project root**:
 
 ```bash
-make help         # Show all available targets
-make up           # Build + start full stack (production mode)
-make dev          # Build + start dev stack with hot-reload
-make infra        # Start databases only (for native development)
-make down         # Stop all containers
-make logs         # Tail all container logs
-make rebuild      # Force no-cache rebuild of all images
-make clean        # DESTRUCTIVE: remove all Docker volumes (prompts for confirmation)
-make backend      # Run backend natively with hot reload (requires infra running)
-make frontend     # Run frontend natively
-make test         # Run backend test suite
-make lint         # Lint frontend TypeScript
-make type-check   # TypeScript type-check frontend
-make smoke        # Run backend smoke test against a running instance
-make init-keys    # Generate new ECDSA keys for all agents (dev only)
+# ── Start / Stop ─────────────────────────────────────────────────────────
+make up                  # Build (if needed) and start all services
+make dev                 # Start with hot-reload (backend + frontend)
+make infra               # Start databases only (for native development)
+make prod                # Production mode with Caddy TLS
+make down                # Stop services — model caches PRESERVED ✅
+make down-clean          # Stop services and DELETE volumes ⚠️ (requires confirmation)
+
+# ── Smart Rebuilds (model caches always preserved) ────────────────────────
+make rebuild             # Auto-detect what changed, rebuild only that service
+make rebuild-backend     # Rebuild and restart backend only
+make rebuild-frontend    # Rebuild and restart frontend only
+
+# ── ML Model Cache ────────────────────────────────────────────────────────
+make cache-status        # Show which model volumes exist and their sizes
+make cache-warm          # Run cache check script in a temporary container
+
+# ── Logs / Status ─────────────────────────────────────────────────────────
+make logs                # Tail all container logs
+make logs-backend        # Tail backend logs only
+make logs-frontend       # Tail frontend logs only
+make ps                  # Show container status and health
+
+# ── Cleanup ───────────────────────────────────────────────────────────────
+make prune               # Remove dangling images (safe — volumes untouched)
+make prune-all           # System prune: stopped containers + networks + images
 ```
 
 ---

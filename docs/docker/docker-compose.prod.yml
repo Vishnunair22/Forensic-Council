@@ -1,42 +1,28 @@
 # ============================================================================
-# Forensic Council — Production Configuration (v0.8.0)
+# Forensic Council — Production Override
 # ============================================================================
-# Use this file for production deployments. Two modes supported:
-#
-# MODE A — Build locally and run (default, no registry needed):
+# Usage:
 #   docker compose -f docs/docker/docker-compose.yml \
 #                  -f docs/docker/docker-compose.prod.yml \
 #                  --env-file .env up -d --build
 #
-# MODE B — Pull pre-built images from a registry (CI/CD pipelines):
-#   Set IMAGE_TAG and DOCKER_REGISTRY in .env, then:
-#   docker compose -f docs/docker/docker-compose.yml \
-#                  -f docs/docker/docker-compose.prod.yml \
-#                  --env-file .env up -d
-#
-# This configuration:
-#   - Sets restart policies for high availability
-#   - Applies production environment flags
-#   - Enables Caddy reverse proxy with automatic HTTPS
+# ML MODEL SHARING: Shares the same named volumes as dev builds.
 # ============================================================================
+
+# Must match base docker-compose.yml for shared volumes.
+name: forensic-council
 
 services:
   redis:
     restart: unless-stopped
-    # No host port mapping in production — internal network only
 
   qdrant:
     restart: unless-stopped
-    # No host port mapping in production — internal network only
 
   postgres:
     restart: unless-stopped
-    # No host port mapping in production — internal network only
 
   backend:
-    # Uncomment to use pre-built images from a registry (MODE B):
-    # image: ${DOCKER_REGISTRY:-ghcr.io/yourorg}/forensic-council-backend:${IMAGE_TAG:-latest}
-    # pull_policy: always
     ports:
       - "8000:8000"
     environment:
@@ -47,19 +33,10 @@ services:
     restart: unless-stopped
 
   frontend:
-    # Uncomment to use pre-built images from a registry (MODE B):
-    # image: ${DOCKER_REGISTRY:-ghcr.io/yourorg}/forensic-council-frontend:${IMAGE_TAG:-latest}
-    # pull_policy: always
-    # Note: NEXT_PUBLIC_API_URL is baked in at build time via docker-compose.yml ARG.
-    # To change the API URL for production, set it in .env before building.
     environment:
       - NODE_ENV=production
     restart: unless-stopped
-    # In production, traffic goes through Caddy — no direct port mapping needed
 
-  # --------------------------------------------------------------------------
-  # Caddy — Reverse proxy with automatic HTTPS
-  # --------------------------------------------------------------------------
   caddy:
     image: caddy:2-alpine
     container_name: forensic_caddy
@@ -83,7 +60,7 @@ services:
       resources:
         limits:
           memory: 256M
-          cpus: '0.5'
+          cpus: "0.5"
 
 volumes:
   caddy_data:

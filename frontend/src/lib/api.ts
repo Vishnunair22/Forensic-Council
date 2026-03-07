@@ -7,7 +7,7 @@
 
 // Use Next.js public runtime config for environment variables
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const WS_BASE = API_BASE.replace(/^http/, "ws");
+const WS_BASE = API_BASE.replace(/^https?/, (m) => (m === "https" ? "wss" : "ws"));
 
 // Token storage key
 const TOKEN_KEY = "forensic_auth_token";
@@ -48,7 +48,7 @@ export interface ReportDTO {
 }
 
 export interface BriefUpdate {
-  type: "AGENT_UPDATE" | "HITL_CHECKPOINT" | "AGENT_COMPLETE" | "PIPELINE_COMPLETE" | "ERROR";
+  type: "AGENT_UPDATE" | "HITL_CHECKPOINT" | "AGENT_COMPLETE" | "PIPELINE_COMPLETE" | "ERROR" | "CONNECTED";
   session_id: string;
   agent_id: string | null;
   agent_name: string | null;
@@ -107,40 +107,25 @@ export interface UserInfo {
  * Authentication Functions
  */
 
-/**
- * Get the stored JWT token
- */
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem(TOKEN_KEY);
 }
 
-/**
- * Store the JWT token
- */
 export function setAuthToken(token: string): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(TOKEN_KEY, token);
 }
 
-/**
- * Clear the stored JWT token
- */
 export function clearAuthToken(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(TOKEN_KEY);
 }
 
-/**
- * Check if user is authenticated
- */
 export function isAuthenticated(): boolean {
   return !!getAuthToken();
 }
 
-/**
- * Login with username and password
- */
 export async function login(username: string, password: string): Promise<TokenResponse> {
   const formData = new URLSearchParams();
   formData.append("username", username);
@@ -148,9 +133,7 @@ export async function login(username: string, password: string): Promise<TokenRe
 
   const response = await fetch(`${API_BASE}/api/v1/auth/login`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: formData.toString(),
   });
 
@@ -165,9 +148,7 @@ export async function login(username: string, password: string): Promise<TokenRe
 }
 
 export async function autoLoginAsInvestigator(): Promise<TokenResponse> {
-  const response = await fetch("/api/auth/demo", {
-    method: "POST",
-  });
+  const response = await fetch("/api/auth/demo", { method: "POST" });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: "Demo auth failed" }));
@@ -179,9 +160,6 @@ export async function autoLoginAsInvestigator(): Promise<TokenResponse> {
   return data;
 }
 
-/**
- * Ensure user is authenticated (auto-login if needed)
- */
 export async function ensureAuthenticated(): Promise<string> {
   let token = getAuthToken();
   if (!token) {
@@ -191,35 +169,25 @@ export async function ensureAuthenticated(): Promise<string> {
   return token;
 }
 
-/**
- * Logout the current user
- */
 export async function logout(): Promise<void> {
   const token = getAuthToken();
   if (token) {
     try {
       await fetch(`${API_BASE}/api/v1/auth/logout`, {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-    } catch (error) {
-      // Ignore errors during logout
+    } catch {
+      // ignore
     }
   }
   clearAuthToken();
 }
 
-/**
- * Get current user info
- */
 export async function getCurrentUser(): Promise<UserInfo> {
   const token = await ensureAuthenticated();
   const response = await fetch(`${API_BASE}/api/v1/auth/me`, {
-    headers: {
-      "Authorization": `Bearer ${token}`,
-    },
+    headers: { Authorization: `Bearer ${token}` },
   });
 
   if (!response.ok) {
@@ -230,61 +198,44 @@ export async function getCurrentUser(): Promise<UserInfo> {
   return response.json();
 }
 
-/**
- * Maximum number of retry attempts for authentication failures
- */
 const MAX_AUTH_RETRIES = 1;
-
-/**
- * Track retry attempts to prevent infinite loops
- */
 let authRetryCount = 0;
 
-/**
- * Reset retry count - should be called after successful requests
- */
 function resetAuthRetry(): void {
   authRetryCount = 0;
 }
 
-/**
- * Handle authentication errors by clearing token and retrying
- */
 async function handleAuthError<T>(
   operation: () => Promise<T>,
-  errorMessage: string
+  _errorMessage: string
 ): Promise<T> {
   try {
     const result = await operation();
     resetAuthRetry();
     return result;
   } catch (error) {
-    // Check if it's an authentication error
-    if (error instanceof Error &&
+    if (
+      error instanceof Error &&
       (error.message.includes("Invalid or expired token") ||
         error.message.includes("401") ||
-        error.message.includes("Unauthorized"))) {
-
+        error.message.includes("Unauthorized"))
+    ) {
       if (authRetryCount < MAX_AUTH_RETRIES) {
         authRetryCount++;
-        console.warn("Token invalid or expired, clearing and re-authenticating...");
+        console.warn("Token invalid, clearing and re-authenticating...");
         clearAuthToken();
-
-        // Retry the operation with fresh authentication
         try {
           const result = await operation();
           resetAuthRetry();
           return result;
-        } catch (retryError) {
-          // Retried and still failing — redirect to session-expired page
+        } catch {
           clearAuthToken();
           if (typeof window !== "undefined") {
             window.location.href = "/session-expired";
           }
-          throw retryError;
+          throw error;
         }
       } else {
-        // Retry limit exhausted — redirect to session-expired page
         clearAuthToken();
         if (typeof window !== "undefined") {
           window.location.href = "/session-expired";
@@ -295,19 +246,10 @@ async function handleAuthError<T>(
   }
 }
 
-/**
- * Get default headers with authentication
- */
 async function getAuthHeaders(): Promise<HeadersInit> {
   const token = await ensureAuthenticated();
-  return {
-    "Authorization": `Bearer ${token}`,
-  };
+  return { Authorization: `Bearer ${token}` };
 }
-
-/**
- * API Functions
- */
 
 /**
  * Start a forensic investigation
@@ -317,14 +259,13 @@ export async function startInvestigation(
   caseId: string,
   investigatorId: string
 ): Promise<InvestigationResponse> {
-  // Client-side Input Validation
-  const caseIdRegex = /^CASE-(?:\d{10,14}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i;
+  const caseIdRegex =
+    /^CASE-(?:\d{10,14}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i;
   const investigatorIdRegex = /^REQ-\d{5,10}$/i;
 
   if (!caseIdRegex.test(caseId)) {
     throw new Error("Invalid Case ID format. Expected CASE-[timestamp] or CASE-[uuid].");
   }
-
   if (!investigatorIdRegex.test(investigatorId)) {
     throw new Error("Invalid Investigator ID format. Expected REQ-[5-10 digits].");
   }
@@ -361,13 +302,8 @@ export async function getReport(sessionId: string): Promise<ReportResponse> {
       headers,
     });
 
-    if (response.status === 404) {
-      throw new Error("Session not found");
-    }
-
-    if (response.status === 202) {
-      return { status: "in_progress" };
-    }
+    if (response.status === 404) throw new Error("Session not found");
+    if (response.status === 202) return { status: "in_progress" };
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: "Unknown error" }));
@@ -379,9 +315,6 @@ export async function getReport(sessionId: string): Promise<ReportResponse> {
   }, "Failed to get report");
 }
 
-/**
- * Get the brief for an agent in a session
- */
 export async function getBrief(sessionId: string, agentId: string): Promise<string> {
   return handleAuthError(async () => {
     const headers = await getAuthHeaders();
@@ -389,10 +322,7 @@ export async function getBrief(sessionId: string, agentId: string): Promise<stri
       headers,
     });
 
-    if (response.status === 404) {
-      return "No brief available.";
-    }
-
+    if (response.status === 404) return "No brief available.";
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: "Unknown error" }));
       throw new Error(error.detail || `HTTP ${response.status}`);
@@ -403,9 +333,6 @@ export async function getBrief(sessionId: string, agentId: string): Promise<stri
   }, "Failed to get brief");
 }
 
-/**
- * Get pending HITL checkpoints for a session
- */
 export async function getCheckpoints(sessionId: string): Promise<HITLCheckpoint[]> {
   return handleAuthError(async () => {
     const headers = await getAuthHeaders();
@@ -413,10 +340,7 @@ export async function getCheckpoints(sessionId: string): Promise<HITLCheckpoint[
       headers,
     });
 
-    if (response.status === 404) {
-      return [];
-    }
-
+    if (response.status === 404) return [];
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: "Unknown error" }));
       throw new Error(error.detail || `HTTP ${response.status}`);
@@ -426,18 +350,12 @@ export async function getCheckpoints(sessionId: string): Promise<HITLCheckpoint[
   }, "Failed to get checkpoints");
 }
 
-/**
- * Submit a HITL decision
- */
 export async function submitHITLDecision(decision: HITLDecisionRequest): Promise<void> {
   return handleAuthError(async () => {
     const headers = await getAuthHeaders();
     const response = await fetch(`${API_BASE}/api/v1/hitl/decision`, {
       method: "POST",
-      headers: {
-        ...headers,
-        "Content-Type": "application/json",
-      },
+      headers: { ...headers, "Content-Type": "application/json" },
       body: JSON.stringify(decision),
     });
 
@@ -449,58 +367,105 @@ export async function submitHITLDecision(decision: HITLDecisionRequest): Promise
 }
 
 /**
- * Create a WebSocket connection for live updates
- * Token is sent after connection via subprotocol to avoid logging in URL
- * Returns both the WebSocket and a Promise that resolves when connected
+ * Create a WebSocket connection for live updates.
+ *
+ * IMPORTANT — connection lifecycle:
+ *   1. Client opens WS to /api/v1/sessions/{id}/live
+ *   2. `onopen` fires → client sends {"type":"AUTH","token":"..."}
+ *   3. Server validates token, registers the socket, sends {"type":"CONNECTED"}
+ *   4. The `connected` Promise resolves only on step 3 (CONNECTED message).
+ *      This ensures broadcasts that start immediately after /investigate
+ *      are never lost because the socket wasn't registered yet.
  */
 export function createLiveSocket(
   sessionId: string
 ): { ws: WebSocket; connected: Promise<void> } {
   const wsUrl = `${WS_BASE}/api/v1/sessions/${sessionId}/live`;
-  // Use subprotocol for authentication to avoid token in URL (which gets logged)
   const ws = new WebSocket(wsUrl, ["forensic-v1"]);
 
-  let settle: (() => void) | null = null;
-  let connected = new Promise<void>((resolve) => {
-    settle = resolve;
+  let resolveConnected!: () => void;
+  let rejectConnected!: (err: Error) => void;
+  let settled = false;
+
+  const connected = new Promise<void>((resolve, reject) => {
+    resolveConnected = resolve;
+    rejectConnected = reject;
   });
 
-  // Track if we've already settled the promise to prevent double-resolution
-  let settled = false;
-  const safeSettle = () => {
-    if (!settle) return;
+  const safeResolve = () => {
     if (!settled) {
       settled = true;
-      settle();
+      resolveConnected();
+    }
+  };
+  const safeReject = (err: Error) => {
+    if (!settled) {
+      settled = true;
+      rejectConnected(err);
     }
   };
 
-  // Set all handlers atomically in one pass to avoid race conditions
+  // Connection timeout — if CONNECTED not received within 12 s, fail
+  const connectTimeout = setTimeout(() => {
+    safeReject(new Error("WebSocket connection timed out — no CONNECTED message received"));
+    ws.close();
+  }, 12_000);
+
   ws.onopen = () => {
-    console.log("WebSocket connected");
-    // Send authentication after connection established
+    console.log("[WS] Connected, sending AUTH");
     const token = getAuthToken();
     if (token) {
       ws.send(JSON.stringify({ type: "AUTH", token }));
+    } else {
+      // No token — will be rejected server-side
+      safeReject(new Error("No auth token available for WebSocket"));
     }
-    // Resolve the promise - connection is ready
-    safeSettle();
   };
 
-  ws.onerror = (error) => {
-    console.error("WebSocket error:", error);
-    // Reject the promise - connection failed
-    safeSettle();
+  ws.onerror = (event) => {
+    console.error("[WS] Connection error", event);
+    clearTimeout(connectTimeout);
+    safeReject(new Error("WebSocket connection error"));
   };
 
   ws.onclose = (event) => {
-    console.log("WebSocket disconnected:", event.code, event.reason);
-    // Note: onclose fires after onopen succeeds normally
-    // For error handling, the caller should check ws.readyState or use the connected promise
-    safeSettle();
+    console.log("[WS] Closed:", event.code, event.reason);
+    clearTimeout(connectTimeout);
+    if (!settled) {
+      safeReject(
+        new Error(
+          event.reason
+            ? `WebSocket closed: ${event.reason}`
+            : `WebSocket closed unexpectedly (code ${event.code})`
+        )
+      );
+    }
   };
 
-  // onmessage is set by the caller via the returned ws object
+  // The first incoming message handler resolves `connected` on CONNECTED type.
+  // After that, messages are routed through the caller-supplied onmessage.
+  const originalOnMessage = ws.onmessage;
+  ws.onmessage = (event: MessageEvent) => {
+    try {
+      const msg = JSON.parse(event.data as string);
+      if ((msg.type === "CONNECTED" || msg.type === "AGENT_UPDATE") && !settled) {
+        clearTimeout(connectTimeout);
+        safeResolve();
+      }
+    } catch {
+      // non-JSON or parse error — still resolve (unexpected but harmless)
+      if (!settled) {
+        clearTimeout(connectTimeout);
+        safeResolve();
+      }
+    }
+    // Forward to caller's handler if already attached
+    if (originalOnMessage) {
+      originalOnMessage.call(ws, event);
+    }
+    // Also call any handler set after this bootstrap listener
+    // (will be overridden by useSimulation which sets ws.onmessage directly)
+  };
 
   return { ws, connected };
 }
@@ -511,20 +476,19 @@ export function createLiveSocket(
 export async function pollForReport(
   sessionId: string,
   onProgress: (status: string) => void,
-  intervalMs: number = 5000,
-  maxAttempts: number = 60
+  intervalMs = 5000,
+  maxAttempts = 60
 ): Promise<ReportDTO> {
   return new Promise((resolve, reject) => {
-    let intervalId: NodeJS.Timeout;
-    let hasFinished = false;
+    let intervalId: ReturnType<typeof setInterval>;
+    let finished = false;
     let attempts = 0;
 
     const poll = async () => {
-      if (hasFinished) return;
-
+      if (finished) return;
       attempts++;
       if (attempts > maxAttempts) {
-        hasFinished = true;
+        finished = true;
         clearInterval(intervalId);
         reject(new Error("Polling timeout — investigation took too long"));
         return;
@@ -532,25 +496,21 @@ export async function pollForReport(
 
       try {
         const result = await getReport(sessionId);
-
         if (result.status === "complete" && result.report) {
-          hasFinished = true;
+          finished = true;
           clearInterval(intervalId);
           resolve(result.report);
         } else {
           onProgress("in_progress");
         }
       } catch (error) {
-        hasFinished = true;
+        finished = true;
         clearInterval(intervalId);
         reject(error);
       }
     };
 
-    // Start polling
     intervalId = setInterval(poll, intervalMs);
-
-    // Initial poll
     poll();
   });
 }

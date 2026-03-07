@@ -150,11 +150,13 @@ export default function EvidencePage() {
         if (pending) {
             delete (window as any).__forensic_pending_file;
             setFile(pending);
-            // Auto-start analysis if the landing page requested it
+            // Auto-start analysis if the landing page requested it.
+            // Small delay ensures the component is fully mounted and auth is ready.
             const autoStart = sessionStorage.getItem("forensic_auto_start");
             if (autoStart === "true") {
                 sessionStorage.removeItem("forensic_auto_start");
-                triggerAnalysis(pending);
+                // 300 ms grace period for React hydration + auth token check
+                setTimeout(() => triggerAnalysis(pending), 300);
             }
         } else if (sessionStorage.getItem("forensic_auto_start") === "true") {
             setValidationError("File was not received. Please re-select your evidence file.");

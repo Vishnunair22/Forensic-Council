@@ -1,10 +1,8 @@
 # ============================================================================
-# Backend .dockerignore
+# Backend .dockerignore — Keep build context lean
 # ============================================================================
-# Prevents unnecessary files from being sent as Docker build context.
-# This dramatically speeds up builds and prevents secrets from leaking.
 
-# Python bytecode and caches
+# Python bytecode
 __pycache__/
 *.py[cod]
 *.so
@@ -14,19 +12,19 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Virtual environments (Docker installs its own via uv)
+# Virtual environments
 .venv/
 venv/
 env/
 
-# Development / test files
+# Dev / test files
 tests/
 *.test.*
 .env
 .env.*
 !.env.example
 
-# Storage and model caches (injected via Docker volumes at runtime)
+# Storage and model caches (mounted via Docker volumes at runtime)
 storage/evidence/
 storage/keys/
 cache/
@@ -34,18 +32,16 @@ cache/
 # Version control
 .git/
 .gitignore
+*.md
+README*
 
 # OS artifacts
 .DS_Store
-Thumbs.db
+Thumbbs.db
 
 # IDE
 .vscode/
 .idea/
-
-# Documentation
-*.md
-docs/
 
 # Logs
 *.log
