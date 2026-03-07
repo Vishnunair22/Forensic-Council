@@ -9,6 +9,7 @@ import asyncio
 import os
 import re
 import tempfile
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any
 from uuid import UUID, uuid4
@@ -43,7 +44,6 @@ router = APIRouter(prefix="/api/v1", tags=["investigation"])
 # Store active pipelines, WebSocket connections, background tasks, and cached reports
 _active_pipelines: dict[str, ForensicCouncilPipeline] = {}
 _websocket_connections: dict[str, list] = {}
-from datetime import datetime, timezone, timedelta
 _active_tasks: dict[str, asyncio.Task] = {}
 _final_reports: dict[str, tuple[Any, datetime]] = {}
 
@@ -392,9 +392,14 @@ async def run_investigation_task(
     error_msg = None
 
     try:
-        # Wait for WebSocket client to connect before broadcasting
-        # The frontend needs time to establish the WS connection after receiving session_id
-        await asyncio.sleep(0.5)
+        # Wait for the WebSocket client to connect before broadcasting.
+        # The frontend connects immediately after receiving session_id, but the
+        # TCP handshake + AUTH exchange takes ~100-500 ms.  We poll until at
+        # least one WS is registered (up to 5 s) so no early broadcasts are lost.
+        for _ws_wait in range(50):   # 50 × 0.1 s = 5 s max
+            if session_id in _websocket_connections and _websocket_connections[session_id]:
+                break
+            await asyncio.sleep(0.1)
 
         # Send initial update
         await broadcast_update(
@@ -496,7 +501,6 @@ async def run_investigation_task(
         # Free memory and cache report if generated
         report = getattr(pipeline, "_final_report", None)
         if report:
-             from datetime import datetime, timezone
              _final_reports[session_id] = (report, datetime.now(timezone.utc))
         
         remove_active_pipeline(session_id)
@@ -555,16 +559,10 @@ async def investigate(
     if not validate_investigator_id(investigator_id):
         raise HTTPException(status_code=400, detail="Invalid investigator_id format. Expected REQ-<5-10 digits>.")
 
-    # 2. Rate Limiting (SEC 2) - Fault tolerant atomic operations
+    # 2. Rate Limiting (SEC 2) - Uses shared Redis singleton to avoid per-request TCP connection overhead
     try:
-        from infra.redis_client import RedisClient
-        redis = RedisClient(
-            host=settings.redis_host,
-            port=settings.redis_port,
-            db=settings.redis_db,
-            password=settings.redis_password
-        )
-        await redis.connect()
+        from infra.redis_client import get_redis_client
+        redis = await get_redis_client()
         rate_limit_key = f"rate_limit:upload:{investigator_id}"
         
         rate_limit_script = """
@@ -588,11 +586,7 @@ async def investigate(
         return {0, ttl}
         """
         
-        # eval(script, numkeys, *keys_and_args)
-        try:
-            result = await redis.client.eval(rate_limit_script, 1, rate_limit_key, 5, 600)
-        finally:
-            await redis.disconnect()
+        result = await redis.client.eval(rate_limit_script, 1, rate_limit_key, 5, 600)
         
         if result[0] == 1:
             raise HTTPException(
@@ -724,7 +718,6 @@ async def get_report(
     
     report = None
     
-    from datetime import datetime, timezone, timedelta
     entry = _final_reports.get(session_id)
     if entry:
         report_data, stored_at = entry

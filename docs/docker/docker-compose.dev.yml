@@ -1,5 +1,5 @@
 # ============================================================================
-# Forensic Council — Development Docker Compose (v0.8.0)
+# Forensic Council — Development Docker Compose (v1.0.0)
 # ============================================================================
 # This file enables full hot-reload for both Backend and Frontend.
 # Merge on top of the base compose file:
@@ -10,7 +10,14 @@
 #
 # Or use the Makefile shortcut:
 #   make dev
+#
+# ML MODEL SHARING: This file shares the same named volumes as the production
+# build. Models downloaded in dev are available in prod and vice versa.
+# No re-downloads when switching between dev and prod modes.
 # ============================================================================
+
+# Must match the name in the base docker-compose.yml so volumes are shared.
+name: forensic-council
 
 services:
   # --------------------------------------------------------------------------
@@ -45,7 +52,7 @@ services:
       - calibration_models:/app/cache/calibration_models:rw
       - evidence_data:/app/storage/evidence:rw
       - cache_scratch:/app/cache:rw
-    command: ["/app/.venv/bin/python", "scripts/run_api.py"]
+    command: ["sh", "scripts/docker_entrypoint.sh"]
 
   # --------------------------------------------------------------------------
   # Frontend — Development configuration with hot-reload
@@ -64,6 +71,9 @@ services:
       - WATCHPACK_POLLING=true
       - NEXT_PUBLIC_API_URL=http://localhost:8000
       - NEXT_PUBLIC_DEMO_PASSWORD=${NEXT_PUBLIC_DEMO_PASSWORD}
+      # INTERNAL_API_URL is used by Next.js server-side API routes (e.g. /api/auth/demo).
+      # Must point to the Docker-internal service name, NOT localhost.
+      - INTERNAL_API_URL=http://forensic_api:8000
     volumes:
       - ../../frontend/src:/app/src
       - ../../frontend/public:/app/public
@@ -75,3 +85,19 @@ services:
     healthcheck:
       disable: true
     command: ["npm", "run", "dev"]
+
+# ─── Shared ML model volumes ──────────────────────────────────────────────────
+# These volumes are SHARED with the production build.
+# Dev mode and prod mode read from and write to the same volume pool.
+# Models download once — switching between `make dev` and `make up` never
+# triggers a re-download.
+volumes:
+  hf_cache:
+  torch_cache:
+  easyocr_cache:
+  numba_cache:
+  yolo_cache:
+  deepface_cache:
+  calibration_models:
+  evidence_data:
+  cache_scratch:

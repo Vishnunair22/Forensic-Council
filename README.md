@@ -2,7 +2,7 @@
 
 Upload digital evidence. Five AI agents analyze it concurrently. Get a cryptographically signed forensic report in seconds.
 
-[![Version](https://img.shields.io/badge/version-v0.9.1-blue.svg)](#) [![Status](https://img.shields.io/badge/status-beta-orange.svg)](#) [![Postgres](https://img.shields.io/badge/postgres-16-blue.svg)](#) [![License](https://img.shields.io/badge/license-MIT-green.svg)](#)
+[![Version](https://img.shields.io/badge/version-v1.0.0-blue.svg)](#) [![Status](https://img.shields.io/badge/status-stable-green.svg)](#) [![Postgres](https://img.shields.io/badge/postgres-17-blue.svg)](#) [![License](https://img.shields.io/badge/license-MIT-green.svg)](#)
 
 *A Multi-Agent Forensic Evidence Analysis System*
 

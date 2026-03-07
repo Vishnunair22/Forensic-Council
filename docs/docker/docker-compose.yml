@@ -1,17 +1,31 @@
 # ============================================================================
-# Forensic Council — Base Docker Compose Configuration
+# Forensic Council — Docker Compose (Development + Production base)
 # ============================================================================
-# This file defines shared service definitions. It is not meant to be used
-# directly. Use one of the following:
 #
-#   Development (native):  docker compose -f docs/docker/docker-compose.infra.yml --env-file .env up -d
-#   Development (Docker):  docker compose -f docs/docker/docker-compose.yml --env-file .env up --build
-#   Production:            docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.prod.yml --env-file .env up -d
+# Quick start:
+#   cp .env.example .env   # then fill in LLM_API_KEY etc.
+#   docker compose -f docs/docker/docker-compose.yml --env-file .env up --build
+#
+# BuildKit is enabled by default in Docker 23+ and Docker Desktop.
+# If you're on an older Docker version add: DOCKER_BUILDKIT=1 before the command.
+#
+# ML models are stored in named volumes (hf_cache, torch_cache, etc.).
+# They download ONCE on first start and persist across rebuilds/restarts.
+# DO NOT use `docker compose down -v` unless you want to redownload all models.
+#
+# IMPORTANT: COMPOSE_PROJECT_NAME is set to "forensic-council" in .env.example.
+# This ensures dev and production builds share the SAME named volumes and never
+# re-download ML models when switching between dev and prod modes.
 # ============================================================================
+
+# Locks the Docker project name so all compose variants (dev, prod, override)
+# always use the same named volume pool. Without this, Docker would prefix volumes
+# differently based on the working directory, causing separate model downloads.
+name: forensic-council
 
 services:
   # --------------------------------------------------------------------------
-  # Infrastructure Services
+  # Infrastructure
   # --------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
@@ -19,7 +33,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -27,18 +41,18 @@ services:
       resources:
         limits:
           memory: 512M
-          cpus: '0.5'
+          cpus: "0.5"
         reservations:
           memory: 128M
-          cpus: '0.25'
+          cpus: "0.25"
 
   qdrant:
-    image: qdrant/qdrant:v1.11.0
+    image: qdrant/qdrant:v1.13.6
     container_name: forensic_qdrant
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: [ "CMD-SHELL", "bash -c 'cat < /dev/null > /dev/tcp/localhost/6333'" ]
+      test: ["CMD-SHELL", "bash -c 'cat < /dev/null > /dev/tcp/localhost/6333'"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -46,13 +60,13 @@ services:
       resources:
         limits:
           memory: 1G
-          cpus: '1.0'
+          cpus: "1.0"
         reservations:
           memory: 256M
-          cpus: '0.5'
+          cpus: "0.5"
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     container_name: forensic_postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-forensic_user}
@@ -61,7 +75,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-forensic_user} -d ${POSTGRES_DB:-forensic_council}" ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-forensic_user} -d ${POSTGRES_DB:-forensic_council}"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -69,13 +83,13 @@ services:
       resources:
         limits:
           memory: 1G
-          cpus: '1.0'
+          cpus: "1.0"
         reservations:
           memory: 256M
-          cpus: '0.25'
+          cpus: "0.25"
 
   # --------------------------------------------------------------------------
-  # Application Services (definitions only — no build contexts)
+  # Backend API
   # --------------------------------------------------------------------------
   backend:
     build:
@@ -83,7 +97,7 @@ services:
       dockerfile: Dockerfile
     container_name: forensic_api
     ports:
-      - "8000:8000" # optional — only needed for direct API access from host
+      - "8000:8000"
     environment:
       - APP_NAME=forensic_council
       - APP_ENV=${APP_ENV:-development}
@@ -100,10 +114,10 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-forensic_council}
       - BOOTSTRAP_INVESTIGATOR_PASSWORD=${NEXT_PUBLIC_DEMO_PASSWORD:-inv123!}
       - BOOTSTRAP_ADMIN_PASSWORD=${BOOTSTRAP_ADMIN_PASSWORD:-admin123!}
-      # DATABASE_URL removed - not read by app (core/config.py builds URL from postgres_* vars)
       - SIGNING_KEY=${SIGNING_KEY:-change-me-in-development}
       - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
-      - CORS_ALLOWED_ORIGINS=["http://frontend:3000","http://localhost:3000","http://localhost:3001"]
+      # Allow requests from both the browser and frontend container
+      - CORS_ALLOWED_ORIGINS=["http://frontend:3000","http://localhost:3000","http://localhost:3001","http://127.0.0.1:3000"]
       - HF_TOKEN=${HF_TOKEN:-}
       - LLM_PROVIDER=${LLM_PROVIDER:-none}
       - LLM_API_KEY=${LLM_API_KEY:-}
@@ -118,23 +132,22 @@ services:
       qdrant:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 45s
     deploy:
       resources:
         limits:
           memory: 4G
-          cpus: '2.0'
+          cpus: "2.0"
         reservations:
           memory: 512M
-          cpus: '0.5'
-    # Security hardening
+          cpus: "0.5"
     read_only: true
     tmpfs:
-      - /tmp:nosuid,size=512m # Remove noexec — Numba dlopen() requires exec on /tmp
+      - /tmp:nosuid,size=512m
     volumes:
       - evidence_data:/app/storage/evidence:rw
       - cache_scratch:/app/cache:rw
@@ -147,25 +160,34 @@ services:
       - deepface_cache:/app/cache/deepface:rw
       - calibration_models:/app/cache/calibration_models:rw
 
+  # --------------------------------------------------------------------------
+  # Frontend
+  # --------------------------------------------------------------------------
   frontend:
     build:
       context: ../../frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_DEMO_PASSWORD: "${NEXT_PUBLIC_DEMO_PASSWORD:?Error: NEXT_PUBLIC_DEMO_PASSWORD not set}"
+        # NEXT_PUBLIC_* vars are baked into the JS bundle at build time.
+        NEXT_PUBLIC_DEMO_PASSWORD: "${NEXT_PUBLIC_DEMO_PASSWORD:?Error: NEXT_PUBLIC_DEMO_PASSWORD not set in .env}"
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     container_name: forensic_ui
     ports:
       - "3000:3000"
     environment:
       - HOSTNAME=0.0.0.0
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      # NEXT_PUBLIC_API_URL below is redundant (baked at build), but kept for clarity.
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
       - NEXT_PUBLIC_DEMO_PASSWORD=${NEXT_PUBLIC_DEMO_PASSWORD}
+      # INTERNAL_API_URL: used by Next.js server-side API routes (e.g. /api/auth/demo).
+      # Inside Docker, the frontend container CANNOT reach "localhost:8000" — it must
+      # use the Docker-internal service name "forensic_api".
+      - INTERNAL_API_URL=http://forensic_api:8000
     depends_on:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3000', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3000',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -174,10 +196,10 @@ services:
       resources:
         limits:
           memory: 512M
-          cpus: '0.5'
+          cpus: "0.5"
         reservations:
           memory: 128M
-          cpus: '0.25'
+          cpus: "0.25"
 
 volumes:
   redis_data:

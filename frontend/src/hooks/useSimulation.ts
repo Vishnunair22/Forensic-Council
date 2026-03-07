@@ -93,6 +93,11 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                     console.log("[Simulation] Processing update from queue:", update);
 
                     switch (update.type) {
+                        case "CONNECTED":
+                            // Server confirmed auth and registered socket — connection fully ready.
+                            // No UI action needed; the connected promise is already resolved in api.ts.
+                            break;
+
                         case "AGENT_UPDATE":
                             if (update.agent_id && update.data) {
                                 const agentData = update.data as { status?: string; thinking?: string };
@@ -240,8 +245,16 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
             const { ws, connected } = createLiveSocket(targetSessionId);
             wsRef.current = ws;
 
-            // Wire up message handler
-            ws.onmessage = handleMessage;
+            // Wire up message handler.
+            // createLiveSocket attaches a bootstrap handler first (to resolve 'connected').
+            // We wrap it so both handlers fire in sequence.
+            const bootstrapHandler = ws.onmessage;
+            ws.onmessage = (event: MessageEvent) => {
+                // Let the bootstrap handler run first (resolves connected promise)
+                if (bootstrapHandler) bootstrapHandler.call(ws, event);
+                // Then run our simulation handler
+                handleMessage(event);
+            };
 
             // Handle close - reject if closed before/during connection, otherwise notify
             const handleClose = (event: CloseEvent) => {

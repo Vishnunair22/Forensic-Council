@@ -1,14 +1,14 @@
 # Forensic Council — Code Analysis & Setup Guide
 
-**Version:** v0.9.1 (packaged as v0.8.0)  
-**Analysis Date:** March 6, 2026  
+**Version:** v1.0.0  
+**Analysis Date:** March 7, 2026  
 **Status:** ✅ **FIXED** — All identified issues resolved
 
 ---
 
 ## Executive Summary
 
-The Forensic Council codebase is a sophisticated multi-agent forensic analysis system built with **Next.js 15** (frontend), **FastAPI** (backend), and **Python 3.11+** with specialized ML agents. The project is well-structured with comprehensive Docker support.
+The Forensic Council codebase is a sophisticated multi-agent forensic analysis system built with **Next.js 15** (frontend), **FastAPI** (backend), and **Python 3.12+** with specialized ML agents. The project is well-structured with comprehensive Docker support.
 
 ### Issues Found & Fixed
 
@@ -36,7 +36,7 @@ The Forensic Council codebase is a sophisticated multi-agent forensic analysis s
 └───────────────────┬────────────────────────────────┘
                     │ HTTP + WebSocket
 ┌───────────────────▼────────────────────────────────┐
-│       BACKEND (FastAPI + Python 3.11+)              │
+│       BACKEND (FastAPI + Python 3.12+)              │
 │  ┌──────────────────────────────────────────────┐  │
 │  │  5 AI Agents + Council Arbiter               │  │
 │  │  • Agent 1: Image Forensics                  │  │
@@ -339,7 +339,7 @@ docker compose -f docs/docker/docker-compose.yml \
 Best for: Native Python/Node development with maximum IDE support
 
 **Prerequisites:**
-- Python 3.11+
+- Python 3.12+
 - Node.js 20+
 - uv package manager
 - Docker (for databases only)

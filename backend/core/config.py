@@ -9,6 +9,7 @@ All configuration is centralized and validated at startup.
 from functools import lru_cache
 from typing import Optional
 
+import warnings
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -232,7 +233,6 @@ class Settings(BaseSettings):
     def validate_hf_token(cls, v: Optional[str], info) -> Optional[str]:
         """Warn if HuggingFace token is missing when needed."""
         if v is None:
-            import warnings
             warnings.warn(
                 "HF_TOKEN not set. Agent 2 speaker diarization will fail gracefully. "
                 "Get a free token at https://hf.co/settings/tokens",

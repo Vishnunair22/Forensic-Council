@@ -1,7 +1,7 @@
 # Forensic Council — Error Log & Resolution Audit
 
-**Date:** 2026-03-06
-**Status:** v0.8.0 — All Known Issues Resolved
+**Date:** 2026-03-07
+**Status:** v1.0.0 — All Known Issues Resolved
 
 This log tracks significant errors, architectural flaws, and their subsequent resolutions.
 
@@ -861,3 +861,16 @@ The absolute final 14 High/Critical priority issues.
 | 281 | ForensicReport.contested_findings type inconsistency | 🟢 Low | **RESOLVED** | Fixed Pydantic type signatures unifying string dictionary models natively. |
 | 282 | WebSocket message queue has no size cap | 🟢 Low | **RESOLVED** | Applied strict `500` message shifting boundaries capping memory allocations locally on the client DOM. |
 | 283 | startSimulation() called without session ID doesn't set initiating status | 🟢 Low | **RESOLVED** | Pulled status propagation flags out of ID dependency clauses applying globally. |
+
+---
+
+## v1.0.0 Audit — Additional Issues Found & Resolved (2026-03-07)
+
+| # | Issue | Severity | Status | Resolution |
+|---|---|---|---|---|
+| 284 | Rate limiter in `investigate()` created a new Redis `TCP` connection per request | 🔴 Critical | **RESOLVED** | Replaced `RedisClient()` + `connect()` + `disconnect()` per-request pattern with the shared `get_redis_client()` singleton. Eliminates unnecessary connection overhead on every file upload. |
+| 285 | `from datetime import datetime, timezone, timedelta` duplicated in `investigation.py` | 🟢 Low | **RESOLVED** | Moved import to top-level only; removed redundant inline import inside `get_report()`. |
+| 286 | `api/main.py` version string showed `0.9.1` in two places | 🟢 Low | **RESOLVED** | Updated FastAPI `version=` param and root endpoint `"version"` key to `1.0.0`. |
+| 287 | `docker-compose.dev.yml` missing `INTERNAL_API_URL` for frontend service | 🔴 Critical | **RESOLVED** | Added `INTERNAL_API_URL=http://forensic_api:8000` to dev compose frontend environment, preventing silent auth failures in dev Docker mode (same root cause as BUG 1 from v1.0.0 main fix). |
+| 288 | `docs/start/STARTUP.md` listed Python 3.11+ and Node 20+ as prerequisites | 🟡 Medium | **RESOLVED** | Updated to Python 3.12+ and Node 22+ to match actual Dockerfile base images. |
+| 289 | No comprehensive Docker build/rebuild/caching documentation | 🟡 Medium | **RESOLVED** | Created `docs/docker/DOCKER_BUILD.md` — full reference for cold builds, code-only fast rebuilds, dependency rebuilds, no-cache rebuilds, BuildKit cache mounts, ML model volume management, and troubleshooting. |

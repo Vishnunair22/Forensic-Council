@@ -1,39 +1,35 @@
 # ============================================================================
 # Frontend .dockerignore
 # ============================================================================
-# Prevents unnecessary files from being sent as Docker build context.
 
-# Node modules (Docker installs its own via npm ci)
+# Node modules (Docker installs its own)
 node_modules/
+npm-debug.log*
 
-# Next.js build output
+# Next.js build outputs
 .next/
 out/
 
-# Environment files
+# Env files
 .env
 .env.*
 !.env.example
 
-# Development artifacts
+# Dev artifacts
 *.log
-lint.json
-lint_output.txt
+coverage/
+*.tsbuildinfo
 
 # Version control
 .git/
 .gitignore
+*.md
+README*
 
 # OS artifacts
 .DS_Store
-Thumbs.db
+Thumbbs.db
 
 # IDE
 .vscode/
 .idea/
-
-# Test artifacts
-coverage/
-
-# TypeScript build info
-*.tsbuildinfo

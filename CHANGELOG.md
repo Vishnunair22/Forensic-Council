@@ -7,6 +7,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.0] — 2026-03-07
+
+### Production Release — Full Audit & Hardening
+
+Complete codebase trace, bug fixes, Docker build/caching improvements,
+and documentation overhaul. First stable production release.
+
+### Fixed
+
+**BUG 1 — Docker Container Networking (Root cause of "click twice" / silent auth failure)**
+- `frontend/src/app/api/auth/demo/route.ts`: Server-side Next.js API routes called
+  `http://localhost:8000` from inside the frontend Docker container. Inside Docker,
+  `localhost` resolves to the frontend container itself, not the backend. Auth silently
+  failed on every first page load.
+- Fix: Added `INTERNAL_API_URL=http://forensic_api:8000` to all compose environments.
+  Auth route now uses `process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL`.
+
+**BUG 2 — WebSocket Race Condition (Agents not starting / silent message loss)**
+- `backend/api/routes/investigation.py`: Investigation task waited hardcoded `0.5s`
+  before broadcasting. WebSocket auth handshake takes ~200–500ms. Messages fired before
+  socket was registered were silently dropped.
+- Fix: Replaced sleep with active polling loop (50 × 100ms = up to 5s) that waits
+  for the socket to be registered before broadcasting.
+
+**BUG 3 — WebSocket `connected` Promise Resolved Too Early**
+- `frontend/src/lib/api.ts`: `createLiveSocket()` resolved its `connected` promise in
+  `ws.onopen`, before the server processed AUTH and registered the socket.
+- Fix: Promise now resolves only when server sends `{"type":"CONNECTED"}`. 12s timeout
+  handles connection failures gracefully.
+
+**BUG 4 — WebSocket Close Before Accept**
+- `backend/api/routes/sessions.py`: Server called `websocket.close()` before
+  `websocket.accept()`, breaking the HTTP upgrade handshake.
+- Fix: Accept called first. Added pipeline registration retry. New `CONNECTED`
+  message type sent after successful auth registration.
+
+**BUG 5 — Rate Limiter Per-Request Redis Connection (Performance)**
+- `backend/api/routes/investigation.py`: Rate limiter created a fresh `RedisClient()`,
+  called `connect()`, ran the Lua script, then `disconnect()` on every upload request.
+  This created a new TCP connection per request, defeating connection pooling.
+- Fix: Rate limiter now uses the shared singleton via `get_redis_client()`.
+
+**BUG 6 — Duplicate `datetime` Import in `investigation.py`**
+- `from datetime import datetime, timezone, timedelta` appeared at module level AND
+  inside the `get_report()` function body.
+- Fix: Removed the redundant inline import.
+
+**BUG 7 — `api/main.py` Version Stale**
+- FastAPI app `version` and root endpoint `"version"` key still showed `0.9.1`.
+- Fix: Updated to `1.0.0`.
+
+**BUG 8 — `docker-compose.dev.yml` Missing `INTERNAL_API_URL`**
+- The dev frontend override was missing `INTERNAL_API_URL`, so demo auth would fail
+  the same way as BUG 1 in dev mode.
+- Fix: Added `INTERNAL_API_URL=http://forensic_api:8000` to dev compose frontend env.
+
+### Added
+
+- `backend/scripts/model_cache_check.py` — Startup ML cache verification script.
+  Scans all 7 cache directories, reports size + file counts, verifies core Python
+  imports. Runs in ~3s before API server starts. Always exits 0.
+- `backend/scripts/docker_entrypoint.sh` — Docker entrypoint that runs cache check
+  then `exec`s the API server. Set `SKIP_CACHE_CHECK=1` to bypass in CI/CD.
+- `docs/docker/DOCKER_BUILD.md` — Comprehensive Docker build and caching guide covering:
+  shared volume mechanics, startup cache check, code-only rebuild (fast path),
+  dependency rebuild, full no-cache rebuild, BuildKit cache mounts, and troubleshooting.
+
+### Changed
+
+- **All compose files now pin `name: forensic-council`** — ensures dev and prod always
+  share the same named volume pool. No more duplicate ML model downloads.
+- **`.env.example`** — Added `COMPOSE_PROJECT_NAME=forensic-council`.
+- **`docker-compose.dev.yml` / `docker-compose.override.yml`** — Added `volumes:` sections.
+- **`backend/Dockerfile`** — `CMD` changed to use new entrypoint. `start_period` 45s.
+- **`docker-compose.yml`** — Backend healthcheck `start_period` updated to 45s.
+- **`frontend/next.config.ts`** — Added `optimizeCss`, AVIF/WebP image formats,
+  1-year static asset cache headers, `@radix-ui/react-dialog` to `optimizePackageImports`.
+- **`frontend/tsconfig.json`** — `target` upgraded `ES2017` → `ES2020` for smaller bundles.
+- **`frontend/package.json`** — Version `0.9.1` → `1.0.0`.
+- **`Makefile`** — Complete rewrite: `rebuild`, `rebuild-backend`, `rebuild-frontend`,
+  `cache-status`, `cache-warm`, `check-env`, `logs-<service>`, `down-clean` with confirmation.
+- **`docs/start/STARTUP.md`** — Updated to v1.0.0; Python 3.12+, Node 22+;
+  Model Cache Behaviour section updated; Makefile Shortcuts rewritten.
+
+---
+
 ## [0.9.1] — 2026-03-06
 
 ### Individual Agent Analysis Overhaul

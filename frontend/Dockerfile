@@ -1,51 +1,50 @@
+# syntax=docker/dockerfile:1.7
 # ============================================================================
-# Stage 1: Builder - builds the Next.js application (Unified with Deps to fix Layer Export hanging)
+# Frontend — Optimised Two-Stage Build
 # ============================================================================
-FROM node:20-alpine AS builder
+
+# ── Stage 1: Builder ─────────────────────────────────────────────────────────
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Copy package locks first for better caching
+# Copy lock files first for better layer caching
 COPY package.json package-lock.json ./
 
-# Install dependencies - we use --loglevel verbose so you can see live connection progress
+# BuildKit cache mount keeps npm's package cache between builds → much faster
 RUN --mount=type=cache,target=/root/.npm \
-  npm ci --prefer-offline --no-audit --no-fund --loglevel verbose
+    npm ci --prefer-offline --no-audit --no-fund
 
-# Copy application code
+# Copy source
 COPY . .
 
-# Build args for Next.js public variables
+# Build-time variables baked into the JS bundle
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_DEMO_PASSWORD
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_DEMO_PASSWORD=${NEXT_PUBLIC_DEMO_PASSWORD}
-
-# Disable Next.js telemetry during build
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Persist Next.js compiler cache between Docker builds for instantaneous recompilation
+# BuildKit cache mount preserves Next.js compiler cache between rebuilds
+# → near-instant recompilation when only source files change
 RUN --mount=type=cache,target=/app/.next/cache \
-  npm run build
+    npm run build
 
-# ============================================================================
-# Stage 3: Runner - production stage with standalone output
-# ============================================================================
-FROM node:20-alpine AS runner
+# ── Stage 2: Runner ──────────────────────────────────────────────────────────
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Copy standalone output (includes built-in server)
+# Copy standalone output (Next.js built-in server)
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
-# Healthcheck with fixed syntax (added missing closing parenthesis)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 \
-  CMD node -e "require('http').get('http://127.0.0.1:3000', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', (e) => {console.error('Health check failed:', e); process.exit(1)})"
+  CMD node -e "require('http').get('http://127.0.0.1:3000', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
 EXPOSE 3000
 
