@@ -212,7 +212,7 @@ class Settings(BaseSettings):
     # Agent Configuration
     default_iteration_ceiling: int = Field(default=20, description="Default iteration ceiling for agent loops")
     hitl_enabled: bool = Field(default=True, description="Enable Human-in-the-Loop checkpoints")
-    investigation_timeout: int = Field(default=300, description="Max seconds for a single investigation")
+    investigation_timeout: int = Field(default=600, description="Max seconds for a single investigation")
     investigation_max_retries: int = Field(default=3, description="Max retry attempts for failed investigations")
     investigation_retry_delay: float = Field(default=5.0, description="Base delay between investigation retries (seconds)")
     
@@ -222,8 +222,9 @@ class Settings(BaseSettings):
     llm_model: str = Field(default="llama-3.3-70b-versatile", description="LLM model. Groq: llama-3.3-70b-versatile. OpenAI: gpt-4o. Anthropic: claude-3-5-sonnet-20241022")
     llm_temperature: float = Field(default=0.1, description="Temperature for LLM sampling (0.0-1.0)")
     llm_max_tokens: int = Field(default=4096, description="Maximum tokens for LLM responses (Groq: up to 32768)")
-    llm_timeout: float = Field(default=30.0, description="Timeout for LLM API calls in seconds (Groq is fast; 30s is safe)")
-    llm_enable_react_reasoning: bool = Field(default=True, description="Enable LLM reasoning in ReAct loop")
+    llm_timeout: float = Field(default=15.0, description="Timeout for LLM API calls in seconds (reduced from 30s to fit within per-agent timeout budget)")
+    llm_enable_react_reasoning: bool = Field(default=False, description="Enable LLM reasoning in ReAct loop (disabled: agents use fast task-decomposition driver)")
+    llm_enable_post_synthesis: bool = Field(default=True, description="After tools complete, call LLM once to synthesize findings into rich forensic narratives")
 
     # HuggingFace Token (for pyannote.audio speaker diarization and other HF models)
     hf_token: Optional[str] = Field(default=None, description="HuggingFace API token for model downloads")

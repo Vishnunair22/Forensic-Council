@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import uuid
 from typing import Any, Optional
-import random
-import hashlib
 
 from agents.base_agent import ForensicAgent
 from core.config import Settings

@@ -10,7 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas import HITLDecisionRequest
-from api.routes.investigation import _active_pipelines
+from api.routes.investigation import get_active_pipeline
 from core.auth import get_current_user, User
 from core.react_loop import HumanDecision
 
@@ -33,7 +33,7 @@ async def submit_decision(
                   and the decision type (APPROVE, REDIRECT, OVERRIDE, TERMINATE, TRIBUNAL)
     """
     # Look up the active pipeline for this session
-    pipeline = _active_pipelines.get(decision.session_id)
+    pipeline = get_active_pipeline(decision.session_id)
     if pipeline is None:
         raise HTTPException(
             status_code=404,

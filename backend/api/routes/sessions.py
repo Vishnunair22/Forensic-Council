@@ -16,8 +16,9 @@ from api.routes.investigation import (
     get_all_active_pipelines,
     get_active_pipeline,
     remove_active_pipeline,
-    _active_tasks,
-    _websocket_connections,
+    pop_active_task,
+    get_session_websockets,
+    clear_session_websockets,
     register_websocket,
     unregister_websocket,
 )
@@ -49,18 +50,17 @@ async def terminate_session(session_id: str, current_user: User = Depends(get_cu
         raise HTTPException(status_code=404, detail="Session not found")
 
     # Cancel the background task if still running
-    task = _active_tasks.pop(session_id, None)
+    task = pop_active_task(session_id)
     if task and not task.done():
         task.cancel()
 
     # Close WebSocket connections
-    if session_id in _websocket_connections:
-        for ws in _websocket_connections[session_id]:
-            try:
-                await ws.close()
-            except Exception:
-                pass
-        _websocket_connections[session_id] = []
+    for ws in get_session_websockets(session_id):
+        try:
+            await ws.close()
+        except Exception:
+            pass
+    clear_session_websockets(session_id)
 
     remove_active_pipeline(session_id)
     return {"status": "terminated", "session_id": session_id}

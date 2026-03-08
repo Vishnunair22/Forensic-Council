@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import uuid
 from typing import Any, Optional
-import random
-import hashlib
 
 from agents.base_agent import ForensicAgent
 from core.config import Settings
@@ -79,28 +77,37 @@ class Agent3Object(ForensicAgent):
     @property
     def task_decomposition(self) -> list[str]:
         """
-        List of tasks this agent performs.
-        Exact 12 tasks from architecture document.
+        Light tasks — YOLO detection + quick validation (~15-20s total).
+        Heavy ML tasks are in deep_task_decomposition.
         """
         return [
             "Run full-scene primary object detection",
             "For each detected object below confidence threshold: run secondary classification pass",
             "For each confirmed object: run scale and proportion validation",
             "For each confirmed object: run lighting and shadow consistency check",
-            "Run scene-level contextual incongruence analysis",
-            "Run ML-based image splicing detection on objects",
-            "Run camera noise fingerprint analysis for region consistency",
             "Cross-reference confirmed objects against contraband/weapons database",
-            "Issue inter-agent call to Agent 1 for any region showing lighting inconsistency",
-            "Run adversarial robustness check against object detection evasion",
             "Self-reflection pass",
             "Submit calibrated findings to Arbiter",
         ]
-    
+
+    @property
+    def deep_task_decomposition(self) -> list[str]:
+        """
+        Heavy tasks — CLIP inference, ML splicing, adversarial checks.
+        Runs in background after initial findings are returned.
+        """
+        return [
+            "Run scene-level contextual incongruence analysis",
+            "Run ML-based image splicing detection on objects",
+            "Run camera noise fingerprint analysis for region consistency",
+            "Issue inter-agent call to Agent 1 for any region showing lighting inconsistency",
+            "Run adversarial robustness check against object detection evasion",
+        ]
+
     @property
     def iteration_ceiling(self) -> int:
         """Maximum iterations for the ReAct loop."""
-        return 20
+        return 15
     
     async def build_tool_registry(self) -> ToolRegistry:
         """
@@ -580,25 +587,6 @@ class Agent3Object(ForensicAgent):
         object detection and lighting consistency checks.
         """
         context_lines = []
-        try:
-            if self._tool_registry:
-                handler = self._tool_registry._handlers.get("scene_incongruence")
-                if handler:
-                    result = await handler({"artifact": self.evidence_artifact})
-                    scene_type = result.get("scene_type", result.get("scene_label", ""))
-                    incongruent = result.get("incongruent_objects", result.get("anomalous_elements", []))
-                    confidence = result.get("confidence", 0)
-                    if scene_type:
-                        context_lines.append(
-                            f"Scene type: {scene_type} (confidence: {confidence:.0%})"
-                        )
-                    if incongruent:
-                        context_lines.append(
-                            "Semantic incongruences detected: " + ", ".join(str(x) for x in incongruent[:4])
-                        )
-        except Exception:
-            pass
-
         context = " | ".join(context_lines) if context_lines else "Scene pre-screen unavailable."
         return (
             f"Starting scene and object analysis. Evidence: {self.evidence_artifact.artifact_id}. "

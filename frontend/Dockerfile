@@ -1,19 +1,42 @@
 # syntax=docker/dockerfile:1.7
 # ============================================================================
-# Frontend — Optimised Two-Stage Build
+# Frontend — Multi-Stage Build (development + production)
+# ============================================================================
+# Targets:
+#   development  — hot-reload dev server  (used by: make dev)
+#   runner       — optimised production   (used by: make up / make prod)
+#
+# Build for development:
+#   docker build --target development -t forensic-frontend:dev .
+# Build for production (default):
+#   docker build -t forensic-frontend:latest .
 # ============================================================================
 
-# ── Stage 1: Builder ─────────────────────────────────────────────────────────
-FROM node:22-alpine AS builder
+# ── Stage 0: Base — shared dependency installation ───────────────────────────
+FROM node:22-alpine AS base
 
 WORKDIR /app
 
-# Copy lock files first for better layer caching
 COPY package.json package-lock.json ./
 
 # BuildKit cache mount keeps npm's package cache between builds → much faster
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --prefer-offline --no-audit --no-fund
+
+# ── Stage 1: Development — hot-reload server ─────────────────────────────────
+FROM base AS development
+
+COPY . .
+
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=development
+
+EXPOSE 3000
+
+CMD ["npm", "run", "dev"]
+
+# ── Stage 2: Builder — production build ──────────────────────────────────────
+FROM base AS builder
 
 # Copy source
 COPY . .
@@ -30,7 +53,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN --mount=type=cache,target=/app/.next/cache \
     npm run build
 
-# ── Stage 2: Runner ──────────────────────────────────────────────────────────
+# ── Stage 3: Runner — minimal production image ───────────────────────────────
 FROM node:22-alpine AS runner
 
 WORKDIR /app
@@ -38,10 +61,19 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Create a dedicated non-root user for security — running as root in production
+# containers is a critical vulnerability that grants full container filesystem
+# access on any RCE exploit.
+RUN addgroup --system --gid 1001 nodejs \
+ && adduser  --system --uid  1001 nextjs
+
 # Copy standalone output (Next.js built-in server)
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+# Switch to non-root user before the process starts
+USER nextjs
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 \
   CMD node -e "require('http').get('http://127.0.0.1:3000', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"

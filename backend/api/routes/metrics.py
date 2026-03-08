@@ -10,6 +10,7 @@ import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from core.auth import require_admin, User
@@ -48,10 +49,6 @@ class MetricsResponse(BaseModel):
     investigations_failed: int
     success_rate: float
 
-
-class PrometheusMetricsResponse(BaseModel):
-    """Prometheus-formatted metrics."""
-    content: str
 
 
 def increment_request_count():
@@ -139,8 +136,8 @@ async def get_metrics(current_user: User = Depends(require_admin)):
     )
 
 
-@router.get("/prometheus", response_class=PrometheusMetricsResponse)
-async def get_prometheus_metrics(current_user: User = Depends(require_admin)):
+@router.get("/prometheus", response_class=PlainTextResponse)
+async def get_prometheus_metrics(current_user: User = Depends(require_admin)) -> str:
     """
     Get metrics in Prometheus exposition format.
     
@@ -198,7 +195,7 @@ async def get_prometheus_metrics(current_user: User = Depends(require_admin)):
     ])
     
     content = "\n".join(lines)
-    return PrometheusMetricsResponse(content=content)
+    return content
 
 
 # Raw endpoint for Prometheus scraping (no auth required, IP-restricted in production)

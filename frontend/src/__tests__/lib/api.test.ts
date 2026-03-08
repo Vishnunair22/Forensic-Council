@@ -39,7 +39,7 @@ describe('API Client', () => {
         }),
       });
 
-      const result = await startInvestigation(mockFile, 'CASE-1', 'INVESTIGATOR-1');
+      const result = await startInvestigation(mockFile, 'CASE-1697000000', 'REQ-12345');
 
       // Assert fetch was called with POST
       expect(global.fetch).toHaveBeenCalledWith(
@@ -55,8 +55,8 @@ describe('API Client', () => {
 
       // Verify FormData contents
       expect(formData.get('file')).toBe(mockFile);
-      expect(formData.get('case_id')).toBe('CASE-1');
-      expect(formData.get('investigator_id')).toBe('INVESTIGATOR-1');
+      expect(formData.get('case_id')).toBe('CASE-1697000000');
+      expect(formData.get('investigator_id')).toBe('REQ-12345');
 
       // Verify returned session_id
       expect(result.session_id).toBe('test-123');
@@ -70,7 +70,7 @@ describe('API Client', () => {
         json: async () => ({ detail: 'Internal server error' }),
       });
 
-      await expect(startInvestigation(mockFile, 'CASE-1', 'INVESTIGATOR-1')).rejects.toThrow(
+      await expect(startInvestigation(mockFile, 'CASE-1697000000', 'REQ-12345')).rejects.toThrow(
         'Internal server error'
       );
     });
@@ -128,6 +128,9 @@ describe('API Client', () => {
 
   describe('submitHITLDecision', () => {
     it('sends correct decision payload', async () => {
+      // Mock auth token from storage BEFORE calling submitHITLDecision
+      jest.spyOn(Storage.prototype, 'getItem').mockReturnValue('mock-token');
+
       // Mock fetch to return success
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
@@ -148,9 +151,10 @@ describe('API Client', () => {
         expect.stringContaining('/api/v1/hitl/decision'),
         expect.objectContaining({
           method: 'POST',
-          headers: {
+          headers: expect.objectContaining({
+            'Authorization': 'Bearer mock-token',
             'Content-Type': 'application/json',
-          },
+          }),
           body: JSON.stringify(decision),
         })
       );

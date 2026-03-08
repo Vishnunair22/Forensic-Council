@@ -243,16 +243,16 @@ class ReportSigningError(ReportError):
 # Memory Errors
 # -------------------
 
-class MemoryError(ForensicCouncilBaseException):
+class ForensicMemoryError(ForensicCouncilBaseException):
     """Base class for memory-related errors."""
     pass
 
 
-class WorkingMemoryError(MemoryError):
+class WorkingMemoryError(ForensicMemoryError):
     """Raised when working memory operations fail."""
     pass
 
 
-class EpisodicMemoryError(MemoryError):
+class EpisodicMemoryError(ForensicMemoryError):
     """Raised when episodic memory operations fail."""
     pass

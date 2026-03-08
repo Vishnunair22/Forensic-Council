@@ -18,11 +18,11 @@
 const API_BASE =
   typeof window === "undefined"
     ? // Server-side: use Docker-internal service name or fall back to localhost
-      process.env.INTERNAL_API_URL ||
-      process.env.NEXT_PUBLIC_API_URL ||
-      "http://localhost:8000"
+    process.env.INTERNAL_API_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    "http://localhost:8000"
     : // Browser: empty string → relative path → no cross-origin request
-      "";
+    "";
 
 // WebSocket requires an absolute URL — derive from the public-facing API URL.
 // This remains cross-origin but browsers don't apply the same CORS rules to
@@ -73,7 +73,7 @@ export interface ReportDTO {
 }
 
 export interface BriefUpdate {
-  type: "AGENT_UPDATE" | "HITL_CHECKPOINT" | "AGENT_COMPLETE" | "PIPELINE_COMPLETE" | "ERROR" | "CONNECTED";
+  type: "AGENT_UPDATE" | "HITL_CHECKPOINT" | "AGENT_COMPLETE" | "PIPELINE_COMPLETE" | "ERROR" | "CONNECTED" | "PIPELINE_PAUSED";
   session_id: string;
   agent_id: string | null;
   agent_name: string | null;
