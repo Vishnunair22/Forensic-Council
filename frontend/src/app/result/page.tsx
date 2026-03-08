@@ -1,23 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef, JSX } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  FileCheck, Activity, Shield, ArrowRight, CheckCircle, Clock, Search, ShieldAlert, ShieldCheck, ShieldX,
-  Cpu, Lock, Archive, Database, Eye, Hash, FileSymlink, AlertTriangle, Trash2, Loader2, ChevronDown,
-  MonitorPlay, Mic2, Image as ImageIcon, Binary, GitMerge, GitPullRequest, Zap, Home, RotateCcw, ChevronUp
+  FileCheck, CheckCircle, Search, Lock, AlertTriangle, Trash2, Loader2, ChevronDown,
+  MonitorPlay, Mic2, Image as ImageIcon, Binary, Home, RotateCcw
 } from "lucide-react";
-import { AGENTS_DATA } from "@/lib/constants";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
-import { AgentIcon } from "@/components/ui/AgentIcon";
-import { AgentResponseText } from "@/components/ui/AgentResponseText";
 import { useForensicData, mapReportDtoToReport } from "@/hooks/useForensicData";
 import { useSound } from "@/hooks/useSound";
-import { getReport, type ReportDTO, type AgentFindingDTO } from "@/lib/api";
-import type { AgentResult, Report } from "@/types";
-
-const VALID_AGENTS = new Set([...AGENTS_DATA.map(a => a.name), "Council Arbiter"]);
+import { getReport, type ReportDTO } from "@/lib/api";
 
 // Agent configuration with colors and icons
 const AGENT_CONFIG: Record<string, { name: string; role: string; icon: React.ReactNode; color: string; borderColor: string; bgColor: string }> = {
@@ -83,26 +76,48 @@ export default function ResultPage() {
   const { playSound } = useSound();
 
   useEffect(() => {
-    const fetchRealReport = async () => {
-      const sessionId = sessionStorage.getItem('forensic_session_id');
-      if (sessionId) {
-        setIsLoadingRealReport(true);
-        try {
-          const response = await getReport(sessionId);
-          if (response.status === 'complete' && response.report) {
+    const sessionId = sessionStorage.getItem('forensic_session_id');
+    if (!sessionId) return;
+
+    let cancelled = false;
+    let timerId: ReturnType<typeof setTimeout>;
+    const MAX_ATTEMPTS = 30;
+    let attempts = 0;
+
+    setIsLoadingRealReport(true);
+
+    const poll = async () => {
+      if (cancelled) return;
+      attempts++;
+      try {
+        const response = await getReport(sessionId);
+        if (response.status === 'complete' && response.report) {
+          if (!cancelled) {
             setRealReport(response.report);
             const mapped = mapReportDtoToReport(response.report);
             addToHistory(mapped);
+            setIsLoadingRealReport(false);
           }
-        } catch (err) {
-          console.error("Failed to fetch report:", err);
-        } finally {
-          setIsLoadingRealReport(false);
+          return; // done — stop polling
         }
+      } catch (err) {
+        console.error("Failed to fetch report:", err);
+      }
+      // Still in-progress or error — retry unless we hit max
+      if (!cancelled && attempts < MAX_ATTEMPTS) {
+        timerId = setTimeout(poll, 4000);
+      } else if (!cancelled) {
+        setIsLoadingRealReport(false); // give up gracefully
       }
     };
 
-    fetchRealReport();
+    poll();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timerId);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const playSoundRef = useRef(playSound);

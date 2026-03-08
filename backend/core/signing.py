@@ -85,11 +85,16 @@ class AgentKeyPair:
         """Generate a new ECDSA P-256 key pair for an agent, optionally from a seed."""
         curve = ec.SECP256R1()
         if seed:
-            # Deterministic generation from seed
-            # Get the order of the curve (required for derive_private_key)
-            # Use the curve's key size to derive a valid private key
+            # Deterministic generation from seed.
+            # P-256 group order n — the private key must be in [1, n-1].
+            # We reduce the seed modulo (n-1) then add 1 to guarantee this range.
+            # Using the actual group order (not 2^key_size) is required for
+            # correctness and avoids the operator-precedence pitfall in the
+            # original  expression.
+            _P256_ORDER = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+            private_value = (int.from_bytes(seed, "big") % (_P256_ORDER - 1)) + 1
             private_key = ec.derive_private_key(
-                int.from_bytes(seed, "big") % (1 << curve.key_size) - 1,
+                private_value,
                 curve,
                 default_backend()
             )

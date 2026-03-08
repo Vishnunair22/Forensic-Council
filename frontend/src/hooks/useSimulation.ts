@@ -5,6 +5,7 @@ import { AGENTS_DATA } from "@/lib/constants";
 import { AgentResult } from "@/types";
 import { createLiveSocket, BriefUpdate, HITLCheckpoint } from "@/lib/api";
 import { SoundType } from "./useSound";
+import { AgentUpdate } from "@/components/evidence";
 
 type SimulationStatus = "idle" | "analyzing" | "initiating" | "processing" | "awaiting_decision" | "complete" | "error";
 
@@ -16,18 +17,15 @@ type UseSimulationProps = {
 
 export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSimulationProps) => {
     const [status, setStatus] = useState<SimulationStatus>("idle");
-    const [completedAgents, setCompletedAgents] = useState<AgentResult[]>([]);
+    const [completedAgents, setCompletedAgents] = useState<AgentUpdate[]>([]);
     const [agentUpdates, setAgentUpdates] = useState<Record<string, { status: string; thinking: string }>>({});
     const [hitlCheckpoint, setHitlCheckpoint] = useState<HITLCheckpoint | null>(null);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [wsReady, setWsReady] = useState(false);
 
-    // UI Sequence Tracking (0 to 4)
-    const [uiSequenceIndex, setUiSequenceIndex] = useState(0);
-
     const wsRef = useRef<WebSocket | null>(null);
-    const completedAgentsRef = useRef<AgentResult[]>([]);
+    const completedAgentsRef = useRef<AgentUpdate[]>([]);
 
     // Store callbacks in refs to avoid triggering effect on every render
     const onAgentCompleteRef = useRef(onAgentComplete);
@@ -40,41 +38,6 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
         onCompleteRef.current = onComplete;
         playSoundRef.current = playSound;
     }, [onAgentComplete, onComplete, playSound]);
-
-    // Sequence progression effect
-    useEffect(() => {
-        if (status !== "analyzing" && status !== "processing" && status !== "initiating") return;
-
-        // If we've processed all agents in the UI
-        if (uiSequenceIndex >= AGENTS_DATA.length) {
-            if (completedAgentsRef.current.length >= AGENTS_DATA.length) {
-                setStatus("complete");
-                onCompleteRef.current?.();
-                playSoundRef.current?.("complete");
-            }
-            return;
-        }
-
-        const currentAgent = AGENTS_DATA[uiSequenceIndex];
-        if (!currentAgent) return;
-
-        // Has the currently displayed agent actually completed in the background?
-        const isCompleted = completedAgentsRef.current.find((a: AgentResult) => a.id === currentAgent.id);
-
-        if (isCompleted) {
-            // It has completed. Wait 1s then advance the UI to the next agent.
-            const timer = setTimeout(() => {
-                setUiSequenceIndex((prev: number) => {
-                    const next = prev + 1;
-                    if (next < AGENTS_DATA.length) {
-                        playSoundRef.current?.("think");
-                    }
-                    return next;
-                });
-            }, 1000);
-            return () => clearTimeout(timer);
-        }
-    }, [uiSequenceIndex, completedAgents.length, status]);
 
     // Connect WebSocket manually — returns a Promise that resolves once the WS is open.
     const connectWebSocket = useCallback((targetSessionId: string): Promise<void> => {
@@ -142,22 +105,34 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                             if (update.agent_id) {
                                 const agent = AGENTS_DATA.find(a => a.id === update.agent_id);
                                 if (agent) {
-                                    const confidence = (update.data as { confidence?: number })?.confidence ?? agent.simulation.confidence / 100;
-                                    const result: AgentResult = {
-                                        id: agent.id,
-                                        name: agent.name,
-                                        role: agent.role,
-                                        result: update.message || agent.simulation.result,
-                                        confidence,
-                                        thinking: undefined,
+                                    const { confidence, findings_count, error, deep_analysis_pending, status: agentStatus } = update.data as any;
+                                    const parsedConfidence = confidence ?? agent.simulation.confidence / 100;
+
+                                    const newUpdate: AgentUpdate = {
+                                        agent_id: agent.id,
+                                        agent_name: update.agent_name || agent.name,
+                                        message: update.message || agent.simulation.result,
+                                        status: agentStatus || "complete",
+                                        confidence: parsedConfidence,
+                                        findings_count: findings_count || 1,
+                                        error: error,
+                                        deep_analysis_pending: deep_analysis_pending,
                                     };
 
-                                    if (!completedAgentsRef.current.find((a: AgentResult) => a.id === result.id)) {
-                                        completedAgentsRef.current.push(result);
+                                    const existingIndex = completedAgentsRef.current.findIndex((a: AgentUpdate) => a.agent_id === newUpdate.agent_id);
+                                    if (existingIndex >= 0) {
+                                        // Update existing for deep pass overrides
+                                        completedAgentsRef.current[existingIndex] = newUpdate;
+                                    } else {
+                                        completedAgentsRef.current.push(newUpdate);
                                     }
+
                                     const nextCompleted = [...completedAgentsRef.current];
                                     setCompletedAgents(nextCompleted);
-                                    onAgentCompleteRef.current?.(result);
+                                    // Use type assertion since onAgentComplete is legacy, or just drop calling it if not needed.
+                                    // But to be safe, we cast.
+                                    onAgentCompleteRef.current?.(newUpdate as any);
+
                                     // Also transition to analyzing if still in initiating
                                     setStatus((prev: SimulationStatus) => prev === "initiating" ? "analyzing" : prev);
                                 }
@@ -274,7 +249,6 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
         setCompletedAgents([]);
         completedAgentsRef.current = [];
         setAgentUpdates({});
-        setUiSequenceIndex(0);
         setWsReady(false);
         if (newSessionId) {
             setSessionId(newSessionId);
@@ -288,7 +262,6 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
         setCompletedAgents([]);
         completedAgentsRef.current = [];
         setAgentUpdates({});
-        setUiSequenceIndex(0);
         setHitlCheckpoint(null);
         setErrorMessage(null);
         setWsReady(false);
@@ -305,10 +278,16 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
     }, []);
 
     const resumeInvestigation = useCallback(async (deep: boolean) => {
-        if (!sessionId) return;
+        // Prefer hook state; fall back to sessionStorage set by evidence page
+        const targetId = sessionId || sessionStorage.getItem("forensic_session_id");
+        if (!targetId) return;
         try {
-            const token = sessionStorage.getItem('forensic_token') || localStorage.getItem('forensic_token');
-            const response = await fetch(`/api/v1/investigation/${sessionId}/resume`, {
+            const { ensureAuthenticated } = await import("@/lib/api");
+            const token = await ensureAuthenticated();
+
+            // Re-import API_BASE or just rely on relative path since we are in the browser
+            // Actually, next.config.ts rewrites /api/v1/ to the backend. Just use relative path.
+            const response = await fetch(`/api/v1/${targetId}/resume`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -319,16 +298,20 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
             if (!response.ok) throw new Error("Failed to resume investigation");
 
             setStatus(deep ? "analyzing" : "processing");
-            if (deep) playSoundRef.current?.("process");
+            if (deep) playSoundRef.current?.("think");
         } catch (error) {
             console.error("Error resuming investigation:", error);
             setErrorMessage("Failed to resume analysis");
         }
     }, [sessionId]);
 
+    const clearCompletedAgents = useCallback(() => {
+        setCompletedAgents([]);
+        completedAgentsRef.current = [];
+    }, []);
+
     return {
         status,
-        uiSequenceIndex,
         agentUpdates,
         completedAgents,
         startSimulation,
@@ -336,6 +319,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
         resumeInvestigation,
         resetSimulation,
         dismissCheckpoint,
+        clearCompletedAgents,
         hitlCheckpoint,
         errorMessage,
         totalAgents: AGENTS_DATA.length

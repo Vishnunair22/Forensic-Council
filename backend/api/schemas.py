@@ -83,7 +83,7 @@ class HITLCheckpointDTO(BaseModel):
 
 class BriefUpdate(BaseModel):
     """WebSocket message model."""
-    type: Literal["AGENT_UPDATE", "HITL_CHECKPOINT", "AGENT_COMPLETE", "PIPELINE_COMPLETE", "ERROR"]
+    type: Literal["AGENT_UPDATE", "HITL_CHECKPOINT", "AGENT_COMPLETE", "PIPELINE_COMPLETE", "PIPELINE_PAUSED", "CONNECTED", "ERROR"]
     session_id: str
     agent_id: Optional[str] = None
     agent_name: Optional[str] = None

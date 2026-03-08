@@ -23,7 +23,7 @@
 9. [ML Model Cache Management](#ml-model-cache-management)
 10. [BuildKit Cache Mounts](#buildkit-cache-mounts)
 11. [Layer Cache Invalidation Reference](#layer-cache-invalidation-reference)
-12. [Makefile Quick Reference](#makefile-quick-reference)
+12. [PowerShell Quick Reference](#powershell-quick-reference)
 13. [Troubleshooting Stale Builds](#troubleshooting-stale-builds)
 
 ---

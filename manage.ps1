@@ -42,7 +42,7 @@ switch ($Command) {
     "dev" {
         Check-Env
         Invoke-Compose "$COMPOSE_DEV up --build -d"
-        Write-Host "`n[+] Development Services started." -ForegroundColor Cayan
+        Write-Host "`n[+] Development Services started." -ForegroundColor Cyan
     }
     "infra" {
         Invoke-Compose "docker compose -f docs/docker/docker-compose.infra.yml --env-file .env up -d"

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight, ShieldCheck, Upload, UploadCloud, FileImage, FileAudio, FileVideo, File as FileIcon, X, ArrowRight, RotateCcw } from "lucide-react";
+import { ChevronRight, ShieldCheck, Upload, UploadCloud, FileImage, FileAudio, FileVideo, X, ArrowRight, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";

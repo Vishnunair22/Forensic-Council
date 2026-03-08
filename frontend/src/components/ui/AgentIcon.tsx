@@ -1,14 +1,24 @@
+"use client";
+
 import { Shield, Search, Layout, Database, Video, Mic2, CheckCircle } from "lucide-react";
+import { AGENTS_DATA } from "@/lib/constants";
 
 interface AgentIconProps {
-    role: string;
+    role?: string;
+    agentId?: string;
     className?: string;
     active?: boolean;
 }
 
-export const AgentIcon = ({ role, className, active }: AgentIconProps) => {
+export const AgentIcon = ({ role, agentId, className, active }: AgentIconProps) => {
+    // Resolve role from agentId if role not provided
+    let resolvedRole = role || "";
+    if (!resolvedRole && agentId) {
+        const agent = AGENTS_DATA.find(a => a.id === agentId);
+        resolvedRole = agent?.role || "";
+    }
     // Normalize string for checking
-    const r = role.toLowerCase();
+    const r = resolvedRole.toLowerCase();
 
     if (r.includes("integrity") || r.includes("artifact")) return <Shield className={className} />;
     if (r.includes("scene") || r.includes("lighting") || r.includes("reconstruction")) return <Search className={className} />;

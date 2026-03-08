@@ -44,13 +44,13 @@ export const useForensicData = () => {
     const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
     const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    // Load data on mount (from localStorage for backward compatibility)
+    // Load data on mount (from sessionStorage for sensitive data)
     useEffect(() => {
         if (typeof window === 'undefined') return;
 
         try {
-            const savedHistory = localStorage.getItem(HISTORY_KEY);
-            const savedCurrent = localStorage.getItem(CURRENT_REPORT_KEY);
+            const savedHistory = sessionStorage.getItem(HISTORY_KEY);
+            const savedCurrent = sessionStorage.getItem(CURRENT_REPORT_KEY);
 
             if (savedHistory) {
                 const parsed = JSON.parse(savedHistory);
@@ -129,9 +129,9 @@ export const useForensicData = () => {
                     addToHistory(report); // Save to History tab
                     setIsAnalyzing(false);
 
-                    // Save to localStorage for backward compatibility
+                    // Save to sessionStorage (sensitive data should not persist)
                     if (typeof window !== 'undefined') {
-                        localStorage.setItem(CURRENT_REPORT_KEY, JSON.stringify(report));
+                        sessionStorage.setItem(CURRENT_REPORT_KEY, JSON.stringify(report));
                     }
                 }
             } catch (error) {
@@ -154,7 +154,7 @@ export const useForensicData = () => {
     const saveCurrentReport = useCallback((report: Report) => {
         setCurrentReport(report);
         if (typeof window !== 'undefined') {
-            localStorage.setItem(CURRENT_REPORT_KEY, JSON.stringify(report));
+            sessionStorage.setItem(CURRENT_REPORT_KEY, JSON.stringify(report));
         }
     }, []);
 
@@ -164,7 +164,7 @@ export const useForensicData = () => {
             if (prev.some(h => h.id === report.id)) return prev;
             const next = [report, ...prev];
             if (typeof window !== 'undefined') {
-                localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+                sessionStorage.setItem(HISTORY_KEY, JSON.stringify(next));
             }
             return next;
         });
@@ -175,7 +175,7 @@ export const useForensicData = () => {
         const newHistory = history.filter(h => h.id !== id);
         setHistory(newHistory);
         if (typeof window !== 'undefined') {
-            localStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
+            sessionStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
         }
     }, [history]);
 
@@ -183,7 +183,7 @@ export const useForensicData = () => {
     const clearHistory = useCallback(() => {
         setHistory([]);
         if (typeof window !== 'undefined') {
-            localStorage.removeItem(HISTORY_KEY);
+            sessionStorage.removeItem(HISTORY_KEY);
         }
     }, []);
 

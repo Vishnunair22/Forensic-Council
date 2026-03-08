@@ -472,8 +472,8 @@ class EvidenceStore:
             True if integrity is valid, False otherwise
         """
         try:
-            # Read stored file
-            data = self._storage.read(artifact.file_path)
+            # Use async retrieve so we don't block the event loop on disk I/O.
+            data = await self._storage.retrieve(artifact.file_path)
             
             # Recompute hash
             computed_hash = self._compute_hash(data)
