@@ -148,7 +148,7 @@ Forensic-Council/
 │   ├── docker/          # Docker Compose files (base, dev, prod, infra)
 │   ├── test/            # Testing guides and checklists
 │   └── status/          # Development status and error logs
-└── Makefile             # Convenience targets (make up / make dev / make down)
+└── manage.ps1           # PowerShell manager (.\manage.ps1 up / dev / down)
 ```
 
 ## API Summary

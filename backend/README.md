@@ -57,7 +57,7 @@ Forensic Council analyzes digital evidence through a structured ReAct reasoning 
 
 3. **Start infrastructure services**
    ```bash
-   docker compose -f ../docker/docker-compose.infra.yml --env-file ../.env up -d
+   docker compose -f ../docs/docker/docker-compose.infra.yml --env-file ../.env up -d
    ```
 
 4. **Configure environment**
@@ -128,7 +128,7 @@ Key configuration areas:
 - **Redis**: Working memory and caching
 - **Qdrant**: Episodic memory (vector storage)
 - **PostgreSQL**: Chain-of-custody logging
-- **OpenAI**: LLM integration for agent reasoning
+- **Groq**: LLM integration for agent reasoning (Llama 3.3 70B)
 - **Storage**: Evidence file storage path
 
 ## Development

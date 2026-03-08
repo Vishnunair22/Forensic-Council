@@ -44,7 +44,7 @@ async def submit_decision(
     try:
         human_decision = HumanDecision(
             decision_type=decision.decision,
-            investigator_id=decision.agent_id,
+            investigator_id=current_user.user_id,  # Use actual investigator, not agent_id
             notes=decision.note or "",
             override_finding=decision.override_finding,
         )

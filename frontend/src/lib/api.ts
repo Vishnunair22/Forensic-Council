@@ -36,6 +36,7 @@ const WS_BASE = _WS_HTTP_BASE.replace(
 
 // Token storage key
 const TOKEN_KEY = "forensic_auth_token";
+const TOKEN_EXPIRY_KEY = "forensic_auth_token_expiry";
 
 /**
  * Types matching backend DTOs
@@ -132,19 +133,49 @@ export interface UserInfo {
  * Authentication Functions
  */
 
+/**
+ * Get the auth token from sessionStorage.
+ * SessionStorage is more secure than localStorage as it's cleared when the tab closes.
+ */
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(TOKEN_KEY);
+  
+  const token = sessionStorage.getItem(TOKEN_KEY);
+  if (!token) return null;
+  
+  // Check if token has expired
+  const expiryStr = sessionStorage.getItem(TOKEN_EXPIRY_KEY);
+  if (expiryStr) {
+    const expiry = parseInt(expiryStr, 10);
+    if (Date.now() > expiry) {
+      clearAuthToken();
+      return null;
+    }
+  }
+  
+  return token;
 }
 
-export function setAuthToken(token: string): void {
+/**
+ * Set the auth token in sessionStorage with expiration tracking.
+ */
+export function setAuthToken(token: string, expiresIn?: number): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(TOKEN_KEY, token);
+  sessionStorage.setItem(TOKEN_KEY, token);
+  
+  // Set expiration time (default 1 hour if not provided)
+  const expirationMs = (expiresIn || 3600) * 1000;
+  const expiry = Date.now() + expirationMs;
+  sessionStorage.setItem(TOKEN_EXPIRY_KEY, expiry.toString());
 }
 
+/**
+ * Clear the auth token and expiration from sessionStorage.
+ */
 export function clearAuthToken(): void {
   if (typeof window === "undefined") return;
-  localStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_EXPIRY_KEY);
 }
 
 export function isAuthenticated(): boolean {
@@ -168,7 +199,7 @@ export async function login(username: string, password: string): Promise<TokenRe
   }
 
   const data: TokenResponse = await response.json();
-  setAuthToken(data.access_token);
+  setAuthToken(data.access_token, data.expires_in);
   return data;
 }
 
@@ -181,7 +212,7 @@ export async function autoLoginAsInvestigator(): Promise<TokenResponse> {
   }
 
   const data: TokenResponse = await response.json();
-  setAuthToken(data.access_token);
+  setAuthToken(data.access_token, data.expires_in);
   return data;
 }
 

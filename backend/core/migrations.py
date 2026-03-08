@@ -338,50 +338,51 @@ class MigrationManager:
             return []
     
     async def apply_migration(self, migration: Migration) -> bool:
-        """Apply a single migration."""
+        """Apply a single migration within a single connection so BEGIN/COMMIT are atomic."""
         import time
-        
+
         start_time = time.time()
         logger.info(
             "Applying migration",
             version=migration.version,
             name=migration.name,
         )
-        
+
         try:
-            await self.client.execute("BEGIN")
-            await self.client.execute(migration.sql)
-            
-            execution_time = int((time.time() - start_time) * 1000)
-            
-            await self.client.execute(
-                """
-                INSERT INTO schema_migrations (version, name, description, execution_time_ms)
-                VALUES ($1, $2, $3, $4)
-                ON CONFLICT (version) DO UPDATE SET
-                    applied_at = NOW(),
-                    execution_time_ms = $4
-                """,
-                migration.version,
-                migration.name,
-                migration.description,
-                execution_time,
-            )
-            await self.client.execute("COMMIT")
-            
+            async with self.client.pool.acquire() as conn:
+                await conn.execute("BEGIN")
+                try:
+                    await conn.execute(migration.sql)
+
+                    execution_time = int((time.time() - start_time) * 1000)
+
+                    await conn.execute(
+                        """
+                        INSERT INTO schema_migrations (version, name, description, execution_time_ms)
+                        VALUES ($1, $2, $3, $4)
+                        ON CONFLICT (version) DO UPDATE SET
+                            applied_at = NOW(),
+                            execution_time_ms = $4
+                        """,
+                        migration.version,
+                        migration.name,
+                        migration.description,
+                        execution_time,
+                    )
+                    await conn.execute("COMMIT")
+                except Exception:
+                    await conn.execute("ROLLBACK")
+                    raise
+
             logger.info(
                 "Migration applied successfully",
                 version=migration.version,
                 name=migration.name,
-                execution_time_ms=execution_time,
+                execution_time_ms=int((time.time() - start_time) * 1000),
             )
             return True
-            
+
         except Exception as e:
-            try:
-                await self.client.execute("ROLLBACK")
-            except Exception:
-                pass
             logger.error(
                 "Migration failed",
                 version=migration.version,
@@ -391,7 +392,7 @@ class MigrationManager:
             return False
     
     async def rollback_migration(self, migration: Migration) -> bool:
-        """Rollback a single migration."""
+        """Rollback a single migration within a single connection so it is atomic."""
         if not migration.rollback_sql:
             logger.warning(
                 "No rollback SQL for migration",
@@ -399,27 +400,34 @@ class MigrationManager:
                 name=migration.name,
             )
             return False
-        
+
         logger.info(
             "Rolling back migration",
             version=migration.version,
             name=migration.name,
         )
-        
+
         try:
-            await self.client.execute(migration.rollback_sql)
-            await self.client.execute(
-                "DELETE FROM schema_migrations WHERE version = $1",
-                migration.version,
-            )
-            
+            async with self.client.pool.acquire() as conn:
+                await conn.execute("BEGIN")
+                try:
+                    await conn.execute(migration.rollback_sql)
+                    await conn.execute(
+                        "DELETE FROM schema_migrations WHERE version = $1",
+                        migration.version,
+                    )
+                    await conn.execute("COMMIT")
+                except Exception:
+                    await conn.execute("ROLLBACK")
+                    raise
+
             logger.info(
                 "Migration rolled back successfully",
                 version=migration.version,
                 name=migration.name,
             )
             return True
-            
+
         except Exception as e:
             logger.error(
                 "Rollback failed",

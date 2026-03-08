@@ -25,7 +25,7 @@ Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [✅] → C
 
 ## Component Status
 
-### Agents (v0.8.0 — all stubs replaced)
+### Agents (v1.0.0 — all stubs replaced)
 
 | Agent | Implementation | Stubs Remaining | Notes |
 |-------|----------------|-----------------|-------|

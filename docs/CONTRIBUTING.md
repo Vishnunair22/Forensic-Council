@@ -24,7 +24,7 @@ Commit messages should be precise. We loosely follow Conventional Commits.
 When generating a PR, adhere to the following checklist:
 1. **Run Tests Offline:** Ensure `pytest` and `npm test` execute successfully locally. See `TESTING.md`.
 2. **Linting & Formatting:** 
-   - Backend: Use `ruff` and `black`.
+   - Backend: Use `ruff` for both linting and formatting.
    - Frontend: Run `npm run lint`.
 3. **Draft the PR:** Attach screenshots/videos if UI changes are involved. Describe the **problem** and the **solution**.
 4. **Code Review Expectations:** 
@@ -33,4 +33,4 @@ When generating a PR, adhere to the following checklist:
 
 ## 4. Setting up the Development Environment
 
-Please consult `STARTUP.md` to spin up the local Docker environment, including Qdrant, Redis, Postgres, the API subsystem, and the Next.js frontend.
+Please consult the root [`README.md`](../README.md) and [`docs/docker/DOCKER_BUILD.md`](docker/DOCKER_BUILD.md) to spin up the local Docker environment, including Qdrant, Redis, Postgres, the API subsystem, and the Next.js frontend.

@@ -6,6 +6,7 @@ Immutable file storage abstraction for evidence artifacts.
 Provides a local filesystem implementation as a stub for production cloud storage.
 """
 
+import asyncio
 import hashlib
 import shutil
 from abc import ABC, abstractmethod
@@ -197,26 +198,27 @@ class LocalStorageBackend(StorageBackend):
         artifact_dir = self._get_artifact_dir(root_id)
         artifact_dir.mkdir(parents=True, exist_ok=True)
         
+        loop = asyncio.get_event_loop()
         if data is not None:
-            # Store raw data
+            # Store raw data (off the event-loop thread to avoid blocking)
             dest_path = artifact_dir / f"{artifact_id}{extension}"
-            dest_path.write_bytes(data)
+            await loop.run_in_executor(None, dest_path.write_bytes, data)
         elif file_path is not None:
             # Copy from source file
             source = Path(file_path)
-            if not source.exists():
+            if not await loop.run_in_executor(None, source.exists):
                 raise EvidenceNotFoundError(
                     f"Source file not found: {file_path}",
                     details={"file_path": file_path},
                 )
             extension = self._get_extension(file_path)
             dest_path = artifact_dir / f"{artifact_id}{extension}"
-            shutil.copy2(source, dest_path)
+            await loop.run_in_executor(None, shutil.copy2, source, dest_path)
         else:
             raise ValueError("Either data or file_path must be provided")
-        
+
         # Make file read-only for immutability
-        dest_path.chmod(0o444)
+        await loop.run_in_executor(None, dest_path.chmod, 0o444)
         
         logger.info(
             "Stored evidence",
@@ -274,7 +276,7 @@ class LocalStorageBackend(StorageBackend):
     
     async def retrieve(self, storage_path: str) -> bytes:
         """
-        Retrieve file contents.
+        Retrieve file contents without blocking the event loop.
         
         Args:
             storage_path: Path to the stored file
@@ -282,11 +284,12 @@ class LocalStorageBackend(StorageBackend):
         Returns:
             File contents as bytes
         """
-        return self.read(storage_path)
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.read, storage_path)
     
     async def compute_hash(self, storage_path: str) -> str:
         """
-        Compute SHA-256 hash of a stored file.
+        Compute SHA-256 hash of a stored file without blocking the event loop.
         
         Args:
             storage_path: Path to the stored file
@@ -294,19 +297,22 @@ class LocalStorageBackend(StorageBackend):
         Returns:
             Hex-encoded SHA-256 hash
         """
-        path = Path(storage_path)
-        if not path.exists():
-            raise EvidenceNotFoundError(
-                f"Evidence file not found: {storage_path}",
-                details={"storage_path": storage_path},
-            )
-        
-        sha256 = hashlib.sha256()
-        with open(path, "rb") as f:
-            for chunk in iter(lambda: f.read(8192), b""):
-                sha256.update(chunk)
-        
-        return sha256.hexdigest()
+        def _hash_sync() -> str:
+            path = Path(storage_path)
+            if not path.exists():
+                from core.exceptions import EvidenceNotFoundError as _E
+                raise _E(
+                    f"Evidence file not found: {storage_path}",
+                    details={"storage_path": storage_path},
+                )
+            sha256 = hashlib.sha256()
+            with open(path, "rb") as f:
+                for chunk in iter(lambda: f.read(8192), b""):
+                    sha256.update(chunk)
+            return sha256.hexdigest()
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _hash_sync)
     
     async def exists(self, storage_path: str) -> bool:
         """Check if a file exists."""
