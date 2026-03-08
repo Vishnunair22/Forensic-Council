@@ -56,32 +56,41 @@ The system is triggered via the frontend, uploading evidence to the FastAPI back
 | Layer | Technology | Why |
 |-------|-----------|-----|
 | Frontend | Next.js 15, React 19 | Responsive UI, fluid animations via Framer Motion & Tailwind v4. |
-| Backend | Python 3.11+, FastAPI, LangGraph | High-performance async API with structured agentic graph orchestration. |
-| Ledger | PostgreSQL 16 | ACID-compliant custody logging and final report storage. |
+| Backend | Python 3.12+, FastAPI, LangGraph | High-performance async API with structured agentic graph orchestration. |
+| Ledger | PostgreSQL 17 | ACID-compliant custody logging and final report storage. |
 | Memory | Redis 7 | High-speed pub/sub for WebSocket event broadcasting and working memory. |
 | Vector DB | Qdrant | Local-first dense vector similarity search; no managed cloud service required. |
 | Signing | ECDSA (SHA-256) | Deterministic, auditable chain of custody without complex PKI infrastructure. |
 
 ## Quick Start
 
+### Method 1: Using the PowerShell Manager (Recommended)
 ```bash
-# 1. Copy environment templates (required)
+# 1. Copy environment template (required)
 cp .env.example .env
-cp backend/.env.example backend/.env
 
-# 2. Start full Docker stack (builds images + starts all services)
+# 2. Start full Docker stack (builds images + starts services)
+.\manage.ps1 up
+```
+
+### Method 2: Raw Docker Compose (Fallback)
+If execution policies block the script, you can run the raw command:
+```bash
 docker compose -f docs/docker/docker-compose.yml --env-file .env up -d --build
 ```
 
-**→ For complete step-by-step instructions, see [`docs/start/STARTUP.md`](docs/start/STARTUP.md).**
+**→ For detailed build and caching strategies, see [`docs/docker/DOCKER_BUILD.md`](docs/docker/DOCKER_BUILD.md).**
 
-## 🚀 Development with Hot Reload
+## 🚀 Development Mode (Hot Reload)
 
 Run the full stack with hot-reload enabled for both Backend and Frontend:
 
 ```bash
-# From project root
-docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml up -d
+# From project root using the manager:
+.\manage.ps1 dev
+
+# OR using raw Docker commands:
+docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml --env-file .env up -d --build
 ```
 
 ### What's Enabled:
@@ -96,27 +105,31 @@ docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.d
 
 ### Common Commands:
 
-| Action | Command |
-|:-------|:--------|
-| **View logs** | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml logs -f` |
-| **Stop all** | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml down` |
-| **Force rebuild** | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml build --no-cache` |
-| **Restart backend** | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml restart backend` |
+| Action | Manager Command | Raw Docker Equivalent |
+|:-------|:----------------|:----------------------|
+| **Start Production** | `.\manage.ps1 prod` | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.prod.yml --env-file .env up -d --build` |
+| **Stop all services** | `.\manage.ps1 down` | `docker compose -f docs/docker/docker-compose.yml --env-file .env down` |
+| **Smart Rebuild Backend** | `.\manage.ps1 rebuild-backend` | `docker compose -f docs/docker/docker-compose.yml --env-file .env build backend && docker compose -f docs/docker/docker-compose.yml --env-file .env up -d --no-deps backend` |
+| **View logs** | `.\manage.ps1 logs` | `docker compose -f docs/docker/docker-compose.yml --env-file .env logs -f` |
 
 ### Native Development (without Docker):
 
 ```bash
-# Run backend natively (with hot reload)
-cd backend && uv run uvicorn api.main:app --reload --port 8000
+# Start required databases natively via Docker first
+.\manage.ps1 infra
+# (Fallback: docker compose -f docs/docker/docker-compose.infra.yml --env-file .env up -d)
+
+# Run backend natively
+cd backend && uv sync --extra ml
+uv run uvicorn api.main:app --reload --port 8000
 
 # Run frontend natively (in another terminal)
-cd frontend && npm run dev
+cd frontend && npm install
+npm run dev
 ```
 
 → **Frontend:** http://localhost:3000
 → **Backend:** http://localhost:8000
-
-*For Docker-based development and production deployment, see [`STARTUP.md`](docs/start/STARTUP.md).*
 
 ## Project Structure
 
@@ -133,7 +146,6 @@ Forensic-Council/
 ├── frontend/            # Next.js web application
 ├── docs/                # Documentation, Docker configs, and operational guides
 │   ├── docker/          # Docker Compose files (base, dev, prod, infra)
-│   ├── start/           # Startup and operations guides
 │   ├── test/            # Testing guides and checklists
 │   └── status/          # Development status and error logs
 └── Makefile             # Convenience targets (make up / make dev / make down)

@@ -150,7 +150,12 @@ class PostgresClient:
             Status string from PostgreSQL
         """
         async with self.pool.acquire() as conn:
-            result = await conn.execute(query, *args)
+            # Convert dict args to JSON strings for JSONB columns
+            processed_args = [
+                json.dumps(arg) if isinstance(arg, dict) else arg
+                for arg in args
+            ]
+            result = await conn.execute(query, *processed_args)
             logger.debug("Executed query", query=query[:100], status=result)
             return result
     
@@ -170,7 +175,11 @@ class PostgresClient:
             args_list: List of parameter tuples
         """
         async with self.pool.acquire() as conn:
-            await conn.executemany(query, args_list)
+            processed_args_list = [
+                tuple(json.dumps(arg) if isinstance(arg, dict) else arg for arg in args)
+                for args in args_list
+            ]
+            await conn.executemany(query, processed_args_list)
             logger.debug("Executed batch query", query=query[:100], count=len(args_list))
     
     async def fetch(
@@ -189,7 +198,12 @@ class PostgresClient:
             List of records
         """
         async with self.pool.acquire() as conn:
-            results = await conn.fetch(query, *args)
+            # Convert dict args to JSON strings for JSONB columns
+            processed_args = [
+                json.dumps(arg) if isinstance(arg, dict) else arg
+                for arg in args
+            ]
+            results = await conn.fetch(query, *processed_args)
             logger.debug("Fetched rows", query=query[:100], count=len(results))
             return results
     
@@ -209,7 +223,12 @@ class PostgresClient:
             Single record or None
         """
         async with self.pool.acquire() as conn:
-            result = await conn.fetchrow(query, *args)
+            # Convert dict args to JSON strings for JSONB columns
+            processed_args = [
+                json.dumps(arg) if isinstance(arg, dict) else arg
+                for arg in args
+            ]
+            result = await conn.fetchrow(query, *processed_args)
             logger.debug("Fetched single row", query=query[:100], found=result is not None)
             return result
     
@@ -229,7 +248,12 @@ class PostgresClient:
             Single value or None
         """
         async with self.pool.acquire() as conn:
-            result = await conn.fetchval(query, *args)
+            # Convert dict args to JSON strings for JSONB columns
+            processed_args = [
+                json.dumps(arg) if isinstance(arg, dict) else arg
+                for arg in args
+            ]
+            result = await conn.fetchval(query, *processed_args)
             logger.debug("Fetched single value", query=query[:100])
             return result
     

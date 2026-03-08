@@ -60,7 +60,8 @@ services:
   frontend:
     build:
       context: ../../frontend
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
+      target: development
     ports:
       - "3000:3000"
     environment:

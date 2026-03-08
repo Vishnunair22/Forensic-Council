@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import uuid
 from typing import Any
-import random
-import hashlib
 
 from agents.base_agent import ForensicAgent
 from core.config import Settings
@@ -73,29 +71,38 @@ class Agent5Metadata(ForensicAgent):
     @property
     def task_decomposition(self) -> list[str]:
         """
-        List of tasks this agent performs.
-        Exact 13 tasks from architecture document.
+        Light tasks — EXIF extraction, hash, hex scan (~15-20s total).
+        Heavy ML/network tasks are in deep_task_decomposition.
         """
         return [
             "Extract all EXIF fields - explicitly log expected-but-absent fields",
-            "Run ML metadata anomaly scoring to detect field inconsistency",
             "Cross-validate GPS coordinates against timestamp timezone",
-            "Run astronomical API check for GPS location and claimed date",
-            "Run reverse image search for prior online appearances",
             "Run steganography scan",
             "Run file structure forensic analysis",
             "Run hexadecimal software signature scan on raw bytes",
             "Verify file hash against ingestion hash",
-            "Query device fingerprint database against claimed device model",
             "Synthesize cross-field consistency verdict",
-            "Run adversarial robustness check against metadata spoofing techniques",
             "Self-reflection pass",
+        ]
+
+    @property
+    def deep_task_decomposition(self) -> list[str]:
+        """
+        Heavy tasks — ML models, network APIs, adversarial checks.
+        Runs in background after initial findings are returned.
+        """
+        return [
+            "Run ML metadata anomaly scoring to detect field inconsistency",
+            "Run astronomical API check for GPS location and claimed date",
+            "Run reverse image search for prior online appearances",
+            "Query device fingerprint database against claimed device model",
+            "Run adversarial robustness check against metadata spoofing techniques",
         ]
     
     @property
     def iteration_ceiling(self) -> int:
         """Maximum iterations for the ReAct loop."""
-        return 20
+        return 15
     
     async def build_tool_registry(self) -> ToolRegistry:
         """

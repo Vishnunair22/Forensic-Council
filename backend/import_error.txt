@@ -1,0 +1,9 @@
+Exception caught:
+Traceback (most recent call last):
+  File "D:\Forensic Council\backend\test_import.py", line 9, in <module>
+    import infra.postgres_client
+  File "D:\Forensic Council\backend\infra\__init__.py", line 12, in <module>
+    from infra.redis_client import RedisClient, get_redis_client
+  File "D:\Forensic Council\backend\infra\redis_client.py", line 10, in <module>
+    import redis.asyncio as redis
+ModuleNotFoundError: No module named 'redis'

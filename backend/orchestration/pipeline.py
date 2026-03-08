@@ -178,12 +178,16 @@ class ForensicCouncilPipeline:
     
     def __init__(self, config: Optional[Settings] = None):
         """
-        Initialize the pipeline with all required components.
+        Initialize the pipeline.
         
         Args:
-            config: Application settings. If not provided, loads from environment.
+            config: Optional override configuration
         """
         self.config = config or get_settings()
+        
+        # State tracking for the two-phase deep analysis pause
+        self.deep_analysis_decision_event = asyncio.Event()
+        self.run_deep_analysis_flag = False
         
         # Initialize infrastructure
         self._setup_infrastructure()
@@ -377,8 +381,18 @@ class ForensicCouncilPipeline:
         arbiter_results = {}
         for result in agent_results:
             if result.error is None:
+                # Normalize findings to dictionaries to prevent AttributeError in arbiter
+                normalized_findings = []
+                for f in result.findings:
+                    if hasattr(f, "model_dump"):
+                        normalized_findings.append(f.model_dump(mode="json"))
+                    elif isinstance(f, dict):
+                        normalized_findings.append(f)
+                    else:
+                        normalized_findings.append(vars(f))
+                        
                 arbiter_results[result.agent_id] = {
-                    "findings": result.findings,
+                    "findings": normalized_findings,
                     "reflection_report": result.reflection_report,
                     "react_chain": result.react_chain,
                 }

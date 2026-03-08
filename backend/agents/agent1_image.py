@@ -61,29 +61,38 @@ class Agent1Image(ForensicAgent):
     @property
     def task_decomposition(self) -> list[str]:
         """
-        List of tasks this agent performs.
-        Exact 13 tasks from architecture document.
+        Light tasks — fast numpy/OpenCV tools that complete in ~15-20s total.
+        Heavy tasks are in deep_task_decomposition and run in background.
         """
         return [
-            "Perform semantic image understanding to identify image type and context",
             "Run full-image ELA and map anomaly regions",
             "Run ELA anomaly block classification on flagged blocks",
-            "Isolate and re-analyze all flagged ROIs with noise footprint analysis",
             "Run JPEG ghost detection on all flagged regions",
             "Run frequency domain analysis on contested regions",
             "Run frequency-domain GAN artifact detection",
-            "Detect copy-move forgery in flagged ROI regions",
             "Verify file hash against ingestion hash",
-            "Run adversarial robustness check against known anti-ELA evasion techniques",
-            "Extract visible text via OCR for contextual analysis",
+            "Isolate and re-analyze all flagged ROIs with noise footprint analysis",
             "Self-reflection pass",
             "Submit calibrated findings to Arbiter",
         ]
-    
+
+    @property
+    def deep_task_decomposition(self) -> list[str]:
+        """
+        Heavy tasks — ML model downloads + CPU inference.
+        Runs in background after initial findings are returned.
+        """
+        return [
+            "Perform semantic image understanding to identify image type and context",
+            "Detect copy-move forgery in flagged ROI regions",
+            "Run adversarial robustness check against known anti-ELA evasion techniques",
+            "Extract visible text via OCR for contextual analysis",
+        ]
+
     @property
     def iteration_ceiling(self) -> int:
         """Maximum iterations for the ReAct loop."""
-        return 20
+        return 15
     
     async def build_tool_registry(self) -> ToolRegistry:
         """
@@ -468,20 +477,6 @@ class Agent1Image(ForensicAgent):
                     h = result.get("sha256_hash", result.get("sha256", ""))
                     if h:
                         context_lines.append(f"SHA-256: {h[:16]}...")
-        except Exception:
-            pass
-        # Fast pre-screen: OCR text
-        try:
-            if self._tool_registry:
-                ocr_handler = self._tool_registry._handlers.get("extract_evidence_text")
-                if ocr_handler:
-                    result = await ocr_handler({"artifact": self.evidence_artifact})
-                    word_count = result.get("word_count", 0)
-                    summary = result.get("summary", "")
-                    if word_count and word_count > 0:
-                        context_lines.append(f"OCR pre-screen: {word_count} words detected. {summary}")
-                    else:
-                        context_lines.append("OCR pre-screen: no text content detected in image.")
         except Exception:
             pass
 

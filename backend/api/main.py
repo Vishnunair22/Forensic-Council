@@ -25,7 +25,6 @@ from api.routes.metrics import (
 )
 from core.config import get_settings
 from core.migrations import run_migrations
-from scripts.init_db import init_database
 from core.logging import get_logger, request_id_ctx
 import uuid
 

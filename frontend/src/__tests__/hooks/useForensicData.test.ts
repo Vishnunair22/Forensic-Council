@@ -106,7 +106,7 @@ describe('useForensicData', () => {
     Object.defineProperty(invalidFile, 'size', { value: 1024 });
     expect(result.current.validateFile(invalidFile)).toEqual({
       valid: false,
-      error: 'Unsupported format. Use JPG, PNG, MP4, WAV, or MPEG.',
+      error: 'Unsupported format.',
     });
   });
 

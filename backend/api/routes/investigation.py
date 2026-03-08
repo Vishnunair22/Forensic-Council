@@ -241,7 +241,7 @@ async def _wrap_pipeline_with_broadcasts(
                     findings=[{"finding_type": "Format not supported", "confidence_raw": 1.0, "status": "CONFIRMED", "reasoning_summary": f"This agent does not support analyzing {mime} files.", "agent_name": agent_name}],
                     reflection_report={},
                     react_chain=[],
-                )
+                ), None
 
             # --- AGENT_UPDATE: agent is starting ---
             await broadcast_update(
@@ -256,7 +256,7 @@ async def _wrap_pipeline_with_broadcasts(
                 )
             )
 
-            # --- Run the single agent ---
+            # --- Run the single agent with live heartbeat progress ---
             try:
                 agent_kwargs = {
                     "agent_id": agent_id,
@@ -272,10 +272,103 @@ async def _wrap_pipeline_with_broadcasts(
                     agent_kwargs["inter_agent_bus"] = pipeline.inter_agent_bus
                 agent = AgentClass(**agent_kwargs)
                 
-                findings = await asyncio.wait_for(
-                    agent.run_investigation(),
-                    timeout=pipeline.config.investigation_timeout
-                )
+                # --- Heartbeat progress streamer ---
+                # Reads live task progress from WorkingMemory (updated by ReAct loop)
+                # and broadcasts real tool/task activity to the frontend
+                heartbeat_done = asyncio.Event()
+                
+                async def heartbeat():
+                    """Stream live progress from agent's working memory tasks."""
+                    last_complete_count = 0
+                    last_in_progress = ""
+                    while not heartbeat_done.is_set():
+                        try:
+                            await asyncio.wait_for(heartbeat_done.wait(), timeout=5.0)
+                            break  # Agent finished
+                        except asyncio.TimeoutError:
+                            pass  # 5s elapsed, send update
+                        
+                        # Read live task state from working memory
+                        thinking = f"{agent_name} analyzing evidence..."
+                        try:
+                            wm_state = await pipeline.working_memory.get_state(
+                                session_id=agent.session_id,
+                                agent_id=agent_id,
+                            )
+                            tasks = wm_state.tasks
+                            completed = [t for t in tasks if t.status.value == "COMPLETE"]
+                            in_progress = [t for t in tasks if t.status.value == "IN_PROGRESS"]
+                            total = len(tasks)
+                            done = len(completed)
+                            
+                            if in_progress:
+                                # Show the actual task being worked on
+                                current_task = in_progress[0].description
+                                tool_name = in_progress[0].result_ref or ""
+                                
+                                # Add more "transparent" backend-y phrases
+                                if "ela" in tool_name.lower():
+                                    thinking = f"Analyzing JPEG compression artifacts via ELA..."
+                                if "jpeg_ghost" in tool_name.lower():
+                                    thinking = f"Detecting double-compression ghosts (scanning quality levels)..."
+                                if "object" in tool_name.lower() or "detection" in tool_name.lower():
+                                    thinking = f"Running neural object detection (initializing YOLO weights)..."
+                                if "metadata" in tool_name.lower():
+                                    thinking = f"Parsing binary metadata tags and EXIF structure..."
+                                if "audio" in tool_name.lower():
+                                    thinking = f"Analyzing spectral consistency and codec fingerprints..."
+                                if "hash" in tool_name.lower():
+                                    thinking = f"Computing SHA-256 evidence integrity hash..."
+                                
+                                # Default to current task description if no specific mapping
+                                if thinking == f"Running: {current_task}": # If it still has the default from above logic (Wait, I need to make sure thinking is defined)
+                                    thinking = f"Executing: {current_task}"
+                                    
+                                if done > 0:
+                                    thinking += f" [{done}/{total}]"
+                            elif done > last_complete_count:
+                                # A new task just completed
+                                last_done = completed[-1].description if completed else ""
+                                thinking = f"Verified: {last_done} ({done}/{total})"
+                            elif done == total and total > 0:
+                                # All tasks done, likely doing post-synthesis
+                                thinking = "Synthesizing findings for Arbiter..."
+                            elif done > 0:
+                                thinking = f"Processing evidence... ({done}/{total} tasks complete)"
+                            else:
+                                thinking = f"Initializing forensic environment ({total} tasks queued)..."
+                            
+                            last_complete_count = done
+                        except Exception:
+                            # Working memory not yet initialized or unavailable
+                            pass
+                        
+                        await broadcast_update(
+                            ws_session_id,
+                            BriefUpdate(
+                                type="AGENT_UPDATE",
+                                session_id=ws_session_id,
+                                agent_id=agent_id,
+                                agent_name=agent_name,
+                                message=f"{agent_name} is analyzing evidence...",
+                                data={"status": "running", "thinking": thinking},
+                            )
+                        )
+                
+                # Run agent + heartbeat concurrently
+                heartbeat_task = asyncio.create_task(heartbeat())
+                
+                # Per-agent timeout: 180s (tools run ~15-30s, post-synthesis LLM adds ~10s, 
+                # generous buffer for tool downloads and cold starts)
+                agent_timeout = min(400, pipeline.config.investigation_timeout * 0.8)
+                try:
+                    findings = await asyncio.wait_for(
+                        agent.run_investigation(),
+                        timeout=agent_timeout
+                    )
+                finally:
+                    heartbeat_done.set()
+                    await heartbeat_task  # Ensure heartbeat stops cleanly
                 
                 # --- FORMATTING ENFORCEMENT ---
                 # Keep individual findings intact so the frontend can display
@@ -310,6 +403,12 @@ async def _wrap_pipeline_with_broadcasts(
                     findings=[f.model_dump(mode="json") for f in findings],
                     reflection_report=getattr(agent, '_reflection_report', None).model_dump(mode="json") if getattr(agent, '_reflection_report', None) else {},
                     react_chain=serialized_chain,
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"{agent_id} timed out after {agent_timeout}s")
+                result = AgentLoopResult(
+                    agent_id=agent_id, findings=[], reflection_report={},
+                    react_chain=[], error=f"{agent_name} timed out after {agent_timeout:.0f}s",
                 )
             except Exception as e:
                 logger.error(f"{agent_id} failed", error=str(e))
@@ -351,10 +450,11 @@ async def _wrap_pipeline_with_broadcasts(
                         "confidence": confidence,
                         "findings_count": len(result.findings),
                         "error": result.error,
+                        "deep_analysis_pending": len(agent.deep_task_decomposition) > 0 if agent else False,
                     },
                 )
             )
-            return result
+            return result, agent
 
         # Run each agent with a staggered start to ensure sequential activation in the UI
         async def run_with_stagger(index, agent_id, agent_name, AgentClass, thinking_phrase):
@@ -366,7 +466,154 @@ async def _wrap_pipeline_with_broadcasts(
             run_with_stagger(i, agent_id, agent_name, AgentClass, thinking_phrase)
             for i, (agent_id, agent_name, AgentClass, thinking_phrase) in enumerate(agent_configs)
         ]
-        results = await asyncio.gather(*tasks)
+        raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Handle any agents that raised exceptions despite the per-agent try/except
+        results = []
+        deep_pass_coroutines = []
+        
+        async def run_agent_deep_pass(agent_id: str, agent_name: str, agent, initial_result: AgentLoopResult):
+            """Run deep analysis in background and append findings."""
+            try:
+                # Signal deep analysis started
+                await broadcast_update(
+                    ws_session_id,
+                    BriefUpdate(
+                        type="AGENT_UPDATE",
+                        session_id=ws_session_id,
+                        agent_id=agent_id,
+                        agent_name=agent_name,
+                        message=f"{agent_name} running deep analysis pass...",
+                        data={"status": "running", "thinking": "Running heavy forensic models in background..."},
+                    )
+                )
+                
+                # Run the heavy tools
+                deep_timeout = min(600, pipeline.config.investigation_timeout)
+                deep_findings = await asyncio.wait_for(
+                    agent.run_deep_investigation(),
+                    timeout=deep_timeout
+                )
+                
+                if deep_findings:
+                    # Append findings directly to the result object
+                    initial_result.findings.extend([f.model_dump(mode="json") for f in deep_findings])
+                    
+                    # Update the UI with final complete findings
+                    confidences = [
+                        f.get("confidence_raw", 0.5) if isinstance(f, dict) else 0.5
+                        for f in initial_result.findings
+                    ]
+                    confidence = sum(confidences) / len(confidences) if confidences else 0.5
+                    
+                    finding_summaries = []
+                    for f in initial_result.findings:
+                        if isinstance(f, dict) and f.get("reasoning_summary"):
+                            finding_summaries.append(f["reasoning_summary"])
+                    finding_summary = "\n\n".join(finding_summaries) if finding_summaries else f"{agent_name} deep analysis complete."
+                    
+                    await broadcast_update(
+                        ws_session_id,
+                        BriefUpdate(
+                            type="AGENT_COMPLETE",
+                            session_id=ws_session_id,
+                            agent_id=agent_id,
+                            agent_name=agent_name,
+                            message=finding_summary,
+                            data={
+                                "status": "complete",
+                                "confidence": confidence,
+                                "findings_count": len(initial_result.findings),
+                                "error": initial_result.error,
+                                "deep_analysis_pending": False,
+                            },
+                        )
+                    )
+            except Exception as e:
+                logger.error(f"Deep pass failed for {agent_id}", error=str(e))
+                # Even on failure, signal completion so UI stops pulsing
+                await broadcast_update(
+                    ws_session_id,
+                    BriefUpdate(
+                        type="AGENT_COMPLETE",
+                        session_id=ws_session_id,
+                        agent_id=agent_id,
+                        agent_name=agent_name,
+                        message=f"{agent_name} initial analysis complete. (Deep pass failed: {str(e)[:50]})",
+                        data={
+                            "status": "complete",
+                            "confidence": initial_result.findings[0].get("confidence_raw", 0.5) if initial_result.findings else 0.0,
+                            "findings_count": len(initial_result.findings),
+                            "error": initial_result.error,
+                            "deep_analysis_pending": False,
+                        },
+                    )
+                )
+
+
+        for i, r in enumerate(raw_results):
+            agent_id = agent_configs[i][0]
+            agent_name = agent_configs[i][1]
+            
+            if isinstance(r, Exception):
+                logger.error(f"{agent_id} raised unhandled exception", error=str(r))
+                results.append(AgentLoopResult(
+                    agent_id=agent_id, findings=[], reflection_report={},
+                    react_chain=[], error=str(r),
+                ))
+                # Still broadcast AGENT_COMPLETE so frontend advances
+                await broadcast_update(
+                    ws_session_id,
+                    BriefUpdate(
+                        type="AGENT_COMPLETE",
+                        session_id=ws_session_id,
+                        agent_id=agent_id,
+                        agent_name=agent_name,
+                        message=f"{agent_name}: Error - {str(r)[:100]}",
+                        data={"status": "complete", "confidence": 0.0, "findings_count": 0, "error": str(r)},
+                    )
+                )
+            else:
+                result_obj, agent_instance = r
+                results.append(result_obj)
+                
+                # If this agent has deep tasks, queue them for background execution
+                if agent_instance and len(agent_instance.deep_task_decomposition) > 0:
+                    deep_pass_coroutines.append(
+                        run_agent_deep_pass(agent_id, agent_name, agent_instance, result_obj)
+                    )
+        
+        # Pause the pipeline to let the user review initial findings and choose Deep Analysis
+        if deep_pass_coroutines:
+            logger.info("Initial analysis complete. Pausing for user decision on deep analysis.")
+            await broadcast_update(
+                ws_session_id,
+                BriefUpdate(
+                    type="PIPELINE_PAUSED",
+                    session_id=ws_session_id,
+                    message="Initial analysis complete. Awaiting deep analysis decision.",
+                    data={"status": "awaiting_decision", "deep_analysis_pending": True},
+                )
+            )
+            
+            # Wait for the user to hit the /resume endpoint
+            await getattr(pipeline, "deep_analysis_decision_event").wait()
+            
+            # If the user chose to proceed with deep analysis
+            if getattr(pipeline, "run_deep_analysis_flag"):
+                logger.info(f"User selected Deep Analysis. Resuming {len(deep_pass_coroutines)} tasks...")
+                await broadcast_update(
+                    ws_session_id,
+                    BriefUpdate(
+                        type="AGENT_UPDATE",
+                        session_id=ws_session_id,
+                        message="Resuming deep analysis...",
+                        data={"status": "running", "thinking": "Starting heavy forensic models in background..."},
+                    )
+                )
+                await asyncio.gather(*deep_pass_coroutines, return_exceptions=True)
+            else:
+                logger.info("User skipped Deep Analysis. Proceeding directly to Arbiter synthesis.")
 
         return results
 
@@ -536,8 +783,37 @@ def validate_investigator_id(investigator_id: str) -> bool:
         return False
     remainder = investigator_id[4:]
     return remainder.isdigit() and 5 <= len(remainder) <= 10
+from pydantic import BaseModel
 
+class ResumeRequest(BaseModel):
+    deep_analysis: bool
 
+@router.post("/{session_id}/resume")
+async def resume_investigation(
+    session_id: str,
+    request: ResumeRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Resume the investigation flow after user decides on deep analysis."""
+    pipeline = get_active_pipeline(session_id)
+    if not pipeline:
+        raise HTTPException(status_code=404, detail="Active investigation not found for this session.")
+        
+    logger.info(
+        "Received decision to resume investigation",
+        session_id=session_id,
+        deep_analysis=request.deep_analysis
+    )
+    
+    # Set the flag based on user choice
+    setattr(pipeline, "run_deep_analysis_flag", request.deep_analysis)
+    
+    # Set the event so the wrapper function unblocks and continues
+    decision_event = getattr(pipeline, "deep_analysis_decision_event", None)
+    if decision_event:
+        decision_event.set()
+        
+    return {"status": "ok", "message": "Investigation resuming"}
 
 @router.post("/investigate", response_model=InvestigationResponse)
 async def investigate(
@@ -864,3 +1140,23 @@ def unregister_websocket(session_id: str, websocket):
     if session_id in _websocket_connections:
         if websocket in _websocket_connections[session_id]:
             _websocket_connections[session_id].remove(websocket)
+
+
+def get_active_task(session_id: str):
+    """Return the active asyncio Task for a session, or None."""
+    return _active_tasks.get(session_id)
+
+
+def pop_active_task(session_id: str):
+    """Remove and return the active asyncio Task for a session, or None."""
+    return _active_tasks.pop(session_id, None)
+
+
+def get_session_websockets(session_id: str) -> list:
+    """Return the list of WebSocket connections for a session."""
+    return _websocket_connections.get(session_id, [])
+
+
+def clear_session_websockets(session_id: str):
+    """Remove all WebSocket connections for a session."""
+    _websocket_connections.pop(session_id, None)

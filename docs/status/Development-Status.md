@@ -75,20 +75,16 @@ Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [✅] → C
 
 ---
 
-## New in v0.8.0
+## New in v1.0.0
 
-- All 9 agent stubs replaced with real implementations
-- Full deep-dive audit completed (237+ issues resolved)
-- Production structural audit and Next.js `npm run build` passed with zero errors
-- Version aligned to 0.8.0 across all config files
-- Backend Dockerfile `uv` pinned to stable version (0.6.6)
-- ESLint config migrated to proper flat config format
-- `.gitignore` expanded with missing patterns
-- Docker compose dev override fixed for `read_only` conflict
-- Directory cleaned: removed roadmap docx, duplicate docs, scaffolding assets
-- CHANGELOG, ERROR_LOG, and all docs updated
-
----
+- Application has reached stable production readiness (v1.0.0).
+- Deep-dive audits complete across backend, frontend, and infrastructure.
+- Docker optimizations: Migrated to highly-cached multi-stage builds and Next.js standalone outputs.
+- Redundant Docker files (e.g. override, Dockerfile.dev) stripped.
+- Model caching strategy centralized using dedicated volumes.
+- Frontend framework locked to Next.js 15, React 19, and Tailwind CSS v4.
+- Backend environments unified on Python 3.12 and uv (0.7+).
+- All AI agent deployments running fully deterministic adversarial resilience implementations.
 
 ## Maintenance Discipline
 

@@ -26,7 +26,7 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
-_MAX_RETRIES = 3
+_MAX_RETRIES = 2
 _BASE_BACKOFF = 1.0
 
 

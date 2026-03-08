@@ -6,7 +6,7 @@ import { AgentResult } from "@/types";
 import { createLiveSocket, BriefUpdate, HITLCheckpoint } from "@/lib/api";
 import { SoundType } from "./useSound";
 
-type SimulationStatus = "idle" | "analyzing" | "initiating" | "processing" | "complete" | "error";
+type SimulationStatus = "idle" | "analyzing" | "initiating" | "processing" | "awaiting_decision" | "complete" | "error";
 
 type UseSimulationProps = {
     onAgentComplete?: (result: AgentResult) => void;
@@ -17,23 +17,17 @@ type UseSimulationProps = {
 export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSimulationProps) => {
     const [status, setStatus] = useState<SimulationStatus>("idle");
     const [completedAgents, setCompletedAgents] = useState<AgentResult[]>([]);
-    const [activeAgents, setActiveAgents] = useState<Record<string, { status: string; thinking: string }>>({});
+    const [agentUpdates, setAgentUpdates] = useState<Record<string, { status: string; thinking: string }>>({});
     const [hitlCheckpoint, setHitlCheckpoint] = useState<HITLCheckpoint | null>(null);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [wsReady, setWsReady] = useState(false);
 
+    // UI Sequence Tracking (0 to 4)
+    const [uiSequenceIndex, setUiSequenceIndex] = useState(0);
+
     const wsRef = useRef<WebSocket | null>(null);
-    const thinkingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const completedAgentsRef = useRef<AgentResult[]>([]);
-
-    // Sequential Activation Queue
-    const pendingActivationsRef = useRef<Array<{ agent_id: string; thinking: string }>>([]);
-    const currentlyActiveRef = useRef<string | null>(null);
-
-    useEffect(() => {
-        completedAgentsRef.current = completedAgents;
-    }, [completedAgents]);
 
     // Store callbacks in refs to avoid triggering effect on every render
     const onAgentCompleteRef = useRef(onAgentComplete);
@@ -47,14 +41,40 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
         playSoundRef.current = playSound;
     }, [onAgentComplete, onComplete, playSound]);
 
-    // Cycle thinking phrases for the currently active agent to keep UI alive
-    const activeAgentIds = Object.keys(activeAgents).sort().join(",");
-
+    // Sequence progression effect
     useEffect(() => {
-        // Backend now sends real-time thinking updates via AGENT_UPDATE WebSocket messages.
-        // We no longer need to cycle fake phrases from AGENTS_DATA.
-        // The text will naturally update as the agent's task progresses.
-    }, [activeAgentIds]);
+        if (status !== "analyzing" && status !== "processing" && status !== "initiating") return;
+
+        // If we've processed all agents in the UI
+        if (uiSequenceIndex >= AGENTS_DATA.length) {
+            if (completedAgentsRef.current.length >= AGENTS_DATA.length) {
+                setStatus("complete");
+                onCompleteRef.current?.();
+                playSoundRef.current?.("complete");
+            }
+            return;
+        }
+
+        const currentAgent = AGENTS_DATA[uiSequenceIndex];
+        if (!currentAgent) return;
+
+        // Has the currently displayed agent actually completed in the background?
+        const isCompleted = completedAgentsRef.current.find((a: AgentResult) => a.id === currentAgent.id);
+
+        if (isCompleted) {
+            // It has completed. Wait 1s then advance the UI to the next agent.
+            const timer = setTimeout(() => {
+                setUiSequenceIndex((prev: number) => {
+                    const next = prev + 1;
+                    if (next < AGENTS_DATA.length) {
+                        playSoundRef.current?.("think");
+                    }
+                    return next;
+                });
+            }, 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [uiSequenceIndex, completedAgents.length, status]);
 
     // Connect WebSocket manually — returns a Promise that resolves once the WS is open.
     const connectWebSocket = useCallback((targetSessionId: string): Promise<void> => {
@@ -69,18 +89,6 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
             let isProcessingQueue = false;
             let wsConnectionReady = false;
 
-            const activateNextPending = () => {
-                if (pendingActivationsRef.current.length === 0) {
-                    currentlyActiveRef.current = null;
-                    return;
-                }
-                const next = pendingActivationsRef.current.shift()!;
-                currentlyActiveRef.current = next.agent_id;
-                setActiveAgents({
-                    [next.agent_id]: { status: "running", thinking: next.thinking }
-                });
-                setStatus("analyzing");
-            };
 
             const processQueue = async () => {
                 if (isProcessingQueue || messageQueue.length === 0) return;
@@ -103,43 +111,15 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                 const agentData = update.data as { status?: string; thinking?: string };
                                 const incomingId = update.agent_id;
 
-                                if (
-                                    currentlyActiveRef.current === null &&
-                                    pendingActivationsRef.current.length === 0
-                                ) {
-                                    // Nothing active — activate immediately
-                                    currentlyActiveRef.current = incomingId;
-                                    setActiveAgents({
-                                        [incomingId]: {
-                                            status: agentData.status || "running",
-                                            thinking: agentData.thinking || "Analyzing...",
-                                        }
-                                    });
-                                    setStatus("analyzing");
-                                    // Play sound when ANY new agent becomes active natively
-                                    playSoundRef.current?.("think");
-                                } else if (currentlyActiveRef.current === incomingId) {
-                                    // Update thinking text for the currently active agent only
-                                    setActiveAgents(prev => ({
-                                        ...prev,
-                                        [incomingId]: {
-                                            status: agentData.status || "running",
-                                            thinking: agentData.thinking || prev[incomingId]?.thinking || "Analyzing...",
-                                        }
-                                    }));
-                                } else {
-                                    const existingPending = pendingActivationsRef.current.find(p => p.agent_id === incomingId);
-                                    if (existingPending) {
-                                        // Update the queued thinking text so it's fresh when activated
-                                        existingPending.thinking = agentData.thinking || existingPending.thinking;
-                                    } else {
-                                        // Queue it — don't activate yet
-                                        pendingActivationsRef.current.push({
-                                            agent_id: incomingId,
-                                            thinking: agentData.thinking || "Analyzing...",
-                                        });
+                                setAgentUpdates((prev: Record<string, { status: string; thinking: string }>) => ({
+                                    ...prev,
+                                    [incomingId]: {
+                                        status: agentData.status || "running",
+                                        thinking: agentData.thinking || "Analyzing...",
                                     }
-                                }
+                                }));
+                                // Transition from initiating to analyzing on first real agent update
+                                setStatus((prev: SimulationStatus) => prev === "initiating" ? "analyzing" : prev);
                             }
                             break;
 
@@ -169,44 +149,29 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                         role: agent.role,
                                         result: update.message || agent.simulation.result,
                                         confidence,
-                                        thinking: update.message,
+                                        thinking: undefined,
                                     };
 
-                                    const nextCompleted = [...completedAgentsRef.current, result];
+                                    if (!completedAgentsRef.current.find((a: AgentResult) => a.id === result.id)) {
+                                        completedAgentsRef.current.push(result);
+                                    }
+                                    const nextCompleted = [...completedAgentsRef.current];
                                     setCompletedAgents(nextCompleted);
                                     onAgentCompleteRef.current?.(result);
-                                    playSoundRef.current?.("agent");
-
-                                    setActiveAgents(prev => {
-                                        const next = { ...prev };
-                                        delete next[update.agent_id!];
-                                        return next;
-                                    });
-
-                                    // Reset current tracking
-                                    currentlyActiveRef.current = null;
-
-                                    // Check if all agents are done
-                                    const totalExpected = AGENTS_DATA.length;
-                                    if (nextCompleted.length >= totalExpected) {
-                                        setStatus("complete");
-                                        onCompleteRef.current?.();
-                                        playSoundRef.current?.("complete");
-                                    } else {
-                                        // Delay next agent appearance by 3s to achieve stagger effect without blocking socket queue
-                                        setTimeout(() => {
-                                            activateNextPending();
-                                        }, 3000);
-                                    }
+                                    // Also transition to analyzing if still in initiating
+                                    setStatus((prev: SimulationStatus) => prev === "initiating" ? "analyzing" : prev);
                                 }
                             }
                             break;
 
+                        case "PIPELINE_PAUSED":
+                            setStatus("awaiting_decision");
+                            playSoundRef.current?.("think");
+                            break;
+
                         case "PIPELINE_COMPLETE":
-                            // Clear any remaining active agents (e.g. Arbiter)
-                            setActiveAgents({});
                             // Status is ideally already set to "complete" when last agent finished
-                            setStatus(prev => {
+                            setStatus((prev: SimulationStatus) => {
                                 if (prev !== "complete") {
                                     playSoundRef.current?.("complete");
                                     onCompleteRef.current?.();
@@ -302,16 +267,14 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                 wsRef.current.close();
                 wsRef.current = null;
             }
-            if (thinkingIntervalRef.current) {
-                clearInterval(thinkingIntervalRef.current);
-                thinkingIntervalRef.current = null;
-            }
         };
     }, []);
 
     const startSimulation = useCallback((newSessionId?: string) => {
         setCompletedAgents([]);
-        setActiveAgents({});
+        completedAgentsRef.current = [];
+        setAgentUpdates({});
+        setUiSequenceIndex(0);
         setWsReady(false);
         if (newSessionId) {
             setSessionId(newSessionId);
@@ -323,7 +286,9 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
         setSessionId(null);
         setStatus("idle");
         setCompletedAgents([]);
-        setActiveAgents({});
+        completedAgentsRef.current = [];
+        setAgentUpdates({});
+        setUiSequenceIndex(0);
         setHitlCheckpoint(null);
         setErrorMessage(null);
         setWsReady(false);
@@ -332,10 +297,6 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
             wsRef.current.close();
             wsRef.current = null;
         }
-        if (thinkingIntervalRef.current) {
-            clearInterval(thinkingIntervalRef.current);
-            thinkingIntervalRef.current = null;
-        }
     }, []);
 
     // Dismiss HITL checkpoint
@@ -343,12 +304,36 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
         setHitlCheckpoint(null);
     }, []);
 
+    const resumeInvestigation = useCallback(async (deep: boolean) => {
+        if (!sessionId) return;
+        try {
+            const token = sessionStorage.getItem('forensic_token') || localStorage.getItem('forensic_token');
+            const response = await fetch(`/api/v1/investigation/${sessionId}/resume`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({ deep_analysis: deep })
+            });
+            if (!response.ok) throw new Error("Failed to resume investigation");
+
+            setStatus(deep ? "analyzing" : "processing");
+            if (deep) playSoundRef.current?.("process");
+        } catch (error) {
+            console.error("Error resuming investigation:", error);
+            setErrorMessage("Failed to resume analysis");
+        }
+    }, [sessionId]);
+
     return {
         status,
-        activeAgents,
+        uiSequenceIndex,
+        agentUpdates,
         completedAgents,
         startSimulation,
         connectWebSocket,
+        resumeInvestigation,
         resetSimulation,
         dismissCheckpoint,
         hitlCheckpoint,

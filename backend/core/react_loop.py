@@ -486,6 +486,12 @@ class ReActLoopEngine:
         "contraband": "contraband_database",
         "ml metadata anomaly": "metadata_anomaly_score",
         "astronomical api": "astronomical_api",
+        "reverse image search": "reverse_image_search",
+        "device fingerprint database": "device_fingerprint_db",
+        "inter-agent call": "inter_agent_call",
+        "adversarial robustness": "adversarial_robustness_check",
+        "ml-based image splicing": "image_splice_check",
+        "camera noise fingerprint analysis": "noise_fingerprint",
         # OCR
         "extract evidence text": "extract_evidence_text",
         "ocr text extraction": "extract_evidence_text",
@@ -636,16 +642,20 @@ class ReActLoopEngine:
             self._current_iteration += 1
 
             # Get next step from LLM or built-in task driver
+            next_step = None
             if llm_generator is not None:
                 next_step = await llm_generator(self._react_chain, state)
-            else:
-                # Built-in task-decomposition driver: iterate through tasks
+            
+            # If LLM returned None (failure, not configured, or no suggestion),
+            # fall back to the built-in task-decomposition driver so agents
+            # still produce real tool-based findings without LLM reasoning.
+            if next_step is None:
                 next_step = await self._default_step_generator(
                     state, tool_registry
                 )
 
             if next_step is None:
-                # Driver signals completion (all tasks processed)
+                # Both LLM and task driver signal completion
                 break
 
             next_step.iteration = self._current_iteration
@@ -786,6 +796,23 @@ class ReActLoopEngine:
                 )
                 self._react_chain.append(observation)
                 await self._log_step(observation)
+
+                # Mark the IN_PROGRESS task as COMPLETE now that the tool has run
+                try:
+                    if state:
+                        from core.working_memory import TaskStatus as _TS
+                        for task in state.tasks:
+                            if task.status == _TS.IN_PROGRESS:
+                                await self.working_memory.update_task(
+                                    session_id=self.session_id,
+                                    agent_id=self.agent_id,
+                                    task_id=task.task_id,
+                                    status=_TS.COMPLETE,
+                                    result_ref=next_step.tool_name,
+                                )
+                                break
+                except Exception:
+                    pass
 
                 # Check for tool unavailability HITL trigger
                 if tool_result.unavailable:
@@ -1073,7 +1100,7 @@ class ReActLoopEngine:
         best_tool = self._match_tool_to_task(pending_task.description, tools)
 
         if best_tool is None:
-            # No matching tool — mark task blocked and move on
+            # No matching tool — mark task complete and move on
             try:
                 await self.working_memory.update_task(
                     session_id=self.session_id,
@@ -1094,41 +1121,25 @@ class ReActLoopEngine:
                 iteration=self._current_iteration,
             )
 
-        last_step = self._react_chain[-1] if self._react_chain else None
-        
-        is_thought_emitted = (
-            last_step is not None and
-            last_step.step_type == "THOUGHT" and
-            pending_task.description in last_step.content
-        )
-
-        if is_thought_emitted:
-            try:
-                await self.working_memory.update_task(
-                    session_id=self.session_id,
-                    agent_id=self.agent_id,
-                    task_id=pending_task.task_id,
-                    status=TaskStatus.COMPLETE,
-                    result_ref=best_tool.name,
-                )
-            except Exception:
-                pass
-
-            return ReActStep(
-                step_type="ACTION",
-                content=f"Calling tool '{best_tool.name}' for task: {pending_task.description}",
-                tool_name=best_tool.name,
-                tool_input={"artifact": None},
-                iteration=self._current_iteration,
+        # Mark task as IN_PROGRESS so heartbeat shows real task name,
+        # then emit ACTION directly (skipping the wasteful THOUGHT step).
+        # This halves iteration usage: 1 iteration per task instead of 2.
+        try:
+            await self.working_memory.update_task(
+                session_id=self.session_id,
+                agent_id=self.agent_id,
+                task_id=pending_task.task_id,
+                status=TaskStatus.IN_PROGRESS,
+                result_ref=best_tool.name,
             )
+        except Exception:
+            pass
 
         return ReActStep(
-            step_type="THOUGHT",
-            content=(
-                f"Working on task: {pending_task.description}. "
-                f"I will invoke tool '{best_tool.name}' "
-                f"({best_tool.description})."
-            ),
+            step_type="ACTION",
+            content=f"Executing: {pending_task.description} → {best_tool.name}",
+            tool_name=best_tool.name,
+            tool_input={"artifact": None},
             iteration=self._current_iteration,
         )
 

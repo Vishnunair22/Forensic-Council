@@ -170,6 +170,138 @@ MIGRATIONS: List[Migration] = [
         DROP TABLE IF EXISTS users;
         """,
     ),
+    Migration(
+        version=5,
+        name="create_forensic_core_tables",
+        description="Create tables for forensic tracking and evidence",
+        sql="""
+        CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+        
+        CREATE TABLE IF NOT EXISTS chain_of_custody (
+            entry_id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            entry_type      VARCHAR(64) NOT NULL,
+            agent_id        VARCHAR(64) NOT NULL,
+            session_id      UUID NOT NULL,
+            timestamp_utc   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            content         JSONB NOT NULL,
+            content_hash    VARCHAR(64) NOT NULL,
+            signature       TEXT NOT NULL,
+            prior_entry_ref VARCHAR(64)
+        );
+        CREATE INDEX IF NOT EXISTS idx_coc_session ON chain_of_custody(session_id);
+        CREATE INDEX IF NOT EXISTS idx_coc_agent ON chain_of_custody(agent_id);
+        CREATE INDEX IF NOT EXISTS idx_coc_timestamp ON chain_of_custody(timestamp_utc);
+        CREATE INDEX IF NOT EXISTS idx_coc_entry_type ON chain_of_custody(entry_type);
+
+        CREATE TABLE IF NOT EXISTS evidence_artifacts (
+            artifact_id   UUID PRIMARY KEY,
+            parent_id     UUID REFERENCES evidence_artifacts(artifact_id),
+            root_id       UUID NOT NULL,
+            artifact_type VARCHAR(64) NOT NULL,
+            file_path     TEXT NOT NULL,
+            content_hash  VARCHAR(64) NOT NULL,
+            action        TEXT NOT NULL,
+            agent_id      VARCHAR(64) NOT NULL,
+            session_id    UUID NOT NULL,
+            timestamp_utc TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            metadata      JSONB NOT NULL DEFAULT '{}'
+        );
+        CREATE INDEX IF NOT EXISTS idx_ev_root ON evidence_artifacts(root_id);
+        CREATE INDEX IF NOT EXISTS idx_ev_session ON evidence_artifacts(session_id);
+        CREATE INDEX IF NOT EXISTS idx_ev_parent ON evidence_artifacts(parent_id);
+        CREATE INDEX IF NOT EXISTS idx_ev_type ON evidence_artifacts(artifact_type);
+
+        CREATE TABLE IF NOT EXISTS calibration_models (
+            model_id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            agent_id        VARCHAR(64) NOT NULL,
+            method          VARCHAR(64) NOT NULL,
+            benchmark_dataset VARCHAR(255) NOT NULL,
+            version         VARCHAR(64) NOT NULL,
+            created_utc     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            params          JSONB NOT NULL,
+            UNIQUE(agent_id, version)
+        );
+        CREATE INDEX IF NOT EXISTS idx_cal_agent ON calibration_models(agent_id);
+
+        CREATE TABLE IF NOT EXISTS hitl_checkpoints (
+            checkpoint_id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            agent_id          VARCHAR(64) NOT NULL,
+            session_id        UUID NOT NULL,
+            reason            VARCHAR(64) NOT NULL,
+            current_finding   JSONB,
+            paused_at_iteration INTEGER NOT NULL,
+            investigator_brief TEXT,
+            status            VARCHAR(64) NOT NULL DEFAULT 'PAUSED',
+            serialized_state  JSONB NOT NULL,
+            created_utc       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            resolved_utc      TIMESTAMPTZ,
+            human_decision    JSONB
+        );
+        CREATE INDEX IF NOT EXISTS idx_hitl_session ON hitl_checkpoints(session_id);
+        CREATE INDEX IF NOT EXISTS idx_hitl_status ON hitl_checkpoints(status);
+
+        CREATE TABLE IF NOT EXISTS inter_agent_calls (
+            call_id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            caller_agent_id VARCHAR(64) NOT NULL,
+            callee_agent_id VARCHAR(64) NOT NULL,
+            call_type       VARCHAR(64) NOT NULL,
+            payload         JSONB NOT NULL,
+            response        JSONB,
+            status          VARCHAR(64) NOT NULL DEFAULT 'PENDING',
+            created_utc     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            completed_utc   TIMESTAMPTZ,
+            session_id      UUID NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_iac_session ON inter_agent_calls(session_id);
+        CREATE INDEX IF NOT EXISTS idx_iac_caller ON inter_agent_calls(caller_agent_id);
+        CREATE INDEX IF NOT EXISTS idx_iac_callee ON inter_agent_calls(callee_agent_id);
+
+        CREATE TABLE IF NOT EXISTS tribunal_cases (
+            tribunal_id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            session_id        UUID NOT NULL,
+            agent_a_id        VARCHAR(64) NOT NULL,
+            agent_b_id        VARCHAR(64) NOT NULL,
+            contradiction     JSONB NOT NULL,
+            human_judgment    JSONB,
+            resolved          BOOLEAN NOT NULL DEFAULT FALSE,
+            created_utc       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            resolved_utc      TIMESTAMPTZ
+        );
+        CREATE INDEX IF NOT EXISTS idx_tribunal_session ON tribunal_cases(session_id);
+
+        CREATE TABLE IF NOT EXISTS forensic_reports (
+            report_id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            session_id          UUID NOT NULL UNIQUE,
+            case_id             VARCHAR(255) NOT NULL,
+            executive_summary   TEXT NOT NULL,
+            per_agent_findings  JSONB NOT NULL,
+            cross_modal_confirmed JSONB NOT NULL DEFAULT '[]',
+            contested_findings  JSONB NOT NULL DEFAULT '[]',
+            tribunal_resolved   JSONB NOT NULL DEFAULT '[]',
+            incomplete_findings JSONB NOT NULL DEFAULT '[]',
+            case_linking_flags  JSONB NOT NULL DEFAULT '[]',
+            chain_of_custody_log JSONB NOT NULL DEFAULT '[]',
+            evidence_version_trees JSONB NOT NULL DEFAULT '[]',
+            react_chains        JSONB NOT NULL DEFAULT '{}',
+            self_reflection_outputs JSONB NOT NULL DEFAULT '{}',
+            uncertainty_statement TEXT NOT NULL,
+            cryptographic_signature TEXT NOT NULL,
+            report_hash         VARCHAR(64) NOT NULL,
+            signed_utc          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_reports_session ON forensic_reports(session_id);
+        CREATE INDEX IF NOT EXISTS idx_reports_case ON forensic_reports(case_id);
+        """,
+        rollback_sql="""
+        DROP TABLE IF EXISTS forensic_reports;
+        DROP TABLE IF EXISTS tribunal_cases;
+        DROP TABLE IF EXISTS inter_agent_calls;
+        DROP TABLE IF EXISTS hitl_checkpoints;
+        DROP TABLE IF EXISTS calibration_models;
+        DROP TABLE IF EXISTS evidence_artifacts;
+        DROP TABLE IF EXISTS chain_of_custody;
+        """,
+    ),
 ]
 
 

@@ -242,6 +242,18 @@ class ForensicAgent(ABC):
         pass
     
     @property
+    def deep_task_decomposition(self) -> list[str]:
+        """
+        Heavy/slow tasks that run in background after initial findings.
+        
+        Override in subclasses to define tasks that require ML model
+        downloads, heavy CPU inference, or network calls. These run
+        as a background pass after the agent returns initial findings.
+        Default: empty (no deep pass).
+        """
+        return []
+    
+    @property
     @abstractmethod
     def iteration_ceiling(self) -> int:
         """Maximum iterations for the ReAct loop."""
@@ -365,7 +377,13 @@ class ForensicAgent(ABC):
             redis_client=None,  # HITL handled externally in production
         )
         
-        # Create LLM step generator if enabled
+        # LLM reasoning in the ReAct loop is DISABLED by default.
+        # Agents use the fast task-decomposition driver: iterate through
+        # tasks, match each task to a tool, run the tool, collect findings.
+        # This completes in ~15-30s instead of 60-180s with LLM.
+        #
+        # LLM (Groq) is called ONCE after all tools finish to synthesize
+        # raw findings into rich forensic narratives (see Step 6b below).
         llm_generator = None
         if self.config.llm_enable_react_reasoning and self.config.llm_api_key:
             llm_client = LLMClient(self.config)
@@ -391,26 +409,29 @@ class ForensicAgent(ABC):
         loop_result = await loop_engine.run(
             initial_thought=initial_thought,
             tool_registry=self._tool_registry,
-            llm_generator=llm_generator  # Use LLM if configured, else task-decomposition driver
+            llm_generator=llm_generator  # None = fast task-decomposition driver
         )
         
         self._findings = loop_result.findings
         self._react_chain = loop_result.react_chain
         self._loop_result = loop_result
 
-        # Step 6b: Attach LLM reasoning notes to findings.
-        # When the LLM is enabled, THOUGHT steps contain rich analytical
-        # reasoning that is NOT currently stored in the findings — it only
-        # lives in the ReAct chain log. This pass matches each finding to
-        # the THOUGHT step that immediately preceded its ACTION step and
-        # stores the LLM's interpretation in finding.metadata["llm_reasoning"].
-        # This makes LLM insights visible in the per-agent findings section
-        # of the final report, not just in the raw chain log.
-        if self.config.llm_api_key and self.config.llm_provider != "none":
-            self._findings = _attach_llm_reasoning_to_findings(
-                findings=self._findings,
-                react_chain=loop_result.react_chain,
-            )
+        # Step 6b: Post-analysis LLM synthesis.
+        # Instead of calling the LLM on every ReAct iteration (slow, rate-limited),
+        # we call Groq ONCE after all tools complete to synthesize raw findings
+        # into coherent, court-grade forensic narratives.
+        if (self.config.llm_enable_post_synthesis 
+                and self.config.llm_api_key 
+                and self.config.llm_provider != "none"
+                and self._findings):
+            try:
+                await self._synthesize_findings_with_llm()
+            except Exception as synth_err:
+                logger.warning(
+                    "Post-analysis LLM synthesis failed, raw findings preserved",
+                    agent_id=self.agent_id,
+                    error=str(synth_err),
+                )
 
         # Step 7: Run self-reflection pass
         self._reflection_report = await self.self_reflection_pass(self._findings)
@@ -425,6 +446,80 @@ class ForensicAgent(ABC):
         )
         
         return self._findings
+    
+    async def run_deep_investigation(self) -> list[AgentFinding]:
+        """
+        Run the deep/heavy investigation pass in background.
+        
+        Uses the SAME tool registry built during the initial pass,
+        but initializes fresh working memory with deep_task_decomposition.
+        Returns additional findings from heavy ML tools.
+        
+        Must be called AFTER run_investigation() has completed.
+        """
+        deep_tasks = self.deep_task_decomposition
+        if not deep_tasks:
+            return []
+        
+        logger.info(
+            "Starting deep investigation pass",
+            agent_id=self.agent_id,
+            agent_name=self.agent_name,
+            deep_task_count=len(deep_tasks),
+        )
+        
+        # Use a suffixed agent_id for separate working memory namespace
+        deep_agent_id = f"{self.agent_id}_deep"
+        
+        # Initialize working memory for deep tasks
+        await self.working_memory.initialize(
+            session_id=self.session_id,
+            agent_id=deep_agent_id,
+            tasks=deep_tasks,
+            iteration_ceiling=len(deep_tasks) + 5,  # generous ceiling
+        )
+        
+        # Build a new ReAct loop engine for the deep pass
+        loop_engine = ReActLoopEngine(
+            agent_id=deep_agent_id,
+            session_id=self.session_id,
+            iteration_ceiling=len(deep_tasks) + 5,
+            working_memory=self.working_memory,
+            custody_logger=self.custody_logger,
+            redis_client=None,
+        )
+        
+        # Run loop with task-decomposition driver (no LLM in loop)
+        loop_result = await loop_engine.run(
+            initial_thought=f"Deep analysis pass: running {len(deep_tasks)} heavy forensic tools.",
+            tool_registry=self._tool_registry,  # reuse tools from initial pass
+            llm_generator=None,
+        )
+        
+        deep_findings = loop_result.findings
+        
+        # Post-synthesis with LLM on deep findings too
+        if (self.config.llm_enable_post_synthesis
+                and self.config.llm_api_key
+                and self.config.llm_provider != "none"
+                and deep_findings):
+            # Temporarily swap findings for synthesis
+            orig_findings = self._findings
+            self._findings = deep_findings
+            try:
+                await self._synthesize_findings_with_llm()
+                deep_findings = self._findings
+            except Exception:
+                pass
+            self._findings = orig_findings
+        
+        logger.info(
+            "Deep investigation pass complete",
+            agent_id=self.agent_id,
+            deep_finding_count=len(deep_findings),
+        )
+        
+        return deep_findings
     
     async def _initialize_working_memory(self) -> None:
         """Initialize working memory with task decomposition."""
@@ -466,6 +561,107 @@ class ForensicAgent(ABC):
                 "Some tools unavailable",
                 agent_id=self.agent_id,
                 unavailable=[t.name for t in unavailable_tools],
+            )
+    
+    async def _synthesize_findings_with_llm(self) -> None:
+        """
+        Post-analysis LLM synthesis: call Groq ONCE to enrich raw tool findings.
+
+        Sends all findings to the LLM with forensic context. The LLM returns
+        enriched reasoning summaries that interpret tool outputs in context,
+        identify anomaly patterns across findings, and produce court-grade prose.
+
+        Updates finding.reasoning_summary in-place. If the LLM call fails,
+        the caller catches the exception and raw findings are preserved.
+        """
+        import json as _json
+
+        llm_client = LLMClient(self.config)
+
+        # Build compact findings digest for the LLM
+        findings_digest = []
+        for f in self._findings:
+            findings_digest.append({
+                "tool": f.metadata.get("tool_name", "unknown"),
+                "finding_type": f.finding_type,
+                "confidence": round(f.confidence_raw, 3),
+                "status": f.status,
+                "summary": f.reasoning_summary[:300] if f.reasoning_summary else "",
+                "court_defensible": f.metadata.get("court_defensible", False),
+            })
+
+        evidence_context = {
+            "mime_type": getattr(self.evidence_artifact, "mime_type", "unknown"),
+            "file_name": getattr(self.evidence_artifact, "file_path", "unknown"),
+        }
+
+        system_prompt = f"""You are {self.agent_name}, a specialist forensic analysis agent.
+
+You have just completed running {len(self._findings)} forensic tools on the evidence.
+Below are the raw tool results. Your job is to SYNTHESIZE these into a coherent forensic narrative.
+
+For each finding, write a 1-3 sentence analysis that:
+1. Interprets what the tool result MEANS forensically
+2. Notes any anomalies, inconsistencies, or confirmations
+3. Uses precise forensic terminology appropriate for court documentation
+
+Respond with a JSON array of objects, one per finding, in the SAME ORDER as the input.
+Each object must have exactly: {{"tool": "<tool_name>", "analysis": "<your synthesis>"}}
+
+Be factual. Only interpret what the data shows. Do not speculate."""
+
+        user_content = f"""Evidence: {evidence_context['file_name']} ({evidence_context['mime_type']})
+
+Raw findings:
+{_json.dumps(findings_digest, indent=2)}
+
+Synthesize each finding into a forensic narrative."""
+
+        logger.info(
+            "Running post-analysis LLM synthesis",
+            agent_id=self.agent_id,
+            finding_count=len(self._findings),
+        )
+
+        raw_response = await llm_client.generate_synthesis(
+            system_prompt=system_prompt,
+            user_content=user_content,
+            max_tokens=1500,
+        )
+
+        # Parse the LLM response and update findings
+        try:
+            # Handle response that may be wrapped in text or markdown
+            response_text = raw_response.strip()
+            # Find JSON array in response
+            start = response_text.find("[")
+            end = response_text.rfind("]") + 1
+            if start >= 0 and end > start:
+                syntheses = _json.loads(response_text[start:end])
+            else:
+                logger.warning("LLM synthesis response did not contain JSON array")
+                return
+
+            # Map syntheses back to findings by index
+            for i, synth in enumerate(syntheses):
+                if i < len(self._findings):
+                    analysis = synth.get("analysis", "")
+                    if analysis:
+                        # Prepend LLM synthesis to existing summary
+                        existing = self._findings[i].reasoning_summary or ""
+                        self._findings[i].reasoning_summary = f"{analysis}\n\n{existing}".strip()
+                        self._findings[i].metadata["llm_synthesis"] = analysis
+
+            logger.info(
+                "Post-analysis LLM synthesis complete",
+                agent_id=self.agent_id,
+                synthesized_count=min(len(syntheses), len(self._findings)),
+            )
+        except (_json.JSONDecodeError, KeyError, TypeError) as parse_err:
+            logger.warning(
+                "Could not parse LLM synthesis response, raw findings preserved",
+                agent_id=self.agent_id,
+                error=str(parse_err),
             )
     
     async def self_reflection_pass(

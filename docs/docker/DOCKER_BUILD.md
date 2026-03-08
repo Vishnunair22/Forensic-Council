@@ -1,9 +1,12 @@
 # Forensic Council — Docker Build & Caching Guide
 
-> **Version:** v1.0.0 | **Last Updated:** 2026-03-07
+> **Version:** v1.0.1 | **Last Updated:** 2026-03-07
 >
 > This is the definitive reference for building, rebuilding, and managing
 > Docker layer and ML model caches for Forensic Council.
+> The frontend uses a single multi-stage `Dockerfile` with `development` and
+> `runner` targets — `Dockerfile.dev` and `docker-compose.override.yml` have
+> been removed.
 
 ---
 
@@ -43,7 +46,7 @@ Forensic Council uses **three distinct cache systems**, each operating independe
 ## Shared Model Volumes — Dev & Prod
 
 **All compose variants share the exact same named volumes.** Dev and production builds
-read from and write to the same pool. Switching from `make dev` to `make up` (or back)
+read from and write to the same pool. Switching from `.\manage.ps1 dev` to `.\manage.ps1 up` (or back)
 never triggers a model re-download.
 
 This is enforced via two mechanisms:
@@ -89,8 +92,8 @@ docker volume ls | grep forensic-council
 ```
 
 ```bash
-# Or use the Makefile shortcut:
-make cache-status
+# Or use the PowerShell shortcut:
+.\manage.ps1 cache-status
 ```
 
 ---
@@ -312,8 +315,8 @@ docker compose -f docs/docker/docker-compose.yml --env-file .env up -d backend
 # This DELETES ALL volumes including postgres, redis, and all ML models
 docker compose -f docs/docker/docker-compose.yml --env-file .env down -v
 
-# Or use the Makefile target which includes a warning
-make down-clean
+# Or use the PowerShell target which includes a warning
+.\manage.ps1 down-clean
 ```
 
 ---
@@ -379,9 +382,18 @@ Layer 5  → compileall (always runs, but fast)
 
 ### Frontend Dockerfile layer order
 
+The frontend uses a multi-stage Dockerfile with three named targets:
+`base` → `development` → `builder` → `runner`.
+
 ```
+# base stage (shared)
 Layer 1  → FROM node:22-alpine (never invalidates)
 Layer 2  → npm ci (invalidates if package-lock.json changes)
+
+# development target (manage.ps1 dev)
+Layer 3  → COPY source files (invalidates if any .ts/.tsx/.css changes)
+
+# builder stage (production only)
 Layer 3  → COPY source files (invalidates if any .ts/.tsx/.css changes)
 Layer 4  → npm run build (always runs, but Next.js uses .next/cache internally)
 ```
@@ -407,21 +419,19 @@ Layer 4  → npm run build (always runs, but Next.js uses .next/cache internally
 
 ---
 
-## Makefile Quick Reference
+## PowerShell Quick Reference
 
-All Makefile targets use `docs/docker/docker-compose.yml` and `.env` automatically.
+All `manage.ps1` targets use `docs/docker/docker-compose.yml` and `.env` automatically. If your system blocks powershell scripts, use the raw Docker commands below.
 
-```bash
-make up          # Build (if needed) and start all services in background
-make dev         # Start with hot-reload (mounts source dirs, uses Dockerfile.dev)
-make build       # Build images without starting
-make down        # Stop containers, keep volumes (models preserved ✅)
-make down-clean  # Stop containers, DELETE volumes (models wiped ⚠️)
-make logs        # Tail all container logs
-make ps          # Show container status and health
-make prod        # Production mode (Caddy TLS, restart policies)
-make prune       # Remove dangling images to free disk space
-```
+| Action | Manager Command | Raw Docker Equivalent |
+|---|---|---|
+| Start all | `.\manage.ps1 up` | `docker compose -f docs/docker/docker-compose.yml --env-file .env up -d --build` |
+| Start Hot-Reload | `.\manage.ps1 dev` | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml --env-file .env up -d --build` |
+| Build only | `.\manage.ps1 build` | `docker compose -f docs/docker/docker-compose.yml --env-file .env build` |
+| Stop (keep volumes)| `.\manage.ps1 down` | `docker compose -f docs/docker/docker-compose.yml --env-file .env down` |
+| Stop (wipe volumes)| `.\manage.ps1 down-clean`| `docker compose -f docs/docker/docker-compose.yml --env-file .env down -v` |
+| View Logs | `.\manage.ps1 logs` | `docker compose -f docs/docker/docker-compose.yml --env-file .env logs -f` |
+| Production Mode | `.\manage.ps1 prod` | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.prod.yml --env-file .env up -d --build` |
 
 ---
 

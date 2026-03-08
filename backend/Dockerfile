@@ -80,11 +80,21 @@ RUN mkdir -p \
     /app/cache/calibration_models \
     /app/cache/easyocr
 
+# Create a dedicated non-root user so the process cannot write outside its
+# designated directories even if exploited.  All writable paths are explicitly
+# chown'd here; the volume mounts in docker-compose inherit these permissions.
+RUN addgroup --system --gid 1001 appgroup \
+ && adduser  --system --uid  1001 --ingroup appgroup --no-create-home appuser \
+ && chown -R appuser:appgroup /app/cache /app/storage
+
 # 5. Pre-compile application bytecode for faster cold starts
 RUN python -m compileall -q api/ core/ orchestration/ agents/ tools/ scripts/ 2>/dev/null || true
 
 # 6. Make entrypoint executable
 RUN chmod +x scripts/docker_entrypoint.sh
+
+# Switch to non-root user before the process starts
+USER appuser
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
     CMD curl -f -s http://localhost:8000/health || exit 1
