@@ -48,6 +48,9 @@ export default function EvidencePage() {
 
   // HITL state
   const [isSubmittingHITL, setIsSubmittingHITL] = useState(false);
+  
+  // Deep analysis decision tracking
+  const [deepAnalysisRequested, setDeepAnalysisRequested] = useState(false);
 
   // Simulation/Analysis state
   const {
