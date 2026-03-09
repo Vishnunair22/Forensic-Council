@@ -176,7 +176,7 @@ class CouncilArbiter:
             )
         
         # Generate executive summary
-        executive_summary = self._generate_executive_summary(
+        executive_summary = await self._generate_executive_summary(
             len(per_agent_findings),
             len(all_findings),
             len(cross_modal_confirmed),
@@ -185,7 +185,7 @@ class CouncilArbiter:
         )
         
         # Generate uncertainty statement
-        uncertainty_statement = self._generate_uncertainty_statement(
+        uncertainty_statement = await self._generate_uncertainty_statement(
             len(incomplete_findings),
             len(contested_findings),
         )
@@ -467,7 +467,7 @@ class CouncilArbiter:
         
         return report
     
-    def _generate_executive_summary(
+    async def _generate_executive_summary(
         self,
         num_agents: int,
         num_findings: int,
@@ -482,33 +482,14 @@ class CouncilArbiter:
         a structured, plain-language summary from actual finding data.
         Falls back to a deterministic template if LLM is unavailable.
         """
-        import asyncio
-
         if self.config.llm_api_key and self.config.llm_provider != "none":
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    import concurrent.futures
-                    with concurrent.futures.ThreadPoolExecutor() as pool:
-                        future = pool.submit(
-                            asyncio.run,
-                            self._llm_executive_summary(
-                                num_agents, num_findings, cross_modal_confirmed,
-                                contested, all_findings or []
-                            )
-                        )
-                        result = future.result(timeout=25)
-                        if result:
-                            return result
-                else:
-                    result = loop.run_until_complete(
-                        self._llm_executive_summary(
-                            num_agents, num_findings, cross_modal_confirmed,
-                            contested, all_findings or []
-                        )
-                    )
-                    if result:
-                        return result
+                result = await self._llm_executive_summary(
+                    num_agents, num_findings, cross_modal_confirmed,
+                    contested, all_findings or []
+                )
+                if result:
+                    return result
             except Exception as exc:
                 logger.warning("LLM executive summary failed, using template: %s", exc)
 
@@ -608,34 +589,18 @@ Write the Executive Summary for this forensic report."""
         )
         return " ".join(lines)
     
-    def _generate_uncertainty_statement(self, incomplete: int, contested: int) -> str:
+    async def _generate_uncertainty_statement(self, incomplete: int, contested: int) -> str:
         """
         Generate the uncertainty and limitations statement.
 
         Uses LLM to produce a nuanced, legally-aware statement when configured.
         Falls back to deterministic template otherwise.
         """
-        import asyncio
-
         if self.config.llm_api_key and self.config.llm_provider != "none" and (incomplete > 0 or contested > 0):
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    import concurrent.futures
-                    with concurrent.futures.ThreadPoolExecutor() as pool:
-                        future = pool.submit(
-                            asyncio.run,
-                            self._llm_uncertainty_statement(incomplete, contested)
-                        )
-                        result = future.result(timeout=15)
-                        if result:
-                            return result
-                else:
-                    result = loop.run_until_complete(
-                        self._llm_uncertainty_statement(incomplete, contested)
-                    )
-                    if result:
-                        return result
+                result = await self._llm_uncertainty_statement(incomplete, contested)
+                if result:
+                    return result
             except Exception as exc:
                 logger.warning("LLM uncertainty statement failed, using template: %s", exc)
 

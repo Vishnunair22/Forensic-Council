@@ -17,7 +17,6 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
 
-import { useForensicData } from "@/hooks/useForensicData";
 import { useSimulation } from "@/hooks/useSimulation";
 import { useSound } from "@/hooks/useSound";
 import { startInvestigation, submitHITLDecision } from "@/lib/api";
@@ -34,7 +33,6 @@ import {
 
 export default function EvidencePage() {
   const router = useRouter();
-  const { addToHistory } = useForensicData();
   const { playSound } = useSound();
 
   // File upload state
@@ -48,9 +46,6 @@ export default function EvidencePage() {
 
   // HITL state
   const [isSubmittingHITL, setIsSubmittingHITL] = useState(false);
-  
-  // Deep analysis decision tracking
-  const [deepAnalysisRequested, setDeepAnalysisRequested] = useState(false);
 
   // Simulation/Analysis state
   const {
@@ -129,15 +124,16 @@ export default function EvidencePage() {
         try {
           await connectWebSocket(res.session_id);
           setIsUploading(false);
-        } catch (wsErr: any) {
+        } catch (wsErr: unknown) {
           console.error("WebSocket connection failed", wsErr);
           setValidationError("Failed to connect to analysis streams");
 
           if (process.env.NODE_ENV === "development") {
+            const errorObj = wsErr instanceof Error ? wsErr : new Error(String(wsErr));
             window.dispatchEvent(
               new ErrorEvent("error", {
-                error: wsErr,
-                message: wsErr?.message || "Failed to connect",
+                error: errorObj,
+                message: errorObj.message,
               })
             );
           }
@@ -145,15 +141,17 @@ export default function EvidencePage() {
           setIsUploading(false);
           resetSimulation();
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Investigation start failed", err);
-        setValidationError(err.message || "Failed to start investigation");
+        const errorMsg = err instanceof Error ? err.message : "Failed to start investigation";
+        setValidationError(errorMsg);
 
         if (process.env.NODE_ENV === "development") {
+          const errorObj = err instanceof Error ? err : new Error(String(err));
           window.dispatchEvent(
             new ErrorEvent("error", {
-              error: err,
-              message: err.message || "Failed to start investigation",
+              error: errorObj,
+              message: errorObj.message,
             })
           );
         }
@@ -168,9 +166,9 @@ export default function EvidencePage() {
 
   // Pick up file injected from landing page
   useEffect(() => {
-    const pending = (window as any).__forensic_pending_file as File | undefined;
+    const pending = (window as { __forensic_pending_file?: File }).__forensic_pending_file;
     if (pending) {
-      delete (window as any).__forensic_pending_file;
+      delete (window as { __forensic_pending_file?: File }).__forensic_pending_file;
       setFile(pending);
 
       const autoStart = sessionStorage.getItem("forensic_auto_start");
@@ -295,7 +293,7 @@ export default function EvidencePage() {
     progressText = "Initial analysis complete. Choose how to proceed.";
   } else if (deepAnalysisDone) {
     progressText = "Deep analysis complete. All findings collected.";
-  } else if (validCompletedAgents.length > 0 && status !== "complete" && status !== "awaiting_decision") {
+  } else if (validCompletedAgents.length > 0 && status !== "complete") {
     progressText = `Gathering findings... (${validCompletedAgents.length}/${validAgentsData.length} complete)`;
   } else if (status === "complete") {
     progressText = "All agents have reported. Council Consensus reached.";

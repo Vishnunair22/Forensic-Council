@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback } from "react";
 
 export type SoundType = "success" | "error" | "agent" | "complete" | "think" | "click" | "upload";
 

@@ -22,7 +22,6 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
     const [hitlCheckpoint, setHitlCheckpoint] = useState<HITLCheckpoint | null>(null);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [wsReady, setWsReady] = useState(false);
 
     const wsRef = useRef<WebSocket | null>(null);
     const completedAgentsRef = useRef<AgentUpdate[]>([]);
@@ -105,6 +104,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                             if (update.agent_id) {
                                 const agent = AGENTS_DATA.find(a => a.id === update.agent_id);
                                 if (agent) {
+                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- WebSocket message data is dynamic
                                     const { confidence, findings_count, error, deep_analysis_pending, status: agentStatus } = update.data as any;
                                     const parsedConfidence = confidence ?? agent.simulation.confidence / 100;
 
@@ -131,6 +131,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                     setCompletedAgents(nextCompleted);
                                     // Use type assertion since onAgentComplete is legacy, or just drop calling it if not needed.
                                     // But to be safe, we cast.
+                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AgentResult type mismatch in legacy callback
                                     onAgentCompleteRef.current?.(newUpdate as any);
 
                                     // Also transition to analyzing if still in initiating
@@ -223,7 +224,6 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
             connected
                 .then(() => {
                     wsConnectionReady = true;
-                    setWsReady(true);
                     resolve();
                 })
                 .catch(() => {
@@ -249,7 +249,6 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
         setCompletedAgents([]);
         completedAgentsRef.current = [];
         setAgentUpdates({});
-        setWsReady(false);
         if (newSessionId) {
             setSessionId(newSessionId);
         }
@@ -264,7 +263,6 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
         setAgentUpdates({});
         setHitlCheckpoint(null);
         setErrorMessage(null);
-        setWsReady(false);
 
         if (wsRef.current) {
             wsRef.current.close();

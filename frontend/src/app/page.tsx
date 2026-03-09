@@ -1,8 +1,8 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight, ShieldCheck, Upload, UploadCloud, FileImage, FileAudio, FileVideo, X, ArrowRight, RotateCcw } from "lucide-react";
-import Link from "next/link";
+import { ChevronRight, ShieldCheck, File, UploadCloud, FileImage, FileAudio, FileVideo, X, ArrowRight, RotateCcw } from "lucide-react";
+
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AGENTS_DATA } from "@/lib/constants";
@@ -52,7 +52,7 @@ export default function LandingPage() {
     playSound("upload");
     sessionStorage.setItem("forensic_pending_file_name", file.name);
     sessionStorage.setItem("forensic_auto_start", "true");
-    (window as any).__forensic_pending_file = file;
+    (window as { __forensic_pending_file?: File }).__forensic_pending_file = file;
     // Don't close modal immediately, wait for route transition to start
     router.push("/evidence");
   };
@@ -454,6 +454,7 @@ export default function LandingPage() {
                       {/* Preview area */}
                       <div className="w-full rounded-2xl overflow-hidden bg-black/40 border border-white/[0.08] relative" style={{ minHeight: "200px" }}>
                         {previewUrl && file?.type.startsWith("image/") && (
+                          /* eslint-disable-next-line @next/next/no-img-element -- Dynamic blob URL preview, cannot use Next/Image */
                           <img
                             src={previewUrl}
                             alt="Evidence preview"
@@ -478,8 +479,8 @@ export default function LandingPage() {
                               {file.type.startsWith("audio/")
                                 ? <FileAudio className="w-8 h-8 text-cyan-400" />
                                 : file.type === "application/pdf"
-                                  ? <FileIcon className="w-8 h-8 text-rose-400" />
-                                  : <FileIcon className="w-8 h-8 text-slate-400" />
+                                  ? <File className="w-8 h-8 text-rose-400" />
+                                  : <File className="w-8 h-8 text-slate-400" />
                               }
                             </div>
                             {/* Waveform / document graphic */}

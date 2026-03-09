@@ -140,7 +140,7 @@ export default function ResultPage() {
 
   // Extract verdict based on confidence scores
   const verdict = useMemo(() => {
-    let scores: number[] = [];
+    const scores: number[] = [];
     if (realReport?.per_agent_findings) {
       Object.values(realReport.per_agent_findings).forEach((findings) => {
         findings.forEach((f) => {
@@ -151,7 +151,7 @@ export default function ResultPage() {
     }
 
     if (scores.length === 0) return null;
-    let avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
 
     const contested = realReport?.contested_findings?.length ?? 0;
     if (avg >= 0.75 && contested === 0) return { label: "AUTHENTIC", color: "emerald", icon: CheckCircle };
@@ -511,7 +511,7 @@ export default function ResultPage() {
                 </>
               ) : (
                 <div className="p-12 text-center text-slate-500 bg-white/5 rounded-3xl border border-white/5">
-                  <p className="mb-8 max-w-sm mx-auto">You haven't initiated an investigation yet, or the data has expired from memory.</p>
+                  <p className="mb-8 max-w-sm mx-auto">You haven&apos;t initiated an investigation yet, or the data has expired from memory.</p>
                   <button
                     onClick={() => { playSound("click"); router.push('/'); }}
                     className="px-6 py-2 rounded-lg bg-emerald-500 text-white font-semibold hover:bg-emerald-400"

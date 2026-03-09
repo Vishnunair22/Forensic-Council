@@ -15,8 +15,8 @@ jest.mock('@/lib/api', () => ({
   getReport: jest.fn(),
 }));
 
-// Mock localStorage
-const localStorageMock = (() => {
+// Mock sessionStorage
+const sessionStorageMock = (() => {
   let store: Record<string, string> = {};
   return {
     getItem: jest.fn((key: string) => store[key] || null),
@@ -32,14 +32,14 @@ const localStorageMock = (() => {
   };
 })();
 
-Object.defineProperty(window, 'localStorage', {
-  value: localStorageMock,
+Object.defineProperty(window, 'sessionStorage', {
+  value: sessionStorageMock,
 });
 
 describe('useForensicData', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    localStorageMock.clear();
+    sessionStorageMock.clear();
   });
 
   it('starts analysis and returns session ID', async () => {
@@ -57,7 +57,10 @@ describe('useForensicData', () => {
     });
 
     // Call startAnalysis
-    const sessionId = await result.current.startAnalysis(mockFile, 'CASE-1', 'INVESTIGATOR-1');
+    let sessionId: string | undefined;
+    await act(async () => {
+      sessionId = await result.current.startAnalysis(mockFile, 'CASE-1', 'INVESTIGATOR-1');
+    });
 
     // Verify API was called
     expect(api.startInvestigation).toHaveBeenCalledWith(
@@ -70,11 +73,13 @@ describe('useForensicData', () => {
     expect(sessionId).toBe('abc-123');
   });
 
-  it('getCurrentReport returns null before complete', () => {
+  it('getCurrentReport returns null before complete', async () => {
     const { result } = renderHook(() => useForensicData());
 
-    // Wait for initial load
-    expect(result.current.isLoading).toBe(true);
+    // Wait for initial load to complete
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
 
     // getCurrentReport should return null
     expect(result.current.getCurrentReport()).toBeNull();
@@ -127,7 +132,9 @@ describe('useForensicData', () => {
     };
 
     // Save report
-    result.current.saveCurrentReport(mockReport);
+    act(() => {
+      result.current.saveCurrentReport(mockReport);
+    });
 
     // Retrieve report
     expect(result.current.getCurrentReport()).toEqual(mockReport);
@@ -150,7 +157,9 @@ describe('useForensicData', () => {
     };
 
     // Add to history
-    result.current.addToHistory(mockReport);
+    act(() => {
+      result.current.addToHistory(mockReport);
+    });
 
     // Verify history contains the report
     expect(result.current.getHistory()).toContainEqual(mockReport);
@@ -173,11 +182,16 @@ describe('useForensicData', () => {
     };
 
     // Add to history
-    result.current.addToHistory(mockReport);
+    act(() => {
+      result.current.addToHistory(mockReport);
+    });
+    
     expect(result.current.getHistory().length).toBe(1);
 
     // Clear history
-    result.current.clearHistory();
+    act(() => {
+      result.current.clearHistory();
+    });
 
     // Verify history is empty
     expect(result.current.getHistory()).toEqual([]);
