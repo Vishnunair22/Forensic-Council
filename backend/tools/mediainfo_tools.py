@@ -307,7 +307,7 @@ async def profile_av_container(
     if not os.path.exists(artifact.file_path):
         raise ToolUnavailableError(f"File not found: {artifact.file_path}")
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     result = await loop.run_in_executor(
         _MI_EXECUTOR, _profile_av_sync, artifact.file_path
     )

@@ -19,7 +19,7 @@ Provides a three-tier OCR pipeline for forensic evidence:
 Design principles:
   - All heavy model loads are lazy (on first call) and cached at module level.
   - Each tier degrades gracefully to the next without raising.
-  - All functions are async-compatible via asyncio.get_event_loop().run_in_executor
+  - All functions are async-compatible via asyncio.get_running_loop().run_in_executor
     for the blocking EasyOCR/Tesseract calls so the FastAPI event loop is never blocked.
   - No performance hit on non-OCR file types — tiers are skipped via MIME guard.
 """
@@ -208,7 +208,7 @@ async def extract_text_from_pdf(
             "note": "File is not a PDF — use extract_text_easyocr for image-based OCR",
         }
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     result = await loop.run_in_executor(
         _OCR_EXECUTOR, _extract_text_pymupdf_sync, artifact.file_path
     )
@@ -321,7 +321,7 @@ async def extract_text_easyocr(
     if not os.path.exists(artifact.file_path):
         raise ToolUnavailableError(f"File not found: {artifact.file_path}")
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     result = await loop.run_in_executor(
         _OCR_EXECUTOR,
         lambda: _extract_text_easyocr_sync(artifact.file_path, detail=detail),
@@ -399,7 +399,7 @@ async def _extract_text_tesseract_fallback(
     artifact: EvidenceArtifact,
 ) -> dict[str, Any]:
     """Internal Tesseract fallback used by extract_text_easyocr."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     result = await loop.run_in_executor(
         _OCR_EXECUTOR, _extract_text_tesseract_sync, artifact.file_path
     )

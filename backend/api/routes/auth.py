@@ -5,6 +5,8 @@ Authentication Routes
 Routes for user authentication and token management.
 """
 
+import time
+from collections import defaultdict
 from datetime import timedelta
 from typing import Optional
 
@@ -27,6 +29,86 @@ logger = get_logger(__name__)
 settings = get_settings()
 
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
+
+# ── Brute-force login protection ─────────────────────────────────────────────
+# Per-IP attempt tracking with a sliding window.
+# Redis is used when available; falls back to an in-process dict.
+_MAX_LOGIN_ATTEMPTS = 5        # max failures before lockout
+_LOCKOUT_WINDOW_SECS = 300     # 5-minute rolling window
+_LOCKOUT_DURATION_SECS = 900   # 15-minute lockout
+
+# In-memory fallback: {ip: [(timestamp, count), ...]}
+_failed_attempts: dict[str, list[float]] = defaultdict(list)
+
+
+async def _is_rate_limited(ip: str) -> bool:
+    """Return True and raise 429 if the IP has exceeded the login attempt limit."""
+    key = f"login_fail:{ip}"
+    now = time.time()
+
+    try:
+        from infra.redis_client import get_redis_client
+        redis = await get_redis_client()
+        if redis:
+            count_raw = await redis.get(key)
+            count = int(count_raw) if count_raw else 0
+            if count >= _MAX_LOGIN_ATTEMPTS:
+                ttl = await redis.ttl(key)
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Too many failed login attempts. Try again in {max(ttl, 1)} seconds.",
+                    headers={"Retry-After": str(max(ttl, 1))},
+                )
+            return False
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # fall through to in-memory
+
+    # In-memory fallback — prune old entries outside the window
+    attempts = _failed_attempts[ip]
+    cutoff = now - _LOCKOUT_WINDOW_SECS
+    attempts[:] = [t for t in attempts if t > cutoff]
+    if len(attempts) >= _MAX_LOGIN_ATTEMPTS:
+        retry_after = int(_LOCKOUT_WINDOW_SECS - (now - attempts[0]))
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many failed login attempts. Try again in {max(retry_after, 1)} seconds.",
+            headers={"Retry-After": str(max(retry_after, 1))},
+        )
+    return False
+
+
+async def _record_failed_attempt(ip: str) -> None:
+    """Record a failed login attempt for the given IP."""
+    key = f"login_fail:{ip}"
+    try:
+        from infra.redis_client import get_redis_client
+        redis = await get_redis_client()
+        if redis:
+            pipe = redis.pipeline()
+            pipe.incr(key)
+            pipe.expire(key, _LOCKOUT_DURATION_SECS)
+            await pipe.execute()
+            return
+    except Exception:
+        pass
+    _failed_attempts[ip].append(time.time())
+
+
+async def _clear_failed_attempts(ip: str) -> None:
+    """Clear failed attempts on successful login."""
+    key = f"login_fail:{ip}"
+    try:
+        from infra.redis_client import get_redis_client
+        redis = await get_redis_client()
+        if redis:
+            await redis.delete(key)
+            return
+    except Exception:
+        pass
+    _failed_attempts.pop(ip, None)
+
 
 
 class TokenResponse(BaseModel):
@@ -111,6 +193,10 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
     # Verify password using bcrypt
     from core.auth import verify_password
     
+    # Rate-limit check before any database work
+    client_ip = request.client.host if request.client else "unknown"
+    await _is_rate_limited(client_ip)
+
     # Try to fetch user from database first
     user = await get_user_from_db(form_data.username)
     
@@ -119,7 +205,7 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
         user = _DEMO_USERS_FALLBACK.get(form_data.username)
     
     if not user or not verify_password(form_data.password, user["hashed_password"]):
-        client_ip = request.client.host if request.client else "unknown"
+        await _record_failed_attempt(client_ip)
         logger.warning("Failed login attempt", username=form_data.username, ip=client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -141,6 +227,7 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
         username=user["username"],
     )
     
+    await _clear_failed_attempts(client_ip)
     logger.info("User logged in successfully", user_id=user["user_id"], role=user["role"].value)
     
     return TokenResponse(

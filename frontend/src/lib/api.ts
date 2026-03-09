@@ -262,8 +262,7 @@ function resetAuthRetry(): void {
 }
 
 async function handleAuthError<T>(
-  operation: () => Promise<T>,
-  _errorMessage: string
+  operation: () => Promise<T>
 ): Promise<T> {
   try {
     const result = await operation();
@@ -349,7 +348,7 @@ export async function startInvestigation(
     }
 
     return response.json();
-  }, "Failed to start investigation");
+  });
 }
 
 /**
@@ -372,7 +371,7 @@ export async function getReport(sessionId: string): Promise<ReportResponse> {
 
     const report: ReportDTO = await response.json();
     return { status: "complete", report };
-  }, "Failed to get report");
+  });
 }
 
 export async function getBrief(sessionId: string, agentId: string): Promise<string> {
@@ -390,7 +389,7 @@ export async function getBrief(sessionId: string, agentId: string): Promise<stri
 
     const data = await response.json();
     return data.brief || "No brief available.";
-  }, "Failed to get brief");
+  });
 }
 
 export async function getCheckpoints(sessionId: string): Promise<HITLCheckpoint[]> {
@@ -407,7 +406,7 @@ export async function getCheckpoints(sessionId: string): Promise<HITLCheckpoint[
     }
 
     return response.json();
-  }, "Failed to get checkpoints");
+  });
 }
 
 export async function submitHITLDecision(decision: HITLDecisionRequest): Promise<void> {
@@ -423,7 +422,7 @@ export async function submitHITLDecision(decision: HITLDecisionRequest): Promise
       const error = await response.json().catch(() => ({ detail: "Unknown error" }));
       throw new Error(error.detail || `HTTP ${response.status}`);
     }
-  }, "Failed to submit decision");
+  });
 }
 
 /**
@@ -540,6 +539,7 @@ export async function pollForReport(
   maxAttempts = 60
 ): Promise<ReportDTO> {
   return new Promise((resolve, reject) => {
+    // eslint-disable-next-line prefer-const -- intervalId must be declared before poll function that uses it
     let intervalId: ReturnType<typeof setInterval>;
     let finished = false;
     let attempts = 0;

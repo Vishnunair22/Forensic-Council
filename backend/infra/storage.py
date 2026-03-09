@@ -198,7 +198,7 @@ class LocalStorageBackend(StorageBackend):
         artifact_dir = self._get_artifact_dir(root_id)
         artifact_dir.mkdir(parents=True, exist_ok=True)
         
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         if data is not None:
             # Store raw data (off the event-loop thread to avoid blocking)
             dest_path = artifact_dir / f"{artifact_id}{extension}"
@@ -284,7 +284,7 @@ class LocalStorageBackend(StorageBackend):
         Returns:
             File contents as bytes
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.read, storage_path)
     
     async def compute_hash(self, storage_path: str) -> str:
@@ -311,22 +311,27 @@ class LocalStorageBackend(StorageBackend):
                     sha256.update(chunk)
             return sha256.hexdigest()
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, _hash_sync)
     
     async def exists(self, storage_path: str) -> bool:
-        """Check if a file exists."""
-        return Path(storage_path).exists()
-    
+        """Check if a file exists without blocking the event loop."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, Path(storage_path).exists)
+
     async def get_size(self, storage_path: str) -> int:
-        """Get the size of a stored file."""
-        path = Path(storage_path)
-        if not path.exists():
-            raise EvidenceNotFoundError(
-                f"Evidence file not found: {storage_path}",
-                details={"storage_path": storage_path},
-            )
-        return path.stat().st_size
+        """Get the size of a stored file without blocking the event loop."""
+        def _stat_sync() -> int:
+            path = Path(storage_path)
+            if not path.exists():
+                raise EvidenceNotFoundError(
+                    f"Evidence file not found: {storage_path}",
+                    details={"storage_path": storage_path},
+                )
+            return path.stat().st_size
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _stat_sync)
     
     async def list_artifacts(self, root_id: UUID) -> list[str]:
         """

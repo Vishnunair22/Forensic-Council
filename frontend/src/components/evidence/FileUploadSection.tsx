@@ -128,6 +128,7 @@ export function FileUploadSection({
           {/* Preview */}
           <div className="relative w-full bg-black/40" style={{ minHeight: "200px" }}>
             {file.type.startsWith("image/") && (
+              /* eslint-disable-next-line @next/next/no-img-element -- Dynamic blob URL preview */
               <img
                 src={filePreviewUrl ?? ""}
                 alt="Evidence"

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Report, AgentResult } from "@/types";
 import { HistorySchema, ReportSchema } from "@/lib/schemas";
-import { startInvestigation, getReport, ReportDTO, AgentFindingDTO } from "@/lib/api";
+import { startInvestigation, getReport, ReportDTO } from "@/lib/api";
 import { ALLOWED_MIME_TYPES } from "@/lib/constants";
 
 const HISTORY_KEY = "fc_history";
@@ -41,6 +41,7 @@ export const useForensicData = () => {
     const [currentReport, setCurrentReport] = useState<Report | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [pollError, setPollError] = useState<string | null>(null);
     const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
     const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -74,6 +75,18 @@ export const useForensicData = () => {
         }
     }, []);
 
+    // Add to history - defined first so it can be used in pollForReport
+    const addToHistory = useCallback((report: Report) => {
+        setHistory(prev => {
+            if (prev.some(h => h.id === report.id)) return prev;
+            const next = [report, ...prev];
+            if (typeof window !== 'undefined') {
+                sessionStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+            }
+            return next;
+        });
+    }, []);
+
     // Start analysis - calls the real API
     const startAnalysis = useCallback(async (
         file: File,
@@ -98,6 +111,7 @@ export const useForensicData = () => {
         if (pollIntervalRef.current) {
             clearInterval(pollIntervalRef.current);
         }
+        setPollError(null);
 
         const MAX_POLL_ATTEMPTS = 60; // 5 min at 5s interval
         let attempts = 0;
@@ -110,6 +124,7 @@ export const useForensicData = () => {
                     pollIntervalRef.current = null;
                 }
                 setIsAnalyzing(false);
+                setPollError("Analysis timed out. The investigation took too long.");
                 return;
             }
 
@@ -136,9 +151,15 @@ export const useForensicData = () => {
                 }
             } catch (error) {
                 console.error("Failed to poll for report:", error);
+                if (pollIntervalRef.current) {
+                    clearInterval(pollIntervalRef.current);
+                    pollIntervalRef.current = null;
+                }
+                setIsAnalyzing(false);
+                setPollError(error instanceof Error ? error.message : "Failed to retrieve analysis results.");
             }
         }, 5000); // Poll every 5 seconds
-    }, []);
+    }, [addToHistory]);
 
     // Get current report
     const getCurrentReport = useCallback((): Report | null => {
@@ -156,18 +177,6 @@ export const useForensicData = () => {
         if (typeof window !== 'undefined') {
             sessionStorage.setItem(CURRENT_REPORT_KEY, JSON.stringify(report));
         }
-    }, []);
-
-    // Add to history
-    const addToHistory = useCallback((report: Report) => {
-        setHistory(prev => {
-            if (prev.some(h => h.id === report.id)) return prev;
-            const next = [report, ...prev];
-            if (typeof window !== 'undefined') {
-                sessionStorage.setItem(HISTORY_KEY, JSON.stringify(next));
-            }
-            return next;
-        });
     }, []);
 
     // Delete from history
@@ -214,6 +223,7 @@ export const useForensicData = () => {
         currentReport,
         isLoading,
         isAnalyzing,
+        pollError,
         currentSessionId,
         startAnalysis,
         pollForReport,

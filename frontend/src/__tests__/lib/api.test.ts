@@ -10,23 +10,30 @@ import {
   getReport,
   submitHITLDecision,
   type ReportDTO,
-  type InvestigationResponse,
 } from '@/lib/api';
 
 // Mock global fetch
 global.fetch = jest.fn();
 
+// Mock sessionStorage
+const mockSessionStorage = {
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+};
+Object.defineProperty(global, 'sessionStorage', { value: mockSessionStorage });
+
 describe('API Client', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Mock auth token for all tests
+    mockSessionStorage.getItem.mockReturnValue('mock-token');
   });
 
   describe('startInvestigation', () => {
     const mockFile = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
 
     it('sends correct multipart form data', async () => {
-      // Mock auth token from storage BEFORE calling startInvestigation
-      jest.spyOn(Storage.prototype, 'getItem').mockReturnValue('mock-token');
 
       // Mock fetch to return success
       (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -107,6 +114,7 @@ describe('API Client', () => {
 
       // Mock fetch to return 200 with report
       (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
         status: 200,
         json: async () => mockReport,
       });
@@ -119,6 +127,7 @@ describe('API Client', () => {
     it('throws on 404', async () => {
       // Mock fetch to return 404
       (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: false,
         status: 404,
       });
 
@@ -128,8 +137,6 @@ describe('API Client', () => {
 
   describe('submitHITLDecision', () => {
     it('sends correct decision payload', async () => {
-      // Mock auth token from storage BEFORE calling submitHITLDecision
-      jest.spyOn(Storage.prototype, 'getItem').mockReturnValue('mock-token');
 
       // Mock fetch to return success
       (global.fetch as jest.Mock).mockResolvedValueOnce({

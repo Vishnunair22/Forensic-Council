@@ -7,10 +7,9 @@ interface AgentIconProps {
     role?: string;
     agentId?: string;
     className?: string;
-    active?: boolean;
 }
 
-export const AgentIcon = ({ role, agentId, className, active }: AgentIconProps) => {
+export const AgentIcon = ({ role, agentId, className }: AgentIconProps) => {
     // Resolve role from agentId if role not provided
     let resolvedRole = role || "";
     if (!resolvedRole && agentId) {
