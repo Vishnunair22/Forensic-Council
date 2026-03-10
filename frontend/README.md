@@ -1,5 +1,9 @@
 # Frontend - Forensic Council
 
+> ⚠️ **Security Note (March 2026):**
+> This project uses Next.js 15.3.3 which has a known vulnerability (CVE-2025-66478).
+> Run `npm audit` for details and upgrade when a patched version is available.
+
 Modern Next.js frontend for the Forensic Council multi-agent forensic analysis system.
 
 ## Quick Start

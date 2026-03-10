@@ -29,7 +29,7 @@ When generating a PR, adhere to the following checklist:
 3. **Draft the PR:** Attach screenshots/videos if UI changes are involved. Describe the **problem** and the **solution**.
 4. **Code Review Expectations:** 
    - A minimum of 1 approval is required for non-critical changes. 
-   - Changes to the cryptographic signing methodology (`reports/signing.py`) require 2 senior approvals.
+   - Changes to the cryptographic signing methodology (`core/signing.py`) require 2 senior approvals.
 
 ## 4. Setting up the Development Environment
 

@@ -30,13 +30,14 @@ Forensic-Council/
 │   │   ├── retry.py                # Retry logic
 │   │   └── observability.py        # OpenTelemetry setup
 │   ├── infra/                       # Infrastructure
-│   │   ├── database.py             # Database setup
-│   │   ├── redis.py                # Redis client
-│   │   └── qdrant.py               # Vector DB client
+│   │   ├── postgres_client.py       # PostgreSQL client
+│   │   ├── redis_client.py          # Redis client
+│   │   ├── qdrant_client.py         # Vector DB client
+│   │   ├── evidence_store.py        # Evidence storage
+│   │   └── storage.py               # File storage helpers
 │   ├── orchestration/               # Workflow orchestration
 │   │   ├── pipeline.py             # Investigation pipeline
-│   │   ├── session_manager.py      # Session management
-│   │   └── react_loop.py           # ReAct logic
+│   │   └── session_manager.py      # Session management
 │   ├── tools/                       # Agent tools
 │   │   ├── image_tools.py          # Image analysis tools
 │   │   ├── audio_tools.py          # Audio analysis tools
@@ -108,11 +109,6 @@ Forensic-Council/
 │   ├── DECISIONS.md                # Technical decisions
 │   ├── SCHEMAS.md                  # Data schemas
 │   ├── agent_capabilities.md       # Agent capabilities
-│   ├── docker/                     # Docker documentation
-│   ├── status/                     # Status reports
-│   └── test/                       # Testing guides
-│
-├── docker-compose.yml              # Docker Compose setup
 │   ├── docker/                     # Docker documentation
 │   ├── status/                     # Status reports
 │   └── test/                       # Testing guides
@@ -358,8 +354,8 @@ npm run dev
 
 # Backend (in separate terminal)
 cd backend
-pip install -e .
-python -m uvicorn api.main:app --reload
+uv sync
+uv run uvicorn api.main:app --reload
 ```
 
 ### Production Build
@@ -383,7 +379,7 @@ docker-compose build
 docker-compose up
 
 # Production
-docker-compose -f docker-compose.prod.yml up
+docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.prod.yml --env-file .env up
 ```
 
 ---
@@ -431,17 +427,17 @@ docker-compose -f docker-compose.prod.yml up
 |------|---------|
 | Start dev | `python -m uvicorn api.main:app --reload` |
 | Run tests | `pytest` |
-| Format code | `black .` |
-| Lint | `flake8` |
+| Format code | `ruff format .` |
+| Lint | `ruff check .` |
 
 ### Docker
 
 | Task | Command |
 |------|---------|
-| Build all | `docker-compose build` |
-| Start all | `docker-compose up` |
-| Stop all | `docker-compose down` |
-| View logs | `docker-compose logs -f` |
+| Build all | `docker compose -f docs/docker/docker-compose.yml --env-file .env build` |
+| Start all | `docker compose -f docs/docker/docker-compose.yml --env-file .env up` |
+| Stop all | `docker compose -f docs/docker/docker-compose.yml --env-file .env down` |
+| View logs | `docker compose -f docs/docker/docker-compose.yml --env-file .env logs -f` |
 
 ---
 

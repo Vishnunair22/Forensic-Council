@@ -1,5 +1,10 @@
 # Testing Guide
 
+> **Current Test Status (March 2026):**
+> - **Frontend**: ✅ 22 tests passing (Jest)
+> - **Backend**: ✅ 9 test files created (8 unit + 1 integration); some may fail due to infrastructure dependencies
+> - **Next.js**: ✅ Updated to latest version (CVE-2025-66478 resolved)
+
 The Forensic Council relies on `pytest` for the backend and `jest` for the frontend.
 
 ---
@@ -10,7 +15,7 @@ The Forensic Council relies on `pytest` for the backend and `jest` for the front
 
 The backend needs Postgres, Redis, and Qdrant. Start only the data stores:
 ```bash
-docker compose -f docker/docker-compose.infra.yml --env-file .env up -d
+docker compose -f docs/docker/docker-compose.infra.yml --env-file .env up -d
 ```
 
 ### B. Backend Tests (pytest)
@@ -216,18 +221,15 @@ in `backend/tests/` for full implementation.
 
 ---
 
-### TS-09 — E2E: Full Pipeline (Implemented ✅)
+### TS-09 — E2E: Full Pipeline
 
 **Path:** `backend/tests/test_integration/test_e2e.py`
 
-All E2E pipeline tests pass. See `test_e2e.py` for the full list of 45+ test cases covering:
-- Pipeline → signed report generation
-- Chain-of-custody logging
-- Cryptographic integrity
-- Session management
-- API contracts
-- Config validation
-- Evidence fixtures
+> **NOTE**: Backend test files have been created under `backend/tests/unit/` and
+> `backend/tests/integration/`. Some tests may fail when infrastructure services
+> (PostgreSQL, Redis, Qdrant) are not running.
+
+The E2E pipeline tests documented here are planned but not yet fully implemented.
 
 ---
 

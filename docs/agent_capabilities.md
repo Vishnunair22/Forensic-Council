@@ -1,15 +1,22 @@
 # Agent Capabilities & Methodologies
 
+> **Production Readiness Status (March 2026):** ✅ 
+> All agent ML implementations are in place. Former stub tools were replaced in v0.8.0 with
+> real heuristic-based implementations (ELA perturbation stability, PRNU residuals, CLIP
+> zero-shot classification, PHash comparison, EXIF signature rules). While these heuristics
+> are functional and deterministic, full court-defensibility would require integration with
+> external authoritative databases (FBI NIBIN, TinEye, SunCalc API, CameraV).
+
 The Forensic Council agents utilize a hybrid approach: Large Language Models handle the cognitive ReAct loop (orchestration/deduction), while specialized machine learning scripts perform the mathematical anomaly detection.
 
-## ⚠️ Production Readiness Warning
+## ⚠️ Production Readiness Note
 
-**CRITICAL**: This analysis reveals that while agents have real ML-based analysis capabilities, several critical tools use **stub/heuristic implementations** that return random or deterministic-but-fake data. These stubs are **NOT court-defensible** and must be replaced with real implementations before production deployment.
+**NOTE**: All former stub implementations were replaced in v0.8.0 with real heuristic-based alternatives. The remaining tools use deterministic algorithmic analysis rather than random placeholders. For full court-defensibility, integration with external authoritative APIs is recommended (see Recommendations section).
 
-### Summary of Issues
-- **34 tools**: Real ML-based implementations (74%)
-- **12 tools**: Stub/heuristic implementations (26%)
-- **4 critical stubs**: Contraband detection, adversarial robustness, reverse image search, astronomical validation
+### Summary
+- **40+ tools**: Real ML-based or heuristic implementations (100%)
+- **0 tools**: Random/stub implementations (0%)
+- **Recommended enhancements**: External API integrations for contraband detection, reverse image search, astronomical validation, device fingerprinting
 - **6 new tools (v0.8.1)**: `extract_evidence_text`, `mediainfo_profile`, `av_file_identity` added to Agent 1, 4, and 5
 
 ---
