@@ -91,6 +91,38 @@ def clear_active_pipelines():
     _active_pipelines.clear()
     _final_reports.clear()
 
+
+def pop_active_task(session_id: str):
+    """Remove and return the active task for a session."""
+    return _active_tasks.pop(session_id, None)
+
+
+def get_session_websockets(session_id: str) -> list:
+    """Get WebSocket connections for a session."""
+    return _websocket_connections.get(session_id, [])
+
+
+def clear_session_websockets(session_id: str):
+    """Remove all WebSocket connections for a session."""
+    _websocket_connections.pop(session_id, None)
+
+
+def register_websocket(session_id: str, websocket):
+    """Register a WebSocket connection for a session."""
+    if session_id not in _websocket_connections:
+        _websocket_connections[session_id] = []
+    _websocket_connections[session_id].append(websocket)
+
+
+def unregister_websocket(session_id: str, websocket):
+    """Unregister a WebSocket connection from a session."""
+    if session_id in _websocket_connections:
+        try:
+            _websocket_connections[session_id].remove(websocket)
+        except ValueError:
+            pass
+
+
 # Allowed MIME types
 ALLOWED_MIME_TYPES = {
     "image/jpeg", "image/png", "image/tiff", "image/webp",

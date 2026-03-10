@@ -1,10 +1,10 @@
 # Development Status
 
-**Last updated:** 2026-03-07  
+**Last updated:** 2026-03-10  
 **Current version:** 1.0.0  
-**Overall health:** 🟢 Stable — full production release, all known bugs resolved  
-**Actively working on:** N/A — production-ready  
-**Blocked on:** Nothing currently  
+**Overall health:** 🟡 Partial — production features implemented, backend tests missing  
+**Actively working on:** Implementing backend test suite  
+**Blocked on:** None  
 
 ---
 
@@ -72,6 +72,10 @@ Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [✅] → C
 | 2 | 🟡 Medium | WebSocket subprocess timeouts occasionally fail to kill child processes | Restart `forensic_api` container | v0.5 |
 | 3 | 🟢 Low | Agent 4 temporal analysis is frame-level only | Frame-level analysis only | v0.3 |
 | 4 | 🟢 Low | PHash reverse search is local-only | TinEye API required for web provenance | v0.8 |
+| 5 | ✅ Fixed | Backend tests not implemented | 9 test files created (8 unit + 1 integration) | v1.0 |
+| 6 | ✅ Fixed | NumPy dependency conflict with qdrant-client | Updated pyproject.toml to allow numpy>=1.26 | v1.0 |
+| 7 | ✅ Fixed | Next.js security vulnerability (CVE-2025-66478) | Updated to Next.js latest | v1.0 |
+| 8 | ✅ Fixed | API routes import missing functions | Added `pop_active_task`, `get_session_websockets`, `clear_session_websockets`, `register_websocket`, `unregister_websocket` to investigation.py | v1.0.1 |
 
 ---
 
@@ -89,5 +93,4 @@ Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [✅] → C
 ## Maintenance Discipline
 
 **Update this document before closing any task.**  
-**Review Known Issues at the start of every session.**  
-**When something is fixed, move it to ERROR_LOG.md immediately.**
+**Review Known Issues at the start of every session.**
