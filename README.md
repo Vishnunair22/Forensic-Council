@@ -14,7 +14,7 @@ Forensic Council provides an automated, auditable pipeline for determining the a
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                  Frontend (Next.js 15)              │
+│                  Frontend (Next.js 16)              │
 │  Landing → Evidence Upload → Live Analysis → Report │
 │             WebSocket Live Updates                  │
 └─────────────────┬───────────────────────────────────┘

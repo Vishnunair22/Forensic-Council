@@ -157,12 +157,18 @@ class AgentLoopResult:
         reflection_report: dict[str, Any],
         react_chain: list[dict[str, Any]],
         error: Optional[str] = None,
+        agent_active: bool = True,
+        supports_file_type: bool = True,
+        deep_findings_count: int = 0,
     ):
         self.agent_id = agent_id
         self.findings = findings
         self.reflection_report = reflection_report
         self.react_chain = react_chain
         self.error = error
+        self.agent_active = agent_active  # Whether agent actually ran
+        self.supports_file_type = supports_file_type  # Whether agent supports this file type
+        self.deep_findings_count = deep_findings_count  # Number of findings from deep analysis
 
 
 class ForensicCouncilPipeline:
@@ -471,148 +477,104 @@ class ForensicCouncilPipeline:
         evidence_artifact: EvidenceArtifact,
         session_id: UUID,
     ) -> list[AgentLoopResult]:
-        """Run all 5 specialist agents concurrently."""
+        """
+        Run all 5 specialist agents concurrently.
         
-        async def run_agent1() -> AgentLoopResult:
+        Only agents that support the uploaded file type will run.
+        After initial investigation, deep analysis is run for supported agents.
+        """
+        
+        # Helper function to run an agent with file type filtering and deep analysis
+        async def run_agent_with_deep(
+            agent_class,
+            agent_id: str,
+            extra_kwargs: dict = None
+        ) -> AgentLoopResult:
             try:
-                agent = Agent1Image(
-                    agent_id="Agent1",
-                    session_id=session_id,
-                    evidence_artifact=evidence_artifact,
-                    config=self.config,
-                    working_memory=self.working_memory,
-                    episodic_memory=self.episodic_memory,
-                    custody_logger=self.custody_logger,
-                    evidence_store=self.evidence_store,
-                )
-                findings = await asyncio.wait_for(
+                # Create agent instance
+                kwargs = {
+                    "agent_id": agent_id,
+                    "session_id": session_id,
+                    "evidence_artifact": evidence_artifact,
+                    "config": self.config,
+                    "working_memory": self.working_memory,
+                    "episodic_memory": self.episodic_memory,
+                    "custody_logger": self.custody_logger,
+                    "evidence_store": self.evidence_store,
+                }
+                if extra_kwargs:
+                    kwargs.update(extra_kwargs)
+                
+                agent = agent_class(**kwargs)
+                
+                # Check if agent supports this file type
+                if not agent.supports_uploaded_file:
+                    logger.info(
+                        f"{agent_id} skipped - file type not supported",
+                        agent_id=agent_id,
+                        supported_types=agent.supported_file_types,
+                    )
+                    return AgentLoopResult(
+                        agent_id=agent_id,
+                        findings=[],
+                        reflection_report={},
+                        react_chain=[],
+                        agent_active=False,
+                        supports_file_type=False,
+                    )
+                
+                # Run initial investigation
+                logger.info(f"Running {agent_id} initial investigation")
+                initial_findings = await asyncio.wait_for(
                     agent.run_investigation(),
                     timeout=self.config.investigation_timeout
                 )
+                initial_count = len(initial_findings)
+                
+                # Run deep investigation (combines initial + deep findings)
+                logger.info(f"Running {agent_id} deep investigation")
+                combined_findings = await agent.run_deep_investigation()
+                deep_count = len(combined_findings) - initial_count
+                
                 return AgentLoopResult(
-                    agent_id="Agent1",
-                    findings=[f.model_dump() for f in findings],
-                    # Safely access attributes with getattr in case the agent crashed mid-initialization
+                    agent_id=agent_id,
+                    findings=[f.model_dump() for f in combined_findings],
                     reflection_report=getattr(agent, '_reflection_report', None).model_dump() if getattr(agent, '_reflection_report', None) else {},
                     react_chain=getattr(agent, '_react_chain', []),
+                    agent_active=True,
+                    supports_file_type=True,
+                    deep_findings_count=max(0, deep_count),
                 )
             except Exception as e:
-                logger.error("Agent1 failed", error=str(e))
-                return AgentLoopResult(agent_id="Agent1", findings=[], reflection_report={}, react_chain=[], error=str(e))
-        
-        async def run_agent2() -> AgentLoopResult:
-            try:
-                agent = Agent2Audio(
-                    agent_id="Agent2",
-                    session_id=session_id,
-                    evidence_artifact=evidence_artifact,
-                    config=self.config,
-                    working_memory=self.working_memory,
-                    episodic_memory=self.episodic_memory,
-                    custody_logger=self.custody_logger,
-                    evidence_store=self.evidence_store,
-                    inter_agent_bus=self.inter_agent_bus,
-                )
-                findings = await asyncio.wait_for(
-                    agent.run_investigation(),
-                    timeout=self.config.investigation_timeout
-                )
+                logger.error(f"{agent_id} failed", error=str(e))
                 return AgentLoopResult(
-                    agent_id="Agent2",
-                    findings=[f.model_dump() for f in findings],
-                    # Safely access attributes with getattr in case the agent crashed mid-initialization
-                    reflection_report=getattr(agent, '_reflection_report', None).model_dump() if getattr(agent, '_reflection_report', None) else {},
-                    react_chain=getattr(agent, '_react_chain', []),
+                    agent_id=agent_id,
+                    findings=[],
+                    reflection_report={},
+                    react_chain=[],
+                    error=str(e),
+                    agent_active=False,
+                    supports_file_type=True,
                 )
-            except Exception as e:
-                logger.error("Agent2 failed", error=str(e))
-                return AgentLoopResult(agent_id="Agent2", findings=[], reflection_report={}, react_chain=[], error=str(e))
-        
-        async def run_agent3() -> AgentLoopResult:
-            try:
-                agent = Agent3Object(
-                    agent_id="Agent3",
-                    session_id=session_id,
-                    evidence_artifact=evidence_artifact,
-                    config=self.config,
-                    working_memory=self.working_memory,
-                    episodic_memory=self.episodic_memory,
-                    custody_logger=self.custody_logger,
-                    evidence_store=self.evidence_store,
-                    inter_agent_bus=self.inter_agent_bus,
-                )
-                findings = await asyncio.wait_for(
-                    agent.run_investigation(),
-                    timeout=self.config.investigation_timeout
-                )
-                return AgentLoopResult(
-                    agent_id="Agent3",
-                    findings=[f.model_dump() for f in findings],
-                    # Safely access attributes with getattr in case the agent crashed mid-initialization
-                    reflection_report=getattr(agent, '_reflection_report', None).model_dump() if getattr(agent, '_reflection_report', None) else {},
-                    react_chain=getattr(agent, '_react_chain', []),
-                )
-            except Exception as e:
-                logger.error("Agent3 failed", error=str(e))
-                return AgentLoopResult(agent_id="Agent3", findings=[], reflection_report={}, react_chain=[], error=str(e))
-        
-        async def run_agent4() -> AgentLoopResult:
-            try:
-                agent = Agent4Video(
-                    agent_id="Agent4",
-                    session_id=session_id,
-                    evidence_artifact=evidence_artifact,
-                    config=self.config,
-                    working_memory=self.working_memory,
-                    episodic_memory=self.episodic_memory,
-                    custody_logger=self.custody_logger,
-                    evidence_store=self.evidence_store,
-                    inter_agent_bus=self.inter_agent_bus,
-                )
-                findings = await asyncio.wait_for(
-                    agent.run_investigation(),
-                    timeout=self.config.investigation_timeout
-                )
-                return AgentLoopResult(
-                    agent_id="Agent4",
-                    findings=[f.model_dump() for f in findings],
-                    # Safely access attributes with getattr in case the agent crashed mid-initialization
-                    reflection_report=getattr(agent, '_reflection_report', None).model_dump() if getattr(agent, '_reflection_report', None) else {},
-                    react_chain=getattr(agent, '_react_chain', []),
-                )
-            except Exception as e:
-                logger.error("Agent4 failed", error=str(e))
-                return AgentLoopResult(agent_id="Agent4", findings=[], reflection_report={}, react_chain=[], error=str(e))
-        
-        async def run_agent5() -> AgentLoopResult:
-            try:
-                agent = Agent5Metadata(
-                    agent_id="Agent5",
-                    session_id=session_id,
-                    evidence_artifact=evidence_artifact,
-                    config=self.config,
-                    working_memory=self.working_memory,
-                    episodic_memory=self.episodic_memory,
-                    custody_logger=self.custody_logger,
-                    evidence_store=self.evidence_store,
-                )
-                findings = await asyncio.wait_for(
-                    agent.run_investigation(),
-                    timeout=self.config.investigation_timeout
-                )
-                return AgentLoopResult(
-                    agent_id="Agent5",
-                    findings=[f.model_dump() for f in findings],
-                    # Safely access attributes with getattr in case the agent crashed mid-initialization
-                    reflection_report=getattr(agent, '_reflection_report', None).model_dump() if getattr(agent, '_reflection_report', None) else {},
-                    react_chain=getattr(agent, '_react_chain', []),
-                )
-            except Exception as e:
-                logger.error("Agent5 failed", error=str(e))
-                return AgentLoopResult(agent_id="Agent5", findings=[], reflection_report={}, react_chain=[], error=str(e))
         
         # Run all agents concurrently
-        results = await asyncio.gather(run_agent1(), run_agent2(), run_agent3(), run_agent4(), run_agent5())
+        results = await asyncio.gather(
+            run_agent_with_deep(Agent1Image, "Agent1"),
+            run_agent_with_deep(Agent2Audio, "Agent2", {"inter_agent_bus": self.inter_agent_bus}),
+            run_agent_with_deep(Agent3Object, "Agent3", {"inter_agent_bus": self.inter_agent_bus}),
+            run_agent_with_deep(Agent4Video, "Agent4", {"inter_agent_bus": self.inter_agent_bus}),
+            run_agent_with_deep(Agent5Metadata, "Agent5"),
+        )
+        
+        # Log summary of active agents
+        active_agents = [r.agent_id for r in results if r.agent_active]
+        skipped_agents = [r.agent_id for r in results if not r.supports_file_type]
+        logger.info(
+            "Agent execution summary",
+            active_agents=active_agents,
+            skipped_agents=skipped_agents,
+        )
+        
         return list(results)
     
     async def handle_hitl_decision(

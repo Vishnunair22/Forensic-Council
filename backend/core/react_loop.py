@@ -465,7 +465,7 @@ class ReActLoopEngine:
         "splice point detection": "audio_splice_detect",
         "background noise consistency": "background_noise_analysis",
         "codec fingerprinting": "codec_fingerprinting",
-        "optical flow": "optical_flow_analyze",
+        "optical flow": "optical_flow_analysis",
         "frame-to-frame consistency": "frame_consistency_analysis",
         "face-swap detection": "face_swap_detection",
         "extract all exif": "exif_extract",
@@ -505,6 +505,26 @@ class ReActLoopEngine:
         "av file identity": "av_file_identity",
         "av pre-screen": "av_file_identity",
         "variable frame rate": "mediainfo_profile",
+        # Agent 3 - Secondary Classification
+        "secondary classification": "secondary_classification",
+        "scale and proportion": "scale_validation",
+        "scale validation": "scale_validation",
+        # Agent 5 - Timestamp Analysis
+        "timestamp analysis": "timestamp_analysis",
+        "timestamp consistency": "timestamp_analysis",
+        # Agent 5 - Deep metadata
+        "deep metadata": "extract_deep_metadata",
+        "physical address": "get_physical_address",
+        # Agent 4 - Video Analysis
+        "optical flow analysis": "optical_flow_analysis",
+        "temporal anomaly": "optical_flow_analysis",
+        "frame extraction": "frame_extraction",
+        "frame window": "frame_extraction",
+        "anomaly as explainable": "anomaly_classification",
+        "anomaly classification": "anomaly_classification",
+        "rolling shutter": "rolling_shutter_validation",
+        "face swap": "face_swap_detection",
+        "gan artifact detection": "deepfake_frequency_check",
     }
 
     def __init__(
@@ -1076,6 +1096,13 @@ class ReActLoopEngine:
             "submit calibrated findings to arbiter",
             "submit findings",
             "calibrated findings",
+            "synthesize cross-field consistency",  # Summary task - no tool needed
+            "synthesize",  # Generic synthesis tasks
+            "classify each anomaly",  # Classification tasks are summary/synthesis
+            "issue collaborative call",  # Optional inter-agent tasks
+            "for each suspicious anomaly",  # Iterative tasks handled by tools
+            "for each flagged anomaly",  # Iterative tasks handled by tools
+            "for frames containing",  # Conditional tasks
         }
 
         if pending_task.description and any(skip in pending_task.description.lower() for skip in _SKIP_TASKS):

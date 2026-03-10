@@ -351,96 +351,91 @@ export default function ResultPage() {
                         <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-8">
                           <h3 className="text-2xl font-bold text-white mb-8">Agent Findings</h3>
 
-                          {/* 3-2 Grid Layout */}
-                          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3 gap-6">
-                            {/* Agent 1, 2, 3 (top row) */}
-                            {["Agent1", "Agent2", "Agent3"].map((agentId) => {
-                              const config = AGENT_CONFIG[agentId];
-                              const agentFindings = realReport?.per_agent_findings?.[agentId] || [];
-                              const colors = COLOR_STYLES[config.color];
-
+                          {/* Dynamic Grid - Only show agents with findings */}
+                          {(() => {
+                            // Get all agents and filter to only those with findings
+                            const allAgentIds = ["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"];
+                            const activeAgents = allAgentIds.filter(agentId => {
+                              const findings = realReport?.per_agent_findings?.[agentId] || [];
+                              return findings.length > 0;
+                            });
+                            
+                            if (activeAgents.length === 0) {
                               return (
-                                <motion.div
-                                  key={agentId}
-                                  initial={{ opacity: 0, y: 20 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  transition={{ delay: 0.1 }}
-                                  className={`rounded-xl border p-6 bg-white/[0.02] ${config.borderColor} hover:bg-white/[0.04] transition-all`}
-                                >
-                                  <div className="flex items-center gap-3 mb-4">
-                                    <div className={`p-3 rounded-lg ${config.bgColor}`}>
-                                      <div className={colors.text}>{config.icon}</div>
-                                    </div>
-                                    <div>
-                                      <h4 className="font-bold text-white text-lg">{config.name}</h4>
-                                      <p className="text-slate-400 text-xs">{config.role}</p>
-                                    </div>
-                                  </div>
-
-                                  <div className="space-y-2">
-                                    {agentFindings.length > 0 ? (
-                                      agentFindings.map((finding, idx) => (
-                                        <div key={idx} className="text-sm">
-                                          <p className={`font-medium ${colors.text}`}>{finding.finding_type}</p>
-                                          <p className="text-slate-400 text-xs mt-1">{finding.reasoning_summary}</p>
-                                          <p className={`text-xs mt-2 ${colors.text}`}>
-                                            Confidence: {Math.round((finding.calibrated_probability ?? finding.confidence_raw ?? 0) * 100)}%
-                                          </p>
-                                        </div>
-                                      ))
-                                    ) : (
-                                      <p className="text-slate-500 text-sm italic">No findings recorded</p>
-                                    )}
-                                  </div>
-                                </motion.div>
+                                <div className="text-center py-8">
+                                  <p className="text-slate-400">No agents produced findings for this file type.</p>
+                                </div>
                               );
-                            })}
-                          </div>
+                            }
+                            
+                            return (
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {activeAgents.map((agentId, idx) => {
+                                  const config = AGENT_CONFIG[agentId];
+                                  const agentFindings = realReport?.per_agent_findings?.[agentId] || [];
+                                  const colors = COLOR_STYLES[config.color];
+                                  
+                                  // Count initial vs deep findings
+                                  const initialCount = agentFindings.filter(f => f.metadata?.analysis_phase !== 'deep').length;
+                                  const deepCount = agentFindings.filter(f => f.metadata?.analysis_phase === 'deep').length;
 
-                          {/* Agent 4, 5 (bottom row - centered) */}
-                          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3 gap-6 mt-6">
-                            {["Agent4", "Agent5"].map((agentId) => {
-                              const config = AGENT_CONFIG[agentId];
-                              const agentFindings = realReport?.per_agent_findings?.[agentId] || [];
-                              const colors = COLOR_STYLES[config.color];
-
-                              return (
-                                <motion.div
-                                  key={agentId}
-                                  initial={{ opacity: 0, y: 20 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  transition={{ delay: 0.15 }}
-                                  className={`rounded-xl border p-6 bg-white/[0.02] ${config.borderColor} hover:bg-white/[0.04] transition-all`}
-                                >
-                                  <div className="flex items-center gap-3 mb-4">
-                                    <div className={`p-3 rounded-lg ${config.bgColor}`}>
-                                      <div className={colors.text}>{config.icon}</div>
-                                    </div>
-                                    <div>
-                                      <h4 className="font-bold text-white text-lg">{config.name}</h4>
-                                      <p className="text-slate-400 text-xs">{config.role}</p>
-                                    </div>
-                                  </div>
-
-                                  <div className="space-y-2">
-                                    {agentFindings.length > 0 ? (
-                                      agentFindings.map((finding, idx) => (
-                                        <div key={idx} className="text-sm">
-                                          <p className={`font-medium ${colors.text}`}>{finding.finding_type}</p>
-                                          <p className="text-slate-400 text-xs mt-1">{finding.reasoning_summary}</p>
-                                          <p className={`text-xs mt-2 ${colors.text}`}>
-                                            Confidence: {Math.round((finding.calibrated_probability ?? finding.confidence_raw ?? 0) * 100)}%
-                                          </p>
+                                  return (
+                                    <motion.div
+                                      key={agentId}
+                                      initial={{ opacity: 0, y: 20 }}
+                                      animate={{ opacity: 1, y: 0 }}
+                                      transition={{ delay: idx * 0.1 }}
+                                      className={`rounded-xl border p-6 bg-white/[0.02] ${config.borderColor} hover:bg-white/[0.04] transition-all`}
+                                    >
+                                      <div className="flex items-center gap-3 mb-4">
+                                        <div className={`p-3 rounded-lg ${config.bgColor}`}>
+                                          <div className={colors.text}>{config.icon}</div>
                                         </div>
-                                      ))
-                                    ) : (
-                                      <p className="text-slate-500 text-sm italic">No findings recorded</p>
-                                    )}
-                                  </div>
-                                </motion.div>
-                              );
-                            })}
-                          </div>
+                                        <div>
+                                          <h4 className="font-bold text-white text-lg">{config.name}</h4>
+                                          <p className="text-slate-400 text-xs">{config.role}</p>
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Show finding counts */}
+                                      <div className="flex gap-2 mb-3 text-xs">
+                                        {initialCount > 0 && (
+                                          <span className="px-2 py-1 rounded-full bg-slate-500/20 text-slate-300 border border-slate-500/30">
+                                            {initialCount} Initial
+                                          </span>
+                                        )}
+                                        {deepCount > 0 && (
+                                          <span className="px-2 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                            {deepCount} Deep
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                                        {agentFindings.map((finding, fidx) => {
+                                          const isDeep = finding.metadata?.analysis_phase === 'deep';
+                                          return (
+                                            <div key={fidx} className="text-sm">
+                                              <div className="flex items-center gap-2 mb-1">
+                                                <p className={`font-medium ${colors.text}`}>{finding.finding_type}</p>
+                                                <span className={`text-[10px] px-2 py-0.5 rounded-full ${isDeep ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-slate-500/20 text-slate-300 border border-slate-500/30'}`}>
+                                                  {isDeep ? 'Deep' : 'Initial'}
+                                                </span>
+                                              </div>
+                                              <p className="text-slate-400 text-xs mt-1">{finding.reasoning_summary}</p>
+                                              <p className={`text-xs mt-2 ${colors.text}`}>
+                                                Confidence: {Math.round((finding.calibrated_probability ?? finding.confidence_raw ?? 0) * 100)}%
+                                              </p>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </motion.div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </motion.div>
                     )}
@@ -471,13 +466,16 @@ export default function ResultPage() {
 
                   {/* Action Buttons */}
                   <div className="flex gap-4 mt-12">
-                    {/* Analyse Again Button */}
+                    {/* New Analysis Button - takes to upload page */}
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => {
                         playSound("click");
-                        window.location.reload();
+                        sessionStorage.removeItem('forensic_session_id');
+                        sessionStorage.removeItem('forensic_file_name');
+                        sessionStorage.removeItem('forensic_case_id');
+                        router.push('/evidence');
                       }}
                       className="flex-1 flex items-center justify-center gap-3 px-6 py-4 rounded-xl
                         bg-white/[0.04] border border-white/[0.10] text-slate-300 font-semibold
@@ -485,10 +483,10 @@ export default function ResultPage() {
                         transition-all duration-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
                     >
                       <RotateCcw className="w-5 h-5" />
-                      Analyse Again
+                      New Analysis
                     </motion.button>
 
-                    {/* Back to Home Button */}
+                    {/* Back to Home Button - takes to landing page */}
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}

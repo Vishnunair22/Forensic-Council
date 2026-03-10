@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.1] — 2026-03-10
+
+### Production Readiness Audit & Groq LLM Configuration
+
+Complete production readiness audit with Groq LLM integration verified and
+Docker configuration improvements for smooth fresh builds.
+
+### Added
+
+**Groq LLM Configuration**
+- `.env` file created with Groq API key configuration
+- Verified `LLM_PROVIDER=groq` as default (recommended provider)
+- Verified `llama-3.3-70b-versatile` as default model
+- Confirmed post-analysis LLM synthesis pipeline is correctly configured
+- Verified Arbiter executive summary generation uses Groq when available
+
+**Production Readiness Verification**
+- Verified all Docker files build correctly with BuildKit
+- Verified model caching is properly configured with 7 named volumes
+- Verified dev/prod compose files share the same volume pool
+- Verified `.gitignore` properly excludes `.env` files
+- Verified `.dockerignore` files are properly configured
+- Verified entrypoint scripts exist and are properly configured
+
+### Verified
+
+**Docker Configuration**
+- `name: forensic-council` pinned in all compose files for shared volumes
+- `COMPOSE_PROJECT_NAME=forensic-council` in `.env` as backup
+- ML model caches: hf_cache, torch_cache, easyocr_cache, numba_cache, yolo_cache, deepface_cache, calibration_models
+- BuildKit cache mounts for uv and npm packages
+- Healthchecks configured for all services
+- Resource limits (memory, CPU) defined for each service
+
+**Environment Configuration**
+- `APP_ENV` defaults to `development` (validated: development|staging|production|testing)
+- Production blocks insecure default passwords
+- JWT secret key validation in production (min 32 chars, entropy check)
+- CORS origins configurable via `CORS_ALLOWED_ORIGINS`
+
+**Frontend Configuration**
+- Next.js 16.1.6 with standalone output (smaller Docker images)
+- React 19.1.0 with Framer Motion 12
+- Tailwind CSS v4.1
+- API proxy configured via `next.config.ts` rewrites
+- `INTERNAL_API_URL` for Docker-internal service communication
+
+---
+
 ## [1.0.0] — 2026-03-07
 
 ### Production Release — Full Audit & Hardening
