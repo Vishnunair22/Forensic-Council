@@ -259,6 +259,57 @@ class ForensicAgent(ABC):
         """Maximum iterations for the ReAct loop."""
         pass
     
+    @property
+    def supported_file_types(self) -> list[str]:
+        """
+        List of MIME type prefixes this agent supports.
+        
+        Override in subclasses to specify which file types the agent can analyze.
+        Examples: ['image/'], ['audio/', 'video/'], ['image/', 'video/']
+        Default: ['*'] (all file types - for metadata agent).
+        
+        Used by the pipeline to filter which agents should run for a given file.
+        """
+        return ['*']  # Default: support all file types
+    
+    @property
+    def supports_uploaded_file(self) -> bool:
+        """
+        Check if this agent supports the uploaded evidence file type.
+        
+        Returns True if any of the agent's supported_file_types match
+        the evidence file's MIME type, or if the agent supports all types.
+        """
+        if '*' in self.supported_file_types:
+            return True
+        
+        mime_type = getattr(self.evidence_artifact, 'mime_type', '') or ''
+        file_path = getattr(self.evidence_artifact, 'file_path', '') or ''
+        
+        # Check MIME type prefix match
+        for supported in self.supported_file_types:
+            if mime_type.lower().startswith(supported.lower()):
+                return True
+        
+        # Check file extension as fallback
+        audio_exts = ('.wav', '.mp3', '.flac', '.ogg', '.aac', '.m4a', '.wma')
+        video_exts = ('.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm')
+        image_exts = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.tif', '.webp')
+        
+        file_lower = file_path.lower()
+        for supported in self.supported_file_types:
+            if 'image' in supported.lower():
+                if any(file_lower.endswith(ext) for ext in image_exts):
+                    return True
+            elif 'audio' in supported.lower():
+                if any(file_lower.endswith(ext) for ext in audio_exts):
+                    return True
+            elif 'video' in supported.lower():
+                if any(file_lower.endswith(ext) for ext in video_exts):
+                    return True
+        
+        return False
+    
     # Abstract methods that must be overridden
     
     @abstractmethod
@@ -453,20 +504,33 @@ class ForensicAgent(ABC):
         
         Uses the SAME tool registry built during the initial pass,
         but initializes fresh working memory with deep_task_decomposition.
-        Returns additional findings from heavy ML tools.
+        Returns COMBINED findings from both initial and deep analysis.
+        
+        Each finding is tagged with analysis_phase metadata:
+        - 'initial': Findings from run_investigation()
+        - 'deep': Findings from this deep pass
         
         Must be called AFTER run_investigation() has completed.
         """
         deep_tasks = self.deep_task_decomposition
         if not deep_tasks:
-            return []
+            # No deep tasks - return initial findings with phase tag
+            for f in self._findings:
+                if "analysis_phase" not in f.metadata:
+                    f.metadata["analysis_phase"] = "initial"
+            return self._findings
         
         logger.info(
             "Starting deep investigation pass",
             agent_id=self.agent_id,
             agent_name=self.agent_name,
             deep_task_count=len(deep_tasks),
+            initial_finding_count=len(self._findings),
         )
+        
+        # Tag initial findings with analysis phase
+        for f in self._findings:
+            f.metadata["analysis_phase"] = "initial"
         
         # Use a suffixed agent_id for separate working memory namespace
         deep_agent_id = f"{self.agent_id}_deep"
@@ -498,6 +562,10 @@ class ForensicAgent(ABC):
         
         deep_findings = loop_result.findings
         
+        # Tag deep findings with analysis phase
+        for f in deep_findings:
+            f.metadata["analysis_phase"] = "deep"
+        
         # Post-synthesis with LLM on deep findings too
         if (self.config.llm_enable_post_synthesis
                 and self.config.llm_api_key
@@ -509,17 +577,28 @@ class ForensicAgent(ABC):
             try:
                 await self._synthesize_findings_with_llm()
                 deep_findings = self._findings
+                # Re-tag after synthesis
+                for f in deep_findings:
+                    f.metadata["analysis_phase"] = "deep"
             except Exception:
                 pass
             self._findings = orig_findings
         
+        # COMBINE initial and deep findings
+        combined_findings = self._findings + deep_findings
+        
+        # Update internal findings to the combined set
+        self._findings = combined_findings
+        
         logger.info(
-            "Deep investigation pass complete",
+            "Deep investigation pass complete - combined findings",
             agent_id=self.agent_id,
+            initial_finding_count=len(self._findings) - len(deep_findings),
             deep_finding_count=len(deep_findings),
+            total_finding_count=len(combined_findings),
         )
         
-        return deep_findings
+        return combined_findings
     
     async def _initialize_working_memory(self) -> None:
         """Initialize working memory with task decomposition."""

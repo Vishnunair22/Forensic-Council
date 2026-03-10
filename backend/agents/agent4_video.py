@@ -104,11 +104,30 @@ class Agent4Video(ForensicAgent):
             "Self-reflection pass",
             "Submit calibrated findings to Arbiter with dual anomaly classification list preserved",
         ]
+
+    @property
+    def deep_task_decomposition(self) -> list[str]:
+        """
+        Heavy tasks — deep face-swap detection, frequency analysis.
+        Runs in background after initial findings are returned.
+        """
+        return [
+            "Run deep face-swap detection with deepface ensemble on extracted frames",
+            "Run comprehensive deepfake frequency analysis across full video",
+            "Run inter-agent collaboration with Agent 2 for audio-visual timestamp correlation",
+            "Run advanced codec fingerprinting for re-encoding event detection",
+            "Run adversarial robustness check against optical flow evasion techniques",
+        ]
     
     @property
     def iteration_ceiling(self) -> int:
         """Maximum iterations for the ReAct loop."""
         return 20
+    
+    @property
+    def supported_file_types(self) -> list[str]:
+        """Video agent supports video file types."""
+        return ['video/']
     
     async def build_tool_registry(self) -> ToolRegistry:
         """
@@ -346,6 +365,8 @@ class Agent4Video(ForensicAgent):
             artifact = input_data.get("artifact") or self.evidence_artifact
             return await real_get_av_file_identity(artifact=artifact)
 
+        # CRITICAL: optical_flow_analysis must be registered FIRST - it's the primary tool for this agent
+        registry.register("optical_flow_analysis", optical_flow_analysis_handler, "Full-timeline optical flow analysis")
         registry.register("frame_extraction", frame_extraction_handler, "Frame window extraction")
         registry.register("frame_consistency_analysis", frame_consistency_analysis_handler, "Frame-to-frame consistency analysis")
         registry.register("face_swap_detection", face_swap_detection_handler, "Face-swap detection")

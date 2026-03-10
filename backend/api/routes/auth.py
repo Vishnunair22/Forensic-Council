@@ -200,8 +200,8 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
     # Try to fetch user from database first
     user = await get_user_from_db(form_data.username)
     
-    # Fallback to demo users if database is unavailable
-    if not user:
+    # Fallback to demo users if database is unavailable (strictly non-production)
+    if not user and settings.app_env != "production":
         user = _DEMO_USERS_FALLBACK.get(form_data.username)
     
     if not user or not verify_password(form_data.password, user["hashed_password"]):

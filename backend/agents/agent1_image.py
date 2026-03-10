@@ -94,6 +94,11 @@ class Agent1Image(ForensicAgent):
         """Maximum iterations for the ReAct loop."""
         return 15
     
+    @property
+    def supported_file_types(self) -> list[str]:
+        """Image agent supports image file types."""
+        return ['image/']
+    
     async def build_tool_registry(self) -> ToolRegistry:
         """
         Build and return the tool registry for this agent.

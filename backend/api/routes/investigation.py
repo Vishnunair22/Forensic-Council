@@ -44,6 +44,91 @@ settings = get_settings()
 router = APIRouter(prefix="/api/v1", tags=["investigation"])
 
 
+# ============================================================================
+# INVESTIGATE ENDPOINT - Start a new forensic investigation
+# ============================================================================
+
+@router.post("/investigate", response_model=InvestigationResponse)
+async def start_investigation(
+    file: UploadFile = File(...),
+    case_id: str = Form(...),
+    investigator_id: str = Form(...),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Start a new forensic investigation by uploading evidence.
+    
+    Accepts multipart/form-data with:
+    - file: The evidence file (image, audio, or video)
+    - case_id: Case identifier (e.g., CASE-20260101-001)
+    - investigator_id: Investigator ID (e.g., REQ-12345)
+    
+    Returns session_id for tracking the investigation via WebSocket.
+    """
+    from uuid import uuid4
+    import os
+    
+    # Validate file type
+    if file.content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type {file.content_type} not allowed. Allowed types: {', '.join(ALLOWED_MIME_TYPES)}"
+        )
+    
+    # Validate file size
+    if file.size and file.size > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File size exceeds maximum allowed size of {MAX_FILE_SIZE / (1024*1024)}MB"
+        )
+    
+    # Generate session ID
+    session_id = str(uuid4())
+    
+    # Create temp file for evidence
+    evidence_dir = Path("/app/storage/evidence")
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    
+    file_extension = Path(file.filename).suffix if file.filename else ""
+    evidence_file_path = evidence_dir / f"{session_id}{file_extension}"
+    
+    # Save uploaded file using FastAPI's built-in async file handling
+    try:
+        # Use the async file directly - FastAPI UploadFile is already async
+        content = await file.read()
+        with open(evidence_file_path, 'wb') as f:
+            f.write(content)
+    except Exception as e:
+        logger.error(f"Failed to save uploaded file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+    
+    # Create pipeline - takes no arguments in constructor
+    from orchestration.pipeline import ForensicCouncilPipeline
+    pipeline = ForensicCouncilPipeline()
+    _active_pipelines[session_id] = pipeline
+    
+    # Start investigation in background
+    task = asyncio.create_task(
+        _wrap_pipeline_with_broadcasts(
+            pipeline,
+            session_id,
+            str(evidence_file_path),
+            case_id,
+            investigator_id,
+        )
+    )
+    _active_tasks[session_id] = task
+    
+    logger.info(f"Investigation started: session_id={session_id}, case_id={case_id}, file={file.filename}")
+    
+    return InvestigationResponse(
+        session_id=session_id,
+        case_id=case_id,
+        status="started",
+        message=f"Investigation started for {file.filename}"
+    )
+
+
 class ResumeRequest(BaseModel):
     """Request body for the resume endpoint."""
     deep_analysis: bool
@@ -509,7 +594,9 @@ async def _wrap_pipeline_with_broadcasts(
                         pass
                 
                 if deep_findings:
-                    initial_result.findings.extend([f.model_dump(mode="json") for f in deep_findings])
+                    # run_deep_investigation returns COMBINED findings (initial + deep)
+                    # Replace initial findings with combined findings to avoid duplication
+                    initial_result.findings = [f.model_dump(mode="json") for f in deep_findings]
                     
                     confidences = [
                         f.get("confidence_raw", 0.5) if isinstance(f, dict) else 0.5
@@ -736,3 +823,71 @@ async def run_investigation_task(
                 os.unlink(evidence_file_path)
         except Exception as e:
             logger.warning(f"Failed to clean up temp file: {e}")
+
+
+# ============================================================================
+# RESUME ENDPOINT - Handles Accept Analysis / Deep Analysis decision
+# ============================================================================
+
+@router.post("/{session_id}/resume")
+async def resume_investigation(
+    session_id: str,
+    request: ResumeRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Resume investigation after initial analysis decision.
+    
+    This endpoint is called when the user clicks:
+    - "Accept Analysis" -> deep_analysis=False -> Skip deep pass, proceed to arbiter
+    - "Deep Analysis" -> deep_analysis=True -> Run heavy ML analysis
+    
+    The pipeline must be in a paused state (waiting on deep_analysis_decision_event).
+    """
+    logger.info(
+        "Resume investigation called",
+        session_id=session_id,
+        deep_analysis=request.deep_analysis,
+        user_id=current_user.user_id,
+    )
+    
+    # Get the active pipeline
+    pipeline = get_active_pipeline(session_id)
+    if not pipeline:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No active investigation found for session {session_id}"
+        )
+    
+    # Check if pipeline is waiting for decision
+    if not hasattr(pipeline, 'deep_analysis_decision_event'):
+        raise HTTPException(
+            status_code=400,
+            detail="Pipeline is not in a paused state waiting for decision"
+        )
+    
+    # Check if the event has already been set (decision already made)
+    if pipeline.deep_analysis_decision_event.is_set():
+        raise HTTPException(
+            status_code=400,
+            detail="Decision already made for this investigation"
+        )
+    
+    # Set the deep analysis flag based on user choice
+    pipeline.run_deep_analysis_flag = request.deep_analysis
+    
+    # Signal the pipeline to continue (release the wait)
+    pipeline.deep_analysis_decision_event.set()
+    
+    logger.info(
+        "Investigation resume signal sent",
+        session_id=session_id,
+        deep_analysis=request.deep_analysis,
+    )
+    
+    return {
+        "status": "resumed",
+        "session_id": session_id,
+        "deep_analysis": request.deep_analysis,
+        "message": "Deep analysis started" if request.deep_analysis else "Proceeding to final report"
+    }

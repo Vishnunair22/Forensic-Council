@@ -22,7 +22,10 @@ from api.routes.investigation import (
     register_websocket,
     unregister_websocket,
 )
-from api.schemas import SessionInfo
+from api.schemas import SessionInfo, ReportDTO
+from api.routes.investigation import _final_reports, _active_tasks
+from fastapi.responses import JSONResponse
+from datetime import datetime, timezone
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 
@@ -190,3 +193,69 @@ async def live_updates(websocket: WebSocket, session_id: str):
         pass
     finally:
         unregister_websocket(session_id, websocket)
+
+
+# ============================================================================
+# REPORT ENDPOINT - Fetch final report for results page
+# ============================================================================
+
+@router.get("/{session_id}/report", response_model=ReportDTO)
+async def get_session_report(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get the final investigation report.
+    
+    Returns the completed report with all agent findings and arbiter synthesis.
+    Used by the frontend results page to display the final analysis.
+    """
+    pipeline = get_active_pipeline(session_id)
+    
+    if not pipeline:
+        # Check if we have a cached report
+        if session_id in _final_reports:
+            report, cached_time = _final_reports[session_id]
+            # Return cached report if still valid (within 24 hours)
+            if (datetime.now(timezone.utc) - cached_time).total_seconds() < 86400:
+                return report
+            else:
+                del _final_reports[session_id]
+        
+        raise HTTPException(
+            status_code=404,
+            detail=f"No investigation found for session {session_id}"
+        )
+    
+    # Check if pipeline has completed
+    report = getattr(pipeline, '_final_report', None)
+    if not report:
+        # Check if still running
+        task = _active_tasks.get(session_id)
+        if task and not task.done():
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "status": "in_progress",
+                    "session_id": session_id,
+                    "message": "Investigation still in progress"
+                }
+            )
+        
+        # Check for error
+        error = getattr(pipeline, '_error', None)
+        if error:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Investigation failed: {error}"
+            )
+        
+        raise HTTPException(
+            status_code=404,
+            detail="Report not yet available"
+        )
+    
+    # Cache the report
+    _final_reports[session_id] = (report, datetime.now(timezone.utc))
+    
+    return report

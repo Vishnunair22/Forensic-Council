@@ -109,6 +109,11 @@ class Agent3Object(ForensicAgent):
         """Maximum iterations for the ReAct loop."""
         return 15
     
+    @property
+    def supported_file_types(self) -> list[str]:
+        """Object agent supports image and video file types."""
+        return ['image/', 'video/']
+    
     async def build_tool_registry(self) -> ToolRegistry:
         """
         Build and return the tool registry for this agent.
@@ -132,18 +137,24 @@ class Agent3Object(ForensicAgent):
             YOLOv8n is ~6MB and runs CPU-only in ~200ms per image.
             Detects 80 COCO classes including weapons (knife, gun, etc.)
             """
-            try:
-                from ultralytics import YOLO
-            except ImportError:
-                # Fallback to OpenCV heuristics if YOLO not available
-                return await _object_detection_opencv(input_data)
+            import os
+            
+            # Set YOLO cache directory BEFORE importing - this controls where models are downloaded
+            yolo_cache = os.getenv("YOLO_CONFIG_DIR", "/app/cache/ultralytics")
+            os.makedirs(yolo_cache, exist_ok=True)
+            os.environ["YOLO_CONFIG_DIR"] = yolo_cache
+            os.environ["ULTRALYTICS_CACHE_DIR"] = yolo_cache
             
             artifact = input_data.get("artifact") or self.evidence_artifact
             
             try:
-                # YOLOv8n is 6MB — runs CPU-only in ~200ms
+                from ultralytics import YOLO, settings
+                
+                settings.update({'weights_dir': yolo_cache, 'cache_dir': yolo_cache})
+                
                 # Auto-downloads on first call
-                model = YOLO("yolov8n.pt")
+                model_path = os.path.join(yolo_cache, "yolov8n.pt")
+                model = YOLO(model_path)
                 results = model(artifact.file_path, conf=0.25, verbose=False)
                 
                 detections = []
@@ -475,13 +486,23 @@ class Agent3Object(ForensicAgent):
 
                 def _detect_classes(pil_image) -> set:
                     """Run YOLO or OpenCV fallback and return set of detected class names."""
+                    import os
+                    
+                    # Set YOLO cache directory BEFORE importing
+                    yolo_cache = os.getenv("YOLO_CONFIG_DIR", "/app/cache/ultralytics")
+                    os.makedirs(yolo_cache, exist_ok=True)
+                    os.environ["YOLO_CONFIG_DIR"] = yolo_cache
+                    os.environ["ULTRALYTICS_CACHE_DIR"] = yolo_cache
+                    
                     with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
                         pil_image.save(tmp.name, format="JPEG", quality=95)
                         tmp_path = tmp.name
                     try:
                         try:
-                            from ultralytics import YOLO
-                            model = YOLO("yolov8n.pt")
+                            from ultralytics import YOLO, settings
+                            settings.update({'weights_dir': yolo_cache, 'cache_dir': yolo_cache})
+                            model_path = os.path.join(yolo_cache, "yolov8n.pt")
+                            model = YOLO(model_path)
                             results = model(tmp_path, conf=0.25, verbose=False)
                             classes = set()
                             for r in results:
@@ -565,6 +586,8 @@ class Agent3Object(ForensicAgent):
                     "confidence": None,
                     "error": str(e),
                 }
+        # CRITICAL: object_detection must be registered FIRST - it's the primary tool for this agent
+        registry.register("object_detection", object_detection, "Full-scene object detection using YOLOv8")
         registry.register("secondary_classification", secondary_classification, "Secondary classification pass")
         registry.register("scale_validation", scale_validation, "Scale and proportion validation")
         registry.register("lighting_consistency", lighting_consistency, "Lighting and shadow consistency check")

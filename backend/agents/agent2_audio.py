@@ -102,11 +102,29 @@ class Agent2Audio(ForensicAgent):
             "Self-reflection pass",
             "Submit calibrated findings to Arbiter",
         ]
+
+    @property
+    def deep_task_decomposition(self) -> list[str]:
+        """
+        Heavy tasks — deep anti-spoofing ensemble, cross-agent collaboration.
+        Runs in background after initial findings are returned.
+        """
+        return [
+            "Run deep anti-spoofing ensemble analysis on flagged speaker segments",
+            "Run spectral perturbation adversarial robustness check",
+            "Run cross-agent collaboration with Agent 4 for A/V timestamp correlation",
+            "Run advanced codec chain analysis for multi-generation detection",
+        ]
     
     @property
     def iteration_ceiling(self) -> int:
         """Maximum iterations for the ReAct loop."""
         return 20
+    
+    @property
+    def supported_file_types(self) -> list[str]:
+        """Audio agent supports audio file types."""
+        return ['audio/']
     
     async def build_tool_registry(self) -> ToolRegistry:
         """

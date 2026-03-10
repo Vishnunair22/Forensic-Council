@@ -242,16 +242,21 @@ export default function EvidencePage() {
   const handleDeepAnalysis = useCallback(async () => {
     playSound("think");
     setPhase("deep");
-    clearCompletedAgents();
+    // Don't clear completed agents - skipped agents should remain skipped
+    // Only agents with deep tasks will run again
     await resumeInvestigation(true); // Tell backend: run deep analysis
-  }, [playSound, resumeInvestigation, clearCompletedAgents]);
+  }, [playSound, resumeInvestigation]);
 
-  // New Analysis → go back to upload
-  const handleNewAnalysis = useCallback(() => {
+  // New Analysis → go back to upload page (clear state and show upload form)
+  const handleNewUpload = useCallback(() => {
     setFile(null);
     setPhase("initial");
     resetSimulation();
-  }, [resetSimulation]);
+    sessionStorage.removeItem('forensic_session_id');
+    sessionStorage.removeItem('forensic_file_name');
+    sessionStorage.removeItem('forensic_case_id');
+    playSound("click");
+  }, [resetSimulation, playSound]);
 
   // View Results → let arbiter compile, go to results page
   const handleViewResults = useCallback(() => {
@@ -348,7 +353,7 @@ export default function EvidencePage() {
               awaitingDecision={awaitingDecision}
               onAcceptAnalysis={handleAcceptAnalysis}
               onDeepAnalysis={handleDeepAnalysis}
-              onNewAnalysis={handleNewAnalysis}
+              onNewUpload={handleNewUpload}
               onViewResults={handleViewResults}
             />
           )}

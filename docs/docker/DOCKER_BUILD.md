@@ -1,6 +1,6 @@
 # Forensic Council — Docker Build & Caching Guide
 
-> **Version:** v1.0.1 | **Last Updated:** 2026-03-07
+> **Version:** v1.0.1 | **Last Updated:** 2026-03-10
 >
 > This is the definitive reference for building, rebuilding, and managing
 > Docker layer and ML model caches for Forensic Council.

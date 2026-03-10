@@ -104,6 +104,11 @@ class Agent5Metadata(ForensicAgent):
         """Maximum iterations for the ReAct loop."""
         return 15
     
+    @property
+    def supported_file_types(self) -> list[str]:
+        """Metadata agent supports all file types."""
+        return ['*']  # Metadata analysis applies to all file types
+    
     async def build_tool_registry(self) -> ToolRegistry:
         """
         Build and return the tool registry for this agent.

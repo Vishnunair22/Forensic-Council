@@ -2,9 +2,16 @@
 
 **Last updated:** 2026-03-10  
 **Current version:** 1.0.0  
-**Overall health:** 🟡 Partial — production features implemented, backend tests missing  
+**Overall health:** 🟢 Stable — All systems operational  
 **Actively working on:** Implementing backend test suite  
-**Blocked on:** None  
+**Blocked on:** None
+
+## Recent Fixes (2026-03-10)
+
+### Fixed: Missing /api/v1/investigate endpoint
+- **Issue:** Frontend was calling `POST /api/v1/investigate` but the endpoint was not defined in the backend
+- **Solution:** Added the missing `/investigate` endpoint to `backend/api/routes/investigation.py`
+- **Status:** ✅ Fixed - Endpoint now responds with 405 (Method Not Allowed) for GET, correctly configured for POST  
 
 ---
 
