@@ -71,7 +71,8 @@ export function AgentProgressDisplay({
     : allValidAgents;
 
   const hasVisibleAgents = visibleAgents.length > 0;
-  const firstVisibleId = hasVisibleAgents ? visibleAgents[0].id : null;
+  const firstVisibleAgent = visibleAgents[0];
+  const firstVisibleId = firstVisibleAgent ? firstVisibleAgent.id : null;
 
   // Stagger reveal state
   const [revealedAgents, setRevealedAgents] = useState<Set<string>>(new Set());
