@@ -2,7 +2,6 @@
 name = "forensic_council"
 version = "1.0.3"
 description = "Multi-Agent Forensic Evidence Analysis System"
-readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [

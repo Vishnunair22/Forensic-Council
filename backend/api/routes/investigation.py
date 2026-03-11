@@ -621,8 +621,8 @@ async def _wrap_pipeline_with_broadcasts(
                 # Run agent + heartbeat concurrently
                 heartbeat_task = asyncio.create_task(make_heartbeat(agent_id, agent_name, agent.working_memory, heartbeat_done))
                 
-                # FIX: Reduce timeout to 120s for faster completion
-                agent_timeout = min(120, pipeline.config.investigation_timeout * 0.6)
+                # Increase timeout to 300s for better agent completion
+                agent_timeout = min(300, pipeline.config.investigation_timeout * 0.6)
                 try:
                     findings = await asyncio.wait_for(
                         agent.run_investigation(),
@@ -640,7 +640,7 @@ async def _wrap_pipeline_with_broadcasts(
                 
                 if is_unsupported:
                     base_name = evidence_artifact.metadata.get("original_filename", os.path.basename(evidence_file_path))
-                    clean_text = f"{agent_name} cannot analyze this file type ({mime})."
+                    clean_text = f"{agent_name} does not support {base_name}. {agent_name} skipped forensic analysis."
                     for f in findings:
                         f.reasoning_summary = clean_text
                 

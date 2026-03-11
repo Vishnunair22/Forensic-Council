@@ -200,6 +200,10 @@ class CalibrationLayer:
         baseline_tpr = params.get("baseline_tpr", 0.1)
         baseline_fpr = params.get("baseline_fpr", 0.05)
         
+        # Handle None raw_score
+        if raw_score is None:
+            raw_score = 0.5  # Default to neutral confidence
+        
         # Sigmoid transformation
         import math
         calibrated_prob = 1.0 / (1.0 + math.exp(-k * (raw_score - x0)))
