@@ -1,13 +1,18 @@
 # syntax=docker/dockerfile:1.7
-# ─── Backend — Optimised Multi-Stage Build ────────────────────────────────────
+# ─── Backend — Multi-Stage Build ──────────────────────────────────────────────
+# Stages:
+#   base        — system deps + uv + Python venv (shared by all stages)
+#   development — hot-reload dev server  (used by: docker-compose.dev.yml)
+#   production  — hardened, non-root, read-only container (default)
+#
 # Requires BuildKit (enabled by default in Docker 23+ and Docker Desktop).
 # Manual override: DOCKER_BUILDKIT=1 docker compose build
 # ─────────────────────────────────────────────────────────────────────────────
 
-FROM python:3.12-slim
+# ── Stage 0: Base — system deps + Python venv ────────────────────────────────
+FROM python:3.12-slim AS base
 
 # 1. System deps — cached aggressively via BuildKit cache mount
-#    Layer is reused on rebuild unless apt package list changes.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
@@ -22,23 +27,18 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Install latest uv (fast Python package manager)
-COPY --from=ghcr.io/astral-sh/uv:0.7 /uv /uvx /bin/
+# 2. Install uv (fast Python package manager)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-# ─── Dependency layer ─────────────────────────────────────────────────────────
-# Copy ONLY the lock files first so this expensive layer is cache-valid
-# whenever pyproject.toml and uv.lock are unchanged (i.e. every code-only change).
+# ─── Dependency layer ──────────────────────────────────────────────────────────
 COPY pyproject.toml uv.lock ./
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_HTTP_TIMEOUT=600
 
-# BuildKit cache mount preserves uv's HTTP cache between rebuilds.
-# Result: packages are downloaded ONCE and reused even across `docker build`.
-# This is the primary fix for slow builds.
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project --extra ml
 
@@ -47,8 +47,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get purge -y gcc && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
-# ─── Application layer ────────────────────────────────────────────────────────
-# Source code is copied AFTER deps — code changes don't invalidate the dep layer.
+# Copy application source AFTER deps — code changes don't invalidate the dep layer
 COPY . .
 
 ENV PATH="/app/.venv/bin:$PATH" \
@@ -56,11 +55,10 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# 4. ML model cache dirs — mapped to named Docker volumes in docker-compose.
-#    Models download ONCE into the volume on first run; they persist across:
-#      - Container restarts
-#      - Image rebuilds  (volume is separate from the image)
-#    They are ONLY re-downloaded if you explicitly run: docker volume rm <vol>
+# ML model cache dirs — mapped to named Docker volumes in docker-compose.
+# Models download ONCE into the volume on first run; they persist across:
+#   - Container restarts
+#   - Image rebuilds (volume is separate from the image)
 ENV NUMBA_CACHE_DIR="/app/cache/numba_cache" \
     YOLO_CONFIG_DIR="/app/cache/ultralytics" \
     TORCH_HOME="/app/cache/torch" \
@@ -80,20 +78,40 @@ RUN mkdir -p \
     /app/cache/calibration_models \
     /app/cache/easyocr
 
+# Pre-compile application bytecode for faster cold starts
+RUN python -m compileall -q api/ core/ orchestration/ agents/ tools/ scripts/ 2>/dev/null || true
+
+# Make entrypoint executable
+RUN chmod +x scripts/docker_entrypoint.sh
+
+# ── Stage 1: Development — hot-reload server ─────────────────────────────────
+FROM base AS development
+
+# Install dev + test dependencies
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --extra ml --extra dev
+
+ENV RELOAD=true \
+    APP_ENV=development \
+    DEBUG=true
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
+    CMD curl -f -s http://localhost:8000/health || exit 1
+
+CMD ["sh", "scripts/docker_entrypoint.sh"]
+
+# ── Stage 2: Production — hardened, non-root ─────────────────────────────────
+FROM base AS production
+
 # Create a dedicated non-root user so the process cannot write outside its
-# designated directories even if exploited.  All writable paths are explicitly
-# chown'd here; the volume mounts in docker-compose inherit these permissions.
+# designated directories even if exploited. All writable paths are explicitly
+# chown'd here; volume mounts in docker-compose inherit these permissions.
 RUN addgroup --system --gid 1001 appgroup \
  && adduser  --system --uid  1001 --ingroup appgroup --no-create-home appuser \
  && chown -R appuser:appgroup /app/cache /app/storage
 
-# 5. Pre-compile application bytecode for faster cold starts
-RUN python -m compileall -q api/ core/ orchestration/ agents/ tools/ scripts/ 2>/dev/null || true
-
-# 6. Make entrypoint executable
-RUN chmod +x scripts/docker_entrypoint.sh
-
-# Switch to non-root user before the process starts
 USER appuser
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
@@ -104,3 +122,6 @@ EXPOSE 8000
 # Entrypoint runs model_cache_check.py then exec's the API server.
 # Set SKIP_CACHE_CHECK=1 to bypass the check (useful in CI/CD pipelines).
 CMD ["sh", "scripts/docker_entrypoint.sh"]
+
+# Default target is production
+FROM production

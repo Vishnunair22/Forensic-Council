@@ -23,3 +23,15 @@
 *   **Context**: Processing a single payload through 5 agents.
 *   **Decision**: Enforce sequential execution.
 *   **Rationale**: Parallelizing 5 LLM chains and 5 heavy ML subprocesses simultaneously on typical analyst hardware caused severe out-of-memory (OOM) crashes and disjointed UX. Sequential execution slows down the total *wall-clock* time but drastically improves system stability and provides a linear, readable stream of text for the UI.
+
+## ADR 5: GitHub Actions for CI/CD
+*   **Date**: 2026-03-11
+*   **Context**: No automated gate existed; tests were never run on push.
+*   **Decision**: Add `.github/workflows/ci.yml` with backend + frontend lint/type-check/build jobs, dependency audits, and an integration smoke test gated to `main` pushes.
+*   **Rationale**: Forensic evidence tooling has a high correctness bar. Catching regressions in the signing pipeline or auth layer before merge is non-negotiable. The smoke test runs the full Docker stack against a live backend to verify `/health` and auth rejection without requiring real ML models (`LLM_PROVIDER=none`).
+
+## ADR 6: Redis-Backed Rate Limiting with In-Process Fallback
+*   **Date**: 2026-03-11
+*   **Context**: A single authenticated user could submit unlimited investigation jobs, exhausting memory and CPU.
+*   **Decision**: Redis `INCR`/`EXPIRE` counters for per-user investigation rate limits and per-IP login attempt tracking; in-process dict as fallback when Redis is unreachable.
+*   **Rationale**: Pure in-process counters reset on restart and are wrong across replicas. Pure Redis counters fail if Redis is momentarily unavailable. The dual-layer approach gives correct multi-replica behaviour in steady state while degrading gracefully to single-node accuracy during Redis outages rather than blocking all requests.

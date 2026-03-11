@@ -6,6 +6,7 @@ Async Redis client wrapper for working memory and caching.
 Supports async context managers and logs connection events.
 """
 
+import asyncio
 from typing import Any, Optional
 import redis.asyncio as redis
 from redis.asyncio import Redis
@@ -280,27 +281,46 @@ class RedisClient:
         return await self.client.hdel(name, *keys)
 
 
-# Singleton instance
+# Singleton instance — protected by a lock to prevent concurrent init races
 _redis_client: Optional[RedisClient] = None
+_redis_lock: Optional[asyncio.Lock] = None
+
+
+def _get_redis_lock() -> asyncio.Lock:
+    """Lazily create the Redis init lock on first use (must run inside an event loop)."""
+    global _redis_lock
+    if _redis_lock is None:
+        _redis_lock = asyncio.Lock()
+    return _redis_lock
 
 
 async def get_redis_client() -> RedisClient:
     """
     Get or create the Redis client singleton.
-    
+
+    Thread-safe via asyncio.Lock — concurrent callers will wait rather than
+    each creating their own connection pool.
+
     Returns:
         RedisClient instance
     """
     global _redis_client
-    if _redis_client is None:
-        _redis_client = RedisClient()
-        await _redis_client.connect()
+    if _redis_client is not None:
+        return _redis_client
+    async with _get_redis_lock():
+        # Double-checked locking: another coroutine may have connected while
+        # we were waiting for the lock.
+        if _redis_client is None:
+            client = RedisClient()
+            await client.connect()
+            _redis_client = client
     return _redis_client
 
 
 async def close_redis_client() -> None:
     """Close the Redis client singleton."""
     global _redis_client
-    if _redis_client is not None:
-        await _redis_client.disconnect()
-        _redis_client = None
+    async with _get_redis_lock():
+        if _redis_client is not None:
+            await _redis_client.disconnect()
+            _redis_client = None

@@ -137,7 +137,7 @@ def get_logger(name: str, level: Optional[str] = None) -> StructuredLogger:
     
     Usage:
         logger = get_logger(__name__)
-        logger.info("Application started", version="1.0.0")
+        logger.info("Application started", version="1.0.3")
     """
     return StructuredLogger(name, level)
 

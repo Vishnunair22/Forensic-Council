@@ -110,10 +110,8 @@ backend/
 │   └── report_renderer.py # Report rendering
 ├── tests/                  # Test suite
 │   ├── conftest.py        # Pytest fixtures
-│   ├── test_core/         # Core module tests
-│   ├── test_infra/        # Infrastructure tests
-│   ├── test_agents/       # Agent tests
-│   └── test_tools/        # Tool tests
+│   ├── unit/              # Unit tests (config, signing, agents, custody, memory…)
+│   └── integration/       # Integration tests (API routes smoke tests)
 ├── scripts/                # Utility scripts
 │   └── init_db.py         # Database initialization
 ├── pyproject.toml          # Python project config
@@ -143,7 +141,7 @@ uv run pytest tests/ -v
 uv run pytest tests/ -v --cov=. --cov-report=term-missing
 
 # Run specific test file
-uv run pytest tests/test_infra/test_redis.py -v
+uv run pytest tests/unit/test_signing.py -v
 ```
 
 ### Code Style

@@ -6,6 +6,8 @@
 
 services:
   backend:
+    build:
+      target: production
     environment:
       - RELOAD=false
       - APP_ENV=production

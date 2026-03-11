@@ -1,6 +1,6 @@
 [project]
 name = "forensic_council"
-version = "1.0.0"
+version = "1.0.3"
 description = "Multi-Agent Forensic Evidence Analysis System"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -83,7 +83,7 @@ dev = [
 observability = [
     "opentelemetry-api>=1.20",
     "opentelemetry-sdk>=1.20",
-    "opentelemetry-exporter-jaeger>=1.20",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.20",
     "opentelemetry-instrumentation-fastapi>=0.41b0",
     "opentelemetry-instrumentation-redis>=0.41b0",
     "opentelemetry-instrumentation-sqlalchemy>=0.41b0",

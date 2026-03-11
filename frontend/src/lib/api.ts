@@ -5,6 +5,14 @@
  * Client module for communicating with the FastAPI backend.
  */
 
+/** Dev-only logger — silenced in production builds */
+const isDev = process.env.NODE_ENV !== "production";
+const dbg = {
+    log: isDev ? console.log.bind(console) : () => {},
+    warn: isDev ? console.warn.bind(console) : () => {},
+    error: isDev ? console.error.bind(console) : () => {},
+};
+
 // ── API Base URL ─────────────────────────────────────────────────────────────
 //
 // CORS FIX: browser requests use an empty string (relative URL) so they hit
@@ -278,7 +286,7 @@ async function handleAuthError<T>(
     ) {
       if (authRetryCount < MAX_AUTH_RETRIES) {
         authRetryCount++;
-        console.warn("Token invalid, clearing and re-authenticating...");
+        dbg.warn("Token invalid, clearing and re-authenticating...");
         clearAuthToken();
         try {
           const result = await operation();
@@ -472,7 +480,7 @@ export function createLiveSocket(
   }, 12_000);
 
   ws.onopen = () => {
-    console.log("[WS] Connected, sending AUTH");
+    dbg.log("[WS] Connected, sending AUTH");
     const token = getAuthToken();
     if (token) {
       ws.send(JSON.stringify({ type: "AUTH", token }));
@@ -483,13 +491,13 @@ export function createLiveSocket(
   };
 
   ws.onerror = (event) => {
-    console.error("[WS] Connection error", event);
+    dbg.error("[WS] Connection error", event);
     clearTimeout(connectTimeout);
     safeReject(new Error("WebSocket connection error"));
   };
 
   ws.onclose = (event) => {
-    console.log("[WS] Closed:", event.code, event.reason);
+    dbg.log("[WS] Closed:", event.code, event.reason);
     clearTimeout(connectTimeout);
     if (!settled) {
       safeReject(

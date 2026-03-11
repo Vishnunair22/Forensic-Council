@@ -6,6 +6,7 @@ Async PostgreSQL client wrapper using asyncpg.
 Supports async context managers and logs connection events.
 """
 
+import asyncio
 import json
 from typing import Any, Optional, AsyncGenerator
 import asyncpg
@@ -319,34 +320,49 @@ class TransactionContext:
         return await self._conn.fetchrow(query, *args)
 
 
-# Singleton instance
+# Singleton instance — protected by a lock to prevent concurrent init races
 _postgres_client: Optional[PostgresClient] = None
+_postgres_lock: Optional[asyncio.Lock] = None
+
+
+def _get_postgres_lock() -> asyncio.Lock:
+    """Lazily create the Postgres init lock on first use (must run inside an event loop)."""
+    global _postgres_lock
+    if _postgres_lock is None:
+        _postgres_lock = asyncio.Lock()
+    return _postgres_lock
 
 
 async def get_postgres_client() -> PostgresClient:
     """
     Get or create the PostgreSQL client singleton.
-    
+
+    Thread-safe via asyncio.Lock — concurrent callers wait rather than each
+    creating their own connection pool.
+
     Returns:
         PostgresClient instance
     """
     global _postgres_client
-    if _postgres_client is None:
-        _postgres_client = PostgresClient()
-        
-    if getattr(_postgres_client, "_pool", None) is None:
-        try:
-            await _postgres_client.connect()
-        except Exception as e:
-            _postgres_client = None
-            raise e
-            
+    if _postgres_client is not None and getattr(_postgres_client, "_pool", None) is not None:
+        return _postgres_client
+    async with _get_postgres_lock():
+        # Double-checked locking
+        if _postgres_client is None or getattr(_postgres_client, "_pool", None) is None:
+            client = PostgresClient()
+            try:
+                await client.connect()
+            except Exception:
+                _postgres_client = None
+                raise
+            _postgres_client = client
     return _postgres_client
 
 
 async def close_postgres_client() -> None:
     """Close the PostgreSQL client singleton."""
     global _postgres_client
-    if _postgres_client is not None:
-        await _postgres_client.disconnect()
-        _postgres_client = None
+    async with _get_postgres_lock():
+        if _postgres_client is not None:
+            await _postgres_client.disconnect()
+            _postgres_client = None

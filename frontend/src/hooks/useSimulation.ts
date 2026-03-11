@@ -3,6 +3,15 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { AGENTS_DATA } from "@/lib/constants";
 import { AgentResult } from "@/types";
+
+/** Dev-only logger — silenced in production builds */
+const isDev = process.env.NODE_ENV !== "production";
+const dbg = {
+    log: isDev ? console.log.bind(console) : () => {},
+    warn: isDev ? console.warn.bind(console) : () => {},
+    error: isDev ? console.error.bind(console) : () => {},
+};
+
 import { createLiveSocket, BriefUpdate, HITLCheckpoint } from "@/lib/api";
 import { SoundType } from "./useSound";
 import { AgentUpdate } from "@/components/evidence";
@@ -60,7 +69,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                     const update = messageQueue.shift();
                     if (!update) break;
 
-                    console.log("[Simulation] Processing update from queue:", update);
+                    dbg.log("[Simulation] Processing update from queue:", update);
 
                     switch (update.type) {
                         case "CONNECTED":
@@ -158,7 +167,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                             break;
 
                         case "ERROR":
-                            console.error("[WebSocket] Error:", update.message);
+                            dbg.error("[WebSocket] Error:", update.message);
                             setErrorMessage(update.message || "Investigation failed");
                             setStatus("error");
                             break;
@@ -170,15 +179,15 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
             const handleMessage = (event: MessageEvent) => {
                 try {
                     const update: BriefUpdate = JSON.parse(event.data);
-                    console.log("[WebSocket] Received update, adding to queue:", update);
+                    dbg.log("[WebSocket] Received update, adding to queue:", update);
                     if (messageQueue.length >= 500) {
                         messageQueue.shift();
-                        console.warn("[WebSocket] Queue limit reached, dropped oldest message");
+                        dbg.warn("[WebSocket] Queue limit reached, dropped oldest message");
                     }
                     messageQueue.push(update);
                     processQueue();
                 } catch (error) {
-                    console.error("[WebSocket] Failed to parse message:", error);
+                    dbg.error("[WebSocket] Failed to parse message:", error);
                 }
             };
 
@@ -199,7 +208,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
 
             // Handle close - reject if closed before/during connection, otherwise notify
             const handleClose = (event: CloseEvent) => {
-                console.log("[WebSocket] Connection closed:", event.code, event.reason);
+                dbg.log("[WebSocket] Connection closed:", event.code, event.reason);
                 wsRef.current = null;
 
                 // If connection was never established, reject the promise
@@ -298,7 +307,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
             setStatus(deep ? "analyzing" : "processing");
             if (deep) playSoundRef.current?.("think");
         } catch (error) {
-            console.error("Error resuming investigation:", error);
+            dbg.error("Error resuming investigation:", error);
             setErrorMessage("Failed to resume analysis");
         }
     }, [sessionId]);

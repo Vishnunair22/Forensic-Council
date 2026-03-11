@@ -22,6 +22,51 @@ If the key must be rotated:
 3.  Restart the backend container: `docker compose -f docs/docker/docker-compose.yml --env-file .env up -d --force-recreate backend`
 **Note:** Old reports accessed via the API or stored in Postgres will fail signature verification against the new key. This is expected and ensures temporal separation of evidence custody boundaries.
 
+---
+
+## Authentication & Credential Hardening (v1.0.3)
+
+### No credentials in source code
+Demo-user password hashes are never stored in the codebase. On startup, the backend reads `BOOTSTRAP_ADMIN_PASSWORD` and `BOOTSTRAP_INVESTIGATOR_PASSWORD` from the environment, hashes them with bcrypt, and inserts them into the database. Changing a password requires only an env update and container restart.
+
+### JWT token lifetime
+Access tokens expire after **60 minutes** (down from 7 days in earlier versions). This limits the blast radius of a stolen token in evidentiary systems where long-lived sessions are a compliance risk.
+
+### Brute-force login protection
+Failed login attempts are tracked per source IP using Redis (`login_fail:{ip}` counter). After 5 failures within a 5-minute window the IP is locked out for 15 minutes. Lockout state and TTL are stored in Redis with automatic expiry; the implementation falls back to an in-process dict when Redis is unavailable.
+
+---
+
+## Rate Limiting
+
+### Investigation rate limiter (v1.0.3)
+Authenticated users are limited to **5 investigation submissions per 5-minute window**. Counters are backed by Redis and fall back to an in-process dict when Redis is unavailable. Exceeding the limit returns `HTTP 429 Too Many Requests` with a `Retry-After` header.
+
+---
+
+## HTTP Security Headers
+
+Every response carries the following headers (set in `api/main.py`):
+
+| Header | Value |
+|--------|-------|
+| `X-Content-Type-Options` | `nosniff` |
+| `X-Frame-Options` | `DENY` |
+| `X-XSS-Protection` | `1; mode=block` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` |
+| `Content-Security-Policy` | `default-src 'self'; …` |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` *(production only)* |
+
+---
+
+## Input Validation
+
+*   **File upload:** MIME type allow-list + `_ALLOWED_EXTENSIONS` frozenset; both must match. Max size 50 MB enforced at middleware level (HTTP 413 before the body is read).
+*   **`case_id` / `investigator_id`:** Allow-list regex (`^[A-Za-z0-9_\-]{1,64}$`) enforced before the pipeline starts. Rejects path-traversal and injection payloads.
+
+---
+
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability within the Forensic Council, please avoid opening a public issue.
@@ -31,9 +76,11 @@ Send an encrypted email directly to the project maintainers containing:
 *   The environment details (Docker version, Postgres/Redis versions).
 *   A Proof-Of-Concept (PoC) script or detailed reproduction steps.
 
-Maintainers will respond within 48 hours to acknowledge receipt and provide a triage timeline. 
+Maintainers will respond within 48 hours to acknowledge receipt and provide a triage timeline.
 
 **Vulnerability Types of High Interest:**
-*   Bypass of file size validation checks.
+*   Bypass of file size or extension validation checks.
 *   Injection attacks via `case_id` or `investigator_id` payloads.
 *   Any method capable of coercing an agent into an infinite ReAct loop, causing a Denial of Service (DoS) attack.
+*   JWT forgery or token blacklist bypass.
+*   Rate-limiter bypass allowing resource exhaustion.
