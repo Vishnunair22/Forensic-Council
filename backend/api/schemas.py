@@ -57,7 +57,7 @@ class ReportDTO(BaseModel):
     uncertainty_statement: str
     cryptographic_signature: str
     report_hash: str
-    signed_utc: str
+    signed_utc: Optional[str] = None
 
 
 class HITLDecisionRequest(BaseModel):

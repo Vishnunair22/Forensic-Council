@@ -25,6 +25,17 @@ export default function LandingPage() {
       playSound("error");
       return;
     }
+    // Validate MIME type against the allowed set (same as backend)
+    const ALLOWED = new Set([
+      "image/jpeg", "image/png", "image/tiff", "image/webp", "image/gif", "image/bmp",
+      "video/mp4", "video/quicktime", "video/x-msvideo",
+      "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4", "audio/flac",
+    ]);
+    if (!ALLOWED.has(f.type)) {
+      setValidationError(`File type "${f.type || "unknown"}" is not supported. Upload an image, video, or audio file.`);
+      playSound("error");
+      return;
+    }
     setValidationError(null);
     setFile(f);
     if (f.type.startsWith("image/") || f.type.startsWith("video/")) {

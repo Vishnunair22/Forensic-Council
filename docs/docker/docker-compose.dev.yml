@@ -1,105 +1,29 @@
 # ============================================================================
-# Forensic Council — Development Docker Compose (v1.0.0)
+# Forensic Council — Docker Compose Override (Development)
 # ============================================================================
-# This file enables full hot-reload for both Backend and Frontend.
-# Merge on top of the base compose file:
-#
-#   docker compose -f docs/docker/docker-compose.yml \
-#                  -f docs/docker/docker-compose.dev.yml \
-#                  --env-file .env up -d --build
-#
-# Or use the Makefile shortcut:
-#   make dev
-#
-# ML MODEL SHARING: This file shares the same named volumes as the production
-# build. Models downloaded in dev are available in prod and vice versa.
-# No re-downloads when switching between dev and prod modes.
+# Enforces hot-reload for both Backend and Frontend.
 # ============================================================================
-
-# Must match the name in the base docker-compose.yml so volumes are shared.
-name: forensic-council
 
 services:
-  # --------------------------------------------------------------------------
-  # Backend — Development configuration with hot-reload
-  # --------------------------------------------------------------------------
   backend:
     build:
-      context: ../../backend
-      dockerfile: Dockerfile
-    # Override read_only from base — uvicorn --reload writes .pyc files
-    read_only: false
+      target: development # Optional if Dockerfile handles it, but good for clarity
     environment:
-      - DEBUG=true
-      - LOG_LEVEL=DEBUG
       - RELOAD=true
-    # Mount source directories for hot-reload (code runs from host, not image)
+      - APP_ENV=development
+      - DEBUG=true
     volumes:
-      - ../../backend/api:/app/api
-      - ../../backend/core:/app/core
-      - ../../backend/agents:/app/agents
-      - ../../backend/infra:/app/infra
-      - ../../backend/orchestration:/app/orchestration
-      - ../../backend/tools:/app/tools
-      - ../../backend/scripts:/app/scripts
-      # Scratch cache — must be listed BEFORE sub-directory mounts so they overlay
-      - cache_scratch:/app/cache:rw
-      - evidence_data:/app/storage/evidence:rw
-      # ML model caches — persisted across rebuilds (overlay the scratch volume)
-      - hf_cache:/app/cache/huggingface:rw
-      - torch_cache:/app/cache/torch:rw
-      - easyocr_cache:/app/cache/easyocr:rw
-      - numba_cache:/app/cache/numba_cache:rw
-      - yolo_cache:/app/cache/ultralytics:rw
-      - deepface_cache:/app/cache/deepface:rw
-      - calibration_models:/app/cache/calibration_models:rw
-    command: [ "sh", "scripts/docker_entrypoint.sh" ]
+      - ../../backend:/app:rw
+      # Protect the container's venv from being overwritten by local (potentially incompatible) .venv
+      - /app/.venv
 
-  # --------------------------------------------------------------------------
-  # Frontend — Development configuration with hot-reload
-  # --------------------------------------------------------------------------
   frontend:
     build:
-      context: ../../frontend
-      dockerfile: Dockerfile
       target: development
-    ports:
-      - "3000:3000"
     environment:
-      - HOSTNAME=0.0.0.0
-      - NEXT_TELEMETRY_DISABLED=1
       - NODE_ENV=development
-      # Enable polling for hot-reload in Docker on Windows/WSL/macOS
-      - WATCHPACK_POLLING=true
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
-      - NEXT_PUBLIC_DEMO_PASSWORD=${NEXT_PUBLIC_DEMO_PASSWORD}
-      # INTERNAL_API_URL is used by Next.js server-side API routes (e.g. /api/auth/demo).
-      # Must point to the Docker-internal service name, NOT localhost.
-      - INTERNAL_API_URL=http://forensic_api:8000
     volumes:
-      - ../../frontend/src:/app/src
-      - ../../frontend/public:/app/public
-      - ../../frontend/next.config.ts:/app/next.config.ts
-      - ../../frontend/tsconfig.json:/app/tsconfig.json
-      - ../../frontend/package.json:/app/package.json
-      - ../../frontend/package-lock.json:/app/package-lock.json
-    # Disable healthcheck in dev mode — fast iteration takes priority
-    healthcheck:
-      disable: true
-    command: [ "npm", "run", "dev" ]
-
-# ─── Shared ML model volumes ──────────────────────────────────────────────────
-# These volumes are SHARED with the production build.
-# Dev mode and prod mode read from and write to the same volume pool.
-# Models download once — switching between `make dev` and `make up` never
-# triggers a re-download.
-volumes:
-  hf_cache:
-  torch_cache:
-  easyocr_cache:
-  numba_cache:
-  yolo_cache:
-  deepface_cache:
-  calibration_models:
-  evidence_data:
-  cache_scratch:
+      - ../../frontend:/app:rw
+      # Protect node_modules and Next.js cache from host overrides
+      - /app/node_modules
+      - /app/.next

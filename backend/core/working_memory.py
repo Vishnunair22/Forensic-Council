@@ -183,7 +183,16 @@ class WorkingMemory:
         
         # Store in Redis with 24h TTL
         key = self._get_key(session_id, agent_id)
-        await self._redis.set(key, state.model_dump_json(), ex=86400)
+        if self._redis is not None:
+            try:
+                await self._redis.set(key, state.model_dump_json(), ex=86400)
+            except Exception as e:
+                logger.warning(
+                    "WorkingMemory.initialize: Redis write failed, running in-memory only",
+                    error=str(e),
+                )
+        else:
+            logger.warning("WorkingMemory.initialize: Redis unavailable, running in-memory only")
         
         # Log to custody logger
         if self._custody_logger:
@@ -243,7 +252,11 @@ class WorkingMemory:
         
         # Store updated state with 24h TTL
         key = self._get_key(session_id, agent_id)
-        await self._redis.set(key, state.model_dump_json(), ex=86400)
+        if self._redis is not None:
+            try:
+                await self._redis.set(key, state.model_dump_json(), ex=86400)
+            except Exception as e:
+                logger.warning("WorkingMemory.update_task: Redis write failed", error=str(e))
         
         # Log to custody logger
         if self._custody_logger:
@@ -284,7 +297,12 @@ class WorkingMemory:
             WorkingMemoryState with all tasks
         """
         key = self._get_key(session_id, agent_id)
-        data = await self._redis.get(key)
+        if self._redis is None:
+            raise ValueError(f"No working memory found for {session_id}/{agent_id} (Redis unavailable)")
+        try:
+            data = await self._redis.get(key)
+        except Exception as e:
+            raise ValueError(f"No working memory found for {session_id}/{agent_id}: Redis error: {e}")
         
         if data is None:
             raise ValueError(f"No working memory found for {session_id}/{agent_id}")
@@ -360,7 +378,11 @@ class WorkingMemory:
 
         # Persist with 24h TTL
         key = self._get_key(session_id, agent_id)
-        await self._redis.set(key, state.model_dump_json(), ex=86400)
+        if self._redis is not None:
+            try:
+                await self._redis.set(key, state.model_dump_json(), ex=86400)
+            except Exception as e:
+                logger.warning("WorkingMemory.update_state: Redis write failed", error=str(e))
 
         # Log
         if self._custody_logger:
@@ -394,11 +416,15 @@ class WorkingMemory:
         """
         state = await self.get_state(session_id, agent_id)
         state.current_iteration += 1
-        
+
         # Persist with 24h TTL
         key = self._get_key(session_id, agent_id)
-        await self._redis.set(key, state.model_dump_json(), ex=86400)
-        
+        if self._redis is not None:
+            try:
+                await self._redis.set(key, state.model_dump_json(), ex=86400)
+            except Exception as e:
+                logger.warning("WorkingMemory.increment_iteration: Redis write failed", error=str(e))
+
         return state.current_iteration
     
     async def serialize_to_json(
@@ -435,10 +461,16 @@ class WorkingMemory:
         """
         state_dict = json.loads(json_str)
         state = WorkingMemoryState.from_dict(state_dict)
-        
+
         # Persist with 24h TTL
         key = self._get_key(session_id, agent_id)
-        await self._redis.set(key, state.model_dump_json(), ex=86400)
+        if self._redis is not None:
+            try:
+                await self._redis.set(key, state.model_dump_json(), ex=86400)
+            except Exception as e:
+                logger.warning("WorkingMemory.restore_from_json: Redis write failed", error=str(e))
+        else:
+            logger.warning("WorkingMemory.restore_from_json: Redis unavailable")
         
         # Log to custody logger
         if self._custody_logger:
@@ -472,7 +504,11 @@ class WorkingMemory:
             agent_id: Agent identifier
         """
         key = self._get_key(session_id, agent_id)
-        await self._redis.delete(key)
+        if self._redis is not None:
+            try:
+                await self._redis.delete(key)
+            except Exception as e:
+                logger.warning("WorkingMemory.clear: Redis delete failed", error=str(e))
         
         logger.info(
             "Cleared working memory",

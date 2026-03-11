@@ -1,65 +1,86 @@
 #!/bin/bash
-# Forensic Council — Full Integration Smoke Test
-# Run this script to verify the complete application is working.
-# Usage: bash scripts/smoke_test.sh
-
+# ============================================================================
+# Forensic Council — Smoke Test
+# ============================================================================
+# Run from the backend/ directory:
+#   bash scripts/smoke_test.sh
+#
+# Prerequisites:
+#   - Docker Compose stack up  (docker compose -f docs/docker/docker-compose.yml up -d)
+#   - uv installed
+# ============================================================================
 set -e
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BACKEND_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="$(cd "$BACKEND_DIR/.." && pwd)"
+COMPOSE_FILE="$PROJECT_DIR/docs/docker/docker-compose.yml"
+
 echo -e "${YELLOW}=== Forensic Council Smoke Test ===${NC}"
+echo -e "Project root: $PROJECT_DIR"
 
-# 1. Check infrastructure
-echo -e "\n${YELLOW}[1/8] Checking infrastructure containers...${NC}"
-docker compose -f ../../docker/docker-compose.yml ps | grep -E "forensic_(redis|qdrant|postgres)" | grep "healthy" | wc -l | xargs -I {} bash -c 'if [ {} -eq 3 ]; then echo -e "${GREEN}All 3 containers healthy${NC}"; else echo -e "${RED}Not all containers healthy — run: docker compose up -d${NC}"; exit 1; fi' || echo -e "${YELLOW}Note: Containers may not be running. Continuing...${NC}"
+# 1. Infrastructure health
+echo -e "\n${YELLOW}[1/7] Checking infrastructure containers...${NC}"
+HEALTHY_COUNT=$(docker compose -f "$COMPOSE_FILE" ps --format json 2>/dev/null \
+  | python3 -c "import sys,json; data=sys.stdin.read(); rows=[json.loads(l) for l in data.splitlines() if l]; print(sum(1 for r in rows if 'healthy' in r.get('Health','').lower() and r.get('Service','') in ('redis','qdrant','postgres')))" 2>/dev/null || echo "0")
+if [ "$HEALTHY_COUNT" -ge 3 ]; then
+  echo -e "${GREEN}All 3 infrastructure containers healthy${NC}"
+else
+  echo -e "${YELLOW}Only $HEALTHY_COUNT/3 infrastructure containers healthy. Tests requiring infra may fail.${NC}"
+fi
 
-# 2. Check DB schema
-echo -e "\n${YELLOW}[2/8] Verifying database schema...${NC}"
-uv run python scripts/init_db.py || echo -e "${YELLOW}Note: DB init may have warnings. Continuing...${NC}"
-echo -e "${GREEN}DB schema verified${NC}"
+# 2. Unit tests (no infrastructure needed)
+echo -e "\n${YELLOW}[2/7] Running unit tests...${NC}"
+cd "$BACKEND_DIR"
+uv run pytest tests/unit/ -q --tb=short && echo -e "${GREEN}Unit tests passed${NC}" \
+  || echo -e "${YELLOW}Some unit tests failed — check output above${NC}"
 
-# 3. Run unit tests
-echo -e "\n${YELLOW}[3/8] Running unit tests...${NC}"
-uv run pytest tests/ -m "unit" -q --tb=short || echo -e "${YELLOW}Note: Some unit tests may fail without infrastructure. Continuing...${NC}"
-echo -e "${GREEN}Unit tests passed${NC}"
+# 3. Integration tests
+echo -e "\n${YELLOW}[3/7] Running integration tests...${NC}"
+uv run pytest tests/integration/ -q --tb=short && echo -e "${GREEN}Integration tests passed${NC}" \
+  || echo -e "${YELLOW}Some integration tests failed (may need running infra)${NC}"
 
-# 4. Start API server
-echo -e "\n${YELLOW}[4/8] Starting API server...${NC}"
+# 4. Start API server (background)
+echo -e "\n${YELLOW}[4/7] Starting API server...${NC}"
 uv run python scripts/run_api.py &
 API_PID=$!
-sleep 3
+sleep 4
 
-# 5. Check API health
-echo -e "\n${YELLOW}[5/8] Checking API health...${NC}"
-STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/docs 2>/dev/null || echo "000")
-if [ "$STATUS" = "200" ]; then
-  echo -e "${GREEN}API server responding (HTTP $STATUS)${NC}"
+# 5. Health check
+echo -e "\n${YELLOW}[5/7] Checking API health endpoint...${NC}"
+HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health 2>/dev/null || echo "000")
+if [ "$HEALTH_STATUS" = "200" ]; then
+  echo -e "${GREEN}API health check passed (HTTP $HEALTH_STATUS)${NC}"
 else
-  echo -e "${RED}API server not responding (HTTP $STATUS)${NC}"
-  kill $API_PID 2>/dev/null || true
+  echo -e "${RED}API health check failed (HTTP $HEALTH_STATUS)${NC}"
+  kill "$API_PID" 2>/dev/null || true
   exit 1
 fi
 
-# 6. Run API integration tests
-echo -e "\n${YELLOW}[6/8] Running API integration tests...${NC}"
-uv run pytest tests/test_api/ -q --tb=short || echo -e "${YELLOW}Note: API tests may require full infrastructure. Continuing...${NC}"
-echo -e "${GREEN}API integration tests passed${NC}"
+# 6. Auth smoke test
+echo -e "\n${YELLOW}[6/7] Testing auth endpoint...${NC}"
+AUTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+  -X POST http://localhost:8000/api/v1/auth/login \
+  -d "username=investigator&password=inv123!" \
+  -H "Content-Type: application/x-www-form-urlencoded" 2>/dev/null || echo "000")
+if [ "$AUTH_STATUS" = "200" ]; then
+  echo -e "${GREEN}Auth endpoint working (HTTP $AUTH_STATUS)${NC}"
+else
+  echo -e "${YELLOW}Auth returned HTTP $AUTH_STATUS — users may not be bootstrapped yet${NC}"
+fi
 
-# 7. Run regression suite
-echo -e "\n${YELLOW}[7/8] Running regression suite...${NC}"
-uv run pytest tests/test_regression/ -q --tb=short || echo -e "${YELLOW}Note: Regression tests may require full infrastructure. Continuing...${NC}"
-echo -e "${GREEN}Regression suite passed${NC}"
-
-# 8. Check frontend build
-echo -e "\n${YELLOW}[8/8] Verifying frontend build...${NC}"
-cd ../frontend
-npm run build 2>&1 | tail -5 || echo -e "${YELLOW}Note: Frontend build may have warnings. Continuing...${NC}"
-echo -e "${GREEN}Frontend build passed${NC}"
-cd ../backend
+# 7. Frontend build check
+echo -e "\n${YELLOW}[7/7] Verifying frontend build...${NC}"
+cd "$PROJECT_DIR/frontend"
+npm run build 2>&1 | tail -5 && echo -e "${GREEN}Frontend build passed${NC}" \
+  || echo -e "${YELLOW}Frontend build had warnings — check output above${NC}"
 
 # Cleanup
-kill $API_PID 2>/dev/null || true
+kill "$API_PID" 2>/dev/null || true
 
-echo -e "\n${GREEN}=== ALL SMOKE TESTS PASSED — Application is ready to run ===${NC}"
+echo -e "\n${GREEN}=== Smoke test complete ===${NC}"

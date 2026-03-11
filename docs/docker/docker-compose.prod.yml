@@ -1,69 +1,18 @@
 # ============================================================================
-# Forensic Council — Production Override
+# Forensic Council — Docker Compose Override (Production)
 # ============================================================================
-# Usage:
-#   docker compose -f docs/docker/docker-compose.yml \
-#                  -f docs/docker/docker-compose.prod.yml \
-#                  --env-file .env up -d --build
-#
-# ML MODEL SHARING: Shares the same named volumes as dev builds.
+# Ensures optimized production targets are used.
 # ============================================================================
-
-# Must match base docker-compose.yml for shared volumes.
-name: forensic-council
 
 services:
-  redis:
-    restart: unless-stopped
-
-  qdrant:
-    restart: unless-stopped
-
-  postgres:
-    restart: unless-stopped
-
   backend:
-    ports:
-      - "8000:8000"
     environment:
+      - RELOAD=false
       - APP_ENV=production
       - DEBUG=false
-      - LOG_LEVEL=WARNING
-      - HF_TOKEN=${HF_TOKEN}
-      - CORS_ALLOWED_ORIGINS=["https://${DOMAIN:-localhost}","http://${DOMAIN:-localhost}","http://frontend:3000"]
-    restart: unless-stopped
 
   frontend:
+    build:
+      target: runner
     environment:
       - NODE_ENV=production
-    restart: unless-stopped
-
-  caddy:
-    image: caddy:2-alpine
-    container_name: forensic_caddy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-      - caddy_logs:/var/log/caddy
-    environment:
-      - DOMAIN=${DOMAIN:-localhost}
-    depends_on:
-      backend:
-        condition: service_healthy
-      frontend:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: "0.5"
-
-volumes:
-  caddy_data:
-  caddy_config:
-  caddy_logs:

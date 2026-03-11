@@ -234,7 +234,11 @@ class RedisClient:
             List of matching keys
         """
         return await self.client.keys(pattern)
-    
+
+    def pipeline(self):
+        """Return a Redis pipeline for batched commands."""
+        return self.client.pipeline()
+
     async def flushdb(self) -> bool:
         """Clear all keys in current database."""
         await self.client.flushdb()

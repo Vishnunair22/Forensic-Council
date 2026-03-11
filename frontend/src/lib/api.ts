@@ -55,6 +55,7 @@ export interface AgentFindingDTO {
   robustness_caveat: boolean;
   robustness_caveat_detail: string | null;
   reasoning_summary: string;
+  metadata: Record<string, unknown> | null;
 }
 
 export interface ReportDTO {
@@ -70,7 +71,7 @@ export interface ReportDTO {
   uncertainty_statement: string;
   cryptographic_signature: string;
   report_hash: string;
-  signed_utc: string;
+  signed_utc: string | null;
 }
 
 export interface BriefUpdate {

@@ -86,7 +86,7 @@ async def start_investigation(
     session_id = str(uuid4())
     
     # Create temp file for evidence
-    evidence_dir = Path("/app/storage/evidence")
+    evidence_dir = Path(settings.evidence_storage_path)
     evidence_dir.mkdir(parents=True, exist_ok=True)
     
     file_extension = Path(file.filename).suffix if file.filename else ""
@@ -107,19 +107,28 @@ async def start_investigation(
     pipeline = ForensicCouncilPipeline()
     _active_pipelines[session_id] = pipeline
     
-    # Start investigation in background
+    # Start investigation in background using run_investigation_task which:
+    # 1. Waits for WebSocket connection
+    # 2. Calls _wrap_pipeline_with_broadcasts
+    # 3. Sets pipeline._final_report
+    # 4. Broadcasts PIPELINE_COMPLETE
+    # 5. Handles errors and cleanup
     task = asyncio.create_task(
-        _wrap_pipeline_with_broadcasts(
-            pipeline,
-            session_id,
-            str(evidence_file_path),
-            case_id,
-            investigator_id,
+        run_investigation_task(
+            session_id=session_id,
+            pipeline=pipeline,
+            evidence_file_path=str(evidence_file_path),
+            case_id=case_id,
+            investigator_id=investigator_id,
         )
     )
     _active_tasks[session_id] = task
     
+    increment_investigations_started()
     logger.info(f"Investigation started: session_id={session_id}, case_id={case_id}, file={file.filename}")
+
+    # Opportunistically evict stale sessions (runs in O(n) but n is small)
+    _evict_stale_sessions()
     
     return InvestigationResponse(
         session_id=session_id,
@@ -159,6 +168,31 @@ def cleanup_connections():
     _websocket_connections.clear()
     _active_pipelines.clear()
     _final_reports.clear()
+
+# Session TTL: keep completed sessions for 24 hours, then evict
+_SESSION_TTL_SECONDS = 86_400  # 24 h
+
+
+def _evict_stale_sessions() -> None:
+    """
+    Remove completed sessions that have exceeded SESSION_TTL.
+    Called periodically to prevent unbounded memory growth in long-running deployments.
+    """
+    now = datetime.now(timezone.utc)
+    stale = [
+        sid for sid, (_, cached_at) in list(_final_reports.items())
+        if (now - cached_at).total_seconds() > _SESSION_TTL_SECONDS
+    ]
+    for sid in stale:
+        _final_reports.pop(sid, None)
+        # Only remove the pipeline if there's no live task still running
+        task = _active_tasks.get(sid)
+        if task is None or task.done():
+            _active_pipelines.pop(sid, None)
+            _active_tasks.pop(sid, None)
+            _websocket_connections.pop(sid, None)
+    if stale:
+        logger.info(f"Evicted {len(stale)} stale session(s) from memory")
 
 def get_active_pipelines_count() -> int:
     return len(_active_pipelines)
@@ -210,9 +244,9 @@ def unregister_websocket(session_id: str, websocket):
 
 # Allowed MIME types
 ALLOWED_MIME_TYPES = {
-    "image/jpeg", "image/png", "image/tiff", "image/webp",
+    "image/jpeg", "image/png", "image/tiff", "image/webp", "image/gif", "image/bmp",
     "video/mp4", "video/quicktime", "video/x-msvideo",
-    "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4",
+    "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4", "audio/flac",
 }
 
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
@@ -296,10 +330,12 @@ async def _wrap_pipeline_with_broadcasts(
         
         _AGENT_MIME_SUPPORT = {
             "Agent1": {"image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp", "image/tiff"},
-            "Agent2": {"audio/wav", "audio/mpeg", "audio/flac", "video/mp4", "video/x-msvideo", "video/quicktime"},
-            "Agent3": {"image/jpeg", "image/png", "video/mp4", "video/x-msvideo", "video/quicktime"},
+            "Agent2": {"audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4", "audio/flac",
+                       "video/mp4", "video/x-msvideo", "video/quicktime"},
+            "Agent3": {"image/jpeg", "image/png", "image/webp", "video/mp4", "video/x-msvideo", "video/quicktime"},
             "Agent4": {"video/mp4", "video/x-msvideo", "video/quicktime"},
-            "Agent5": {"image/jpeg", "image/png", "image/tiff", "video/mp4", "audio/wav", "audio/mpeg"},
+            "Agent5": {"image/jpeg", "image/png", "image/tiff", "image/webp",
+                       "video/mp4", "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4"},
         }
         
         from agents.agent1_image import Agent1Image
@@ -318,7 +354,62 @@ async def _wrap_pipeline_with_broadcasts(
         ]
         
         results = []
-        
+
+        async def make_heartbeat(agent_id: str, agent_name: str, target_memory: WorkingMemory, done_event: asyncio.Event):
+            """Stream live working-memory progress to the WebSocket client."""
+            last_thinking = ""
+            while not done_event.is_set():
+                try:
+                    await asyncio.wait_for(done_event.wait(), timeout=0.2)
+                    break
+                except asyncio.TimeoutError:
+                    pass
+                try:
+                    wm_state = await target_memory.get_state(
+                        session_id=session_id or evidence_artifact.artifact_id,
+                        agent_id=agent_id,
+                    )
+                    if not wm_state:
+                        await asyncio.sleep(0.1)
+                        continue
+                    tasks_list = wm_state.tasks
+                    completed_t = [t for t in tasks_list if t.status.value == "COMPLETE"]
+                    in_progress_t = [t for t in tasks_list if t.status.value == "IN_PROGRESS"]
+                    total = len(tasks_list)
+                    done = len(completed_t)
+                    thinking = ""
+                    if in_progress_t:
+                        current_task = in_progress_t[0].description
+                        tool_name = in_progress_t[0].result_ref or ""
+                        thinking = f"Running: {current_task}"
+                        if tool_name:
+                            thinking += f" [{tool_name}]"
+                        if total > 0:
+                            thinking += f" ({done+1}/{total})"
+                    elif done > 0 and done >= total and total > 0:
+                        thinking = "Finalizing findings..."
+                    elif done > 0:
+                        thinking = f"Processed {done}/{total} tasks. Running validation..."
+                    elif total > 0:
+                        thinking = f"Initializing {total} analysis tasks..."
+                    else:
+                        thinking = "Starting analysis..."
+                    if thinking and thinking != last_thinking:
+                        last_thinking = thinking
+                        await broadcast_update(
+                            ws_session_id,
+                            BriefUpdate(
+                                type="AGENT_UPDATE",
+                                session_id=ws_session_id,
+                                agent_id=agent_id,
+                                agent_name=agent_name,
+                                message=thinking,
+                                data={"status": "running", "thinking": thinking},
+                            )
+                        )
+                except Exception as e:
+                    logger.debug(f"Heartbeat error: {e}")
+
         async def run_single_agent(agent_id, agent_name, AgentClass, thinking_phrase):
             supported_mimes = _AGENT_MIME_SUPPORT.get(agent_id, set())
             if mime not in supported_mimes:
@@ -387,75 +478,11 @@ async def _wrap_pipeline_with_broadcasts(
                     agent_kwargs["inter_agent_bus"] = pipeline.inter_agent_bus
                 agent = AgentClass(**agent_kwargs)
                 
-                # FIX: Faster heartbeat with more frequent updates (0.2s instead of 1.0s)
+                # Use shared heartbeat helper
                 heartbeat_done = asyncio.Event()
                 
-                async def heartbeat(target_agent_id: str, target_memory: WorkingMemory):
-                    """Stream live progress with FASTER updates."""
-                    last_thinking = ""
-                    last_task_count = 0
-                    
-                    while not heartbeat_done.is_set():
-                        try:
-                            await asyncio.wait_for(heartbeat_done.wait(), timeout=0.2)
-                            break
-                        except asyncio.TimeoutError:
-                            pass
-                        
-                        try:
-                            wm_state = await target_memory.get_state(
-                                session_id=agent.session_id,
-                                agent_id=target_agent_id,
-                            )
-                            if not wm_state:
-                                await asyncio.sleep(0.1)
-                                continue
-                            
-                            tasks = wm_state.tasks
-                            completed = [t for t in tasks if t.status.value == "COMPLETE"]
-                            in_progress = [t for t in tasks if t.status.value == "IN_PROGRESS"]
-                            total = len(tasks)
-                            done = len(completed)
-                            
-                            thinking = ""
-                            
-                            # Generate detailed thinking text
-                            if in_progress:
-                                current_task = in_progress[0].description
-                                tool_name = in_progress[0].result_ref or ""
-                                thinking = f"Running: {current_task}"
-                                if tool_name:
-                                    thinking += f" [{tool_name}]"
-                                if total > 0:
-                                    thinking += f" ({done+1}/{total})"
-                            elif done > 0 and done >= total and total > 0:
-                                thinking = "Finalizing findings..."
-                            elif done > 0:
-                                thinking = f"Processed {done}/{total} tasks. Running validation..."
-                            elif total > 0:
-                                thinking = f"Initializing {total} analysis tasks..."
-                            else:
-                                thinking = "Starting analysis..."
-                            
-                            # Only broadcast if thinking changed
-                            if thinking and thinking != last_thinking:
-                                last_thinking = thinking
-                                await broadcast_update(
-                                    ws_session_id,
-                                    BriefUpdate(
-                                        type="AGENT_UPDATE",
-                                        session_id=ws_session_id,
-                                        agent_id=agent_id,
-                                        agent_name=agent_name,
-                                        message=thinking,
-                                        data={"status": "running", "thinking": thinking},
-                                    )
-                                )
-                        except Exception as e:
-                            logger.debug(f"Heartbeat error: {e}")
-                
                 # Run agent + heartbeat concurrently
-                heartbeat_task = asyncio.create_task(heartbeat(agent_id, agent.working_memory))
+                heartbeat_task = asyncio.create_task(make_heartbeat(agent_id, agent_name, agent.working_memory, heartbeat_done))
                 
                 # FIX: Reduce timeout to 120s for faster completion
                 agent_timeout = min(120, pipeline.config.investigation_timeout * 0.6)
@@ -578,7 +605,8 @@ async def _wrap_pipeline_with_broadcasts(
                 )
                 
                 deep_agent_id = f"{agent_id}_deep"
-                heartbeat_task = asyncio.create_task(heartbeat(deep_agent_id, agent.working_memory))
+                deep_heartbeat_done = asyncio.Event()
+                heartbeat_task = asyncio.create_task(make_heartbeat(agent_id, agent_name, agent.working_memory, deep_heartbeat_done))
                 
                 try:
                     deep_timeout = min(300, pipeline.config.investigation_timeout)
@@ -587,6 +615,7 @@ async def _wrap_pipeline_with_broadcasts(
                         timeout=deep_timeout
                     )
                 finally:
+                    deep_heartbeat_done.set()
                     try:
                         heartbeat_task.cancel()
                         await asyncio.wait_for(heartbeat_task, timeout=2.0)

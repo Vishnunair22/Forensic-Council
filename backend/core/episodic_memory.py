@@ -126,12 +126,20 @@ class EpisodicMemory:
             await self._qdrant.disconnect()
             self._qdrant = None
     
-    async def ensure_collection(self) -> None:
-        """Ensure the collection exists."""
-        await self._qdrant.create_collection(
-            collection_name=EPISODIC_MEMORY_COLLECTION,
-            vector_size=self._vector_size,
-        )
+    async def ensure_collection(self) -> bool:
+        """Ensure the collection exists. Returns False if Qdrant is unavailable."""
+        if self._qdrant is None:
+            logger.warning("EpisodicMemory: Qdrant unavailable, skipping ensure_collection")
+            return False
+        try:
+            await self._qdrant.create_collection(
+                collection_name=EPISODIC_MEMORY_COLLECTION,
+                vector_size=self._vector_size,
+            )
+            return True
+        except Exception as e:
+            logger.warning("EpisodicMemory: ensure_collection failed", error=str(e))
+            return False
     
     async def store(
         self,
@@ -145,16 +153,25 @@ class EpisodicMemory:
             entry: EpisodicEntry to store
             embedding: Vector embedding (768 dimensions)
         """
-        # Ensure collection exists
-        await self.ensure_collection()
-        
+        # Ensure collection exists — bail out if Qdrant is unavailable
+        if not await self.ensure_collection():
+            logger.warning(
+                "EpisodicMemory.store: skipped — Qdrant unavailable",
+                entry_id=str(entry.entry_id),
+            )
+            return
+
         # Upsert to Qdrant
-        await self._qdrant.upsert(
-            collection_name=EPISODIC_MEMORY_COLLECTION,
-            point_id=entry.entry_id,
-            vector=embedding,
-            payload=entry.to_dict(),
-        )
+        try:
+            await self._qdrant.upsert(
+                collection_name=EPISODIC_MEMORY_COLLECTION,
+                point_id=entry.entry_id,
+                vector=embedding,
+                payload=entry.to_dict(),
+            )
+        except Exception as e:
+            logger.warning("EpisodicMemory.store: upsert failed", error=str(e))
+            return
         
         # Log to custody logger
         if self._custody_logger:
@@ -196,21 +213,27 @@ class EpisodicMemory:
         Returns:
             List of matching EpisodicEntry objects
         """
-        # Ensure collection exists
-        await self.ensure_collection()
-        
+        # Ensure collection exists — return empty list if Qdrant is unavailable
+        if not await self.ensure_collection():
+            logger.warning("EpisodicMemory.query: skipped — Qdrant unavailable")
+            return []
+
         # Build filter conditions
         filter_conditions = None
         if signature_type:
             filter_conditions = {"signature_type": signature_type.value}
-        
+
         # Query Qdrant
-        results = await self._qdrant.query(
-            collection_name=EPISODIC_MEMORY_COLLECTION,
-            query_vector=query_embedding,
-            top_k=top_k,
-            filter_conditions=filter_conditions,
-        )
+        try:
+            results = await self._qdrant.query(
+                collection_name=EPISODIC_MEMORY_COLLECTION,
+                query_vector=query_embedding,
+                top_k=top_k,
+                filter_conditions=filter_conditions,
+            )
+        except Exception as e:
+            logger.warning("EpisodicMemory.query: failed", error=str(e))
+            return []
         
         # Convert to EpisodicEntry
         entries = [
@@ -253,15 +276,21 @@ class EpisodicMemory:
         Returns:
             List of EpisodicEntry objects for the case
         """
-        # Ensure collection exists
-        await self.ensure_collection()
-        
+        # Ensure collection exists — return empty list if Qdrant is unavailable
+        if not await self.ensure_collection():
+            logger.warning("EpisodicMemory.get_by_case: skipped — Qdrant unavailable")
+            return []
+
         # Query with case_id filter using scroll (filter-only query)
-        results = await self._qdrant.scroll(
-            collection_name=EPISODIC_MEMORY_COLLECTION,
-            filter_conditions={"case_id": case_id},
-            limit=100,  # Get all entries for case
-        )
+        try:
+            results = await self._qdrant.scroll(
+                collection_name=EPISODIC_MEMORY_COLLECTION,
+                filter_conditions={"case_id": case_id},
+                limit=100,  # Get all entries for case
+            )
+        except Exception as e:
+            logger.warning("EpisodicMemory.get_by_case: scroll failed", error=str(e))
+            return []
         
         # Convert to EpisodicEntry
         entries = [
@@ -290,15 +319,21 @@ class EpisodicMemory:
         Returns:
             List of EpisodicEntry objects for the session
         """
-        # Ensure collection exists
-        await self.ensure_collection()
-        
+        # Ensure collection exists — return empty list if Qdrant is unavailable
+        if not await self.ensure_collection():
+            logger.warning("EpisodicMemory.get_by_session: skipped — Qdrant unavailable")
+            return []
+
         # Query with session_id filter using scroll (filter-only query)
-        results = await self._qdrant.scroll(
-            collection_name=EPISODIC_MEMORY_COLLECTION,
-            filter_conditions={"session_id": str(session_id)},
-            limit=100,
-        )
+        try:
+            results = await self._qdrant.scroll(
+                collection_name=EPISODIC_MEMORY_COLLECTION,
+                filter_conditions={"session_id": str(session_id)},
+                limit=100,
+            )
+        except Exception as e:
+            logger.warning("EpisodicMemory.get_by_session: scroll failed", error=str(e))
+            return []
         
         # Convert to EpisodicEntry
         entries = [

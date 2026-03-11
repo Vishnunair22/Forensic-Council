@@ -222,6 +222,7 @@ class ForensicAgent(ABC):
         # Will be set during investigation
         self._tool_registry: ToolRegistry | None = None
         self._findings: list[AgentFinding] = []
+        self._react_chain: list = []
         self._reflection_report: SelfReflectionReport | None = None
     
     # Abstract properties that must be overridden

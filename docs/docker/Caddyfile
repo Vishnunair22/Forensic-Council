@@ -1,19 +1,22 @@
 # ============================================================================
 # Forensic Council - Caddy Reverse Proxy Configuration
 # ============================================================================
-# This configuration provides:
-# - Automatic HTTPS with Let's Encrypt
-# - HTTP to HTTPS redirect
-# - Security headers
-# - Rate limiting
-# - Backend proxying
+# Usage:
+#   Development (localhost self-signed): DOMAIN not set or DOMAIN=localhost
+#   Production (Let's Encrypt):          DOMAIN=forensic.yourdomain.com
+#
+# Caddy automatically obtains and renews TLS certificates from Let's Encrypt
+# when a real domain is configured.  No manual cert management required.
+#
+# The {$DOMAIN} placeholder is replaced at runtime by the DOMAIN env var
+# (set in docker-compose.yml → environment → DOMAIN).
 # ============================================================================
 
 {
-    # Global options
-    admin off       # Disable admin API in production
-    
-    # Logging
+    # Disable admin API in production to reduce attack surface
+    admin off
+
+    # Structured JSON access log
     log {
         output file /var/log/caddy/access.log {
             roll_size 10MB
@@ -24,120 +27,63 @@
     }
 }
 
-# HTTP to HTTPS redirect (when domain is configured)
+# HTTP → HTTPS redirect
 :80 {
-    # Redirect all HTTP traffic to HTTPS
     redir https://{host}{uri} permanent
 }
 
-# Production HTTPS configuration
-# Set DOMAIN environment variable to enable HTTPS
-# Example: export DOMAIN=forensic.yourdomain.com
-localhost {
-    # TLS configuration for local development (self-signed)
-    tls self_signed
+# Main site block
+# {$DOMAIN} is set from the DOMAIN env var (see docker-compose.yml).
+# When DOMAIN=localhost → self-signed cert.
+# When DOMAIN=forensic.yourdomain.com → auto Let's Encrypt.
+{$DOMAIN:localhost} {
 
     # Security headers
     header {
-        # Enable HSTS
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-        # Disable content type sniffing
-        X-Content-Type-Options "nosniff"
-        # Enable XSS filter
-        X-XSS-Protection "1; mode=block"
-        # Prevent clickjacking
-        X-Frame-Options "DENY"
-        # Referrer policy
-        Referrer-Policy "strict-origin-when-cross-origin"
-        # Permissions policy
-        Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
-        # Remove server header
+        X-Content-Type-Options    "nosniff"
+        X-XSS-Protection          "1; mode=block"
+        X-Frame-Options           "DENY"
+        Referrer-Policy           "strict-origin-when-cross-origin"
+        Permissions-Policy        "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
         -Server
     }
 
-    # Frontend reverse proxy (Next.js standalone server)
-    reverse_proxy frontend:3000
-
-    # API + WebSocket proxy (combined to handle both HTTP and WS)
+    # Backend API + WebSocket (matched before catch-all frontend)
     handle /api/* {
         reverse_proxy backend:8000 {
-            # Health checks
-            health_uri /health
+            header_up Host              {host}
+            header_up X-Real-IP         {remote_host}
+            header_up X-Forwarded-For   {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up Upgrade           {http_upgrade}
+            header_up Connection        "{http_connection}"
+
+            health_uri      /health
             health_interval 10s
-            health_timeout 5s
-            
-            # Header handling
-            header_up Host {host}
-            header_up X-Real-IP {remote}
-            header_up X-Forwarded-For {remote}
-            header_up X-Forwarded-Proto {scheme}
-            header_up Upgrade {http_upgrade}
-            header_up Connection "{http_connection}"
-            
-            # Timeouts
+            health_timeout  5s
+
             transport http {
-                read_buffer 64KB
-                write_buffer 64KB
-                dial_timeout 10s
-                response_header_timeout 300s
+                response_header_timeout 620s
+                dial_timeout            10s
+                read_buffer             64KB
+                write_buffer            64KB
             }
         }
     }
 
-    # Legacy /ws/* path (redirects to /api/)
-    handle /ws/* {
-        reverse_proxy backend:8000 {
-            header_up Host {host}
-            header_up X-Real-IP {remote}
-            header_up X-Forwarded-For {remote}
+    # Frontend (Next.js) — catch-all
+    handle {
+        reverse_proxy frontend:3000 {
+            header_up Host              {host}
+            header_up X-Real-IP         {remote_host}
+            header_up X-Forwarded-For   {remote_host}
             header_up X-Forwarded-Proto {scheme}
-            header_up Upgrade {http_upgrade}
-            header_up Connection "{http_connection}"
-        }
-    }
-}
 
-# Local development configuration (HTTP only on port 81)
-:81 {
-    # Security headers (non-HSTS since HTTP)
-    header {
-        X-Content-Type-Options "nosniff"
-        X-XSS-Protection "1; mode=block"
-        X-Frame-Options "DENY"
-        Referrer-Policy "strict-origin-when-cross-origin"
-        Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
-        -Server
-    }
-
-    # Frontend reverse proxy (Next.js standalone server)
-    reverse_proxy frontend:3000
-
-    # API + WebSocket proxy (combined to handle both HTTP and WS)
-    handle /api/* {
-        reverse_proxy backend:8000 {
-            header_up Host {host}
-            header_up X-Real-IP {remote}
-            header_up X-Forwarded-For {remote}
-            header_up X-Forwarded-Proto {scheme}
-            header_up Upgrade {http_upgrade}
-            header_up Connection "{http_connection}"
-            
             transport http {
-                dial_timeout 10s
-                response_header_timeout 300s
+                response_header_timeout 30s
+                dial_timeout            5s
             }
-        }
-    }
-
-    # Legacy /ws/* path
-    handle /ws/* {
-        reverse_proxy backend:8000 {
-            header_up Host {host}
-            header_up X-Real-IP {remote}
-            header_up X-Forwarded-For {remote}
-            header_up X-Forwarded-Proto {scheme}
-            header_up Upgrade {http_upgrade}
-            header_up Connection "{http_connection}"
         }
     }
 }

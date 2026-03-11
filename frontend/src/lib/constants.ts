@@ -78,7 +78,7 @@ export const AGENTS_DATA: AgentDefinition[] = [
 export const MOCK_AGENTS = AGENTS_DATA.map(a => ({ name: a.name, role: a.role, desc: a.desc }));
 
 export const ALLOWED_MIME_TYPES = new Set([
-    "image/jpeg", "image/png", "image/tiff", "image/webp",
+    "image/jpeg", "image/png", "image/tiff", "image/webp", "image/gif", "image/bmp",
     "video/mp4", "video/quicktime", "video/x-msvideo",
-    "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4",
+    "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4", "audio/flac",
 ]);
