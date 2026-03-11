@@ -7,6 +7,7 @@ export const AgentResultSchema = z.object({
     result: z.string(),
     confidence: z.number(),
     thinking: z.string().optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const ReportSchema = z.object({

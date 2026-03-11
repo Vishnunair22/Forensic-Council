@@ -11,9 +11,8 @@ const nextConfig: NextConfig = {
   // If serving behind Caddy/nginx, set to false — the reverse proxy handles it.
   compress: true,
 
-  // ── TypeScript / ESLint ──────────────────────────────────────────────────
+  // ── TypeScript ────────────────────────────────────────────────────────
   typescript: { ignoreBuildErrors: false },
-  eslint:     { ignoreDuringBuilds: false },
 
   // ── Bundle optimisation ───────────────────────────────────────────────────
   experimental: {

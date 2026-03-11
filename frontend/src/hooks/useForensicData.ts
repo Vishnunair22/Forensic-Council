@@ -30,7 +30,7 @@ export function mapReportDtoToReport(dto: ReportDTO): Report {
     return {
         id: dto.report_id,
         fileName: dto.case_id,
-        timestamp: dto.signed_utc,
+        timestamp: dto.signed_utc ?? new Date().toISOString(),
         summary: dto.executive_summary,
         agents: agentResults,
     };

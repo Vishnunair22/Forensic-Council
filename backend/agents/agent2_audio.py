@@ -123,8 +123,8 @@ class Agent2Audio(ForensicAgent):
     
     @property
     def supported_file_types(self) -> list[str]:
-        """Audio agent supports audio file types."""
-        return ['audio/']
+        """Audio agent supports audio and video file types (video contains audio track)."""
+        return ['audio/', 'video/']
     
     async def build_tool_registry(self) -> ToolRegistry:
         """
@@ -356,7 +356,7 @@ class Agent2Audio(ForensicAgent):
 
     async def run_investigation(self):
         """
-        Override to short-circuit when the evidence is not an audio/video file.
+        Override to short-circuit when the evidence is not an audio or video file.
         Returns a clear finding instead of running tools that will fail on images.
         """
         from core.react_loop import AgentFinding
@@ -366,8 +366,9 @@ class Agent2Audio(ForensicAgent):
         image_exts = (".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp", ".svg")
 
         is_image = any(file_path.endswith(ext) for ext in image_exts) or mime.startswith("image/")
+        is_audio_video = mime.startswith("audio/") or mime.startswith("video/")
 
-        if is_image:
+        if is_image or (not is_audio_video and not mime == ""):
             finding = AgentFinding(
                 agent_id=self.agent_id,
                 finding_type="File type not applicable",
@@ -375,9 +376,9 @@ class Agent2Audio(ForensicAgent):
                 status="CONFIRMED",
                 evidence_refs=[],
                 reasoning_summary=(
-                    "Audio Forensics — The uploaded evidence is an image file. "
+                    "Audio Forensics — The uploaded evidence is not an audio or video file. "
                     "Audio analysis (speaker diarization, anti-spoofing, prosody, "
-                    "codec fingerprinting) is not applicable for image evidence. "
+                    "codec fingerprinting) is not applicable for this evidence type. "
                     "No audio track was detected."
                 ),
             )

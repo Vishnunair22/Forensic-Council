@@ -64,9 +64,8 @@ export function AgentProgressDisplay({
   // Track which agents have been "revealed" (staggered loading)
   const [revealedAgents, setRevealedAgents] = useState<Set<string>>(new Set());
 
-  // Track unsupported agents that should be hidden
+  // Track unsupported agents (show as N/A, never hidden)
   const [unsupportedAgents, setUnsupportedAgents] = useState<Set<string>>(new Set());
-  const [hiddenAgents, setHiddenAgents] = useState<Set<string>>(new Set());
 
   // Staggered loading: reveal one agent every 3 seconds
   useEffect(() => {
@@ -74,7 +73,6 @@ export function AgentProgressDisplay({
     if (phase === "initial") {
       setRevealedAgents(new Set());
       setUnsupportedAgents(new Set());
-      setHiddenAgents(new Set());
     }
 
     // Reveal agents one by one (only if we have valid agents)
@@ -104,10 +102,8 @@ export function AgentProgressDisplay({
     return () => clearInterval(revealInterval);
   }, [phase, hasValidAgents, firstAgentId]);
 
-  // Detect unsupported agents and hide them after 10 seconds
+  // Detect unsupported agents — mark them but never hide them
   useEffect(() => {
-    const timers: NodeJS.Timeout[] = [];
-
     completedAgents.forEach(agent => {
       const isUnsupported = agent.error?.includes("not supported") ||
         agent.error?.includes("Format not supported") ||
@@ -115,26 +111,14 @@ export function AgentProgressDisplay({
         agent.message?.includes("Skipped") ||
         (agent.findings_count === 0 && agent.confidence === 0 && agent.error);
 
-      if (isUnsupported && !unsupportedAgents.has(agent.agent_id) && !hiddenAgents.has(agent.agent_id)) {
-        // Mark as unsupported
+      if (isUnsupported && !unsupportedAgents.has(agent.agent_id)) {
         setUnsupportedAgents(prev => new Set([...prev, agent.agent_id]));
-
-        // Hide after 10 seconds
-        const timer = setTimeout(() => {
-          setHiddenAgents(prev => new Set([...prev, agent.agent_id]));
-        }, 10000);
-        timers.push(timer);
       }
     });
-
-    return () => timers.forEach(t => clearTimeout(t));
-  }, [completedAgents, unsupportedAgents, hiddenAgents]);
+  }, [completedAgents, unsupportedAgents]);
 
   const getAgentStatus = (agentId: string): "waiting" | "checking" | "running" | "complete" | "error" | "unsupported" => {
-    // Check if hidden
-    if (hiddenAgents.has(agentId)) return "unsupported";
-
-    // Check if marked as unsupported but not yet hidden
+    // Check if marked as unsupported (always show, never hide)
     if (unsupportedAgents.has(agentId)) return "unsupported";
 
     const completed = completedAgents.find(c => c.agent_id === agentId);
@@ -166,10 +150,10 @@ export function AgentProgressDisplay({
 
   // Count only active/supported agents
   const activeCompletedCount = completedAgents.filter(c =>
-    !unsupportedAgents.has(c.agent_id) && !hiddenAgents.has(c.agent_id)
+    !unsupportedAgents.has(c.agent_id)
   ).length;
 
-  const visibleAgentsCount = validAgentsData.filter(a => !hiddenAgents.has(a.id)).length;
+  const visibleAgentsCount = validAgentsData.length;
 
   // Show decision buttons after initial analysis OR after deep analysis
   const showInitialDecision = awaitingDecision && phase === "initial";
@@ -206,10 +190,6 @@ export function AgentProgressDisplay({
           const thinking = getAgentThinking(agent.id);
           const completed = getAgentFindings(agent.id);
           const isRevealed = revealedAgents.has(agent.id);
-          const isHidden = hiddenAgents.has(agent.id);
-
-          // Don't render hidden agents
-          if (isHidden) return null;
 
           return (
             <AnimatePresence key={agent.id}>
@@ -338,7 +318,7 @@ export function AgentProgressDisplay({
                         {completed.message || completed.error || "File type not supported for this agent."}
                       </p>
                       <p className="text-[10px] text-amber-400/50 italic">
-                        This card will be hidden in a few seconds...
+                        Not applicable for this evidence type.
                       </p>
                     </div>
                   )}

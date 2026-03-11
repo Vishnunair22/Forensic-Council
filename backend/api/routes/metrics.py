@@ -9,7 +9,7 @@ Provides application metrics, system metrics, and business metrics.
 import time
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
@@ -198,23 +198,38 @@ async def get_prometheus_metrics(current_user: User = Depends(require_admin)) ->
     return content
 
 
-# Raw endpoint for Prometheus scraping (no auth required, IP-restricted in production)
+# Raw endpoint for Prometheus scraping (token-protected)
 @router.get("/raw")
-async def get_raw_metrics():
+async def get_raw_metrics(request: Request):
     """
-    Get raw Prometheus metrics without authentication.
-    
-    WARNING: This endpoint should be IP-restricted at the infrastructure level
-    (e.g., only allow Prometheus server IP). Do not expose publicly.
-    
-    Returns:
-        Plain text metrics in Prometheus format
+    Get raw Prometheus metrics for Prometheus scraper.
+
+    Protected by a static bearer token (METRICS_SCRAPE_TOKEN).
+    Set this in your .env and configure Prometheus to send it as:
+        Authorization: Bearer <token>
+
+    If METRICS_SCRAPE_TOKEN is not configured this endpoint is disabled.
+    Do NOT expose this endpoint publicly without the token.
     """
-    # In production, check source IP or use a secret token
-    # For now, this is a simplified endpoint
-    
+    from fastapi import Request as _Request
+    from core.config import get_settings as _gs
+    _settings = _gs()
+
+    scrape_token = getattr(_settings, "metrics_scrape_token", None) or ""
+    if not scrape_token:
+        from fastapi.responses import JSONResponse as _JR
+        return _JR(
+            {"detail": "Metrics scrape endpoint disabled — set METRICS_SCRAPE_TOKEN to enable"},
+            status_code=503,
+        )
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer ") or auth_header[7:] != scrape_token:
+        from fastapi.responses import JSONResponse as _JR
+        return _JR({"detail": "Unauthorized"}, status_code=401)
+
     uptime = time.time() - _metrics_store["start_time"]
-    
+
     lines = [
         f'forensic_uptime_seconds {uptime}',
         f'forensic_requests_total {_metrics_store["request_count"]}',
@@ -224,5 +239,6 @@ async def get_raw_metrics():
         f'forensic_investigations_completed_total {_metrics_store["investigations_completed"]}',
         f'forensic_investigations_failed_total {_metrics_store["investigations_failed"]}',
     ]
-    
-    return "\n".join(lines)
+
+    from fastapi.responses import PlainTextResponse as _PTR
+    return _PTR("\n".join(lines))

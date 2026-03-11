@@ -64,72 +64,66 @@ The system is triggered via the frontend, uploading evidence to the FastAPI back
 
 ## Quick Start
 
-### Method 1: Using the PowerShell Manager (Recommended)
-```bash
-# 1. Copy environment template (required)
-cp .env.example .env
+### 1. Environment Setup
+Copy the template and configure your keys (at minimum `LLM_API_KEY` or set `LLM_PROVIDER=none` in `.env`).
+```powershell
+Copy-Item .env.example .env
+```
 
-# 2. Start full Docker stack (builds images + starts services)
+### 2. Choose Your Mode
+
+| Mode | Command | Description |
+|:---|:---|:---|
+| **Development** | `.\manage.ps1 dev` | **Hot-Reload enabled.** Mounts source code volumes and enables Uvicorn/Next.js watch modes. |
+| **Production** | `.\manage.ps1 prod` | Optimized build using multi-stage `runner` targets. No hot-reload. |
+| **Infrastructure**| `.\manage.ps1 infra`| Starts only databases (Postgres, Redis, Qdrant). Use for native local dev. |
+
+---
+
+## 🏗️ Docker Caching Strategy
+
+The system uses a three-tier caching system to ensure builds and startups are near-instant after the first run.
+
+### 1. Docker Layer Cache (OS & Deps)
+Layers are ordered so that code changes (most frequent) happen last.
+- **Fast Path:** Changing a `.py` or `.tsx` file only rebuilds the final layer (~30s).
+- **Dependency Path:** Adding a package triggers a `uv sync` or `npm ci` but reuses the global package cache.
+
+### 2. BuildKit Cache Mounts (Deep Package Caching)
+Specified in `Dockerfile` via `--mount=type=cache`. These persist even if you delete your images.
+- **Backend:** `uv` HTTP cache at `/root/.cache/uv`.
+- **Frontend:** `npm` cache at `/root/.npm` and Next.js compiler cache at `/app/.next/cache`.
+- *To wipe:* `docker builder prune -f`
+
+### 3. ML Model Volumes (The "Heavy" Cache)
+ML models (PyTorch, Transformers, YOLO, etc.) are stored in **Named Volumes**. They are shared between `dev` and `prod` modes because both use the project name `forensic-council`.
+- **Volumes:** `hf_cache`, `torch_cache`, `easyocr_cache`, `yolo_cache`, `deepface_cache`.
+- **Persistence:** These are **NOT** deleted during `docker compose down` or image rebuilds.
+- **Wipe:** `docker volume rm forensic-council_hf_cache` (force re-download).
+
+---
+
+## 🛠️ Troubleshooting & Maintenance
+
+### Rebuilding with Model Cache
+If you changed dependencies or code and want a clean refresh without losing models:
+```bash
+# Force rebuild without layer cache, but keeping ML models
+docker compose -f docs/docker/docker-compose.yml build --no-cache
 .\manage.ps1 up
 ```
 
-### Method 2: Raw Docker Compose (Fallback)
-If execution policies block the script, you can run the raw command:
-```bash
-docker compose -f docs/docker/docker-compose.yml --env-file .env up -d --build
-```
+### When Caching Fails (Stale Builds)
+1. **Old Frontend UI:** `NEXT_PUBLIC_*` variables are baked at build time. If you changed them in `.env`, you **must** rebuild the frontend: `docker compose build frontend`.
+2. **Corrupted Packages:** If `uv` or `npm` fails mysteriously, wipe the BuildKit cache: `docker builder prune --all -f`.
+3. **Empty Models:** If analysis is slow, check `.\manage.ps1 logs`. On first run, it will say `⚠ EMPTY` and download ~10GB of models. This is normal.
+4. **Nuclear Reset:** `.\manage.ps1 down-clean` (Deletes everything, including databases and models).
 
-**→ For detailed build and caching strategies, see [`docs/docker/DOCKER_BUILD.md`](docs/docker/DOCKER_BUILD.md).**
-
-## 🚀 Development Mode (Hot Reload)
-
-Run the full stack with hot-reload enabled for both Backend and Frontend:
-
-```bash
-# From project root using the manager:
-.\manage.ps1 dev
-
-# OR using raw Docker commands:
-docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml --env-file .env up -d --build
-```
-
-### What's Enabled:
-
-| Service | Hot Reload | Port |
-|---------|-------------|------|
-| **Backend** (Python/Uvicorn) | ✅ Auto-restart on file save | 8000 |
-| **Frontend** (Next.js) | ✅ Fast Refresh | 3000 |
-| **PostgreSQL** | - | 5432 |
-| **Redis** | - | 6379 |
-| **Qdrant** | - | 6333 |
-
-### Common Commands:
-
-| Action | Manager Command | Raw Docker Equivalent |
-|:-------|:----------------|:----------------------|
-| **Start Production** | `.\manage.ps1 prod` | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.prod.yml --env-file .env up -d --build` |
-| **Stop all services** | `.\manage.ps1 down` | `docker compose -f docs/docker/docker-compose.yml --env-file .env down` |
-| **Smart Rebuild Backend** | `.\manage.ps1 rebuild-backend` | `docker compose -f docs/docker/docker-compose.yml --env-file .env build backend && docker compose -f docs/docker/docker-compose.yml --env-file .env up -d --no-deps backend` |
-| **View logs** | `.\manage.ps1 logs` | `docker compose -f docs/docker/docker-compose.yml --env-file .env logs -f` |
-
-### Native Development (without Docker):
-
-```bash
-# Start required databases natively via Docker first
-.\manage.ps1 infra
-# (Fallback: docker compose -f docs/docker/docker-compose.infra.yml --env-file .env up -d)
-
-# Run backend natively
-cd backend && uv sync --extra ml
-uv run uvicorn api.main:app --reload --port 8000
-
-# Run frontend natively (in another terminal)
-cd frontend && npm install
-npm run dev
-```
-
-→ **Frontend:** http://localhost:3000
-→ **Backend:** http://localhost:8000
+## 📂 Key Docker Files
+- [docker-compose.yml](docs/docker/docker-compose.yml) — Base services & infra.
+- [docker-compose.dev.yml](docs/docker/docker-compose.dev.yml) — Dev overrides (mounts, reload).
+- [DOCKER_BUILD.md](docs/docker/DOCKER_BUILD.md) — The definitive deep-dive on caching logic.
+- [manage.ps1](manage.ps1) — Unified entry point script.
 
 ## Project Structure
 

@@ -271,6 +271,13 @@ class Settings(BaseSettings):
     external_api_retry_max: int = Field(default=3, description="Max external API retries")
     external_api_retry_delay: float = Field(default=1.0, description="Base external API retry delay (seconds)")
     
+    # Metrics scraping
+    metrics_scrape_token: Optional[str] = Field(
+        default=None,
+        description="Bearer token required to access /api/v1/metrics/raw (Prometheus scrape endpoint). "
+                    "If not set, the endpoint returns 503.",
+    )
+
     # Session Persistence
     session_ttl_hours: int = Field(default=24, description="Session state TTL in hours")
     enable_session_persistence: bool = Field(default=True, description="Enable PostgreSQL session persistence")

@@ -126,18 +126,8 @@ export default function EvidencePage() {
           setIsUploading(false);
         } catch (wsErr: unknown) {
           console.error("WebSocket connection failed", wsErr);
-          setValidationError("Failed to connect to analysis streams");
-
-          if (process.env.NODE_ENV === "development") {
-            const errorObj = wsErr instanceof Error ? wsErr : new Error(String(wsErr));
-            window.dispatchEvent(
-              new ErrorEvent("error", {
-                error: errorObj,
-                message: errorObj.message,
-              })
-            );
-          }
-
+          const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to analysis streams";
+          setValidationError(wsErrMsg);
           setIsUploading(false);
           resetSimulation();
         }
@@ -145,17 +135,6 @@ export default function EvidencePage() {
         console.error("Investigation start failed", err);
         const errorMsg = err instanceof Error ? err.message : "Failed to start investigation";
         setValidationError(errorMsg);
-
-        if (process.env.NODE_ENV === "development") {
-          const errorObj = err instanceof Error ? err : new Error(String(err));
-          window.dispatchEvent(
-            new ErrorEvent("error", {
-              error: errorObj,
-              message: errorObj.message,
-            })
-          );
-        }
-
         setIsUploading(false);
         resetSimulation();
         playSound("error");
@@ -187,6 +166,15 @@ export default function EvidencePage() {
     setValidationError(null);
     if (f.size > 50 * 1024 * 1024) {
       setValidationError("File must be under 50MB");
+      return false;
+    }
+    const ALLOWED = new Set([
+      "image/jpeg", "image/png", "image/tiff", "image/webp", "image/gif", "image/bmp",
+      "video/mp4", "video/quicktime", "video/x-msvideo",
+      "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4", "audio/flac",
+    ]);
+    if (!ALLOWED.has(f.type)) {
+      setValidationError(`File type "${f.type || "unknown"}" is not supported. Upload an image, video, or audio file.`);
       return false;
     }
     return true;
@@ -268,6 +256,7 @@ export default function EvidencePage() {
   const validCompletedAgents = completedAgents.filter((c: AgentUpdate) =>
     validAgentsData.some(v => v.id === c.agent_id)
   );
+  // allAgentsDone: true when every agent has reported (either completed or skipped/unsupported)
   const allAgentsDone = validCompletedAgents.length >= validAgentsData.length;
 
   // Awaiting decision = backend sent PIPELINE_PAUSED

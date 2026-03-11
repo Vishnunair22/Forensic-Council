@@ -5,7 +5,7 @@ Sessions Routes
 Routes for managing investigation sessions.
 """
 
-from typing import List
+from typing import List, Optional
 import asyncio
 import json
 
@@ -22,7 +22,7 @@ from api.routes.investigation import (
     register_websocket,
     unregister_websocket,
 )
-from api.schemas import SessionInfo, ReportDTO
+from api.schemas import SessionInfo, ReportDTO, AgentFindingDTO
 from api.routes.investigation import _final_reports, _active_tasks
 from fastapi.responses import JSONResponse
 from datetime import datetime, timezone
@@ -30,12 +30,88 @@ from datetime import datetime, timezone
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 
 
+def _forensic_report_to_dto(report) -> ReportDTO:
+    """
+    Convert a ForensicReport Pydantic model to a serialization-safe ReportDTO.
+
+    Handles UUID→str coercion and Optional[datetime]→ISO-string conversion
+    explicitly so FastAPI never has to guess.
+    """
+    def _to_finding_dto(f: dict) -> AgentFindingDTO:
+        return AgentFindingDTO(
+            finding_id=str(f.get("finding_id", "")),
+            agent_id=str(f.get("agent_id", "")),
+            agent_name=str(f.get("agent_name", "")),
+            finding_type=str(f.get("finding_type", "")),
+            status=str(f.get("status", "CONFIRMED")),
+            confidence_raw=float(f.get("confidence_raw", 0.0)),
+            calibrated=bool(f.get("calibrated", False)),
+            calibrated_probability=f.get("calibrated_probability"),
+            court_statement=f.get("court_statement") or f.get("metadata", {}).get("court_statement"),
+            robustness_caveat=bool(f.get("robustness_caveat", False)),
+            robustness_caveat_detail=f.get("robustness_caveat_detail"),
+            reasoning_summary=str(f.get("reasoning_summary", "")),
+        )
+
+    per_agent: dict = {}
+    for agent_id, findings in (report.per_agent_findings or {}).items():
+        per_agent[agent_id] = [_to_finding_dto(f) for f in findings]
+
+    cross_modal = [_to_finding_dto(f) for f in (report.cross_modal_confirmed or [])]
+    incomplete = [_to_finding_dto(f) for f in (report.incomplete_findings or [])]
+
+    # TribunalCase objects need explicit serialization
+    tribunal_resolved = []
+    for item in (report.tribunal_resolved or []):
+        if hasattr(item, "model_dump"):
+            tribunal_resolved.append(item.model_dump(mode="json"))
+        elif isinstance(item, dict):
+            tribunal_resolved.append(item)
+
+    contested = []
+    for item in (report.contested_findings or []):
+        if hasattr(item, "model_dump"):
+            contested.append(item.model_dump(mode="json"))
+        elif isinstance(item, dict):
+            contested.append(item)
+
+    signed_utc_str: Optional[str] = None
+    if report.signed_utc is not None:
+        if hasattr(report.signed_utc, "isoformat"):
+            signed_utc_str = report.signed_utc.isoformat()
+        else:
+            signed_utc_str = str(report.signed_utc)
+
+    return ReportDTO(
+        report_id=str(report.report_id),
+        session_id=str(report.session_id),
+        case_id=report.case_id,
+        executive_summary=report.executive_summary,
+        per_agent_findings=per_agent,
+        cross_modal_confirmed=cross_modal,
+        contested_findings=contested,
+        tribunal_resolved=tribunal_resolved,
+        incomplete_findings=incomplete,
+        uncertainty_statement=report.uncertainty_statement,
+        cryptographic_signature=report.cryptographic_signature or "",
+        report_hash=report.report_hash or "",
+        signed_utc=signed_utc_str,
+    )
+
+
 @router.get("", response_model=List[SessionInfo])
 async def list_sessions(current_user: User = Depends(get_current_user)):
     """List all active sessions. Requires authentication."""
     sessions = []
     for session_id, pipeline in get_all_active_pipelines().items():
-        status = "running" if not hasattr(pipeline, "_final_report") else "completed"
+        final_report = getattr(pipeline, "_final_report", None)
+        error = getattr(pipeline, "_error", None)
+        if final_report is not None:
+            status = "completed"
+        elif error:
+            status = "error"
+        else:
+            status = "running"
         session_info = SessionInfo(
             session_id=session_id,
             case_id=getattr(pipeline, "_case_id", "unknown"),
@@ -206,27 +282,27 @@ async def get_session_report(
 ):
     """
     Get the final investigation report.
-    
+
     Returns the completed report with all agent findings and arbiter synthesis.
     Used by the frontend results page to display the final analysis.
     """
     pipeline = get_active_pipeline(session_id)
-    
+
     if not pipeline:
         # Check if we have a cached report
         if session_id in _final_reports:
             report, cached_time = _final_reports[session_id]
             # Return cached report if still valid (within 24 hours)
             if (datetime.now(timezone.utc) - cached_time).total_seconds() < 86400:
-                return report
+                return _forensic_report_to_dto(report)
             else:
                 del _final_reports[session_id]
-        
+
         raise HTTPException(
             status_code=404,
             detail=f"No investigation found for session {session_id}"
         )
-    
+
     # Check if pipeline has completed
     report = getattr(pipeline, '_final_report', None)
     if not report:
@@ -241,7 +317,7 @@ async def get_session_report(
                     "message": "Investigation still in progress"
                 }
             )
-        
+
         # Check for error
         error = getattr(pipeline, '_error', None)
         if error:
@@ -249,13 +325,46 @@ async def get_session_report(
                 status_code=500,
                 detail=f"Investigation failed: {error}"
             )
-        
+
         raise HTTPException(
             status_code=404,
             detail="Report not yet available"
         )
-    
-    # Cache the report
+
+    # Cache the raw report object and return the DTO
     _final_reports[session_id] = (report, datetime.now(timezone.utc))
-    
-    return report
+
+    return _forensic_report_to_dto(report)
+
+
+# ============================================================================
+# STUB ENDPOINTS - Called by frontend, return graceful empty responses
+# ============================================================================
+
+@router.get("/{session_id}/brief/{agent_id}")
+async def get_agent_brief(
+    session_id: str,
+    agent_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Return the agent's brief text if available, or an empty brief."""
+    pipeline = get_active_pipeline(session_id)
+    if not pipeline:
+        if session_id not in _final_reports:
+            raise HTTPException(status_code=404, detail="Session not found")
+    return {"brief": ""}
+
+
+@router.get("/{session_id}/checkpoints")
+async def get_session_checkpoints(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Return any pending HITL checkpoints for the session."""
+    pipeline = get_active_pipeline(session_id)
+    if not pipeline:
+        if session_id not in _final_reports:
+            raise HTTPException(status_code=404, detail="Session not found")
+    return []
+
+

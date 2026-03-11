@@ -1,56 +1,16 @@
 # ============================================================================
-# Forensic Council — Infrastructure Only
+# Forensic Council — Docker Compose (Infrastructure Only)
 # ============================================================================
-# Run this when developing backend natively (outside Docker).
-# Usage:
-#   docker compose -f docs/docker/docker-compose.infra.yml --env-file .env up -d
+# Starts only Postgres, Redis, and Qdrant. Use this for native development.
+# ============================================================================
 
 services:
-  redis:
-    image: redis:7-alpine
-    container_name: forensic_redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
-  qdrant:
-    image: qdrant/qdrant:v1.13.6
-    container_name: forensic_qdrant
-    ports:
-      - "6333:6333"
-      - "6334:6334"
-    volumes:
-      - qdrant_data:/qdrant/storage
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c 'cat < /dev/null > /dev/tcp/localhost/6333'"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  postgres:
-    image: postgres:17-alpine
-    container_name: forensic_postgres
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-forensic_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forensic_pass}
-      POSTGRES_DB: ${POSTGRES_DB:-forensic_council}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-forensic_user} -d ${POSTGRES_DB:-forensic_council}"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
-volumes:
-  redis_data:
-  qdrant_data:
-  postgres_data:
+  backend:
+    deploy:
+      replicas: 0
+  frontend:
+    deploy:
+      replicas: 0
+  caddy:
+    deploy:
+      replicas: 0

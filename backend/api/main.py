@@ -58,11 +58,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Run versioned migrations
     try:
         from core.retry import with_retry
-        
+
         @with_retry(max_retries=5, base_delay=1.0, retry_exceptions=(Exception,))
         async def run_migrations_with_retry():
             return await run_migrations()
-        
+
         migration_success = await run_migrations_with_retry()
         if migration_success:
             logger.info("Database migrations completed")
@@ -70,6 +70,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.error("Database migrations failed")
     except Exception as e:
         logger.error("Migration error", error=str(e))
+
+    # Bootstrap default users (idempotent — skips if users already exist)
+    try:
+        from scripts.init_db import bootstrap_users
+        from infra.postgres_client import PostgresClient
+
+        async with PostgresClient() as pg:
+            await bootstrap_users(pg)
+        logger.info("User bootstrap completed")
+    except Exception as e:
+        logger.warning("User bootstrap skipped or failed", error=str(e))
 
     yield
 
