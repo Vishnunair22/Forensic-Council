@@ -7,7 +7,7 @@
 services:
   backend:
     build:
-      target: development # Optional if Dockerfile handles it, but good for clarity
+      target: development
     environment:
       - RELOAD=true
       - APP_ENV=development

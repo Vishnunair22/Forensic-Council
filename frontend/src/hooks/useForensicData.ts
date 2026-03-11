@@ -3,6 +3,14 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Report, AgentResult } from "@/types";
 import { HistorySchema, ReportSchema } from "@/lib/schemas";
+
+/** Dev-only logger — silenced in production builds */
+const isDev = process.env.NODE_ENV !== "production";
+const dbg = {
+    error: isDev ? console.error.bind(console) : () => {},
+    warn: isDev ? console.warn.bind(console) : () => {},
+};
+
 import { startInvestigation, getReport, ReportDTO } from "@/lib/api";
 import { ALLOWED_MIME_TYPES } from "@/lib/constants";
 
@@ -69,7 +77,7 @@ export const useForensicData = () => {
                 }
             }
         } catch (error) {
-            console.error("Failed to load forensic data", error);
+            dbg.error("Failed to load forensic data", error);
         } finally {
             setIsLoading(false);
         }
@@ -100,7 +108,7 @@ export const useForensicData = () => {
             setCurrentSessionId(result.session_id);
             return result.session_id;
         } catch (error) {
-            console.error("Failed to start investigation:", error);
+            dbg.error("Failed to start investigation:", error);
             throw error;
         }
     }, []);
@@ -150,7 +158,7 @@ export const useForensicData = () => {
                     }
                 }
             } catch (error) {
-                console.error("Failed to poll for report:", error);
+                dbg.error("Failed to poll for report:", error);
                 if (pollIntervalRef.current) {
                     clearInterval(pollIntervalRef.current);
                     pollIntervalRef.current = null;

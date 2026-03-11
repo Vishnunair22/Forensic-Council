@@ -1,12 +1,15 @@
 # Forensic Council — Docker Build & Caching Guide
 
-> **Version:** v1.0.1 | **Last Updated:** 2026-03-10
+> **Version:** v1.0.3 | **Last Updated:** 2026-03-11
 >
 > This is the definitive reference for building, rebuilding, and managing
 > Docker layer and ML model caches for Forensic Council.
-> The frontend uses a single multi-stage `Dockerfile` with `development` and
-> `runner` targets — `Dockerfile.dev` and `docker-compose.override.yml` have
-> been removed.
+> **Both** frontend and backend use proper multi-stage Dockerfiles:
+> - **Frontend:** `base` → `development` → `builder` → `runner` stages
+> - **Backend:** `base` → `development` → `production` stages
+>
+> `docker-compose.dev.yml` uses `target: development` for both services.
+> `docker-compose.prod.yml` uses `target: production` (backend) / `runner` (frontend).
 
 ---
 

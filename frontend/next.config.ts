@@ -14,6 +14,12 @@ const nextConfig: NextConfig = {
   // ── TypeScript ────────────────────────────────────────────────────────
   typescript: { ignoreBuildErrors: false },
 
+  // ── ESLint ────────────────────────────────────────────────────────────────
+  // ESLint is run separately in CI (npm run lint).
+  // Disabling here keeps Docker builds fast and avoids eslint-config-next
+  // version skew issues across major Next.js releases.
+  eslint: { ignoreDuringBuilds: true },
+
   // ── Bundle optimisation ───────────────────────────────────────────────────
   experimental: {
     // Tree-shakes these packages at the module level so only imported icons

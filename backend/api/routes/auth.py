@@ -127,27 +127,49 @@ class UserResponse(BaseModel):
     role: str
 
 
-# Demo users - In production, use a database with hashed passwords
-# These are for initial setup and testing only
-# Hash generated with: python -c "from passlib.context import CryptContext; print(CryptContext(['bcrypt']).hash('password'))"
-# NOTE: DEMO_USERS is deprecated - users are now stored in PostgreSQL
-# Only used as fallback if database is unavailable
-_DEMO_USERS_FALLBACK = {
-    "admin": {
-        "user_id": "admin-001",
-        "username": "admin",
-        "hashed_password": "$2b$12$HN9puMv2yozjg5Hn.i88Eez/fcBwNItF7asF6vOTBGO00ECugvDd.",
-        "role": UserRole.ADMIN,
-        "disabled": False,
-    },
-    "investigator": {
-        "user_id": "inv-001",
-        "username": "investigator",
-        "hashed_password": "$2b$12$w6XehNzJ9h8Jr95Yg6Qp3u0d0NpuqXdfpxC9j7c7v374veCaMWw2G",
-        "role": UserRole.INVESTIGATOR,
-        "disabled": False,
-    },
-}
+# ── Development-only fallback user store ──────────────────────────────────────
+# Used ONLY when:
+#   a) app_env != "production"  AND
+#   b) the database is unavailable
+#
+# Passwords are loaded from environment variables at runtime — no credentials
+# are baked into the binary.  In production the database is the sole authority.
+#
+# To set passwords: export BOOTSTRAP_ADMIN_PASSWORD and BOOTSTRAP_INVESTIGATOR_PASSWORD
+# (already documented in .env.example).  These are the same variables used by
+# scripts/init_db.py to bootstrap the users table.
+import os as _os
+
+_DEV_ADMIN_PASSWORD    = _os.environ.get("BOOTSTRAP_ADMIN_PASSWORD", "")
+_DEV_INV_PASSWORD      = _os.environ.get("BOOTSTRAP_INVESTIGATOR_PASSWORD", "")
+
+
+def _build_dev_fallback() -> dict:
+    """Build dev fallback dict from env vars. Returns empty dict if passwords not set."""
+    from passlib.context import CryptContext as _CC
+    _ctx = _CC(schemes=["bcrypt"], deprecated="auto")
+    users: dict = {}
+    if _DEV_ADMIN_PASSWORD:
+        users["admin"] = {
+            "user_id": "admin-dev-001",
+            "username": "admin",
+            "hashed_password": _ctx.hash(_DEV_ADMIN_PASSWORD),
+            "role": UserRole.ADMIN,
+            "disabled": False,
+        }
+    if _DEV_INV_PASSWORD:
+        users["investigator"] = {
+            "user_id": "inv-dev-001",
+            "username": "investigator",
+            "hashed_password": _ctx.hash(_DEV_INV_PASSWORD),
+            "role": UserRole.INVESTIGATOR,
+            "disabled": False,
+        }
+    return users
+
+
+# Built once at import time — avoids re-hashing on every request
+_DEMO_USERS_FALLBACK: dict = _build_dev_fallback()
 
 
 async def get_user_from_db(username: str) -> Optional[dict]:

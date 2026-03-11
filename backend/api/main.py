@@ -93,7 +93,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="Forensic Council API",
     description="Multi-Agent Forensic Evidence Analysis System API",
-    version="1.0.0",
+    version="1.0.3",
     docs_url="/docs" if settings.app_env != "production" else None,
     redoc_url="/redoc" if settings.app_env != "production" else None,
     lifespan=lifespan,
@@ -262,7 +262,7 @@ async def root():
     """Root endpoint."""
     return {
         "name": "Forensic Council API",
-        "version": "1.0.0",
+        "version": "1.0.3",
         "status": "running",
         "docs": "/docs" if settings.app_env != "production" else None,
     }
@@ -271,11 +271,55 @@ async def root():
 @app.get("/health")
 async def health_check():
     """
-    Health check endpoint.
-    Returns API status and basic environment info.
+    Deep health check endpoint.
+
+    Verifies connectivity to all infrastructure dependencies.
+    Returns 200 only when the API and all dependencies are healthy.
+    Returns 503 if any dependency is unavailable.
     """
-    return {
-        "status": "healthy",
-        "environment": settings.app_env,
-        "active_sessions": investigation.get_active_pipelines_count(),
-    }
+    checks: dict = {}
+    overall_healthy = True
+
+    # ── PostgreSQL ────────────────────────────────────────────────────────────
+    try:
+        from infra.postgres_client import get_postgres_client
+        pg = await get_postgres_client()
+        await pg.fetch_val("SELECT 1")
+        checks["postgres"] = "ok"
+    except Exception as e:
+        checks["postgres"] = f"error: {str(e)[:60]}"
+        overall_healthy = False
+
+    # ── Redis ─────────────────────────────────────────────────────────────────
+    try:
+        from infra.redis_client import get_redis_client
+        redis = await get_redis_client()
+        await redis.ping()
+        checks["redis"] = "ok"
+    except Exception as e:
+        checks["redis"] = f"error: {str(e)[:60]}"
+        overall_healthy = False
+
+    # ── Qdrant ────────────────────────────────────────────────────────────────
+    try:
+        from infra.qdrant_client import get_qdrant_client
+        qdrant = await get_qdrant_client()
+        await qdrant.health_check()
+        checks["qdrant"] = "ok"
+    except Exception as e:
+        checks["qdrant"] = f"error: {str(e)[:60]}"
+        # Qdrant unavailable degrades vector search but doesn't block core flow
+        # Mark as warning rather than fatal
+        checks["qdrant_note"] = "degraded — vector search unavailable"
+
+    status_code = 200 if overall_healthy else 503
+    from fastapi.responses import JSONResponse as _JSONResponse
+    return _JSONResponse(
+        status_code=status_code,
+        content={
+            "status": "healthy" if overall_healthy else "degraded",
+            "environment": settings.app_env,
+            "active_sessions": investigation.get_active_pipelines_count(),
+            "checks": checks,
+        },
+    )

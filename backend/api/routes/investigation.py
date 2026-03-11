@@ -10,12 +10,13 @@ import asyncio
 import os
 import re
 import tempfile
+import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, List
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Form, Request
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Form, Request, status
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 
@@ -43,6 +44,103 @@ settings = get_settings()
 
 router = APIRouter(prefix="/api/v1", tags=["investigation"])
 
+# ── Per-user upload rate limiter ──────────────────────────────────────────────
+# Limits how many investigations a single authenticated user can start within
+# a rolling window. Prevents a single account from exhausting pipeline capacity.
+_MAX_INVESTIGATIONS_PER_USER = 5       # max concurrent/recent investigations
+_USER_RATE_WINDOW_SECS = 300           # 5-minute rolling window
+_USER_RATE_LOCKOUT_SECS = 600          # 10-minute lockout after limit hit
+
+# In-memory fallback: {user_id: [timestamp, ...]}
+_user_investigation_times: dict[str, list[float]] = {}
+
+
+async def _check_investigation_rate_limit(user_id: str) -> None:
+    """
+    Raise HTTP 429 if the user has exceeded the investigation rate limit.
+
+    Prefers Redis when available (replica-safe); falls back to an in-process
+    dict when Redis is unavailable (single-replica safe).
+    """
+    key = f"inv_rate:{user_id}"
+    now = time.time()
+
+    # ── Redis path ────────────────────────────────────────────────────────────
+    try:
+        from infra.redis_client import get_redis_client
+        redis = await get_redis_client()
+        if redis:
+            count_raw = await redis.get(key)
+            count = int(count_raw) if count_raw else 0
+            if count >= _MAX_INVESTIGATIONS_PER_USER:
+                ttl = await redis.ttl(key)
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=(
+                        f"Too many investigations started. "
+                        f"Try again in {max(ttl, 1)} seconds."
+                    ),
+                    headers={"Retry-After": str(max(ttl, 1))},
+                )
+            pipe = redis.pipeline()
+            pipe.incr(key)
+            pipe.expire(key, _USER_RATE_LOCKOUT_SECS)
+            await pipe.execute()
+            return
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # fall through to in-memory fallback
+
+    # ── In-memory fallback ────────────────────────────────────────────────────
+    cutoff = now - _USER_RATE_WINDOW_SECS
+    times = _user_investigation_times.setdefault(user_id, [])
+    times[:] = [t for t in times if t > cutoff]
+    if len(times) >= _MAX_INVESTIGATIONS_PER_USER:
+        retry_after = int(_USER_RATE_WINDOW_SECS - (now - times[0])) + 1
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"Too many investigations started. "
+                f"Try again in {max(retry_after, 1)} seconds."
+            ),
+            headers={"Retry-After": str(max(retry_after, 1))},
+        )
+    times.append(now)
+
+# Allowed MIME types (declared early — used in start_investigation)
+ALLOWED_MIME_TYPES = {
+    "image/jpeg", "image/png", "image/tiff", "image/webp", "image/gif", "image/bmp",
+    "video/mp4", "video/quicktime", "video/x-msvideo",
+    "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4", "audio/flac",
+}
+
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+
+# Allowed file extensions — must match an accepted MIME type
+_ALLOWED_EXTENSIONS: frozenset[str] = frozenset({
+    ".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".gif", ".bmp",
+    ".mp4", ".mov", ".avi",
+    ".wav", ".mp3", ".m4a", ".flac",
+})
+
+# Strict allow-list pattern for case_id and investigator_id.
+# Alphanumerics, hyphens, underscores, and dots only — prevents log injection,
+# shell metacharacter injection, and DB issues with unusual unicode.
+_SAFE_ID_RE = re.compile(r'^[A-Za-z0-9_\-\.]{1,128}$')
+
+
+def _validate_safe_id(value: str, field_name: str) -> None:
+    """Raise 422 if value contains unsafe characters."""
+    if not _SAFE_ID_RE.match(value):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Invalid {field_name}: must be 1–128 characters, "
+                "alphanumeric with hyphens, underscores, and dots only."
+            ),
+        )
+
 
 # ============================================================================
 # INVESTIGATE ENDPOINT - Start a new forensic investigation
@@ -65,76 +163,120 @@ async def start_investigation(
     
     Returns session_id for tracking the investigation via WebSocket.
     """
-    from uuid import uuid4
-    import os
-    
-    # Validate file type
+    # ── Input validation ──────────────────────────────────────────────────────
+    _validate_safe_id(case_id, "case_id")
+    _validate_safe_id(investigator_id, "investigator_id")
+
+    # ── Per-user rate limit ───────────────────────────────────────────────────
+    await _check_investigation_rate_limit(current_user.user_id)
+
+    # ── MIME type check ───────────────────────────────────────────────────────
     if file.content_type not in ALLOWED_MIME_TYPES:
         raise HTTPException(
             status_code=400,
-            detail=f"File type {file.content_type} not allowed. Allowed types: {', '.join(ALLOWED_MIME_TYPES)}"
+            detail=(
+                f"File type '{file.content_type}' is not allowed. "
+                f"Accepted types: {', '.join(sorted(ALLOWED_MIME_TYPES))}"
+            ),
         )
-    
-    # Validate file size
+
+    # ── File extension allow-list check ───────────────────────────────────────
+    raw_suffix = Path(file.filename or "").suffix.lower()
+    if raw_suffix not in _ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"File extension '{raw_suffix}' is not permitted. "
+                f"Accepted extensions: {', '.join(sorted(_ALLOWED_EXTENSIONS))}"
+            ),
+        )
+    file_extension = raw_suffix  # already safe — no path traversal possible
+
+    # ── File size check ───────────────────────────────────────────────────────
     if file.size and file.size > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=400,
-            detail=f"File size exceeds maximum allowed size of {MAX_FILE_SIZE / (1024*1024)}MB"
+            detail=f"File size exceeds the {MAX_FILE_SIZE // (1024 * 1024)} MB limit.",
         )
-    
-    # Generate session ID
+
+    # ── Generate session ID ───────────────────────────────────────────────────
     session_id = str(uuid4())
-    
-    # Create temp file for evidence
-    evidence_dir = Path(settings.evidence_storage_path)
-    evidence_dir.mkdir(parents=True, exist_ok=True)
-    
-    file_extension = Path(file.filename).suffix if file.filename else ""
-    evidence_file_path = evidence_dir / f"{session_id}{file_extension}"
-    
-    # Save uploaded file using FastAPI's built-in async file handling
+
+    # ── Stage file to /tmp (non-blocking) ────────────────────────────────────
+    # Upload to /tmp for initial staging; the pipeline moves it to the evidence
+    # volume after hashing.  Using run_in_executor keeps the event loop free
+    # during disk I/O, which matters for large files.
+    tmp_path = Path("/tmp") / f"{session_id}{file_extension}"
     try:
-        # Use the async file directly - FastAPI UploadFile is already async
         content = await file.read()
-        with open(evidence_file_path, 'wb') as f:
-            f.write(content)
+        if not content:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+        # Final size guard (content-length header may be absent or spoofed)
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File size exceeds the {MAX_FILE_SIZE // (1024 * 1024)} MB limit.",
+            )
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, tmp_path.write_bytes, content)
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Failed to save uploaded file: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
-    
-    # Create pipeline - takes no arguments in constructor
+        logger.error("Failed to stage uploaded file", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to save uploaded file.")
+
+    # ── Register pipeline ─────────────────────────────────────────────────────
     from orchestration.pipeline import ForensicCouncilPipeline
     pipeline = ForensicCouncilPipeline()
     _active_pipelines[session_id] = pipeline
-    
-    # Start investigation in background using run_investigation_task which:
-    # 1. Waits for WebSocket connection
-    # 2. Calls _wrap_pipeline_with_broadcasts
-    # 3. Sets pipeline._final_report
-    # 4. Broadcasts PIPELINE_COMPLETE
-    # 5. Handles errors and cleanup
+
+    # ── Start background investigation task ───────────────────────────────────
     task = asyncio.create_task(
         run_investigation_task(
             session_id=session_id,
             pipeline=pipeline,
-            evidence_file_path=str(evidence_file_path),
+            evidence_file_path=str(tmp_path),
             case_id=case_id,
             investigator_id=investigator_id,
         )
     )
     _active_tasks[session_id] = task
-    
-    increment_investigations_started()
-    logger.info(f"Investigation started: session_id={session_id}, case_id={case_id}, file={file.filename}")
 
-    # Opportunistically evict stale sessions (runs in O(n) but n is small)
+    increment_investigations_started()
+    logger.info(
+        "Investigation started",
+        session_id=session_id,
+        case_id=case_id,
+        content_type=file.content_type,
+        size_bytes=len(content),
+    )
+
+    # ── Register session in DB immediately (best-effort, non-blocking) ────────
+    # This creates a row in investigation_state so DB-backed queries work even
+    # before the pipeline completes. Failure is non-fatal.
+    async def _register_session_async():
+        try:
+            from core.session_persistence import get_session_persistence
+            persistence = await get_session_persistence()
+            await persistence.save_session_state(
+                session_id=session_id,
+                case_id=case_id,
+                investigator_id=investigator_id,
+                pipeline_state={"status": "running"},
+                status="running",
+            )
+        except Exception as e:
+            logger.warning("Could not register session in DB", session_id=session_id, error=str(e))
+
+    asyncio.create_task(_register_session_async())
+
     _evict_stale_sessions()
-    
+
     return InvestigationResponse(
         session_id=session_id,
         case_id=case_id,
         status="started",
-        message=f"Investigation started for {file.filename}"
+        message=f"Investigation started for {file.filename or 'evidence'}",
     )
 
 
@@ -242,16 +384,6 @@ def unregister_websocket(session_id: str, websocket):
             pass
 
 
-# Allowed MIME types
-ALLOWED_MIME_TYPES = {
-    "image/jpeg", "image/png", "image/tiff", "image/webp", "image/gif", "image/bmp",
-    "video/mp4", "video/quicktime", "video/x-msvideo",
-    "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4", "audio/flac",
-}
-
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
-
-
 async def broadcast_update(session_id: str, update: BriefUpdate):
     """Broadcast a WebSocket update to all connected clients."""
     if session_id in _websocket_connections:
@@ -332,10 +464,15 @@ async def _wrap_pipeline_with_broadcasts(
             "Agent1": {"image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp", "image/tiff"},
             "Agent2": {"audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4", "audio/flac",
                        "video/mp4", "video/x-msvideo", "video/quicktime"},
-            "Agent3": {"image/jpeg", "image/png", "image/webp", "video/mp4", "video/x-msvideo", "video/quicktime"},
+            # Agent3 is YOLO/object-detection on still frames only — no raw video
+            "Agent3": {"image/jpeg", "image/png", "image/webp", "image/bmp", "image/gif", "image/tiff"},
             "Agent4": {"video/mp4", "video/x-msvideo", "video/quicktime"},
-            "Agent5": {"image/jpeg", "image/png", "image/tiff", "image/webp",
-                       "video/mp4", "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4"},
+            # Agent5 is metadata forensics — runs on every supported MIME type
+            "Agent5": {
+                "image/jpeg", "image/png", "image/tiff", "image/webp", "image/gif", "image/bmp",
+                "video/mp4", "video/quicktime", "video/x-msvideo",
+                "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4", "audio/flac",
+            },
         }
         
         from agents.agent1_image import Agent1Image
@@ -817,7 +954,30 @@ async def run_investigation_task(
         
         pipeline._final_report = report
         increment_investigations_completed()
-        
+
+        # ── Persist completed report to PostgreSQL ─────────────────────────
+        # This is the key production-hardening step: once a report is written
+        # to the DB, it survives backend restarts and is queryable by any
+        # replica without needing the in-memory pipeline object.
+        try:
+            from core.session_persistence import get_session_persistence
+            persistence = await get_session_persistence()
+            await persistence.save_report(
+                session_id=session_id,
+                case_id=case_id,
+                investigator_id=investigator_id,
+                report_data=report.model_dump(mode="json"),
+            )
+            await persistence.update_session_status(session_id, "completed")
+            logger.info("Report persisted to database", session_id=session_id)
+        except Exception as persist_err:
+            # Non-fatal: report is still in-memory; log but don't crash
+            logger.error(
+                "Failed to persist report to database",
+                session_id=session_id,
+                error=str(persist_err),
+            )
+
     except asyncio.TimeoutError:
         error_msg = f"Investigation timed out after {timeout}s"
         logger.error(error_msg, session_id=session_id)
@@ -847,6 +1007,15 @@ async def run_investigation_task(
     finally:
         if error_msg:
             pipeline._error = error_msg
+            # Persist failure status so other replicas can report it
+            try:
+                from core.session_persistence import get_session_persistence
+                persistence = await get_session_persistence()
+                await persistence.update_session_status(
+                    session_id, "error", error_message=error_msg
+                )
+            except Exception:
+                pass  # best-effort; already logged above
         try:
             if os.path.exists(evidence_file_path):
                 os.unlink(evidence_file_path)

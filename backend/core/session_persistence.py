@@ -107,7 +107,7 @@ class SessionPersistence:
         await self._ensure_client()
         
         try:
-            result = await self.client.fetchrow(
+            result = await self.client.fetch_one(
                 """
                 SELECT session_id, case_id, investigator_id, pipeline_state, 
                        agent_results, checkpoints, status, created_at, updated_at
@@ -194,7 +194,7 @@ class SessionPersistence:
         await self._ensure_client()
         
         try:
-            result = await self.client.fetchrow(
+            result = await self.client.fetch_one(
                 """
                 SELECT session_id, case_id, investigator_id, status, 
                        completed_at, report_data, error_message

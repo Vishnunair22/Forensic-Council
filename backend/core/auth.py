@@ -29,7 +29,7 @@ logger = get_logger(__name__)
 settings = get_settings()
 SECRET_KEY = settings.effective_jwt_secret
 ALGORITHM = settings.jwt_algorithm
-ACCESS_TOKEN_EXPIRE_MINUTES = settings.jwt_access_token_expire_minutes  # Default: 7 days (10080 minutes)
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.jwt_access_token_expire_minutes  # Default: 60 minutes
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

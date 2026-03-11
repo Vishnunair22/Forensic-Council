@@ -283,30 +283,21 @@ async def get_session_report(
     """
     Get the final investigation report.
 
-    Returns the completed report with all agent findings and arbiter synthesis.
-    Used by the frontend results page to display the final analysis.
+    Resolution order (most recent / most reliable first):
+    1. In-memory pipeline object  — fastest; only available on the originating replica
+    2. In-memory final_reports cache — survives pipeline eviction for up to 24 h
+    3. PostgreSQL session_reports  — survives restarts and is visible to all replicas
     """
     pipeline = get_active_pipeline(session_id)
 
-    if not pipeline:
-        # Check if we have a cached report
-        if session_id in _final_reports:
-            report, cached_time = _final_reports[session_id]
-            # Return cached report if still valid (within 24 hours)
-            if (datetime.now(timezone.utc) - cached_time).total_seconds() < 86400:
-                return _forensic_report_to_dto(report)
-            else:
-                del _final_reports[session_id]
+    # ── 1. In-memory pipeline ─────────────────────────────────────────────────
+    if pipeline:
+        report = getattr(pipeline, "_final_report", None)
+        if report:
+            _final_reports[session_id] = (report, datetime.now(timezone.utc))
+            return _forensic_report_to_dto(report)
 
-        raise HTTPException(
-            status_code=404,
-            detail=f"No investigation found for session {session_id}"
-        )
-
-    # Check if pipeline has completed
-    report = getattr(pipeline, '_final_report', None)
-    if not report:
-        # Check if still running
+        # Still running?
         task = _active_tasks.get(session_id)
         if task and not task.done():
             return JSONResponse(
@@ -314,27 +305,97 @@ async def get_session_report(
                 content={
                     "status": "in_progress",
                     "session_id": session_id,
-                    "message": "Investigation still in progress"
-                }
+                    "message": "Investigation still in progress",
+                },
             )
 
-        # Check for error
-        error = getattr(pipeline, '_error', None)
+        # Failed (error set on pipeline)
+        error = getattr(pipeline, "_error", None)
         if error:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Investigation failed: {error}"
-            )
+            raise HTTPException(status_code=500, detail=f"Investigation failed: {error}")
 
-        raise HTTPException(
-            status_code=404,
-            detail="Report not yet available"
+    # ── 2. In-memory reports cache ────────────────────────────────────────────
+    if session_id in _final_reports:
+        report, cached_at = _final_reports[session_id]
+        if (datetime.now(timezone.utc) - cached_at).total_seconds() < 86_400:
+            return _forensic_report_to_dto(report)
+        del _final_reports[session_id]
+
+    # ── 3. PostgreSQL — restart-resilient fallback ────────────────────────────
+    try:
+        from core.session_persistence import get_session_persistence
+        from api.schemas import ReportDTO as _ReportDTO
+        persistence = await get_session_persistence()
+        db_row = await persistence.get_report(session_id)
+        if db_row:
+            status = db_row.get("status")
+            if status == "error":
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Investigation failed: {db_row.get('error_message', 'unknown')}",
+                )
+            if status in ("running", "pending"):
+                return JSONResponse(
+                    status_code=202,
+                    content={
+                        "status": "in_progress",
+                        "session_id": session_id,
+                        "message": "Investigation still in progress",
+                    },
+                )
+            if status == "completed" and db_row.get("report_data"):
+                # Re-hydrate from the stored JSON dict
+                from api.schemas import ReportDTO as _RD, AgentFindingDTO as _AFD
+
+                def _rebuild_finding(f: dict) -> _AFD:
+                    return _AFD(
+                        finding_id=str(f.get("finding_id", "")),
+                        agent_id=str(f.get("agent_id", "")),
+                        agent_name=str(f.get("agent_name", "")),
+                        finding_type=str(f.get("finding_type", "")),
+                        status=str(f.get("status", "CONFIRMED")),
+                        confidence_raw=float(f.get("confidence_raw", 0.0)),
+                        calibrated=bool(f.get("calibrated", False)),
+                        calibrated_probability=f.get("calibrated_probability"),
+                        court_statement=f.get("court_statement"),
+                        robustness_caveat=bool(f.get("robustness_caveat", False)),
+                        robustness_caveat_detail=f.get("robustness_caveat_detail"),
+                        reasoning_summary=str(f.get("reasoning_summary", "")),
+                    )
+
+                rd = db_row["report_data"]
+                per_agent = {
+                    agent_id: [_rebuild_finding(f) for f in findings]
+                    for agent_id, findings in (rd.get("per_agent_findings") or {}).items()
+                }
+                return _RD(
+                    report_id=str(rd.get("report_id", "")),
+                    session_id=str(rd.get("session_id", session_id)),
+                    case_id=rd.get("case_id", ""),
+                    executive_summary=rd.get("executive_summary", ""),
+                    per_agent_findings=per_agent,
+                    cross_modal_confirmed=[_rebuild_finding(f) for f in rd.get("cross_modal_confirmed", [])],
+                    contested_findings=rd.get("contested_findings", []),
+                    tribunal_resolved=rd.get("tribunal_resolved", []),
+                    incomplete_findings=[_rebuild_finding(f) for f in rd.get("incomplete_findings", [])],
+                    uncertainty_statement=rd.get("uncertainty_statement", ""),
+                    cryptographic_signature=rd.get("cryptographic_signature", ""),
+                    report_hash=rd.get("report_hash", ""),
+                    signed_utc=rd.get("signed_utc"),
+                )
+    except HTTPException:
+        raise
+    except Exception as db_err:
+        logger.warning(
+            "DB report lookup failed, continuing to 404",
+            session_id=session_id,
+            error=str(db_err),
         )
 
-    # Cache the raw report object and return the DTO
-    _final_reports[session_id] = (report, datetime.now(timezone.utc))
-
-    return _forensic_report_to_dto(report)
+    raise HTTPException(
+        status_code=404,
+        detail=f"No investigation found for session {session_id}",
+    )
 
 
 # ============================================================================

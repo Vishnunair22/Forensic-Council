@@ -31,7 +31,7 @@ uv run pytest
 uv run pytest -s -v
 
 # Run only a specific test file
-uv run pytest tests/test_tools/test_image_tools.py
+uv run pytest tests/unit/test_signing.py
 
 # Generate a coverage report
 uv run pytest --cov=core --cov=agents --cov=orchestration --cov-report=html

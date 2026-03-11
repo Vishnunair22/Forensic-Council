@@ -37,7 +37,7 @@ README*
 
 # OS artifacts
 .DS_Store
-Thumbbs.db
+Thumbs.db
 
 # IDE
 .vscode/
