@@ -557,14 +557,128 @@ class ForensicCouncilPipeline:
                     supports_file_type=True,
                 )
         
-        # Run all agents concurrently
-        results = await asyncio.gather(
-            run_agent_with_deep(Agent1Image, "Agent1"),
-            run_agent_with_deep(Agent2Audio, "Agent2", {"inter_agent_bus": self.inter_agent_bus}),
-            run_agent_with_deep(Agent3Object, "Agent3", {"inter_agent_bus": self.inter_agent_bus}),
-            run_agent_with_deep(Agent4Video, "Agent4", {"inter_agent_bus": self.inter_agent_bus}),
-            run_agent_with_deep(Agent5Metadata, "Agent5"),
+        # --- TWO-PHASE EXECUTION for cross-agent context sharing ---
+        # Phase 1: Run all agents' INITIAL passes concurrently, then
+        # Phase 2: Inject Agent 1's Gemini findings into Agent 3 and run all deep passes
+
+        async def run_agent_initial_only(
+            agent_class,
+            agent_id: str,
+            extra_kwargs: dict = None,
+        ) -> tuple:
+            """Run only the initial investigation pass. Returns (agent_instance, initial_findings)."""
+            try:
+                kwargs = {
+                    "agent_id": agent_id,
+                    "session_id": session_id,
+                    "evidence_artifact": evidence_artifact,
+                    "config": self.config,
+                    "working_memory": self.working_memory,
+                    "episodic_memory": self.episodic_memory,
+                    "custody_logger": self.custody_logger,
+                    "evidence_store": self.evidence_store,
+                }
+                if extra_kwargs:
+                    kwargs.update(extra_kwargs)
+                agent = agent_class(**kwargs)
+                if not agent.supports_uploaded_file:
+                    return agent, [], False
+                logger.info(f"Running {agent_id} initial investigation")
+                initial_findings = await asyncio.wait_for(
+                    agent.run_investigation(),
+                    timeout=self.config.investigation_timeout,
+                )
+                return agent, initial_findings, True
+            except Exception as e:
+                logger.error(f"{agent_id} initial pass failed", error=str(e))
+                return None, [], False
+
+        async def run_agent_deep_only(
+            agent,
+            agent_id: str,
+            initial_findings: list,
+            supports_file: bool,
+        ) -> AgentLoopResult:
+            """Run the deep investigation pass on an already-initialized agent."""
+            if agent is None:
+                return AgentLoopResult(agent_id=agent_id, findings=[], reflection_report={},
+                                       react_chain=[], agent_active=False, supports_file_type=supports_file,
+                                       error="Initial pass failed")
+            if not supports_file:
+                return AgentLoopResult(agent_id=agent_id, findings=[], reflection_report={},
+                                       react_chain=[], agent_active=False, supports_file_type=False)
+            try:
+                initial_count = len(initial_findings)
+                logger.info(f"Running {agent_id} deep investigation")
+                combined_findings = await agent.run_deep_investigation()
+                deep_count = len(combined_findings) - initial_count
+                return AgentLoopResult(
+                    agent_id=agent_id,
+                    findings=[f.model_dump() for f in combined_findings],
+                    reflection_report=(
+                        getattr(agent, "_reflection_report", None).model_dump()
+                        if getattr(agent, "_reflection_report", None) else {}
+                    ),
+                    react_chain=getattr(agent, "_react_chain", []),
+                    agent_active=True,
+                    supports_file_type=True,
+                    deep_findings_count=max(0, deep_count),
+                )
+            except Exception as e:
+                logger.error(f"{agent_id} deep pass failed", error=str(e))
+                # Return whatever initial findings we already have
+                return AgentLoopResult(
+                    agent_id=agent_id,
+                    findings=[f.model_dump() for f in initial_findings],
+                    reflection_report={},
+                    react_chain=getattr(agent, "_react_chain", []),
+                    agent_active=True,
+                    supports_file_type=True,
+                    error=str(e),
+                )
+
+        # --- Phase 1: All initial passes concurrently ---
+        (
+            (agent1, a1_init, a1_ok),
+            (agent2, a2_init, a2_ok),
+            (agent3, a3_init, a3_ok),
+            (agent4, a4_init, a4_ok),
+            (agent5, a5_init, a5_ok),
+        ) = await asyncio.gather(
+            run_agent_initial_only(Agent1Image, "Agent1"),
+            run_agent_initial_only(Agent2Audio, "Agent2", {"inter_agent_bus": self.inter_agent_bus}),
+            run_agent_initial_only(Agent3Object, "Agent3", {"inter_agent_bus": self.inter_agent_bus}),
+            run_agent_initial_only(Agent4Video, "Agent4", {"inter_agent_bus": self.inter_agent_bus}),
+            run_agent_initial_only(Agent5Metadata, "Agent5"),
         )
+
+        # --- Cross-agent context injection: Agent 1 → Agent 3 ---
+        # Share Agent 1's Gemini vision analysis with Agent 3 for cross-validated object/weapon detection
+        try:
+            if agent1 is not None:
+                gemini_result = getattr(agent1, "_gemini_vision_result", {})
+                if not gemini_result and a1_ok:
+                    # Try to extract from findings if direct attribute not set
+                    for f in (a1_init or []):
+                        if hasattr(f, "metadata") and f.metadata.get("tool_name") == "gemini_deep_forensic":
+                            gemini_result = f.metadata
+                            break
+                if gemini_result:
+                    Agent3Object.inject_agent1_context(gemini_result)
+                    logger.info("Agent 1 Gemini findings injected into Agent 3 context",
+                                has_content_type=bool(gemini_result.get("gemini_content_type")),
+                                has_objects=bool(gemini_result.get("gemini_detected_objects")))
+        except Exception as _ctx_err:
+            logger.warning(f"Could not inject Agent 1 context into Agent 3: {_ctx_err}")
+
+        # --- Phase 2: All deep passes concurrently ---
+        results = list(await asyncio.gather(
+            run_agent_deep_only(agent1, "Agent1", a1_init, a1_ok),
+            run_agent_deep_only(agent2, "Agent2", a2_init, a2_ok),
+            run_agent_deep_only(agent3, "Agent3", a3_init, a3_ok),
+            run_agent_deep_only(agent4, "Agent4", a4_init, a4_ok),
+            run_agent_deep_only(agent5, "Agent5", a5_init, a5_ok),
+        ))
         
         # Log summary of active agents
         active_agents = [r.agent_id for r in results if r.agent_active]

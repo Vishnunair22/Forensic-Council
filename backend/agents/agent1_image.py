@@ -65,6 +65,7 @@ class Agent1Image(ForensicAgent):
         Covers the highest-signal forensic checks before deep pass.
         """
         return [
+            "Perform semantic image understanding to identify image type and context",
             "Run full-image ELA and map anomaly regions",
             "Run ELA anomaly block classification on flagged blocks",
             "Run JPEG ghost detection on all flagged regions",
@@ -80,14 +81,13 @@ class Agent1Image(ForensicAgent):
         Runs in background after initial findings are returned.
         """
         return [
+            "Run Gemini deep forensic analysis: identify content type, extract all text, detect objects and weapons, identify interfaces, describe what is happening, cross-validate metadata",
             "Run ELA anomaly block classification on flagged blocks",
             "Run frequency domain analysis on contested regions",
             "Isolate and re-analyze all flagged ROIs with noise footprint analysis",
-            "Perform semantic image understanding to identify image type and context",
             "Detect copy-move forgery in flagged ROI regions",
             "Run adversarial robustness check against known anti-ELA evasion techniques",
             "Extract visible text via OCR for contextual analysis",
-            "Run Gemini deep forensic analysis: identify content type, extract all text, detect objects and weapons, identify interfaces, describe what is happening, cross-validate metadata",
         ]
 
     @property
@@ -661,6 +661,8 @@ class Agent1Image(ForensicAgent):
             result["gemini_narrative"] = getattr(finding, "_contextual_narrative", "")
             result["gemini_verdict"] = getattr(finding, "_authenticity_verdict", "")
             result["gemini_metadata_consistency"] = getattr(finding, "_metadata_visual_consistency", "")
+            # Store result on instance for cross-agent sharing (Agent 3 reads this)
+            self._gemini_vision_result = result
             return result
 
         registry.register(
@@ -684,27 +686,59 @@ class Agent1Image(ForensicAgent):
         starts reasoning from real data, not a cold-start generic prompt.
         """
         context_lines = []
-        # Fast pre-screen: file hash
+        # Fast pre-screen: file hash + semantic image understanding
         try:
             if self._tool_registry:
                 hash_handler = self._tool_registry._handlers.get("file_hash_verify")
                 if hash_handler:
                     result = await hash_handler({"artifact": self.evidence_artifact})
-                    h = result.get("sha256_hash", result.get("sha256", ""))
+                    h = result.get("sha256_hash", result.get("sha256", result.get("current_hash", "")))
                     if h:
                         context_lines.append(f"SHA-256: {h[:16]}...")
         except Exception:
             pass
 
+        # Pre-screen: CLIP semantic understanding of what the image contains
+        semantic_context = ""
+        try:
+            if self._tool_registry:
+                clip_handler = self._tool_registry._handlers.get("analyze_image_content")
+                if clip_handler:
+                    clip_result = await clip_handler({"artifact": self.evidence_artifact})
+                    if clip_result and clip_result.get("available"):
+                        top_match = clip_result.get("top_match", "")
+                        top_conf = clip_result.get("top_confidence", 0.0)
+                        concern = clip_result.get("concern_flag", False)
+                        if top_match:
+                            semantic_context = f"CLIP semantic pre-screen: '{top_match}' ({top_conf:.0%})"
+                            if concern:
+                                semantic_context += " — CONCERN FLAG raised"
+                            context_lines.append(semantic_context)
+        except Exception:
+            pass
+
         context = " | ".join(context_lines) if context_lines else "Pre-screen tools unavailable."
+        file_path = getattr(self.evidence_artifact, "file_path", "unknown")
+        import os
+        file_name = os.path.basename(file_path) if file_path else "unknown"
+        file_size = ""
+        try:
+            sz = os.path.getsize(file_path)
+            file_size = f", {sz:,} bytes" if sz else ""
+        except Exception:
+            pass
+
         return (
-            f"Starting image integrity analysis. Evidence: {self.evidence_artifact.artifact_id}. "
-            f"Pre-screen results — {context} "
-            f"I will now proceed through {len(self.task_decomposition)} tasks: "
-            f"semantic context analysis, full-image ELA, ROI extraction, "
-            f"JPEG ghost detection, frequency domain analysis, splicing detection, "
-            f"noise fingerprinting, perceptual hashing, and copy-move detection. "
-            f"I will flag any anomalies immediately and cross-reference findings across tools."
+            f"Starting image integrity analysis. "
+            f"File: {file_name}{file_size}. Evidence ID: {self.evidence_artifact.artifact_id}. "
+            f"Pre-screen — {context}. "
+            f"I will proceed through {len(self.task_decomposition)} initial tasks: "
+            f"semantic content identification (CLIP), full-image ELA, ELA anomaly block classification, "
+            f"JPEG ghost detection, frequency-domain GAN artifact check, and file hash verification. "
+            f"Deep pass will follow with Gemini AI vision analysis (image content, objects, text, UI, "
+            f"manipulation signals), noise fingerprinting, copy-move detection, and adversarial robustness. "
+            f"All findings will be cross-referenced. Conservative threshold: every finding must be "
+            f"court-defensible before it is recorded."
         )
 
     async def run_investigation(self):
