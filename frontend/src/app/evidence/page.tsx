@@ -233,7 +233,7 @@ export default function EvidencePage() {
       await resumeInvestigation(false);
       // Small deliberate pause so the backend registers the resume before the result
       // page's first poll fires — avoids getting a stale "in_progress" on the first tick.
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 200));
       router.push("/result");
     } catch (err) {
       console.error("Accept analysis failed", err);

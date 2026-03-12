@@ -135,10 +135,10 @@ class CustodyLogger:
         Initialize the custody logger.
         
         Args:
-            postgres_client: Optional PostgreSQL client (creates new one if not provided)
+            postgres_client: Optional PostgreSQL client (uses singleton if not provided)
         """
         self._postgres = postgres_client
-        self._owned_client = postgres_client is None
+        self._owned_client = False  # Never own — always use singleton
     
     async def __aenter__(self) -> "CustodyLogger":
         """Async context manager entry."""
@@ -147,10 +147,8 @@ class CustodyLogger:
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Async context manager exit."""
-        if self._owned_client and self._postgres:
-            await self._postgres.disconnect()
-            self._postgres = None
+        """Async context manager exit — never close the shared pool."""
+        pass
     
     async def _get_last_entry_hash(self, session_id: UUID) -> Optional[str]:
         """
@@ -413,9 +411,6 @@ async def get_custody_logger() -> CustodyLogger:
 
 
 async def close_custody_logger() -> None:
-    """Close the custody logger singleton."""
+    """Reset the custody logger singleton reference (does not close the shared pool)."""
     global _custody_logger
-    if _custody_logger is not None:
-        if _custody_logger._postgres:
-            await _custody_logger._postgres.disconnect()
-        _custody_logger = None
+    _custody_logger = None

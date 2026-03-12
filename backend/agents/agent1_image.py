@@ -61,40 +61,39 @@ class Agent1Image(ForensicAgent):
     @property
     def task_decomposition(self) -> list[str]:
         """
-        Light tasks — fast numpy/OpenCV tools that complete in ~15-20s total.
-        Heavy tasks are in deep_task_decomposition and run in background.
+        Initial analysis tasks — fast numpy/OpenCV tools, ~15-20s total.
+        Covers the highest-signal forensic checks before deep pass.
         """
         return [
             "Run full-image ELA and map anomaly regions",
             "Run ELA anomaly block classification on flagged blocks",
             "Run JPEG ghost detection on all flagged regions",
-            "Run frequency domain analysis on contested regions",
             "Run frequency-domain GAN artifact detection",
             "Verify file hash against ingestion hash",
-            "Isolate and re-analyze all flagged ROIs with noise footprint analysis",
             "Self-reflection pass",
-            "Submit calibrated findings to Arbiter",
         ]
 
     @property
     def deep_task_decomposition(self) -> list[str]:
         """
-        Heavy tasks — ML model downloads + CPU inference + Gemini vision analysis.
+        Deep/heavy tasks — deferred from initial pass plus full ML + Gemini analysis.
         Runs in background after initial findings are returned.
         """
         return [
+            "Run ELA anomaly block classification on flagged blocks",
+            "Run frequency domain analysis on contested regions",
+            "Isolate and re-analyze all flagged ROIs with noise footprint analysis",
             "Perform semantic image understanding to identify image type and context",
             "Detect copy-move forgery in flagged ROI regions",
             "Run adversarial robustness check against known anti-ELA evasion techniques",
             "Extract visible text via OCR for contextual analysis",
-            "Run Gemini vision analysis: identify file content and surface manipulation signals",
-            "Run Gemini vision cross-validation: compare visual evidence with preliminary ELA findings",
+            "Run Gemini deep forensic analysis: identify content type, extract all text, detect objects and weapons, identify interfaces, describe what is happening, cross-validate metadata",
         ]
 
     @property
     def iteration_ceiling(self) -> int:
-        """Maximum iterations for the ReAct loop."""
-        return 15
+        """Maximum iterations — 6 initial tasks × 2 iters each + 2 buffer."""
+        return 14
     
     @property
     def supported_file_types(self) -> list[str]:
@@ -460,48 +459,64 @@ class Agent1Image(ForensicAgent):
         registry.register("adversarial_robustness_check", adversarial_robustness_check, "Adversarial robustness check")
         registry.register("sensor_db_query", sensor_db_query, "Camera sensor noise profile database query")
 
-        # ── Gemini vision handlers ──────────────────────────────────────────
+        # ── Gemini deep forensic analysis handler ──────────────────────────
         _gemini = GeminiVisionClient(self.config)
 
-        async def gemini_identify_content(input_data: dict) -> dict:
-            """Gemini vision: identify file content, scene, and immediate anomalies."""
+        async def gemini_deep_forensic_handler(input_data: dict) -> dict:
+            """
+            Comprehensive Gemini deep forensic analysis for image files.
+            Identifies content type, extracts all visible text, detects objects
+            and weapons, identifies interfaces/UIs, describes what is going on,
+            cross-validates EXIF metadata against visual content, and surfaces
+            manipulation signals.
+            """
             artifact = input_data.get("artifact") or self.evidence_artifact
-            context = input_data.get("context", f"Image integrity agent pre-screening {artifact.artifact_id}")
-            finding = await _gemini.identify_file_content(
+
+            # Gather EXIF summary to pass to Gemini for metadata cross-validation
+            exif_summary: dict = {}
+            try:
+                if self._tool_registry:
+                    exif_handler = self._tool_registry._handlers.get("file_hash_verify")
+                    # Use piexif to get quick EXIF context
+                    import piexif
+                    if artifact.file_path.lower().endswith((".jpg", ".jpeg", ".tiff", ".tif")):
+                        exif_raw = piexif.load(artifact.file_path)
+                        zeroth = exif_raw.get("0th", {})
+                        exif_ifd = exif_raw.get("Exif", {})
+                        make = zeroth.get(piexif.ImageIFD.Make, b"")
+                        model = zeroth.get(piexif.ImageIFD.Model, b"")
+                        dt = exif_ifd.get(piexif.ExifIFD.DateTimeOriginal, b"")
+                        exif_summary = {
+                            "camera_make": make.decode(errors="replace").strip("\x00") if isinstance(make, bytes) else str(make),
+                            "camera_model": model.decode(errors="replace").strip("\x00") if isinstance(model, bytes) else str(model),
+                            "datetime_original": dt.decode(errors="replace").strip("\x00") if isinstance(dt, bytes) else str(dt),
+                            "has_gps": bool(exif_raw.get("GPS")),
+                        }
+            except Exception:
+                pass
+
+            finding = await _gemini.deep_forensic_analysis(
                 file_path=artifact.file_path,
-                agent_context=context,
+                exif_summary=exif_summary or None,
             )
             result = finding.to_finding_dict(self.agent_id)
-            # Flatten key fields so the ReAct loop can reference them directly
+
+            # Expose key fields at top level for react_loop formatter
             result["gemini_content_type"] = finding.file_type_assessment
             result["gemini_scene"] = finding.content_description
             result["gemini_manipulation_signals"] = finding.manipulation_signals
             result["gemini_detected_objects"] = finding.detected_objects
-            return result
-
-        async def gemini_cross_validate_manipulation(input_data: dict) -> dict:
-            """Gemini vision: cross-validate preliminary ELA/JPEG manipulation flags."""
-            artifact = input_data.get("artifact") or self.evidence_artifact
-            # Pull preliminary findings text from working memory context
-            preliminary = input_data.get("preliminary_findings", [])
-            finding = await _gemini.analyze_manipulation_evidence(
-                file_path=artifact.file_path,
-                preliminary_findings=preliminary,
-            )
-            result = finding.to_finding_dict(self.agent_id)
-            result["gemini_authenticity_assessment"] = finding.content_description
-            result["gemini_additional_anomalies"] = finding.manipulation_signals
+            result["gemini_extracted_text"] = getattr(finding, "_extracted_text", [])
+            result["gemini_interface"] = getattr(finding, "_interface_identification", "")
+            result["gemini_narrative"] = getattr(finding, "_contextual_narrative", "")
+            result["gemini_verdict"] = getattr(finding, "_authenticity_verdict", "")
+            result["gemini_metadata_consistency"] = getattr(finding, "_metadata_visual_consistency", "")
             return result
 
         registry.register(
-            "gemini_identify_content",
-            gemini_identify_content,
-            "Gemini vision: identify file content type, scene description, and immediate anomalies",
-        )
-        registry.register(
-            "gemini_cross_validate_manipulation",
-            gemini_cross_validate_manipulation,
-            "Gemini vision: cross-validate preliminary ELA/JPEG manipulation findings visually",
+            "gemini_deep_forensic",
+            gemini_deep_forensic_handler,
+            "Gemini deep forensic analysis: content ID, text extraction, object/weapon detection, interface identification, narrative, metadata cross-validation",
         )
 
         return registry
@@ -545,9 +560,15 @@ class Agent1Image(ForensicAgent):
     async def run_investigation(self):
         """
         Override to short-circuit when the evidence is not an image file.
-        Returns a clear finding instead of running tools that will fail on audio/video.
+        Working memory is initialized first so the heartbeat shows the
+        file-type validation step, then returns a clean finding if not applicable.
         """
         from core.react_loop import AgentFinding
+        from core.working_memory import TaskStatus
+
+        # Step 1: always initialize working memory so the heartbeat shows
+        # task progress (including the validation step) even on unsupported files.
+        await self._initialize_working_memory()
 
         file_path = self.evidence_artifact.file_path.lower()
         mime = (self.evidence_artifact.metadata or {}).get("mime_type", "").lower()
@@ -562,6 +583,23 @@ class Agent1Image(ForensicAgent):
         )
 
         if is_audio_video:
+            # Mark all tasks complete so the heartbeat shows full progress
+            try:
+                state = await self.working_memory.get_state(
+                    session_id=self.session_id, agent_id=self.agent_id
+                )
+                if state:
+                    for task in state.tasks:
+                        await self.working_memory.update_task(
+                            session_id=self.session_id,
+                            agent_id=self.agent_id,
+                            task_id=task.task_id,
+                            status=TaskStatus.COMPLETE,
+                            result_ref="file_type_validation",
+                        )
+            except Exception:
+                pass
+
             finding = AgentFinding(
                 agent_id=self.agent_id,
                 finding_type="File type not applicable",
@@ -580,5 +618,9 @@ class Agent1Image(ForensicAgent):
             self._reflection_report = None
             return self._findings
 
-        # For image files, run the full investigation
+        # For image files, run the full investigation.
+        # Flag tells base class not to re-initialize working memory.
+        self._skip_memory_init = True
+        # Rebuild tool registry so deep pass always has gemini_deep_forensic handler.
+        self._tool_registry = await self.build_tool_registry()
         return await super().run_investigation()

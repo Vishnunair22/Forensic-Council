@@ -530,7 +530,14 @@ class ReActLoopEngine:
         "gemini vision cross-validation": "gemini_cross_validate_manipulation",
         "gemini vision analysis: deep object": "gemini_object_scene_analysis",
         "gemini vision analysis: cross-validate visual content": "gemini_metadata_visual_consistency",
-        "gemini vision": "gemini_identify_content",  # fallback for any gemini task
+        # New comprehensive deep forensic task (replaces the above for Agents 1, 3, 5)
+        "gemini deep forensic analysis": "gemini_deep_forensic",
+        "gemini deep forensic": "gemini_deep_forensic",
+        "gemini deep": "gemini_deep_forensic",
+        "deep forensic analysis": "gemini_deep_forensic",
+        "identify content type, extract all text": "gemini_deep_forensic",
+        "identify interfaces": "gemini_deep_forensic",
+        "gemini vision": "gemini_deep_forensic",  # fallback for any gemini task
         # Audio splice (Agent 2)
         "audio splice": "audio_splice_detect",
         "splice point": "audio_splice_detect",
@@ -802,6 +809,7 @@ class ReActLoopEngine:
                         "gemini_cross_validate_manipulation": "Gemini Vision — Manipulation Cross-Validation",
                         "gemini_object_scene_analysis": "Gemini Vision — Object & Scene Analysis",
                         "gemini_metadata_visual_consistency": "Gemini Vision — Metadata Consistency Check",
+                        "gemini_deep_forensic": "Gemini Deep Forensic Analysis",
                     }
                     tool_label = _TOOL_LABELS.get(
                         next_step.tool_name,
@@ -1513,6 +1521,25 @@ class ReActLoopEngine:
                 f"Gemini metadata-visual consistency: {str(o.get('gemini_metadata_verdict', o.get('content_description', '')))[:200]}. "
                 + (f"Provenance flags: {'; '.join(str(s) for s in o.get('gemini_provenance_flags', o.get('manipulation_signals', [])))[:200]}."
                    if o.get('gemini_provenance_flags') or o.get('manipulation_signals') else "No provenance flags raised.")
+            ),
+            # ── Comprehensive deep forensic (Agents 1, 3, 5) ──────────────────
+            "gemini_deep_forensic": lambda o: (
+                # Content type + scene
+                f"Content type: {o.get('gemini_content_type', o.get('file_type_assessment', 'unknown'))}. "
+                # Interface identification (only if present and meaningful)
+                + (f"Interface: {o.get('gemini_interface', '')}. " if o.get('gemini_interface') else "")
+                # Contextual narrative
+                + (f"What is happening: {str(o.get('gemini_narrative', o.get('content_description', '')))[:250]}. " if o.get('gemini_narrative') or o.get('content_description') else "")
+                # Detected objects
+                + (f"Objects detected: {', '.join(str(x) for x in o.get('gemini_detected_objects', o.get('gemini_validated_objects', o.get('detected_objects', []))))[:200]}. " if (o.get('gemini_detected_objects') or o.get('gemini_validated_objects') or o.get('detected_objects')) else "No significant objects detected. ")
+                # Extracted text (first 150 chars)
+                + (f"Extracted text ({len(o.get('gemini_extracted_text', []))} item(s)): {' | '.join(str(t) for t in o.get('gemini_extracted_text', []))[:150]}. " if o.get('gemini_extracted_text') else "No text extracted. ")
+                # Authenticity verdict
+                + (f"Verdict: {o.get('gemini_verdict', '')}. " if o.get('gemini_verdict') else "")
+                # Metadata consistency (Agent 5)
+                + (f"Metadata consistency: {str(o.get('gemini_metadata_consistency', ''))[:150]}. " if o.get('gemini_metadata_consistency') else "")
+                # Manipulation signals
+                + (f"Manipulation signals: {'; '.join(str(s) for s in (o.get('gemini_manipulation_signals') or o.get('gemini_compositing_signals') or o.get('manipulation_signals', [])))[:200]}." if (o.get('gemini_manipulation_signals') or o.get('gemini_compositing_signals') or o.get('manipulation_signals')) else "No manipulation signals detected.")
             ),
         }
 

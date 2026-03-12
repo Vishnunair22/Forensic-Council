@@ -89,7 +89,7 @@ class Agent5Metadata(ForensicAgent):
     @property
     def deep_task_decomposition(self) -> list[str]:
         """
-        Heavy tasks — ML models, network APIs, adversarial checks, Gemini vision.
+        Heavy tasks — ML models, network APIs, adversarial checks, Gemini deep forensic analysis.
         Runs in background after initial findings are returned.
         """
         return [
@@ -98,7 +98,7 @@ class Agent5Metadata(ForensicAgent):
             "Run reverse image search for prior online appearances",
             "Query device fingerprint database against claimed device model",
             "Run adversarial robustness check against metadata spoofing techniques",
-            "Run Gemini vision analysis: cross-validate visual content against EXIF metadata claims",
+            "Run Gemini deep forensic analysis: identify content type, extract all text, detect objects and weapons, identify interfaces, describe what is happening, cross-validate metadata",
         ]
     
     @property
@@ -631,56 +631,109 @@ class Agent5Metadata(ForensicAgent):
         registry.register("mediainfo_profile", mediainfo_profile_handler, "Deep AV container profiling: codec, frame rate mode, encoding tools, forensic flags")
         registry.register("av_file_identity", av_file_identity_handler, "Lightweight AV pre-screen: format, codec, duration, high-severity flags only")
 
-        # ── Gemini vision handler ───────────────────────────────────────────
+        # ── Gemini deep forensic analysis handler ──────────────────────────
         _gemini = GeminiVisionClient(self.config)
 
-        async def gemini_metadata_visual_consistency(input_data: dict) -> dict:
+        async def gemini_deep_forensic_handler(input_data: dict) -> dict:
             """
-            Gemini vision deep analysis: cross-validate EXIF metadata claims
-            against what the visual content actually shows.
-
-            Checks timestamp/lighting consistency, GPS/environment consistency,
-            device characteristics, and provenance flags (screenshot, AI-generated,
-            re-photographed from screen).
+            Comprehensive Gemini deep forensic analysis with full EXIF cross-validation.
+            Identifies content type, extracts all visible text, detects objects and
+            weapons, identifies interfaces/UIs, describes contextual narrative, and
+            performs thorough metadata-vs-visual consistency check using the actual
+            EXIF fields extracted by the initial analysis pass.
             """
             artifact = input_data.get("artifact") or self.evidence_artifact
-            # Build a compact metadata summary to send to Gemini
-            metadata_summary: dict = {}
+
+            # Build the richest possible EXIF summary for Gemini to cross-validate
+            exif_summary: dict = {}
             try:
                 import piexif
                 if artifact.file_path.lower().endswith((".jpg", ".jpeg", ".tiff", ".tif")):
                     exif_data = piexif.load(artifact.file_path)
                     zeroth = exif_data.get("0th", {})
                     exif_ifd = exif_data.get("Exif", {})
-                    gps = exif_data.get("GPS", {})
-                    make = zeroth.get(piexif.ImageIFD.Make, b"")
-                    model = zeroth.get(piexif.ImageIFD.Model, b"")
-                    dt_orig = exif_ifd.get(piexif.ExifIFD.DateTimeOriginal, b"")
-                    metadata_summary = {
-                        "camera_make": make.decode(errors="replace").strip("\x00") if isinstance(make, bytes) else str(make),
-                        "camera_model": model.decode(errors="replace").strip("\x00") if isinstance(model, bytes) else str(model),
-                        "datetime_original": dt_orig.decode(errors="replace").strip("\x00") if isinstance(dt_orig, bytes) else str(dt_orig),
-                        "has_gps": bool(gps),
+                    gps_ifd = exif_data.get("GPS", {})
+
+                    def _b(v):
+                        return v.decode(errors="replace").strip("\x00") if isinstance(v, bytes) else str(v) if v else ""
+
+                    make = _b(zeroth.get(piexif.ImageIFD.Make, b""))
+                    model = _b(zeroth.get(piexif.ImageIFD.Model, b""))
+                    software = _b(zeroth.get(piexif.ImageIFD.Software, b""))
+                    dt_orig = _b(exif_ifd.get(piexif.ExifIFD.DateTimeOriginal, b""))
+                    dt_dig = _b(exif_ifd.get(piexif.ExifIFD.DateTimeDigitized, b""))
+                    dt_mod = _b(zeroth.get(piexif.ImageIFD.DateTime, b""))
+                    iso = exif_ifd.get(piexif.ExifIFD.ISOSpeedRatings)
+                    focal = exif_ifd.get(piexif.ExifIFD.FocalLength)
+                    exposure = exif_ifd.get(piexif.ExifIFD.ExposureTime)
+                    flash = exif_ifd.get(piexif.ExifIFD.Flash)
+                    width = zeroth.get(piexif.ImageIFD.ImageWidth) or exif_ifd.get(piexif.ExifIFD.PixelXDimension)
+                    height = zeroth.get(piexif.ImageIFD.ImageLength) or exif_ifd.get(piexif.ExifIFD.PixelYDimension)
+
+                    # GPS extraction
+                    has_gps = bool(gps_ifd)
+                    gps_str = ""
+                    if has_gps:
+                        try:
+                            def _dms(val):
+                                if not val: return None
+                                d, m, s = val
+                                return d[0]/d[1] + m[0]/m[1]/60 + s[0]/s[1]/3600
+                            lat = _dms(gps_ifd.get(piexif.GPSIFD.GPSLatitude))
+                            lon = _dms(gps_ifd.get(piexif.GPSIFD.GPSLongitude))
+                            lat_ref = _b(gps_ifd.get(piexif.GPSIFD.GPSLatitudeRef, b"N"))
+                            lon_ref = _b(gps_ifd.get(piexif.GPSIFD.GPSLongitudeRef, b"E"))
+                            if lat and lon:
+                                gps_str = f"{lat:.6f}{lat_ref}, {lon:.6f}{lon_ref}"
+                        except Exception:
+                            gps_str = "GPS present but could not decode"
+
+                    exif_summary = {
+                        "camera_make": make,
+                        "camera_model": model,
+                        "software": software,
+                        "datetime_original": dt_orig,
+                        "datetime_digitized": dt_dig,
+                        "datetime_modified": dt_mod,
+                        "iso": str(iso) if iso else "",
+                        "focal_length": str(focal) if focal else "",
+                        "exposure_time": str(exposure) if exposure else "",
+                        "flash": str(flash) if flash is not None else "",
+                        "image_width": str(width) if width else "",
+                        "image_height": str(height) if height else "",
+                        "has_gps": has_gps,
+                        "gps_coordinates": gps_str,
                     }
+                    # Remove empty fields to keep the prompt clean
+                    exif_summary = {k: v for k, v in exif_summary.items() if v not in ("", None, False, "False")}
             except Exception:
-                metadata_summary = {"note": "EXIF extraction unavailable for Gemini context"}
+                exif_summary = {"note": "EXIF extraction unavailable — visual analysis only"}
 
-            # Merge any explicitly provided summary from the orchestrator
-            metadata_summary.update(input_data.get("metadata_summary", {}))
+            # Merge any overrides from caller
+            exif_summary.update(input_data.get("metadata_summary", {}))
 
-            finding = await _gemini.analyze_metadata_visual_consistency(
+            finding = await _gemini.deep_forensic_analysis(
                 file_path=artifact.file_path,
-                metadata_summary=metadata_summary,
+                exif_summary=exif_summary or None,
             )
             result = finding.to_finding_dict(self.agent_id)
+
+            # Expose all key fields for react_loop formatter and report
             result["gemini_metadata_verdict"] = finding.content_description
             result["gemini_provenance_flags"] = finding.manipulation_signals
+            result["gemini_content_type"] = finding.file_type_assessment
+            result["gemini_extracted_text"] = getattr(finding, "_extracted_text", [])
+            result["gemini_interface"] = getattr(finding, "_interface_identification", "")
+            result["gemini_narrative"] = getattr(finding, "_contextual_narrative", "")
+            result["gemini_verdict"] = getattr(finding, "_authenticity_verdict", "")
+            result["gemini_metadata_consistency"] = getattr(finding, "_metadata_visual_consistency", "")
+            result["gemini_detected_objects"] = finding.detected_objects
             return result
 
         registry.register(
-            "gemini_metadata_visual_consistency",
-            gemini_metadata_visual_consistency,
-            "Gemini vision: cross-validate EXIF/metadata claims against visual content (timestamp, GPS, device)",
+            "gemini_deep_forensic",
+            gemini_deep_forensic_handler,
+            "Gemini deep forensic analysis: content ID, text extraction, object/weapon detection, interface ID, narrative, full EXIF cross-validation",
         )
 
         return registry
@@ -701,12 +754,22 @@ class Agent5Metadata(ForensicAgent):
                 handler = self._tool_registry._handlers.get("exif_extract")
                 if handler:
                     result = await handler({"artifact": self.evidence_artifact})
-                    device = result.get("device_model", result.get("make", ""))
-                    software = result.get("software", "")
-                    gps = result.get("gps_coordinates", result.get("has_gps", False))
-                    total_tags = result.get("total_exif_tags", result.get("tag_count", 0))
+                    # device_model is a top-level key from exif_extract_enhanced
+                    device = result.get("device_model", "")
+                    # software lives inside present_fields
+                    present = result.get("present_fields", {})
+                    software = present.get("Software", present.get("software", ""))
+                    gps = result.get("gps_coordinates") or present.get("GPSInfo")
+                    total_tags = result.get("total_exif_tags", result.get("tag_count", len(present)))
                     absent_fields = result.get("absent_fields", [])
-                    created = result.get("datetime_original", result.get("date_created", ""))
+                    # DateTimeOriginal is inside present_fields, not a top-level key
+                    created = (
+                        present.get("DateTimeOriginal")
+                        or present.get("DateTime")
+                        or result.get("datetime_original")
+                        or result.get("date_created")
+                        or ""
+                    )
                     if device or total_tags:
                         context_lines.append(
                             f"Device: {device or 'Unknown'}, software: {software or 'None'}, "

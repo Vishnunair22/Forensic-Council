@@ -34,6 +34,28 @@ import { getReport, type ReportDTO } from "@/lib/api";
 
 // ── Agent colours / icons ──────────────────────────────────────────────────
 
+// Collapsible summary component to prevent clutter
+function SummaryText({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const LIMIT = 300;
+  const isLong = text.length > LIMIT;
+  return (
+    <div>
+      <p className="text-slate-300 leading-relaxed text-sm">
+        {isLong && !expanded ? text.slice(0, LIMIT) + "…" : text}
+      </p>
+      {isLong && (
+        <button
+          onClick={() => setExpanded(v => !v)}
+          className="mt-2 text-xs text-emerald-400 hover:text-emerald-300 transition-colors font-medium"
+        >
+          {expanded ? "Show less ▲" : "Read more ▼"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 const AGENT_CONFIG: Record<string, {
   name: string; role: string;
   icon: React.ReactNode;
@@ -154,7 +176,7 @@ export default function ResultPage() {
 
     let cancelled = false;
     let timerId: ReturnType<typeof setTimeout>;
-    const MAX_ATTEMPTS = 40; // 40 × 4 s = ~2.7 min
+    const MAX_ATTEMPTS = 60; // 60 × 2 s = ~2 min
     let attempts = 0;
 
     setIsLoadingRealReport(true);
@@ -179,7 +201,7 @@ export default function ResultPage() {
         console.error("Failed to fetch report:", err);
       }
       if (!cancelled && attempts < MAX_ATTEMPTS) {
-        timerId = setTimeout(poll, 4000);
+        timerId = setTimeout(poll, 2000);
       } else if (!cancelled) {
         setIsLoadingRealReport(false);
       }
@@ -360,38 +382,42 @@ export default function ResultPage() {
 
                   {/* Executive summary */}
                   <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6">
-                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
                       <FileCheck className="w-5 h-5 text-emerald-400" />
                       Executive Summary
                     </h3>
-                    <p className="text-slate-300 leading-relaxed">
-                      {realReport?.executive_summary || currentReport?.summary || "Analysis complete. Review findings below."}
-                    </p>
+                    <SummaryText text={realReport?.executive_summary || currentReport?.summary || "Analysis complete. Review findings below."} />
                   </div>
 
                   {/* Cross-modal confirmed findings */}
                   {realReport?.cross_modal_confirmed && realReport.cross_modal_confirmed.length > 0 && (
                     <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6">
-                      <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                      <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                         <CheckCircle className="w-5 h-5 text-emerald-400" />
-                        Key Findings — Cross-Modal Confirmed
+                        Key Findings
+                        <span className="text-xs font-normal text-slate-500 ml-1">({realReport.cross_modal_confirmed.length} cross-confirmed)</span>
                       </h3>
-                      <div className="space-y-3">
-                        {realReport.cross_modal_confirmed.map((finding, idx) => (
+                      <div className="space-y-2">
+                        {realReport.cross_modal_confirmed.slice(0, 4).map((finding, idx) => (
                           <motion.div key={idx}
                             initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: idx * 0.07 }}
-                            className="flex items-start gap-3 p-4 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
-                            <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                            <div className="flex-1">
-                              <p className="font-medium text-white">{finding.finding_type}</p>
-                              <p className="text-slate-400 text-sm mt-1">{finding.reasoning_summary}</p>
-                              <p className="text-emerald-400 text-xs mt-2">
-                                Confidence: {Math.round((finding.calibrated_probability ?? finding.confidence_raw ?? 0) * 100)}%
+                            transition={{ delay: idx * 0.05 }}
+                            className="flex items-start gap-3 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                            <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-white text-sm">{finding.finding_type}</p>
+                              <p className="text-slate-400 text-xs mt-0.5 line-clamp-2">{finding.reasoning_summary}</p>
+                              <p className="text-emerald-400 text-xs mt-1">
+                                {Math.round((finding.calibrated_probability ?? finding.confidence_raw ?? 0) * 100)}% confidence
                               </p>
                             </div>
                           </motion.div>
                         ))}
+                        {realReport.cross_modal_confirmed.length > 4 && (
+                          <p className="text-xs text-slate-500 text-center pt-1">
+                            +{realReport.cross_modal_confirmed.length - 4} more findings in Detailed Agent Analysis below
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}

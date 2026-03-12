@@ -96,6 +96,12 @@ class GeminiVisionFinding:
                 "detected_objects": self.detected_objects,
                 "manipulation_signals": self.manipulation_signals,
                 "contextual_anomalies": self.contextual_anomalies,
+                # deep_forensic_analysis extras (populated if analysis_type == 'deep_forensic_analysis')
+                "extracted_text": getattr(self, "_extracted_text", []),
+                "interface_identification": getattr(self, "_interface_identification", ""),
+                "contextual_narrative": getattr(self, "_contextual_narrative", ""),
+                "authenticity_verdict": getattr(self, "_authenticity_verdict", ""),
+                "metadata_visual_consistency": getattr(self, "_metadata_visual_consistency", ""),
                 "analysis_phase": "deep",
                 "latency_ms": round(self.latency_ms, 1),
             },
@@ -245,6 +251,116 @@ class GeminiVisionClient:
             analysis_type="object_scene_analysis",
         )
 
+    async def deep_forensic_analysis(
+        self,
+        file_path: str,
+        exif_summary: dict[str, Any] | None = None,
+    ) -> GeminiVisionFinding:
+        """
+        Comprehensive deep forensic analysis — single call covering everything.
+
+        Used by Agent 1 (Image Integrity), Agent 3 (Object/Weapon), and
+        Agent 5 (Metadata/Context) during the deep analysis pass for image files.
+
+        Returns a single rich finding that covers:
+          - What the file IS (content type: photo, screenshot, web UI, document,
+            AI-generated, etc.)
+          - Full scene description including contextual meaning
+          - All visible text (OCR-quality extraction)
+          - Object inventory: every identifiable item, device, weapon, or person
+          - Interface/UI identification (web app, mobile UI, desktop GUI, etc.)
+          - Contextual narrative: what is going on / what action is depicted
+          - Manipulation signals and forensic anomalies
+          - Metadata cross-validation against visual cues (if exif_summary provided)
+          - Overall authenticity verdict and confidence
+        """
+        if not self._enabled:
+            return await self._local_forensic_fallback(file_path, exif_summary)
+
+        meta_section = ""
+        if exif_summary:
+            meta_text = json.dumps(exif_summary, indent=2, default=str)
+            meta_section = (
+                f"\n\nEXIF / metadata extracted from file:\n{meta_text}\n"
+                "Cross-validate these claims against what you visually observe."
+            )
+
+        prompt = (
+            "You are a senior forensic analyst performing a comprehensive examination "
+            "of this file. Provide a thorough, court-grade analysis covering ALL of "
+            "the following areas:\n\n"
+
+            "1. CONTENT_TYPE: Classify the file precisely. Examples: 'photograph taken "
+            "with a camera', 'screenshot of a web browser', 'screenshot of a mobile app', "
+            "'scanned document', 'AI-generated image', 'screen recording frame', "
+            "'screenshot of a desktop application', 'photograph of a physical document', "
+            "'infographic', 'meme', etc. Be specific.\n\n"
+
+            "2. SCENE_DESCRIPTION: Describe in detail what you see. What is the setting? "
+            "What is happening? What is the overall context or narrative? If it is a "
+            "screenshot, describe what application/website is shown and what action is "
+            "being performed or displayed.\n\n"
+
+            "3. EXTRACTED_TEXT: Extract ALL visible text from the image verbatim, "
+            "preserving structure. Include UI labels, headings, body text, captions, "
+            "URLs, usernames, timestamps, error messages, form fields, table data, "
+            "watermarks — everything. If no text is present, return an empty list.\n\n"
+
+            "4. DETECTED_OBJECTS: List every identifiable object, device, or item. "
+            "Include: computers/laptops/phones/tablets, weapons (knives, firearms, etc.), "
+            "vehicles, faces/people (describe without identifying), documents/IDs, "
+            "currency, drugs/substances, clothing, furniture, logos/brands. "
+            "For each object include its approximate location in the frame "
+            "(e.g. 'laptop, center-left'). If none beyond the main scene, say 'None'.\n\n"
+
+            "5. INTERFACE_IDENTIFICATION: If the image shows a digital interface, "
+            "identify it precisely: application name (if recognisable), type of interface "
+            "(web browser, mobile app, desktop app, terminal, map, social media, "
+            "messaging, email client, etc.), and what the user is doing or what data "
+            "is displayed.\n\n"
+
+            "6. CONTEXTUAL_NARRATIVE: In 2-4 sentences, explain what is going on in this "
+            "image. What event, activity, or situation does it depict? What is the forensic "
+            "significance of its content?\n\n"
+
+            "7. MANIPULATION_SIGNALS: List any visual forensic red flags: inconsistent "
+            "lighting/shadows, copy-paste artifacts, edge blending issues, resolution "
+            "inconsistencies, AI generation artefacts, metadata-visual mismatches, "
+            "signs of cropping/compositing. If none, return empty list.\n\n"
+
+            "8. METADATA_VISUAL_CONSISTENCY: If EXIF data is provided, assess whether "
+            "the visual content is consistent with the claimed timestamp, location, and "
+            "device. If no EXIF provided, return 'No metadata provided for cross-validation'.\n\n"
+
+            "9. AUTHENTICITY_VERDICT: One of 'AUTHENTIC', 'SUSPICIOUS', 'LIKELY_MANIPULATED', "
+            "'AI_GENERATED', or 'CANNOT_DETERMINE'.\n\n"
+
+            "10. CONFIDENCE: Your overall confidence in this analysis (0.0-1.0).\n\n"
+
+            f"{meta_section}\n\n"
+
+            "Respond ONLY with valid JSON matching this exact schema (no markdown, no "
+            "preamble, just the JSON object):\n"
+            "{\n"
+            '  "content_type": str,\n'
+            '  "scene_description": str,\n'
+            '  "extracted_text": [str],\n'
+            '  "detected_objects": [str],\n'
+            '  "interface_identification": str,\n'
+            '  "contextual_narrative": str,\n'
+            '  "manipulation_signals": [str],\n'
+            '  "metadata_visual_consistency": str,\n'
+            '  "authenticity_verdict": str,\n'
+            '  "confidence": float\n'
+            "}"
+        )
+
+        return await self._run_vision_analysis(
+            file_path=file_path,
+            prompt=prompt,
+            analysis_type="deep_forensic_analysis",
+        )
+
     async def analyze_metadata_visual_consistency(
         self,
         file_path: str,
@@ -336,7 +452,10 @@ class GeminiVisionClient:
         url = f"{_GEMINI_API_BASE}/models/{self.model}:generateContent?key={self.api_key}"
 
         try:
-            raw_text = await self._post_with_retry(url, payload)
+            raw_text = await asyncio.wait_for(
+                self._post_with_retry(url, payload),
+                timeout=self.timeout + 5,  # hard cap slightly above httpx timeout
+            )
             latency_ms = (time.monotonic() - t0) * 1000
             finding = self._parse_response(raw_text, analysis_type, latency_ms)
             return finding
@@ -420,13 +539,24 @@ class GeminiVisionClient:
 
         confidence = float(data.get("confidence", 0.5))
 
-        # Build unified description from various response shapes
+        # Build unified description — handle all response shapes including deep_forensic_analysis
         descriptions = []
         for key in ("scene_description", "visual_confirmation", "authenticity_assessment",
-                    "overall_verdict", "scene_coherence"):
+                    "overall_verdict", "scene_coherence", "contextual_narrative"):
             val = data.get(key)
             if val and isinstance(val, str):
                 descriptions.append(val)
+
+        # deep_forensic_analysis extras: interface + authenticity verdict
+        iface = data.get("interface_identification", "")
+        if iface and isinstance(iface, str) and iface.lower() not in ("none", "n/a", ""):
+            descriptions.insert(0, f"Interface: {iface}")
+        verdict = data.get("authenticity_verdict", "")
+        if verdict and isinstance(verdict, str):
+            descriptions.append(f"Verdict: {verdict}")
+        meta_consistency = data.get("metadata_visual_consistency", "")
+        if meta_consistency and isinstance(meta_consistency, str) and meta_consistency.lower() not in ("none", "n/a", ""):
+            descriptions.append(f"Metadata consistency: {meta_consistency}")
 
         # Gather manipulation and anomaly signals
         manipulation_signals: list[str] = []
@@ -445,17 +575,25 @@ class GeminiVisionClient:
             if isinstance(items, list):
                 contextual_anomalies.extend(str(i) for i in items if i)
 
-        # Gather detected objects
+        # Gather detected objects (all variants)
         detected_objects: list[str] = []
         for key in ("detected_objects", "validated_objects", "weapons_contraband"):
             items = data.get(key, [])
             if isinstance(items, list):
                 detected_objects.extend(str(i) for i in items if i)
 
+        # Extracted text (deep_forensic_analysis only)
+        extracted_text_items: list[str] = []
+        raw_text_items = data.get("extracted_text", [])
+        if isinstance(raw_text_items, list):
+            extracted_text_items = [str(t) for t in raw_text_items if t]
+        elif isinstance(raw_text_items, str) and raw_text_items:
+            extracted_text_items = [raw_text_items]
+
         file_type = data.get("content_type", "")
 
-        # Build human-readable description
-        desc_parts = descriptions[:2]
+        # Build human-readable description (cap at 3 desc parts to stay concise)
+        desc_parts = descriptions[:3]
         if manipulation_signals:
             none_signals = [s for s in manipulation_signals
                             if s.lower() not in ("none detected", "none")]
@@ -463,7 +601,7 @@ class GeminiVisionClient:
                 desc_parts.append(f"Manipulation signals: {'; '.join(none_signals[:3])}")
         content_description = " | ".join(desc_parts) if desc_parts else "Visual analysis complete."
 
-        return GeminiVisionFinding(
+        finding = GeminiVisionFinding(
             analysis_type=analysis_type,
             model_used=self.model,
             content_description=content_description,
@@ -478,6 +616,13 @@ class GeminiVisionClient:
             raw_response=raw_text,
             latency_ms=latency_ms,
         )
+        # Attach deep_forensic_analysis extras as dynamic attributes for agents to use
+        finding._extracted_text = extracted_text_items
+        finding._interface_identification = iface
+        finding._contextual_narrative = data.get("contextual_narrative", "")
+        finding._authenticity_verdict = verdict
+        finding._metadata_visual_consistency = meta_consistency
+        return finding
 
     @staticmethod
     def _encode_file(file_path: str) -> tuple[str, str]:
@@ -510,6 +655,135 @@ class GeminiVisionClient:
             raw = f.read()
 
         return base64.b64encode(raw).decode("utf-8"), mime_type
+
+    async def _local_forensic_fallback(
+        self,
+        file_path: str,
+        exif_summary: dict[str, Any] | None = None,
+    ) -> GeminiVisionFinding:
+        """
+        Local OpenCV/PIL fallback when Gemini API key is not configured.
+        Extracts meaningful forensic signals from the image without any network call:
+        - Image dimensions, colour stats, channel analysis
+        - Basic content type classification from image statistics
+        - Noise level, sharpness, compression artifacts
+        - EXIF metadata cross-check if provided
+        """
+        t0 = time.monotonic()
+        path = Path(file_path)
+
+        try:
+            from PIL import Image as PILImage
+            import numpy as np
+
+            img = PILImage.open(file_path).convert("RGB")
+            arr = np.array(img, dtype=np.float32)
+            h, w = arr.shape[:2]
+
+            # Colour statistics
+            mean_rgb = arr.mean(axis=(0, 1)).tolist()
+            std_rgb = arr.std(axis=(0, 1)).tolist()
+            brightness = float(arr.mean())
+
+            # Sharpness via Laplacian variance
+            import cv2
+            gray = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2GRAY)
+            laplacian_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+            is_blurry = laplacian_var < 100
+
+            # Noise estimate via high-frequency residual
+            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+            noise_residual = float(np.abs(gray.astype(float) - blurred.astype(float)).mean())
+
+            # JPEG artifact check: blockiness score
+            block_diff = float(np.abs(np.diff(gray.astype(float), axis=0)[7::8].mean())) if h > 16 else 0.0
+            likely_jpeg_compressed = block_diff > 3.0
+
+            # Colour uniformity (synthetic/AI images tend to have smoother distributions)
+            channel_balance = max(std_rgb) - min(std_rgb)
+            possibly_synthetic = channel_balance < 10 and laplacian_var > 500
+
+            content_type = "unknown image"
+            if w > 1200 and h > 800 and laplacian_var > 300:
+                content_type = "high-resolution photograph"
+            elif laplacian_var < 80:
+                content_type = "blurry or low-quality image"
+            elif possibly_synthetic:
+                content_type = "possibly synthetic or AI-generated image"
+            elif likely_jpeg_compressed and block_diff > 8:
+                content_type = "heavily JPEG-compressed image"
+            else:
+                content_type = "digital image"
+
+            scene_desc = (
+                f"{content_type.capitalize()}, {w}×{h}px. "
+                f"Mean brightness {brightness:.0f}/255 ({'dark' if brightness < 80 else 'bright' if brightness > 180 else 'mid-tone'}). "
+                f"Sharpness score {laplacian_var:.0f} ({'blurry' if is_blurry else 'sharp'}). "
+                f"Estimated noise level {noise_residual:.2f}."
+            )
+
+            manipulation_signals = []
+            if noise_residual > 8:
+                manipulation_signals.append(f"Elevated noise residual ({noise_residual:.2f}) — possible double-compression or splicing")
+            if block_diff > 8:
+                manipulation_signals.append(f"Strong JPEG block boundary artifacts (score {block_diff:.1f}) — re-encoding likely")
+            if possibly_synthetic:
+                manipulation_signals.append("Channel balance and sharpness profile consistent with synthetic/AI-generated content")
+
+            meta_notes = []
+            if exif_summary:
+                dt = exif_summary.get("datetime_original", "")
+                make = exif_summary.get("camera_make", "")
+                if make:
+                    meta_notes.append(f"Claimed device: {make} {exif_summary.get('camera_model', '')}")
+                if dt:
+                    meta_notes.append(f"Claimed capture time: {dt}")
+                if not make and not dt:
+                    meta_notes.append("No device or timestamp in EXIF — provenance cannot be verified from metadata")
+
+            narrative = (
+                f"Local forensic analysis (Gemini API not configured). {scene_desc} "
+                + (f"Metadata: {'; '.join(meta_notes)}." if meta_notes else "No EXIF metadata available.")
+            )
+
+            latency_ms = (time.monotonic() - t0) * 1000
+            finding = GeminiVisionFinding(
+                analysis_type="deep_forensic_analysis",
+                model_used="local_opencv_fallback",
+                content_description=narrative,
+                manipulation_signals=manipulation_signals,
+                detected_objects=[],
+                contextual_anomalies=[],
+                file_type_assessment=content_type,
+                confidence=0.55,
+                court_defensible=True,
+                caveat=(
+                    "Local fallback analysis — GEMINI_API_KEY not set. "
+                    "Set GEMINI_API_KEY for AI-powered deep visual forensics. "
+                    "Results are based on local image statistics only."
+                ),
+                raw_response="",
+                latency_ms=latency_ms,
+            )
+            finding._extracted_text = []
+            finding._interface_identification = ""
+            finding._contextual_narrative = narrative
+            finding._authenticity_verdict = "SUSPICIOUS" if manipulation_signals else "CANNOT_DETERMINE"
+            finding._metadata_visual_consistency = "; ".join(meta_notes) if meta_notes else "No EXIF for cross-validation"
+            return finding
+
+        except Exception as exc:
+            latency_ms = (time.monotonic() - t0) * 1000
+            logger.warning("Local forensic fallback failed: %s", exc)
+            return GeminiVisionFinding(
+                analysis_type="deep_forensic_analysis",
+                model_used="local_fallback_error",
+                content_description=f"Local analysis failed: {exc}",
+                confidence=0.0,
+                court_defensible=False,
+                error=str(exc),
+                latency_ms=latency_ms,
+            )
 
     def _disabled_finding(self, analysis_type: str) -> GeminiVisionFinding:
         """Return a graceful no-op finding when Gemini is not configured."""

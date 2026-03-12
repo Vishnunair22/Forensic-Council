@@ -338,9 +338,9 @@ class ForensicAgent(ABC):
     async def run_investigation(self) -> list[AgentFinding]:
         """
         Run the full investigation workflow.
-        
+
         Steps:
-        1. Initialize working memory with task_decomposition
+        1. Initialize working memory with task_decomposition (unless _skip_memory_init flag set)
         2. Log session start to CustodyLogger
         3. Build tool registry
         4. Check tool availability
@@ -348,7 +348,7 @@ class ForensicAgent(ABC):
         6. Run ReActLoopEngine
         7. Run self_reflection_pass()
         8. Return findings
-        
+
         Returns:
             List of AgentFinding objects from the investigation
         """
@@ -361,7 +361,9 @@ class ForensicAgent(ABC):
         )
         
         # Step 1: Initialize working memory with task decomposition
-        await self._initialize_working_memory()
+        # (Skipped when subclass pre-initialized it for file-type validation)
+        if not getattr(self, "_skip_memory_init", False):
+            await self._initialize_working_memory()
         
         # Step 2: Log session start
         if self.custody_logger:
@@ -503,24 +505,18 @@ class ForensicAgent(ABC):
         """
         Run the deep/heavy investigation pass in background.
         
-        Uses the SAME tool registry built during the initial pass,
-        but initializes fresh working memory with deep_task_decomposition.
+        Uses a SEPARATE working memory namespace (agent_id + '_deep') so
+        deep tasks never bleed into the initial-pass task list.  Ensures the
+        tool registry is available (builds it if the initial pass was skipped).
         Returns COMBINED findings from both initial and deep analysis.
-        
-        Each finding is tagged with analysis_phase metadata:
-        - 'initial': Findings from run_investigation()
-        - 'deep': Findings from this deep pass
-        
-        Must be called AFTER run_investigation() has completed.
         """
         deep_tasks = self.deep_task_decomposition
         if not deep_tasks:
-            # No deep tasks - return initial findings with phase tag
             for f in self._findings:
                 if "analysis_phase" not in f.metadata:
                     f.metadata["analysis_phase"] = "initial"
             return self._findings
-        
+
         logger.info(
             "Starting deep investigation pass",
             agent_id=self.agent_id,
@@ -528,23 +524,25 @@ class ForensicAgent(ABC):
             deep_task_count=len(deep_tasks),
             initial_finding_count=len(self._findings),
         )
-        
-        # Tag initial findings with analysis phase
+
+        # Tag initial findings
         for f in self._findings:
             f.metadata["analysis_phase"] = "initial"
-        
-        # Use a suffixed agent_id for separate working memory namespace
+
+        # Ensure we have a tool registry (agent may not have run initial pass)
+        if self._tool_registry is None:
+            self._tool_registry = await self.build_tool_registry()
+
+        # ISOLATED namespace for deep pass — avoids re-running initial tasks
         deep_agent_id = f"{self.agent_id}_deep"
-        
-        # Initialize working memory for deep tasks
+
         await self.working_memory.initialize(
             session_id=self.session_id,
             agent_id=deep_agent_id,
             tasks=deep_tasks,
-            iteration_ceiling=len(deep_tasks) + 5,  # generous ceiling
+            iteration_ceiling=len(deep_tasks) + 5,
         )
-        
-        # Build a new ReAct loop engine for the deep pass
+
         loop_engine = ReActLoopEngine(
             agent_id=deep_agent_id,
             session_id=self.session_id,
@@ -553,58 +551,57 @@ class ForensicAgent(ABC):
             custody_logger=self.custody_logger,
             redis_client=None,
         )
-        
-        # Run loop with task-decomposition driver (no LLM in loop)
+
         loop_result = await loop_engine.run(
-            initial_thought=f"Deep analysis pass: running {len(deep_tasks)} heavy forensic tools.",
-            tool_registry=self._tool_registry,  # reuse tools from initial pass
+            initial_thought=(
+                f"Deep analysis pass for {self.agent_name}: running {len(deep_tasks)} "
+                f"heavy forensic tools (ML models + Gemini vision). "
+                f"Initial pass found {len(self._findings)} finding(s). "
+                f"Deep tasks: {'; '.join(deep_tasks)}."
+            ),
+            tool_registry=self._tool_registry,
             llm_generator=None,
         )
-        
+
         deep_findings = loop_result.findings
-        
-        # Normalize deep findings: reset agent_id to the base agent (strip _deep suffix)
-        # so frontend grouping by agent_id is consistent between initial and deep passes
+
+        # Normalize agent_id — strip _deep suffix so frontend groups correctly
         for f in deep_findings:
-            if hasattr(f, 'agent_id') and f.agent_id == deep_agent_id:
+            if hasattr(f, "agent_id") and f.agent_id == deep_agent_id:
                 f.agent_id = self.agent_id
-        
-        # Tag deep findings with analysis phase
+
+        # Tag deep findings
         for f in deep_findings:
             f.metadata["analysis_phase"] = "deep"
-        
-        # Post-synthesis with LLM on deep findings too
-        if (self.config.llm_enable_post_synthesis
-                and self.config.llm_api_key
-                and self.config.llm_provider != "none"
-                and deep_findings):
-            # Temporarily swap findings for synthesis
+
+        # Post-synthesis on deep findings
+        if (
+            self.config.llm_enable_post_synthesis
+            and self.config.llm_api_key
+            and self.config.llm_provider != "none"
+            and deep_findings
+        ):
             orig_findings = self._findings
             self._findings = deep_findings
             try:
                 await self._synthesize_findings_with_llm()
                 deep_findings = self._findings
-                # Re-tag after synthesis
                 for f in deep_findings:
                     f.metadata["analysis_phase"] = "deep"
             except Exception:
                 pass
             self._findings = orig_findings
-        
-        # COMBINE initial and deep findings
+
         combined_findings = self._findings + deep_findings
-        
-        # Update internal findings to the combined set
         self._findings = combined_findings
-        
+
         logger.info(
-            "Deep investigation pass complete - combined findings",
+            "Deep investigation pass complete",
             agent_id=self.agent_id,
-            initial_finding_count=len(self._findings) - len(deep_findings),
             deep_finding_count=len(deep_findings),
             total_finding_count=len(combined_findings),
         )
-        
+
         return combined_findings
     
     async def _initialize_working_memory(self) -> None:
