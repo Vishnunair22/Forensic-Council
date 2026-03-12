@@ -45,7 +45,7 @@ interface AgentProgressDisplayProps {
 }
 
 // ── Per-card expandable text ──────────────────────────────────────────────────
-const TRUNCATE_CHARS = 180;
+const TRUNCATE_CHARS = 500;
 
 function truncateAtWord(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
@@ -101,6 +101,12 @@ function ExpandableText({
  */
 function humaniseThinking(raw: string, agentId: string): string {
   if (!raw) return "Analyzing evidence…";
+
+  // If the backend already humanised the text (contains emoji or progress counter
+  // like "(3/8)"), return it as-is to avoid double-processing.
+  const hasEmoji = /[\u{1F300}-\u{1FFFF}]|[\u2600-\u27FF]/u.test(raw);
+  const hasProgressCounter = /\(\d+\/\d+\)/.test(raw);
+  if (hasEmoji || hasProgressCounter) return raw;
 
   const r = raw.toLowerCase();
 
@@ -323,7 +329,7 @@ export function AgentProgressDisplay({
                   exit={{ opacity: 0, y: -10, scale: 0.95 }}
                   transition={{ type: "spring", stiffness: 260, damping: 20 }}
                   className={`
-                    relative rounded-xl border p-5 transition-colors duration-300 overflow-hidden
+                    relative rounded-xl border p-5 transition-colors duration-300
                     ${status === "running" ? "bg-cyan-500/[0.04] border-cyan-500/25"
                       : status === "complete" ? "bg-white/[0.03] border-emerald-500/20"
                       : status === "error" ? "bg-red-500/[0.04] border-red-500/20"
@@ -374,9 +380,10 @@ export function AgentProgressDisplay({
                   )}
 
                   {status === "running" && (
-                    <p className="text-xs text-cyan-300/80 leading-relaxed">
-                      {thinking}
-                    </p>
+                    <ExpandableText
+                      text={thinking}
+                      textClassName="text-cyan-300/80"
+                    />
                   )}
 
                   {status === "complete" && completed && (

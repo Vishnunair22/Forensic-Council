@@ -1306,10 +1306,19 @@ class ReActLoopEngine:
             err = tool_result.error or "unknown error"
             for prefix in ("[ToolUnavailableError]", "[ToolError]", "ToolError:", "Exception:", "ValueError:", "TypeError:", "KeyError:"):
                 err = err.replace(prefix, "").strip()
-            err = err[:120] + ("..." if len(err) > 120 else "")
+            # Classify error type for a cleaner message
+            if "ModuleNotFoundError" in err or "ImportError" in err or "No module named" in err:
+                dep_name = err.split("'")[1] if "'" in err else "required dependency"
+                err_msg = f"ML dependency '{dep_name}' not installed — tool skipped."
+            elif "Timeout" in err or "timeout" in err:
+                err_msg = f"Tool timed out — likely model cold-start. Result skipped."
+            elif "FileNotFoundError" in err:
+                err_msg = "Evidence file not accessible — skipped."
+            else:
+                err_msg = err[:140] + ("…" if len(err) > 140 else "")
             return (
-                f"{tool_label}: The agent attempted to run a specialized scan but was unable to complete it successfully due to an operational hurdle: '{err}'. "
-                f"Consequently, diagnostic confidence has been appropriately adjusted to {confidence:.0%}."
+                f"{tool_label}: {err_msg} "
+                f"Confidence adjusted to {confidence:.0%}."
             )
 
         output = tool_result.output or {}
@@ -1400,11 +1409,16 @@ class ReActLoopEngine:
             ),
             # ── Metadata tools (Agent 5) ─────────────────────────────────────
             # FIXED: exif_extract_enhanced returns total_fields_extracted, absent_mandatory_fields, not has_exif/device_model/absent_fields
-            "exif_extract": lambda o: (
-                f"EXIF extraction: {o.get('total_fields_extracted', o.get('total_exif_tags', 0))} fields found. "
-                f"GPS: {'Present' if o.get('gps_coordinates') else 'Absent'}. "
-                f"Missing {len(o.get('absent_mandatory_fields', o.get('absent_fields', [])))} mandatory fields "
-                f"({', '.join(str(f) for f in o.get('absent_mandatory_fields', o.get('absent_fields', []))[:4]) or 'none'})."
+                        "exif_extract": lambda o: (
+                f"File: {o.get('file_name', 'unknown')} ({o.get('file_size_human', '')}) · {o.get('mime_type', '')}. "
+                + (f"Device: {o.get('device_model', o.get('camera_make', '') + ' ' + o.get('camera_model', '')).strip()}. " if o.get('device_model') or o.get('camera_make') else "Device: not recorded. ")
+                + (f"Captured: {o.get('datetime_original', '')}. " if o.get('datetime_original') else "Capture time: not in EXIF. ")
+                + (f"Modified: {o.get('datetime_modified', '')}. " if o.get('datetime_modified') else "")
+                + (f"Software: {o.get('software', '')}. " if o.get('software') else "")
+                + (f"Dimensions: {o.get('image_dimensions', '')}. " if o.get('image_dimensions') else "")
+                + f"GPS: {'Present' if o.get('gps_coordinates') else 'Absent'}. "
+                + f"{o.get('total_fields_extracted', 0)} EXIF field(s) extracted. "
+                + (f"Missing mandatory fields: {', '.join(str(f) for f in o.get('absent_mandatory_fields', [])[:5])}." if o.get('absent_mandatory_fields') else "All mandatory EXIF fields present.")
             ),
             # FIXED: gps_timezone_validate returns 'plausible' bool + 'issues' list, NOT 'inconsistent' + 'distance_km'
             "gps_timezone_validate": lambda o: (
@@ -1524,22 +1538,25 @@ class ReActLoopEngine:
             ),
             # ── Comprehensive deep forensic (Agents 1, 3, 5) ──────────────────
             "gemini_deep_forensic": lambda o: (
-                # Content type + scene
-                f"Content type: {o.get('gemini_content_type', o.get('file_type_assessment', 'unknown'))}. "
-                # Interface identification (only if present and meaningful)
-                + (f"Interface: {o.get('gemini_interface', '')}. " if o.get('gemini_interface') else "")
-                # Contextual narrative
-                + (f"What is happening: {str(o.get('gemini_narrative', o.get('content_description', '')))[:250]}. " if o.get('gemini_narrative') or o.get('content_description') else "")
-                # Detected objects
-                + (f"Objects detected: {', '.join(str(x) for x in o.get('gemini_detected_objects', o.get('gemini_validated_objects', o.get('detected_objects', []))))[:200]}. " if (o.get('gemini_detected_objects') or o.get('gemini_validated_objects') or o.get('detected_objects')) else "No significant objects detected. ")
-                # Extracted text (first 150 chars)
-                + (f"Extracted text ({len(o.get('gemini_extracted_text', []))} item(s)): {' | '.join(str(t) for t in o.get('gemini_extracted_text', []))[:150]}. " if o.get('gemini_extracted_text') else "No text extracted. ")
-                # Authenticity verdict
-                + (f"Verdict: {o.get('gemini_verdict', '')}. " if o.get('gemini_verdict') else "")
-                # Metadata consistency (Agent 5)
-                + (f"Metadata consistency: {str(o.get('gemini_metadata_consistency', ''))[:150]}. " if o.get('gemini_metadata_consistency') else "")
-                # Manipulation signals
-                + (f"Manipulation signals: {'; '.join(str(s) for s in (o.get('gemini_manipulation_signals') or o.get('gemini_compositing_signals') or o.get('manipulation_signals', [])))[:200]}." if (o.get('gemini_manipulation_signals') or o.get('gemini_compositing_signals') or o.get('manipulation_signals')) else "No manipulation signals detected.")
+                (lambda
+                    ctype=o.get('gemini_content_type', o.get('file_type_assessment', 'unknown')),
+                    narrative=str(o.get('gemini_narrative', o.get('content_description', ''))),
+                    objects=o.get('gemini_detected_objects', o.get('gemini_validated_objects', o.get('detected_objects', []))),
+                    texts=o.get('gemini_extracted_text', []),
+                    verdict=o.get('gemini_verdict', ''),
+                    meta_consistency=str(o.get('gemini_metadata_consistency', '')),
+                    iface=o.get('gemini_interface', ''),
+                    signals=list(o.get('gemini_manipulation_signals') or o.get('manipulation_signals') or []):
+                    f"✅ Gemini deep forensic complete. "
+                    + f"Content: {ctype}. "
+                    + (f"Interface/UI: {iface}. " if iface else "")
+                    + (f"Scene: {narrative[:400]}. " if narrative else "")
+                    + (f"Objects/subjects detected: {', '.join(str(x) for x in objects[:12])}. " if objects else "No specific objects identified. ")
+                    + (f"Text extracted from image ({len(texts)} item(s)): {' | '.join(str(t) for t in texts[:8])}. " if texts else "No text found in image. ")
+                    + (f"Authenticity verdict: {verdict}. " if verdict else "")
+                    + (f"Metadata vs visual: {meta_consistency[:200]}. " if meta_consistency else "")
+                    + (f"⚠️ Manipulation signals: {'; '.join(str(s) for s in signals[:6])}." if signals else "No manipulation signals detected.")
+                )()
             ),
         }
 
