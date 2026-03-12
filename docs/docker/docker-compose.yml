@@ -217,16 +217,20 @@ services:
         NEXT_PUBLIC_DEMO_PASSWORD: "${NEXT_PUBLIC_DEMO_PASSWORD:-inv123!}"
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     container_name: forensic_ui
+    restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+      # Standalone Next.js server must bind to all interfaces so health-checks
+      # and external traffic can reach it from outside the container.
       - HOSTNAME=0.0.0.0
+      - PORT=3000
       # NEXT_PUBLIC_API_URL below is redundant (baked at build), but kept for clarity.
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
       - NEXT_PUBLIC_DEMO_PASSWORD=${NEXT_PUBLIC_DEMO_PASSWORD:-inv123!}
       # DEMO_PASSWORD: server-side alias used by /api/auth/demo Next.js API route.
-      # Next.js API routes (server-side) can read runtime env vars directly, but
-      # NEXT_PUBLIC_* vars are also readable server-side, so this is belt-and-suspenders.
       - DEMO_PASSWORD=${NEXT_PUBLIC_DEMO_PASSWORD:-inv123!}
       # INTERNAL_API_URL: used by Next.js server-side API routes (e.g. /api/auth/demo).
       # Inside Docker, the frontend container CANNOT reach "localhost:8000" — it must
@@ -236,11 +240,13 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3000',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      # wget is available in node:22-alpine. Increased start-period to allow
+      # the Next.js standalone server enough time to fully boot before checks begin.
+      test: ["CMD-SHELL", "wget -qO- http://0.0.0.0:3000/ > /dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 30s
+      start_period: 60s
     deploy:
       resources:
         limits:

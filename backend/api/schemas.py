@@ -40,6 +40,7 @@ class AgentFindingDTO(BaseModel):
     robustness_caveat: bool
     robustness_caveat_detail: Optional[str] = None
     reasoning_summary: str
+    metadata: Optional[dict[str, Any]] = None  # includes analysis_phase, analysis_source, etc.
 
 
 class ReportDTO(BaseModel):

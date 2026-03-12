@@ -60,6 +60,10 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# Standalone Next.js server must bind to 0.0.0.0 so Docker health-checks
+# and external traffic can reach it. Without this it defaults to localhost only.
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
 
 # Create a dedicated non-root user for security — running as root in production
 # containers is a critical vulnerability that grants full container filesystem
@@ -75,8 +79,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 # Switch to non-root user before the process starts
 USER nextjs
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 \
-  CMD node -e "require('http').get('http://127.0.0.1:3000', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+# Health-check: use wget (available in alpine) hitting 0.0.0.0 which is where
+# the standalone server listens. Increase start-period to give Next.js time to boot.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+  CMD wget -qO- http://0.0.0.0:3000/ > /dev/null || exit 1
 
 EXPOSE 3000
 

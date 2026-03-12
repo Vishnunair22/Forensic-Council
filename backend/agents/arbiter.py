@@ -71,6 +71,13 @@ class ForensicReport(BaseModel):
     tribunal_resolved: list[TribunalCase] = Field(default_factory=list)
     incomplete_findings: list[dict[str, Any]] = Field(default_factory=list)
     stub_findings: list[dict[str, Any]] = Field(default_factory=list)  # Stub/implemented tool results
+    gemini_vision_findings: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description=(
+            "Deep vision findings produced by Google Gemini (Agents 1, 3, 5 deep pass). "
+            "Compiled separately for review; also present inside per_agent_findings."
+        ),
+    )
     case_linking_flags: list[dict[str, Any]] = Field(default_factory=list)
     chain_of_custody_log: list[dict[str, Any]] = Field(default_factory=list)
     evidence_version_trees: list[dict[str, Any]] = Field(default_factory=list)
@@ -112,19 +119,51 @@ class CouncilArbiter:
         agent_results: dict[str, dict[str, Any]],
         case_id: str = "",
     ) -> ForensicReport:
-        """Deliberate on agent results and generate a forensic report."""
-        # Collect all findings
+        """Deliberate on agent results and generate a forensic report.
+
+        Groq (via LLMClient) synthesizes the executive summary and uncertainty
+        statement from all agent findings. Gemini vision findings produced by
+        Agents 1, 3, and 5 are compiled into a dedicated section so they can
+        be reviewed alongside classical tool findings in the final report.
+        """
+        # Collect all findings — including Gemini vision findings tagged with
+        # metadata.analysis_source == "gemini_vision"
         all_findings = []
         per_agent_findings = {}
-        
+        gemini_findings_by_agent: dict[str, list[dict[str, Any]]] = {}
+
         for agent_id, result in agent_results.items():
             findings = result.get("findings", [])
             per_agent_findings[agent_id] = findings
             all_findings.extend(findings)
-        
+
+            # Separate Gemini findings for dedicated compilation
+            agent_gemini = [
+                f for f in findings
+                if isinstance(f, dict)
+                and f.get("metadata", {}).get("analysis_source") == "gemini_vision"
+            ]
+            if agent_gemini:
+                gemini_findings_by_agent[agent_id] = agent_gemini
+                logger.info(
+                    "Arbiter: collected %d Gemini vision finding(s) from %s",
+                    len(agent_gemini), agent_id,
+                )
+
+        # Compile flat Gemini findings list for the report
+        gemini_vision_findings: list[dict[str, Any]] = []
+        for agent_findings in gemini_findings_by_agent.values():
+            gemini_vision_findings.extend(agent_findings)
+
+        if gemini_vision_findings:
+            logger.info(
+                "Arbiter: total Gemini vision findings compiled: %d across %d agent(s)",
+                len(gemini_vision_findings), len(gemini_findings_by_agent),
+            )
+
         # Run cross-agent comparison
         comparisons = await self.cross_agent_comparison(all_findings)
-        
+
         # Identify contradictions and run challenge loop
         contested_findings = []
         challenge_results = []
@@ -143,54 +182,55 @@ class CouncilArbiter:
                     comparison, challenged_agent, context_from_other
                 )
                 challenge_results.append(result)
-        
+
         # Cross-modal confirmed findings
         seen_ids = set()
         cross_modal_confirmed = []
         for comparison in comparisons:
-            if (comparison.verdict == FindingVerdict.AGREEMENT and 
-                comparison.cross_modal_confirmed):
+            if (comparison.verdict == FindingVerdict.AGREEMENT and
+                    comparison.cross_modal_confirmed):
                 fid = comparison.finding_a.get("finding_id")
                 if fid not in seen_ids:
                     seen_ids.add(fid)
                     cross_modal_confirmed.append(comparison.finding_a)
-        
+
         # Incomplete findings (excluding stub results which are not court-defensible)
         incomplete_findings = [
-            f for f in all_findings 
+            f for f in all_findings
             if f.get("status") == "INCOMPLETE"
         ]
-        
+
         # Stub findings - results from unimplemented tools
         # These are tracked separately and excluded from verdict calculation
         stub_findings = [
             f for f in all_findings
-            if f.get("stub_result") == True
+            if f.get("stub_result") is True
         ]
-        
+
         # Log warning if stub findings are present
         if stub_findings:
             logger.warning(
                 f"Report contains {len(stub_findings)} stub findings that should not be used for verdicts",
                 stub_count=len(stub_findings),
             )
-        
-        # Generate executive summary
+
+        # Generate executive summary via Groq (with Gemini findings included in digest)
         executive_summary = await self._generate_executive_summary(
             len(per_agent_findings),
             len(all_findings),
             len(cross_modal_confirmed),
             len(contested_findings),
-            all_findings=all_findings
+            all_findings=all_findings,
+            gemini_findings=gemini_vision_findings,
         )
-        
+
         # Generate uncertainty statement
         uncertainty_statement = await self._generate_uncertainty_statement(
             len(incomplete_findings),
             len(contested_findings),
         )
-        
-        # Build report
+
+        # Build report — include gemini_vision_findings as a dedicated section
         report = ForensicReport(
             session_id=self.session_id,
             case_id=case_id or f"case_{self.session_id}",
@@ -199,10 +239,11 @@ class CouncilArbiter:
             cross_modal_confirmed=cross_modal_confirmed,
             contested_findings=contested_findings,
             incomplete_findings=incomplete_findings,
-            stub_findings=stub_findings,  # Include stub findings for transparency
+            stub_findings=stub_findings,
+            gemini_vision_findings=gemini_vision_findings,
             uncertainty_statement=uncertainty_statement,
         )
-        
+
         return report
     
     async def cross_agent_comparison(
@@ -474,19 +515,21 @@ class CouncilArbiter:
         cross_modal_confirmed: int,
         contested: int,
         all_findings: list[dict[str, Any]] = None,
+        gemini_findings: list[dict[str, Any]] = None,
     ) -> str:
         """
-        Generate an executive summary.
+        Generate an executive summary using Groq LLM.
 
-        When LLM is configured (Groq recommended), uses the model to write
-        a structured, plain-language summary from actual finding data.
+        When Groq is configured (recommended), uses the model to write
+        a structured, plain-language summary from actual finding data,
+        incorporating Gemini vision insights where available.
         Falls back to a deterministic template if LLM is unavailable.
         """
         if self.config.llm_api_key and self.config.llm_provider != "none":
             try:
                 result = await self._llm_executive_summary(
                     num_agents, num_findings, cross_modal_confirmed,
-                    contested, all_findings or []
+                    contested, all_findings or [], gemini_findings or []
                 )
                 if result:
                     return result
@@ -504,13 +547,19 @@ class CouncilArbiter:
         cross_modal_confirmed: int,
         contested: int,
         all_findings: list[dict[str, Any]],
+        gemini_findings: list[dict[str, Any]] = None,
     ) -> str:
-        """Generate executive summary using LLM synthesis."""
+        """Generate executive summary using Groq LLM synthesis.
+
+        Incorporates Gemini vision findings (from Agents 1, 3, 5 deep pass)
+        alongside classical tool findings for a comprehensive summary.
+        """
         client = LLMClient(self.config)
 
         # Build structured findings digest for the model
         top_findings = sorted(
-            [f for f in all_findings if not f.get("stub_result")],
+            [f for f in all_findings if not f.get("stub_result")
+             and f.get("metadata", {}).get("analysis_source") != "gemini_vision"],
             key=lambda f: f.get("confidence_raw", 0),
             reverse=True,
         )[:8]
@@ -526,14 +575,33 @@ class CouncilArbiter:
                 "cross_modal": f.get("cross_modal_confirmed", False),
             })
 
+        # Build Gemini vision digest
+        gemini_digest = []
+        for gf in (gemini_findings or [])[:4]:
+            meta = gf.get("metadata", {})
+            gemini_digest.append({
+                "agent": gf.get("agent_id", "unknown"),
+                "analysis_type": meta.get("analysis_type", "vision"),
+                "model": meta.get("model_used", "gemini"),
+                "confidence": round(gf.get("confidence_raw", 0), 3),
+                "summary": gf.get("reasoning_summary", ""),
+                "manipulation_signals": meta.get("manipulation_signals", []),
+                "detected_objects": meta.get("detected_objects", []),
+            })
+
+        gemini_section = ""
+        if gemini_digest:
+            gemini_section = f"\n\nGemini vision deep analysis findings ({len(gemini_digest)} of {len(gemini_findings or [])}):\n{json.dumps(gemini_digest, indent=2)}"
+
         system_prompt = """You are the Council Arbiter writing the Executive Summary section of a court-admissible forensic evidence report.
 
 Your summary must be:
 - Factual and grounded only in the structured findings data provided
 - Written in formal, precise legal/forensic language
-- 3-5 paragraphs covering: (1) scope of analysis, (2) key confirmed findings with confidence levels, (3) contested or inconclusive findings, (4) overall evidential weight and recommended next steps
+- 3-5 paragraphs covering: (1) scope of analysis including both classical tools and Gemini vision AI, (2) key confirmed findings with confidence levels, (3) contested or inconclusive findings, (4) overall evidential weight and recommended next steps
 - Free of speculation — only state what the data shows
 - Explicit about limitations and uncertainties
+- Where Gemini vision findings are present, clearly attribute them as AI-assisted visual analysis requiring corroboration
 
 Do NOT use bullet points. Write in continuous prose paragraphs."""
 
@@ -542,9 +610,10 @@ Do NOT use bullet points. Write in continuous prose paragraphs."""
 - Total findings: {num_findings}
 - Cross-modal confirmed (multiple agents agree): {cross_modal_confirmed}
 - Contested findings (agents disagree): {contested}
+- Gemini vision findings: {len(gemini_findings or [])}
 
-Top findings by confidence:
-{json.dumps(findings_digest, indent=2)}
+Top findings by confidence (classical tools):
+{json.dumps(findings_digest, indent=2)}{gemini_section}
 
 Write the Executive Summary for this forensic report."""
 

@@ -301,9 +301,9 @@ class Agent2Audio(ForensicAgent):
                 }
         
         # Register tools
-        registry.register("speaker_diarization", speaker_diarization_handler, "Speaker diarization")
-        registry.register("anti_spoofing_detection", anti_spoofing_detection_handler, "Anti-spoofing detection")
-        registry.register("prosody_analysis", prosody_analysis_handler, "Prosody analysis")
+        registry.register("speaker_diarize", speaker_diarization_handler, "Speaker diarization")
+        registry.register("anti_spoofing_detect", anti_spoofing_detection_handler, "Anti-spoofing detection")
+        registry.register("prosody_analyze", prosody_analysis_handler, "Prosody analysis")
         registry.register("audio_splice_detect", audio_splice_detect_handler, "Run ML-based audio splice detection on segments")
         registry.register("background_noise_analysis", background_noise_analysis_handler, "Background noise consistency analysis")
         registry.register("codec_fingerprinting", codec_fingerprinting_handler, "Codec fingerprinting")

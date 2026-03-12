@@ -51,6 +51,7 @@ def _forensic_report_to_dto(report) -> ReportDTO:
             robustness_caveat=bool(f.get("robustness_caveat", False)),
             robustness_caveat_detail=f.get("robustness_caveat_detail"),
             reasoning_summary=str(f.get("reasoning_summary", "")),
+            metadata=f.get("metadata"),
         )
 
     per_agent: dict = {}
@@ -361,6 +362,7 @@ async def get_session_report(
                         robustness_caveat=bool(f.get("robustness_caveat", False)),
                         robustness_caveat_detail=f.get("robustness_caveat_detail"),
                         reasoning_summary=str(f.get("reasoning_summary", "")),
+                        metadata=f.get("metadata"),
                     )
 
                 rd = db_row["report_data"]
