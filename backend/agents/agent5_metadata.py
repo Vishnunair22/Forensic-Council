@@ -93,12 +93,12 @@ class Agent5Metadata(ForensicAgent):
         Runs in background after initial findings are returned.
         """
         return [
+            "Run Gemini deep forensic analysis: identify content type, extract all text, detect objects and weapons, identify interfaces, describe what is happening, cross-validate metadata",
             "Run ML metadata anomaly scoring to detect field inconsistency",
             "Run astronomical API check for GPS location and claimed date",
             "Run reverse image search for prior online appearances",
             "Query device fingerprint database against claimed device model",
             "Run adversarial robustness check against metadata spoofing techniques",
-            "Run Gemini deep forensic analysis: identify content type, extract all text, detect objects and weapons, identify interfaces, describe what is happening, cross-validate metadata",
         ]
     
     @property
@@ -758,6 +758,56 @@ class Agent5Metadata(ForensicAgent):
             # Merge any overrides from caller
             exif_summary.update(input_data.get("metadata_summary", {}))
 
+            # Add file system metadata (os.stat) — file name, size, timestamps
+            import os as _os
+            import mimetypes as _mimetypes
+            try:
+                fp = artifact.file_path
+                stat = _os.stat(fp)
+                import datetime as _dt
+                ctime = _dt.datetime.fromtimestamp(stat.st_ctime).strftime("%Y-%m-%d %H:%M:%S")
+                mtime = _dt.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                file_size_bytes = stat.st_size
+                file_size_human = (
+                    f"{file_size_bytes / 1_048_576:.2f} MB" if file_size_bytes >= 1_048_576
+                    else f"{file_size_bytes / 1024:.1f} KB" if file_size_bytes >= 1024
+                    else f"{file_size_bytes} bytes"
+                )
+                mime_guess, _ = _mimetypes.guess_type(fp)
+                stored_mime = (artifact.metadata or {}).get("mime_type", "") if artifact.metadata else ""
+                fs_meta = {
+                    "file_name": _os.path.basename(fp),
+                    "file_extension": _os.path.splitext(fp)[1].lower(),
+                    "file_size_bytes": str(file_size_bytes),
+                    "file_size_human": file_size_human,
+                    "filesystem_created": ctime,
+                    "filesystem_modified": mtime,
+                    "mime_type_detected": mime_guess or stored_mime or "unknown",
+                    "absolute_path": fp,
+                }
+                exif_summary.update({k: v for k, v in fs_meta.items() if v not in ("", None)})
+            except Exception:
+                pass
+
+            # Add any EXIF findings from initial pass for cross-validation
+            try:
+                exif_initial_findings = [
+                    f for f in (self._findings or [])
+                    if f.metadata.get("tool_name") == "exif_extract"
+                ]
+                if exif_initial_findings:
+                    ef = exif_initial_findings[0].metadata
+                    extra = {}
+                    for field in ["total_fields_extracted", "absent_mandatory_fields",
+                                  "gps_coordinates", "datetime_original", "software",
+                                  "device_model", "camera_make", "camera_model"]:
+                        v = ef.get(field)
+                        if v is not None and v not in ("", [], {}):
+                            extra[f"exif_{field}"] = str(v) if not isinstance(v, str) else v
+                    exif_summary.update(extra)
+            except Exception:
+                pass
+
             finding = await _gemini.deep_forensic_analysis(
                 file_path=artifact.file_path,
                 exif_summary=exif_summary or None,
@@ -774,6 +824,13 @@ class Agent5Metadata(ForensicAgent):
             result["gemini_verdict"] = getattr(finding, "_authenticity_verdict", "")
             result["gemini_metadata_consistency"] = getattr(finding, "_metadata_visual_consistency", "")
             result["gemini_detected_objects"] = finding.detected_objects
+            # Surface file system metadata prominently in result
+            result["file_name"] = exif_summary.get("file_name", "")
+            result["file_size_human"] = exif_summary.get("file_size_human", "")
+            result["file_size_bytes"] = exif_summary.get("file_size_bytes", "")
+            result["filesystem_created"] = exif_summary.get("filesystem_created", "")
+            result["filesystem_modified"] = exif_summary.get("filesystem_modified", "")
+            result["mime_type_detected"] = exif_summary.get("mime_type_detected", "")
             return result
 
         registry.register(

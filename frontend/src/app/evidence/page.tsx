@@ -15,7 +15,8 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+import { ShieldCheck } from "lucide-react";
 
 import { useSimulation } from "@/hooks/useSimulation";
 import { useSound } from "@/hooks/useSound";
@@ -49,6 +50,7 @@ export default function EvidencePage() {
 
   // Navigation loading state — declared early so callbacks below can reference it
   const [isNavigating, setIsNavigating] = useState(false);
+  const [showArbiterOverlay, setShowArbiterOverlay] = useState(false);
 
   // Simulation/Analysis state
   const {
@@ -227,18 +229,18 @@ export default function EvidencePage() {
     if (isNavigating) return;
     playSound("success");
     setIsNavigating(true);
+    setShowArbiterOverlay(true); // Show arbiter progress overlay
     try {
       // Tell the backend to skip deep analysis and compile the report via the arbiter.
-      // We await this so the arbiter has been triggered before the result page starts polling.
       await resumeInvestigation(false);
-      // Small deliberate pause so the backend registers the resume before the result
-      // page's first poll fires — avoids getting a stale "in_progress" on the first tick.
-      await new Promise(r => setTimeout(r, 200));
+      // Small pause so the backend registers the resume before result page polls
+      await new Promise(r => setTimeout(r, 400));
       router.push("/result");
     } catch (err) {
       console.error("Accept analysis failed", err);
       playSound("error");
       setIsNavigating(false);
+      setShowArbiterOverlay(false);
     }
   }, [playSound, resumeInvestigation, router, isNavigating]);
 
@@ -268,9 +270,9 @@ export default function EvidencePage() {
     if (isNavigating) return;
     playSound("complete");
     setIsNavigating(true);
-    // The pipeline has already completed (PIPELINE_COMPLETE was received).
-    // The arbiter ran automatically after deep agents finished.
-    // Just navigate — the result page polls for the report.
+    setShowArbiterOverlay(true); // Show arbiter progress overlay
+    // Small pause to let the user see the overlay before navigating
+    await new Promise(r => setTimeout(r, 500));
     router.push("/result");
   }, [playSound, router, isNavigating]);
 
@@ -348,6 +350,47 @@ export default function EvidencePage() {
     <div className="min-h-screen bg-[#050505] text-white p-6 pb-20 overflow-x-hidden relative">
       {/* Background gradient */}
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900/30 via-black to-black -z-50" />
+
+      {/* Arbiter compiling overlay — shown when user accepts or views results */}
+      {showArbiterOverlay && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="flex flex-col items-center gap-6 px-8 py-10 rounded-3xl bg-[#09090f]/95 border border-white/10 shadow-2xl max-w-xs w-full mx-4"
+          >
+            <div className="relative w-20 h-20 flex items-center justify-center">
+              <motion.div
+                animate={{ scale: [1, 1.2, 1], opacity: [0.2, 0.45, 0.2] }}
+                transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute inset-0 rounded-full bg-purple-500/20 border border-purple-500/30"
+              />
+              <div className="relative z-10 w-12 h-12 rounded-full bg-purple-950/80 border border-purple-500/40 flex items-center justify-center shadow-[0_0_30px_rgba(168,85,247,0.4)]">
+                <ShieldCheck className="w-6 h-6 text-purple-300" />
+              </div>
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 2.8, repeat: Infinity, ease: "linear" }}
+                className="absolute inset-0 pointer-events-none"
+              >
+                <div className="absolute top-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-purple-400 shadow-[0_0_6px_rgba(168,85,247,1)]" />
+              </motion.div>
+            </div>
+            <div className="text-center space-y-1.5">
+              <p className="text-white font-bold">Council Arbiter Deliberating</p>
+              <p className="text-purple-300/70 text-sm font-mono">Synthesising all agent findings…</p>
+              <p className="text-slate-700 text-xs mt-2">Redirecting to results shortly</p>
+            </div>
+            <div className="w-full h-0.5 bg-white/5 rounded-full overflow-hidden">
+              <motion.div
+                animate={{ x: ["-100%", "220%"] }}
+                transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+                className="h-full w-1/3 bg-gradient-to-r from-transparent via-purple-400 to-transparent"
+              />
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* Header */}
       <HeaderSection

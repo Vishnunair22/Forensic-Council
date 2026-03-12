@@ -360,6 +360,26 @@ export async function startInvestigation(
   });
 }
 
+export interface ArbiterStatusResponse {
+  status: "running" | "complete" | "error" | "not_found";
+  message?: string;
+  report_id?: string;
+}
+
+/**
+ * Poll arbiter compilation status (lightweight — no report body)
+ */
+export async function getArbiterStatus(sessionId: string): Promise<ArbiterStatusResponse> {
+  return handleAuthError(async () => {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_BASE}/api/v1/sessions/${sessionId}/arbiter-status`, {
+      headers,
+    });
+    if (!response.ok) return { status: "not_found" };
+    return response.json();
+  });
+}
+
 /**
  * Get the report for a session
  */

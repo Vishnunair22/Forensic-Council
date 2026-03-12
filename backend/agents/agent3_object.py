@@ -45,6 +45,17 @@ class Agent3Object(ForensicAgent):
     12. Submit calibrated findings to Arbiter
     """
     
+    # Class-level context injected by pipeline after Agent 1's initial pass
+    _shared_agent1_context: dict = {}
+
+    @classmethod
+    def inject_agent1_context(cls, agent1_gemini_findings: dict) -> None:
+        """
+        Called by pipeline to share Agent 1's Gemini vision findings with Agent 3.
+        Agent 3's deep pass reads this to cross-reference object/weapon analysis.
+        """
+        cls._shared_agent1_context = agent1_gemini_findings or {}
+
     def __init__(
         self,
         agent_id: str,
@@ -98,12 +109,11 @@ class Agent3Object(ForensicAgent):
         Runs in background after initial findings are returned.
         """
         return [
+            "Run Gemini deep forensic analysis: identify content type, extract all text, detect objects and weapons, identify interfaces, describe what is happening, cross-validate metadata",
             "Run scene-level contextual incongruence analysis",
             "Run ML-based image splicing detection on objects",
             "Run camera noise fingerprint analysis for region consistency",
-            "Issue inter-agent call to Agent 1 for any region showing lighting inconsistency",
             "Run adversarial robustness check against object detection evasion",
-            "Run Gemini deep forensic analysis: identify content type, extract all text, detect objects and weapons, identify interfaces, describe what is happening, cross-validate metadata",
         ]
 
     @property
@@ -706,16 +716,62 @@ class Agent3Object(ForensicAgent):
         async def gemini_deep_forensic_handler(input_data: dict) -> dict:
             """
             Comprehensive Gemini deep forensic analysis for object/scene context.
-            Identifies content type, extracts all visible text, provides full
-            object inventory (including weapons and contraband), identifies
-            UI interfaces, describes contextual narrative, and assesses scene
-            coherence and compositing signals.
+            Uses Agent 1's Gemini vision findings (if available) plus this agent's
+            own YOLO detections to provide cross-validated object/weapon analysis.
+            Identifies compositing, lighting inconsistencies, UI/interface content,
+            and describes the full contextual narrative of what is in the image.
             """
             artifact = input_data.get("artifact") or self.evidence_artifact
 
+            # Build cross-agent context: YOLO detections from our initial pass
+            yolo_context: dict = {}
+            try:
+                yolo_findings = [
+                    f for f in (self._findings or [])
+                    if f.metadata.get("tool_name") == "object_detection"
+                ]
+                if yolo_findings:
+                    yolo_out = yolo_findings[0].metadata
+                    yolo_classes = yolo_out.get("classes_found", [])
+                    yolo_count = yolo_out.get("detection_count", 0)
+                    yolo_weapons = [d.get("class_name", "") for d in yolo_out.get("weapon_detections", [])]
+                    yolo_context = {
+                        "yolo_detected_classes": yolo_classes,
+                        "yolo_detection_count": yolo_count,
+                        "yolo_weapon_classes": yolo_weapons,
+                        "yolo_backend": yolo_out.get("backend", ""),
+                    }
+            except Exception:
+                pass
+
+            # Build Agent 1 context (injected by pipeline from Agent 1's Gemini analysis)
+            agent1_context: dict = {}
+            try:
+                a1 = type(self)._shared_agent1_context
+                if a1:
+                    agent1_context = {
+                        "agent1_image_content_type": a1.get("gemini_content_type", ""),
+                        "agent1_scene_description": str(a1.get("gemini_narrative", a1.get("gemini_scene", "")))[:400],
+                        "agent1_objects_detected": a1.get("gemini_detected_objects", []),
+                        "agent1_manipulation_signals": a1.get("gemini_manipulation_signals", []),
+                        "agent1_extracted_text": a1.get("gemini_extracted_text", []),
+                        "agent1_interface": a1.get("gemini_interface", ""),
+                        "agent1_verdict": a1.get("gemini_verdict", ""),
+                    }
+                    # Remove empty fields
+                    agent1_context = {k: v for k, v in agent1_context.items() if v not in ("", None, [], {})}
+            except Exception:
+                pass
+
+            # Merge contexts into exif_summary-style dict for Gemini
+            context_summary = {}
+            context_summary.update(yolo_context)
+            if agent1_context:
+                context_summary["agent1_image_forensics"] = agent1_context
+
             finding = await _gemini.deep_forensic_analysis(
                 file_path=artifact.file_path,
-                exif_summary=None,
+                exif_summary=context_summary if context_summary else None,
             )
             result = finding.to_finding_dict(self.agent_id)
 
@@ -738,6 +794,9 @@ class Agent3Object(ForensicAgent):
             result["gemini_interface"] = getattr(finding, "_interface_identification", "")
             result["gemini_narrative"] = getattr(finding, "_contextual_narrative", "")
             result["gemini_verdict"] = getattr(finding, "_authenticity_verdict", "")
+            # Include cross-agent context in result for traceability
+            result["agent1_context_used"] = bool(agent1_context)
+            result["yolo_context_used"] = bool(yolo_context)
             return result
 
         registry.register(

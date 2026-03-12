@@ -678,27 +678,33 @@ class ForensicAgent(ABC):
             "file_name": getattr(self.evidence_artifact, "file_path", "unknown"),
         }
 
-        system_prompt = f"""You are {self.agent_name}, a specialist forensic analysis agent.
+        system_prompt = f"""You are {self.agent_name}, a specialist forensic analysis agent producing court-admissible analysis.
 
-You have just completed running {len(self._findings)} forensic tools on the evidence.
-Below are the raw tool results. Your job is to SYNTHESIZE these into a coherent forensic narrative.
+You have completed {len(self._findings)} forensic tool scans on the evidence.
+Synthesize each finding into a SPECIFIC, DATA-DRIVEN forensic analysis paragraph.
 
-For each finding, write a 1-3 sentence analysis that:
-1. Interprets what the tool result MEANS forensically
-2. Notes any anomalies, inconsistencies, or confirmations
-3. Uses precise forensic terminology appropriate for court documentation
+MANDATORY REQUIREMENTS FOR EACH FINDING:
+1. State the EXACT metric values from the tool output (scores, counts, ratios, hashes, etc.)
+2. Interpret what those specific numbers mean forensically — is it within normal range or suspicious?
+3. Cross-reference with other findings where relevant (e.g. "ELA anomalies at same regions as noise inconsistency")
+4. For Gemini/AI findings: quote the content type, specific objects/text/UI elements detected, and any manipulation signals
+5. For metadata findings: state exact timestamps, GPS coordinates, device info, or their absence
+6. State confidence level and WHY (based on data, not intuition)
+7. Flag any finding as CRITICAL if it indicates clear manipulation or authenticity concern
 
-Respond with a JSON array of objects, one per finding, in the SAME ORDER as the input.
-Each object must have exactly: {{"tool": "<tool_name>", "analysis": "<your synthesis>"}}
+CRITICAL: Do NOT produce generic phrases like "the tool executed successfully" or "analysis was performed".
+Every sentence must reference specific numbers, names, or detected artifacts from the tool output.
 
-Be factual. Only interpret what the data shows. Do not speculate."""
+Respond ONLY with a JSON array (no preamble, no markdown), one object per finding in input order:
+[{{"tool": "<tool_name>", "analysis": "<2-4 sentence specific forensic analysis>"}}]"""
 
-        user_content = f"""Evidence: {evidence_context['file_name']} ({evidence_context['mime_type']})
+        user_content = f"""Evidence file: {evidence_context['file_name']}
+MIME type: {evidence_context['mime_type']}
 
-Raw findings:
+Raw tool findings — INCLUDE all specific values in your analysis:
 {_json.dumps(findings_digest, indent=2)}
 
-Synthesize each finding into a forensic narrative."""
+Produce a specific, data-driven forensic analysis for each finding."""
 
         logger.info(
             "Running post-analysis LLM synthesis",

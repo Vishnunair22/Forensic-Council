@@ -36,30 +36,69 @@ def _forensic_report_to_dto(report) -> ReportDTO:
 
     Handles UUID→str coercion and Optional[datetime]→ISO-string conversion
     explicitly so FastAPI never has to guess.
+
+    Also normalises findings so that:
+    - findings tagged with metadata.analysis_phase are preserved
+    - stub/no-op findings (zero reasoning_summary and no tool output) are filtered
+    - per_agent_findings only includes agents with at least 1 real finding
     """
-    def _to_finding_dto(f: dict) -> AgentFindingDTO:
+    def _as_dict(f) -> dict:
+        """Convert finding to dict — handles both Pydantic models and plain dicts."""
+        if isinstance(f, dict):
+            return f
+        if hasattr(f, "model_dump"):
+            return f.model_dump(mode="json")
+        if hasattr(f, "__dict__"):
+            return vars(f)
+        return {}
+
+    def _to_finding_dto(f) -> AgentFindingDTO:
+        d = _as_dict(f)
+        meta = d.get("metadata") or {}
+        if isinstance(meta, str):
+            # Shouldn't happen, but guard against accidental serialisation
+            try:
+                import json as _json
+                meta = _json.loads(meta)
+            except Exception:
+                meta = {}
         return AgentFindingDTO(
-            finding_id=str(f.get("finding_id", "")),
-            agent_id=str(f.get("agent_id", "")),
-            agent_name=str(f.get("agent_name", "")),
-            finding_type=str(f.get("finding_type", "")),
-            status=str(f.get("status", "CONFIRMED")),
-            confidence_raw=float(f.get("confidence_raw", 0.0)),
-            calibrated=bool(f.get("calibrated", False)),
-            calibrated_probability=f.get("calibrated_probability"),
-            court_statement=f.get("court_statement") or f.get("metadata", {}).get("court_statement"),
-            robustness_caveat=bool(f.get("robustness_caveat", False)),
-            robustness_caveat_detail=f.get("robustness_caveat_detail"),
-            reasoning_summary=str(f.get("reasoning_summary", "")),
-            metadata=f.get("metadata"),
+            finding_id=str(d.get("finding_id", "")),
+            agent_id=str(d.get("agent_id", "")),
+            agent_name=str(d.get("agent_name", d.get("agent_id", ""))),
+            finding_type=str(d.get("finding_type", "Unknown")),
+            status=str(d.get("status", "CONFIRMED")),
+            confidence_raw=float(d.get("confidence_raw") or 0.0),
+            calibrated=bool(d.get("calibrated", False)),
+            calibrated_probability=d.get("calibrated_probability"),
+            court_statement=d.get("court_statement") or meta.get("court_statement"),
+            robustness_caveat=bool(d.get("robustness_caveat", False)),
+            robustness_caveat_detail=d.get("robustness_caveat_detail"),
+            reasoning_summary=str(d.get("reasoning_summary") or ""),
+            metadata=meta if meta else None,
         )
+
+    def _is_real_finding(f) -> bool:
+        """Filter out pure no-op placeholder findings."""
+        d = _as_dict(f)
+        summary = str(d.get("reasoning_summary") or "")
+        ftype = str(d.get("finding_type") or "")
+        # Skip entries that are clearly empty placeholders
+        if not summary and not ftype:
+            return False
+        # Skip "file type not applicable" stubs from unsupported agents
+        if ftype.lower() in ("file type not applicable", "format not supported"):
+            return False
+        return True
 
     per_agent: dict = {}
     for agent_id, findings in (report.per_agent_findings or {}).items():
-        per_agent[agent_id] = [_to_finding_dto(f) for f in findings]
+        real = [_to_finding_dto(f) for f in findings if _is_real_finding(f)]
+        if real:
+            per_agent[agent_id] = real
 
-    cross_modal = [_to_finding_dto(f) for f in (report.cross_modal_confirmed or [])]
-    incomplete = [_to_finding_dto(f) for f in (report.incomplete_findings or [])]
+    cross_modal = [_to_finding_dto(f) for f in (report.cross_modal_confirmed or []) if _is_real_finding(f)]
+    incomplete = [_to_finding_dto(f) for f in (report.incomplete_findings or []) if _is_real_finding(f)]
 
     # TribunalCase objects need explicit serialization
     tribunal_resolved = []
@@ -87,13 +126,13 @@ def _forensic_report_to_dto(report) -> ReportDTO:
         report_id=str(report.report_id),
         session_id=str(report.session_id),
         case_id=report.case_id,
-        executive_summary=report.executive_summary,
+        executive_summary=report.executive_summary or "",
         per_agent_findings=per_agent,
         cross_modal_confirmed=cross_modal,
         contested_findings=contested,
         tribunal_resolved=tribunal_resolved,
         incomplete_findings=incomplete,
-        uncertainty_statement=report.uncertainty_statement,
+        uncertainty_statement=report.uncertainty_statement or "",
         cryptographic_signature=report.cryptographic_signature or "",
         report_hash=report.report_hash or "",
         signed_utc=signed_utc_str,
@@ -270,6 +309,65 @@ async def live_updates(websocket: WebSocket, session_id: str):
         pass
     finally:
         unregister_websocket(session_id, websocket)
+
+
+# ============================================================================
+# ARBITER STATUS ENDPOINT - Lightweight poll to track arbiter deliberation
+# ============================================================================
+
+@router.get("/{session_id}/arbiter-status")
+async def get_arbiter_status(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Lightweight endpoint polled by the frontend while the arbiter compiles.
+    Returns one of:
+      - {status: running,   message: current step}
+      - {status: complete,  report_id: ...}
+      - {status: error,     message: ...}
+      - {status: not_found}
+    """
+    pipeline = get_active_pipeline(session_id)
+
+    # Report already in memory cache
+    if session_id in _final_reports:
+        report, _ = _final_reports[session_id]
+        return {"status": "complete", "report_id": str(report.report_id)}
+
+    if pipeline:
+        report = getattr(pipeline, "_final_report", None)
+        if report:
+            return {"status": "complete", "report_id": str(report.report_id)}
+
+        error = getattr(pipeline, "_error", None)
+        if error:
+            return {"status": "error", "message": error[:200]}
+
+        task = _active_tasks.get(session_id)
+        if task and not task.done():
+            evt = getattr(pipeline, "deep_analysis_decision_event", None)
+            if evt and evt.is_set():
+                return {"status": "running", "message": "Arbiter deliberating — synthesising findings..."}
+            return {"status": "running", "message": "Agents analysing evidence..."}
+
+    # Try DB
+    try:
+        from core.session_persistence import get_session_persistence
+        persistence = await get_session_persistence()
+        db_row = await persistence.get_report(session_id)
+        if db_row:
+            s = db_row.get("status", "")
+            if s == "completed":
+                return {"status": "complete", "report_id": session_id}
+            if s in ("running", "pending"):
+                return {"status": "running", "message": "Investigation in progress..."}
+            if s == "error":
+                return {"status": "error", "message": db_row.get("error_message", "Unknown error")}
+    except Exception:
+        pass
+
+    return {"status": "not_found"}
 
 
 # ============================================================================
