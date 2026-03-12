@@ -876,6 +876,19 @@ async def _wrap_pipeline_with_broadcasts(
         else:
             logger.info("No deep analysis tasks. Proceeding to arbiter.")
         
+        # Broadcast arbiter is about to run before returning results to pipeline
+        await broadcast_update(
+            ws_session_id,
+            BriefUpdate(
+                type="AGENT_UPDATE",
+                session_id=ws_session_id,
+                agent_id="Arbiter",
+                agent_name="Council Arbiter",
+                message="Synthesizing all agent findings with Groq...",
+                data={"status": "deliberating", "thinking": "Running council deliberation..."},
+            )
+        )
+        
         return results
     
     pipeline._run_agents_concurrent = instrumented_run
@@ -926,19 +939,6 @@ async def run_investigation_task(
                 investigator_id=investigator_id,
             ),
             timeout=float(timeout),
-        )
-        
-        # Arbiter synthesis
-        await broadcast_update(
-            session_id,
-            BriefUpdate(
-                type="AGENT_UPDATE",
-                session_id=session_id,
-                agent_id="Arbiter",
-                agent_name="Council Arbiter",
-                message="Council deliberating findings...",
-                data={"status": "deliberating", "thinking": "Synthesizing results..."},
-            )
         )
         
         # Pipeline complete
@@ -1064,12 +1064,18 @@ async def resume_investigation(
             detail="Pipeline is not in a paused state waiting for decision"
         )
     
-    # Check if the event has already been set (decision already made)
+    # Check if the event has already been set (decision already made) — return gracefully
     if pipeline.deep_analysis_decision_event.is_set():
-        raise HTTPException(
-            status_code=400,
-            detail="Decision already made for this investigation"
+        logger.info(
+            "Resume called but decision already made — returning idempotent 200",
+            session_id=session_id,
         )
+        return {
+            "status": "already_resumed",
+            "session_id": session_id,
+            "deep_analysis": request.deep_analysis,
+            "message": "Investigation already resumed"
+        }
     
     # Set the deep analysis flag based on user choice
     pipeline.run_deep_analysis_flag = request.deep_analysis

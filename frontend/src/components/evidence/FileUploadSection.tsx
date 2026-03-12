@@ -225,6 +225,7 @@ export function FileUploadSection({
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           onDragEnter={handleDragEnter}
+          onDragOver={(e) => { e.preventDefault(); if (!isDragging) onDragEnter(); }}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           className={`w-full rounded-[2rem] overflow-hidden bg-gradient-to-b from-white/[0.05] to-black/60 border-2 border-dashed transition-all duration-300 ${isDragging

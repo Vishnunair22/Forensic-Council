@@ -20,6 +20,7 @@ from core.tool_registry import ToolRegistry
 from core.working_memory import WorkingMemory
 from core.ml_subprocess import run_ml_tool
 from infra.evidence_store import EvidenceStore
+from core.gemini_client import GeminiVisionClient
 
 
 class Agent3Object(ForensicAgent):
@@ -93,7 +94,7 @@ class Agent3Object(ForensicAgent):
     @property
     def deep_task_decomposition(self) -> list[str]:
         """
-        Heavy tasks — CLIP inference, ML splicing, adversarial checks.
+        Heavy tasks — CLIP inference, ML splicing, adversarial checks, Gemini vision.
         Runs in background after initial findings are returned.
         """
         return [
@@ -102,6 +103,7 @@ class Agent3Object(ForensicAgent):
             "Run camera noise fingerprint analysis for region consistency",
             "Issue inter-agent call to Agent 1 for any region showing lighting inconsistency",
             "Run adversarial robustness check against object detection evasion",
+            "Run Gemini vision analysis: deep object identification, weapon/contraband detection, and scene coherence",
         ]
 
     @property
@@ -597,7 +599,34 @@ class Agent3Object(ForensicAgent):
         registry.register("contraband_database", contraband_database_handler, "Contraband and weapons database cross-reference")
         registry.register("inter_agent_call", inter_agent_call_handler, "Inter-agent communication")
         registry.register("adversarial_robustness_check", adversarial_robustness_check_handler, "Adversarial robustness check")
-        
+
+        # ── Gemini vision handler ───────────────────────────────────────────
+        _gemini = GeminiVisionClient(self.config)
+
+        async def gemini_object_scene_analysis(input_data: dict) -> dict:
+            """
+            Gemini vision deep analysis: validated object list, weapon/contraband
+            detection, scene coherence assessment, and compositing signals.
+            """
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            # Gather preliminary YOLO detections from input context if available
+            preliminary = input_data.get("preliminary_detections", [])
+            finding = await _gemini.analyze_objects_and_scene(
+                file_path=artifact.file_path,
+                preliminary_detections=preliminary,
+            )
+            result = finding.to_finding_dict(self.agent_id)
+            result["gemini_validated_objects"] = finding.detected_objects
+            result["gemini_compositing_signals"] = finding.manipulation_signals
+            result["gemini_scene_coherence"] = finding.content_description
+            return result
+
+        registry.register(
+            "gemini_object_scene_analysis",
+            gemini_object_scene_analysis,
+            "Gemini vision: deep object ID, weapon/contraband detection, scene coherence, and compositing signals",
+        )
+
         return registry
     
     async def build_initial_thought(self) -> str:

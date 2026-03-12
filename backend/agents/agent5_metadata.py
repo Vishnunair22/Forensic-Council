@@ -39,6 +39,7 @@ from tools.mediainfo_tools import (
     profile_av_container as real_profile_av_container,
     get_av_file_identity as real_get_av_file_identity,
 )
+from core.gemini_client import GeminiVisionClient
 
 
 class Agent5Metadata(ForensicAgent):
@@ -88,7 +89,7 @@ class Agent5Metadata(ForensicAgent):
     @property
     def deep_task_decomposition(self) -> list[str]:
         """
-        Heavy tasks — ML models, network APIs, adversarial checks.
+        Heavy tasks — ML models, network APIs, adversarial checks, Gemini vision.
         Runs in background after initial findings are returned.
         """
         return [
@@ -97,6 +98,7 @@ class Agent5Metadata(ForensicAgent):
             "Run reverse image search for prior online appearances",
             "Query device fingerprint database against claimed device model",
             "Run adversarial robustness check against metadata spoofing techniques",
+            "Run Gemini vision analysis: cross-validate visual content against EXIF metadata claims",
         ]
     
     @property
@@ -628,7 +630,59 @@ class Agent5Metadata(ForensicAgent):
         registry.register("extract_evidence_text", extract_evidence_text_handler, "Auto-dispatching text extraction: PDF (PyMuPDF lossless) -> EasyOCR -> Tesseract fallback")
         registry.register("mediainfo_profile", mediainfo_profile_handler, "Deep AV container profiling: codec, frame rate mode, encoding tools, forensic flags")
         registry.register("av_file_identity", av_file_identity_handler, "Lightweight AV pre-screen: format, codec, duration, high-severity flags only")
-        
+
+        # ── Gemini vision handler ───────────────────────────────────────────
+        _gemini = GeminiVisionClient(self.config)
+
+        async def gemini_metadata_visual_consistency(input_data: dict) -> dict:
+            """
+            Gemini vision deep analysis: cross-validate EXIF metadata claims
+            against what the visual content actually shows.
+
+            Checks timestamp/lighting consistency, GPS/environment consistency,
+            device characteristics, and provenance flags (screenshot, AI-generated,
+            re-photographed from screen).
+            """
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            # Build a compact metadata summary to send to Gemini
+            metadata_summary: dict = {}
+            try:
+                import piexif
+                if artifact.file_path.lower().endswith((".jpg", ".jpeg", ".tiff", ".tif")):
+                    exif_data = piexif.load(artifact.file_path)
+                    zeroth = exif_data.get("0th", {})
+                    exif_ifd = exif_data.get("Exif", {})
+                    gps = exif_data.get("GPS", {})
+                    make = zeroth.get(piexif.ImageIFD.Make, b"")
+                    model = zeroth.get(piexif.ImageIFD.Model, b"")
+                    dt_orig = exif_ifd.get(piexif.ExifIFD.DateTimeOriginal, b"")
+                    metadata_summary = {
+                        "camera_make": make.decode(errors="replace").strip("\x00") if isinstance(make, bytes) else str(make),
+                        "camera_model": model.decode(errors="replace").strip("\x00") if isinstance(model, bytes) else str(model),
+                        "datetime_original": dt_orig.decode(errors="replace").strip("\x00") if isinstance(dt_orig, bytes) else str(dt_orig),
+                        "has_gps": bool(gps),
+                    }
+            except Exception:
+                metadata_summary = {"note": "EXIF extraction unavailable for Gemini context"}
+
+            # Merge any explicitly provided summary from the orchestrator
+            metadata_summary.update(input_data.get("metadata_summary", {}))
+
+            finding = await _gemini.analyze_metadata_visual_consistency(
+                file_path=artifact.file_path,
+                metadata_summary=metadata_summary,
+            )
+            result = finding.to_finding_dict(self.agent_id)
+            result["gemini_metadata_verdict"] = finding.content_description
+            result["gemini_provenance_flags"] = finding.manipulation_signals
+            return result
+
+        registry.register(
+            "gemini_metadata_visual_consistency",
+            gemini_metadata_visual_consistency,
+            "Gemini vision: cross-validate EXIF/metadata claims against visual content (timestamp, GPS, device)",
+        )
+
         return registry
     
     async def build_initial_thought(self) -> str:

@@ -226,6 +226,44 @@ class Settings(BaseSettings):
     llm_enable_react_reasoning: bool = Field(default=False, description="Enable LLM reasoning in ReAct loop (disabled: agents use fast task-decomposition driver)")
     llm_enable_post_synthesis: bool = Field(default=True, description="After tools complete, call LLM once to synthesize findings into rich forensic narratives")
 
+    # Gemini Vision Configuration (for deep analysis in Agents 1, 3, 5)
+    gemini_api_key: Optional[str] = Field(
+        default=None,
+        description=(
+            "Google Gemini API key for vision-powered deep analysis. "
+            "Used by Agent 1 (Image Integrity), Agent 3 (Object/Weapon), and "
+            "Agent 5 (Metadata/Context) to perform multimodal file understanding. "
+            "Get a free key at https://aistudio.google.com/apikey"
+        ),
+    )
+    gemini_model: str = Field(
+        default="gemini-1.5-flash",
+        description=(
+            "Gemini model for vision analysis. "
+            "gemini-1.5-flash: fast, cost-effective (recommended). "
+            "gemini-1.5-pro: deeper reasoning, higher cost."
+        ),
+    )
+    gemini_timeout: float = Field(
+        default=30.0,
+        description="Timeout for Gemini API calls in seconds.",
+    )
+
+    @field_validator("gemini_api_key")
+    @classmethod
+    def validate_gemini_api_key(cls, v: Optional[str]) -> Optional[str]:
+        """Warn if Gemini key is missing (optional — agents degrade gracefully)."""
+        if v is None:
+            import warnings
+            warnings.warn(
+                "GEMINI_API_KEY not set. Agents 1, 3, and 5 will skip Gemini vision "
+                "deep analysis. Get a free key at https://aistudio.google.com/apikey",
+                UserWarning,
+            )
+        elif len(v) < 20:
+            raise ValueError("GEMINI_API_KEY appears invalid (too short).")
+        return v
+
     # HuggingFace Token (for pyannote.audio speaker diarization and other HF models)
     hf_token: Optional[str] = Field(default=None, description="HuggingFace API token for model downloads")
     

@@ -40,11 +40,13 @@ interface AgentProgressDisplayProps {
   allAgentsDone: boolean;
   phase: "initial" | "deep";
   awaitingDecision: boolean;
+  pipelineStatus?: string;
   onAcceptAnalysis?: () => void;
   onDeepAnalysis?: () => void;
   onNewUpload?: () => void;
   onViewResults?: () => void;
   playSound?: (type: SoundType) => void;
+  isNavigating?: boolean;
 }
 
 export function AgentProgressDisplay({
@@ -54,11 +56,13 @@ export function AgentProgressDisplay({
   allAgentsDone,
   phase,
   awaitingDecision,
+  pipelineStatus,
   onAcceptAnalysis,
   onDeepAnalysis,
   onNewUpload,
   onViewResults,
   playSound,
+  isNavigating = false,
 }: AgentProgressDisplayProps) {
   const allValidAgents = AGENTS_DATA.filter(a => a.name !== "Council Arbiter");
 
@@ -150,7 +154,7 @@ export function AgentProgressDisplay({
   const visibleAgentsCount = visibleAgents.length;
 
   const showInitialDecision = awaitingDecision && phase === "initial";
-  const showDeepComplete = allAgentsDone && phase === "deep";
+  const showDeepComplete = phase === "deep" && (allAgentsDone || pipelineStatus === "complete");
 
   return (
     <motion.div
@@ -274,16 +278,23 @@ export function AgentProgressDisplay({
           className="mt-10 w-full max-w-lg flex gap-4"
         >
           <button onClick={onAcceptAnalysis}
+            disabled={isNavigating}
             className="flex-1 flex items-center justify-center gap-2 px-5 py-4 rounded-xl
               bg-emerald-600/20 border border-emerald-500/30 text-emerald-300
-              hover:bg-emerald-600/35 hover:border-emerald-500/50 transition-all font-semibold text-sm">
-            <FileText className="w-4 h-4" />
-            Accept Analysis
+              hover:bg-emerald-600/35 hover:border-emerald-500/50 transition-all font-semibold text-sm
+              disabled:opacity-60 disabled:cursor-not-allowed">
+            {isNavigating ? (
+              <><Loader2 className="w-4 h-4 animate-spin" />Compiling Report...</>
+            ) : (
+              <><FileText className="w-4 h-4" />Accept Analysis</>
+            )}
           </button>
           <button onClick={onDeepAnalysis}
+            disabled={isNavigating}
             className="flex-1 flex items-center justify-center gap-2 px-5 py-4 rounded-xl
               bg-cyan-600/20 border border-cyan-500/30 text-cyan-300
-              hover:bg-cyan-600/35 hover:border-cyan-500/50 transition-all font-semibold text-sm">
+              hover:bg-cyan-600/35 hover:border-cyan-500/50 transition-all font-semibold text-sm
+              disabled:opacity-60 disabled:cursor-not-allowed">
             <Microscope className="w-4 h-4" />
             Deep Analysis
             <ArrowRight className="w-4 h-4" />
@@ -298,23 +309,29 @@ export function AgentProgressDisplay({
           className="mt-10 w-full max-w-lg flex gap-4"
         >
           <button onClick={onNewUpload}
+            disabled={isNavigating}
             className="flex-1 flex items-center justify-center gap-2 px-5 py-4 rounded-xl
               bg-white/[0.04] border border-white/[0.10] text-slate-300
               hover:bg-white/[0.08] hover:border-white/20 hover:text-white
-              transition-all font-semibold text-sm">
+              transition-all font-semibold text-sm
+              disabled:opacity-60 disabled:cursor-not-allowed">
             <RotateCcw className="w-4 h-4" />
             New Analysis
           </button>
           <button onClick={onViewResults}
+            disabled={isNavigating}
             className="flex-1 flex items-center justify-center gap-2 px-5 py-4 rounded-xl
               bg-gradient-to-r from-emerald-600/30 to-cyan-600/20
               border border-emerald-500/40 text-emerald-300
               hover:from-emerald-600/50 hover:to-cyan-600/35
               hover:shadow-[0_0_20px_rgba(52,211,153,0.2)]
-              transition-all font-semibold text-sm">
-            <FileText className="w-4 h-4" />
-            View Results
-            <ArrowRight className="w-4 h-4" />
+              transition-all font-semibold text-sm
+              disabled:opacity-60 disabled:cursor-not-allowed">
+            {isNavigating ? (
+              <><Loader2 className="w-4 h-4 animate-spin" />Compiling Report...</>
+            ) : (
+              <><FileText className="w-4 h-4" />View Results<ArrowRight className="w-4 h-4" /></>
+            )}
           </button>
         </motion.div>
       )}

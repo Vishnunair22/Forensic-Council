@@ -47,6 +47,9 @@ export default function EvidencePage() {
   // HITL state
   const [isSubmittingHITL, setIsSubmittingHITL] = useState(false);
 
+  // Navigation loading state — declared early so callbacks below can reference it
+  const [isNavigating, setIsNavigating] = useState(false);
+
   // Simulation/Analysis state
   const {
     status,
@@ -221,34 +224,55 @@ export default function EvidencePage() {
 
   // Accept Analysis → skip deep, arbiter compiles, go to results
   const handleAcceptAnalysis = useCallback(async () => {
-    playSound("success");           // ← brief success click to confirm button press
-    await resumeInvestigation(false);
-    router.push("/result");
-  }, [playSound, resumeInvestigation, router]);
+    if (isNavigating) return;
+    playSound("success");
+    setIsNavigating(true);
+    try {
+      // Tell the backend to skip deep analysis and compile the report via the arbiter.
+      // We await this so the arbiter has been triggered before the result page starts polling.
+      await resumeInvestigation(false);
+      // Small deliberate pause so the backend registers the resume before the result
+      // page's first poll fires — avoids getting a stale "in_progress" on the first tick.
+      await new Promise(r => setTimeout(r, 600));
+      router.push("/result");
+    } catch (err) {
+      console.error("Accept analysis failed", err);
+      playSound("error");
+      setIsNavigating(false);
+    }
+  }, [playSound, resumeInvestigation, router, isNavigating]);
 
   // Deep Analysis → run heavy ML pass
   const handleDeepAnalysis = useCallback(async () => {
-    playSound("think");             // ← deep analysis starting sound
+    playSound("think");
+    // Clear initial-phase completed agents so allAgentsDone starts fresh in deep phase
+    clearCompletedAgents();
     setPhase("deep");
     await resumeInvestigation(true);
-  }, [playSound, resumeInvestigation]);
+  }, [playSound, resumeInvestigation, clearCompletedAgents]);
 
   // New Analysis → clear everything, go to upload form
   const handleNewUpload = useCallback(() => {
     playSound("click");
     setFile(null);
     setPhase("initial");
+    setIsNavigating(false);
     resetSimulation();
     sessionStorage.removeItem('forensic_session_id');
     sessionStorage.removeItem('forensic_file_name');
     sessionStorage.removeItem('forensic_case_id');
   }, [resetSimulation, playSound]);
 
-  // View Results → arbiter compiles, navigate to result page
-  const handleViewResults = useCallback(() => {
-    playSound("complete");          // ← deep analysis done chime
+  // View Results → after deep analysis the arbiter already compiled — just navigate
+  const handleViewResults = useCallback(async () => {
+    if (isNavigating) return;
+    playSound("complete");
+    setIsNavigating(true);
+    // The pipeline has already completed (PIPELINE_COMPLETE was received).
+    // The arbiter ran automatically after deep agents finished.
+    // Just navigate — the result page polls for the report.
     router.push("/result");
-  }, [playSound, router]);
+  }, [playSound, router, isNavigating]);
 
   // Determine what to show
   const validAgentsData = AGENTS_DATA.filter(a => a.name !== "Council Arbiter");
@@ -272,8 +296,10 @@ export default function EvidencePage() {
   const supportedCompletedCount = validCompletedAgents.filter(c => !unsupportedAgentIds.has(c.agent_id)).length;
 
   // allAgentsDone: all supported agents finished (deep or initial)
+  // For deep phase: also accept status==="complete" (PIPELINE_COMPLETE) since unsupported
+  // agents don't send AGENT_COMPLETE in deep phase after completedAgents was cleared.
   const allAgentsDone = phase === "deep"
-    ? supportedCompletedCount >= supportedAgentCount && supportedAgentCount > 0
+    ? status === "complete" || (supportedCompletedCount >= supportedAgentCount && supportedAgentCount > 0)
     : validCompletedAgents.length >= validAgentsData.length;
 
   // Awaiting decision = backend sent PIPELINE_PAUSED
@@ -304,14 +330,18 @@ export default function EvidencePage() {
   let progressText = "Initializing forensic analysis...";
   if (awaitingDecision) {
     progressText = "Initial analysis complete. Choose how to proceed.";
+  } else if (phase === "deep" && status === "complete") {
+    progressText = "Deep analysis complete. All findings collected.";
   } else if (deepAnalysisDone) {
     progressText = "Deep analysis complete. All findings collected.";
+  } else if (phase === "deep") {
+    progressText = "Running deep forensic analysis with heavy ML models...";
   } else if (validCompletedAgents.length > 0 && status !== "complete") {
     progressText = `Gathering findings... (${validCompletedAgents.length}/${validAgentsData.length} complete)`;
   } else if (status === "complete") {
     progressText = "All agents have reported. Council Consensus reached.";
   } else if (Object.keys(agentUpdates).length > 0) {
-    progressText = phase === "deep" ? "Running deep forensic analysis..." : "Agents are analyzing evidence...";
+    progressText = "Agents are analyzing evidence...";
   }
 
   return (
@@ -359,11 +389,13 @@ export default function EvidencePage() {
               allAgentsDone={allAgentsDone}
               phase={phase}
               awaitingDecision={awaitingDecision}
+              pipelineStatus={status}
               onAcceptAnalysis={handleAcceptAnalysis}
               onDeepAnalysis={handleDeepAnalysis}
               onNewUpload={handleNewUpload}
               onViewResults={handleViewResults}
               playSound={playSound}
+              isNavigating={isNavigating}
             />
           )}
 

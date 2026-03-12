@@ -525,6 +525,15 @@ class ReActLoopEngine:
         "rolling shutter": "rolling_shutter_validation",
         "face swap": "face_swap_detection",
         "gan artifact detection": "deepfake_frequency_check",
+        # Gemini vision tools (Agents 1, 3, 5 deep pass)
+        "gemini vision analysis: identify file content": "gemini_identify_content",
+        "gemini vision cross-validation": "gemini_cross_validate_manipulation",
+        "gemini vision analysis: deep object": "gemini_object_scene_analysis",
+        "gemini vision analysis: cross-validate visual content": "gemini_metadata_visual_consistency",
+        "gemini vision": "gemini_identify_content",  # fallback for any gemini task
+        # Audio splice (Agent 2)
+        "audio splice": "audio_splice_detect",
+        "splice point": "audio_splice_detect",
     }
 
     def __init__(
@@ -722,6 +731,12 @@ class ReActLoopEngine:
                         "Agent3": "Object Detection",
                         "Agent4": "Video Forensics",
                         "Agent5": "Metadata Forensics",
+                        # Deep pass IDs (suffixed with _deep)
+                        "Agent1_deep": "Image Forensics",
+                        "Agent2_deep": "Audio Forensics",
+                        "Agent3_deep": "Object Detection",
+                        "Agent4_deep": "Video Forensics",
+                        "Agent5_deep": "Metadata Forensics",
                     }
     
                     # Build a clean, human-readable finding type.
@@ -742,6 +757,7 @@ class ReActLoopEngine:
                         "perceptual_hash": "Perceptual Hash (pHash)",
                         "file_hash_verify": "File Hash Verification",
                         "splicing_detect": "Splicing Detection",
+                        "image_splice_check": "Image Splice Check",
                         "roi_extract": "Region of Interest Extraction",
                         "speaker_diarize": "Speaker Diarization",
                         "anti_spoofing_detect": "Anti-Spoofing Detection",
@@ -753,14 +769,19 @@ class ReActLoopEngine:
                         "object_detection": "Object Detection (YOLO)",
                         "lighting_consistency": "Lighting & Shadow Consistency",
                         "scene_incongruence": "Scene Incongruence (CLIP)",
-                        "image_splice_check": "Image Splice Check",
                         "secondary_classification": "Secondary Object Classification",
                         "scale_validation": "Scale & Proportion Validation",
+                        "contraband_database": "Contraband / Weapons CLIP Analysis",
+                        "optical_flow_analysis": "Optical Flow Analysis",
                         "optical_flow_analyze": "Optical Flow Analysis",
+                        "frame_extraction": "Frame Window Extraction",
                         "frame_window_extract": "Frame Window Extraction",
                         "frame_consistency_analysis": "Frame Consistency Analysis",
                         "face_swap_detection": "Face-Swap Detection",
+                        "video_metadata": "Video Metadata Extraction",
                         "video_metadata_extract": "Video Metadata Extraction",
+                        "anomaly_classification": "Anomaly Classification",
+                        "rolling_shutter_validation": "Rolling Shutter Validation",
                         "mediainfo_profile": "MediaInfo Container Profile",
                         "av_file_identity": "AV File Identity Pre-Screen",
                         "exif_extract": "EXIF Metadata Extraction",
@@ -771,8 +792,16 @@ class ReActLoopEngine:
                         "hex_signature_scan": "Hex Signature Scan",
                         "timestamp_analysis": "Timestamp Consistency Analysis",
                         "extract_deep_metadata": "Deep Metadata Extraction",
+                        "get_physical_address": "GPS Reverse Geocoding",
                         "astronomical_api": "Astronomical Timestamp Validation",
-                        "contraband_database": "Contraband Database Cross-Reference",
+                        "reverse_image_search": "Reverse Image Search (pHash)",
+                        "device_fingerprint_db": "Device Fingerprint Analysis",
+                        "adversarial_robustness_check": "Adversarial Robustness Check",
+                        # Gemini vision tools
+                        "gemini_identify_content": "Gemini Vision — Content Identification",
+                        "gemini_cross_validate_manipulation": "Gemini Vision — Manipulation Cross-Validation",
+                        "gemini_object_scene_analysis": "Gemini Vision — Object & Scene Analysis",
+                        "gemini_metadata_visual_consistency": "Gemini Vision — Metadata Consistency Check",
                     }
                     tool_label = _TOOL_LABELS.get(
                         next_step.tool_name,
@@ -1285,6 +1314,7 @@ class ReActLoopEngine:
             )
 
         _TOOL_INTERPRETERS = {
+            # ── Image tools ───────────────────────────────────────────────────
             "ela_full_image": lambda o: (
                 f"ELA detected {o.get('num_anomaly_regions', 0)} anomaly region(s) "
                 f"with a maximum deviation of {o.get('max_anomaly', 0):.1f} "
@@ -1294,30 +1324,117 @@ class ReActLoopEngine:
                 f"JPEG ghost analysis {'detected double-compression artifacts' if o.get('ghost_detected') else 'found no ghost artifacts'} "
                 f"with {o.get('confidence', 0):.0%} confidence across {len(o.get('ghost_regions', []))} region(s)."
             ),
-            "exif_extract": lambda o: (
-                f"EXIF extraction found {'no metadata' if not o.get('has_exif') else str(o.get('total_exif_tags', 0)) + ' tags'}. "
-                f"Device: {o.get('device_model') or 'Unknown'}. "
-                f"GPS: {'Present' if o.get('gps_coordinates') else 'Absent'}. "
-                f"Missing {len(o.get('absent_fields', []))} expected fields."
-            ),
-            "hex_signature_scan": lambda o: (
-                f"Hex signature scan {'detected editing software: ' + ', '.join(o.get('software_signatures', [])) if o.get('editing_software_detected') else 'found no editing software signatures'} "
-                f"across {o.get('bytes_scanned', 0):,} bytes."
-            ),
-            "steganography_scan": lambda o: (
-                f"LSB steganography analysis {'suspects hidden data' if o.get('stego_suspected') else 'found no hidden data'} "
-                f"(deviation from random: {o.get('lsb_statistics', {}).get('average_deviation', 0):.4f})."
-            ),
-            "timestamp_analysis": lambda o: (
-                f"Timestamp cross-check found {len(o.get('inconsistencies', []))} inconsistency(ies). "
-                + (f"Issues: {'; '.join(o.get('inconsistencies', []))}" if o.get('inconsistencies') else "All timestamps are consistent.")
-            ),
             "frequency_domain_analysis": lambda o: (
                 f"Frequency domain analysis yielded anomaly score {o.get('anomaly_score', 0):.3f} "
                 f"(high-freq ratio: {o.get('high_freq_ratio', 0):.3f}, "
                 f"{'anomalous high-frequency content detected' if o.get('anomaly_score', 0) > 0.4 else 'frequency distribution appears natural'})."
             ),
-            # OCR tools (v0.8.1)
+            # FIXED: key was 'noise_inconsistency' — actual keys: noise_consistency_score, outlier_region_count, verdict
+            "noise_fingerprint": lambda o: (
+                f"PRNU noise fingerprint: {o.get('verdict', 'INCONCLUSIVE')} — "
+                f"consistency score {o.get('noise_consistency_score', 0):.3f}, "
+                f"{o.get('outlier_region_count', 0)} of {o.get('total_regions', 0)} region(s) flagged as outliers."
+            ),
+            "copy_move_detect": lambda o: (
+                f"Copy-move detection: {o.get('match_count', o.get('num_matches', 0))} keypoint match(es). "
+                + ("Copy-move forgery detected." if o.get('copy_move_detected') else "No copy-move cloning detected.")
+            ),
+            # FIXED: actual keys from splicing_detector: splicing_detected, num_inconsistent_blocks, inconsistency_ratio
+            "splicing_detect": lambda o: (
+                f"Splicing detection: {'SPLICING DETECTED' if o.get('splicing_detected') else 'No splicing found'}. "
+                f"{o.get('num_inconsistent_blocks', 0)} of {o.get('total_blocks', 0)} blocks flagged "
+                f"(ratio {o.get('inconsistency_ratio', 0):.3f})."
+            ),
+            "image_splice_check": lambda o: (
+                f"Image splice check: {'SPLICING DETECTED' if o.get('splicing_detected') else 'No splicing found'}. "
+                f"{o.get('num_inconsistent_blocks', 0)} of {o.get('total_blocks', 0)} blocks flagged."
+            ),
+            # FIXED: correct keys; also added for both tool name aliases
+            "file_hash_verify": lambda o: (
+                f"Hash verification: SHA-256 = "
+                + str(o.get('current_hash', o.get('original_hash', '')))[:20] + "... "
+                + ("Hash matches chain-of-custody record — file integrity confirmed."
+                   if o.get('hash_matches') else "WARNING: hash mismatch — file may have been modified after ingestion.")
+            ),
+            "adversarial_robustness_check": lambda o: (
+                f"Adversarial robustness: {'EVASION DETECTED — findings may be adversarially engineered.' if o.get('adversarial_pattern_detected') else 'Findings are stable under perturbation — robust.'} "
+                f"Method: {o.get('method', 'perturbation stability')}."
+            ),
+            # ── Object detection tools (Agent 3) ─────────────────────────────
+            "object_detection": lambda o: (
+                f"YOLO object detection: {o.get('detection_count', len(o.get('detections', [])))} object(s) detected "
+                f"({', '.join(o.get('classes_found', [])[:8]) or 'none'}). "
+                + (f"WEAPON CLASSES DETECTED: {', '.join(d['class_name'] for d in o.get('weapon_detections', []))}." if o.get('weapon_detections') else "No weapons detected.")
+            ),
+            "secondary_classification": lambda o: (
+                f"Secondary CLIP classification of '{o.get('input_object_class', 'object')}': "
+                f"top match = '{o.get('top_refined_match', 'unknown')}' ({o.get('top_confidence', 0):.0%}). "
+                + ("CONCERN FLAGGED." if o.get('concern_flag') else "No concern flag.")
+            ),
+            "scale_validation": lambda o: (
+                f"Scale/proportion analysis: {'consistent perspective angles' if o.get('scale_consistent') else 'INCONSISTENT perspective — possible compositing'}. "
+                f"Line angle std: {o.get('angle_std_deg', 0):.1f}° across {o.get('line_count', 0)} lines."
+            ),
+            "scene_incongruence": lambda o: (
+                f"Scene noise coherence: {o.get('contextual_anomalies_detected', 0)} anomalous region(s) detected. "
+                f"Noise std across quadrants: {o.get('noise_variance_across_quadrants', 0):.1f} "
+                f"(mean: {o.get('mean_noise_level', 0):.1f}). "
+                + (o.get('anomaly_description', '') or "")
+            ),
+            "contraband_database": lambda o: (
+                f"Contraband/CLIP analysis: top match = '{o.get('top_matches', [{}])[0].get('category', 'none') if o.get('top_matches') else 'none'}'. "
+                + ("CONCERN FLAG raised." if o.get('concern_flag') else "No concern flag raised.")
+            ),
+            "lighting_consistency": lambda o: (
+                f"Lighting/shadow consistency: {'INCONSISTENCY detected' if o.get('inconsistency_detected') else 'consistent across scene'}. "
+                + (f"Details: {o.get('details', '')}" if o.get('details') else "")
+                + (f" Flags: {'; '.join(o.get('flags', []))}" if o.get('flags') else "")
+            ),
+            # ── Metadata tools (Agent 5) ─────────────────────────────────────
+            # FIXED: exif_extract_enhanced returns total_fields_extracted, absent_mandatory_fields, not has_exif/device_model/absent_fields
+            "exif_extract": lambda o: (
+                f"EXIF extraction: {o.get('total_fields_extracted', o.get('total_exif_tags', 0))} fields found. "
+                f"GPS: {'Present' if o.get('gps_coordinates') else 'Absent'}. "
+                f"Missing {len(o.get('absent_mandatory_fields', o.get('absent_fields', [])))} mandatory fields "
+                f"({', '.join(str(f) for f in o.get('absent_mandatory_fields', o.get('absent_fields', []))[:4]) or 'none'})."
+            ),
+            # FIXED: gps_timezone_validate returns 'plausible' bool + 'issues' list, NOT 'inconsistent' + 'distance_km'
+            "gps_timezone_validate": lambda o: (
+                ("GPS-timezone is INCONSISTENT — " + "; ".join(o.get('issues', ['Unknown issue']))
+                 if o.get('plausible') is False
+                 else "GPS-timestamp timezone is plausible.")
+                + f" Timezone detected: {o.get('timezone', 'N/A')}."
+            ),
+            "steganography_scan": lambda o: (
+                f"LSB steganography scan: {'HIDDEN DATA SUSPECTED' if o.get('stego_suspected') else 'no hidden data found'}. "
+                f"LSB deviation from random: {o.get('lsb_statistics', {}).get('average_deviation', 0):.4f}."
+            ),
+            # FIXED: file_structure_analysis returns header_valid, trailer_valid, has_appended_data, anomalies
+            "file_structure_analysis": lambda o: (
+                f"File structure: header {'valid' if o.get('header_valid') else 'INVALID'}, "
+                f"trailer {'valid' if o.get('trailer_valid', True) else 'INVALID'}, "
+                f"appended data: {'YES — ' + str(o.get('file_size', 0)) + ' bytes' if o.get('has_appended_data') else 'none'}. "
+                f"Anomalies: {len(o.get('anomalies', []))} — {'; '.join(o.get('anomalies', [])) or 'none'}."
+            ),
+            "hex_signature_scan": lambda o: (
+                f"Hex signature scan {'detected editing software: ' + ', '.join(o.get('software_signatures', [])) if o.get('editing_software_detected') else 'found no editing software signatures'} "
+                f"across {o.get('bytes_scanned', 0):,} bytes."
+            ),
+            "timestamp_analysis": lambda o: (
+                f"Timestamp cross-check found {len(o.get('inconsistencies', []))} inconsistency(ies). "
+                + (f"Issues: {'; '.join(o.get('inconsistencies', []))}" if o.get('inconsistencies') else "All timestamps are consistent.")
+            ),
+            "metadata_anomaly_score": lambda o: (
+                f"ML anomaly score: {o.get('anomaly_score', 0):.3f} "
+                + ("(ANOMALOUS). " if o.get('is_anomalous') else "(within normal range). ")
+                + ("Anomalous fields: " + ", ".join(o.get('anomalous_fields', [])[:5]) if o.get('anomalous_fields') else "")
+            ),
+            "device_fingerprint_db": lambda o: (
+                f"Device fingerprint: {o.get('camera_make', 'Unknown')} {o.get('camera_model', '')}. "
+                f"{'SUSPICIOUS — ' + '; '.join(o.get('inconsistencies', [])) if o.get('exif_fingerprint_suspicious') else 'PRNU pattern consistent with declared device.'}. "
+                f"PRNU variance: {o.get('prnu_variance', 0):.3f}."
+            ),
+            # ── OCR tools ────────────────────────────────────────────────────
             "extract_evidence_text": lambda o: (
                 "OCR extracted " + str(o.get('word_count', 0)) + " word(s) "
                 "via " + str(o.get('method', 'OCR')) + " "
@@ -1328,7 +1445,7 @@ class ReActLoopEngine:
                 "Tesseract OCR extracted " + str(o.get('word_count', 0)) + " word(s). "
                 + ("Preview: '" + str(o.get('text', o.get('full_text', '')))[:100] + "...'" if o.get('text') or o.get('full_text') else "No visible text found.")
             ),
-            # MediaInfo tools (v0.8.1)
+            # ── MediaInfo tools ───────────────────────────────────────────────
             "mediainfo_profile": lambda o: (
                 "MediaInfo profiled: " + str(o.get('format', 'unknown'))
                 + " / " + str(o.get('video_codec', o.get('codec', 'unknown')))
@@ -1342,47 +1459,60 @@ class ReActLoopEngine:
                 + str(o.get('resolution', '')) + ". "
                 + ("HIGH-SEVERITY FLAGS: " + ", ".join(o.get('high_severity_flags', [])) if o.get('high_severity_flags') else "No high-severity flags.")
             ),
-            # Additional tool interpreters
-            "noise_fingerprint": lambda o: (
-                f"PRNU noise analysis: inconsistency score {o.get('inconsistency_score', o.get('noise_inconsistency', 0)):.3f}. "
-                + ("Region-level noise mismatch detected." if o.get('inconsistency_score', o.get('noise_inconsistency', 0)) > 0.3 else "Noise pattern consistent across image.")
+            # ── Audio tools (Agent 2) — FIXED: keys match actual return dicts ─
+            # FIXED: pyannote returns speaker_count + segments; legacy returns speaker_count + num_segments
+            "speaker_diarize": lambda o: (
+                f"Speaker diarization: {o.get('speaker_count', o.get('num_speakers', 0))} speaker(s) identified, "
+                f"{len(o.get('segments', []))} segment(s). "
+                f"Backend: {o.get('backend', 'unknown')}."
             ),
-            "copy_move_detect": lambda o: (
-                f"Copy-move detection: {o.get('match_count', o.get('num_matches', 0))} keypoint match(es). "
-                + ("Copy-move forgery detected." if o.get('copy_move_detected') else "No copy-move cloning detected.")
+            # FIXED: SpeechBrain returns spoofing_detected + synthetic_probability; legacy returns is_spoofed + spoof_score
+            "anti_spoofing_detect": lambda o: (
+                f"Anti-spoofing: {'SYNTHETIC/REPLAYED speech detected' if o.get('spoofing_detected', o.get('is_spoofed')) else 'speech appears genuine'}. "
+                f"Synthetic probability: {o.get('synthetic_probability', o.get('spoof_score', 0)):.3f}. "
+                f"Backend: {o.get('backend', 'unknown')}."
+            ),
+            # FIXED: prosody_praat returns f0_mean_hz, jitter_local, shimmer_local, prosody_anomaly_detected
+            "prosody_analyze": lambda o: (
+                f"Prosody analysis: F0={o.get('f0_mean_hz', 0):.1f}Hz, "
+                f"jitter={o.get('jitter_local', 0):.5f}, shimmer={o.get('shimmer_local', 0):.5f}, "
+                f"HNR={o.get('hnr_db', 0):.1f}dB. "
+                + ("PROSODY ANOMALY DETECTED." if o.get('prosody_anomaly_detected') else "Prosody within normal range.")
+            ),
+            # ── Video tools (Agent 4) ─────────────────────────────────────────
+            "optical_flow_analysis": lambda o: (
+                f"Optical flow: {o.get('anomaly_frame_count', o.get('num_anomaly_frames', 0))} anomalous frame(s). "
+                f"Mean magnitude: {o.get('mean_flow_magnitude', 0):.3f}. "
+                + ("Temporal discontinuity detected." if o.get('discontinuity_detected') else "Flow is temporally consistent.")
             ),
             "face_swap_detection": lambda o: (
                 f"Face-swap: {o.get('faces_detected', 0)} face(s) analysed. "
                 + ("Face-swap event detected." if o.get('face_swap_detected') else "No face-swap artifacts found.")
                 + f" Max embedding distance: {o.get('max_distance', 0):.3f}."
             ),
-            "optical_flow_analyze": lambda o: (
-                f"Optical flow: {o.get('anomaly_frame_count', 0)} anomalous frame(s). "
-                f"Mean magnitude: {o.get('mean_flow_magnitude', 0):.3f}. "
-                + ("Temporal discontinuity detected." if o.get('discontinuity_detected') else "Flow is temporally consistent.")
+            # ── Gemini vision tools (Agents 1, 3, 5 deep pass) ───────────────
+            # Gemini findings share common fields via GeminiFinding.to_finding_dict()
+            "gemini_identify_content": lambda o: (
+                f"Gemini Vision content identification: {o.get('gemini_content_type', o.get('file_type_assessment', 'unknown type'))}. "
+                f"Scene: {str(o.get('gemini_scene', o.get('content_description', '')))[:150]}. "
+                + (f"Manipulation signals: {'; '.join(o.get('gemini_manipulation_signals', o.get('manipulation_signals', [])))[:200]}."
+                   if o.get('gemini_manipulation_signals') or o.get('manipulation_signals') else "No manipulation signals identified.")
             ),
-            "gps_timezone_validate": lambda o: (
-                ("INCONSISTENCY — timezone does not match GPS." if o.get('inconsistent') else "GPS consistent with claimed timezone.")
-                + f" Distance from expected zone: {o.get('distance_km', 0):.1f} km."
+            "gemini_cross_validate_manipulation": lambda o: (
+                f"Gemini cross-validation: {str(o.get('gemini_authenticity_assessment', o.get('content_description', '')))[:200]}. "
+                + (f"Additional anomalies: {'; '.join(str(s) for s in o.get('gemini_additional_anomalies', o.get('manipulation_signals', [])))[:200]}."
+                   if o.get('gemini_additional_anomalies') or o.get('manipulation_signals') else "No additional anomalies identified.")
             ),
-            "metadata_anomaly_score": lambda o: (
-                f"ML anomaly score: {o.get('anomaly_score', 0):.3f} "
-                + ("(ANOMALOUS). " if o.get('is_anomalous') else "(within normal range). ")
-                + ("Anomalous fields: " + ", ".join(o.get('anomalous_fields', [])[:5]) if o.get('anomalous_fields') else "")
+            "gemini_object_scene_analysis": lambda o: (
+                f"Gemini object/scene analysis: {str(o.get('gemini_scene_coherence', o.get('content_description', '')))[:200]}. "
+                f"Validated objects: {', '.join(str(x) for x in o.get('gemini_validated_objects', o.get('detected_objects', [])))[:150] or 'none identified'}. "
+                + (f"Compositing signals: {'; '.join(str(s) for s in o.get('gemini_compositing_signals', o.get('manipulation_signals', [])))[:200]}."
+                   if o.get('gemini_compositing_signals') or o.get('manipulation_signals') else "No compositing signals detected.")
             ),
-            "speaker_diarize": lambda o: (
-                f"Speaker diarization: {o.get('num_speakers', 0)} speaker(s), "
-                f"{o.get('num_segments', 0)} segment(s), "
-                f"{o.get('total_speech_duration', 0):.1f}s total speech."
-            ),
-            "anti_spoofing_detect": lambda o: (
-                f"Anti-spoofing score: {o.get('spoof_score', 0):.3f}. "
-                + ("SYNTHETIC/REPLAYED speech detected." if o.get('is_spoofed') else "Speech appears genuine.")
-            ),
-            "file_hash_verify": lambda o: (
-                f"Hash verification: {o.get('algorithm', 'SHA-256')} = "
-                + str(o.get('sha256_hash', o.get('hash', '')))[:20] + "... "
-                + ("Hash matches stored record." if o.get('matches') else "WARNING: hash mismatch detected.")
+            "gemini_metadata_visual_consistency": lambda o: (
+                f"Gemini metadata-visual consistency: {str(o.get('gemini_metadata_verdict', o.get('content_description', '')))[:200]}. "
+                + (f"Provenance flags: {'; '.join(str(s) for s in o.get('gemini_provenance_flags', o.get('manipulation_signals', [])))[:200]}."
+                   if o.get('gemini_provenance_flags') or o.get('manipulation_signals') else "No provenance flags raised.")
             ),
         }
 

@@ -24,7 +24,7 @@ import {
   FileCheck, CheckCircle, Search, Lock, AlertTriangle,
   Trash2, Loader2, ChevronDown, MonitorPlay, Mic2,
   Image as ImageIcon, Binary, Home, RotateCcw,
-  Microscope, ShieldCheck, ArrowRight,
+  ShieldCheck,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
@@ -142,7 +142,6 @@ export default function ResultPage() {
   const [realReport, setRealReport] = useState<ReportDTO | null>(null);
   const [isLoadingRealReport, setIsLoadingRealReport] = useState(true);
   const [activeTab, setActiveTab] = useState<"result" | "history">("result");
-  const [sessionAlive, setSessionAlive] = useState(false);
 
   const { playSound } = useSound();
   const playSoundRef = useRef(playSound);
@@ -193,8 +192,6 @@ export default function ResultPage() {
 
   useEffect(() => {
     setMounted(true);
-    // Check if a live session exists (enables Deep Analysis button)
-    setSessionAlive(!!sessionStorage.getItem("forensic_session_id"));
   }, []);
 
   const getFileName = () => {
@@ -234,12 +231,6 @@ export default function ResultPage() {
     sessionStorage.removeItem("forensic_session_id");
     sessionStorage.removeItem("forensic_file_name");
     sessionStorage.removeItem("forensic_case_id");
-    router.push("/evidence");
-  };
-
-  const handleDeepAnalysis = () => {
-    playSound("think");
-    // Return to evidence page; the session is still live for deep analysis
     router.push("/evidence");
   };
 
@@ -439,10 +430,25 @@ export default function ResultPage() {
                               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {activeAgents.map((agentId, idx) => {
                                   const cfg = AGENT_CONFIG[agentId];
-                                  const findings = realReport?.per_agent_findings?.[agentId] || [];
+                                  const allFindings = realReport?.per_agent_findings?.[agentId] || [];
                                   const colors = COLOR_STYLES[cfg.color];
-                                  const initialCount = findings.filter(f => f.metadata?.analysis_phase !== "deep").length;
-                                  const deepCount = findings.filter(f => f.metadata?.analysis_phase === "deep").length;
+
+                                  // Determine if the backend tagged findings with analysis_phase metadata
+                                  const hasPhaseMetadata = allFindings.some(f => f.metadata?.analysis_phase);
+                                  const deepFindings = allFindings.filter(f => f.metadata?.analysis_phase === "deep");
+                                  const initialFindings = allFindings.filter(f => f.metadata?.analysis_phase !== "deep");
+
+                                  // Without phase metadata: deduplicate by finding_type to avoid showing
+                                  // the same finding from both initial + deep runs.
+                                  let findings = allFindings;
+                                  if (!hasPhaseMetadata) {
+                                    const seen = new Map<string, typeof allFindings[0]>();
+                                    allFindings.forEach(f => seen.set(f.finding_type, f));
+                                    findings = Array.from(seen.values());
+                                  }
+
+                                  const initialCount = hasPhaseMetadata ? initialFindings.length : 0;
+                                  const deepCount = hasPhaseMetadata ? deepFindings.length : 0;
 
                                   return (
                                     <motion.div key={agentId}
@@ -458,19 +464,21 @@ export default function ResultPage() {
                                           <p className="text-slate-400 text-xs">{cfg.role}</p>
                                         </div>
                                       </div>
-                                      {/* Phase badges */}
-                                      <div className="flex gap-2 mb-3">
-                                        {initialCount > 0 && (
-                                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-500/20 text-slate-300 border border-slate-500/30">
-                                            {initialCount} Initial
-                                          </span>
-                                        )}
-                                        {deepCount > 0 && (
-                                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                                            {deepCount} Deep
-                                          </span>
-                                        )}
-                                      </div>
+                                      {/* Phase badges — only shown when backend sets phase metadata */}
+                                      {hasPhaseMetadata && (
+                                        <div className="flex gap-2 mb-3">
+                                          {initialCount > 0 && (
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-500/20 text-slate-300 border border-slate-500/30">
+                                              {initialCount} Initial
+                                            </span>
+                                          )}
+                                          {deepCount > 0 && (
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                              {deepCount} Deep
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
                                       <div className="space-y-3 max-h-64 overflow-y-auto">
                                         {findings.map((f, fi) => {
                                           const isDeep = f.metadata?.analysis_phase === "deep";
@@ -478,9 +486,11 @@ export default function ResultPage() {
                                             <div key={fi}>
                                               <div className="flex items-center gap-2 mb-0.5">
                                                 <p className={`text-sm font-medium ${colors.text}`}>{f.finding_type}</p>
-                                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isDeep ? "bg-purple-500/20 text-purple-300 border border-purple-500/30" : "bg-slate-500/15 text-slate-400 border border-slate-600/20"}`}>
-                                                  {isDeep ? "Deep" : "Initial"}
-                                                </span>
+                                                {hasPhaseMetadata && (
+                                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isDeep ? "bg-purple-500/20 text-purple-300 border border-purple-500/30" : "bg-slate-500/15 text-slate-400 border border-slate-600/20"}`}>
+                                                    {isDeep ? "Deep" : "Initial"}
+                                                  </span>
+                                                )}
                                               </div>
                                               <p className="text-slate-400 text-xs">{f.reasoning_summary}</p>
                                               <p className={`text-xs mt-1 ${colors.text}`}>
@@ -586,22 +596,7 @@ export default function ResultPage() {
               New Analysis
             </motion.button>
 
-            {/* Deep Analysis — only shown when session still live (initial analysis path) */}
-            {sessionAlive && (
-              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
-                onClick={handleDeepAnalysis}
-                className="flex-1 flex items-center justify-center gap-2.5 px-5 py-3.5 rounded-xl
-                  bg-purple-900/30 border border-purple-500/30 text-purple-300 font-semibold text-sm
-                  hover:bg-purple-900/50 hover:border-purple-400/50
-                  hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]
-                  transition-all duration-200">
-                <Microscope className="w-4 h-4" />
-                Deep Analysis
-                <ArrowRight className="w-4 h-4" />
-              </motion.button>
-            )}
-
-            {/* Back to Home — always right */}
+          {/* Back to Home — always right */}
             <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
               onClick={handleBackToHome}
               className="flex-1 flex items-center justify-center gap-2.5 px-5 py-3.5 rounded-xl

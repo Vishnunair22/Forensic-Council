@@ -31,7 +31,7 @@ from tools.image_tools import (
     analyze_image_content as real_analyze_image_content,
 )
 from tools.ocr_tools import extract_evidence_text as real_extract_evidence_text
-
+from core.gemini_client import GeminiVisionClient
 
 class Agent1Image(ForensicAgent):
     """
@@ -79,7 +79,7 @@ class Agent1Image(ForensicAgent):
     @property
     def deep_task_decomposition(self) -> list[str]:
         """
-        Heavy tasks — ML model downloads + CPU inference.
+        Heavy tasks — ML model downloads + CPU inference + Gemini vision analysis.
         Runs in background after initial findings are returned.
         """
         return [
@@ -87,6 +87,8 @@ class Agent1Image(ForensicAgent):
             "Detect copy-move forgery in flagged ROI regions",
             "Run adversarial robustness check against known anti-ELA evasion techniques",
             "Extract visible text via OCR for contextual analysis",
+            "Run Gemini vision analysis: identify file content and surface manipulation signals",
+            "Run Gemini vision cross-validation: compare visual evidence with preliminary ELA findings",
         ]
 
     @property
@@ -457,7 +459,51 @@ class Agent1Image(ForensicAgent):
         registry.register("copy_move_detect", copy_move_detect_handler, "Detect copy-move forgery via SIFT keypoint self-matching")
         registry.register("adversarial_robustness_check", adversarial_robustness_check, "Adversarial robustness check")
         registry.register("sensor_db_query", sensor_db_query, "Camera sensor noise profile database query")
-        
+
+        # ── Gemini vision handlers ──────────────────────────────────────────
+        _gemini = GeminiVisionClient(self.config)
+
+        async def gemini_identify_content(input_data: dict) -> dict:
+            """Gemini vision: identify file content, scene, and immediate anomalies."""
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            context = input_data.get("context", f"Image integrity agent pre-screening {artifact.artifact_id}")
+            finding = await _gemini.identify_file_content(
+                file_path=artifact.file_path,
+                agent_context=context,
+            )
+            result = finding.to_finding_dict(self.agent_id)
+            # Flatten key fields so the ReAct loop can reference them directly
+            result["gemini_content_type"] = finding.file_type_assessment
+            result["gemini_scene"] = finding.content_description
+            result["gemini_manipulation_signals"] = finding.manipulation_signals
+            result["gemini_detected_objects"] = finding.detected_objects
+            return result
+
+        async def gemini_cross_validate_manipulation(input_data: dict) -> dict:
+            """Gemini vision: cross-validate preliminary ELA/JPEG manipulation flags."""
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            # Pull preliminary findings text from working memory context
+            preliminary = input_data.get("preliminary_findings", [])
+            finding = await _gemini.analyze_manipulation_evidence(
+                file_path=artifact.file_path,
+                preliminary_findings=preliminary,
+            )
+            result = finding.to_finding_dict(self.agent_id)
+            result["gemini_authenticity_assessment"] = finding.content_description
+            result["gemini_additional_anomalies"] = finding.manipulation_signals
+            return result
+
+        registry.register(
+            "gemini_identify_content",
+            gemini_identify_content,
+            "Gemini vision: identify file content type, scene description, and immediate anomalies",
+        )
+        registry.register(
+            "gemini_cross_validate_manipulation",
+            gemini_cross_validate_manipulation,
+            "Gemini vision: cross-validate preliminary ELA/JPEG manipulation findings visually",
+        )
+
         return registry
     
     async def build_initial_thought(self) -> str:

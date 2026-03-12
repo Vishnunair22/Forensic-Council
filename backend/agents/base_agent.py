@@ -563,6 +563,12 @@ class ForensicAgent(ABC):
         
         deep_findings = loop_result.findings
         
+        # Normalize deep findings: reset agent_id to the base agent (strip _deep suffix)
+        # so frontend grouping by agent_id is consistent between initial and deep passes
+        for f in deep_findings:
+            if hasattr(f, 'agent_id') and f.agent_id == deep_agent_id:
+                f.agent_id = self.agent_id
+        
         # Tag deep findings with analysis phase
         for f in deep_findings:
             f.metadata["analysis_phase"] = "deep"
