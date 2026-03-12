@@ -131,9 +131,55 @@ class Agent5Metadata(ForensicAgent):
         
         # Real tool handlers - wrap to accept input_data dict
         async def exif_extract_handler(input_data: dict) -> dict:
-            """Handle EXIF extraction with input_data dict."""
+            """Handle EXIF extraction with input_data dict. Enriches result with prominent file-specific fields."""
+            import os
             artifact = input_data.get("artifact") or self.evidence_artifact
-            return await real_exif_extract(artifact=artifact)
+            result = await real_exif_extract(artifact=artifact)
+
+            # Enrich with file-level data always available
+            try:
+                stat = os.stat(artifact.file_path)
+                result["file_name"] = artifact.metadata.get("original_filename", os.path.basename(artifact.file_path))
+                result["file_size_bytes"] = stat.st_size
+                result["file_size_human"] = (
+                    f"{stat.st_size / (1024*1024):.2f} MB" if stat.st_size > 1024*1024
+                    else f"{stat.st_size / 1024:.1f} KB"
+                )
+                result["mime_type"] = artifact.metadata.get("mime_type", "unknown")
+            except Exception:
+                pass
+
+            # Lift key fields from all_metadata to top level for easy access
+            meta = result.get("all_metadata", result.get("present_fields", {}))
+            if meta:
+                # Device info
+                make = meta.get("EXIF:Make", meta.get("Make", ""))
+                model = meta.get("EXIF:Model", meta.get("Model", ""))
+                if make or model:
+                    result["camera_make"] = make
+                    result["camera_model"] = model
+                    result["device_model"] = f"{make} {model}".strip()
+
+                # Timestamps
+                dt_orig = meta.get("EXIF:DateTimeOriginal", meta.get("DateTimeOriginal", ""))
+                dt_mod = meta.get("File:FileModifyDate", meta.get("DateTimeModified", ""))
+                if dt_orig:
+                    result["datetime_original"] = dt_orig
+                if dt_mod:
+                    result["datetime_modified"] = dt_mod
+
+                # Software
+                software = meta.get("EXIF:Software", meta.get("Software", ""))
+                if software:
+                    result["software"] = software
+
+                # Image dimensions
+                width = meta.get("EXIF:ImageWidth", meta.get("File:ImageWidth", ""))
+                height = meta.get("EXIF:ImageHeight", meta.get("File:ImageHeight", ""))
+                if width and height:
+                    result["image_dimensions"] = f"{width}×{height}"
+
+            return result
             
         async def metadata_anomaly_score_handler(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact
@@ -755,23 +801,26 @@ class Agent5Metadata(ForensicAgent):
                 if handler:
                     result = await handler({"artifact": self.evidence_artifact})
                     # device_model is a top-level key from exif_extract_enhanced
-                    device = result.get("device_model", "")
-                    # software lives inside present_fields
-                    present = result.get("present_fields", {})
-                    software = present.get("Software", present.get("software", ""))
+                    device = result.get("device_model") or result.get("camera_make", "") + " " + result.get("camera_model", "")
+                    device = device.strip()
+                    # software lives inside present_fields or top-level
+                    present = result.get("present_fields", result.get("all_metadata", {}))
+                    software = result.get("software") or present.get("Software", present.get("EXIF:Software", ""))
                     gps = result.get("gps_coordinates") or present.get("GPSInfo")
-                    total_tags = result.get("total_exif_tags", result.get("tag_count", len(present)))
-                    absent_fields = result.get("absent_fields", [])
-                    # DateTimeOriginal is inside present_fields, not a top-level key
+                    total_tags = result.get("total_fields_extracted", result.get("total_exif_tags", len(present)))
+                    absent_fields = result.get("absent_mandatory_fields", result.get("absent_fields", []))
                     created = (
-                        present.get("DateTimeOriginal")
+                        result.get("datetime_original")
+                        or present.get("EXIF:DateTimeOriginal")
+                        or present.get("DateTimeOriginal")
                         or present.get("DateTime")
-                        or result.get("datetime_original")
-                        or result.get("date_created")
                         or ""
                     )
+                    file_name = result.get("file_name", "")
+                    file_size = result.get("file_size_human", "")
                     if device or total_tags:
                         context_lines.append(
+                            f"File: {file_name} ({file_size}) | "
                             f"Device: {device or 'Unknown'}, software: {software or 'None'}, "
                             f"EXIF tags: {total_tags}, GPS: {'Present' if gps else 'ABSENT'}, "
                             f"Created: {created or 'Unknown'}"

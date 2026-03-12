@@ -741,8 +741,33 @@ class GeminiVisionClient:
                 if not make and not dt:
                     meta_notes.append("No device or timestamp in EXIF — provenance cannot be verified from metadata")
 
+            # Attempt lightweight OCR to extract any visible text
+            ocr_text_lines: list[str] = []
+            try:
+                import pytesseract
+                ocr_raw = pytesseract.image_to_string(img, config="--psm 3").strip()
+                if ocr_raw:
+                    ocr_text_lines = [ln.strip() for ln in ocr_raw.splitlines() if len(ln.strip()) > 2][:10]
+            except Exception:
+                pass
+            # EasyOCR fallback
+            if not ocr_text_lines:
+                try:
+                    import easyocr
+                    import numpy as _np
+                    _reader = easyocr.Reader(["en"], gpu=False, verbose=False)
+                    _results = _reader.readtext(file_path, detail=0)
+                    ocr_text_lines = [str(t).strip() for t in _results if len(str(t).strip()) > 2][:10]
+                except Exception:
+                    pass
+
+            ocr_summary = ""
+            if ocr_text_lines:
+                ocr_summary = f" Text visible in image: {' | '.join(ocr_text_lines[:6])}."
+
             narrative = (
-                f"Local forensic analysis (Gemini API not configured). {scene_desc} "
+                f"Local forensic analysis (set GEMINI_API_KEY for full AI vision). {scene_desc}"
+                + ocr_summary + " "
                 + (f"Metadata: {'; '.join(meta_notes)}." if meta_notes else "No EXIF metadata available.")
             )
 
@@ -765,7 +790,7 @@ class GeminiVisionClient:
                 raw_response="",
                 latency_ms=latency_ms,
             )
-            finding._extracted_text = []
+            finding._extracted_text = ocr_text_lines
             finding._interface_identification = ""
             finding._contextual_narrative = narrative
             finding._authenticity_verdict = "SUSPICIOUS" if manipulation_signals else "CANNOT_DETERMINE"

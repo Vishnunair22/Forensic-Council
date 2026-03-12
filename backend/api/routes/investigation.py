@@ -753,7 +753,7 @@ async def _wrap_pipeline_with_broadcasts(
                     error=str(e),
                 )
             
-            # Build completion message
+            # Build completion message — prefer the most informative finding
             confidence = 0.0
             finding_summary = f"{agent_name} analysis complete."
             if result.findings:
@@ -762,16 +762,38 @@ async def _wrap_pipeline_with_broadcasts(
                     for f in result.findings
                 ]
                 confidence = sum(confidences) / len(confidences) if confidences else 0.5
+
+                # Priority: ELA/key forensic finding > longest > first
+                _PRIORITY_TOOLS = {
+                    "agent1": ["ela_full_image", "jpeg_ghost_detect", "noise_fingerprint", "copy_move_detect", "frequency_domain_analysis"],
+                    "agent2": ["anti_spoofing_detect", "audio_splice_detect", "speaker_diarize"],
+                    "agent3": ["object_detection", "lighting_consistency", "contraband_database"],
+                    "agent4": ["optical_flow_analysis", "face_swap_detection", "deepfake_frequency_check"],
+                    "agent5": ["exif_extract", "hex_signature_scan", "gps_timezone_validate", "steganography_scan"],
+                }
+                priority_tools = _PRIORITY_TOOLS.get(agent_id.lower(), [])
                 finding_summaries = []
+                priority_summaries = []
                 for f in result.findings:
                     if isinstance(f, dict) and f.get("reasoning_summary"):
-                        finding_summaries.append(f["reasoning_summary"])
-                if finding_summaries:
-                    # Show most informative finding (longest summary tends to have more detail)
+                        summary_text = f["reasoning_summary"]
+                        tool = f.get("metadata", {}).get("tool_name", "") if isinstance(f.get("metadata"), dict) else ""
+                        finding_summaries.append(summary_text)
+                        if tool in priority_tools:
+                            priority_summaries.append(summary_text)
+
+                if priority_summaries:
+                    # Use the most informative priority finding
+                    best = max(priority_summaries, key=len)
+                elif finding_summaries:
                     best = max(finding_summaries, key=len)
-                    finding_summary = best[:200] if len(best) > 200 else best
+                else:
+                    best = ""
+
+                if best:
+                    finding_summary = best[:800] if len(best) > 800 else best
             elif result.error:
-                finding_summary = f"Error: {result.error[:60]}"
+                finding_summary = f"Error: {result.error[:120]}"
             
             # Broadcast completion
             await broadcast_update(
@@ -849,15 +871,26 @@ async def _wrap_pipeline_with_broadcasts(
                     ]
                     confidence = sum(confidences) / len(confidences) if confidences else 0.5
                     
-                    finding_summaries = []
+                    gemini_summaries = []
+                    other_summaries = []
                     for f in initial_result.findings:
                         if isinstance(f, dict) and f.get("reasoning_summary"):
-                            finding_summaries.append(f["reasoning_summary"])
-                    if finding_summaries:
-                        best = max(finding_summaries, key=len)
-                        finding_summary = best[:200] if len(best) > 200 else best
+                            tool = f.get("metadata", {}).get("tool_name", "") if isinstance(f.get("metadata"), dict) else ""
+                            summary = f["reasoning_summary"]
+                            if "gemini" in tool.lower() or "gemini" in f.get("finding_type", "").lower():
+                                gemini_summaries.append(summary)
+                            else:
+                                other_summaries.append(summary)
+
+                    # Prefer Gemini summary (richest content); otherwise use longest finding
+                    if gemini_summaries:
+                        best_deep = max(gemini_summaries, key=len)
+                    elif other_summaries:
+                        best_deep = max(other_summaries, key=len)
                     else:
-                        finding_summary = f"{agent_name} deep analysis complete."
+                        best_deep = f"{agent_name} deep analysis complete."
+
+                    finding_summary = f"\U0001f52c Deep Analysis — {best_deep[:900] if len(best_deep) > 900 else best_deep}"
                     
                     await broadcast_update(
                         ws_session_id,

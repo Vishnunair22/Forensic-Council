@@ -34,6 +34,9 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
 
     const wsRef = useRef<WebSocket | null>(null);
     const completedAgentsRef = useRef<AgentUpdate[]>([]);
+    // Phase generation: incremented on clearCompletedAgents so stale initial-phase
+    // AGENT_COMPLETE messages arriving after deep mode starts are discarded.
+    const phaseGenRef = useRef<number>(0);
 
     // Store callbacks in refs to avoid triggering effect on every render
     const onAgentCompleteRef = useRef(onAgentComplete);
@@ -117,6 +120,11 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                     const { confidence, findings_count, error, deep_analysis_pending, status: agentStatus } = update.data as any;
                                     const parsedConfidence = confidence ?? agent.simulation.confidence / 100;
 
+                                    // Capture phase gen at message-processing time to detect stale messages.
+                                    // A stale initial-phase AGENT_COMPLETE should NOT overwrite a deep-phase result.
+                                    const messagePhaseGen = (update as any)._phaseGen ?? 0;
+                                    const isStaleInitialMessage = messagePhaseGen < phaseGenRef.current;
+
                                     const newUpdate: AgentUpdate = {
                                         agent_id: agent.id,
                                         agent_name: update.agent_name || agent.name,
@@ -128,12 +136,14 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                         deep_analysis_pending: deep_analysis_pending,
                                     };
 
-                                    const existingIndex = completedAgentsRef.current.findIndex((a: AgentUpdate) => a.agent_id === newUpdate.agent_id);
-                                    if (existingIndex >= 0) {
-                                        // Update existing for deep pass overrides
-                                        completedAgentsRef.current[existingIndex] = newUpdate;
-                                    } else {
-                                        completedAgentsRef.current.push(newUpdate);
+                                    // Completely discard stale initial-phase messages after deep mode starts
+                                    if (!isStaleInitialMessage) {
+                                        const existingIndex = completedAgentsRef.current.findIndex((a: AgentUpdate) => a.agent_id === newUpdate.agent_id);
+                                        if (existingIndex >= 0) {
+                                            completedAgentsRef.current[existingIndex] = newUpdate;
+                                        } else {
+                                            completedAgentsRef.current.push(newUpdate);
+                                        }
                                     }
 
                                     const nextCompleted = [...completedAgentsRef.current];
@@ -184,6 +194,9 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                         messageQueue.shift();
                         dbg.warn("[WebSocket] Queue limit reached, dropped oldest message");
                     }
+                    // Tag the message with the current phase generation so stale
+                    // initial-phase messages can be discarded after clearCompletedAgents().
+                    (update as any)._phaseGen = phaseGenRef.current;
                     messageQueue.push(update);
                     processQueue();
                 } catch (error) {
@@ -313,6 +326,9 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
     }, [sessionId]);
 
     const clearCompletedAgents = useCallback(() => {
+        // Increment phase generation so any in-flight AGENT_COMPLETE messages
+        // from the initial pass are treated as stale and ignored.
+        phaseGenRef.current += 1;
         setCompletedAgents([]);
         completedAgentsRef.current = [];
     }, []);
