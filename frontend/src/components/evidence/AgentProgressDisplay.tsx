@@ -1,23 +1,18 @@
 /**
  * AgentProgressDisplay Component
- * =============================
- *
- * Shows agent cards in a grid with real-time status, findings text, and
- * decision buttons after each analysis phase.
- *
- * Behaviour per phase:
- *   initial — all 5 cards stagger in (3 s apart); unsupported agents show amber "Skipped"
- *   deep    — ONLY supported agents shown (unsupported ones hidden); they stagger in fresh
+ * ================================
+ * Shows agent cards in a grid with real-time status, expandable findings,
+ * and decision buttons after each analysis phase.
  */
 
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, AlertTriangle, Loader2, ArrowRight,
-  RotateCcw, Microscope, FileText, FileX,
+  RotateCcw, Microscope, FileText, FileX, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { AgentIcon } from "@/components/ui/AgentIcon";
 import { AGENTS_DATA } from "@/lib/constants";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { SoundType } from "@/hooks/useSound";
 
 export interface AgentUpdate {
@@ -49,6 +44,125 @@ interface AgentProgressDisplayProps {
   isNavigating?: boolean;
 }
 
+// ── Per-card expandable text ──────────────────────────────────────────────────
+const TRUNCATE_CHARS = 180;
+
+function truncateAtWord(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  // Find last space at or before maxChars
+  const sub = text.slice(0, maxChars);
+  const lastSpace = sub.lastIndexOf(" ");
+  return lastSpace > maxChars * 0.6
+    ? sub.slice(0, lastSpace)
+    : sub; // no good word boundary found, use raw slice
+}
+
+function ExpandableText({
+  text,
+  textClassName,
+  wrapperClassName,
+}: {
+  text: string;
+  textClassName?: string;
+  wrapperClassName?: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const needsTruncation = text.length > TRUNCATE_CHARS;
+  const displayText = needsTruncation && !expanded
+    ? truncateAtWord(text, TRUNCATE_CHARS) + "…"
+    : text;
+
+  return (
+    <div className={wrapperClassName}>
+      <p className={`text-xs leading-relaxed whitespace-pre-wrap break-words ${textClassName || "text-slate-300"}`}>
+        {displayText}
+      </p>
+      {needsTruncation && (
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="inline-flex items-center gap-0.5 mt-1.5 text-[11px] font-medium text-cyan-400/80
+            hover:text-cyan-300 transition-colors"
+        >
+          {expanded ? (
+            <><ChevronUp className="w-3 h-3" />Show less</>
+          ) : (
+            <><ChevronDown className="w-3 h-3" />Show more</>
+          )}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Smarter live thinking text ────────────────────────────────────────────────
+/**
+ * Translate the raw working-memory task string into a short, user-friendly
+ * action sentence so the card body reads like real forensic work is happening.
+ */
+function humaniseThinking(raw: string, agentId: string): string {
+  if (!raw) return "Analyzing evidence…";
+
+  const r = raw.toLowerCase();
+
+  // Deep pass phrases
+  if (r.includes("gemini")) return "🔬 Asking Gemini AI to examine the image…";
+  if (r.includes("copy-move") || r.includes("copy move")) return "🔍 Checking for copy-move cloning artifacts…";
+  if (r.includes("semantic image") || r.includes("image type")) return "🧠 Identifying what this image actually shows…";
+  if (r.includes("ocr") || r.includes("visible text")) return "📄 Extracting all visible text from the image…";
+  if (r.includes("adversarial")) return "🛡️ Testing against anti-forensics evasion techniques…";
+
+  // Agent-1 initial
+  if (r.includes("ela") && r.includes("full")) return "🔬 Running Error Level Analysis across full image…";
+  if (r.includes("ela") && r.includes("block")) return "🧩 Classifying ELA anomaly blocks in flagged regions…";
+  if (r.includes("ela") && r.includes("roi")) return "🔍 Re-analysing flagged ROIs with noise footprint…";
+  if (r.includes("jpeg ghost")) return "👻 Running JPEG ghost detection on suspicious regions…";
+  if (r.includes("frequency domain") && r.includes("gan")) return "📡 Scanning frequency domain for GAN artifacts…";
+  if (r.includes("frequency domain")) return "📡 Running frequency-domain analysis on contested regions…";
+  if (r.includes("file hash") || r.includes("hash")) return "🔑 Verifying file hash against ingestion record…";
+  if (r.includes("roi") || r.includes("region of interest")) return "🎯 Isolating and re-analysing flagged ROIs…";
+
+  // Agent-2 audio
+  if (r.includes("speaker diarization") || r.includes("diarization")) return "🎙️ Establishing voice-count baseline with diarization…";
+  if (r.includes("anti-spoofing") || r.includes("spoofing")) return "🔊 Running anti-spoofing detection on speaker segments…";
+  if (r.includes("prosody")) return "🎵 Analysing prosody across the full audio track…";
+  if (r.includes("splice") || r.includes("splice point")) return "✂️ Detecting ML splice points in audio segments…";
+  if (r.includes("background noise") || r.includes("noise consistency")) return "🌊 Checking background noise consistency for edit points…";
+  if (r.includes("codec fingerprint") || r.includes("re-encoding")) return "🔐 Fingerprinting codec chain for re-encoding events…";
+  if (r.includes("audio-visual sync") || r.includes("sync")) return "⏱️ Verifying audio-visual sync against video timestamps…";
+
+  // Agent-3 object
+  if (r.includes("primary object detection") || r.includes("full-scene")) return "👁️ Running YOLO primary object detection on scene…";
+  if (r.includes("secondary classification") || r.includes("confidence threshold")) return "🔎 Running secondary classification on low-confidence objects…";
+  if (r.includes("scale") && r.includes("proportion")) return "📐 Validating object scale and proportion geometry…";
+  if (r.includes("lighting") && r.includes("shadow")) return "💡 Checking lighting and shadow consistency per object…";
+  if (r.includes("contraband") || r.includes("weapons database")) return "⚠️ Cross-referencing detected objects against contraband database…";
+
+  // Agent-4 video
+  if (r.includes("optical flow") || r.includes("temporal anomaly")) return "🎬 Running optical flow analysis — building anomaly heatmap…";
+  if (r.includes("frame-to-frame") || r.includes("frame consistency")) return "🖼️ Extracting frames and checking inter-frame consistency…";
+  if (r.includes("explainable") || r.includes("suspicious")) return "🏷️ Classifying anomalies as EXPLAINABLE or SUSPICIOUS…";
+  if (r.includes("face-swap") || r.includes("face swap")) return "🧑‍💻 Running face-swap detection on human faces…";
+  if (r.includes("rolling shutter") || r.includes("compression pattern")) return "📷 Validating rolling shutter and compression vs device metadata…";
+
+  // Agent-5 metadata
+  if (r.includes("exif")) return "📋 Extracting all EXIF fields and logging absent mandatory fields…";
+  if (r.includes("gps") || r.includes("timezone")) return "🌍 Cross-validating GPS coordinates against timestamp timezone…";
+  if (r.includes("steganography") || r.includes("steg")) return "🕵️ Scanning for hidden steganographic payload…";
+  if (r.includes("file structure") || r.includes("hex") || r.includes("hexadecimal")) return "🗂️ Running hex scan for software signature anomalies…";
+  if (r.includes("cross-field") || r.includes("consistency verdict")) return "📊 Synthesising cross-field metadata consistency verdict…";
+
+  // Generic states
+  if (r.includes("self-reflection") || r.includes("reflection pass")) return "🪞 Running self-reflection quality check on findings…";
+  if (r.includes("submit") || r.includes("arbiter")) return "📤 Submitting calibrated findings to Council Arbiter…";
+  if (r.includes("finalizing") || r.includes("finali")) return "✅ Finalising findings…";
+  if (r.includes("initializing") || r.includes("initialising")) return "⚙️ Initialising analysis tasks…";
+  if (r.includes("processed") || r.includes("running validation")) return "🔄 Running cross-tool validation…";
+
+  // Fallback — capitalise raw and append ellipsis
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
 export function AgentProgressDisplay({
   agentUpdates,
   completedAgents,
@@ -66,10 +180,9 @@ export function AgentProgressDisplay({
 }: AgentProgressDisplayProps) {
   const allValidAgents = AGENTS_DATA.filter(a => a.name !== "Council Arbiter");
 
-  // Track unsupported agents (populated from AGENT_COMPLETE messages)
+  // Track unsupported agents
   const [unsupportedAgents, setUnsupportedAgents] = useState<Set<string>>(new Set());
 
-  // In deep phase: only show supported agents; initial phase shows all
   const visibleAgents = phase === "deep"
     ? allValidAgents.filter(a => !unsupportedAgents.has(a.id))
     : allValidAgents;
@@ -78,39 +191,49 @@ export function AgentProgressDisplay({
   const firstVisibleAgent = visibleAgents[0];
   const firstVisibleId = firstVisibleAgent ? firstVisibleAgent.id : null;
 
-  // Stagger reveal state
+  // Stagger reveal
   const [revealedAgents, setRevealedAgents] = useState<Set<string>>(new Set());
   const prevRevealedRef = useRef<Set<string>>(new Set());
 
-  // Play ascending chime when a new card appears
+  // ── Sound: play on new card reveal ───────────────────────────────────────
+  // We gate on a "user has interacted" flag so AudioContext is already unlocked.
+  const hasInteractedRef = useRef(false);
+  useEffect(() => {
+    const unlock = () => { hasInteractedRef.current = true; };
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
   useEffect(() => {
     if (!playSound) return;
     revealedAgents.forEach(id => {
       if (!prevRevealedRef.current.has(id)) {
-        playSound("agent");
+        // Small stagger so chimes don't all fire at once
+        const idx = [...revealedAgents].indexOf(id);
+        setTimeout(() => playSound("agent"), idx * 80);
       }
     });
     prevRevealedRef.current = new Set(revealedAgents);
   }, [revealedAgents, playSound]);
 
-  // Stagger effect — resets on phase change
+  // Stagger reveal — reset on phase change
   useEffect(() => {
     setRevealedAgents(new Set());
     prevRevealedRef.current = new Set();
-
     if (!hasVisibleAgents || !firstVisibleId) return;
 
-    // Immediately reveal first card
     setRevealedAgents(new Set([firstVisibleId]));
-
     let currentIndex = 1;
     const id = setInterval(() => {
       if (currentIndex >= visibleAgents.length) { clearInterval(id); return; }
       const agentId = visibleAgents[currentIndex]?.id;
       if (agentId) setRevealedAgents(prev => new Set([...prev, agentId]));
       currentIndex++;
-    }, 3000);
-
+    }, 400);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, visibleAgents.length, firstVisibleId]);
@@ -130,7 +253,7 @@ export function AgentProgressDisplay({
     });
   }, [completedAgents, unsupportedAgents]);
 
-  const getAgentStatus = (agentId: string): "waiting" | "checking" | "running" | "complete" | "error" | "unsupported" => {
+  const getAgentStatus = (agentId: string) => {
     if (unsupportedAgents.has(agentId)) return "unsupported";
     const completed = completedAgents.find(c => c.agent_id === agentId);
     if (completed) {
@@ -186,7 +309,8 @@ export function AgentProgressDisplay({
       <div className="w-full max-w-5xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {visibleAgents.map((agent) => {
           const status = getAgentStatus(agent.id);
-          const thinking = getAgentThinking(agent.id);
+          const rawThinking = getAgentThinking(agent.id);
+          const thinking = humaniseThinking(rawThinking, agent.id);
           const completed = getAgentFindings(agent.id);
           const isRevealed = revealedAgents.has(agent.id);
 
@@ -208,7 +332,7 @@ export function AgentProgressDisplay({
                       : "bg-white/[0.02] border-white/[0.08]"}
                   `}
                 >
-                  {/* Scan-sweep on entry */}
+                  {/* Scan sweep on entry */}
                   <motion.div
                     initial={{ x: "-100%", opacity: 0.7 }}
                     animate={{ x: "200%", opacity: 0 }}
@@ -243,25 +367,53 @@ export function AgentProgressDisplay({
                   </div>
 
                   {/* Body */}
-                  {status === "checking" && <p className="text-xs text-purple-300/70 leading-relaxed">Initiating analysis...</p>}
-                  {status === "running" && <p className="text-xs text-cyan-300/70 leading-relaxed line-clamp-3">{thinking || "Analyzing evidence..."}</p>}
+                  {status === "checking" && (
+                    <p className="text-xs text-purple-300/70 leading-relaxed">
+                      ⚙️ Initiating forensic analysis pipeline…
+                    </p>
+                  )}
+
+                  {status === "running" && (
+                    <p className="text-xs text-cyan-300/80 leading-relaxed">
+                      {thinking}
+                    </p>
+                  )}
+
                   {status === "complete" && completed && (
                     <div className="space-y-2">
-                      <p className="text-xs text-slate-300 leading-relaxed line-clamp-3">{completed.message || "Analysis complete."}</p>
+                      <ExpandableText text={completed.message || "Analysis complete."} />
                       <div className="flex items-center gap-3 text-[11px] text-slate-500">
-                        {completed.findings_count !== undefined && <span>{completed.findings_count} finding{completed.findings_count !== 1 ? "s" : ""}</span>}
-                        {completed.confidence !== undefined && <span>· {Math.round(completed.confidence * 100)}% conf.</span>}
+                        {completed.findings_count !== undefined && (
+                          <span>{completed.findings_count} finding{completed.findings_count !== 1 ? "s" : ""}</span>
+                        )}
+                        {completed.confidence !== undefined && (
+                          <span>· {Math.round(completed.confidence * 100)}% conf.</span>
+                        )}
                       </div>
                     </div>
                   )}
+
                   {status === "unsupported" && completed && (
                     <div className="space-y-2">
-                      <p className="text-xs text-amber-300/70 leading-relaxed">{completed.message || completed.error || "File type not supported."}</p>
+                      <p className="text-xs text-amber-300/70 leading-relaxed">
+                        {completed.message || completed.error || "File type not supported."}
+                      </p>
                       <p className="text-[10px] text-amber-400/50 italic">Not applicable for this evidence type.</p>
                     </div>
                   )}
-                  {status === "error" && completed && <p className="text-xs text-red-300/70 leading-relaxed line-clamp-2">{completed.error || "An error occurred."}</p>}
-                  {status === "waiting" && <p className="text-xs text-slate-600">Queued for analysis</p>}
+
+                  {status === "error" && completed && (
+                    <div className="space-y-1">
+                      <ExpandableText
+                        text={completed.error || "An error occurred."}
+                        textClassName="text-red-300/70"
+                      />
+                    </div>
+                  )}
+
+                  {status === "waiting" && (
+                    <p className="text-xs text-slate-600">Queued for analysis</p>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -269,9 +421,8 @@ export function AgentProgressDisplay({
         })}
       </div>
 
-      {/* Decision Buttons */}
+      {/* ── Decision Buttons ─────────────────────────────────────────── */}
 
-      {/* After initial analysis */}
       {showInitialDecision && (
         <motion.div
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
@@ -284,7 +435,7 @@ export function AgentProgressDisplay({
               hover:bg-emerald-600/35 hover:border-emerald-500/50 transition-all font-semibold text-sm
               disabled:opacity-60 disabled:cursor-not-allowed">
             {isNavigating ? (
-              <><Loader2 className="w-4 h-4 animate-spin" />Compiling Report...</>
+              <><Loader2 className="w-4 h-4 animate-spin" />Compiling Report…</>
             ) : (
               <><FileText className="w-4 h-4" />Accept Analysis</>
             )}
@@ -302,7 +453,6 @@ export function AgentProgressDisplay({
         </motion.div>
       )}
 
-      {/* After deep analysis */}
       {showDeepComplete && (
         <motion.div
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
@@ -328,7 +478,7 @@ export function AgentProgressDisplay({
               transition-all font-semibold text-sm
               disabled:opacity-60 disabled:cursor-not-allowed">
             {isNavigating ? (
-              <><Loader2 className="w-4 h-4 animate-spin" />Compiling Report...</>
+              <><Loader2 className="w-4 h-4 animate-spin" />Arbiter Working…</>
             ) : (
               <><FileText className="w-4 h-4" />View Results<ArrowRight className="w-4 h-4" /></>
             )}

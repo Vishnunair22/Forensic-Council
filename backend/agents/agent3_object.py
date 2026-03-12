@@ -94,7 +94,7 @@ class Agent3Object(ForensicAgent):
     @property
     def deep_task_decomposition(self) -> list[str]:
         """
-        Heavy tasks — CLIP inference, ML splicing, adversarial checks, Gemini vision.
+        Heavy tasks — CLIP inference, ML splicing, adversarial checks, Gemini deep forensic analysis.
         Runs in background after initial findings are returned.
         """
         return [
@@ -103,7 +103,7 @@ class Agent3Object(ForensicAgent):
             "Run camera noise fingerprint analysis for region consistency",
             "Issue inter-agent call to Agent 1 for any region showing lighting inconsistency",
             "Run adversarial robustness check against object detection evasion",
-            "Run Gemini vision analysis: deep object identification, weapon/contraband detection, and scene coherence",
+            "Run Gemini deep forensic analysis: identify content type, extract all text, detect objects and weapons, identify interfaces, describe what is happening, cross-validate metadata",
         ]
 
     @property
@@ -600,31 +600,50 @@ class Agent3Object(ForensicAgent):
         registry.register("inter_agent_call", inter_agent_call_handler, "Inter-agent communication")
         registry.register("adversarial_robustness_check", adversarial_robustness_check_handler, "Adversarial robustness check")
 
-        # ── Gemini vision handler ───────────────────────────────────────────
+        # ── Gemini deep forensic analysis handler ──────────────────────────
         _gemini = GeminiVisionClient(self.config)
 
-        async def gemini_object_scene_analysis(input_data: dict) -> dict:
+        async def gemini_deep_forensic_handler(input_data: dict) -> dict:
             """
-            Gemini vision deep analysis: validated object list, weapon/contraband
-            detection, scene coherence assessment, and compositing signals.
+            Comprehensive Gemini deep forensic analysis for object/scene context.
+            Identifies content type, extracts all visible text, provides full
+            object inventory (including weapons and contraband), identifies
+            UI interfaces, describes contextual narrative, and assesses scene
+            coherence and compositing signals.
             """
             artifact = input_data.get("artifact") or self.evidence_artifact
-            # Gather preliminary YOLO detections from input context if available
-            preliminary = input_data.get("preliminary_detections", [])
-            finding = await _gemini.analyze_objects_and_scene(
+
+            finding = await _gemini.deep_forensic_analysis(
                 file_path=artifact.file_path,
-                preliminary_detections=preliminary,
+                exif_summary=None,
             )
             result = finding.to_finding_dict(self.agent_id)
-            result["gemini_validated_objects"] = finding.detected_objects
-            result["gemini_compositing_signals"] = finding.manipulation_signals
-            result["gemini_scene_coherence"] = finding.content_description
+
+            # Expose key fields; safely stringify detected_objects (may be dicts)
+            raw_objects = finding.detected_objects or []
+            safe_objects = []
+            for obj in raw_objects:
+                if isinstance(obj, dict):
+                    label = obj.get("label") or obj.get("name") or obj.get("class_name") or str(obj)
+                    conf = obj.get("confidence") or obj.get("score")
+                    safe_objects.append(f"{label} ({conf:.0%})" if conf else str(label))
+                else:
+                    safe_objects.append(str(obj))
+
+            result["gemini_validated_objects"] = safe_objects
+            result["gemini_compositing_signals"] = [str(s) for s in (finding.manipulation_signals or [])]
+            result["gemini_scene_coherence"] = str(finding.content_description or "")
+            result["gemini_content_type"] = finding.file_type_assessment
+            result["gemini_extracted_text"] = getattr(finding, "_extracted_text", [])
+            result["gemini_interface"] = getattr(finding, "_interface_identification", "")
+            result["gemini_narrative"] = getattr(finding, "_contextual_narrative", "")
+            result["gemini_verdict"] = getattr(finding, "_authenticity_verdict", "")
             return result
 
         registry.register(
-            "gemini_object_scene_analysis",
-            gemini_object_scene_analysis,
-            "Gemini vision: deep object ID, weapon/contraband detection, scene coherence, and compositing signals",
+            "gemini_deep_forensic",
+            gemini_deep_forensic_handler,
+            "Gemini deep forensic analysis: content ID, text extraction, object/weapon detection, interface identification, scene narrative and coherence",
         )
 
         return registry
@@ -653,6 +672,12 @@ class Agent3Object(ForensicAgent):
 
     async def run_investigation(self):
         from core.react_loop import AgentFinding
+        from core.working_memory import TaskStatus
+
+        # Always initialize working memory first so the heartbeat can show
+        # the file-type validation step instead of "Initiating 1/N tasks".
+        await self._initialize_working_memory()
+
         file_path = self.evidence_artifact.file_path.lower()
         mime = (self.evidence_artifact.metadata or {}).get("mime_type", "").lower()
         audio_exts = (".wav", ".mp3", ".flac", ".ogg", ".aac", ".m4a")
@@ -662,6 +687,23 @@ class Agent3Object(ForensicAgent):
             or mime.startswith(("audio/", "video/"))
         )
         if is_audio_video:
+            # Mark all tasks complete so the heartbeat shows full progress
+            try:
+                state = await self.working_memory.get_state(
+                    session_id=self.session_id, agent_id=self.agent_id
+                )
+                if state:
+                    for task in state.tasks:
+                        await self.working_memory.update_task(
+                            session_id=self.session_id,
+                            agent_id=self.agent_id,
+                            task_id=task.task_id,
+                            status=TaskStatus.COMPLETE,
+                            result_ref="file_type_validation",
+                        )
+            except Exception:
+                pass
+
             finding = AgentFinding(
                 agent_id=self.agent_id,
                 finding_type="File type not applicable",
@@ -678,4 +720,11 @@ class Agent3Object(ForensicAgent):
             self._react_chain = []
             self._reflection_report = None
             return self._findings
+
+        # For image/video files, run the full investigation.
+        # Flag tells base class not to re-initialize working memory.
+        self._skip_memory_init = True
+        # Always rebuild tool registry before the main pass so deep pass also gets
+        # the gemini_deep_forensic handler (base_agent reuses _tool_registry).
+        self._tool_registry = await self.build_tool_registry()
         return await super().run_investigation()

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable, List, Optional
 
-from infra.postgres_client import PostgresClient
+from infra.postgres_client import PostgresClient, get_postgres_client
 from core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -310,18 +310,22 @@ class MigrationManager:
     
     def __init__(self, client: Optional[PostgresClient] = None):
         self._owned_client = client is None
-        self.client = client or PostgresClient()
+        self.client = client  # Will be set to singleton in connect()
         self._connected = False
     
     async def connect(self):
-        """Connect to the database."""
+        """Connect to the database — always uses the singleton pool."""
         if not self._connected:
-            await self.client.connect()
+            if self.client is None:
+                self.client = await get_postgres_client()
             self._connected = True
     
     async def disconnect(self):
-        """Disconnect from the database and close the pool if we own it."""
-        if self._connected:
+        """No-op when using singleton; only disconnect if client was externally provided."""
+        if self._connected and not self._owned_client:
+            # Singleton — don't close the shared pool
+            self._connected = False
+        elif self._connected and self._owned_client and self.client:
             await self.client.disconnect()
             self._connected = False
     

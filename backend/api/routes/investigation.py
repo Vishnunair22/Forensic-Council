@@ -47,9 +47,9 @@ router = APIRouter(prefix="/api/v1", tags=["investigation"])
 # ── Per-user upload rate limiter ──────────────────────────────────────────────
 # Limits how many investigations a single authenticated user can start within
 # a rolling window. Prevents a single account from exhausting pipeline capacity.
-_MAX_INVESTIGATIONS_PER_USER = 5       # max concurrent/recent investigations
+_MAX_INVESTIGATIONS_PER_USER = 10      # max concurrent/recent investigations
 _USER_RATE_WINDOW_SECS = 300           # 5-minute rolling window
-_USER_RATE_LOCKOUT_SECS = 600          # 10-minute lockout after limit hit
+_USER_RATE_LOCKOUT_SECS = 120          # 2-minute lockout after limit hit
 
 # In-memory fallback: {user_id: [timestamp, ...]}
 _user_investigation_times: dict[str, list[float]] = {}
@@ -483,18 +483,95 @@ async def _wrap_pipeline_with_broadcasts(
         from core.working_memory import WorkingMemory
         
         agent_configs = [
-            ("Agent1", "Image Forensics", Agent1Image, "Analyzing image patterns and inconsistencies..."),
-            ("Agent2", "Audio Forensics", Agent2Audio, "Checking audio authenticity markers..."),
-            ("Agent3", "Object Detection", Agent3Object, "Scanning for object anomalies..."),
-            ("Agent4", "Video Forensics", Agent4Video, "Examining temporal consistency..."),
-            ("Agent5", "Metadata Forensics", Agent5Metadata, "Validating metadata integrity..."),
+            ("Agent1", "Image Forensics", Agent1Image, "🔬 Launching ELA engine — scanning for pixel-level anomalies…"),
+            ("Agent2", "Audio Forensics", Agent2Audio, "🎙️ Establishing voice-count baseline with diarization…"),
+            ("Agent3", "Object Detection", Agent3Object, "👁️ Loading YOLO model — running primary object detection…"),
+            ("Agent4", "Video Forensics", Agent4Video, "🎬 Starting optical flow analysis — building temporal heatmap…"),
+            ("Agent5", "Metadata Forensics", Agent5Metadata, "📋 Extracting EXIF fields — checking for mandatory field gaps…"),
         ]
-        
+
+        # ── Per-agent tool-action humaniser (initial AND deep pass) ──────────
+        _TASK_PHRASES: dict[str, str] = {
+            # Agent 1 – Image Integrity
+            "ela":                          "🔬 Running Error Level Analysis across full image…",
+            "ela anomaly block":            "🧩 Classifying ELA anomaly blocks in flagged regions…",
+            "jpeg ghost":                   "👻 Detecting JPEG ghost artifacts in suspicious regions…",
+            "frequency domain analysis":    "📡 Running frequency-domain analysis on contested regions…",
+            "frequency-domain gan":         "📡 Scanning frequency domain for GAN generation artifacts…",
+            "file hash":                    "🔑 Verifying file hash against ingestion record…",
+            "roi":                          "🎯 Re-analysing flagged ROIs with noise footprint…",
+            "copy-move":                    "🔍 Checking for copy-move cloning artifacts…",
+            "semantic image":               "🧠 Identifying what this image actually depicts…",
+            "ocr":                          "📄 Extracting all visible text via OCR…",
+            "visible text":                 "📄 Extracting all visible text from image…",
+            "adversarial robustness":       "🛡️ Testing robustness against anti-forensics evasion…",
+            "gemini":                       "🤖 Asking Gemini AI for deep visual forensic analysis…",
+            # Agent 2 – Audio
+            "speaker diarization":          "🎙️ Establishing voice-count baseline with diarization…",
+            "anti-spoofing":                "🔊 Running anti-spoofing detection on speaker segments…",
+            "prosody":                      "🎵 Analysing prosody and rhythm across full audio track…",
+            "splice point":                 "✂️ Detecting ML splice points in audio segments…",
+            "background noise":             "🌊 Checking background noise consistency for edit points…",
+            "codec fingerprint":            "🔐 Fingerprinting codec chain for re-encoding events…",
+            "audio-visual sync":            "⏱️ Verifying audio-visual sync against video timestamps…",
+            "collaborative call":           "🤝 Issuing inter-agent call to Agent 4 for corroboration…",
+            "cross-agent collaboration":    "🤝 Running cross-agent collaboration with Agent 4…",
+            "spectral perturbation":        "📊 Running spectral perturbation adversarial check…",
+            "codec chain":                  "🔐 Running advanced codec chain analysis…",
+            # Agent 3 – Object/Weapon
+            "full-scene primary object":    "👁️ Running YOLO primary object detection on full scene…",
+            "secondary classification":     "🔎 Re-classifying low-confidence detections…",
+            "scale and proportion":         "📐 Validating object scale and proportion geometry…",
+            "lighting and shadow":          "💡 Checking per-object lighting and shadow consistency…",
+            "contraband":                   "⚠️ Cross-referencing objects against contraband database…",
+            "scene-level contextual":       "🧠 Analysing scene for contextual incongruences…",
+            "image splicing":               "✂️ Running ML-based image splicing detection…",
+            "camera noise fingerprint":     "📷 Checking camera noise fingerprint for region consistency…",
+            "inter-agent call":             "🤝 Issuing inter-agent call to Agent 1 for lighting check…",
+            "object detection evasion":     "🛡️ Testing against object detection evasion techniques…",
+            # Agent 4 – Video
+            "optical flow":                 "🎬 Running optical flow analysis — building anomaly heatmap…",
+            "frame-to-frame":               "🖼️ Extracting frames and checking inter-frame consistency…",
+            "explainable":                  "🏷️ Classifying anomalies as EXPLAINABLE or SUSPICIOUS…",
+            "face-swap":                    "🧑‍💻 Running face-swap detection on human faces…",
+            "face swap":                    "🧑‍💻 Running face-swap detection on human faces…",
+            "rolling shutter":              "📷 Validating rolling shutter behaviour vs device metadata…",
+            "deepfake frequency":           "📡 Running deepfake frequency analysis across full video…",
+            "audio-visual timestamp":       "⏱️ Correlating audio-visual timestamps with Agent 2…",
+            # Agent 5 – Metadata
+            "exif":                         "📋 Extracting all EXIF fields — logging absent mandatory fields…",
+            "gps coordinates":              "🌍 Cross-validating GPS coordinates against timestamp timezone…",
+            "steganography":                "🕵️ Scanning for hidden steganographic payload…",
+            "file structure":               "🗂️ Running file structure forensic analysis…",
+            "hexadecimal":                  "🗂️ Running hex scan for software signature anomalies…",
+            "cross-field consistency":      "📊 Synthesising cross-field metadata consistency verdict…",
+            "ml metadata anomaly":          "🤖 Running ML metadata anomaly scoring…",
+            "astronomical":                 "🔭 Running astronomical API check for GPS/timestamp validation…",
+            "reverse image search":         "🌐 Running reverse image search for prior online appearances…",
+            "device fingerprint":           "🔐 Querying device fingerprint database for claimed device…",
+            "metadata spoofing":            "🛡️ Testing against metadata spoofing evasion techniques…",
+            # Generic
+            "self-reflection":              "🪞 Running self-reflection quality check on findings…",
+            "submit":                       "📤 Submitting calibrated findings to Council Arbiter…",
+            "finaliz":                      "✅ Finalising and packaging findings…",
+        }
+
+        def _humanise_task(task_desc: str) -> str:
+            """Map a raw working-memory task description to a friendly action string."""
+            low = task_desc.lower()
+            for keyword, phrase in _TASK_PHRASES.items():
+                if keyword in low:
+                    return phrase
+            # Fallback: capitalise the first letter
+            return task_desc[:1].upper() + task_desc[1:] + "…"
+
         results = []
 
-        async def make_heartbeat(agent_id: str, agent_name: str, target_memory: WorkingMemory, done_event: asyncio.Event):
+        async def make_heartbeat(agent_id: str, agent_name: str, target_memory: WorkingMemory, done_event: asyncio.Event, deep_namespace: str | None = None):
             """Stream live working-memory progress to the WebSocket client."""
             last_thinking = ""
+            # Deep pass uses an isolated namespace; use it when provided
+            wm_agent_id = deep_namespace if deep_namespace else agent_id
             while not done_event.is_set():
                 try:
                     await asyncio.wait_for(done_event.wait(), timeout=0.2)
@@ -504,7 +581,7 @@ async def _wrap_pipeline_with_broadcasts(
                 try:
                     wm_state = await target_memory.get_state(
                         session_id=session_id or evidence_artifact.artifact_id,
-                        agent_id=agent_id,
+                        agent_id=wm_agent_id,
                     )
                     if not wm_state:
                         await asyncio.sleep(0.1)
@@ -517,20 +594,17 @@ async def _wrap_pipeline_with_broadcasts(
                     thinking = ""
                     if in_progress_t:
                         current_task = in_progress_t[0].description
-                        tool_name = in_progress_t[0].result_ref or ""
-                        thinking = f"Running: {current_task}"
-                        if tool_name:
-                            thinking += f" [{tool_name}]"
-                        if total > 0:
-                            thinking += f" ({done+1}/{total})"
+                        friendly = _humanise_task(current_task)
+                        progress_frac = f" ({done + 1}/{total})" if total > 0 else ""
+                        thinking = friendly.rstrip("…") + progress_frac + "…"
                     elif done > 0 and done >= total and total > 0:
-                        thinking = "Finalizing findings..."
+                        thinking = "✅ Finalising findings…"
                     elif done > 0:
-                        thinking = f"Processed {done}/{total} tasks. Running validation..."
+                        thinking = f"🔄 Cross-validating results… ({done}/{total} tasks complete)"
                     elif total > 0:
-                        thinking = f"Initializing {total} analysis tasks..."
+                        thinking = f"⚙️ Initialising {total} analysis tasks…"
                     else:
-                        thinking = "Starting analysis..."
+                        thinking = "⚙️ Starting forensic analysis…"
                     if thinking and thinking != last_thinking:
                         last_thinking = thinking
                         await broadcast_update(
@@ -621,8 +695,8 @@ async def _wrap_pipeline_with_broadcasts(
                 # Run agent + heartbeat concurrently
                 heartbeat_task = asyncio.create_task(make_heartbeat(agent_id, agent_name, agent.working_memory, heartbeat_done))
                 
-                # Increase timeout to 300s for better agent completion
-                agent_timeout = min(300, pipeline.config.investigation_timeout * 0.6)
+                # Increase initial per-agent timeout — YOLO/ELA cold-start needs headroom
+                agent_timeout = min(240, pipeline.config.investigation_timeout * 0.4)
                 try:
                     findings = await asyncio.wait_for(
                         agent.run_investigation(),
@@ -693,7 +767,9 @@ async def _wrap_pipeline_with_broadcasts(
                     if isinstance(f, dict) and f.get("reasoning_summary"):
                         finding_summaries.append(f["reasoning_summary"])
                 if finding_summaries:
-                    finding_summary = " | ".join(finding_summaries[:2])  # Show first 2 findings
+                    # Show most informative finding (longest summary tends to have more detail)
+                    best = max(finding_summaries, key=len)
+                    finding_summary = best[:200] if len(best) > 200 else best
             elif result.error:
                 finding_summary = f"Error: {result.error[:60]}"
             
@@ -736,16 +812,19 @@ async def _wrap_pipeline_with_broadcasts(
                         session_id=ws_session_id,
                         agent_id=agent_id,
                         agent_name=agent_name,
-                        message=f"{agent_name} running deep analysis...",
-                        data={"status": "running", "thinking": "Running heavy analysis models..."},
+                        message=f"🔬 {agent_name} — loading heavy ML models for deep analysis…",
+                        data={"status": "running", "thinking": f"🔬 {agent_name} — loading heavy ML models for deep analysis…"},
                     )
                 )
                 
                 deep_agent_id = f"{agent_id}_deep"
                 deep_heartbeat_done = asyncio.Event()
-                heartbeat_task = asyncio.create_task(make_heartbeat(agent_id, agent_name, agent.working_memory, deep_heartbeat_done))
+                heartbeat_task = asyncio.create_task(
+                    make_heartbeat(agent_id, agent_name, agent.working_memory, deep_heartbeat_done, deep_namespace=deep_agent_id)
+                )
                 
                 try:
+                    # Generative timeout: Gemini alone can take 30s, YOLO model download ~60s on cold start
                     deep_timeout = min(300, pipeline.config.investigation_timeout)
                     deep_findings = await asyncio.wait_for(
                         agent.run_deep_investigation(),
@@ -774,7 +853,11 @@ async def _wrap_pipeline_with_broadcasts(
                     for f in initial_result.findings:
                         if isinstance(f, dict) and f.get("reasoning_summary"):
                             finding_summaries.append(f["reasoning_summary"])
-                    finding_summary = " | ".join(finding_summaries[:2]) if finding_summaries else f"{agent_name} deep analysis complete."
+                    if finding_summaries:
+                        best = max(finding_summaries, key=len)
+                        finding_summary = best[:200] if len(best) > 200 else best
+                    else:
+                        finding_summary = f"{agent_name} deep analysis complete."
                     
                     await broadcast_update(
                         ws_session_id,
@@ -844,37 +927,37 @@ async def _wrap_pipeline_with_broadcasts(
                         run_agent_deep_pass(agent_id, agent_name, agent_instance, result_obj)
                     )
         
-        # FIX: Only pause if there are actual deep tasks
-        if deep_pass_coroutines:
-            logger.info("Initial analysis complete. Awaiting deep analysis decision...")
+        # Always pause here to give the user the choice (Accept vs Deep Analysis)
+        # Even if there are no deep tasks, the user should see the initial findings
+        logger.info("Initial analysis complete. Awaiting deep analysis decision...")
+        await broadcast_update(
+            ws_session_id,
+            BriefUpdate(
+                type="PIPELINE_PAUSED",
+                session_id=ws_session_id,
+                message="Initial analysis complete. Ready for deep analysis.",
+                data={"status": "awaiting_decision", "deep_analysis_pending": bool(deep_pass_coroutines)},
+            )
+        )
+        
+        await getattr(pipeline, "deep_analysis_decision_event").wait()
+        
+        if getattr(pipeline, "run_deep_analysis_flag") and deep_pass_coroutines:
+            logger.info(f"Running deep analysis for {len(deep_pass_coroutines)} agents...")
             await broadcast_update(
                 ws_session_id,
                 BriefUpdate(
-                    type="PIPELINE_PAUSED",
+                    type="AGENT_UPDATE",
                     session_id=ws_session_id,
-                    message="Initial analysis complete. Ready for deep analysis.",
-                    data={"status": "awaiting_decision", "deep_analysis_pending": True},
+                    message="Running deep forensic analysis...",
+                    data={"status": "running", "thinking": "Loading heavy ML models..."},
                 )
             )
-            
-            await getattr(pipeline, "deep_analysis_decision_event").wait()
-            
-            if getattr(pipeline, "run_deep_analysis_flag"):
-                logger.info(f"Running deep analysis for {len(deep_pass_coroutines)} agents...")
-                await broadcast_update(
-                    ws_session_id,
-                    BriefUpdate(
-                        type="AGENT_UPDATE",
-                        session_id=ws_session_id,
-                        message="Running deep forensic analysis...",
-                        data={"status": "running", "thinking": "Loading heavy ML models..."},
-                    )
-                )
-                await asyncio.gather(*deep_pass_coroutines, return_exceptions=True)
-            else:
-                logger.info("User skipped deep analysis.")
+            await asyncio.gather(*deep_pass_coroutines, return_exceptions=True)
+        elif getattr(pipeline, "run_deep_analysis_flag") and not deep_pass_coroutines:
+            logger.info("Deep analysis requested but no deep tasks available for this file type.")
         else:
-            logger.info("No deep analysis tasks. Proceeding to arbiter.")
+            logger.info("User skipped deep analysis.")
         
         # Broadcast arbiter is about to run before returning results to pipeline
         await broadcast_update(
@@ -1021,6 +1104,9 @@ async def run_investigation_task(
                 os.unlink(evidence_file_path)
         except Exception as e:
             logger.warning(f"Failed to clean up temp file: {e}")
+        # Remove pipeline from active set once fully done to free resources.
+        # The report is cached in _final_reports for the report endpoint to read.
+        _active_pipelines.pop(session_id, None)
 
 
 # ============================================================================

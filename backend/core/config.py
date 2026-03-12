@@ -96,8 +96,8 @@ class Settings(BaseSettings):
     postgres_user: str = Field(default="forensic_user", description="PostgreSQL username")
     postgres_password: str = Field(default="forensic_pass", description="PostgreSQL password")
     postgres_db: str = Field(default="forensic_council", description="PostgreSQL database name")
-    postgres_min_pool_size: int = Field(default=5, description="Min DB connection pool size")
-    postgres_max_pool_size: int = Field(default=20, description="Max DB connection pool size")
+    postgres_min_pool_size: int = Field(default=2, description="Min DB connection pool size")
+    postgres_max_pool_size: int = Field(default=10, description="Max DB connection pool size")
     
     @field_validator("postgres_user")
     @classmethod
@@ -245,15 +245,15 @@ class Settings(BaseSettings):
         ),
     )
     gemini_timeout: float = Field(
-        default=30.0,
-        description="Timeout for Gemini API calls in seconds.",
+        default=55.0,
+        description="Timeout for Gemini API calls in seconds (raised to 55s for deep forensic analysis).",
     )
 
     @field_validator("gemini_api_key")
     @classmethod
     def validate_gemini_api_key(cls, v: Optional[str]) -> Optional[str]:
         """Warn if Gemini key is missing (optional — agents degrade gracefully)."""
-        if v is None:
+        if v is None or v == "":
             import warnings
             warnings.warn(
                 "GEMINI_API_KEY not set. Agents 1, 3, and 5 will skip Gemini vision "
@@ -261,7 +261,12 @@ class Settings(BaseSettings):
                 UserWarning,
             )
         elif len(v) < 20:
-            raise ValueError("GEMINI_API_KEY appears invalid (too short).")
+            import warnings
+            warnings.warn(
+                "GEMINI_API_KEY appears too short. Agents 1, 3, and 5 may skip Gemini vision "
+                "deep analysis.",
+                UserWarning,
+            )
         return v
 
     # HuggingFace Token (for pyannote.audio speaker diarization and other HF models)

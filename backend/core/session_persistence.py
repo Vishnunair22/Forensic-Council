@@ -13,7 +13,7 @@ from uuid import UUID
 
 from core.config import get_settings
 from core.logging import get_logger
-from infra.postgres_client import PostgresClient
+from infra.postgres_client import PostgresClient, get_postgres_client
 from core.retry import with_retry, get_retry_config, retry_async
 
 logger = get_logger(__name__)
@@ -25,22 +25,16 @@ class SessionPersistence:
     
     def __init__(self, client: Optional[PostgresClient] = None):
         self.client = client
-        self._owned_client = client is None
+        self._owned_client = False  # Never own the client — always use the singleton
     
     async def _ensure_client(self):
-        """Ensure database client is connected."""
+        """Ensure database client is connected — always reuse the singleton pool."""
         if self.client is None:
-            self.client = PostgresClient()
-        if not hasattr(self.client, '_connected') or not self.client._connected:
-            await retry_async(
-                self.client.connect,
-                config=get_retry_config("database"),
-            )
+            self.client = await get_postgres_client()
     
     async def close(self):
-        """Close database connection if owned."""
-        if self._owned_client and self.client:
-            await self.client.disconnect()
+        """No-op: we don't own the singleton client."""
+        pass
     
     async def save_session_state(
         self,

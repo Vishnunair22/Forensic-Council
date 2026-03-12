@@ -74,6 +74,11 @@ services:
   postgres:
     image: postgres:17-alpine
     container_name: forensic_postgres
+    command: >
+      postgres
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c idle_in_transaction_session_timeout=30000
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-forensic_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forensic_pass}
@@ -129,6 +134,8 @@ services:
       - LLM_PROVIDER=${LLM_PROVIDER:-none}
       - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-gpt-4o}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-placeholder}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-flash}
       - EVIDENCE_STORAGE_PATH=/app/storage/evidence
       - CALIBRATION_MODELS_PATH=/app/cache/calibration_models
     depends_on:

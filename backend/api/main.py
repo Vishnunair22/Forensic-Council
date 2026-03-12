@@ -74,10 +74,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Bootstrap default users (idempotent — skips if users already exist)
     try:
         from scripts.init_db import bootstrap_users
-        from infra.postgres_client import PostgresClient
+        from infra.postgres_client import get_postgres_client
 
-        async with PostgresClient() as pg:
-            await bootstrap_users(pg)
+        pg = await get_postgres_client()
+        await bootstrap_users(pg)
         logger.info("User bootstrap completed")
     except Exception as e:
         logger.warning("User bootstrap skipped or failed", error=str(e))
