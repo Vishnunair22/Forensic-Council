@@ -9,6 +9,7 @@ environment-aware configuration.
 
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
+import asyncio
 
 import time
 
@@ -82,11 +83,26 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as e:
         logger.warning("User bootstrap skipped or failed", error=str(e))
 
+    # Start session cleanup background task
+    try:
+        from orchestration.session_manager import start_session_cleanup_task
+        cleanup_task = asyncio.create_task(start_session_cleanup_task())
+        logger.info("Session cleanup task started")
+    except Exception as e:
+        logger.warning("Session cleanup task could not be started", error=str(e))
+
     yield
 
     # Shutdown
     logger.info("Shutting down Forensic Council API server...")
     investigation.cleanup_connections()
+    
+    # Cancel session cleanup task
+    try:
+        cleanup_task.cancel()
+        await cleanup_task
+    except (asyncio.CancelledError, AttributeError):
+        pass
 
 
 # Create FastAPI app — disable docs in production
@@ -103,6 +119,27 @@ app = FastAPI(
 from core.observability import setup_observability
 setup_observability(app, settings)
 
+# ─── Request Timeout Middleware ─────────────────────────────────────────────
+_TIMEOUT_SECONDS = 300  # 5 minutes
+
+async def timeoutMiddleware(request: Request, call_next):
+    """Reject requests that exceed timeout threshold."""
+    # Skip timeout for WebSocket and health checks
+    if request.url.path.startswith("/ws/") or request.url.path == "/health":
+        return await call_next(request)
+    
+    try:
+        import asyncio
+        return await asyncio.wait_for(
+            call_next(request),
+            timeout=_TIMEOUT_SECONDS
+        )
+    except asyncio.TimeoutError:
+        return JSONResponse(
+            status_code=504,
+            content={"detail": "Request timeout. Please retry."}
+        )
+
 # Configure CORS — restricted methods and headers
 _cors_origins = settings.cors_allowed_origins
 app.add_middleware(
@@ -112,6 +149,26 @@ app.add_middleware(
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
 )
+
+# Request timeout middleware - reject requests exceeding 5 minutes
+@app.middleware("http")
+async def timeoutMiddleware(request: Request, call_next):
+    """Reject requests that exceed timeout threshold."""
+    # Skip timeout for WebSocket and health checks
+    if request.url.path.startswith("/ws/") or request.url.path == "/health":
+        return await call_next(request)
+    
+    try:
+        import asyncio
+        return await asyncio.wait_for(
+            call_next(request),
+            timeout=_TIMEOUT_SECONDS
+        )
+    except asyncio.TimeoutError:
+        return JSONResponse(
+            status_code=504,
+            content={"detail": "Request timeout. Please retry."}
+        )
 
 
 @app.middleware("http")
@@ -311,6 +368,37 @@ async def health_check():
         # Qdrant unavailable degrades vector search but doesn't block core flow
         # Mark as warning rather than fatal
         checks["qdrant_note"] = "degraded — vector search unavailable"
+
+    # ── Gemini API (optional but recommended) ────────────────────────────────
+    try:
+        if settings.gemini_api_key:
+            import google.generativeai as genai
+            genai.configure(api_key=settings.gemini_api_key)
+            # Quick ping - list models (lightweight)
+            list(genai.list_models())
+            checks["gemini_api"] = "ok"
+        else:
+            checks["gemini_api"] = "not_configured"
+    except Exception as e:
+        checks["gemini_api"] = f"error: {str(e)[:60]}"
+        # Non-fatal - agents degrade gracefully
+
+    # ── LLM Provider ───────────────────────────────────────────────────────────
+    try:
+        if settings.llm_provider != "none" and settings.llm_api_key:
+            from core.llm_client import get_llm_client
+            client = await get_llm_client()
+            if client:
+                checks["llm_provider"] = "ok"
+            else:
+                checks["llm_provider"] = "initialization_failed"
+                overall_healthy = False
+        else:
+            checks["llm_provider"] = "not_configured"
+    except Exception as e:
+        checks["llm_provider"] = f"error: {str(e)[:60]}"
+        # LLM is critical for analysis - mark as unhealthy
+        overall_healthy = False
 
     status_code = 200 if overall_healthy else 503
     from fastapi.responses import JSONResponse as _JSONResponse
