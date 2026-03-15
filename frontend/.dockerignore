@@ -1,35 +1,66 @@
-# ============================================================================
-# Frontend .dockerignore
-# ============================================================================
+# Environment files
+.env
+.env.*
+.env.local
+.env.development
+.env.production
 
-# Node modules (Docker installs its own)
+# Node modules
 node_modules/
-npm-debug.log*
+node_modules/*
 
 # Next.js build outputs
 .next/
 out/
+build/
 
-# Env files
-.env
-.env.*
-!.env.example
-
-# Dev artifacts
-*.log
+# Testing
 coverage/
-*.tsbuildinfo
-
-# Version control
-.git/
-.gitignore
-*.md
-README*
-
-# OS artifacts
-.DS_Store
-Thumbbs.db
+*.coverage
+coverage.json
 
 # IDE
-.vscode/
 .idea/
+.vscode/
+*.swp
+*.swo
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local env files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Vercel
+.vercel
+
+# Storybook
+.storybook/
+
+# Misc
+*.pem
+*.key

@@ -12,7 +12,7 @@ concurrency:
 
 env:
   PYTHON_VERSION: "3.12"
-  NODE_VERSION: "20"
+  NODE_VERSION: "22"
 
 # ─── Jobs ──────────────────────────────────────────────────────────────────────
 
@@ -98,7 +98,6 @@ jobs:
         with:
           files: backend/coverage.xml
           flags: backend
-        continue-on-error: true
 
   # ── Backend: Docker build ─────────────────────────────────────────────────────
   backend-docker:
@@ -200,12 +199,10 @@ jobs:
           uv tool install pip-audit
           uv run pip-audit --requirement <(uv export --no-dev --format requirements-txt) \
             --ignore-vuln GHSA-jfh8-c2jp-5hhc  # cryptography false-positive on some runners
-        continue-on-error: true   # advisory — don't block on transitive issues
 
       - name: Node dependency audit
         working-directory: frontend
         run: npm audit --audit-level=high
-        continue-on-error: true   # advisory
 
   # ── Integration smoke test ────────────────────────────────────────────────────
   integration-smoke:

@@ -427,8 +427,11 @@ export default function ResultPage() {
 
   // ── Poll arbiter, then fetch full report ────────────────────
   useEffect(() => {
-    const sessionId = sessionStorage.getItem("forensic_session_id");
-    if (!sessionId) { setState("empty"); return; }
+    const storedSessionId = sessionStorage.getItem("forensic_session_id");
+    if (!storedSessionId) { setState("empty"); return; }
+    
+    // sessionId is guaranteed to be a string in the closure
+    const sessionId = storedSessionId;
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
