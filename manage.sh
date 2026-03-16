@@ -110,8 +110,8 @@ cmd_prod() {
 
 cmd_infra() {
     _require_env
-    _cyan "Starting infrastructure services only..."
-    docker compose -f "$INFRA_COMPOSE" --env-file "$ENV_FILE" up -d
+    _cyan "Starting infrastructure services only (postgres, redis, qdrant)..."
+    docker compose -f "$COMPOSE_FILE" -f "$INFRA_COMPOSE" --env-file "$ENV_FILE" up -d
 }
 
 cmd_rebuild_backend() {

@@ -1,56 +1,54 @@
-# Environment files
-.env
-.env.*
-.env.local
-.env.development
-.env.production
+# ============================================================================
+# Backend .dockerignore — Keep build context lean
+# ============================================================================
 
 # Python bytecode
-__pycache__
+__pycache__/
 *.py[cod]
-*$py.class
-*.pyc
-
-# Testing
-.pytest_cache
+*.so
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
 .coverage
-htmlcov
-.tox
+htmlcov/
 
 # Virtual environments
-.venv
+.venv/
 venv/
-ENV/
+env/
+
+# Dev / test files
+tests/
+*.test.*
+.env
+.env.*
+!.env.example
+
+# Storage and model caches (mounted via Docker volumes at runtime)
+storage/evidence/
+storage/keys/
+cache/
+
+# Version control
+.git/
+.gitignore
+*.md
+README*
+
+# OS artifacts
+.DS_Store
+Thumbs.db
 
 # IDE
-.idea/
 .vscode/
-*.swp
-*.swo
-
-# Documentation
-*.md
-docs/
-
-# Git
-.git
-.gitignore
-.gitattributes
+.idea/
 
 # Logs
 *.log
 logs/
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Test directories
-tests/
-
-# Keys (keep storage/keys/.gitkeep)
-storage/keys/*.pem
-storage/keys/*.key
-
-# Local storage
-storage/evidence/
+# Build artifacts
+dist/
+build/
+*.egg-info/
+*.whl

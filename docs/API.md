@@ -55,7 +55,16 @@ Resolves a paused checkpoint.
     ```
 *   **Response (200 OK):** Blank success message indicating the agent pipeline has resumed.
 
-### 4. Fetch Final Report
+### 4. Resume Investigation (Accept or Deep Analysis)
+
+After initial analysis completes, the client must POST to resume the pipeline.
+
+*   **URL:** `/{session_id}/resume`
+*   **Method:** `POST`
+*   **Body:** `{"deep_analysis": false}` — `false` for Accept Analysis, `true` for Deep Analysis
+*   **Response:** `{"status": "resumed"}`
+
+### 5. Fetch Final Report
 Polls the investigation state. Once the Arbiter concludes, it returns the cryptographically signed DTO.
 
 *   **URL:** `/sessions/{session_id}/report`

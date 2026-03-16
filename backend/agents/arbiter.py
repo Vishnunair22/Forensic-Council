@@ -59,6 +59,19 @@ class TribunalCase(BaseModel):
     resolved: bool = False
 
 
+class AgentMetrics(BaseModel):
+    """Per-agent performance metrics computed at arbiter deliberation time."""
+    agent_id: str
+    agent_name: str
+    total_tools_called: int = 0
+    tools_succeeded: int = 0
+    tools_failed: int = 0
+    error_rate: float = 0.0          # 0.0–1.0 (failed / total)
+    confidence_score: float = 0.0    # avg confidence across real findings
+    finding_count: int = 0
+    skipped: bool = False            # True when file type not applicable
+
+
 class ForensicReport(BaseModel):
     """Complete forensic report with all required sections."""
     report_id: UUID = Field(default_factory=uuid4)
@@ -66,11 +79,25 @@ class ForensicReport(BaseModel):
     case_id: str
     executive_summary: str
     per_agent_findings: dict[str, list[dict[str, Any]]]
+    per_agent_metrics: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Per-agent tool success rates, error rates, and confidence scores.",
+    )
+    per_agent_analysis: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Per-agent Groq-synthesised narrative comparing initial vs deep findings. "
+            "Keyed by agent_id. Only present for active agents."
+        ),
+    )
+    overall_confidence: float = 0.0
+    overall_error_rate: float = 0.0
+    overall_verdict: str = "REVIEW REQUIRED"
     cross_modal_confirmed: list[dict[str, Any]] = Field(default_factory=list)
     contested_findings: list[dict[str, Any]] = Field(default_factory=list)
     tribunal_resolved: list[TribunalCase] = Field(default_factory=list)
     incomplete_findings: list[dict[str, Any]] = Field(default_factory=list)
-    stub_findings: list[dict[str, Any]] = Field(default_factory=list)  # Stub/implemented tool results
+    stub_findings: list[dict[str, Any]] = Field(default_factory=list)
     gemini_vision_findings: list[dict[str, Any]] = Field(
         default_factory=list,
         description=(
@@ -114,6 +141,15 @@ class CouncilArbiter:
         # Ensure arbiter has a key
         self._key_store.get_or_create("Arbiter")
     
+    # ── Shared agent name map ────────────────────────────────────────────
+    _AGENT_NAMES: dict[str, str] = {
+        "Agent1": "Image Forensics",
+        "Agent2": "Audio Forensics",
+        "Agent3": "Object Detection",
+        "Agent4": "Video Forensics",
+        "Agent5": "Metadata Forensics",
+    }
+
     async def deliberate(
         self,
         agent_results: dict[str, dict[str, Any]],
@@ -121,45 +157,128 @@ class CouncilArbiter:
     ) -> ForensicReport:
         """Deliberate on agent results and generate a forensic report.
 
-        Groq (via LLMClient) synthesizes the executive summary and uncertainty
-        statement from all agent findings. Gemini vision findings produced by
-        Agents 1, 3, and 5 are compiled into a dedicated section so they can
-        be reviewed alongside classical tool findings in the final report.
+        Only ACTIVE agents (those that ran real tools on the evidence) are used
+        for Groq synthesis.  Skipped agents (file type not applicable) are
+        excluded from the executive summary and verdict calculation but their
+        skip findings are kept in per_agent_findings for transparency.
+
+        Computes per-agent metrics (tool success/failure rates, confidence) and
+        overall verdict from aggregated confidence + error rates.
         """
-        # Collect all findings — including Gemini vision findings tagged with
-        # metadata.analysis_source == "gemini_vision"
-        all_findings = []
-        per_agent_findings = {}
+        _SKIP_FINDING_TYPES = {"file type not applicable", "format not supported"}
+
+        def _is_skipped_agent(findings: list[dict[str, Any]]) -> bool:
+            """True when all findings are file-type-not-applicable stubs."""
+            if not findings:
+                return True
+            return all(
+                str(f.get("finding_type", "")).lower() in _SKIP_FINDING_TYPES
+                for f in findings
+            )
+
+        def _deduplicate_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            """Remove duplicate findings with same finding_type produced by same tool."""
+            seen: set[str] = set()
+            out: list[dict[str, Any]] = []
+            for f in findings:
+                key = (
+                    str(f.get("agent_id", "")),
+                    str(f.get("finding_type", "")),
+                    str(f.get("metadata", {}).get("tool_name", "") if isinstance(f.get("metadata"), dict) else ""),
+                )
+                if key not in seen:
+                    seen.add(key)
+                    out.append(f)
+            return out
+
+        def _compute_agent_metrics(
+            agent_id: str, findings: list[dict[str, Any]], skipped: bool
+        ) -> "AgentMetrics":
+            agent_name = self._AGENT_NAMES.get(agent_id, agent_id)
+            if skipped:
+                return AgentMetrics(
+                    agent_id=agent_id, agent_name=agent_name, skipped=True,
+                    total_tools_called=0, tools_succeeded=0, tools_failed=0,
+                    error_rate=0.0, confidence_score=0.0, finding_count=0,
+                )
+            real = [f for f in findings if str(f.get("finding_type","")).lower() not in _SKIP_FINDING_TYPES]
+            total = len(real)
+            # A finding is "failed" if success=False or status=INCOMPLETE with no reasoning
+            failed = sum(
+                1 for f in real
+                if (isinstance(f.get("metadata"), dict) and f["metadata"].get("court_defensible") is False)
+                or f.get("status") == "INCOMPLETE"
+            )
+            succeeded = total - failed
+            error_rate = round(failed / total, 3) if total > 0 else 0.0
+            conf_scores = [f.get("calibrated_probability") or f.get("confidence_raw") or 0.0 for f in real]
+            confidence = round(sum(conf_scores) / len(conf_scores), 3) if conf_scores else 0.0
+            return AgentMetrics(
+                agent_id=agent_id, agent_name=agent_name, skipped=False,
+                total_tools_called=total, tools_succeeded=succeeded,
+                tools_failed=failed, error_rate=error_rate,
+                confidence_score=confidence, finding_count=total,
+            )
+
+        # ── Partition agents into active vs skipped ───────────────────────
+        all_findings: list[dict[str, Any]] = []
+        per_agent_findings: dict[str, list[dict[str, Any]]] = {}
+        per_agent_metrics: dict[str, Any] = {}
+        active_agent_results: dict[str, dict[str, Any]] = {}
         gemini_findings_by_agent: dict[str, list[dict[str, Any]]] = {}
 
         for agent_id, result in agent_results.items():
-            findings = result.get("findings", [])
-            per_agent_findings[agent_id] = findings
-            all_findings.extend(findings)
+            raw_findings = result.get("findings", [])
+            deduped = _deduplicate_findings(raw_findings)
+            skipped = _is_skipped_agent(deduped)
+            per_agent_findings[agent_id] = deduped
+            metrics = _compute_agent_metrics(agent_id, deduped, skipped)
+            per_agent_metrics[agent_id] = metrics.model_dump()
 
-            # Separate Gemini findings for dedicated compilation
-            agent_gemini = [
-                f for f in findings
-                if isinstance(f, dict)
-                and f.get("metadata", {}).get("analysis_source") == "gemini_vision"
-            ]
-            if agent_gemini:
-                gemini_findings_by_agent[agent_id] = agent_gemini
-                logger.info(
-                    "Arbiter: collected %d Gemini vision finding(s) from %s",
-                    len(agent_gemini), agent_id,
-                )
+            if not skipped:
+                active_agent_results[agent_id] = {**result, "findings": deduped}
+                all_findings.extend(deduped)
+                agent_gemini = [
+                    f for f in deduped
+                    if isinstance(f, dict)
+                    and f.get("metadata", {}).get("analysis_source") == "gemini_vision"
+                ]
+                if agent_gemini:
+                    gemini_findings_by_agent[agent_id] = agent_gemini
 
-        # Compile flat Gemini findings list for the report
+        logger.info(
+            "Arbiter: %d active agents, %d skipped, %d total findings",
+            len(active_agent_results),
+            len(agent_results) - len(active_agent_results),
+            len(all_findings),
+        )
+
+        # ── Compile Gemini findings list ──────────────────────────────────
         gemini_vision_findings: list[dict[str, Any]] = []
-        for agent_findings in gemini_findings_by_agent.values():
-            gemini_vision_findings.extend(agent_findings)
-
+        for gf_list in gemini_findings_by_agent.values():
+            gemini_vision_findings.extend(gf_list)
         if gemini_vision_findings:
-            logger.info(
-                "Arbiter: total Gemini vision findings compiled: %d across %d agent(s)",
-                len(gemini_vision_findings), len(gemini_findings_by_agent),
-            )
+            logger.info("Arbiter: %d Gemini vision findings across %d agent(s)",
+                        len(gemini_vision_findings), len(gemini_findings_by_agent))
+
+        # ── Compute overall confidence + error rate ───────────────────────
+        active_metrics = [
+            m for m in per_agent_metrics.values()
+            if not m.get("skipped") and m.get("total_tools_called", 0) > 0
+        ]
+        overall_confidence = round(
+            sum(m["confidence_score"] for m in active_metrics) / len(active_metrics), 3
+        ) if active_metrics else 0.0
+        overall_error_rate = round(
+            sum(m["error_rate"] for m in active_metrics) / len(active_metrics), 3
+        ) if active_metrics else 0.0
+
+        # ── Verdict ───────────────────────────────────────────────────────
+        # CERTAIN:     high confidence, low error, no contested
+        # LIKELY:      good confidence, acceptable error
+        # UNCERTAIN:   moderate confidence or some errors
+        # INCONCLUSIVE: low confidence or high errors
+        # MANIPULATION DETECTED: confidence indicates tampering
 
         # Run cross-agent comparison
         comparisons = await self.cross_agent_comparison(all_findings)
@@ -214,28 +333,84 @@ class CouncilArbiter:
                 stub_count=len(stub_findings),
             )
 
-        # Generate executive summary via Groq (with Gemini findings included in digest)
+        # ── Per-agent Groq narrative (initial vs deep comparison) ──────────
+        per_agent_analysis: dict[str, str] = {}
+        for agent_id, result in active_agent_results.items():
+            findings = result.get("findings", [])
+            if not findings:
+                continue
+            try:
+                narrative = await self._generate_agent_narrative(
+                    agent_id=agent_id,
+                    findings=findings,
+                    metrics=per_agent_metrics.get(agent_id, {}),
+                )
+                if narrative:
+                    per_agent_analysis[agent_id] = narrative
+            except Exception as narr_err:
+                logger.warning("Per-agent narrative failed for %s: %s", agent_id, narr_err)
+
+        # ── Contested / incomplete / stub ─────────────────────────────────
+        contested_findings_count = len(contested_findings)
+
+        # ── Verdict ───────────────────────────────────────────────────────
+        if overall_confidence >= 0.80 and overall_error_rate <= 0.10 and contested_findings_count == 0:
+            overall_verdict = "CERTAIN"
+        elif overall_confidence >= 0.65 and overall_error_rate <= 0.20:
+            overall_verdict = "LIKELY"
+        elif overall_confidence >= 0.50 or (contested_findings_count > 0 and contested_findings_count <= 3):
+            overall_verdict = "UNCERTAIN"
+        elif overall_confidence < 0.50 and overall_error_rate > 0.40:
+            overall_verdict = "INCONCLUSIVE"
+        else:
+            overall_verdict = "REVIEW REQUIRED"
+
+        # Override verdict if strong manipulation signal detected across multiple agents
+        manipulation_signals = sum(
+            1 for f in all_findings
+            if any(kw in str(f.get("finding_type","")).lower() for kw in
+                   ("manipulation", "deepfake", "splice", "forgery", "gan", "tamper"))
+            and (f.get("calibrated_probability") or f.get("confidence_raw") or 0) >= 0.70
+        )
+        if manipulation_signals >= 2:
+            overall_verdict = "MANIPULATION DETECTED"
+
+        logger.info(
+            "Arbiter verdict: %s (confidence=%.2f, error_rate=%.2f, contested=%d, manipulation_signals=%d)",
+            overall_verdict, overall_confidence, overall_error_rate,
+            contested_findings_count, manipulation_signals,
+        )
+
+        # ── Executive summary via Groq — only active agents ───────────────
         executive_summary = await self._generate_executive_summary(
-            len(per_agent_findings),
+            len(active_agent_results),
             len(all_findings),
             len(cross_modal_confirmed),
             len(contested_findings),
             all_findings=all_findings,
             gemini_findings=gemini_vision_findings,
+            active_agent_metrics=active_metrics,
+            overall_verdict=overall_verdict,
         )
 
-        # Generate uncertainty statement
+        # ── Uncertainty statement ─────────────────────────────────────────
         uncertainty_statement = await self._generate_uncertainty_statement(
             len(incomplete_findings),
             len(contested_findings),
+            overall_error_rate=overall_error_rate,
         )
 
-        # Build report — include gemini_vision_findings as a dedicated section
+        # ── Build report ──────────────────────────────────────────────────
         report = ForensicReport(
             session_id=self.session_id,
             case_id=case_id or f"case_{self.session_id}",
             executive_summary=executive_summary,
             per_agent_findings=per_agent_findings,
+            per_agent_metrics=per_agent_metrics,
+            per_agent_analysis=per_agent_analysis,
+            overall_confidence=overall_confidence,
+            overall_error_rate=overall_error_rate,
+            overall_verdict=overall_verdict,
             cross_modal_confirmed=cross_modal_confirmed,
             contested_findings=contested_findings,
             incomplete_findings=incomplete_findings,
@@ -508,6 +683,95 @@ class CouncilArbiter:
         
         return report
     
+    # ── Agent name map ────────────────────────────────────────────────────
+    _AGENT_FULL_NAMES: dict[str, str] = {
+        "Agent1": "Image Integrity Agent (ELA · JPEG Ghost · Frequency Domain · Noise Fingerprint)",
+        "Agent2": "Audio Forensics Agent (Speaker Diarization · Anti-Spoofing · Codec Fingerprint)",
+        "Agent3": "Object Detection Agent (YOLO · Lighting Consistency · Contraband DB)",
+        "Agent4": "Video Forensics Agent (Optical Flow · Face-Swap · Rolling Shutter)",
+        "Agent5": "Metadata Forensics Agent (EXIF · GPS · Steganography · Hex Signature)",
+    }
+
+    async def _generate_agent_narrative(
+        self,
+        agent_id: str,
+        findings: list[dict[str, Any]],
+        metrics: dict[str, Any],
+    ) -> str:
+        """
+        Generate a Groq-synthesised per-agent narrative that:
+        - Compares initial vs deep analysis findings for this agent
+        - Summarises tool successes and failures
+        - States the agent's confidence score and error rate
+        - Produces 2-3 plain-English paragraphs suitable for the result page
+
+        Returns empty string if LLM is not configured.
+        """
+        if not (self.config.llm_api_key and self.config.llm_provider != "none"):
+            return ""
+
+        client = LLMClient(self.config)
+        agent_full_name = self._AGENT_FULL_NAMES.get(agent_id, agent_id)
+        confidence_pct  = round(metrics.get("confidence_score", 0) * 100)
+        error_rate_pct  = round(metrics.get("error_rate", 0) * 100)
+        tools_ok        = metrics.get("tools_succeeded", 0)
+        tools_total     = metrics.get("total_tools_called", 0)
+
+        # Split findings by phase
+        initial_f = [f for f in findings
+                     if (f.get("metadata") or {}).get("analysis_phase", "initial") == "initial"]
+        deep_f    = [f for f in findings
+                     if (f.get("metadata") or {}).get("analysis_phase") == "deep"]
+
+        def _fmt(findings_list: list[dict]) -> str:
+            out = []
+            for f in findings_list[:8]:
+                out.append({
+                    "tool":       (f.get("metadata") or {}).get("tool_name", f.get("finding_type", "")),
+                    "confidence": round(f.get("confidence_raw", 0), 3),
+                    "status":     f.get("status", ""),
+                    "summary":    (f.get("reasoning_summary") or "")[:300],
+                    "failed":     not (f.get("metadata") or {}).get("court_defensible", True),
+                })
+            return json.dumps(out, indent=2)
+
+        has_deep = bool(deep_f)
+        comparison_section = ""
+        if has_deep:
+            comparison_section = (
+                f"\n\nDeep analysis findings ({len(deep_f)} new tool scans):\n{_fmt(deep_f)}"
+            )
+
+        system_prompt = f"""You are the Council Arbiter writing the per-agent analysis section of a forensic report.
+
+Write 2-3 clear, plain-English paragraphs for the {agent_full_name}. Include:
+- What the agent found in initial analysis (key findings with exact metric values)
+- What deep analysis added, confirmed, or changed (if deep analysis was run)
+- The agent's overall reliability: confidence {confidence_pct}% and tool error rate {error_rate_pct}%
+- Any tools that failed and what that means for the completeness of this analysis
+- A plain-English verdict for this agent: AUTHENTIC / SUSPICIOUS / INCONCLUSIVE / NOT APPLICABLE
+
+Do NOT use bullet points. Write in prose. Do NOT repeat raw JSON numbers verbatim — interpret them."""
+
+        user_content = (
+            f"Agent: {agent_full_name}\n"
+            f"Confidence score: {confidence_pct}%  |  Tool error rate: {error_rate_pct}%  |  "
+            f"Tools succeeded: {tools_ok}/{tools_total}\n\n"
+            f"Initial analysis findings ({len(initial_f)} tool scans):\n{_fmt(initial_f)}"
+            f"{comparison_section}\n\n"
+            f"Write the per-agent analysis section."
+        )
+
+        try:
+            return await client.generate_synthesis(
+                system_prompt=system_prompt,
+                user_content=user_content,
+                max_tokens=600,
+            )
+        except Exception as e:
+            logger.warning("Per-agent narrative Groq call failed for %s: %s", agent_id, e)
+            return ""
+
     async def _generate_executive_summary(
         self,
         num_agents: int,
@@ -516,6 +780,8 @@ class CouncilArbiter:
         contested: int,
         all_findings: list[dict[str, Any]] = None,
         gemini_findings: list[dict[str, Any]] = None,
+        active_agent_metrics: list[dict[str, Any]] = None,
+        overall_verdict: str = "",
     ) -> str:
         """
         Generate an executive summary using Groq LLM.
@@ -529,7 +795,8 @@ class CouncilArbiter:
             try:
                 result = await self._llm_executive_summary(
                     num_agents, num_findings, cross_modal_confirmed,
-                    contested, all_findings or [], gemini_findings or []
+                    contested, all_findings or [], gemini_findings or [],
+                    active_agent_metrics or [], overall_verdict,
                 )
                 if result:
                     return result
@@ -548,11 +815,13 @@ class CouncilArbiter:
         contested: int,
         all_findings: list[dict[str, Any]],
         gemini_findings: list[dict[str, Any]] = None,
+        active_agent_metrics: list[dict[str, Any]] = None,
+        overall_verdict: str = "",
     ) -> str:
         """Generate executive summary using Groq LLM synthesis.
 
-        Incorporates Gemini vision findings (from Agents 1, 3, 5 deep pass)
-        alongside classical tool findings for a comprehensive summary.
+        Uses ONLY active agents (those that ran real tools).  Incorporates
+        per-agent metrics and the computed verdict for a grounded summary.
         """
         client = LLMClient(self.config)
 
@@ -593,29 +862,47 @@ class CouncilArbiter:
         if gemini_digest:
             gemini_section = f"\n\nGemini vision deep analysis findings ({len(gemini_digest)} of {len(gemini_findings or [])}):\n{json.dumps(gemini_digest, indent=2)}"
 
-        system_prompt = """You are the Council Arbiter writing the Executive Summary section of a court-admissible forensic evidence report.
+        metrics_summary = ""
+        if active_agent_metrics:
+            metrics_summary = "\n\nAgent performance metrics (active agents only):\n" + json.dumps([
+                {
+                    "agent": m.get("agent_name", m.get("agent_id","")),
+                    "confidence": f"{m.get('confidence_score',0)*100:.0f}%",
+                    "error_rate": f"{m.get('error_rate',0)*100:.0f}%",
+                    "tools": m.get("total_tools_called", 0),
+                    "findings": m.get("finding_count", 0),
+                }
+                for m in active_agent_metrics if not m.get("skipped")
+            ], indent=2)
+
+        verdict_line = f"\n\nCouncil Arbiter computed verdict: {overall_verdict}" if overall_verdict else ""
+
+        system_prompt = f"""You are the Council Arbiter writing the Executive Summary of a court-admissible forensic evidence report.
+The computed verdict for this evidence is: {overall_verdict or "REVIEW REQUIRED"}
 
 Your summary must be:
 - Factual and grounded only in the structured findings data provided
 - Written in formal, precise legal/forensic language
-- 3-5 paragraphs covering: (1) scope of analysis including both classical tools and Gemini vision AI, (2) key confirmed findings with confidence levels, (3) contested or inconclusive findings, (4) overall evidential weight and recommended next steps
+- 3-5 paragraphs: (1) scope and active agents with their confidence scores, (2) key confirmed findings with exact metrics, (3) contested or tool-failure issues, (4) overall verdict justification based on confidence and error rates
 - Free of speculation — only state what the data shows
-- Explicit about limitations and uncertainties
-- Where Gemini vision findings are present, clearly attribute them as AI-assisted visual analysis requiring corroboration
+- Explicit about tool failures and low-confidence findings
+- Where Gemini vision findings present, attribute them as AI-assisted analysis needing corroboration
 
-Do NOT use bullet points. Write in continuous prose paragraphs."""
+Do NOT use bullet points. Write in continuous prose paragraphs.
+Reference the computed verdict: {overall_verdict or "REVIEW REQUIRED"} — explain WHY based on the numbers."""
 
         user_content = f"""Forensic analysis statistics:
-- Agents deployed: {num_agents}
-- Total findings: {num_findings}
+- Active agents: {num_agents} (skipped agents excluded from this summary)
+- Total findings from active agents: {num_findings}
 - Cross-modal confirmed (multiple agents agree): {cross_modal_confirmed}
 - Contested findings (agents disagree): {contested}
 - Gemini vision findings: {len(gemini_findings or [])}
+- Computed verdict: {overall_verdict}{verdict_line}
 
 Top findings by confidence (classical tools):
-{json.dumps(findings_digest, indent=2)}{gemini_section}
+{json.dumps(findings_digest, indent=2)}{gemini_section}{metrics_summary}
 
-Write the Executive Summary for this forensic report."""
+Write the Executive Summary for this forensic report. Justify the {overall_verdict} verdict based on the data."""
 
         return await client.generate_synthesis(
             system_prompt=system_prompt,
@@ -658,24 +945,28 @@ Write the Executive Summary for this forensic report."""
         )
         return " ".join(lines)
     
-    async def _generate_uncertainty_statement(self, incomplete: int, contested: int) -> str:
+    async def _generate_uncertainty_statement(
+        self, incomplete: int, contested: int, overall_error_rate: float = 0.0
+    ) -> str:
         """
         Generate the uncertainty and limitations statement.
 
         Uses LLM to produce a nuanced, legally-aware statement when configured.
         Falls back to deterministic template otherwise.
         """
-        if self.config.llm_api_key and self.config.llm_provider != "none" and (incomplete > 0 or contested > 0):
+        if self.config.llm_api_key and self.config.llm_provider != "none" and (incomplete > 0 or contested > 0 or overall_error_rate > 0.15):
             try:
-                result = await self._llm_uncertainty_statement(incomplete, contested)
+                result = await self._llm_uncertainty_statement(incomplete, contested, overall_error_rate)
                 if result:
                     return result
             except Exception as exc:
                 logger.warning("LLM uncertainty statement failed, using template: %s", exc)
 
-        return self._template_uncertainty_statement(incomplete, contested)
+        return self._template_uncertainty_statement(incomplete, contested, overall_error_rate)
 
-    async def _llm_uncertainty_statement(self, incomplete: int, contested: int) -> str:
+    async def _llm_uncertainty_statement(
+        self, incomplete: int, contested: int, overall_error_rate: float = 0.0
+    ) -> str:
         """Generate uncertainty statement using LLM."""
         client = LLMClient(self.config)
 
@@ -686,7 +977,8 @@ Write 2-3 sentences only. Do not use bullet points."""
 
         user_content = (
             f"Incomplete findings (tools unavailable or evidence insufficient): {incomplete}\n"
-            f"Contested findings (agents disagree, not yet resolved): {contested}\n\n"
+            f"Contested findings (agents disagree, not yet resolved): {contested}\n"
+            f"Overall tool error rate across active agents: {overall_error_rate*100:.1f}%\n\n"
             "Write the uncertainty and limitations statement."
         )
 
@@ -696,9 +988,16 @@ Write 2-3 sentences only. Do not use bullet points."""
             max_tokens=200,
         )
 
-    def _template_uncertainty_statement(self, incomplete: int, contested: int) -> str:
+    def _template_uncertainty_statement(
+        self, incomplete: int, contested: int, overall_error_rate: float = 0.0
+    ) -> str:
         """Deterministic uncertainty template fallback."""
         statements = []
+        if overall_error_rate > 0.15:
+            statements.append(
+                f"Average tool error rate across active agents is {overall_error_rate*100:.0f}%, "
+                "indicating some analysis dimensions may be incomplete or unreliable."
+            )
         if incomplete > 0:
             statements.append(
                 f"{incomplete} finding(s) remain incomplete due to unavailable tools "

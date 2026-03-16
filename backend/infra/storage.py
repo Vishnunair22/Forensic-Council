@@ -162,8 +162,10 @@ class LocalStorageBackend(StorageBackend):
     
     def _ensure_storage_directory(self) -> None:
         """Ensure the storage directory exists."""
+        existed = self._storage_path.exists()
         self._storage_path.mkdir(parents=True, exist_ok=True)
-        logger.info("Storage directory initialized", path=str(self._storage_path))
+        if not existed:
+            logger.info("Storage directory created", path=str(self._storage_path))
     
     def _get_artifact_dir(self, root_id: UUID) -> Path:
         """Get the directory for a root artifact."""

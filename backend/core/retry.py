@@ -275,15 +275,21 @@ class CircuitBreaker:
     
     @property
     def state(self) -> str:
-        """Get current circuit state."""
-        if self._state == "OPEN":
-            # Check if we should transition to half-open
-            if self._last_failure_time:
-                elapsed = time.monotonic() - self._last_failure_time
-                if elapsed >= self.recovery_timeout:
-                    self._state = "HALF_OPEN"
-                    self._half_open_calls = 0
-                    logger.info("Circuit breaker transitioning to HALF_OPEN")
+        """Get current circuit state (read-only — no side effects)."""
+        return self._state
+
+    def _check_and_maybe_half_open(self) -> str:
+        """
+        Check if the circuit should transition OPEN → HALF_OPEN based on elapsed
+        recovery time.  This is called explicitly inside call() — not inside the
+        state property — so that simply reading .state is always idempotent.
+        """
+        if self._state == "OPEN" and self._last_failure_time:
+            elapsed = time.monotonic() - self._last_failure_time
+            if elapsed >= self.recovery_timeout:
+                self._state = "HALF_OPEN"
+                self._half_open_calls = 0
+                logger.info("Circuit breaker transitioning to HALF_OPEN")
         return self._state
     
     def record_success(self):
@@ -325,7 +331,7 @@ class CircuitBreaker:
             CircuitBreakerOpen: If circuit is open
             Exception: If function raises
         """
-        state = self.state
+        state = self._check_and_maybe_half_open()
         
         if state == "OPEN":
             raise CircuitBreakerOpen("Circuit breaker is OPEN")

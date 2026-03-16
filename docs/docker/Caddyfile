@@ -13,8 +13,8 @@
 # ============================================================================
 
 {
-    # Admin API - enable only in development
-    {$CADDY_ADMIN:admin off}
+    # Disable admin API in production to reduce attack surface
+    admin off
 
     # Structured JSON access log
     log {
@@ -37,14 +37,6 @@
 # When DOMAIN=localhost → self-signed cert.
 # When DOMAIN=forensic.yourdomain.com → auto Let's Encrypt.
 {$DOMAIN:localhost} {
-    # Rate limiting for authentication endpoint
-    rate_limit {
-        zone login_zone {
-            key {remote_host}
-            events 5
-            window 1m
-        }
-    }
 
     # Security headers
     header {
@@ -59,23 +51,6 @@
 
     # Backend API + WebSocket (matched before catch-all frontend)
     handle /api/* {
-        # Rate limit authentication endpoints
-        handle /api/v1/auth/login {
-            rate_limit login_zone
-            reverse_proxy backend:8000 {
-                header_up Host              {host}
-                header_up X-Real-IP         {remote_host}
-                header_up X-Forwarded-For   {remote_host}
-                header_up X-Forwarded-Proto {scheme}
-
-                transport http {
-                    response_header_timeout 620s
-                    dial_timeout            10s
-                    read_buffer             64KB
-                    write_buffer            64KB
-                }
-            }
-        }
         reverse_proxy backend:8000 {
             header_up Host              {host}
             header_up X-Real-IP         {remote_host}

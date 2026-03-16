@@ -123,23 +123,31 @@ class StructuredLogger:
         self._logger.exception(message, extra=extra)
 
 
-@lru_cache()
-def get_logger(name: str, level: Optional[str] = None) -> StructuredLogger:
+# Per-name logger cache.  We intentionally do NOT include `level` in the
+# cache key — the level can be changed at any time via configure_root_logger
+# and we don't want a stale cached logger to ignore a later level change.
+# Using a plain dict (not lru_cache) also avoids the unhashable-arg footgun.
+_logger_cache: dict[str, "StructuredLogger"] = {}
+
+
+def get_logger(name: str, level: Optional[str] = None) -> "StructuredLogger":
     """
-    Get a structured logger instance.
-    
+    Get a structured logger instance (cached per name).
+
     Args:
         name: Logger name (typically __name__)
-        level: Optional log level override
-    
+        level: Optional log level override (applied only on first creation)
+
     Returns:
         StructuredLogger instance
-    
+
     Usage:
         logger = get_logger(__name__)
         logger.info("Application started", version="1.0.3")
     """
-    return StructuredLogger(name, level)
+    if name not in _logger_cache:
+        _logger_cache[name] = StructuredLogger(name, level)
+    return _logger_cache[name]
 
 
 def configure_root_logger(level: str = "INFO") -> None:

@@ -11,6 +11,7 @@ export type AgentResult = {
     result: string;
     confidence: number;
     thinking?: string;
+    metadata?: Record<string, unknown>;
 };
 
 export type Report = {

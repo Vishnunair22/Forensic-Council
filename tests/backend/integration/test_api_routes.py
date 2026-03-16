@@ -49,11 +49,11 @@ def client():
     mock_qdrant.ping = AsyncMock(return_value=True)
 
     patches = [
-        patch("backend.infra.redis_client.get_redis_client", return_value=mock_redis),
-        patch("backend.infra.postgres_client.get_postgres_client", return_value=mock_pg),
-        patch("backend.infra.qdrant_client.get_qdrant_client", return_value=mock_qdrant),
-        patch("backend.core.migrations.run_migrations", new_callable=AsyncMock),
-        patch("backend.api.main.bootstrap_users", new_callable=AsyncMock),
+        patch("infra.redis_client.get_redis_client", return_value=mock_redis),
+        patch("infra.postgres_client.get_postgres_client", return_value=mock_pg),
+        patch("infra.qdrant_client.get_qdrant_client", return_value=mock_qdrant),
+        patch("core.migrations.run_migrations", new_callable=AsyncMock),
+        patch("api.main.bootstrap_users", new_callable=AsyncMock),
     ]
 
     started = []
@@ -61,7 +61,7 @@ def client():
         started.append(p.start())
 
     try:
-        from backend.api.main import app
+        from api.main import app
         with TestClient(app, raise_server_exceptions=False) as c:
             yield c
     except ImportError:

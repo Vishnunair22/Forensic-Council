@@ -27,7 +27,7 @@ router = APIRouter(prefix="/api/v1/metrics", tags=["metrics"])
 
 # ── Redis key names ───────────────────────────────────────────────────────────
 _KEY_REQUESTS         = "metrics:requests_total"
-_KEY_DURATION_SUM     = "metrics:request_duration_sum_ms"
+_KEY_DURATION_SUM     = "metrics:request_duration_sum"
 _KEY_DURATION_COUNT   = "metrics:request_duration_count"
 _KEY_ERRORS           = "metrics:errors_total"
 _KEY_ACTIVE_SESSIONS  = "metrics:active_sessions"

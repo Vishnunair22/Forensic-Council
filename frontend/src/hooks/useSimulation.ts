@@ -34,9 +34,6 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
 
     const wsRef = useRef<WebSocket | null>(null);
     const completedAgentsRef = useRef<AgentUpdate[]>([]);
-    // Phase generation: incremented on clearCompletedAgents so stale initial-phase
-    // AGENT_COMPLETE messages arriving after deep mode starts are discarded.
-    const phaseGenRef = useRef<number>(0);
 
     // Store callbacks in refs to avoid triggering effect on every render
     const onAgentCompleteRef = useRef(onAgentComplete);
@@ -52,6 +49,9 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
 
     // Connect WebSocket manually — returns a Promise that resolves once the WS is open.
     const connectWebSocket = useCallback((targetSessionId: string): Promise<void> => {
+        // Store session ID so resumeInvestigation can use it directly
+        setSessionId(targetSessionId);
+
         return new Promise((resolve, reject) => {
             // Disconnect existing
             if (wsRef.current) {
@@ -120,11 +120,6 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                     const { confidence, findings_count, error, deep_analysis_pending, status: agentStatus } = update.data as any;
                                     const parsedConfidence = confidence ?? agent.simulation.confidence / 100;
 
-                                    // Capture phase gen at message-processing time to detect stale messages.
-                                    // A stale initial-phase AGENT_COMPLETE should NOT overwrite a deep-phase result.
-                                    const messagePhaseGen = (update as any)._phaseGen ?? 0;
-                                    const isStaleInitialMessage = messagePhaseGen < phaseGenRef.current;
-
                                     const newUpdate: AgentUpdate = {
                                         agent_id: agent.id,
                                         agent_name: update.agent_name || agent.name,
@@ -136,14 +131,12 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                         deep_analysis_pending: deep_analysis_pending,
                                     };
 
-                                    // Completely discard stale initial-phase messages after deep mode starts
-                                    if (!isStaleInitialMessage) {
-                                        const existingIndex = completedAgentsRef.current.findIndex((a: AgentUpdate) => a.agent_id === newUpdate.agent_id);
-                                        if (existingIndex >= 0) {
-                                            completedAgentsRef.current[existingIndex] = newUpdate;
-                                        } else {
-                                            completedAgentsRef.current.push(newUpdate);
-                                        }
+                                    // Upsert: later AGENT_COMPLETE for the same agent_id always wins
+                                    const existingIndex = completedAgentsRef.current.findIndex((a: AgentUpdate) => a.agent_id === newUpdate.agent_id);
+                                    if (existingIndex >= 0) {
+                                        completedAgentsRef.current[existingIndex] = newUpdate;
+                                    } else {
+                                        completedAgentsRef.current.push(newUpdate);
                                     }
 
                                     const nextCompleted = [...completedAgentsRef.current];
@@ -165,14 +158,13 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                             break;
 
                         case "PIPELINE_COMPLETE":
-                            // Status is ideally already set to "complete" when last agent finished
+                            // Force "complete" even if we were in "awaiting_decision"
                             setStatus((prev: SimulationStatus) => {
                                 if (prev !== "complete") {
                                     playSoundRef.current?.("complete");
                                     onCompleteRef.current?.();
-                                    return "complete";
                                 }
-                                return prev;
+                                return "complete";
                             });
                             break;
 
@@ -194,9 +186,6 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                         messageQueue.shift();
                         dbg.warn("[WebSocket] Queue limit reached, dropped oldest message");
                     }
-                    // Tag the message with the current phase generation so stale
-                    // initial-phase messages can be discarded after clearCompletedAgents().
-                    (update as any)._phaseGen = phaseGenRef.current;
                     messageQueue.push(update);
                     processQueue();
                 } catch (error) {
@@ -326,11 +315,11 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
     }, [sessionId]);
 
     const clearCompletedAgents = useCallback(() => {
-        // Increment phase generation so any in-flight AGENT_COMPLETE messages
-        // from the initial pass are treated as stale and ignored.
-        phaseGenRef.current += 1;
+        // Full reset for deep phase: clear both completed agents and running-state updates
+        // so the initial-phase card contents don't persist into the deep phase.
         setCompletedAgents([]);
         completedAgentsRef.current = [];
+        setAgentUpdates({});
     }, []);
 
     return {

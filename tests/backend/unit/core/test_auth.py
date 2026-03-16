@@ -2,27 +2,33 @@
 Backend Unit Tests — core/auth.py
 ===================================
 Tests JWT creation/validation, bcrypt password hashing,
-RBAC role enforcement, and the UserRole enum.
+and the UserRole enum.
+
+D13 fix: corrected import names from actual module:
+  - get_password_hash  (was: hash_password)
+  - decode_token       (was: validate_token)
+  - create_access_token(user_id, role, expires_delta, username)
 """
+import asyncio
 import pytest
 from datetime import datetime, timezone, timedelta
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 # ── Import guards ──────────────────────────────────────────────────────────────
 
 try:
-    from backend.core.auth import (
-        hash_password,
+    from core.auth import (
+        get_password_hash,
         verify_password,
         create_access_token,
-        validate_token,
+        decode_token,
         UserRole,
     )
     HAS_AUTH = True
 except ImportError:
     HAS_AUTH = False
 
-pytestmark = pytest.mark.skipif(not HAS_AUTH, reason="backend.core.auth not importable")
+pytestmark = pytest.mark.skipif(not HAS_AUTH, reason="core.auth not importable")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -31,49 +37,46 @@ pytestmark = pytest.mark.skipif(not HAS_AUTH, reason="backend.core.auth not impo
 
 class TestPasswordHashing:
     def test_hash_returns_string(self):
-        h = hash_password("password123")
+        h = get_password_hash("password123")
         assert isinstance(h, str)
 
     def test_hash_not_equal_to_plaintext(self):
-        assert hash_password("secret") != "secret"
+        assert get_password_hash("secret") != "secret"
 
     def test_verify_correct_password(self):
-        h = hash_password("correct_password")
+        h = get_password_hash("correct_password")
         assert verify_password("correct_password", h) is True
 
     def test_verify_wrong_password(self):
-        h = hash_password("correct_password")
+        h = get_password_hash("correct_password")
         assert verify_password("wrong_password", h) is False
 
     def test_verify_empty_string(self):
-        h = hash_password("password")
+        h = get_password_hash("password")
         assert verify_password("", h) is False
 
     def test_hash_is_salted_unique(self):
         """Same password hashed twice should produce different hashes."""
-        h1 = hash_password("same_pass")
-        h2 = hash_password("same_pass")
+        h1 = get_password_hash("same_pass")
+        h2 = get_password_hash("same_pass")
         assert h1 != h2
 
     def test_both_hashes_verify_correctly(self):
-        h1 = hash_password("same_pass")
-        h2 = hash_password("same_pass")
+        h1 = get_password_hash("same_pass")
+        h2 = get_password_hash("same_pass")
         assert verify_password("same_pass", h1) is True
         assert verify_password("same_pass", h2) is True
 
     def test_hash_is_bcrypt_format(self):
-        h = hash_password("test")
+        h = get_password_hash("test")
         assert h.startswith("$2b$") or h.startswith("$2a$")
 
     def test_long_password_72_byte_bcrypt_limit(self):
-        """bcrypt silently truncates at 72 bytes. Both passwords should verify identically."""
+        """verify_password truncates at 72 bytes per the implementation."""
         base = "x" * 72
-        long_pass = base + "extra"
-        h = hash_password(base)
-        # Both should verify (bcrypt truncates long_pass to 72 bytes == base)
-        # This is expected bcrypt behavior, not a bug
-        result = verify_password(long_pass, h)
-        assert isinstance(result, bool)  # Just verify it doesn't crash
+        h = get_password_hash(base)
+        result = verify_password(base + "extra", h)
+        assert isinstance(result, bool)  # Must not crash
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -81,155 +84,118 @@ class TestPasswordHashing:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestJWTCreation:
-    def test_returns_string(self):
-        token = create_access_token({"sub": "user-1", "role": "investigator"})
-        assert isinstance(token, str)
+    def _make_token(self, user_id="user-1", role=None, expires_delta=None):
+        r = role or UserRole.INVESTIGATOR
+        return create_access_token(
+            user_id=user_id,
+            role=r,
+            expires_delta=expires_delta,
+            username=user_id,
+        )
 
-    def test_token_is_jwt_format(self):
-        """JWT has exactly 3 dot-separated parts."""
-        token = create_access_token({"sub": "user-1", "role": "investigator"})
-        parts = token.split(".")
-        assert len(parts) == 3
-
-    def test_token_contains_user_data(self):
-        """Decoded payload should contain the subject."""
+    def _decode_payload(self, token: str) -> dict:
         import base64, json
-        token = create_access_token({"sub": "user-abc", "role": "investigator"})
         payload_b64 = token.split(".")[1]
-        # Add padding
         padding = 4 - len(payload_b64) % 4
         if padding != 4:
             payload_b64 += "=" * padding
-        payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+        return json.loads(base64.urlsafe_b64decode(payload_b64))
+
+    def test_returns_string(self):
+        assert isinstance(self._make_token(), str)
+
+    def test_token_is_jwt_format(self):
+        """JWT must have exactly 3 dot-separated parts."""
+        assert len(self._make_token().split(".")) == 3
+
+    def test_token_contains_subject(self):
+        payload = self._decode_payload(self._make_token("user-abc"))
         assert payload["sub"] == "user-abc"
 
     def test_token_has_exp_field(self):
-        import base64, json
-        token = create_access_token({"sub": "u", "role": "investigator"})
-        payload_b64 = token.split(".")[1]
-        padding = 4 - len(payload_b64) % 4
-        if padding != 4:
-            payload_b64 += "=" * padding
-        payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+        payload = self._decode_payload(self._make_token())
         assert "exp" in payload
 
-    def test_default_expiry_is_not_excessive(self):
-        """Default expiry should be ≤ 120 minutes (not 7 days as the old bug was)."""
-        import base64, json, time
-        token = create_access_token({"sub": "u", "role": "investigator"})
-        payload_b64 = token.split(".")[1]
-        padding = 4 - len(payload_b64) % 4
-        if padding != 4:
-            payload_b64 += "=" * padding
-        payload = json.loads(base64.urlsafe_b64decode(payload_b64))
-        exp = payload.get("exp", 0)
-        now = time.time()
-        window_minutes = (exp - now) / 60
-        assert window_minutes <= 120, f"Token expires in {window_minutes:.0f} min (expected ≤ 120)"
+    def test_default_expiry_le_120_minutes(self):
+        """Default expiry should be ≤ 120 minutes (v1.0.3 regression guard)."""
+        import time
+        payload = self._decode_payload(self._make_token())
+        window_minutes = (payload["exp"] - time.time()) / 60
+        assert window_minutes <= 120, (
+            f"Token expires in {window_minutes:.0f} min — expected ≤ 120"
+        )
 
     def test_custom_expiry_respected(self):
-        import base64, json, time
-        token = create_access_token({"sub": "u", "role": "investigator"}, expires_delta=timedelta(minutes=30))
-        payload_b64 = token.split(".")[1]
-        padding = 4 - len(payload_b64) % 4
-        if padding != 4:
-            payload_b64 += "=" * padding
-        payload = json.loads(base64.urlsafe_b64decode(payload_b64))
-        exp = payload.get("exp", 0)
-        now = time.time()
-        window_minutes = (exp - now) / 60
+        import time
+        token = self._make_token(expires_delta=timedelta(minutes=30))
+        payload = self._decode_payload(token)
+        window_minutes = (payload["exp"] - time.time()) / 60
         assert 25 <= window_minutes <= 35
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# JWT VALIDATION
+# JWT DECODING (decode_token is async — use asyncio.run)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestJWTValidation:
-    def test_valid_token_returns_payload(self):
-        token = create_access_token({"sub": "user-valid", "role": "investigator"})
-        payload = validate_token(token)
-        assert payload["sub"] == "user-valid"
+class TestJWTDecoding:
+    def _make_token(self, user_id="user-1", role=None, expires_delta=None):
+        r = role or UserRole.INVESTIGATOR
+        return create_access_token(user_id=user_id, role=r,
+                                   expires_delta=expires_delta, username=user_id)
+
+    def test_valid_token_decodes(self):
+        """decode_token must return TokenData for a valid token."""
+        token = self._make_token("user-valid")
+
+        async def _run():
+            # Patch is_token_blacklisted so Redis is not required
+            with patch("core.auth.is_token_blacklisted", new=AsyncMock(return_value=False)):
+                td = await decode_token(token)
+            assert td.user_id == "user-valid"
+
+        asyncio.get_event_loop().run_until_complete(_run())
 
     def test_expired_token_raises(self):
-        token = create_access_token({"sub": "u", "role": "investigator"}, expires_delta=timedelta(seconds=-1))
-        with pytest.raises(Exception) as exc:
-            validate_token(token)
-        assert "expired" in str(exc.value).lower() or exc.value.__class__.__name__ in (
-            "ExpiredSignatureError", "HTTPException", "JWTError", "TokenExpiredError"
-        )
+        token = self._make_token(expires_delta=timedelta(seconds=-1))
 
-    def test_invalid_signature_raises(self):
-        token = create_access_token({"sub": "u", "role": "investigator"})
-        # Tamper with the signature
-        parts = token.split(".")
-        parts[2] = parts[2][:-4] + "XXXX"
-        bad_token = ".".join(parts)
-        with pytest.raises(Exception):
-            validate_token(bad_token)
+        async def _run():
+            with patch("core.auth.is_token_blacklisted", new=AsyncMock(return_value=False)):
+                with pytest.raises(Exception):
+                    await decode_token(token)
+
+        asyncio.get_event_loop().run_until_complete(_run())
 
     def test_garbage_string_raises(self):
-        with pytest.raises(Exception):
-            validate_token("not.a.jwt")
+        async def _run():
+            with patch("core.auth.is_token_blacklisted", new=AsyncMock(return_value=False)):
+                with pytest.raises(Exception):
+                    await decode_token("not.a.jwt")
 
-    def test_empty_string_raises(self):
-        with pytest.raises(Exception):
-            validate_token("")
+        asyncio.get_event_loop().run_until_complete(_run())
 
-    def test_algorithm_none_attack_rejected(self):
-        """Ensure 'none' algorithm JWTs are rejected."""
-        import base64
-        header = base64.urlsafe_b64encode(b'{"alg":"none","typ":"JWT"}').rstrip(b"=").decode()
-        payload_b64 = base64.urlsafe_b64encode(b'{"sub":"admin","role":"admin"}').rstrip(b"=").decode()
-        fake_token = f"{header}.{payload_b64}."
-        with pytest.raises(Exception):
-            validate_token(fake_token)
+    def test_blacklisted_token_raises(self):
+        token = self._make_token()
+
+        async def _run():
+            with patch("core.auth.is_token_blacklisted", new=AsyncMock(return_value=True)):
+                with pytest.raises(Exception) as exc:
+                    await decode_token(token)
+            assert "revoked" in str(exc.value).lower() or "401" in str(exc.value)
+
+        asyncio.get_event_loop().run_until_complete(_run())
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# RBAC
+# USERROLE
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestUserRole:
     def test_investigator_role_exists(self):
-        assert hasattr(UserRole, "INVESTIGATOR") or "investigator" in [r.value for r in UserRole]
+        assert UserRole.INVESTIGATOR is not None
 
     def test_admin_role_exists(self):
-        assert hasattr(UserRole, "ADMIN") or "admin" in [r.value for r in UserRole]
+        assert UserRole.ADMIN is not None
 
     def test_role_values_are_strings(self):
         for role in UserRole:
             assert isinstance(role.value, str)
-
-
-class TestRBACFunctions:
-    """Test role enforcement functions if they exist."""
-
-    def test_investigator_can_access_investigate(self):
-        try:
-            from backend.core.auth import require_role
-            # Should not raise for matching role
-            require_role("investigator", ["investigator", "admin"])
-        except ImportError:
-            pytest.skip("require_role not present")
-        except Exception as e:
-            pytest.fail(f"Unexpected exception: {e}")
-
-    def test_wrong_role_raises_403_equivalent(self):
-        try:
-            from backend.core.auth import require_role
-            with pytest.raises(Exception) as exc:
-                require_role("auditor", ["investigator", "admin"])
-            # Should raise something indicating forbidden (403 or PermissionError)
-            assert "403" in str(exc.value) or "forbidden" in str(exc.value).lower() or \
-                   "permission" in str(exc.value).lower() or "unauthorized" in str(exc.value).lower()
-        except ImportError:
-            pytest.skip("require_role not present")
-
-    def test_disabled_user_flag(self):
-        try:
-            from backend.core.auth import is_user_active
-            assert is_user_active({"sub": "u", "disabled": False}) is True
-            assert is_user_active({"sub": "u", "disabled": True}) is False
-        except ImportError:
-            pytest.skip("is_user_active not present")

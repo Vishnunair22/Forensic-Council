@@ -33,6 +33,8 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 WORKDIR /app
 
 # ─── Dependency layer ──────────────────────────────────────────────────────────
+# uv.lock is committed to the repo and guarantees reproducible builds.
+# Copying both files here means code-only changes do not invalidate this layer.
 COPY pyproject.toml uv.lock ./
 
 ENV UV_COMPILE_BYTECODE=1 \

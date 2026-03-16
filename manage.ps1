@@ -7,7 +7,9 @@
     All commands use docs/docker/docker-compose.yml and .env automatically.
 
 .PARAMETER Target
-    The target to run: up, dev, build, down, down-clean, logs, prod, infra, rebuild-backend, cache-status
+    The target to run: up, dev, build, down, down-clean, logs, prod, infra,
+    rebuild-backend, cache-status, shell-backend, shell-frontend, migrate,
+    init-db, health
 
 .EXAMPLE
     .\manage.ps1 dev
@@ -18,14 +20,19 @@
 
 param(
     [Parameter(Position=0, Mandatory=$true)]
-    [ValidateSet('up', 'dev', 'build', 'down', 'down-clean', 'logs', 'prod', 'infra', 'rebuild-backend', 'cache-status')]
+    [ValidateSet('up', 'dev', 'build', 'down', 'down-clean', 'logs', 'prod', 'infra',
+                 'rebuild-backend', 'cache-status', 'shell-backend', 'shell-frontend',
+                 'migrate', 'init-db', 'health')]
     [string]$Target
 )
 
 $ErrorActionPreference = 'Stop'
 
-$ComposeFile = "docs/docker/docker-compose.yml"
-$EnvFile = ".env"
+$ComposeFile   = "docs/docker/docker-compose.yml"
+$DevOverride   = "docs/docker/docker-compose.dev.yml"
+$ProdOverride  = "docs/docker/docker-compose.prod.yml"
+$InfraOverride = "docs/docker/docker-compose.infra.yml"
+$EnvFile       = ".env"
 
 # Verify .env exists
 if (-not (Test-Path $EnvFile)) {
@@ -40,7 +47,7 @@ switch ($Target) {
     }
     'dev' {
         Write-Host "Starting with hot-reload enabled..." -ForegroundColor Cyan
-        docker compose -f $ComposeFile -f docs/docker/docker-compose.dev.yml --env-file $EnvFile up -d --build
+        docker compose -f $ComposeFile -f $DevOverride --env-file $EnvFile up -d --build
     }
     'build' {
         Write-Host "Building images..." -ForegroundColor Cyan
@@ -51,7 +58,9 @@ switch ($Target) {
         docker compose -f $ComposeFile --env-file $EnvFile down
     }
     'down-clean' {
-        Write-Host "Stopping services and wiping volumes..." -ForegroundColor Red
+        Write-Host "Stopping services and wiping volumes... (DESTRUCTIVE)" -ForegroundColor Red
+        $confirm = Read-Host "Are you sure? This cannot be undone [y/N]"
+        if ($confirm -ne 'y') { Write-Host "Aborted."; exit 0 }
         docker compose -f $ComposeFile --env-file $EnvFile down -v
     }
     'logs' {
@@ -60,11 +69,13 @@ switch ($Target) {
     }
     'prod' {
         Write-Host "Starting production mode..." -ForegroundColor Cyan
-        docker compose -f $ComposeFile -f docs/docker/docker-compose.prod.yml --env-file $EnvFile up -d --build
+        docker compose -f $ComposeFile -f $ProdOverride --env-file $EnvFile up -d --build
     }
     'infra' {
-        Write-Host "Starting infrastructure services only..." -ForegroundColor Cyan
-        docker compose -f docs/docker/docker-compose.infra.yml --env-file $EnvFile up -d
+        # IMPORTANT: infra overlay only sets replicas=0 for app services.
+        # It MUST be composed on top of the main file which defines postgres/redis/qdrant.
+        Write-Host "Starting infrastructure services only (postgres, redis, qdrant)..." -ForegroundColor Cyan
+        docker compose -f $ComposeFile -f $InfraOverride --env-file $EnvFile up -d
     }
     'rebuild-backend' {
         Write-Host "Rebuilding backend only..." -ForegroundColor Yellow
@@ -74,6 +85,32 @@ switch ($Target) {
     'cache-status' {
         Write-Host "ML Model Cache Volumes:" -ForegroundColor Cyan
         docker volume ls | Select-String -Pattern "forensic-council"
+    }
+    'shell-backend' {
+        Write-Host "Opening shell in backend container..." -ForegroundColor Cyan
+        docker compose -f $ComposeFile --env-file $EnvFile exec backend bash
+    }
+    'shell-frontend' {
+        Write-Host "Opening shell in frontend container..." -ForegroundColor Cyan
+        docker compose -f $ComposeFile --env-file $EnvFile exec frontend sh
+    }
+    'migrate' {
+        Write-Host "Running database migrations..." -ForegroundColor Cyan
+        docker compose -f $ComposeFile --env-file $EnvFile exec backend python -m core.migrations
+    }
+    'init-db' {
+        Write-Host "Running database initialisation..." -ForegroundColor Cyan
+        docker compose -f $ComposeFile --env-file $EnvFile exec backend python scripts/init_db.py
+    }
+    'health' {
+        Write-Host "Querying health endpoint..." -ForegroundColor Cyan
+        try {
+            $response = Invoke-RestMethod -Uri "http://localhost:8000/health" -Method Get
+            $response | ConvertTo-Json -Depth 5
+        } catch {
+            Write-Error "Health check failed -- is the API running? $_"
+            exit 1
+        }
     }
 }
 

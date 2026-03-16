@@ -21,9 +21,13 @@ import {
   ShieldCheck, Search, Layers, XCircle, Shield,
   Hash, Clock, FileText, Cpu, Eye, AlertCircle,
 } from "lucide-react";
+import { PageTransition } from "@/components/ui/PageTransition";
+import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { useForensicData, mapReportDtoToReport } from "@/hooks/useForensicData";
+import { PageTransition } from "@/components/ui/PageTransition";
+import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { useSound } from "@/hooks/useSound";
 import { getReport, getArbiterStatus, type ReportDTO, type AgentFindingDTO } from "@/lib/api";
 
@@ -186,6 +190,8 @@ function ArbiterOverlay({ liveMessage }: { liveMessage: string }) {
 
         <p className="text-xs text-slate-700 font-mono">{elapsed}s elapsed — typically 10–60s</p>
       </motion.div>
+      </PageTransition>
+      <GlobalFooter />
     </div>
   );
 }
@@ -224,7 +230,7 @@ function FindingCard({ f, accent }: { f: AgentFindingDTO; accent: string }) {
         {isLong && (
           <button
             onClick={() => setExpanded(v => !v)}
-            className="mt-1 flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-300 transition-colors"
+            className="mt-1 flex items-center gap-1 text-[11px] text-slate-600 hover:text-slate-300 transition-colors cursor-pointer"
           >
             {expanded
               ? <><ChevronUp className="w-3 h-3" />Show less</>
@@ -247,21 +253,40 @@ function FindingCard({ f, accent }: { f: AgentFindingDTO; accent: string }) {
 // AGENT SECTION (collapsible)
 // ─────────────────────────────────────────────────────────────
 
-function AgentSection({ agentId, findings }: { agentId: string; findings: AgentFindingDTO[] }) {
+function AgentSection({ agentId, findings, metrics, narrative }: {
+  agentId: string;
+  findings: AgentFindingDTO[];
+  metrics?: { confidence_score: number; error_rate: number; tools_succeeded: number; total_tools_called: number; skipped: boolean };
+  narrative?: string;
+}) {
   const [open, setOpen] = useState(true);
+  const [showRaw, setShowRaw] = useState(!narrative); // show raw by default when no Groq narrative
   const cfg = AGENT_CFG[agentId];
   if (!cfg || findings.length === 0) return null;
 
-  const deepCount = findings.filter(f => f.metadata?.analysis_phase === "deep").length;
-  const initCount = findings.filter(f => f.metadata?.analysis_phase === "initial").length;
-  const avgConf = findings.reduce((s, f) => s + (f.calibrated_probability ?? f.confidence_raw ?? 0), 0) / findings.length;
+  const initialFindings = findings.filter(f => (f.metadata?.analysis_phase ?? "initial") === "initial");
+  const deepFindings    = findings.filter(f => f.metadata?.analysis_phase === "deep");
+  const confScore  = metrics?.confidence_score ?? 0;
+  const errRate    = metrics?.error_rate ?? 0;
+  const toolsOk    = metrics?.tools_succeeded ?? 0;
+  const toolsTotal = metrics?.total_tools_called ?? 0;
+
+  // Deduplicate findings by finding_id to prevent UI duplication
+  const seen = new Set<string>();
+  const dedupedFindings = findings.filter(f => {
+    const key = f.finding_id || `${f.finding_type}-${f.confidence_raw}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 
   return (
     <div className={clsx("rounded-2xl border overflow-hidden", cfg.border)}>
+      {/* Header */}
       <button
         onClick={() => setOpen(v => !v)}
         className={clsx(
-          "w-full flex items-center justify-between px-5 py-4 transition-colors",
+          "w-full flex items-center justify-between px-5 py-4 transition-colors cursor-pointer",
           cfg.headerBg, "hover:brightness-110"
         )}
       >
@@ -273,10 +298,24 @@ function AgentSection({ agentId, findings }: { agentId: string; findings: AgentF
           </div>
         </div>
         <div className="flex items-center gap-3 text-xs">
-          <span className="text-slate-500 hidden sm:inline">{findings.length} finding{findings.length !== 1 ? "s" : ""}</span>
-          {initCount > 0 && <span className="hidden sm:inline text-slate-500 font-mono">{initCount} init</span>}
-          {deepCount > 0 && <span className="hidden sm:inline text-purple-400 font-mono">{deepCount} deep</span>}
-          <span className={clsx("font-bold", confColor(avgConf))}>{Math.round(avgConf * 100)}%</span>
+          {deepFindings.length > 0 && (
+            <span className="hidden sm:inline text-purple-400 font-mono">
+              {initialFindings.length}i + {deepFindings.length}d
+            </span>
+          )}
+          {!deepFindings.length && (
+            <span className="text-slate-500 hidden sm:inline">
+              {initialFindings.length} finding{initialFindings.length !== 1 ? "s" : ""}
+            </span>
+          )}
+          {toolsTotal > 0 && (
+            <span className={clsx("hidden sm:inline font-mono",
+              errRate === 0 ? "text-emerald-400" : errRate < 0.3 ? "text-amber-400" : "text-red-400"
+            )}>
+              {toolsOk}/{toolsTotal} ✓
+            </span>
+          )}
+          <span className={clsx("font-bold", confColor(confScore))}>{Math.round(confScore * 100)}%</span>
           <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }}>
             <ChevronDown className="w-4 h-4 text-slate-500" />
           </motion.div>
@@ -292,10 +331,89 @@ function AgentSection({ agentId, findings }: { agentId: string; findings: AgentF
             transition={{ duration: 0.25 }}
             className="overflow-hidden"
           >
-            <div className="px-5 pb-4">
-              {findings.map((f, i) => (
-                <FindingCard key={f.finding_id || i} f={f} accent={cfg.accent} />
-              ))}
+            <div className="px-5 pb-5 space-y-4">
+
+              {/* Metrics row */}
+              <div className="flex flex-wrap gap-3 pt-3 text-xs border-t border-white/[0.05]">
+                <span className={clsx("px-2.5 py-1 rounded-full font-mono border border-white/5",
+                  confScore >= 0.75 ? "bg-emerald-500/10 text-emerald-300" :
+                  confScore >= 0.5 ? "bg-amber-500/10 text-amber-300" :
+                  "bg-red-500/10 text-red-300"
+                )}>Confidence: {Math.round(confScore * 100)}%</span>
+                <span className={clsx("px-2.5 py-1 rounded-full font-mono border border-white/5",
+                  errRate === 0 ? "bg-emerald-500/10 text-emerald-300" :
+                  errRate < 0.3 ? "bg-amber-500/10 text-amber-300" :
+                  "bg-red-500/10 text-red-300"
+                )}>Error rate: {Math.round(errRate * 100)}%</span>
+                {toolsTotal > 0 && (
+                  <span className="px-2.5 py-1 rounded-full bg-white/[0.04] text-slate-400 font-mono border border-white/5">
+                    {toolsOk}/{toolsTotal} tools succeeded
+                  </span>
+                )}
+              </div>
+
+              {/* Groq narrative — primary display */}
+              {narrative ? (
+                <div className="rounded-xl bg-white/[0.025] border border-white/[0.06] p-4">
+                  <p className="text-[10px] text-slate-500 font-mono uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                    <span className="text-violet-400">✦</span> Arbiter Analysis
+                    {deepFindings.length > 0 && (
+                      <span className="ml-2 text-purple-400 normal-case tracking-normal">— initial + deep comparison</span>
+                    )}
+                  </p>
+                  <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{narrative}</p>
+                </div>
+              ) : null}
+
+              {/* Toggle raw findings */}
+              <button
+                onClick={() => setShowRaw(v => !v)}
+                className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
+              >
+                <motion.div animate={{ rotate: showRaw ? 180 : 0 }} transition={{ duration: 0.15 }}>
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </motion.div>
+                {showRaw ? "Hide" : "Show"} raw tool findings ({dedupedFindings.length})
+              </button>
+
+              {/* Raw findings — collapsed by default when narrative present */}
+              <AnimatePresence initial={false}>
+                {showRaw && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    {/* Initial findings */}
+                    {initialFindings.length > 0 && (
+                      <div className="mb-3">
+                        {deepFindings.length > 0 && (
+                          <p className="text-[10px] text-slate-600 font-mono uppercase tracking-widest mb-1 px-0.5">
+                            Initial Analysis
+                          </p>
+                        )}
+                        {initialFindings.map((f, i) => (
+                          <FindingCard key={f.finding_id || `init-${i}`} f={f} accent={cfg.accent} />
+                        ))}
+                      </div>
+                    )}
+                    {/* Deep findings */}
+                    {deepFindings.length > 0 && (
+                      <div>
+                        <p className="text-[10px] text-purple-500 font-mono uppercase tracking-widest mb-1 px-0.5">
+                          Deep Analysis
+                        </p>
+                        {deepFindings.map((f, i) => (
+                          <FindingCard key={f.finding_id || `deep-${i}`} f={f} accent={cfg.accent} />
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
             </div>
           </motion.div>
         )}
@@ -309,25 +427,32 @@ function AgentSection({ agentId, findings }: { agentId: string; findings: AgentF
 // ─────────────────────────────────────────────────────────────
 
 function VerdictBanner({ report }: { report: ReportDTO }) {
-  const scores: number[] = [];
-  Object.values(report.per_agent_findings).forEach(arr =>
-    arr.forEach(f => scores.push(f.calibrated_probability ?? f.confidence_raw ?? 0))
-  );
-  const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
-  const contested = report.contested_findings?.length ?? 0;
-  const totalFindings = scores.length;
+  // Use precomputed values from the arbiter — do not recompute on frontend
+  const avg   = report.overall_confidence ?? 0;
+  const errR  = report.overall_error_rate ?? 0;
+  const v     = report.overall_verdict ?? "REVIEW REQUIRED";
+  const contested    = report.contested_findings?.length ?? 0;
+  const totalFindings = Object.values(report.per_agent_findings).flat().length;
 
   type VColor = "emerald" | "amber" | "red";
   let label: string, color: VColor, subtitle: string;
-  if (avg >= 0.75 && contested === 0) {
-    label = "AUTHENTIC"; color = "emerald";
-    subtitle = "No manipulation signals detected across all forensic dimensions.";
-  } else if (avg >= 0.5 || (contested > 0 && contested <= 3)) {
-    label = "REVIEW REQUIRED"; color = "amber";
-    subtitle = `${contested > 0 ? `${contested} contested finding${contested > 1 ? "s" : ""} require` : "Findings require"} human review before use in proceedings.`;
-  } else {
+
+  if (v === "CERTAIN") {
+    label = "CERTAIN — AUTHENTIC"; color = "emerald";
+    subtitle = `${Math.round(avg * 100)}% confidence, ${(errR * 100).toFixed(0)}% tool error rate. All forensic dimensions consistent. No manipulation signals detected.`;
+  } else if (v === "LIKELY") {
+    label = "LIKELY AUTHENTIC"; color = "emerald";
+    subtitle = `${Math.round(avg * 100)}% confidence, ${(errR * 100).toFixed(0)}% tool error rate. Evidence appears authentic with minor uncertainties.`;
+  } else if (v === "MANIPULATION DETECTED") {
     label = "MANIPULATION DETECTED"; color = "red";
-    subtitle = "Multiple forensic signals indicate evidence tampering or manipulation.";
+    subtitle = `${Math.round(avg * 100)}% confidence. Multiple independent forensic signals indicate evidence tampering or manipulation.`;
+  } else if (v === "INCONCLUSIVE") {
+    label = "INCONCLUSIVE"; color = "red";
+    subtitle = `${Math.round(avg * 100)}% confidence, ${(errR * 100).toFixed(0)}% tool error rate. Insufficient data for a reliable verdict.`;
+  } else {
+    // UNCERTAIN or REVIEW REQUIRED
+    label = v === "UNCERTAIN" ? "UNCERTAIN" : "REVIEW REQUIRED"; color = "amber";
+    subtitle = `${Math.round(avg * 100)}% confidence, ${(errR * 100).toFixed(0)}% error rate.${contested > 0 ? ` ${contested} contested finding${contested > 1 ? "s" : ""} require human review.` : " Findings require human review before use in proceedings."}`;
   }
 
   const cls = {
@@ -374,17 +499,19 @@ function VerdictBanner({ report }: { report: ReportDTO }) {
 function StatsStrip({ report }: { report: ReportDTO }) {
   const allFindings = Object.values(report.per_agent_findings).flat();
   const totalFindings = allFindings.length;
-  const deepFindings = allFindings.filter(f => f.metadata?.analysis_phase === "deep").length;
-  const activeAgents = Object.values(report.per_agent_findings).filter(a => a.length > 0).length;
-  const crossConfirmed = report.cross_modal_confirmed?.length ?? 0;
+  const activeAgents = Object.values(report.per_agent_metrics ?? {}).filter((m: any) => !m.skipped).length
+    || Object.values(report.per_agent_findings).filter(a => a.length > 0).length;
   const contested = report.contested_findings?.length ?? 0;
 
+  const confPct  = Math.round((report.overall_confidence ?? 0) * 100);
+  const errorPct = Math.round((report.overall_error_rate ?? 0) * 100);
+
   const stats = [
-    { icon: <Cpu className="w-3.5 h-3.5" />,           label: "Agents",         value: activeAgents     },
-    { icon: <Layers className="w-3.5 h-3.5" />,         label: "Total Findings", value: totalFindings    },
-    { icon: <Eye className="w-3.5 h-3.5" />,            label: "Deep Analysis",  value: deepFindings     },
-    { icon: <CheckCircle className="w-3.5 h-3.5" />,    label: "Confirmed",      value: crossConfirmed   },
-    { icon: <AlertTriangle className="w-3.5 h-3.5" />,  label: "Contested",      value: contested        },
+    { icon: <Cpu className="w-3.5 h-3.5" />,           label: "Active Agents",   value: activeAgents      },
+    { icon: <Layers className="w-3.5 h-3.5" />,         label: "Total Findings",  value: totalFindings     },
+    { icon: <CheckCircle className="w-3.5 h-3.5" />,    label: "Confidence",      value: `${confPct}%`     },
+    { icon: <AlertCircle className="w-3.5 h-3.5" />,    label: "Tool Error Rate", value: `${errorPct}%`    },
+    { icon: <AlertTriangle className="w-3.5 h-3.5" />,  label: "Contested",       value: contested         },
   ];
 
   return (
@@ -427,11 +554,8 @@ export default function ResultPage() {
 
   // ── Poll arbiter, then fetch full report ────────────────────
   useEffect(() => {
-    const storedSessionId = sessionStorage.getItem("forensic_session_id");
-    if (!storedSessionId) { setState("empty"); return; }
-    
-    // sessionId is guaranteed to be a string in the closure
-    const sessionId = storedSessionId;
+    const sessionId = sessionStorage.getItem("forensic_session_id");
+    if (!sessionId) { setState("empty"); return; }
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -528,7 +652,7 @@ export default function ResultPage() {
       {/* ── Header ────────────────────────────────────────────── */}
       <header className="w-full border-b border-white/[0.05]">
         <div className="max-w-5xl mx-auto flex items-center justify-between py-4 px-5">
-          <button onClick={handleHome} className="flex items-center gap-2.5 group">
+          <button onClick={handleHome} className="flex items-center gap-2.5 group cursor-pointer">
             <div className="w-8 h-8 bg-gradient-to-br from-emerald-400/20 to-cyan-500/10 border border-emerald-500/30 rounded-lg flex items-center justify-center font-bold text-emerald-400 text-xs group-hover:border-emerald-400/50 transition-colors">
               FC
             </div>
@@ -594,10 +718,10 @@ export default function ResultPage() {
                       key={tab}
                       onClick={() => { playSound("click"); setActiveTab(tab); }}
                       className={clsx(
-                        "flex-1 text-sm py-2.5 rounded-lg font-medium transition-all",
+                        "flex-1 text-sm py-2.5 rounded-lg font-medium transition-all cursor-pointer select-none",
                         activeTab === tab
-                          ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20"
-                          : "text-slate-500 hover:text-slate-300"
+                          ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20 shadow-[0_0_12px_rgba(16,185,129,0.1)]"
+                          : "text-slate-500 hover:text-slate-300 hover:bg-white/[0.04]"
                       )}
                     >
                       {labels[tab]}
@@ -690,6 +814,8 @@ export default function ResultPage() {
                           key={id}
                           agentId={id}
                           findings={report.per_agent_findings[id] ?? []}
+                          metrics={report.per_agent_metrics?.[id] as any}
+                          narrative={report.per_agent_analysis?.[id]}
                         />
                       ))
                     )}

@@ -6,6 +6,7 @@ Persists investigation session state to PostgreSQL.
 Replaces in-memory storage for production scalability.
 """
 
+import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -30,7 +31,10 @@ class SessionPersistence:
     async def _ensure_client(self):
         """Ensure database client is connected — always reuse the singleton pool."""
         if self.client is None:
-            self.client = await get_postgres_client()
+            try:
+                self.client = await asyncio.wait_for(get_postgres_client(), timeout=10.0)
+            except asyncio.TimeoutError:
+                raise RuntimeError("Database connection timed out after 10s in session persistence")
     
     async def close(self):
         """No-op: we don't own the singleton client."""
