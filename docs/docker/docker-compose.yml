@@ -187,6 +187,7 @@ services:
     image: caddy:2-alpine
     container_name: forensic_caddy
     restart: unless-stopped
+    ports:
       - "80:80"
       - "443:443"
     volumes:

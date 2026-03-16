@@ -299,10 +299,6 @@ async def start_investigation(
     )
 
 
-class ResumeRequest(BaseModel):
-    """Request body for the resume endpoint."""
-    deep_analysis: bool
-
 # Store active pipelines, WebSocket connections, background tasks, and cached reports
 _active_pipelines: dict[str, ForensicCouncilPipeline] = {}
 _websocket_connections: dict[str, list] = {}
@@ -1418,75 +1414,3 @@ async def run_investigation_task(
             logger.debug("Evicted stale report cache entries", count=len(stale))
 
 
-# ============================================================================
-# RESUME ENDPOINT - Handles Accept Analysis / Deep Analysis decision
-# ============================================================================
-
-@router.post("/{session_id}/resume")
-async def resume_investigation(
-    session_id: str,
-    request: ResumeRequest,
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Resume investigation after initial analysis decision.
-    
-    This endpoint is called when the user clicks:
-    - "Accept Analysis" -> deep_analysis=False -> Skip deep pass, proceed to arbiter
-    - "Deep Analysis" -> deep_analysis=True -> Run heavy ML analysis
-    
-    The pipeline must be in a paused state (waiting on deep_analysis_decision_event).
-    """
-    logger.info(
-        "Resume investigation called",
-        session_id=session_id,
-        deep_analysis=request.deep_analysis,
-        user_id=current_user.user_id,
-    )
-    
-    # Get the active pipeline
-    pipeline = get_active_pipeline(session_id)
-    if not pipeline:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No active investigation found for session {session_id}"
-        )
-    
-    # Check if pipeline is waiting for decision
-    if not hasattr(pipeline, 'deep_analysis_decision_event'):
-        raise HTTPException(
-            status_code=400,
-            detail="Pipeline is not in a paused state waiting for decision"
-        )
-    
-    # Check if the event has already been set (decision already made) — return gracefully
-    if pipeline.deep_analysis_decision_event.is_set():
-        logger.info(
-            "Resume called but decision already made — returning idempotent 200",
-            session_id=session_id,
-        )
-        return {
-            "status": "already_resumed",
-            "session_id": session_id,
-            "deep_analysis": request.deep_analysis,
-            "message": "Investigation already resumed"
-        }
-    
-    # Set the deep analysis flag based on user choice
-    pipeline.run_deep_analysis_flag = request.deep_analysis
-    
-    # Signal the pipeline to continue (release the wait)
-    pipeline.deep_analysis_decision_event.set()
-    
-    logger.info(
-        "Investigation resume signal sent",
-        session_id=session_id,
-        deep_analysis=request.deep_analysis,
-    )
-    
-    return {
-        "status": "resumed",
-        "session_id": session_id,
-        "deep_analysis": request.deep_analysis,
-        "message": "Deep analysis started" if request.deep_analysis else "Proceeding to final report"
-    }

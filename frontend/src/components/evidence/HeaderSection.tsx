@@ -28,10 +28,19 @@ export function HeaderSection({
     <header className="max-w-6xl mx-auto flex items-center justify-between mb-8 z-10 relative">
       {/* Logo and Branding */}
       <div
+        role="button"
+        tabIndex={0}
         className="flex items-center space-x-3 cursor-pointer group"
         onClick={() => {
           if (status !== "analyzing") router.push("/");
         }}
+        onKeyDown={(e) => {
+          if ((e.key === "Enter" || e.key === " ") && status !== "analyzing") {
+            e.preventDefault();
+            router.push("/");
+          }
+        }}
+        aria-label="Return to Forensic Council home"
       >
         <div className="w-10 h-10 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center justify-center font-bold text-emerald-400 group-hover:bg-emerald-500/20 transition-colors shadow-[0_0_15px_rgba(16,185,129,0.1)]">
           FC

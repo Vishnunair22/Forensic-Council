@@ -2,13 +2,13 @@
 
 Next.js 15 frontend for the Forensic Council multi-agent forensic evidence analysis system.
 
-**Version:** v1.0.3 | **Framework:** Next.js 15 / React 19 | **Styling:** Tailwind v4
+**Version:** v1.0.3 | **Framework:** Next.js 15 / React 19 | **Styling:** Tailwind CSS v4
 
 ---
 
 ## Overview
 
-The frontend provides an animated, real-time UI for uploading evidence, watching agents analyze it via live WebSocket streams, reviewing HITL checkpoints, and viewing the final cryptographically signed forensic report.
+Real-time investigation UI: upload evidence, watch five AI agents analyze it via live WebSocket streams, review Human-in-the-Loop checkpoints, and read the final cryptographically signed forensic report.
 
 ---
 
@@ -16,9 +16,9 @@ The frontend provides an animated, real-time UI for uploading evidence, watching
 
 | Route | Purpose |
 |-------|---------|
-| `/` | Landing page — file upload, validation, investigation start |
-| `/evidence` | Live analysis view — WebSocket agent updates, HITL decision panel |
-| `/result` | Final signed report with agent findings and confidence scores |
+| `/` | Landing page — file upload, case ID entry, investigation start |
+| `/evidence` | Live analysis — WebSocket agent updates, HITL decision panel, deep analysis trigger |
+| `/result` | Final signed report — per-agent findings, confidence scores, verdict, cryptographic proof |
 | `/session-expired` | Session timeout recovery |
 
 ---
@@ -29,32 +29,38 @@ The frontend provides an animated, real-time UI for uploading evidence, watching
 frontend/
 ├── src/
 │   ├── app/
-│   │   ├── page.tsx              ← Landing + file upload
-│   │   ├── evidence/page.tsx     ← Live analysis (WebSocket consumer)
-│   │   ├── result/page.tsx       ← Signed report display
-│   │   ├── session-expired/      ← Session timeout page
-│   │   └── api/auth/demo/        ← Next.js route for demo auto-login
+│   │   ├── page.tsx                    ← Landing + file upload (MicroscopeScanner, EnvelopeCTA)
+│   │   ├── evidence/page.tsx           ← Live analysis orchestrator (WebSocket consumer)
+│   │   ├── result/page.tsx             ← Signed report display with per-agent analysis
+│   │   ├── session-expired/page.tsx    ← Session timeout recovery
+│   │   ├── error.tsx                   ← Global Next.js error boundary
+│   │   ├── layout.tsx                  ← Root layout (Syne + JetBrains Mono fonts)
+│   │   ├── globals.css                 ← Tailwind v4 theme, btn utility classes, cursor:pointer
+│   │   └── api/auth/demo/route.ts      ← Next.js server route for demo auto-login
 │   ├── components/
 │   │   ├── evidence/
-│   │   │   ├── FileUploadSection.tsx    ← Drag-drop file upload
-│   │   │   ├── AgentProgressDisplay.tsx ← Live agent cards + decision buttons
-│   │   │   ├── CompletionBanner.tsx     ← Analysis complete banner
-│   │   │   ├── ErrorDisplay.tsx         ← Error state display
-│   │   │   ├── HITLCheckpointModal.tsx  ← Human review modal
-│   │   │   └── HeaderSection.tsx        ← Page header
+│   │   │   ├── FileUploadSection.tsx   ← Drag-and-drop file upload with MIME validation
+│   │   │   ├── AgentProgressDisplay.tsx ← Glass agent cards, decision buttons, deep phase
+│   │   │   ├── CompletionBanner.tsx    ← Analysis complete banner
+│   │   │   ├── ErrorDisplay.tsx        ← Error state display
+│   │   │   ├── HITLCheckpointModal.tsx ← Accessible human-review modal
+│   │   │   ├── HeaderSection.tsx       ← Keyboard-accessible logo nav header
+│   │   │   └── index.ts                ← Re-exports
 │   │   └── ui/
-│   │       ├── AgentIcon.tsx     ← Per-agent animated icon
-│   │       ├── AgentResponseText.tsx ← Streaming text display
-│   │       └── dialog.tsx        ← Accessible dialog primitive
+│   │       ├── AgentIcon.tsx           ← Per-agent animated Lucide icon
+│   │       ├── AgentResponseText.tsx   ← Streaming thinking text display
+│   │       ├── GlobalFooter.tsx        ← Academic disclaimer footer (all pages)
+│   │       ├── PageTransition.tsx      ← Framer-style fade/slide page transitions
+│   │       └── dialog.tsx              ← Radix UI accessible dialog primitive
 │   ├── hooks/
-│   │   ├── useForensicData.ts    ← Core data hook: history, session, validation
-│   │   ├── useSimulation.ts      ← Demo mode simulation hook
-│   │   └── useSound.ts           ← Subtle audio feedback
+│   │   ├── useForensicData.ts          ← Core hook: session history, file validation, mapping
+│   │   ├── useSimulation.ts            ← WebSocket consumer: auth, reconnect, resume
+│   │   └── useSound.ts                 ← Web Audio API subtle feedback sounds
 │   └── lib/
-│       ├── api.ts                ← Backend API client (fetch + WebSocket)
-│       ├── schemas.ts            ← Zod validation schemas
-│       ├── constants.ts          ← Agent definitions, MIME allowlist
-│       └── utils.ts              ← cn() Tailwind class merger
+│       ├── api.ts                      ← Backend API client (fetch + WebSocket)
+│       ├── schemas.ts                  ← Zod validation schemas
+│       ├── constants.ts                ← Agent definitions, MIME allowlist
+│       └── utils.ts                    ← cn() Tailwind class merger (clsx + tailwind-merge)
 ```
 
 ---
@@ -65,7 +71,9 @@ frontend/
 |----------|----------|-------------|
 | `NEXT_PUBLIC_API_URL` | Yes | Backend URL reachable from user's browser (e.g. `http://localhost:8000`) |
 | `NEXT_PUBLIC_DEMO_PASSWORD` | Yes | Password for auto-login demo investigator account |
-| `INTERNAL_API_URL` | No | Backend URL for server-side Next.js requests (e.g. `http://backend:8000`) |
+| `INTERNAL_API_URL` | No | Backend URL for Next.js server-side requests (e.g. `http://forensic_api:8000` in Docker) |
+
+> `NEXT_PUBLIC_*` variables are baked into the JS bundle at build time. After changing them, you must rebuild: `docker compose build frontend`.
 
 ---
 
@@ -77,16 +85,16 @@ cd frontend
 # Install dependencies
 npm ci
 
-# Create env file
+# Create local env file
 cp ../.env.example .env.local
-# Edit .env.local — set NEXT_PUBLIC_API_URL=http://localhost:8000
+# Edit .env.local: set NEXT_PUBLIC_API_URL=http://localhost:8000
 
-# Start dev server
+# Start dev server with hot-reload
 npm run dev
 # Open http://localhost:3000
 ```
 
-The backend must be running at `NEXT_PUBLIC_API_URL`. Use `.\manage.ps1 infra` (or `docker compose -f docs/docker/docker-compose.infra.yml up`) to start just Postgres, Redis, and Qdrant, then run the backend natively.
+The backend must be running. Start infrastructure only with: `./manage.sh infra` (starts Postgres, Redis, Qdrant), then run the backend natively.
 
 ---
 
@@ -97,43 +105,50 @@ Tests live in `tests/frontend/` at the project root.
 ```bash
 cd frontend
 
-# Run all tests (watch mode)
-npm test
-
-# Run once (CI mode)
+# All tests (CI mode — no watch)
 npm test -- --watchAll=false
 
-# Run specific test file
-npm test -- tests/frontend/unit/lib/api.test.ts
+# Watch mode (development)
+npm test
 
-# With coverage
+# Specific file
+npm test -- tests/frontend/unit/lib/api.test.ts --watchAll=false
+
+# With coverage report
 npm run test:coverage
+
+# By pattern
+npm test -- --testPathPattern="accessibility" --watchAll=false
 ```
 
 ### Test categories
 
 | Directory | What's tested |
-|-----------|--------------|
-| `tests/frontend/unit/lib/` | API client, Zod schemas, utility functions |
-| `tests/frontend/unit/hooks/` | useForensicData hook, mapReportDtoToReport |
-| `tests/frontend/unit/components/` | FileUploadSection, AgentProgressDisplay rendering |
-| `tests/frontend/accessibility/` | WCAG 2.1 AA: keyboard nav, ARIA, focus management |
-| `tests/frontend/integration/` | Session data flow, deduplication, auth lifecycle |
-| `tests/frontend/e2e/` | WebSocket full lifecycle, arbiter race condition fix |
+|-----------|--------------| 
+| `tests/frontend/unit/lib/` | API client, token management, Zod schemas, `cn()` utility |
+| `tests/frontend/unit/hooks/` | `useForensicData`, `mapReportDtoToReport`, file validation |
+| `tests/frontend/unit/components/` | `FileUploadSection`, `AgentProgressDisplay` rendering |
+| `tests/frontend/accessibility/` | WCAG 2.1 AA: keyboard nav, ARIA labels, focus management |
+| `tests/frontend/integration/` | Session data flow, report deduplication, auth lifecycle |
+| `tests/frontend/e2e/` | WebSocket full lifecycle, arbiter race fix, deep analysis flow |
 
 ---
 
 ## Key Behaviors
 
-**File validation** — Validated client-side before upload: max 50MB, allowed MIME types match backend allowlist (`image/jpeg`, `image/png`, `image/tiff`, `image/webp`, `image/gif`, `image/bmp`, `video/mp4`, `video/quicktime`, `video/x-msvideo`, `audio/wav`, `audio/x-wav`, `audio/mpeg`, `audio/mp4`, `audio/flac`).
+**File validation** — Client-side before upload: max 50 MB, allowed MIME types match backend allowlist (`image/jpeg`, `image/png`, `image/tiff`, `image/webp`, `image/gif`, `image/bmp`, `video/mp4`, `video/quicktime`, `video/x-msvideo`, `audio/wav`, `audio/x-wav`, `audio/mpeg`, `audio/mp4`, `audio/flac`).
 
-**WebSocket auth** — On WS open, immediately sends `{"type":"AUTH","token":"<jwt>"}`. The `connected` promise resolves on either `CONNECTED` or the first `AGENT_UPDATE` message (race condition tolerance).
+**WebSocket auth** — On WS open, immediately sends `{"type":"AUTH","token":"<jwt>"}`. The `connected` promise resolves on either `CONNECTED` or the first `AGENT_UPDATE` message (race condition tolerance for slow connections).
 
-**HITL checkpoint** — When the pipeline pauses (`PIPELINE_PAUSED` message), a decision modal appears. The user chooses Accept, Deep Analysis, or New Upload. The decision button guard (`isNavigating=true`) prevents double-submission.
+**Two-phase investigation** — After initial analysis, the pipeline sends `PIPELINE_PAUSED`. The frontend shows Accept / Deep Analysis / New Upload buttons. The chosen action calls `POST /api/v1/sessions/{id}/resume` with `{"deep_analysis": true/false}`.
 
-**Arbiter navigation fix** — `resumeInvestigation()` is fully awaited before `router.push('/result')`. This prevents the result page from loading before the report is finalized.
+**Deep analysis phase** — `clearCompletedAgents()` is called on deep analysis start to reset agent cards. Agent cards reappear fresh as each agent completes its deep pass. Stale initial-phase thinking text is cleared.
 
-**Report deduplication** — Findings with the same `finding_type` and no `analysis_phase` metadata are deduplicated to prevent duplicate cards in the report view. Findings with `metadata.analysis_phase = "deep"` are always preserved separately.
+**HITL checkpoint** — When `HITL_CHECKPOINT` is received, a decision modal appears. The investigator submits one of: `APPROVE`, `REDIRECT`, `OVERRIDE`, `TERMINATE`, `ESCALATE`.
+
+**Arbiter navigation guard** — `resumeInvestigation()` is fully awaited before `router.push('/result')`. The `isNavigating` flag prevents double-submission and disables buttons during navigation.
+
+**Report deduplication** — `mapReportDtoToReport()` deduplicates findings by `finding_type`. Findings tagged `metadata.analysis_phase = "deep"` are always preserved as separate entries from their initial counterparts.
 
 ---
 
@@ -141,8 +156,19 @@ npm run test:coverage
 
 ```bash
 npm run build    # Production Next.js build (standalone output)
-npm run lint     # ESLint (separate from build — ESLint disabled during next build)
-npm run start    # Start production server (after build)
+npm run lint     # ESLint (does not run during next build — explicitly separate)
+npm run start    # Serve production build locally (after build)
 ```
 
-The Docker build uses `output: standalone` for minimal production images.
+The Docker image uses `output: 'standalone'` for minimal production images (~80 MB). Caddy serves as the reverse proxy in the Docker stack.
+
+---
+
+## Accessibility (WCAG 2.1 AA)
+
+All interactive elements are keyboard accessible. Key compliance points:
+- Logo nav link: `role="button"`, `tabIndex={0}`, `onKeyDown` Enter/Space
+- HITL textarea: associated `<label>` via `htmlFor` / `id`
+- Decision buttons: native `disabled` attribute during `isNavigating`
+- Error states: text announcements (not color alone)
+- Loading states: `aria-busy` and text feedback

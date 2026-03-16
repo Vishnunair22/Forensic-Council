@@ -218,7 +218,10 @@ If you want to run the backend natively (outside Docker) but need the databases:
 ```bash
 .\manage.ps1 infra
 # or:
-docker compose -f docs/docker/docker-compose.infra.yml --env-file .env up -d
+docker compose \
+  -f docs/docker/docker-compose.yml \
+  -f docs/docker/docker-compose.infra.yml \
+  --env-file .env up -d
 ```
 
 This starts only Postgres, Redis, and Qdrant.
@@ -359,7 +362,7 @@ All `manage.ps1` / `manage.sh` targets automatically use `docs/docker/docker-com
 | Start production | `.\manage.ps1 up` | `docker compose -f docs/docker/docker-compose.yml --env-file .env up -d --build` |
 | Start dev | `.\manage.ps1 dev` | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml --env-file .env up --build` |
 | Start production-optimized | `.\manage.ps1 prod` | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.prod.yml --env-file .env up -d --build` |
-| Infrastructure only | `.\manage.ps1 infra` | `docker compose -f docs/docker/docker-compose.infra.yml --env-file .env up -d` |
+| Infrastructure only | `.\manage.ps1 infra` | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.infra.yml --env-file .env up -d` |
 | Stop (keep volumes) | `.\manage.ps1 down` | `docker compose -f docs/docker/docker-compose.yml --env-file .env down` |
 | Stop (delete volumes) | `.\manage.ps1 down-clean` | `docker compose -f docs/docker/docker-compose.yml --env-file .env down -v` |
 | View logs | `.\manage.ps1 logs` | `docker compose -f docs/docker/docker-compose.yml --env-file .env logs -f` |
@@ -410,12 +413,16 @@ docker compose -f docs/docker/docker-compose.yml --env-file .env up -d --no-deps
 
 ### Backend `read_only: true` permission errors
 
-The backend runs with a read-only filesystem for security. Writable paths must be tmpfs or volumes. If you see permission errors for paths like `/tmp`, `/app/storage`, or `/app/cache`, check that the compose file has:
+The backend runs with a read-only filesystem for security. Writable paths must be tmpfs or named volumes. If you see permission errors for paths like `/tmp`, `/app/storage`, or `/app/cache`, check that the compose file has:
 ```yaml
+read_only: true
 tmpfs:
-  - /tmp
-  - /app/storage/temp
+  - /tmp:nosuid,size=512m
+volumes:
+  - evidence_data:/app/storage/evidence:rw
+  - cache_scratch:/app/cache:rw
 ```
+`/tmp` is the only tmpfs mount. All other writable paths (`/app/storage/evidence`, `/app/cache`, and the individual model sub-caches) are backed by named volumes defined in the `volumes:` block.
 
 ---
 

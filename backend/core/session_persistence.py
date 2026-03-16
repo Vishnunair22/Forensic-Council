@@ -249,18 +249,16 @@ class SessionPersistence:
                     status,
                 )
                 
-                # Also update reports table with error
+                # Update session_reports if a row already exists (error status + message)
+                # We use UPDATE not INSERT to avoid NOT NULL violations on case_id/investigator_id
+                # (those fields are only available at investigation start, not in the error callback)
                 await self.client.execute(
                     """
-                    INSERT INTO session_reports (session_id, case_id, investigator_id, status, error_message)
-                    VALUES ($1, $2, $3, $4, $5)
-                    ON CONFLICT (session_id) DO UPDATE SET
-                        status = $4,
-                        error_message = $5
+                    UPDATE session_reports
+                    SET status = $2, error_message = $3
+                    WHERE session_id = $1
                     """,
                     UUID(session_id),
-                    "",  # case_id - NOT NULL but not available here
-                    "",  # investigator_id - NOT NULL but not available here
                     status,
                     error_message,
                 )

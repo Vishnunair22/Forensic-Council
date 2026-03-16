@@ -34,6 +34,12 @@ import {
   AgentUpdate,
 } from "@/components/evidence";
 
+/** Dev-only logger — silenced in production builds */
+const isDev = process.env.NODE_ENV !== "production";
+const dbg = {
+  error: isDev ? console.error.bind(console) : () => {},
+};
+
 export default function EvidencePage() {
   const router = useRouter();
   const { playSound } = useSound();
@@ -128,7 +134,7 @@ export default function EvidencePage() {
 
       try {
         // Use the stable ID generated on mount (never regenerates mid-session).
-        const investigatorId = investigatorIdRef.current as unknown as string;
+        const investigatorId = investigatorIdRef.current;
 
         const caseId = "CASE-" + Date.now();
         const res = await startInvestigation(targetFile, caseId, investigatorId);
@@ -142,14 +148,14 @@ export default function EvidencePage() {
           await connectWebSocket(res.session_id);
           setIsUploading(false);
         } catch (wsErr: unknown) {
-          console.error("WebSocket connection failed", wsErr);
+          dbg.error("WebSocket connection failed", wsErr);
           const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to analysis streams";
           setValidationError(wsErrMsg);
           setIsUploading(false);
           resetSimulation();
         }
       } catch (err: unknown) {
-        console.error("Investigation start failed", err);
+        dbg.error("Investigation start failed", err);
         let errorMsg = err instanceof Error ? err.message : "Failed to start investigation";
         // Surface common backend errors clearly
         if (errorMsg.includes("422") || errorMsg.toLowerCase().includes("unprocessable")) {
@@ -232,7 +238,7 @@ export default function EvidencePage() {
       dismissCheckpoint();
       playSound("success");
     } catch (err) {
-      console.error("HITL decision failed", err);
+      dbg.error("HITL decision failed", err);
       playSound("error");
     } finally {
       setIsSubmittingHITL(false);
@@ -254,7 +260,7 @@ export default function EvidencePage() {
       await new Promise(r => setTimeout(r, 400));
       router.push("/result");
     } catch (err) {
-      console.error("Accept analysis failed", err);
+      dbg.error("Accept analysis failed", err);
       playSound("error");
       setIsNavigating(false);
       setShowArbiterOverlay(false);

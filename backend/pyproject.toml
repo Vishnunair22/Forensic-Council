@@ -2,7 +2,9 @@
 name = "forensic_council"
 version = "1.0.3"
 description = "Multi-Agent Forensic Evidence Analysis System"
-requires-python = ">=3.11"
+# Upper bound: qdrant-client 1.14.1–1.16.1 force numpy>=2.1 on py3.13+, conflicting
+# with moviepy 1.x which requires numpy<2.0. Docker image uses Python 3.12.
+requires-python = ">=3.11,<3.13"
 license = { text = "MIT" }
 authors = [
     { name = "Forensic Council Team" }
@@ -10,9 +12,11 @@ authors = [
 
 dependencies = [
     # Core
-    "langgraph>=0.4",
-    "redis[asyncio]>=5.3",
-    "qdrant-client[async]>=1.14,<1.17",
+    "redis>=5.3",                          # async support built-in via redis.asyncio (extra removed in 5.x)
+    # qdrant==1.16.2 is the last pre-1.17 release that only requires numpy>=2.3 on
+    # Python 3.14+ (not 3.13+). Combined with requires-python<3.13 this is safe with numpy<2.0.
+    # [async] extra removed in 1.10+ — async support (httpx) is built-in.
+    "qdrant-client==1.16.2",
     "asyncpg>=0.30",
     "pydantic>=2.11",
     "pydantic-settings>=2.9",

@@ -482,6 +482,11 @@ async def get_session_report(
                     case_id=rd.get("case_id", ""),
                     executive_summary=rd.get("executive_summary", ""),
                     per_agent_findings=per_agent,
+                    per_agent_metrics=rd.get("per_agent_metrics") or {},
+                    per_agent_analysis=rd.get("per_agent_analysis") or {},
+                    overall_confidence=float(rd.get("overall_confidence") or 0.0),
+                    overall_error_rate=float(rd.get("overall_error_rate") or 0.0),
+                    overall_verdict=rd.get("overall_verdict") or "REVIEW REQUIRED",
                     cross_modal_confirmed=[_rebuild_finding(f) for f in rd.get("cross_modal_confirmed", [])],
                     contested_findings=rd.get("contested_findings", []),
                     tribunal_resolved=rd.get("tribunal_resolved", []),
@@ -601,3 +606,86 @@ async def get_session_checkpoints(
     return checkpoints
 
 
+
+
+# ============================================================================
+# RESUME ENDPOINT — placed here so it lives at /api/v1/sessions/{session_id}/resume
+# matching the frontend call from useSimulation.ts
+# ============================================================================
+
+from pydantic import BaseModel as _BaseModel
+
+
+class ResumeRequest(_BaseModel):
+    """Request body for the resume endpoint."""
+    deep_analysis: bool
+
+
+@router.post("/{session_id}/resume")
+async def resume_investigation(
+    session_id: str,
+    request: ResumeRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Resume investigation after initial analysis decision.
+
+    Called by the frontend when the user clicks:
+    - "Accept Analysis"  → deep_analysis=False → skip deep pass, proceed to arbiter
+    - "Deep Analysis"    → deep_analysis=True  → run heavy ML analysis
+
+    The pipeline must be in a paused state (waiting on deep_analysis_decision_event).
+    Returns 200 with idempotency: if the event was already set, returns
+    {"status": "already_resumed"} rather than 409.
+    """
+    from core.logging import get_logger as _get_logger
+    _log = _get_logger(__name__)
+
+    _log.info(
+        "Resume investigation called",
+        session_id=session_id,
+        deep_analysis=request.deep_analysis,
+        user_id=current_user.user_id,
+    )
+
+    pipeline = get_active_pipeline(session_id)
+    if not pipeline:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No active investigation found for session {session_id}",
+        )
+
+    if not hasattr(pipeline, "deep_analysis_decision_event"):
+        raise HTTPException(
+            status_code=400,
+            detail="Pipeline is not in a paused state waiting for decision",
+        )
+
+    # Idempotent — if already resumed, return gracefully
+    if pipeline.deep_analysis_decision_event.is_set():
+        _log.info(
+            "Resume called but decision already made — returning idempotent 200",
+            session_id=session_id,
+        )
+        return {
+            "status": "already_resumed",
+            "session_id": session_id,
+            "deep_analysis": request.deep_analysis,
+            "message": "Investigation already resumed",
+        }
+
+    pipeline.run_deep_analysis_flag = request.deep_analysis
+    pipeline.deep_analysis_decision_event.set()
+
+    _log.info(
+        "Investigation resume signal sent",
+        session_id=session_id,
+        deep_analysis=request.deep_analysis,
+    )
+
+    return {
+        "status": "resumed",
+        "session_id": session_id,
+        "deep_analysis": request.deep_analysis,
+        "message": "Deep analysis started" if request.deep_analysis else "Proceeding to final report",
+    }
