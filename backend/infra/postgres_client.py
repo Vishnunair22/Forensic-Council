@@ -313,11 +313,19 @@ class TransactionContext:
     
     async def fetch(self, query: str, *args: Any) -> list[asyncpg.Record]:
         """Fetch rows within the transaction."""
-        return await self._conn.fetch(query, *args)
+        processed_args = [
+            json.dumps(arg) if isinstance(arg, dict) else arg
+            for arg in args
+        ]
+        return await self._conn.fetch(query, *processed_args)
     
     async def fetch_one(self, query: str, *args: Any) -> Optional[asyncpg.Record]:
         """Fetch a single row within the transaction."""
-        return await self._conn.fetchrow(query, *args)
+        processed_args = [
+            json.dumps(arg) if isinstance(arg, dict) else arg
+            for arg in args
+        ]
+        return await self._conn.fetchrow(query, *processed_args)
 
 
 # Singleton instance — protected by a lock to prevent concurrent init races

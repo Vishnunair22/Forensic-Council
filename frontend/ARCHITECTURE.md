@@ -30,6 +30,8 @@ frontend/
 │   │       ├── GlobalFooter.tsx       # Global academic disclaimer footer
 │   │       └── PageTransition.tsx     # Smooth page fade-up transition wrapper
 │   │
+│   ├── DevErrorOverlay.tsx    # Dev-only error boundary (stripped in prod)
+│   │
 │   ├── hooks/                 # Custom React hooks
 │   │   ├── useForensicData.ts    # Forensic data management hook
 │   │   ├── useSimulation.ts      # Investigation simulation hook
@@ -45,10 +47,7 @@ frontend/
 │   │   ├── index.ts          # Main types
 │   │   └── global.d.ts        # Global type declarations
 │   │
-│   └── __tests__/             # Test files
-│       ├── hooks/
-│       ├── lib/
-│       └── types/
+│   └── (tests live in tests/frontend/ at project root)
 │
 ├── public/                    # Static assets
 ├── package.json               # Dependencies and scripts
@@ -66,6 +65,7 @@ frontend/
 - Displays introduction and project information
 - File upload modal for quick analysis start
 - Navigation to evidence page
+- Contains three inline helper components (not separate files): `MicroscopeScanner` (animated SVG hero), `EnvelopeCTA` (animated envelope call-to-action), `GlassCard` (glassmorphism card wrapper)
 
 #### Evidence Page (`/evidence/page.tsx`)
 - Main investigation workflow orchestrator
@@ -335,15 +335,20 @@ User views results
 ## Testing
 
 ### Test Files
-- `__tests__/hooks/useForensicData.test.ts` - Data hook tests
-- `__tests__/lib/api.test.ts` - API client tests
-- `__tests__/types/schema.test.ts` - Schema validation tests
+All tests live in `tests/frontend/` at the **project root** (not inside `frontend/`):
+- `tests/frontend/unit/lib/api.test.ts` — API client + token management
+- `tests/frontend/unit/hooks/useForensicData.test.ts` — Hook + mapReportDtoToReport
+- `tests/frontend/unit/components/components.test.tsx` — Component rendering
+- `tests/frontend/accessibility/accessibility.test.tsx` — WCAG 2.1 AA
+- `tests/frontend/integration/page_flows.test.tsx` — Session flow
+- `tests/frontend/e2e/websocket_flow.test.ts` — WebSocket lifecycle
 
 ### Running Tests
 ```bash
-npm run test              # Run tests once
-npm run test:watch      # Watch mode
-npm run test:coverage   # Coverage report
+# From frontend/ directory:
+npm test -- --watchAll=false   # One-shot (CI)
+npm test                       # Watch mode
+npm run test:coverage          # With coverage
 ```
 
 ---

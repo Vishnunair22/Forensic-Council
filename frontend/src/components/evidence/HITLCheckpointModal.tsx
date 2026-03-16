@@ -167,10 +167,11 @@ export function HITLCheckpointModal({
 
               {/* Notes */}
               <div>
-                <label className="text-sm font-semibold text-slate-300 mb-2 block">
+                <label htmlFor="hitl-notes" className="text-sm font-semibold text-slate-300 mb-2 block">
                   Additional Notes (Optional)
                 </label>
                 <textarea
+                  id="hitl-notes"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   placeholder="Explain your decision or provide additional context..."

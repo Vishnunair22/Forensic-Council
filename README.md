@@ -102,14 +102,21 @@ Login: username `investigator`, password = `NEXT_PUBLIC_DEMO_PASSWORD` from `.en
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/api/v1/auth/login` | Get JWT |
-| `POST` | `/api/v1/auth/logout` | Invalidate JWT (token blacklisted in Redis) |
-| `GET`  | `/api/v1/auth/me` | Get current user info |
+| `GET`  | `/api/v1/auth/me` | Current user info |
 | `POST` | `/api/v1/auth/refresh` | Refresh access token |
+| `POST` | `/api/v1/auth/logout` | Invalidate JWT (blacklisted in Redis) |
 | `POST` | `/api/v1/investigate` | Upload evidence + start investigation |
-| `WS` | `/api/v1/sessions/{id}/live` | Live WebSocket cognitive stream |
-| `GET` | `/api/v1/sessions/{id}/report` | Signed final report |
+| `WS`   | `/api/v1/sessions/{id}/live` | Live WebSocket cognitive stream |
+| `POST` | `/api/v1/sessions/{id}/resume` | Resume after initial analysis (Accept/Deep) |
+| `GET`  | `/api/v1/sessions/{id}/report` | Signed final report (202 while pending) |
+| `GET`  | `/api/v1/sessions/{id}/arbiter-status` | Lightweight arbiter poll |
+| `GET`  | `/api/v1/sessions/{id}/checkpoints` | HITL checkpoints |
+| `GET`  | `/api/v1/sessions/{id}/brief/{agent_id}` | Agent thinking text |
+| `GET`  | `/api/v1/sessions` | List all sessions for current user |
+| `DELETE` | `/api/v1/sessions/{id}` | Delete a session and its report |
 | `POST` | `/api/v1/hitl/decision` | Submit HITL decision |
-| `GET` | `/health` | Health check |
+| `GET`  | `/health` | Deep health check (Postgres + Redis + Qdrant) |
+| `GET`  | `/api/v1/metrics` | Prometheus-format backend metrics |
 
 Full reference → [`docs/API.md`](docs/API.md)
 
@@ -160,6 +167,8 @@ Full caching guide → [`docs/docker/README.md`](docs/docker/README.md)
 ## Changelog
 
 **v1.0.3 (2026-03-16)** — Full production hardening across all layers:
+- **Session 4 backend audit**: Resume endpoint URL mismatch fixed (was 404 on every Accept/Deep click) · DB report rebuild missing 5 fields · `update_session_status` NOT NULL violation · Qdrant singleton race condition · HTML injection in report renderer · `TransactionContext.fetch` dict args · pytest path and `backend/__init__.py` · CI test job fixed
+- **Session 3 connectivity**: All frontend↔backend URL mappings verified · Docker CORS origins confirmed · WebSocket subprotocol match · MIME type allowlists identical
 - **Critical bug fixes**: `useRef` lazy-init fixed (was breaking every POST), `react_loop` `update_state` missing `agent_id`, deep pass returning combined findings (duplication), stale `agentUpdates` on deep phase start
 - **Deep analysis**: Agent1 Gemini runs first → context injected into Agents 3 & 5 · Phase-aware Groq synthesis (deep pass compares vs initial) · Active-agent-only deep queue
 - **Arbiter**: 5-tier verdict (CERTAIN/LIKELY/UNCERTAIN/INCONCLUSIVE/MANIPULATION DETECTED) · Per-agent Groq narrative · `AgentMetrics` with confidence + error rate · Finding deduplication

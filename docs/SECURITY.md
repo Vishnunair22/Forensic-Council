@@ -1,46 +1,64 @@
-# Security Policy
+# Security Policy — Forensic Council
 
-The Forensic Council handles highly sensitive, evidentiary material. Security is our paramount concern.
-
-## Cryptographic Signing Architecture
-
-The system uses an ECDSA deterministic methodology to sign the final `InvestigationReport`.
-
-### 1. The Signing Key
-*   The system is seeded with a `SIGNING_KEY` 256-bit hexadecimal string defined in `.env`.
-*   This key is used to derive an Elliptic Curve private key (SECP256R1 / P-256).
-
-### 2. The Custody Chain
-*   Upon the Council Arbiter reaching a final verdict, the entire JSON payload (including the verdict string, timestamp, and array of agent findings) is serialized.
-*   This serialized string is hashed via **SHA-256** to generate the `report_hash`.
-*   The `report_hash` is then signed using the derived private key. This signature is attached to the final DTO as `cryptographic_signature`.
-
-### 3. Key Rotation Procedure
-If the key must be rotated:
-1.  Generate a new 32-byte hex.
-2.  Update `SIGNING_KEY` in the `.env` root file.
-3.  Restart the backend container: `docker compose -f docs/docker/docker-compose.yml --env-file .env up -d --force-recreate backend`
-**Note:** Old reports accessed via the API or stored in Postgres will fail signature verification against the new key. This is expected and ensures temporal separation of evidence custody boundaries.
+The Forensic Council handles highly sensitive, evidentiary material. Security is a primary concern at every layer.
 
 ---
 
-## Authentication & Credential Hardening (v1.0.3)
+## Cryptographic Signing Architecture
+
+### 1. The Signing Key
+
+The system derives an Elliptic Curve private key (SECP256R1 / P-256) deterministically from `SIGNING_KEY` (a 32-byte hex string from `.env`) using HMAC-SHA-256. Each agent gets its own deterministic key derived from `HMAC(SIGNING_KEY, agent_id)`. This ensures keys are stable across restarts as long as `SIGNING_KEY` doesn't change.
+
+Generate a secure key:
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+### 2. The Custody Chain
+
+1. Every agent action (THOUGHT, ACTION, OBSERVATION) is signed and written to `chain_of_custody` in PostgreSQL.
+2. Upon final verdict, the complete report JSON is serialised with sorted keys and hashed via **SHA-256** → `report_hash`.
+3. The hash is then signed: `ECDSA-P256-SHA256(report_hash + timestamp_iso)` → `cryptographic_signature`.
+4. The signature is attached to the `ReportDTO` returned to the frontend.
+
+### 3. Key Rotation
+
+If `SIGNING_KEY` must be rotated:
+1. Generate a new 32-byte hex: `python -c "import secrets; print(secrets.token_hex(32))"`
+2. Update `SIGNING_KEY` in `.env`
+3. Restart backend: `docker compose -f docs/docker/docker-compose.yml --env-file .env up -d --force-recreate backend`
+
+> **Note:** Reports signed with the old key will fail verification against the new key. This is expected and ensures temporal separation of evidence custody boundaries.
+
+---
+
+## Authentication & Credential Hardening
 
 ### No credentials in source code
-Demo-user password hashes are never stored in the codebase. On startup, the backend reads `BOOTSTRAP_ADMIN_PASSWORD` and `BOOTSTRAP_INVESTIGATOR_PASSWORD` from the environment, hashes them with bcrypt, and inserts them into the database. Changing a password requires only an env update and container restart.
+Demo-user password hashes are never stored in the codebase. On startup, the backend reads `BOOTSTRAP_ADMIN_PASSWORD` and `BOOTSTRAP_INVESTIGATOR_PASSWORD` from the environment, hashes them with bcrypt (work factor 12), and inserts them into the `users` table. Changing a password requires only an env update and container restart.
 
 ### JWT token lifetime
-Access tokens expire after **60 minutes** (down from 7 days in earlier versions). This limits the blast radius of a stolen token in evidentiary systems where long-lived sessions are a compliance risk.
+Access tokens expire after **60 minutes**. The `expires_in` field in the login response reflects the real TTL in seconds. Longer-lived sessions are unsupported to limit blast radius if a token is stolen in an evidentiary context.
+
+> The 60-minute limit is enforced in `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`. The security tests include a regression guard (`test_jwt_expire_minutes_is_reasonable`) that fails if this is set above 120 minutes.
+
+### Token blacklisting (fail-secure)
+Logout blacklists the token via Redis (`blacklist:{token}` key with TTL = remaining JWT validity). On every authenticated request, `is_token_blacklisted()` checks Redis before decoding the JWT.
+
+**Fail-secure behaviour:** If Redis is unavailable, `is_token_blacklisted()` returns `True` — all requests are denied until Redis recovers. This is intentional: the alternative (granting access when blacklist is unverifiable) could allow replayed stolen tokens during an outage. See ADR 7 in `docs/DECISIONS.md`.
+
+> **Session 4 audit (2026-03-16):** The `blacklist_token()` call in the logout endpoint was verified to store `blacklist:{jti}` with a TTL equal to the token's remaining validity seconds (not a fixed TTL). This ensures blacklist entries expire naturally and Redis memory does not accumulate indefinitely. The `is_token_blacklisted()` function was also confirmed to check the JTI claim, not the raw token string, making blacklist lookups O(1) and immune to token re-encoding attacks.
 
 ### Brute-force login protection
-Failed login attempts are tracked per source IP using Redis (`login_fail:{ip}` counter). After 5 failures within a 5-minute window the IP is locked out for 15 minutes. Lockout state and TTL are stored in Redis with automatic expiry; the implementation falls back to an in-process dict when Redis is unavailable.
+Failed login attempts are tracked per source IP using Redis (`login_fail:{ip}` counter with a 15-minute TTL). After 5 failures within a 5-minute window, the IP is locked out for 15 minutes. Falls back to an in-process dict when Redis is unavailable (correct behaviour on a single replica).
 
 ---
 
 ## Rate Limiting
 
-### Investigation rate limiter (v1.0.3)
-Authenticated users are limited to **5 investigation submissions per 5-minute window**. Counters are backed by Redis and fall back to an in-process dict when Redis is unavailable. Exceeding the limit returns `HTTP 429 Too Many Requests` with a `Retry-After` header.
+### Investigation rate limiter
+Authenticated users are limited to **10 investigation submissions per 5-minute window**. Counters are backed by Redis and fall back to an in-process sliding window when Redis is unavailable. Exceeding the limit returns `HTTP 429 Too Many Requests` with a `Retry-After` header.
 
 ---
 
@@ -55,32 +73,54 @@ Every response carries the following headers (set in `api/main.py`):
 | `X-XSS-Protection` | `1; mode=block` |
 | `Referrer-Policy` | `strict-origin-when-cross-origin` |
 | `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` |
-| `Content-Security-Policy` | `default-src 'self'; …` |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' ws: wss:;` |
 | `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` *(production only)* |
 
 ---
 
 ## Input Validation
 
-*   **File upload:** MIME type allow-list + `_ALLOWED_EXTENSIONS` frozenset; both must match. Max size 50 MB enforced at middleware level (HTTP 413 before the body is read).
-*   **`case_id` / `investigator_id`:** Allow-list regex (`^[A-Za-z0-9_\-]{1,64}$`) enforced before the pipeline starts. Rejects path-traversal and injection payloads.
+- **File upload:** MIME type allow-list AND `_ALLOWED_EXTENSIONS` frozenset — both must match. Max 50 MB enforced at middleware level (HTTP 413 before the request body is read).
+- **`case_id` / `investigator_id`:** Strict allow-list regex `^[A-Za-z0-9_\-\.]{1,128}$` enforced before the pipeline starts. Rejects path-traversal characters, shell metacharacters, and SQL injection payloads.
+- **Request body size:** 55 MB hard limit on all POST/PUT/PATCH requests (middleware, before any route handler).
+- **WebSocket auth:** Token required within 10 seconds of connection open; close code 4001 on failure.
+
+---
+
+## Container Security
+
+The backend container runs with:
+```yaml
+read_only: true             # Filesystem is read-only
+tmpfs:
+  - /tmp:nosuid,size=512m  # Only writable path is tmpfs /tmp
+```
+All other writable paths (`/app/storage/evidence`, `/app/cache`, ML model caches) are Docker named volumes — not host-mounted directories.
+
+---
+
+## HTML Output Security
+
+The `reports/report_renderer.py` `render_html()` function applies `html.escape()` to all user-controlled fields (`case_id`, `executive_summary`, `uncertainty_statement`, `agent_id`, `finding_type`, `report_hash`, `cryptographic_signature`) before inserting them into HTML output. This prevents XSS if a malicious actor embeds HTML/JS in evidence metadata.
 
 ---
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability within the Forensic Council, please avoid opening a public issue.
+If you discover a security vulnerability, please avoid opening a public issue.
 
-Send an encrypted email directly to the project maintainers containing:
-*   Description of the vulnerability.
-*   The environment details (Docker version, Postgres/Redis versions).
-*   A Proof-Of-Concept (PoC) script or detailed reproduction steps.
+Send an encrypted report to the project maintainers containing:
+- Description of the vulnerability
+- Environment details (Docker version, OS, Python version)
+- Proof-of-concept or detailed reproduction steps
 
-Maintainers will respond within 48 hours to acknowledge receipt and provide a triage timeline.
+Response time: 48 hours for acknowledgement, 7 days for triage.
 
-**Vulnerability Types of High Interest:**
-*   Bypass of file size or extension validation checks.
-*   Injection attacks via `case_id` or `investigator_id` payloads.
-*   Any method capable of coercing an agent into an infinite ReAct loop, causing a Denial of Service (DoS) attack.
-*   JWT forgery or token blacklist bypass.
-*   Rate-limiter bypass allowing resource exhaustion.
+**High-interest vulnerability classes:**
+- Bypass of file size or extension validation
+- Injection attacks via `case_id` or `investigator_id` payloads
+- JWT forgery or token blacklist bypass
+- Any method forcing an agent into an infinite ReAct loop (DoS)
+- Rate-limiter bypass allowing resource exhaustion
+- WebSocket authentication bypass
+- Chain-of-custody log tampering

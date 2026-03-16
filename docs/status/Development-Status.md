@@ -16,10 +16,10 @@ Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [✅] → C
 
 | Stage | Status | Notes |
 |-------|--------|-------|
-| File Upload | ✅ | MIME + extension allowlists, 50MB limit, non-blocking async I/O |
+| File Upload | ✅ | MIME + extension allowlists, 50 MB limit, non-blocking async I/O |
 | Evidence Store | ✅ | Immutable storage with SHA-256 integrity check |
-| WebSocket Stream | ✅ | 12s connection timeout, CONNECTED/AGENT_UPDATE bootstrap, CancelledError re-raised |
-| Agent Dispatch | ✅ | All 5 agents concurrent; file-type validation per agent; heartbeat every 0.2s |
+| WebSocket Stream | ✅ | JWT auth on connect, CONNECTED/AGENT_UPDATE bootstrap, CancelledError re-raised |
+| Agent Dispatch | ✅ | All 5 agents sequential; file-type validation per agent; heartbeat every 0.2s |
 | Initial Analysis | ✅ | Tools run → Groq synthesises findings → PIPELINE_PAUSED → Accept/Deep buttons |
 | Deep Analysis | ✅ | Agent1 Gemini runs first → context injected into Agent3+Agent5 → fresh deep cards |
 | Council Arbiter | ✅ | Skipped agents filtered; deduplication; 5-tier verdict; per-agent Groq narrative |
@@ -28,64 +28,63 @@ Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [✅] → C
 
 ---
 
-## v1.0.3 Complete Fix Log (2026-03-16)
+## Complete Fix Log
 
-### Critical Bug Fixes
+### Session 4 (2026-03-16) — Infrastructure, Connectivity & Backend Audit
 
 | # | File | Issue | Fix |
 |---|------|-------|-----|
-| 1 | `evidence/page.tsx` | `useRef` lazy-init bug — `.current` was a function not a string, causing 422 on every POST | Replaced `useRef<string>(() => {...})` with `useRef<string>(_initInvestigatorId())` |
-| 2 | `useSimulation.ts` | `clearCompletedAgents` didn't clear `agentUpdates` — stale initial-phase text persisted in deep phase | Added `setAgentUpdates({})` to `clearCompletedAgents` |
-| 3 | `react_loop.py` | `update_state()` called without `agent_id` — iteration tracking wrote to wrong Redis key (`""`) | Added `agent_id=self.agent_id` to all 3 `update_state` calls |
-| 4 | `investigation.py` | Deep pass `run_agent_deep_pass` used all agents including skipped ones | Added `_agent_was_active()` filter; skipped agents excluded from deep queue |
-| 5 | `base_agent.py` | `run_deep_investigation()` returned combined initial+deep findings — duplicated initial cards in deep phase | Changed to return only deep findings; `self._findings` still holds combined for arbiter |
+| S4-1 | `api/routes/sessions.py` | Resume endpoint missing at `/api/v1/sessions/{id}/resume` — frontend 404 on every "Accept Analysis" / "Deep Analysis" click | Added `POST /{session_id}/resume` to `sessions.py` router (prefix `/api/v1/sessions`) |
+| S4-2 | `api/routes/sessions.py` (DB rebuild path) | `ReportDTO` constructed without 5 required fields: `per_agent_metrics`, `per_agent_analysis`, `overall_confidence`, `overall_error_rate`, `overall_verdict` — Pydantic validation error on every DB-loaded report | Added all 5 fields to `_RD(...)` constructor in DB rebuild path |
+| S4-3 | `core/session_persistence.py` | `update_session_status` error path: `INSERT INTO session_reports` with empty `""` strings for `NOT NULL` columns `case_id` / `investigator_id` — PostgreSQL constraint violation when investigation fails | Changed to `UPDATE session_reports ... WHERE session_id = $1` |
+| S4-4 | `infra/qdrant_client.py` | Singleton `get_qdrant_client()` had no `asyncio.Lock` — race condition under concurrent startup creates multiple QdrantClient instances (connection leak) | Added `asyncio.Lock` with double-checked locking; added missing `import asyncio` |
+| S4-5 | `reports/report_renderer.py` | `render_html()` inserted raw user-controlled fields (`case_id`, `executive_summary`, etc.) into HTML without escaping — XSS vector | Added `from html import escape as _esc`; wrapped all user fields |
+| S4-6 | `infra/postgres_client.py` | `TransactionContext.fetch()` and `fetch_one()` passed raw args without `json.dumps(dict)` conversion — inconsistency with all other methods | Added dict→JSON processing to both methods |
+| S4-7 | `pytest.ini` (root) | Missing `pythonpath` setting — `from core.auth` raises `ImportError`; `from backend.core.config` raises `ModuleNotFoundError` | Added `pythonpath = . backend` |
+| S4-8 | `backend/__init__.py` | Missing — `from backend.core.config` always raised `ModuleNotFoundError: No module named 'backend'` | Created empty `backend/__init__.py` |
+| S4-9 | `.github/workflows/ci.yml` | `pytest tests/unit/` ran from `backend/` directory where only empty `__init__.py` stubs exist — tests never executed | Fixed to `pytest tests/backend/ tests/infrastructure/ tests/docker/` from project root |
 
-### Feature Additions
+### Session 3 (2026-03-16) — Full Infrastructure & Connectivity Audit
 
-| # | What | Where |
-|---|------|-------|
-| 1 | 5-tier verdict: CERTAIN / LIKELY / UNCERTAIN / INCONCLUSIVE / MANIPULATION DETECTED | `arbiter.py` |
-| 2 | Per-agent Groq narrative comparing initial vs deep findings | `arbiter.py → _generate_agent_narrative()` |
-| 3 | `AgentMetrics` model with error_rate + confidence_score per agent | `arbiter.py`, `schemas.py` |
-| 4 | Phase-aware Groq synthesis: deep-pass prompt includes initial findings for comparison | `base_agent.py → _synthesize_findings_with_llm(phase=...)` |
-| 5 | Agent1 Gemini result injected into Agent3 + Agent5 after deep pass | `investigation.py → run_agent_deep_pass()` |
-| 6 | Agent5 `_shared_agent1_context` + `inject_agent1_context()` classmethod | `agent5_metadata.py` |
-| 7 | `envelope_open` / `envelope_close` / `scan` Web Audio API sounds | `useSound.ts` |
-| 8 | `MicroscopeScanner`, `EnvelopeCTA`, `GlassCard` UI components | `app/page.tsx` |
-| 9 | Syne + JetBrains Mono fonts replacing Poppins | `layout.tsx`, `globals.css` |
-| 10 | `GlobalFooter` academic disclaimer on all pages (landing, evidence, result, error) | `components/ui/GlobalFooter.tsx` |
-| 11 | `PageTransition` + `StaggerIn`/`StaggerChild` smooth page transitions | `components/ui/PageTransition.tsx` |
-| 12 | `cursor: pointer` on all buttons/interactive elements; `btn` utility classes | `globals.css` |
-| 13 | Glass card agent cards with skeleton loading, shimmer bar, ping badge | `AgentProgressDisplay.tsx` |
-| 14 | `per_agent_analysis`, `per_agent_metrics`, `overall_verdict` propagated to result page | Full stack: arbiter → schemas → sessions → api.ts → result page |
-| 15 | AgentSection: Groq narrative primary, initial/deep split, client-side dedup, collapsed raw | `result/page.tsx` |
+| # | File | Issue | Fix |
+|---|------|-------|-----|
+| S3-1 | `api/routes/sessions.py` | DB report rebuild missing 5 required `ReportDTO` fields (all new fields) | Added `per_agent_metrics`, `per_agent_analysis`, `overall_confidence`, `overall_error_rate`, `overall_verdict` |
 
-### Audit Fixes (Sessions 1–2)
+### Session 2 (2026-03-16) — Docker Fixes
 
-| # | File | Fix |
-|---|------|-----|
-| B3 | `metrics.py` | `_KEY_DURATION_SUM` suffix aligned |
-| B4 | `sessions.py` | WebSocket loop re-raises `CancelledError` |
-| B5 | `pipeline.py` | `_setup_infrastructure` uses `get_redis_client()` singleton |
-| B9 | `logging.py` | `get_logger` uses dict cache instead of `@lru_cache` |
-| B10 | `redis_client.py` | `set()` returns `result is True` |
-| B11 | `retry.py` | `CircuitBreaker.state` property is pure (side effects extracted) |
-| D3 | `sessions.py` | `get_agent_brief` queries live working memory |
-| D4 | `sessions.py` | `get_session_checkpoints` queries `hitl_checkpoints` table |
-| D6 | `evidence/page.tsx` | `investigatorId` generated once on mount |
-| D7 | `useSimulation.ts` | Dead `_phaseGen` stale-detection code removed |
-| D10 | `pyproject.toml` | `numpy>=1.26,<2.0` upper bound added |
-| D13–D15 | `test_auth.py`, `test_security.py`, `test_api_routes.py` | Correct import names and patch targets |
-| D16 | `types/index.ts` | `AgentResult.metadata` field added |
-| E1–E6 | Various | Temp file cleanup, done-callback, `gather(return_exceptions=True)`, DB wait_for, 503 on DB error, per-call retry flag |
+| # | File | Issue | Fix |
+|---|------|-------|-----|
+| S2-1 | `docs/docker/docker-compose.yml` | Caddy `ports:` key missing — YAML dangled port entries under `restart:` — entire stack refused to start | Added `ports:` key before port list |
+| S2-2 | `docs/docker/README.md` (line 221) | "Starting Infrastructure Only" showed wrong standalone command for infra-only | Corrected to proper compose overlay command |
+| S2-3 | `docs/docker/README.md` (line 362) | Management table had same wrong infra command | Same fix |
+| S2-4 | `docs/docker/README.md` (line 415–417) | Troubleshooting showed non-existent tmpfs path `/app/storage/temp` | Replaced with actual compose paths |
+
+### Session 1 (2026-03-16) — Frontend Audit
+
+| # | File | Issue | Fix |
+|---|------|-------|-----|
+| S1-1 | `result/page.tsx` | Duplicate `PageTransition` and `GlobalFooter` imports — compile error | Removed duplicates |
+| S1-2 | `result/page.tsx` | Orphaned `</PageTransition>` and `<GlobalFooter />` JSX tags inside `ArbiterOverlay` — compile error | Removed stray tags |
+| S1-3 | `result/page.tsx` | `AgentSection` metrics prop typed as `as any` | Imported `AgentMetricsDTO`; typed props and filter correctly |
+| S1-4 | `result/page.tsx` | Unused `Eye` import from lucide-react — ESLint error | Removed |
+| S1-5 | `useSimulation.ts` | Resume URL wrong: `/api/v1/${targetId}/resume` (missing `/sessions/`) — 404 on every resume | Fixed to `/api/v1/sessions/${targetId}/resume` |
+| S1-6 | `evidence/page.tsx` | Double cast `investigatorIdRef.current as unknown as string` on already-string ref | Removed double cast |
+| S1-7 | `useSimulation.ts` | `update.data as any` in AGENT_COMPLETE handler | Replaced with `Record<string, unknown>` + runtime type guards |
+| S1-8 | `useSimulation.ts` | `newUpdate as any` for legacy callback | Changed to `newUpdate as AgentResult` |
+| S1-9 | `components/evidence/HeaderSection.tsx` | Logo `<div onClick>` keyboard-inaccessible | Added `role="button"`, `tabIndex={0}`, `onKeyDown`, `aria-label` |
+| S1-10 | `components/evidence/HITLCheckpointModal.tsx` | `<label>` not associated with `<textarea>` | Added matching `id` / `htmlFor` |
+| S1-11 | `frontend/package.json` | `jest-util@^30.2.0` incompatible with `jest@29` | Removed |
+| S1-12 | `evidence/page.tsx`, `result/page.tsx` | Bare `console.error` in production paths | Added dev-only `dbg` logger |
+| S1-13 | Test fixtures (4 files) | `ReportDTO` missing 5 required fields in test fixtures | Added all fields to all fixtures |
 
 ---
 
 ## Known Limitations
 
 | Area | Limitation |
-|------|-----------|
-| Agent execution | Sequential within each phase (not parallel) to maintain stable WebSocket streaming |
-| LLM inference | No fallback if Groq/Gemini API is unavailable during analysis |
-| Video analysis | Frame extraction is CPU-intensive; files >200 MB may timeout on slow machines |
-| Deep analysis timing | Agent1 Gemini runs sequentially before Agent3/Agent5 to enable context sharing (~30–90s) |
+|------|------------|
+| Agent execution | Sequential within each phase (not parallel) to maintain stable WebSocket streaming and predictable memory usage |
+| LLM inference | No fallback LLM if Groq/Gemini API is unavailable during analysis — investigation degrades to tool-only mode |
+| Video analysis | Frame extraction is CPU-intensive; files >200 MB may timeout on slow machines (per-agent 180s limit) |
+| Deep analysis timing | Agent1 Gemini runs sequentially before Agent3/Agent5 to enable context sharing (~30–90s additional) |
+| Token blacklisting | Redis unavailability causes all tokens to be treated as revoked (fail-secure design — intentional) |

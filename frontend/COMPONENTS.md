@@ -361,6 +361,45 @@ import { AgentResponseText } from "@/components/ui/AgentResponseText";
 
 ---
 
+### DevErrorOverlay.tsx
+
+**Purpose:** Development-only error boundary and overlay. Classifies React crashes, network errors, WebSocket errors, API errors, null-reference errors, and module errors into readable categories with stack traces. Wraps the app in `layout.tsx` and is stripped in production builds.
+
+**Error categories:** `REACT_CRASH`, `NETWORK_ERROR`, `WEBSOCKET_ERROR`, `API_ERROR`, `NULL_REFERENCE`, `MODULE_ERROR`, `RUNTIME_ERROR`
+
+> Only active when `NODE_ENV=development`. Has no effect in production.
+
+---
+
+### GlobalFooter.tsx
+
+**Purpose:** Academic disclaimer footer shown on all pages (landing, evidence, result, error)
+
+**Usage:**
+```typescript
+import { GlobalFooter } from "@/components/ui/GlobalFooter";
+
+// Added automatically in layout.tsx or per-page footer
+<GlobalFooter />
+```
+
+---
+
+### PageTransition.tsx
+
+**Purpose:** Smooth fade-up page transition wrapper with optional stagger children
+
+**Usage:**
+```typescript
+import { PageTransition } from "@/components/ui/PageTransition";
+
+<PageTransition>
+  <YourPageContent />
+</PageTransition>
+```
+
+---
+
 ## Component Usage Examples
 
 ### Complete Evidence Page Setup

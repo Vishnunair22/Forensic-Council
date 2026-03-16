@@ -117,18 +117,18 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                 const agent = AGENTS_DATA.find(a => a.id === update.agent_id);
                                 if (agent) {
                                     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- WebSocket message data is dynamic
-                                    const { confidence, findings_count, error, deep_analysis_pending, status: agentStatus } = update.data as any;
-                                    const parsedConfidence = confidence ?? agent.simulation.confidence / 100;
+                                    const { confidence, findings_count, error, deep_analysis_pending, status: agentStatus } = update.data as Record<string, unknown>;
+                                    const parsedConfidence = (typeof confidence === "number" ? confidence : null) ?? agent.simulation.confidence / 100;
 
                                     const newUpdate: AgentUpdate = {
                                         agent_id: agent.id,
                                         agent_name: update.agent_name || agent.name,
                                         message: update.message || agent.simulation.result,
-                                        status: agentStatus || "complete",
+                                        status: (typeof agentStatus === "string" ? agentStatus as AgentUpdate["status"] : null) || "complete",
                                         confidence: parsedConfidence,
-                                        findings_count: findings_count || 1,
-                                        error: error,
-                                        deep_analysis_pending: deep_analysis_pending,
+                                        findings_count: typeof findings_count === "number" ? findings_count : 1,
+                                        error: typeof error === "string" ? error : null,
+                                        deep_analysis_pending: typeof deep_analysis_pending === "boolean" ? deep_analysis_pending : undefined,
                                     };
 
                                     // Upsert: later AGENT_COMPLETE for the same agent_id always wins
@@ -141,10 +141,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
 
                                     const nextCompleted = [...completedAgentsRef.current];
                                     setCompletedAgents(nextCompleted);
-                                    // Use type assertion since onAgentComplete is legacy, or just drop calling it if not needed.
-                                    // But to be safe, we cast.
-                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AgentResult type mismatch in legacy callback
-                                    onAgentCompleteRef.current?.(newUpdate as any);
+                                    onAgentCompleteRef.current?.(newUpdate as AgentResult);
 
                                     // Also transition to analyzing if still in initiating
                                     setStatus((prev: SimulationStatus) => prev === "initiating" ? "analyzing" : prev);
@@ -296,7 +293,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
 
             // Re-import API_BASE or just rely on relative path since we are in the browser
             // Actually, next.config.ts rewrites /api/v1/ to the backend. Just use relative path.
-            const response = await fetch(`/api/v1/${targetId}/resume`, {
+            const response = await fetch(`/api/v1/sessions/${targetId}/resume`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

@@ -19,17 +19,21 @@ import {
   ChevronDown, ChevronUp, MonitorPlay, Mic2,
   Image as ImageIcon, Binary, Home, RotateCcw,
   ShieldCheck, Search, Layers, XCircle, Shield,
-  Hash, Clock, FileText, Cpu, Eye, AlertCircle,
+  Hash, Clock, FileText, Cpu, AlertCircle,
 } from "lucide-react";
 import { PageTransition } from "@/components/ui/PageTransition";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { useForensicData, mapReportDtoToReport } from "@/hooks/useForensicData";
-import { PageTransition } from "@/components/ui/PageTransition";
-import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { useSound } from "@/hooks/useSound";
-import { getReport, getArbiterStatus, type ReportDTO, type AgentFindingDTO } from "@/lib/api";
+import { getReport, getArbiterStatus, type ReportDTO, type AgentFindingDTO, type AgentMetricsDTO } from "@/lib/api";
+
+/** Dev-only logger — silenced in production builds */
+const isDev = process.env.NODE_ENV !== "production";
+const dbg = {
+  error: isDev ? console.error.bind(console) : () => {},
+};
 
 // ─────────────────────────────────────────────────────────────
 // AGENT CONFIG
@@ -190,8 +194,6 @@ function ArbiterOverlay({ liveMessage }: { liveMessage: string }) {
 
         <p className="text-xs text-slate-700 font-mono">{elapsed}s elapsed — typically 10–60s</p>
       </motion.div>
-      </PageTransition>
-      <GlobalFooter />
     </div>
   );
 }
@@ -256,7 +258,7 @@ function FindingCard({ f, accent }: { f: AgentFindingDTO; accent: string }) {
 function AgentSection({ agentId, findings, metrics, narrative }: {
   agentId: string;
   findings: AgentFindingDTO[];
-  metrics?: { confidence_score: number; error_rate: number; tools_succeeded: number; total_tools_called: number; skipped: boolean };
+  metrics?: AgentMetricsDTO;
   narrative?: string;
 }) {
   const [open, setOpen] = useState(true);
@@ -499,7 +501,7 @@ function VerdictBanner({ report }: { report: ReportDTO }) {
 function StatsStrip({ report }: { report: ReportDTO }) {
   const allFindings = Object.values(report.per_agent_findings).flat();
   const totalFindings = allFindings.length;
-  const activeAgents = Object.values(report.per_agent_metrics ?? {}).filter((m: any) => !m.skipped).length
+  const activeAgents = Object.values(report.per_agent_metrics ?? {}).filter((m: AgentMetricsDTO) => !m.skipped).length
     || Object.values(report.per_agent_findings).filter(a => a.length > 0).length;
   const contested = report.contested_findings?.length ?? 0;
 
@@ -582,7 +584,7 @@ export default function ResultPage() {
               return;
             }
           } catch (e) {
-            console.error("getReport failed:", e);
+            dbg.error("getReport failed:", e);
           }
           // report endpoint not ready yet — retry
         } else if (s.status === "error") {
@@ -814,7 +816,7 @@ export default function ResultPage() {
                           key={id}
                           agentId={id}
                           findings={report.per_agent_findings[id] ?? []}
-                          metrics={report.per_agent_metrics?.[id] as any}
+                          metrics={report.per_agent_metrics?.[id] as AgentMetricsDTO | undefined}
                           narrative={report.per_agent_analysis?.[id]}
                         />
                       ))

@@ -59,6 +59,11 @@ const sampleDTO: ReportDTO = {
       robustness_caveat_detail: "Low quality", reasoning_summary: "No splice.", metadata: null,
     }],
   },
+  per_agent_metrics: {},
+  per_agent_analysis: {},
+  overall_confidence: 0.88,
+  overall_error_rate: 0.05,
+  overall_verdict: "LIKELY",
   cross_modal_confirmed: [],
   contested_findings: [],
   tribunal_resolved: [],
@@ -131,6 +136,8 @@ describe("mapReportDtoToReport()", () => {
           finding_id: "f1b", metadata: { analysis_phase: "deep" },
         }],
       },
+      per_agent_metrics: {},
+      per_agent_analysis: {},
     };
     expect(mapReportDtoToReport(dto).agents).toHaveLength(2);
   });

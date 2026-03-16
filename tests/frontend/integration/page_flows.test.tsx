@@ -48,6 +48,11 @@ function makeDTO(overrides: Partial<ReportDTO> = {}): ReportDTO {
     case_id: "CASE-9999999999",
     executive_summary: "Integration test report.",
     per_agent_findings: {},
+    per_agent_metrics: {},
+    per_agent_analysis: {},
+    overall_confidence: 0.90,
+    overall_error_rate: 0.02,
+    overall_verdict: "LIKELY",
     cross_modal_confirmed: [],
     contested_findings: [],
     tribunal_resolved: [],
@@ -117,7 +122,7 @@ describe("mapReportDtoToReport — complex reports", () => {
     expect(statements).toContain("Deep pass.");
   });
 
-  it("deduplicates findings with same finding_type and no phase metadata", () => {
+  it("preserves all findings including same-type entries (dedup is UI-only in AgentSection)", () => {
     const perAgent: ReportDTO["per_agent_findings"] = {
       "agent-img": [
         {
@@ -131,14 +136,15 @@ describe("mapReportDtoToReport — complex reports", () => {
           finding_id: "f-dup-2", agent_id: "agent-img", agent_name: "Image Expert",
           finding_type: "ela_analysis", status: "complete",
           confidence_raw: 0.9, calibrated: false, calibrated_probability: null,
-          court_statement: "Duplicate.", robustness_caveat: false,
+          court_statement: "Second.", robustness_caveat: false,
           robustness_caveat_detail: null, reasoning_summary: "Summary.", metadata: null,
         },
       ],
     };
     const report = mapReportDtoToReport(makeDTO({ per_agent_findings: perAgent }));
-    // Dedup by finding_type → 1 finding
-    expect(report.agents).toHaveLength(1);
+    // mapReportDtoToReport flattens ALL findings — dedup by finding_id only happens in
+    // AgentSection (UI layer). Both entries should be present in the mapped agents array.
+    expect(report.agents).toHaveLength(2);
   });
 
   it("preserves correct fields for court display", () => {

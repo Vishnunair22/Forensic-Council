@@ -8,6 +8,7 @@ Supports async context managers and logs connection events.
 
 from typing import Any, Optional
 from uuid import UUID
+import asyncio
 
 from qdrant_client import AsyncQdrantClient as QdrantAsyncClient
 from qdrant_client.models import (
@@ -433,27 +434,45 @@ class QdrantClient:
         ]
 
 
-# Singleton instance
+# Singleton instance — protected by a lock to prevent concurrent init races
 _qdrant_client: Optional[QdrantClient] = None
+_qdrant_lock: Optional[asyncio.Lock] = None
+
+
+def _get_qdrant_lock() -> asyncio.Lock:
+    """Lazily create the Qdrant init lock on first use (must run inside an event loop)."""
+    global _qdrant_lock
+    if _qdrant_lock is None:
+        _qdrant_lock = asyncio.Lock()
+    return _qdrant_lock
 
 
 async def get_qdrant_client() -> QdrantClient:
     """
     Get or create the Qdrant client singleton.
-    
+
+    Thread-safe via asyncio.Lock — concurrent callers wait rather than each
+    creating their own connection to Qdrant.
+
     Returns:
         QdrantClient instance
     """
     global _qdrant_client
-    if _qdrant_client is None:
-        _qdrant_client = QdrantClient()
-        await _qdrant_client.connect()
+    if _qdrant_client is not None:
+        return _qdrant_client
+    async with _get_qdrant_lock():
+        # Double-checked locking
+        if _qdrant_client is None:
+            client = QdrantClient()
+            await client.connect()
+            _qdrant_client = client
     return _qdrant_client
 
 
 async def close_qdrant_client() -> None:
     """Close the Qdrant client singleton."""
     global _qdrant_client
-    if _qdrant_client is not None:
-        await _qdrant_client.disconnect()
-        _qdrant_client = None
+    async with _get_qdrant_lock():
+        if _qdrant_client is not None:
+            await _qdrant_client.disconnect()
+            _qdrant_client = None

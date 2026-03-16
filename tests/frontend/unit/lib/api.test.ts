@@ -287,7 +287,9 @@ describe("getReport()", () => {
   });
   it("returns complete report on 200", async () => {
     const report = { report_id: "r1", session_id: "s1", case_id: "C1", executive_summary: "Done",
-      per_agent_findings: {}, cross_modal_confirmed: [], contested_findings: [],
+      per_agent_findings: {}, per_agent_metrics: {}, per_agent_analysis: {},
+      overall_confidence: 0.9, overall_error_rate: 0.0, overall_verdict: "LIKELY",
+      cross_modal_confirmed: [], contested_findings: [],
       tribunal_resolved: [], incomplete_findings: [], uncertainty_statement: "",
       cryptographic_signature: "sig", report_hash: "hash", signed_utc: "2025-01-01T00:00:00Z" };
     respondOk(report);
@@ -418,8 +420,9 @@ describe("pollForReport()", () => {
 
   it("resolves immediately on first complete response", async () => {
     const report = { report_id: "r-poll", session_id: "s", case_id: "C",
-      executive_summary: "Done", per_agent_findings: {}, cross_modal_confirmed: [],
-      contested_findings: [], tribunal_resolved: [], incomplete_findings: [],
+      executive_summary: "Done", per_agent_findings: {}, per_agent_metrics: {}, per_agent_analysis: {},
+      overall_confidence: 0.9, overall_error_rate: 0.0, overall_verdict: "LIKELY",
+      cross_modal_confirmed: [], contested_findings: [], tribunal_resolved: [], incomplete_findings: [],
       uncertainty_statement: "", cryptographic_signature: "sig", report_hash: "h", signed_utc: null };
     respondOk(report);
     const p = pollForReport("sess", jest.fn(), 1000, 10);
@@ -432,8 +435,9 @@ describe("pollForReport()", () => {
     // First call: in_progress, second call: complete
     mockFetch.mockResolvedValueOnce({ ok: false, status: 202, json: jest.fn() });
     const report = { report_id: "r2", session_id: "s", case_id: "C",
-      executive_summary: "Done", per_agent_findings: {}, cross_modal_confirmed: [],
-      contested_findings: [], tribunal_resolved: [], incomplete_findings: [],
+      executive_summary: "Done", per_agent_findings: {}, per_agent_metrics: {}, per_agent_analysis: {},
+      overall_confidence: 0.9, overall_error_rate: 0.0, overall_verdict: "LIKELY",
+      cross_modal_confirmed: [], contested_findings: [], tribunal_resolved: [], incomplete_findings: [],
       uncertainty_statement: "", cryptographic_signature: "s", report_hash: "h", signed_utc: null };
     respondOk(report);
     const onProgress = jest.fn();

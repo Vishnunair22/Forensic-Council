@@ -301,6 +301,8 @@ describe("Report Polling (result/page.tsx logic)", () => {
   const makeCompleteReport = () => ({
     report_id: "r-poll-e2e", session_id: "sess-poll", case_id: "CASE-9999999999",
     executive_summary: "Authentic.", per_agent_findings: {},
+    per_agent_metrics: {}, per_agent_analysis: {},
+    overall_confidence: 0.92, overall_error_rate: 0.0, overall_verdict: "CERTAIN",
     cross_modal_confirmed: [], contested_findings: [], tribunal_resolved: [],
     incomplete_findings: [], uncertainty_statement: "", cryptographic_signature: "sig",
     report_hash: "hash", signed_utc: "2025-01-01T00:00:00Z",
