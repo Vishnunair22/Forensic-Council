@@ -2,12 +2,43 @@
 @plugin "tailwindcss-animate";
 
 :root {
-  --background: #050505;
-  --foreground: #ededed;
+  /* ─── Core palette ────────────────────────────────────────────── */
+  --background: #030308;
+  --foreground: #eef2ff;
+
+  /* Cyan accent — primary interactive, scanning elements */
+  --accent-cyan: #00d4ff;
+  --accent-cyan-dim: #0891b2;
+  --accent-cyan-glow: rgba(0, 212, 255, 0.35);
+
+  /* Violet accent — arbiter, deep analysis, authority */
+  --accent-violet: #7c3aed;
+  --accent-violet-glow: rgba(124, 58, 237, 0.4);
+
+  /* Emerald — success, confirmed, authentic */
+  --accent-emerald: #10b981;
+
+  /* Amber — warnings, contested, uncertain */
+  --accent-amber: #f59e0b;
+
+  /* Red — errors, manipulation detected */
+  --accent-red: #ef4444;
+
+  /* Glass surface palette */
+  --glass-bg: rgba(255, 255, 255, 0.04);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shine: rgba(255, 255, 255, 0.12);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+
+  /* Typography */
+  --font-sans: var(--font-syne);
+  --font-mono: var(--font-mono, "JetBrains Mono", "Fira Code", monospace);
+
+  /* Legacy compat */
+  --ring: var(--accent-cyan);
+  --ring-offset-background: var(--background);
   --accent: #1e293b;
   --muted-foreground: #94a3b8;
-  --ring: #22d3ee;
-  --ring-offset-background: #050505;
 }
 
 @theme inline {
@@ -17,11 +48,258 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-ring: var(--ring);
   --color-ring-offset-background: var(--ring-offset-background);
-  --font-sans: var(--font-poppins);
+  --font-sans: var(--font-syne);
+  --font-mono: var(--font-mono);
+}
+
+/* ─── Base reset ──────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-poppins), Arial, Helvetica, sans-serif;
+  font-family: var(--font-syne), "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Monospace elements ──────────────────────────────────────────── */
+code, kbd, pre, .font-mono {
+  font-family: var(--font-mono), "JetBrains Mono", "Fira Code", monospace;
+}
+
+/* ─── Glass panel utility ─────────────────────────────────────────── */
+.glass-panel {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: var(--glass-shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-panel::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--glass-shine), transparent);
+  pointer-events: none;
+}
+
+/* ─── Scan line animation ──────────────────────────────────────────── */
+@keyframes scan-v {
+  0%   { top: 20%; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { top: 80%; opacity: 0; }
+}
+
+@keyframes scan-h {
+  0%   { left: -20%; }
+  100% { left: 120%; }
+}
+
+@keyframes ring-spin-slow {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes ring-spin-reverse {
+  to { transform: rotate(-360deg); }
+}
+
+@keyframes pulse-ring {
+  0%, 100% { opacity: 0.15; transform: scale(1); }
+  50%       { opacity: 0.4;  transform: scale(1.04); }
+}
+
+@keyframes data-blink {
+  0%, 100% { opacity: 0; }
+  30%, 70% { opacity: 0.75; }
+}
+
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes envelope-flap-open {
+  0%   { transform: rotateX(0deg); }
+  100% { transform: rotateX(-180deg); }
+}
+
+@keyframes envelope-flap-close {
+  0%   { transform: rotateX(-180deg); }
+  100% { transform: rotateX(0deg); }
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+/* ─── Focus ring ─────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ─── Text justify ───────────────────────────────────────────────── */
+.text-justify-section {
+  text-align: justify;
+  hyphens: auto;
+}
+
+/* ─── Cursor pointer on all interactive elements ────────────────────────── */
+button,
+[role="button"],
+label[for],
+input[type="checkbox"],
+input[type="radio"],
+input[type="file"],
+select,
+a,
+summary {
+  cursor: pointer;
+}
+
+button:disabled,
+[disabled] {
+  cursor: not-allowed;
+}
+
+/* ─── Page transition wrapper ───────────────────────────────────────────── */
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes page-out {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-8px); }
+}
+
+.page-enter {
+  animation: page-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ─── Shared button utility classes ─────────────────────────────────────── */
+/* Use these for consistent button treatment across all pages */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1.25;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+}
+
+/* Active press micro-feedback */
+.btn:active:not(:disabled) {
+  transform: scale(0.975);
+}
+
+/* Primary — emerald→cyan gradient */
+.btn-primary {
+  background: linear-gradient(135deg, #10b981, #06b6d4);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.15);
+  box-shadow: 0 4px 20px rgba(16,185,129,0.2), inset 0 1px 0 rgba(255,255,255,0.15);
+}
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #34d399, #22d3ee);
+  box-shadow: 0 0 28px rgba(16,185,129,0.45), inset 0 1px 0 rgba(255,255,255,0.2);
+  transform: translateY(-1px);
+}
+
+/* Secondary — ghost with white border */
+.btn-ghost {
+  background: rgba(255,255,255,0.04);
+  color: rgb(203,213,225);
+  border: 1px solid rgba(255,255,255,0.10);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: rgba(255,255,255,0.08);
+  color: white;
+  border-color: rgba(255,255,255,0.20);
+}
+
+/* Danger */
+.btn-danger {
+  background: rgba(239,68,68,0.15);
+  color: rgb(252,165,165);
+  border: 1px solid rgba(239,68,68,0.35);
+}
+.btn-danger:hover:not(:disabled) {
+  background: rgba(239,68,68,0.25);
+  box-shadow: 0 0 20px rgba(239,68,68,0.2);
+}
+
+/* Icon-only circular button */
+.btn-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border-radius: 0.75rem;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.10);
+  color: rgb(148,163,184);
+}
+.btn-icon:hover:not(:disabled) {
+  background: rgba(255,255,255,0.10);
+  color: white;
+}
+
+/* Cyan accent */
+.btn-cyan {
+  background: rgba(0,212,255,0.12);
+  color: rgb(103,232,249);
+  border: 1px solid rgba(0,212,255,0.28);
+}
+.btn-cyan:hover:not(:disabled) {
+  background: rgba(0,212,255,0.20);
+  box-shadow: 0 0 22px rgba(0,212,255,0.2);
+  border-color: rgba(0,212,255,0.45);
+}
+
+/* Violet/arbiter */
+.btn-violet {
+  background: rgba(124,58,237,0.15);
+  color: rgb(196,181,253);
+  border: 1px solid rgba(124,58,237,0.35);
+}
+.btn-violet:hover:not(:disabled) {
+  background: rgba(124,58,237,0.25);
+  box-shadow: 0 0 22px rgba(124,58,237,0.25);
 }

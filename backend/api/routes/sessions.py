@@ -128,6 +128,11 @@ def _forensic_report_to_dto(report) -> ReportDTO:
         case_id=report.case_id,
         executive_summary=report.executive_summary or "",
         per_agent_findings=per_agent,
+        per_agent_metrics=getattr(report, "per_agent_metrics", {}) or {},
+        per_agent_analysis=getattr(report, "per_agent_analysis", {}) or {},
+        overall_confidence=getattr(report, "overall_confidence", 0.0) or 0.0,
+        overall_error_rate=getattr(report, "overall_error_rate", 0.0) or 0.0,
+        overall_verdict=getattr(report, "overall_verdict", "REVIEW REQUIRED") or "REVIEW REQUIRED",
         cross_modal_confirmed=cross_modal,
         contested_findings=contested,
         tribunal_resolved=tribunal_resolved,
@@ -305,6 +310,9 @@ async def live_updates(websocket: WebSocket, session_id: str):
 
     except WebSocketDisconnect:
         pass
+    except asyncio.CancelledError:
+        # Must re-raise CancelledError so asyncio task cancellation works correctly
+        raise
     except Exception:
         pass
     finally:
@@ -486,10 +494,16 @@ async def get_session_report(
     except HTTPException:
         raise
     except Exception as db_err:
-        logger.warning(
-            "DB report lookup failed, continuing to 404",
+        # A transient DB error (e.g. connection timeout) must not masquerade as
+        # a 404 — the session may exist but the DB is temporarily unavailable.
+        logger.error(
+            "DB report lookup failed",
             session_id=session_id,
             error=str(db_err),
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Report lookup temporarily unavailable — please retry shortly.",
         )
 
     raise HTTPException(
@@ -499,7 +513,7 @@ async def get_session_report(
 
 
 # ============================================================================
-# STUB ENDPOINTS - Called by frontend, return graceful empty responses
+# BRIEF ENDPOINT — last known thinking text for an agent
 # ============================================================================
 
 @router.get("/{session_id}/brief/{agent_id}")
@@ -508,24 +522,82 @@ async def get_agent_brief(
     agent_id: str,
     current_user: User = Depends(get_current_user),
 ):
-    """Return the agent's brief text if available, or an empty brief."""
-    pipeline = get_active_pipeline(session_id)
-    if not pipeline:
-        if session_id not in _final_reports:
-            raise HTTPException(status_code=404, detail="Session not found")
-    return {"brief": ""}
+    """
+    Return the most recent reasoning brief for an agent.
 
+    Attempts (in order):
+    1. Live working-memory snapshot from the active pipeline
+    2. Falls back to empty string — brief is non-critical UI decoration
+    """
+    pipeline = get_active_pipeline(session_id)
+    if not pipeline and session_id not in _final_reports:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    brief_text = ""
+    if pipeline:
+        try:
+            wm = getattr(pipeline, "working_memory", None)
+            if wm is not None:
+                state = await wm.get_state()
+                if state:
+                    # Extract the most recent in-progress task description as brief
+                    tasks = getattr(state, "tasks", [])
+                    in_progress = [t for t in tasks if getattr(t, "status", None) and
+                                   str(t.status).endswith("IN_PROGRESS")]
+                    if in_progress:
+                        brief_text = getattr(in_progress[-1], "description", "")
+        except Exception:
+            pass  # brief is non-critical
+
+    return {"brief": brief_text}
+
+
+# ============================================================================
+# CHECKPOINTS ENDPOINT — pending HITL decisions
+# ============================================================================
 
 @router.get("/{session_id}/checkpoints")
 async def get_session_checkpoints(
     session_id: str,
     current_user: User = Depends(get_current_user),
 ):
-    """Return any pending HITL checkpoints for the session."""
+    """
+    Return pending HITL checkpoints for a session.
+
+    Checks the active pipeline first, then falls back to the database.
+    """
     pipeline = get_active_pipeline(session_id)
-    if not pipeline:
-        if session_id not in _final_reports:
-            raise HTTPException(status_code=404, detail="Session not found")
-    return []
+    if not pipeline and session_id not in _final_reports:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    checkpoints = []
+    try:
+        from core.session_persistence import get_session_persistence
+        persistence = await get_session_persistence()
+        rows = await persistence.client.fetch(
+            """
+            SELECT checkpoint_id, agent_id, reason, investigator_brief, status, created_utc
+            FROM hitl_checkpoints
+            WHERE session_id = $1 AND status = 'PAUSED'
+            ORDER BY created_utc DESC
+            """,
+            session_id,
+        ) if persistence.client else []
+        for row in rows:
+            checkpoints.append({
+                "checkpoint_id": str(row["checkpoint_id"]),
+                "session_id": session_id,
+                "agent_id": row["agent_id"],
+                "agent_name": row["agent_id"],
+                "brief_text": row.get("investigator_brief") or "",
+                "decision_needed": "APPROVE, REDIRECT, OVERRIDE, TERMINATE, or ESCALATE",
+                "created_at": row["created_utc"].isoformat() if row.get("created_utc") else "",
+            })
+    except Exception as e:
+        # Non-fatal — return empty list if DB unavailable
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to fetch checkpoints: {e}")
+
+    return checkpoints
 
 

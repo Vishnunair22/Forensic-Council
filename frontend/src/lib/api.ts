@@ -66,12 +66,29 @@ export interface AgentFindingDTO {
   metadata: Record<string, unknown> | null;
 }
 
+export interface AgentMetricsDTO {
+  agent_id: string;
+  agent_name: string;
+  total_tools_called: number;
+  tools_succeeded: number;
+  tools_failed: number;
+  error_rate: number;
+  confidence_score: number;
+  finding_count: number;
+  skipped: boolean;
+}
+
 export interface ReportDTO {
   report_id: string;
   session_id: string;
   case_id: string;
   executive_summary: string;
   per_agent_findings: Record<string, AgentFindingDTO[]>;
+  per_agent_metrics: Record<string, AgentMetricsDTO>;
+  per_agent_analysis: Record<string, string>;
+  overall_confidence: number;
+  overall_error_rate: number;
+  overall_verdict: string;
   cross_modal_confirmed: AgentFindingDTO[];
   contested_findings: Record<string, unknown>[];
   tribunal_resolved: Record<string, unknown>[];
@@ -263,20 +280,15 @@ export async function getCurrentUser(): Promise<UserInfo> {
   return response.json();
 }
 
-const MAX_AUTH_RETRIES = 1;
-let authRetryCount = 0;
-
-function resetAuthRetry(): void {
-  authRetryCount = 0;
-}
-
+// E6 fix: use a per-invocation retry flag instead of a shared module-level
+// counter, which was not safe for concurrent requests (two simultaneous 401s
+// would both increment the counter and block each other's legitimate retry).
 async function handleAuthError<T>(
   operation: () => Promise<T>
 ): Promise<T> {
+  let retried = false;
   try {
-    const result = await operation();
-    resetAuthRetry();
-    return result;
+    return await operation();
   } catch (error) {
     if (
       error instanceof Error &&
@@ -284,14 +296,12 @@ async function handleAuthError<T>(
         error.message.includes("401") ||
         error.message.includes("Unauthorized"))
     ) {
-      if (authRetryCount < MAX_AUTH_RETRIES) {
-        authRetryCount++;
+      if (!retried) {
+        retried = true;
         dbg.warn("Token invalid, clearing and re-authenticating...");
         clearAuthToken();
         try {
-          const result = await operation();
-          resetAuthRetry();
-          return result;
+          return await operation();
         } catch {
           clearAuthToken();
           if (typeof window !== "undefined") {

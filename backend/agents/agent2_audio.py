@@ -357,9 +357,13 @@ class Agent2Audio(ForensicAgent):
     async def run_investigation(self):
         """
         Override to short-circuit when the evidence is not an audio or video file.
-        Returns a clear finding instead of running tools that will fail on images.
+        Always initialises working memory FIRST so the heartbeat fires immediately.
         """
         from core.react_loop import AgentFinding
+        from core.working_memory import TaskStatus
+
+        # Always init working memory first so heartbeat is visible during validation
+        await self._initialize_working_memory()
 
         file_path = self.evidence_artifact.file_path.lower()
         mime = (self.evidence_artifact.metadata or {}).get("mime_type", "").lower()
@@ -369,6 +373,23 @@ class Agent2Audio(ForensicAgent):
         is_audio_video = mime.startswith("audio/") or mime.startswith("video/")
 
         if is_image or (not is_audio_video and not mime == ""):
+            # Mark all tasks complete so heartbeat shows full progress
+            try:
+                state = await self.working_memory.get_state(
+                    session_id=self.session_id, agent_id=self.agent_id
+                )
+                if state:
+                    for task in state.tasks:
+                        await self.working_memory.update_task(
+                            session_id=self.session_id,
+                            agent_id=self.agent_id,
+                            task_id=task.task_id,
+                            status=TaskStatus.COMPLETE,
+                            result_ref="file_type_validation",
+                        )
+            except Exception:
+                pass
+
             finding = AgentFinding(
                 agent_id=self.agent_id,
                 finding_type="File type not applicable",
@@ -387,5 +408,7 @@ class Agent2Audio(ForensicAgent):
             self._reflection_report = None
             return self._findings
 
-        # For audio/video files, run the full investigation
+        # For audio/video files: skip memory re-init in base class, run full loop
+        self._skip_memory_init = True
+        self._tool_registry = await self.build_tool_registry()
         return await super().run_investigation()

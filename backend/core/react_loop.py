@@ -884,6 +884,7 @@ class ReActLoopEngine:
             # Update working memory with current iteration
             await self.working_memory.update_state(
                 session_id=self.session_id,
+                agent_id=self.agent_id,
                 updates={"current_iteration": self._current_iteration}
             )
 
@@ -1072,6 +1073,7 @@ class ReActLoopEngine:
             # Inject redirect context into working memory
             await self.working_memory.update_state(
                 session_id=self.session_id,
+                agent_id=self.agent_id,
                 updates={"redirect_context": decision.redirect_context}
             )
             if self._current_checkpoint:
@@ -1085,6 +1087,7 @@ class ReActLoopEngine:
             # Mark for tribunal escalation
             await self.working_memory.update_state(
                 session_id=self.session_id,
+                agent_id=self.agent_id,
                 updates={"tribunal_escalation": True}
             )
             if self._current_checkpoint:

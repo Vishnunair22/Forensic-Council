@@ -3,7 +3,7 @@
 ## Structure
 
 ```
-frontend/src/__tests__/
+tests/frontend/
 ├── accessibility/
 │   └── accessibility.test.tsx         # WCAG 2.1 AA — keyboard nav, ARIA, focus management
 ├── unit/

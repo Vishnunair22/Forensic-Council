@@ -1,6 +1,6 @@
 # Development Status
 
-**Last updated:** 2026-03-12
+**Last updated:** 2026-03-16
 **Current version:** v1.0.3
 **Overall health:** 🟢 Production-ready
 **Actively working on:** —
@@ -18,56 +18,66 @@ Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [✅] → C
 |-------|--------|-------|
 | File Upload | ✅ | MIME + extension allowlists, 50MB limit, non-blocking async I/O |
 | Evidence Store | ✅ | Immutable storage with SHA-256 integrity check |
-| Agent Dispatch | ✅ | Sequential execution with WebSocket streaming |
-| Council Arbiter | ✅ | Cross-modal correlation, HITL, signing complete |
+| WebSocket Stream | ✅ | 12s connection timeout, CONNECTED/AGENT_UPDATE bootstrap, CancelledError re-raised |
+| Agent Dispatch | ✅ | All 5 agents concurrent; file-type validation per agent; heartbeat every 0.2s |
+| Initial Analysis | ✅ | Tools run → Groq synthesises findings → PIPELINE_PAUSED → Accept/Deep buttons |
+| Deep Analysis | ✅ | Agent1 Gemini runs first → context injected into Agent3+Agent5 → fresh deep cards |
+| Council Arbiter | ✅ | Skipped agents filtered; deduplication; 5-tier verdict; per-agent Groq narrative |
 | Report Signing | ✅ | ECDSA P-256 + SHA-256, PostgreSQL custody log |
-| Frontend Display | ✅ | Deduplication fix applied, arbiter race condition resolved |
+| Result Page | ✅ | Pre-computed verdict, per-agent analysis, initial/deep split, client-side dedup |
 
 ---
 
-## v1.0.3 Fixes (2026-03-12)
+## v1.0.3 Complete Fix Log (2026-03-16)
+
+### Critical Bug Fixes
 
 | # | File | Issue | Fix |
 |---|------|-------|-----|
-| 1 | `frontend/src/app/evidence/page.tsx` | `resumeInvestigation()` not awaited before `router.push('/result')` — report loaded before arbiter finished | Added `await resumeInvestigation()` before navigation |
-| 2 | `frontend/src/app/evidence/page.tsx` | No guard on decision buttons — double-click submitted two concurrent arbiter calls | Added `isNavigating` boolean guard; buttons disabled and show "Compiling Report…" while navigating |
-| 3 | `frontend/src/app/evidence/page.tsx` | Error during navigation left `isNavigating=true` permanently — UI stuck | Catch block resets `isNavigating=false` on error |
-| 4 | `frontend/src/app/result/page.tsx` | Duplicate findings shown when same `finding_type` appeared in initial and re-run analyses | Dedup by `finding_type` unless `metadata.analysis_phase` is set (deep analysis findings preserved) |
-| 5 | `frontend/src/hooks/useSound.ts` | Sound effects too jarring | Replaced with subtle, lower-volume audio cues |
-| 6 | `frontend/Dockerfile` | `HOSTNAME` not set — container bound to `127.0.0.1` instead of `0.0.0.0`, unreachable from host | Added `ENV HOSTNAME=0.0.0.0` |
-| 7 | `frontend/Dockerfile` | Healthcheck used `curl` — not available on Alpine images | Changed to `wget -q --spider` |
-| 8 | `docs/docker/docker-compose.yml` | `start_period` too short — healthchecks failed before the server finished starting | Increased to 60s for backend, 45s for frontend |
-| 9 | `docs/docker/docker-compose.yml` | No `restart` policy on frontend — crashed containers not recovered | Added `restart: unless-stopped` |
+| 1 | `evidence/page.tsx` | `useRef` lazy-init bug — `.current` was a function not a string, causing 422 on every POST | Replaced `useRef<string>(() => {...})` with `useRef<string>(_initInvestigatorId())` |
+| 2 | `useSimulation.ts` | `clearCompletedAgents` didn't clear `agentUpdates` — stale initial-phase text persisted in deep phase | Added `setAgentUpdates({})` to `clearCompletedAgents` |
+| 3 | `react_loop.py` | `update_state()` called without `agent_id` — iteration tracking wrote to wrong Redis key (`""`) | Added `agent_id=self.agent_id` to all 3 `update_state` calls |
+| 4 | `investigation.py` | Deep pass `run_agent_deep_pass` used all agents including skipped ones | Added `_agent_was_active()` filter; skipped agents excluded from deep queue |
+| 5 | `base_agent.py` | `run_deep_investigation()` returned combined initial+deep findings — duplicated initial cards in deep phase | Changed to return only deep findings; `self._findings` still holds combined for arbiter |
 
----
+### Feature Additions
 
-## v1.0.2 Fixes (2026-03-11)
+| # | What | Where |
+|---|------|-------|
+| 1 | 5-tier verdict: CERTAIN / LIKELY / UNCERTAIN / INCONCLUSIVE / MANIPULATION DETECTED | `arbiter.py` |
+| 2 | Per-agent Groq narrative comparing initial vs deep findings | `arbiter.py → _generate_agent_narrative()` |
+| 3 | `AgentMetrics` model with error_rate + confidence_score per agent | `arbiter.py`, `schemas.py` |
+| 4 | Phase-aware Groq synthesis: deep-pass prompt includes initial findings for comparison | `base_agent.py → _synthesize_findings_with_llm(phase=...)` |
+| 5 | Agent1 Gemini result injected into Agent3 + Agent5 after deep pass | `investigation.py → run_agent_deep_pass()` |
+| 6 | Agent5 `_shared_agent1_context` + `inject_agent1_context()` classmethod | `agent5_metadata.py` |
+| 7 | `envelope_open` / `envelope_close` / `scan` Web Audio API sounds | `useSound.ts` |
+| 8 | `MicroscopeScanner`, `EnvelopeCTA`, `GlassCard` UI components | `app/page.tsx` |
+| 9 | Syne + JetBrains Mono fonts replacing Poppins | `layout.tsx`, `globals.css` |
+| 10 | `GlobalFooter` academic disclaimer on all pages (landing, evidence, result, error) | `components/ui/GlobalFooter.tsx` |
+| 11 | `PageTransition` + `StaggerIn`/`StaggerChild` smooth page transitions | `components/ui/PageTransition.tsx` |
+| 12 | `cursor: pointer` on all buttons/interactive elements; `btn` utility classes | `globals.css` |
+| 13 | Glass card agent cards with skeleton loading, shimmer bar, ping badge | `AgentProgressDisplay.tsx` |
+| 14 | `per_agent_analysis`, `per_agent_metrics`, `overall_verdict` propagated to result page | Full stack: arbiter → schemas → sessions → api.ts → result page |
+| 15 | AgentSection: Groq narrative primary, initial/deep split, client-side dedup, collapsed raw | `result/page.tsx` |
 
-| # | Issue | Fix |
-|---|-------|-----|
-| 1 | `fetchrow` called on client that only exposes `fetch_one` — DB report lookup crashed | Renamed all `fetchrow` → `fetch_one` |
-| 2 | In-memory report cache lost on restart; second replica had no knowledge of another's sessions | Reports persisted to `session_reports` table; fallback chain: memory → Postgres |
-| 3 | JWT token lifetime defaulted to 10,080 minutes (7 days) | Changed to 60 minutes everywhere |
-| 4 | No rate limit on `/investigate` — single user could exhaust memory | Per-user Redis-backed rate limiter (5 req / 5-min window) |
-| 5 | Hard-coded bcrypt hashes for demo users in binary | Moved to env-var-driven `_build_dev_fallback()` at startup |
-| 6 | In-process dict metric counters reset on restart | Rewrote with Redis INCRBY counters |
-| 7 | No HTTPS documentation in `.env.example` | Added full Caddy/Let's Encrypt guide |
-| 8 | No CI/CD pipeline | Created `.github/workflows/ci.yml` |
+### Audit Fixes (Sessions 1–2)
 
----
-
-## v1.0.1 Fixes (2026-03-10)
-
-| # | Issue | Fix |
-|---|-------|-----|
-| 1 | `backend/Dockerfile` missing `development` stage | Added multi-stage: `base` → `development` → `production` |
-| 2 | `uv` image pinned to non-existent tag | Changed to `uv:latest` |
-| 3 | `eslint-config-next` version mismatch failed `next build` | Added `eslint: { ignoreDuringBuilds: true }` |
-| 4 | No Caddy log volume — writes failed silently | Added `caddy_logs:/var/log/caddy` volume |
-| 5 | Prod compose missing `build.target: production` | Added explicit target |
-| 6 | `BEGIN/COMMIT/ROLLBACK` SQL with asyncpg (incompatible) | Replaced with `async with conn.transaction()` |
-| 7 | Typo `Thumbbs.db` in `.dockerignore` | Fixed to `Thumbs.db` |
-| 8 | `BOOTSTRAP_ADMIN_PASSWORD` was commented out | Uncommented with dev default |
+| # | File | Fix |
+|---|------|-----|
+| B3 | `metrics.py` | `_KEY_DURATION_SUM` suffix aligned |
+| B4 | `sessions.py` | WebSocket loop re-raises `CancelledError` |
+| B5 | `pipeline.py` | `_setup_infrastructure` uses `get_redis_client()` singleton |
+| B9 | `logging.py` | `get_logger` uses dict cache instead of `@lru_cache` |
+| B10 | `redis_client.py` | `set()` returns `result is True` |
+| B11 | `retry.py` | `CircuitBreaker.state` property is pure (side effects extracted) |
+| D3 | `sessions.py` | `get_agent_brief` queries live working memory |
+| D4 | `sessions.py` | `get_session_checkpoints` queries `hitl_checkpoints` table |
+| D6 | `evidence/page.tsx` | `investigatorId` generated once on mount |
+| D7 | `useSimulation.ts` | Dead `_phaseGen` stale-detection code removed |
+| D10 | `pyproject.toml` | `numpy>=1.26,<2.0` upper bound added |
+| D13–D15 | `test_auth.py`, `test_security.py`, `test_api_routes.py` | Correct import names and patch targets |
+| D16 | `types/index.ts` | `AgentResult.metadata` field added |
+| E1–E6 | Various | Temp file cleanup, done-callback, `gather(return_exceptions=True)`, DB wait_for, 503 on DB error, per-call retry flag |
 
 ---
 
@@ -75,20 +85,7 @@ Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [✅] → C
 
 | Area | Limitation |
 |------|-----------|
-| Agent execution | Sequential (not parallel) to maintain stable WebSocket streaming and prevent connection saturation |
-| LLM inference | No fallback if provider API is unavailable — pipeline will fail and session times out |
-| Video analysis | Frame extraction is CPU-intensive; large video files (>200MB) may timeout on slow machines |
-| Audio diarization | Requires `HF_TOKEN` for pyannote gated models; skipped gracefully without it |
-| Qdrant collections | Auto-created on first use; if Qdrant restarts before first write, collection may need manual init |
-| Report persistence | Report data in Redis expires after 24 hours; Postgres custody log is permanent |
-
----
-
-## Roadmap
-
-- [ ] Parallel agent execution (configurable)
-- [ ] LLM provider failover / retry
-- [ ] Multi-file batch investigation
-- [ ] WebSocket reconnection handling (auto-retry on drop)
-- [ ] Prometheus metrics export
-- [ ] Kubernetes Helm chart
+| Agent execution | Sequential within each phase (not parallel) to maintain stable WebSocket streaming |
+| LLM inference | No fallback if Groq/Gemini API is unavailable during analysis |
+| Video analysis | Frame extraction is CPU-intensive; files >200 MB may timeout on slow machines |
+| Deep analysis timing | Agent1 Gemini runs sequentially before Agent3/Agent5 to enable context sharing (~30–90s) |

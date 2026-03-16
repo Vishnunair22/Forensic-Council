@@ -29,7 +29,7 @@ export function ErrorDisplay({
       exit={{ opacity: 0, y: -10 }}
       className="w-full max-w-2xl mx-auto"
     >
-      <div className="p-6 rounded-xl bg-red-500/10 border border-red-500/30 backdrop-blur-sm">
+      <div className="p-6 rounded-2xl bg-red-500/[0.06] border border-red-500/25 backdrop-blur-xl shadow-[0_0_40px_rgba(239,68,68,0.06),inset_0_1px_0_rgba(255,255,255,0.04)]">
         {/* Header */}
         <div className="flex items-start gap-4">
           <div className="mt-1">
@@ -46,19 +46,13 @@ export function ErrorDisplay({
             {/* Action Buttons */}
             <div className="flex gap-3 flex-wrap">
               {showRetry && onRetry && (
-                <button
-                  onClick={onRetry}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 transition-all text-sm font-medium"
-                >
+                <button onClick={onRetry} className="btn btn-danger">
                   <RotateCcw className="w-4 h-4" />
                   Try Again
                 </button>
               )}
               {onDismiss && (
-                <button
-                  onClick={onDismiss}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-900/40 hover:bg-slate-900/60 border border-slate-700/30 text-slate-300 transition-all text-sm font-medium"
-                >
+                <button onClick={onDismiss} className="btn btn-ghost">
                   <X className="w-4 h-4" />
                   Dismiss
                 </button>

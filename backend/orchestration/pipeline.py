@@ -208,33 +208,24 @@ class ForensicCouncilPipeline:
         self.arbiter: Optional[CouncilArbiter] = None
     
     def _setup_infrastructure(self) -> None:
-        """Set up infrastructure connections."""
-        from infra.redis_client import RedisClient
-        
+        """Set up infrastructure slot placeholders — actual connections are
+        acquired lazily in _initialize_components using the global singletons."""
         self._redis = None
         self._qdrant = None
         self._postgres = None
-        
-        try:
-            self._redis = RedisClient(
-                host=self.config.redis_host,
-                port=self.config.redis_port,
-                db=self.config.redis_db,
-                password=self.config.redis_password,
-            )
-        except Exception as e:
-            logger.warning("Failed to connect to Redis", error=str(e))
     
     async def _initialize_components(self, session_id: UUID) -> None:
         """Initialize all components for a session."""
         from infra.qdrant_client import get_qdrant_client
         from infra.postgres_client import get_postgres_client
         
-        if self._redis is not None and getattr(self._redis, '_client', None) is None:
+        if self._redis is None:
             try:
-                await self._redis.connect()
+                from infra.redis_client import get_redis_client
+                self._redis = await get_redis_client()
             except Exception as e:
                 logger.warning("Failed to connect to Redis", error=str(e))
+                self._redis = None
         
         if self._qdrant is None:
             try:
@@ -644,13 +635,17 @@ class ForensicCouncilPipeline:
             (agent3, a3_init, a3_ok),
             (agent4, a4_init, a4_ok),
             (agent5, a5_init, a5_ok),
-        ) = await asyncio.gather(
-            run_agent_initial_only(Agent1Image, "Agent1"),
-            run_agent_initial_only(Agent2Audio, "Agent2", {"inter_agent_bus": self.inter_agent_bus}),
-            run_agent_initial_only(Agent3Object, "Agent3", {"inter_agent_bus": self.inter_agent_bus}),
-            run_agent_initial_only(Agent4Video, "Agent4", {"inter_agent_bus": self.inter_agent_bus}),
-            run_agent_initial_only(Agent5Metadata, "Agent5"),
-        )
+        ) = [
+            r if not isinstance(r, BaseException) else (None, [], False)
+            for r in await asyncio.gather(
+                run_agent_initial_only(Agent1Image, "Agent1"),
+                run_agent_initial_only(Agent2Audio, "Agent2", {"inter_agent_bus": self.inter_agent_bus}),
+                run_agent_initial_only(Agent3Object, "Agent3", {"inter_agent_bus": self.inter_agent_bus}),
+                run_agent_initial_only(Agent4Video, "Agent4", {"inter_agent_bus": self.inter_agent_bus}),
+                run_agent_initial_only(Agent5Metadata, "Agent5"),
+                return_exceptions=True,
+            )
+        ]
 
         # --- Cross-agent context injection: Agent 1 → Agent 3 ---
         # Share Agent 1's Gemini vision analysis with Agent 3 for cross-validated object/weapon detection
@@ -672,13 +667,26 @@ class ForensicCouncilPipeline:
             logger.warning(f"Could not inject Agent 1 context into Agent 3: {_ctx_err}")
 
         # --- Phase 2: All deep passes concurrently ---
-        results = list(await asyncio.gather(
+        raw_deep = await asyncio.gather(
             run_agent_deep_only(agent1, "Agent1", a1_init, a1_ok),
             run_agent_deep_only(agent2, "Agent2", a2_init, a2_ok),
             run_agent_deep_only(agent3, "Agent3", a3_init, a3_ok),
             run_agent_deep_only(agent4, "Agent4", a4_init, a4_ok),
             run_agent_deep_only(agent5, "Agent5", a5_init, a5_ok),
-        ))
+            return_exceptions=True,
+        )
+        # Unwrap any exceptions into error results rather than propagating
+        agent_ids_deep = ["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"]
+        results = []
+        for i, r in enumerate(raw_deep):
+            if isinstance(r, BaseException):
+                logger.error(f"Agent {agent_ids_deep[i]} deep pass raised unexpectedly", error=str(r))
+                results.append(AgentLoopResult(
+                    agent_id=agent_ids_deep[i], findings=[], reflection_report={},
+                    react_chain=[], error=str(r), agent_active=False,
+                ))
+            else:
+                results.append(r)
         
         # Log summary of active agents
         active_agents = [r.agent_id for r in results if r.agent_active]

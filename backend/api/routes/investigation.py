@@ -203,15 +203,11 @@ async def start_investigation(
     session_id = str(uuid4())
 
     # ── Stage file to /tmp (non-blocking) ────────────────────────────────────
-    # Upload to /tmp for initial staging; the pipeline moves it to the evidence
-    # volume after hashing.  Using run_in_executor keeps the event loop free
-    # during disk I/O, which matters for large files.
     tmp_path = Path("/tmp") / f"{session_id}{file_extension}"
     try:
         content = await file.read()
         if not content:
             raise HTTPException(status_code=400, detail="Uploaded file is empty.")
-        # Final size guard (content-length header may be absent or spoofed)
         if len(content) > MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=400,
@@ -220,9 +216,15 @@ async def start_investigation(
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, tmp_path.write_bytes, content)
     except HTTPException:
+        if tmp_path.exists():
+            try: tmp_path.unlink()
+            except Exception: pass
         raise
     except Exception as e:
         logger.error("Failed to stage uploaded file", error=str(e))
+        if tmp_path.exists():
+            try: tmp_path.unlink()
+            except Exception: pass
         raise HTTPException(status_code=500, detail="Failed to save uploaded file.")
 
     # ── Register pipeline ─────────────────────────────────────────────────────
@@ -240,6 +242,23 @@ async def start_investigation(
             investigator_id=investigator_id,
         )
     )
+
+    # E2: done-callback catches any unexpected BaseException that escaped the
+    # task's internal try/except (e.g. SystemExit, MemoryError) so they are
+    # logged rather than silently lost.
+    def _task_done_callback(t: asyncio.Task) -> None:
+        if t.cancelled():
+            return
+        exc = t.exception()
+        if exc is not None:
+            logger.error(
+                "Investigation task raised unexpected exception",
+                session_id=session_id,
+                error=str(exc),
+                exc_info=exc,
+            )
+
+    task.add_done_callback(_task_done_callback)
     _active_tasks[session_id] = task
 
     increment_investigations_started()
@@ -579,8 +598,16 @@ async def _wrap_pipeline_with_broadcasts(
                 except asyncio.TimeoutError:
                     pass
                 try:
+                    # Use UUID version of session_id for working memory lookup
+                    _wm_session = session_id if session_id else evidence_artifact.artifact_id
+                    if isinstance(_wm_session, str):
+                        try:
+                            from uuid import UUID as _UUID
+                            _wm_session = _UUID(_wm_session)
+                        except (ValueError, AttributeError):
+                            pass
                     wm_state = await target_memory.get_state(
-                        session_id=session_id or evidence_artifact.artifact_id,
+                        session_id=_wm_session,
                         agent_id=wm_agent_id,
                     )
                     if not wm_state:
@@ -624,6 +651,7 @@ async def _wrap_pipeline_with_broadcasts(
         async def run_single_agent(agent_id, agent_name, AgentClass, thinking_phrase):
             supported_mimes = _AGENT_MIME_SUPPORT.get(agent_id, set())
             if mime not in supported_mimes:
+                # Step 1: Show "checking" state so card appears active
                 await broadcast_update(
                     ws_session_id,
                     BriefUpdate(
@@ -631,13 +659,34 @@ async def _wrap_pipeline_with_broadcasts(
                         session_id=ws_session_id,
                         agent_id=agent_id,
                         agent_name=agent_name,
-                        message=f"File type {mime} not supported",
-                        data={"status": "running", "thinking": f"Identifying file format"},
+                        message=f"Checking file type compatibility…",
+                        data={"status": "running", "thinking": "🔍 Checking file type compatibility…"},
                     )
                 )
-                
-                await asyncio.sleep(0.5)
-                
+                await asyncio.sleep(0.3)
+
+                # Step 2: Determine a human-friendly file category name
+                if mime.startswith("image/"):
+                    file_cat = "image"
+                elif mime.startswith("video/"):
+                    file_cat = "video"
+                elif mime.startswith("audio/"):
+                    file_cat = "audio"
+                else:
+                    file_cat = mime.split("/")[-1] if "/" in mime else "this file type"
+
+                supported_cats = set()
+                for m in supported_mimes:
+                    if m.startswith("image/"): supported_cats.add("images")
+                    elif m.startswith("video/"): supported_cats.add("video")
+                    elif m.startswith("audio/"): supported_cats.add("audio")
+                supported_str = " and ".join(sorted(supported_cats)) if supported_cats else "other formats"
+
+                skip_msg = (
+                    f"{agent_name} is not applicable for {file_cat} files. "
+                    f"This agent analyses {supported_str} only. Skipping."
+                )
+
                 await broadcast_update(
                     ws_session_id,
                     BriefUpdate(
@@ -645,12 +694,12 @@ async def _wrap_pipeline_with_broadcasts(
                         session_id=ws_session_id,
                         agent_id=agent_id,
                         agent_name=agent_name,
-                        message=f"Skipped - {mime} not supported",
+                        message=skip_msg,
                         data={
                             "status": "complete",
                             "confidence": 0.0,
                             "findings_count": 0,
-                            "error": f"Format not supported",
+                            "error": f"Not applicable for {file_cat} files",
                         },
                     )
                 )
@@ -675,9 +724,18 @@ async def _wrap_pipeline_with_broadcasts(
             )
             
             try:
+                # Agents expect session_id as UUID
+                from uuid import UUID as _AUUID
+                _agent_session_id = session_id or evidence_artifact.artifact_id
+                if isinstance(_agent_session_id, str):
+                    try:
+                        _agent_session_id = _AUUID(_agent_session_id)
+                    except (ValueError, AttributeError):
+                        pass
+
                 agent_kwargs = {
                     "agent_id": agent_id,
-                    "session_id": session_id or evidence_artifact.artifact_id,
+                    "session_id": _agent_session_id,
                     "evidence_artifact": evidence_artifact,
                     "config": pipeline.config,
                     "working_memory": pipeline.working_memory,
@@ -695,8 +753,14 @@ async def _wrap_pipeline_with_broadcasts(
                 # Run agent + heartbeat concurrently
                 heartbeat_task = asyncio.create_task(make_heartbeat(agent_id, agent_name, agent.working_memory, heartbeat_done))
                 
-                # Increase initial per-agent timeout — YOLO/ELA cold-start needs headroom
-                agent_timeout = min(240, pipeline.config.investigation_timeout * 0.4)
+                # Per-agent timeout: generous enough for cold ML model loads,
+                # but not so long that a hung agent blocks the whole UI.
+                # YOLO/ELA first-run can take 60-120s; subsequent runs are ~10-30s.
+                agent_timeout = min(180, pipeline.config.investigation_timeout * 0.35)
+                logger.info(
+                    f"{agent_id} starting with timeout={agent_timeout:.0f}s",
+                    agent_id=agent_id,
+                )
                 try:
                     findings = await asyncio.wait_for(
                         agent.run_investigation(),
@@ -709,6 +773,24 @@ async def _wrap_pipeline_with_broadcasts(
                     except:
                         heartbeat_task.cancel()
                 
+                # Broadcast "Groq synthesising" update so the card shows this step
+                if (pipeline.config.llm_enable_post_synthesis
+                        and pipeline.config.llm_api_key
+                        and pipeline.config.llm_provider != "none"
+                        and findings):
+                    await broadcast_update(
+                        ws_session_id,
+                        BriefUpdate(
+                            type="AGENT_UPDATE",
+                            session_id=ws_session_id,
+                            agent_id=agent_id,
+                            agent_name=agent_name,
+                            message="🤖 Groq synthesising tool findings into forensic narrative…",
+                            data={"status": "running",
+                                  "thinking": "🤖 Groq synthesising tool findings into forensic narrative…"},
+                        )
+                    )
+
                 # Format findings
                 is_unsupported = any(getattr(f, 'finding_type', '') == "Format not supported" for f in findings)
                 
@@ -795,6 +877,16 @@ async def _wrap_pipeline_with_broadcasts(
             elif result.error:
                 finding_summary = f"Error: {result.error[:120]}"
             
+            # Compute tool error rate from findings metadata
+            tool_error_count = sum(
+                1 for f in result.findings
+                if isinstance(f, dict)
+                and isinstance(f.get("metadata"), dict)
+                and f["metadata"].get("court_defensible") is False
+            ) if result.findings else 0
+            tool_total = len(result.findings) if result.findings else 0
+            tool_error_rate = round(tool_error_count / tool_total, 3) if tool_total > 0 else 0.0
+
             # Broadcast completion
             await broadcast_update(
                 ws_session_id,
@@ -809,6 +901,7 @@ async def _wrap_pipeline_with_broadcasts(
                         "confidence": confidence,
                         "findings_count": len(result.findings),
                         "error": result.error,
+                        "tool_error_rate": tool_error_rate,
                     },
                 )
             )
@@ -824,9 +917,37 @@ async def _wrap_pipeline_with_broadcasts(
         results = []
         deep_pass_coroutines = []
         
-        async def run_agent_deep_pass(agent_id: str, agent_name: str, agent, initial_result: AgentLoopResult):
-            """Run deep analysis in background."""
+        # Shared Gemini context injected by Agent1 for Agents 3 and 5
+        _agent1_gemini_result: dict = {}
+
+        async def run_agent_deep_pass(
+            agent_id: str, agent_name: str, agent, initial_result: AgentLoopResult
+        ):
+            """
+            Run one agent's deep analysis pass.
+
+            Steps:
+            1. Broadcast "loading" AGENT_UPDATE so the card shows activity immediately.
+            2. Start heartbeat on the deep WM namespace ({agent_id}_deep).
+            3. Run agent.run_deep_investigation() — returns only NEW deep findings.
+            4. If Agent1, extract Gemini result and inject into Agent3 + Agent5.
+            5. Run Groq synthesis on deep findings.
+            6. Broadcast AGENT_COMPLETE with deep-only findings count + summary.
+            """
+            nonlocal _agent1_gemini_result
+
+            _deep_phrase_map = {
+                "Agent1": "🔬 Loading Gemini vision + ELA anomaly deep pass…",
+                "Agent2": "🎙️ Running heavy audio ML models — anti-spoofing, splice detection…",
+                "Agent3": "👁️ Running Gemini scene analysis + advanced object cross-validation…",
+                "Agent4": "🎬 Running deepfake frequency check + face-swap detection…",
+                "Agent5": "📊 Running ML metadata anomaly scoring + Gemini metadata cross-validation…",
+            }
+            start_phrase = _deep_phrase_map.get(agent_id,
+                f"🔬 {agent_name} — loading heavy ML models for deep analysis…")
+
             try:
+                # Step 1: Signal start so card becomes active immediately
                 await broadcast_update(
                     ws_session_id,
                     BriefUpdate(
@@ -834,82 +955,153 @@ async def _wrap_pipeline_with_broadcasts(
                         session_id=ws_session_id,
                         agent_id=agent_id,
                         agent_name=agent_name,
-                        message=f"🔬 {agent_name} — loading heavy ML models for deep analysis…",
-                        data={"status": "running", "thinking": f"🔬 {agent_name} — loading heavy ML models for deep analysis…"},
+                        message=start_phrase,
+                        data={"status": "running", "thinking": start_phrase},
                     )
                 )
-                
+
+                # Step 2: Heartbeat on the isolated deep WM namespace
                 deep_agent_id = f"{agent_id}_deep"
                 deep_heartbeat_done = asyncio.Event()
                 heartbeat_task = asyncio.create_task(
-                    make_heartbeat(agent_id, agent_name, agent.working_memory, deep_heartbeat_done, deep_namespace=deep_agent_id)
+                    make_heartbeat(
+                        agent_id, agent_name,
+                        agent.working_memory, deep_heartbeat_done,
+                        deep_namespace=deep_agent_id,
+                    )
                 )
-                
+
+                # Step 3: Run deep investigation
+                # Returns ONLY new deep findings (initial findings stay in agent._findings)
+                deep_timeout = min(300, pipeline.config.investigation_timeout)
                 try:
-                    # Generative timeout: Gemini alone can take 30s, YOLO model download ~60s on cold start
-                    deep_timeout = min(300, pipeline.config.investigation_timeout)
-                    deep_findings = await asyncio.wait_for(
+                    deep_findings_raw = await asyncio.wait_for(
                         agent.run_deep_investigation(),
-                        timeout=deep_timeout
+                        timeout=deep_timeout,
+                    )
+                except asyncio.TimeoutError:
+                    deep_findings_raw = []
+                    logger.error(f"{agent_id} deep pass timed out after {deep_timeout}s")
+                    await broadcast_update(
+                        ws_session_id,
+                        BriefUpdate(
+                            type="AGENT_UPDATE",
+                            session_id=ws_session_id,
+                            agent_id=agent_id,
+                            agent_name=agent_name,
+                            message=f"⚠️ {agent_name} deep analysis timed out after {deep_timeout:.0f}s — partial results kept.",
+                            data={"status": "running",
+                                  "thinking": f"⚠️ Timeout after {deep_timeout:.0f}s — saving partial results…"},
+                        )
+                    )
+                except Exception as tool_err:
+                    deep_findings_raw = []
+                    err_msg = str(tool_err)[:120]
+                    logger.error(f"{agent_id} deep pass tool error: {tool_err}")
+                    await broadcast_update(
+                        ws_session_id,
+                        BriefUpdate(
+                            type="AGENT_UPDATE",
+                            session_id=ws_session_id,
+                            agent_id=agent_id,
+                            agent_name=agent_name,
+                            message=f"⚠️ Tool error in {agent_name}: {err_msg}",
+                            data={"status": "running",
+                                  "thinking": f"⚠️ Tool error — {err_msg}"},
+                        )
                     )
                 finally:
                     deep_heartbeat_done.set()
                     try:
-                        heartbeat_task.cancel()
                         await asyncio.wait_for(heartbeat_task, timeout=2.0)
-                    except:
-                        pass
-                
-                if deep_findings:
-                    # run_deep_investigation returns COMBINED findings (initial + deep)
-                    # Replace initial findings with combined findings to avoid duplication
-                    initial_result.findings = [f.model_dump(mode="json") for f in deep_findings]
-                    
-                    confidences = [
-                        f.get("confidence_raw", 0.5) if isinstance(f, dict) else 0.5
-                        for f in initial_result.findings
-                    ]
-                    confidence = sum(confidences) / len(confidences) if confidences else 0.5
-                    
-                    gemini_summaries = []
-                    other_summaries = []
-                    for f in initial_result.findings:
-                        if isinstance(f, dict) and f.get("reasoning_summary"):
-                            tool = f.get("metadata", {}).get("tool_name", "") if isinstance(f.get("metadata"), dict) else ""
-                            summary = f["reasoning_summary"]
-                            if "gemini" in tool.lower() or "gemini" in f.get("finding_type", "").lower():
-                                gemini_summaries.append(summary)
-                            else:
-                                other_summaries.append(summary)
+                    except Exception:
+                        heartbeat_task.cancel()
 
-                    # Prefer Gemini summary (richest content); otherwise use longest finding
-                    if gemini_summaries:
-                        best_deep = max(gemini_summaries, key=len)
-                    elif other_summaries:
-                        best_deep = max(other_summaries, key=len)
+                # Step 4: If Agent1, extract Gemini result and share with Agent3 + Agent5
+                if agent_id == "Agent1":
+                    try:
+                        gemini_result = getattr(agent, "_gemini_vision_result", {})
+                        if not gemini_result and deep_findings_raw:
+                            for f in deep_findings_raw:
+                                tool = (f.metadata.get("tool_name", "") if hasattr(f, "metadata") else "")
+                                if "gemini" in tool.lower():
+                                    gemini_result = f.metadata if hasattr(f, "metadata") else {}
+                                    break
+                        if gemini_result:
+                            _agent1_gemini_result = gemini_result
+                            # Import and inject into Agent3 and Agent5
+                            from agents.agent3_object import Agent3Object
+                            from agents.agent5_metadata import Agent5Metadata
+                            Agent3Object.inject_agent1_context(gemini_result)
+                            Agent5Metadata.inject_agent1_context(gemini_result)
+                            logger.info(
+                                "Agent1 Gemini result injected into Agent3 + Agent5",
+                                has_content_type=bool(gemini_result.get("gemini_content_type")),
+                                has_objects=bool(gemini_result.get("gemini_detected_objects")),
+                                has_text=bool(gemini_result.get("gemini_extracted_text")),
+                            )
+                    except Exception as ctx_err:
+                        logger.warning(f"Could not inject Agent1 Gemini context: {ctx_err}")
+
+                # Step 5: Prepare deep-only findings list for the broadcast
+                deep_findings_serial: list[dict] = []
+                for f in (deep_findings_raw or []):
+                    if hasattr(f, "model_dump"):
+                        deep_findings_serial.append(f.model_dump(mode="json"))
+                    elif isinstance(f, dict):
+                        deep_findings_serial.append(f)
+
+                # Update initial_result.findings to include combined (initial + deep)
+                # The arbiter reads initial_result so it gets all findings.
+                # Use self._findings which already holds combined after run_deep_investigation().
+                combined_serial: list[dict] = []
+                for f in (agent._findings or []):
+                    if hasattr(f, "model_dump"):
+                        combined_serial.append(f.model_dump(mode="json"))
+                    elif isinstance(f, dict):
+                        combined_serial.append(f)
+                if combined_serial:
+                    initial_result.findings = combined_serial
+
+                # Step 6: Build AGENT_COMPLETE summary from deep-only findings
+                conf_list = [
+                    (f.get("confidence_raw", 0.5) if isinstance(f, dict) else 0.5)
+                    for f in (deep_findings_serial or combined_serial)
+                ]
+                confidence = (sum(conf_list) / len(conf_list)) if conf_list else 0.5
+
+                gemini_summaries, other_summaries = [], []
+                for f in deep_findings_serial:
+                    if not isinstance(f, dict) or not f.get("reasoning_summary"):
+                        continue
+                    tool = (f.get("metadata", {}) or {}).get("tool_name", "")
+                    summary = f["reasoning_summary"]
+                    if "gemini" in tool.lower() or "gemini" in f.get("finding_type", "").lower():
+                        gemini_summaries.append(summary)
                     else:
-                        best_deep = f"{agent_name} deep analysis complete."
+                        other_summaries.append(summary)
 
-                    finding_summary = f"\U0001f52c Deep Analysis — {best_deep[:900] if len(best_deep) > 900 else best_deep}"
-                    
-                    await broadcast_update(
-                        ws_session_id,
-                        BriefUpdate(
-                            type="AGENT_COMPLETE",
-                            session_id=ws_session_id,
-                            agent_id=agent_id,
-                            agent_name=agent_name,
-                            message=finding_summary,
-                            data={
-                                "status": "complete",
-                                "confidence": confidence,
-                                "findings_count": len(initial_result.findings),
-                                "error": None,
-                            },
-                        )
-                    )
-            except Exception as e:
-                logger.error(f"Deep pass failed for {agent_id}: {e}")
+                if gemini_summaries:
+                    best_deep = max(gemini_summaries, key=len)
+                elif other_summaries:
+                    best_deep = max(other_summaries, key=len)
+                elif combined_serial:
+                    best_deep = f"{agent_name} deep analysis complete with {len(deep_findings_serial)} new finding(s)."
+                else:
+                    best_deep = f"{agent_name} deep analysis complete."
+
+                finding_summary = f"🔬 Deep — {best_deep[:900]}"
+
+                # Compute deep-only tool error rate
+                deep_err_count = sum(
+                    1 for f in deep_findings_serial
+                    if isinstance(f, dict)
+                    and isinstance(f.get("metadata"), dict)
+                    and f["metadata"].get("court_defensible") is False
+                )
+                deep_total = len(deep_findings_serial)
+                deep_err_rate = round(deep_err_count / deep_total, 3) if deep_total > 0 else 0.0
+
                 await broadcast_update(
                     ws_session_id,
                     BriefUpdate(
@@ -917,16 +1109,53 @@ async def _wrap_pipeline_with_broadcasts(
                         session_id=ws_session_id,
                         agent_id=agent_id,
                         agent_name=agent_name,
-                        message=f"{agent_name} deep analysis failed",
+                        message=finding_summary,
                         data={
                             "status": "complete",
+                            "confidence": confidence,
+                            "findings_count": len(deep_findings_serial),
+                            "error": None,
+                            "tool_error_rate": deep_err_rate,
+                            "deep_analysis_pending": False,
+                        },
+                    )
+                )
+
+            except Exception as e:
+                logger.error(f"Deep pass failed for {agent_id}: {e}", exc_info=True)
+                await broadcast_update(
+                    ws_session_id,
+                    BriefUpdate(
+                        type="AGENT_COMPLETE",
+                        session_id=ws_session_id,
+                        agent_id=agent_id,
+                        agent_name=agent_name,
+                        message=f"⚠️ {agent_name} deep analysis encountered an error.",
+                        data={
+                            "status": "error",
                             "confidence": 0.0,
                             "findings_count": 0,
-                            "error": str(e)[:50],
+                            "error": str(e)[:120],
+                            "deep_analysis_pending": False,
                         },
                     )
                 )
         
+        # ── Track which agents were active (not skipped) ─────────────────────
+        _SKIP_FINDING_TYPES = {"file type not applicable", "format not supported",
+                               "file type not applicable"}
+
+        def _agent_was_active(result_obj: AgentLoopResult) -> bool:
+            """True when the agent ran real tools (not just a file-type skip)."""
+            if not result_obj.findings:
+                return False
+            return not all(
+                (f.get("finding_type", "") if isinstance(f, dict)
+                 else getattr(f, "finding_type", "")).lower()
+                in _SKIP_FINDING_TYPES
+                for f in result_obj.findings
+            )
+
         for i, r in enumerate(raw_results):
             agent_id = agent_configs[i][0]
             agent_name = agent_configs[i][1]
@@ -947,18 +1176,24 @@ async def _wrap_pipeline_with_broadcasts(
                         session_id=ws_session_id,
                         agent_id=agent_id,
                         agent_name=agent_name,
-                        message=f"Error: {str(r)[:50]}",
-                        data={"status": "complete", "confidence": 0.0, "findings_count": 0, "error": str(r)},
+                        message=f"Error: {str(r)[:80]}",
+                        data={"status": "error", "confidence": 0.0,
+                              "findings_count": 0, "error": str(r)[:120]},
                     )
                 )
             else:
                 result_obj, agent_instance = r
                 results.append(result_obj)
                 
-                if agent_instance and len(agent_instance.deep_task_decomposition) > 0:
+                # Only queue deep pass for agents that actually ran during initial pass
+                if (agent_instance
+                        and len(agent_instance.deep_task_decomposition) > 0
+                        and _agent_was_active(result_obj)):
                     deep_pass_coroutines.append(
-                        run_agent_deep_pass(agent_id, agent_name, agent_instance, result_obj)
+                        (agent_id, agent_name, agent_instance, result_obj)
                     )
+                elif agent_instance and not _agent_was_active(result_obj):
+                    logger.info(f"Deep pass skipped for {agent_id} — agent was inactive during initial pass")
         
         # Always pause here to give the user the choice (Accept vs Deep Analysis)
         # Even if there are no deep tasks, the user should see the initial findings
@@ -968,25 +1203,49 @@ async def _wrap_pipeline_with_broadcasts(
             BriefUpdate(
                 type="PIPELINE_PAUSED",
                 session_id=ws_session_id,
+                agent_id=None,
+                agent_name=None,
                 message="Initial analysis complete. Ready for deep analysis.",
-                data={"status": "awaiting_decision", "deep_analysis_pending": bool(deep_pass_coroutines)},
+                data={
+                    "status": "awaiting_decision",
+                    "deep_analysis_pending": bool(deep_pass_coroutines),
+                    "agents_completed": len([r for r in results if r is not None]),
+                },
             )
         )
         
         await getattr(pipeline, "deep_analysis_decision_event").wait()
         
         if getattr(pipeline, "run_deep_analysis_flag") and deep_pass_coroutines:
-            logger.info(f"Running deep analysis for {len(deep_pass_coroutines)} agents...")
+            logger.info(f"Running deep analysis for {len(deep_pass_coroutines)} agents…")
             await broadcast_update(
                 ws_session_id,
                 BriefUpdate(
                     type="AGENT_UPDATE",
                     session_id=ws_session_id,
-                    message="Running deep forensic analysis...",
-                    data={"status": "running", "thinking": "Loading heavy ML models..."},
+                    agent_id=None,
+                    agent_name=None,
+                    message=f"🔬 Deep analysis starting — {len(deep_pass_coroutines)} agent(s) loading heavy ML models…",
+                    data={"status": "running",
+                          "thinking": f"Deep analysis starting for {len(deep_pass_coroutines)} agent(s)…"},
                 )
             )
-            await asyncio.gather(*deep_pass_coroutines, return_exceptions=True)
+            # Agent1 must finish first (Gemini result injected into Agent3 + Agent5)
+            # Run Agent1 separately, then run the rest concurrently.
+            agent1_tuple = next((t for t in deep_pass_coroutines if t[0] == "Agent1"), None)
+            others = [t for t in deep_pass_coroutines if t[0] != "Agent1"]
+
+            if agent1_tuple:
+                try:
+                    await run_agent_deep_pass(*agent1_tuple)
+                except Exception as _e1:
+                    logger.error(f"Agent1 deep pass raised: {_e1}")
+
+            if others:
+                await asyncio.gather(
+                    *[run_agent_deep_pass(*t) for t in others],
+                    return_exceptions=True,
+                )
         elif getattr(pipeline, "run_deep_analysis_flag") and not deep_pass_coroutines:
             logger.info("Deep analysis requested but no deep tasks available for this file type.")
         else:
@@ -1140,6 +1399,23 @@ async def run_investigation_task(
         # Remove pipeline from active set once fully done to free resources.
         # The report is cached in _final_reports for the report endpoint to read.
         _active_pipelines.pop(session_id, None)
+
+        # D2: clean up WebSocket connections for this session now that it's done.
+        _websocket_connections.pop(session_id, None)
+
+        # D1: evict stale entries from _final_reports (older than 24 hours).
+        # This prevents unbounded growth when many investigations complete without
+        # their reports being fetched.  O(n) scan runs once per completed session.
+        from datetime import datetime, timezone as _tz
+        cutoff = datetime.now(_tz.utc).timestamp() - 86_400
+        stale = [
+            sid for sid, (_, cached_at) in list(_final_reports.items())
+            if cached_at.timestamp() < cutoff
+        ]
+        for sid in stale:
+            _final_reports.pop(sid, None)
+        if stale:
+            logger.debug("Evicted stale report cache entries", count=len(stale))
 
 
 # ============================================================================

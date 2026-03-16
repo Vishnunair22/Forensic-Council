@@ -218,9 +218,9 @@ export function AgentProgressDisplay({
     if (!playSound) return;
     revealedAgents.forEach(id => {
       if (!prevRevealedRef.current.has(id)) {
-        // Small stagger so chimes don't all fire at once
         const idx = [...revealedAgents].indexOf(id);
-        setTimeout(() => playSound("agent"), idx * 80);
+        // First card: scan sweep sound; subsequent: soft chime
+        setTimeout(() => playSound(idx === 0 ? "scan" : "agent"), idx * 90);
       }
     });
     prevRevealedRef.current = new Set(revealedAgents);
@@ -324,38 +324,57 @@ export function AgentProgressDisplay({
             <AnimatePresence key={agent.id}>
               {isRevealed && (
                 <motion.div
-                  initial={{ opacity: 0, y: 30, scale: 0.88 }}
+                  initial={{ opacity: 0, y: 28, scale: 0.9 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                  transition={{ type: "spring", stiffness: 260, damping: 20 }}
-                  className={`
-                    relative rounded-xl border p-5 transition-colors duration-300
-                    ${status === "running" ? "bg-cyan-500/[0.04] border-cyan-500/25"
-                      : status === "complete" ? "bg-white/[0.03] border-emerald-500/20"
-                      : status === "error" ? "bg-red-500/[0.04] border-red-500/20"
-                      : status === "unsupported" ? "bg-amber-500/[0.04] border-amber-500/20"
-                      : status === "checking" ? "bg-purple-500/[0.04] border-purple-500/20"
-                      : "bg-white/[0.02] border-white/[0.08]"}
-                  `}
+                  exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                  transition={{ type: "spring", stiffness: 280, damping: 22 }}
+                  className={[
+                    "relative rounded-2xl p-5 overflow-hidden",
+                    "backdrop-blur-xl backdrop-saturate-150 transition-all duration-400",
+                    status === "running"
+                      ? "bg-cyan-500/[0.04] border border-cyan-400/25 shadow-[0_0_24px_rgba(0,212,255,0.08),inset_0_1px_0_rgba(0,212,255,0.10)]"
+                      : status === "complete"
+                        ? "bg-emerald-500/[0.03] border border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.06),inset_0_1px_0_rgba(16,185,129,0.08)]"
+                        : status === "error"
+                          ? "bg-red-500/[0.04] border border-red-500/22"
+                          : status === "unsupported"
+                            ? "bg-amber-500/[0.03] border border-amber-500/20"
+                            : status === "checking"
+                              ? "bg-violet-500/[0.04] border border-violet-500/22 shadow-[0_0_18px_rgba(124,58,237,0.07)]"
+                              : "bg-white/[0.025] border border-white/[0.07] shadow-[0_4px_24px_rgba(0,0,0,0.35)]",
+                  ].join(" ")}
                 >
-                  {/* Scan sweep on entry */}
+                  {/* Glass top-edge shine */}
+                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent pointer-events-none" />
+                  {/* Pulsing glow when running */}
+                  {status === "running" && (
+                    <div className="absolute inset-0 rounded-2xl pointer-events-none animate-[pulse-ring_2.8s_ease-in-out_infinite]"
+                      style={{ boxShadow: "inset 0 0 0 1px rgba(0,212,255,0.18)" }} />
+                  )}
+                  {/* Entry scan sweep */}
                   <motion.div
-                    initial={{ x: "-100%", opacity: 0.7 }}
-                    animate={{ x: "200%", opacity: 0 }}
-                    transition={{ duration: 0.7, ease: "easeOut", delay: 0.05 }}
-                    className="absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none z-10"
+                    initial={{ x: "-100%", opacity: 0.85 }}
+                    animate={{ x: "230%", opacity: 0 }}
+                    transition={{ duration: 0.6, ease: "easeOut", delay: 0.04 }}
+                    className="absolute inset-y-0 w-2/5 bg-gradient-to-r from-transparent via-white/8 to-transparent pointer-events-none z-10"
                   />
 
                   {/* Top row */}
                   <div className="flex items-center gap-3 mb-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0
-                      ${status === "running" ? "bg-cyan-500/15 text-cyan-400"
-                        : status === "complete" ? "bg-emerald-500/15 text-emerald-400"
-                        : status === "error" ? "bg-red-500/15 text-red-400"
-                        : status === "unsupported" ? "bg-amber-500/15 text-amber-400"
-                        : status === "checking" ? "bg-purple-500/15 text-purple-400"
-                        : "bg-white/5 text-slate-500"}
-                    `}>
+                    <div className={[
+                      "w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300",
+                      status === "running"
+                        ? "bg-cyan-500/15 text-cyan-400 shadow-[0_0_14px_rgba(0,212,255,0.2)]"
+                        : status === "complete"
+                          ? "bg-emerald-500/15 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.15)]"
+                          : status === "error"
+                            ? "bg-red-500/15 text-red-400"
+                            : status === "unsupported"
+                              ? "bg-amber-500/15 text-amber-400"
+                              : status === "checking"
+                                ? "bg-violet-500/15 text-violet-400"
+                                : "bg-white/[0.06] text-slate-500",
+                    ].join(" ")}>
                       <AgentIcon agentId={agent.id} className="w-5 h-5" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -363,27 +382,86 @@ export function AgentProgressDisplay({
                       <span className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">{agent.role}</span>
                     </div>
                     <div className="shrink-0">
-                      {status === "waiting" && <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 font-medium"><span className="w-1.5 h-1.5 rounded-full bg-slate-600" />Waiting</span>}
-                      {status === "checking" && <span className="inline-flex items-center gap-1.5 text-[11px] text-purple-400 font-medium"><Loader2 className="w-3 h-3 animate-spin" />Initiating</span>}
-                      {status === "running" && <span className="inline-flex items-center gap-1.5 text-[11px] text-cyan-400 font-medium"><Loader2 className="w-3 h-3 animate-spin" />Active</span>}
-                      {status === "complete" && <span className="inline-flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium"><CheckCircle2 className="w-3.5 h-3.5" />Done</span>}
-                      {status === "error" && <span className="inline-flex items-center gap-1.5 text-[11px] text-red-400 font-medium"><AlertTriangle className="w-3.5 h-3.5" />Error</span>}
-                      {status === "unsupported" && <span className="inline-flex items-center gap-1.5 text-[11px] text-amber-400 font-medium"><FileX className="w-3.5 h-3.5" />Skipped</span>}
+                      {status === "waiting" && (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 font-medium px-2 py-0.5 rounded-full bg-slate-800/50">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-600 animate-pulse" />Queued
+                        </span>
+                      )}
+                      {status === "checking" && (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] text-violet-300 font-medium px-2 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/20">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-60" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500" />
+                          </span>Initiating
+                        </span>
+                      )}
+                      {status === "running" && (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] text-cyan-300 font-medium px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20">
+                          <Loader2 className="w-3 h-3 animate-spin" />Active
+                        </span>
+                      )}
+                      {status === "complete" && (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] text-emerald-300 font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                          <CheckCircle2 className="w-3.5 h-3.5" />Done
+                        </span>
+                      )}
+                      {status === "error" && (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] text-red-300 font-medium px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20">
+                          <AlertTriangle className="w-3.5 h-3.5" />Error
+                        </span>
+                      )}
+                      {status === "unsupported" && (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] text-amber-300 font-medium px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20">
+                          <FileX className="w-3.5 h-3.5" />Skipped
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   {/* Body */}
                   {status === "checking" && (
-                    <p className="text-xs text-purple-300/70 leading-relaxed">
-                      ⚙️ Initiating forensic analysis pipeline…
-                    </p>
+                    <div className="space-y-2.5">
+                      <p className="text-xs text-violet-300/80 leading-relaxed">
+                        Initiating forensic analysis pipeline…
+                      </p>
+                      {/* Loading bar animation */}
+                      <div className="w-full h-0.5 bg-white/[0.06] rounded-full overflow-hidden">
+                        <motion.div
+                          animate={{ x: ["-100%", "200%"] }}
+                          transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+                          className="h-full w-1/2 bg-gradient-to-r from-transparent via-violet-400/70 to-transparent"
+                        />
+                      </div>
+                      {/* Skeleton tool lines */}
+                      <div className="space-y-1.5 opacity-30">
+                        {[80, 65, 72].map((w, i) => (
+                          <motion.div
+                            key={i}
+                            className="h-1.5 bg-slate-600 rounded-full"
+                            style={{ width: `${w}%` }}
+                            animate={{ opacity: [0.3, 0.7, 0.3] }}
+                            transition={{ duration: 1.8, repeat: Infinity, delay: i * 0.2 }}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   )}
 
                   {status === "running" && (
-                    <ExpandableText
-                      text={thinking}
-                      textClassName="text-cyan-300/80"
-                    />
+                    <div className="space-y-2">
+                      <ExpandableText
+                        text={thinking}
+                        textClassName="text-cyan-300/80"
+                      />
+                      {/* Live progress shimmer */}
+                      <div className="w-full h-0.5 bg-white/[0.05] rounded-full overflow-hidden mt-2">
+                        <motion.div
+                          animate={{ x: ["-100%", "220%"] }}
+                          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                          className="h-full w-1/3 bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent"
+                        />
+                      </div>
+                    </div>
                   )}
 
                   {status === "complete" && completed && (
@@ -435,28 +513,36 @@ export function AgentProgressDisplay({
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
           className="mt-10 w-full max-w-lg flex gap-4"
         >
-          <button onClick={onAcceptAnalysis}
+          <motion.button
+            onClick={onAcceptAnalysis}
             disabled={isNavigating}
-            className="flex-1 flex items-center justify-center gap-2 px-5 py-4 rounded-xl
+            whileHover={isNavigating ? {} : { scale: 1.02, y: -1 }}
+            whileTap={isNavigating ? {} : { scale: 0.97 }}
+            className="btn flex-1 py-4 rounded-xl
               bg-emerald-600/20 border border-emerald-500/30 text-emerald-300
-              hover:bg-emerald-600/35 hover:border-emerald-500/50 transition-all font-semibold text-sm
-              disabled:opacity-60 disabled:cursor-not-allowed">
+              hover:bg-emerald-600/35 hover:border-emerald-500/55
+              hover:shadow-[0_0_24px_rgba(16,185,129,0.2)]
+              disabled:opacity-55 disabled:cursor-not-allowed"
+          >
             {isNavigating ? (
               <><Loader2 className="w-4 h-4 animate-spin" />Compiling Report…</>
             ) : (
               <><FileText className="w-4 h-4" />Accept Analysis</>
             )}
-          </button>
-          <button onClick={onDeepAnalysis}
+          </motion.button>
+          <motion.button
+            onClick={onDeepAnalysis}
             disabled={isNavigating}
-            className="flex-1 flex items-center justify-center gap-2 px-5 py-4 rounded-xl
+            whileHover={isNavigating ? {} : { scale: 1.02, y: -1 }}
+            whileTap={isNavigating ? {} : { scale: 0.97 }}
+            className="btn flex-1 py-4 rounded-xl
               bg-cyan-600/20 border border-cyan-500/30 text-cyan-300
-              hover:bg-cyan-600/35 hover:border-cyan-500/50 transition-all font-semibold text-sm
-              disabled:opacity-60 disabled:cursor-not-allowed">
-            <Microscope className="w-4 h-4" />
-            Deep Analysis
-            <ArrowRight className="w-4 h-4" />
-          </button>
+              hover:bg-cyan-600/35 hover:border-cyan-500/55
+              hover:shadow-[0_0_24px_rgba(0,212,255,0.2)]
+              disabled:opacity-55 disabled:cursor-not-allowed"
+          >
+            <Microscope className="w-4 h-4" />Deep Analysis<ArrowRight className="w-4 h-4" />
+          </motion.button>
         </motion.div>
       )}
 
@@ -465,31 +551,34 @@ export function AgentProgressDisplay({
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
           className="mt-10 w-full max-w-lg flex gap-4"
         >
-          <button onClick={onNewUpload}
+          <motion.button
+            onClick={onNewUpload}
             disabled={isNavigating}
-            className="flex-1 flex items-center justify-center gap-2 px-5 py-4 rounded-xl
-              bg-white/[0.04] border border-white/[0.10] text-slate-300
-              hover:bg-white/[0.08] hover:border-white/20 hover:text-white
-              transition-all font-semibold text-sm
-              disabled:opacity-60 disabled:cursor-not-allowed">
-            <RotateCcw className="w-4 h-4" />
-            New Analysis
-          </button>
-          <button onClick={onViewResults}
+            whileHover={isNavigating ? {} : { scale: 1.02, y: -1 }}
+            whileTap={isNavigating ? {} : { scale: 0.97 }}
+            className="btn btn-ghost flex-1 py-4 rounded-xl
+              disabled:opacity-55 disabled:cursor-not-allowed"
+          >
+            <RotateCcw className="w-4 h-4" />New Analysis
+          </motion.button>
+          <motion.button
+            onClick={onViewResults}
             disabled={isNavigating}
-            className="flex-1 flex items-center justify-center gap-2 px-5 py-4 rounded-xl
+            whileHover={isNavigating ? {} : { scale: 1.02, y: -1 }}
+            whileTap={isNavigating ? {} : { scale: 0.97 }}
+            className="btn flex-1 py-4 rounded-xl
               bg-gradient-to-r from-emerald-600/30 to-cyan-600/20
               border border-emerald-500/40 text-emerald-300
               hover:from-emerald-600/50 hover:to-cyan-600/35
-              hover:shadow-[0_0_20px_rgba(52,211,153,0.2)]
-              transition-all font-semibold text-sm
-              disabled:opacity-60 disabled:cursor-not-allowed">
+              hover:shadow-[0_0_24px_rgba(16,185,129,0.25)]
+              disabled:opacity-55 disabled:cursor-not-allowed"
+          >
             {isNavigating ? (
               <><Loader2 className="w-4 h-4 animate-spin" />Arbiter Working…</>
             ) : (
               <><FileText className="w-4 h-4" />View Results<ArrowRight className="w-4 h-4" /></>
             )}
-          </button>
+          </motion.button>
         </motion.div>
       )}
 

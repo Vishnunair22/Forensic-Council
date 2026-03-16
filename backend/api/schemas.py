@@ -43,6 +43,19 @@ class AgentFindingDTO(BaseModel):
     metadata: Optional[dict[str, Any]] = None  # includes analysis_phase, analysis_source, etc.
 
 
+class AgentMetricsDTO(BaseModel):
+    """Per-agent performance metrics for the result page."""
+    agent_id: str
+    agent_name: str
+    total_tools_called: int = 0
+    tools_succeeded: int = 0
+    tools_failed: int = 0
+    error_rate: float = 0.0
+    confidence_score: float = 0.0
+    finding_count: int = 0
+    skipped: bool = False
+
+
 class ReportDTO(BaseModel):
     """Serializable subset of ForensicReport for frontend."""
     report_id: str
@@ -50,6 +63,11 @@ class ReportDTO(BaseModel):
     case_id: str
     executive_summary: str
     per_agent_findings: dict[str, list[AgentFindingDTO]]
+    per_agent_metrics: dict[str, Any] = {}
+    per_agent_analysis: dict[str, str] = {}
+    overall_confidence: float = 0.0
+    overall_error_rate: float = 0.0
+    overall_verdict: str = "REVIEW REQUIRED"
     cross_modal_confirmed: list[AgentFindingDTO]
     # contested_findings and tribunal_resolved are serialized FindingComparison/TribunalCase objects
     contested_findings: list[dict]

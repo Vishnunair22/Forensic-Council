@@ -552,12 +552,30 @@ class ForensicAgent(ABC):
             redis_client=None,
         )
 
+        # Build a rich initial thought that summarises what initial analysis found
+        # so Gemini and other deep tools have full forensic context from the start.
+        init_summary_parts = []
+        for f in self._findings[:4]:  # top 4 initial findings
+            ft = getattr(f, "finding_type", "")
+            rs = getattr(f, "reasoning_summary", "") or ""
+            conf = getattr(f, "confidence_raw", 0.0)
+            if ft and rs:
+                init_summary_parts.append(f"{ft} ({conf*100:.0f}%): {rs[:120]}")
+        init_context = (
+            " | ".join(init_summary_parts)
+            if init_summary_parts
+            else f"{len(self._findings)} initial finding(s) recorded."
+        )
+
         loop_result = await loop_engine.run(
             initial_thought=(
-                f"Deep analysis pass for {self.agent_name}: running {len(deep_tasks)} "
-                f"heavy forensic tools (ML models + Gemini vision). "
-                f"Initial pass found {len(self._findings)} finding(s). "
-                f"Deep tasks: {'; '.join(deep_tasks)}."
+                f"DEEP ANALYSIS PASS — {self.agent_name}. "
+                f"Running {len(deep_tasks)} heavy forensic tools (ML models + Gemini AI vision). "
+                f"Initial pass summary: {init_context}. "
+                f"Deep tasks to execute: {'; '.join(deep_tasks)}. "
+                f"For Gemini analysis: provide complete image understanding — content type, "
+                f"all text, objects/weapons, interfaces, what is happening in the image, "
+                f"cross-validate with EXIF metadata."
             ),
             tool_registry=self._tool_registry,
             llm_generator=None,
@@ -574,24 +592,32 @@ class ForensicAgent(ABC):
         for f in deep_findings:
             f.metadata["analysis_phase"] = "deep"
 
-        # Post-synthesis on deep findings
+        # Post-synthesis on deep findings — compare against initial findings
         if (
             self.config.llm_enable_post_synthesis
             and self.config.llm_api_key
             and self.config.llm_provider != "none"
             and deep_findings
         ):
+            # Temporarily set self._findings to ALL (initial + deep) so the
+            # synthesis prompt can reference initial findings for comparison.
             orig_findings = self._findings
-            self._findings = deep_findings
+            combined_for_synth = orig_findings + deep_findings
+            self._findings = combined_for_synth
             try:
-                await self._synthesize_findings_with_llm()
-                deep_findings = self._findings
+                await self._synthesize_findings_with_llm(phase="deep")
+                # Extract back only deep findings (they're at the end)
+                deep_findings = self._findings[len(orig_findings):]
                 for f in deep_findings:
                     f.metadata["analysis_phase"] = "deep"
-            except Exception:
-                pass
+            except Exception as synth_ex:
+                logger.warning("Deep synthesis failed, raw findings preserved: %s", synth_ex,
+                               agent_id=self.agent_id)
             self._findings = orig_findings
 
+        # Store combined for the arbiter (initial + deep) but return ONLY deep
+        # findings so the investigation route can show a fresh deep-only card
+        # without duplicating the initial-analysis results.
         combined_findings = self._findings + deep_findings
         self._findings = combined_findings
 
@@ -602,7 +628,9 @@ class ForensicAgent(ABC):
             total_finding_count=len(combined_findings),
         )
 
-        return combined_findings
+        # Return only the new deep findings — callers use self._findings for
+        # the full combined set when building the arbiter payload.
+        return deep_findings
     
     async def _initialize_working_memory(self) -> None:
         """Initialize working memory with task decomposition."""
@@ -646,111 +674,163 @@ class ForensicAgent(ABC):
                 unavailable=[t.name for t in unavailable_tools],
             )
     
-    async def _synthesize_findings_with_llm(self) -> None:
+    async def _synthesize_findings_with_llm(self, phase: str = "initial") -> None:
         """
-        Post-analysis LLM synthesis: call Groq ONCE to enrich raw tool findings.
+        Post-analysis Groq synthesis: enrich raw tool findings with court-grade prose.
 
-        Sends all findings to the LLM with forensic context. The LLM returns
-        enriched reasoning summaries that interpret tool outputs in context,
-        identify anomaly patterns across findings, and produce court-grade prose.
+        Called once after initial tools complete AND once after deep tools complete.
+        The `phase` parameter controls the system prompt tone:
+          - "initial": Synthesise fast tool scans into a grounded first-pass analysis.
+          - "deep":    Compare deep ML/Gemini findings against initial findings;
+                       produce a clear IMPROVED or CONFIRMED narrative per finding.
 
-        Updates finding.reasoning_summary in-place. If the LLM call fails,
-        the caller catches the exception and raw findings are preserved.
+        Updates finding.reasoning_summary in-place.  On failure, raw findings
+        are preserved — this method must NEVER raise.
         """
         import json as _json
 
-        llm_client = LLMClient(self.config)
+        if not self._findings:
+            return
 
-        # Build compact findings digest for the LLM
-        findings_digest = []
-        for f in self._findings:
-            findings_digest.append({
-                "tool": f.metadata.get("tool_name", "unknown"),
-                "finding_type": f.finding_type,
-                "confidence": round(f.confidence_raw, 3),
-                "status": f.status,
-                "summary": f.reasoning_summary[:300] if f.reasoning_summary else "",
-                "court_defensible": f.metadata.get("court_defensible", False),
-            })
+        llm_client = LLMClient(self.config)
 
         evidence_context = {
             "mime_type": getattr(self.evidence_artifact, "mime_type", "unknown"),
             "file_name": getattr(self.evidence_artifact, "file_path", "unknown"),
         }
 
-        system_prompt = f"""You are {self.agent_name}, a specialist forensic analysis agent producing court-admissible analysis.
+        # Separate initial vs deep findings for the deep-pass prompt
+        initial_findings = [f for f in self._findings
+                            if f.metadata.get("analysis_phase", "initial") == "initial"]
+        deep_findings    = [f for f in self._findings
+                            if f.metadata.get("analysis_phase", "initial") == "deep"]
+        target_findings  = deep_findings if phase == "deep" and deep_findings else self._findings
 
-You have completed {len(self._findings)} forensic tool scans on the evidence.
+        # Build compact digest of target findings
+        findings_digest = []
+        for f in target_findings:
+            findings_digest.append({
+                "tool": f.metadata.get("tool_name", "unknown"),
+                "finding_type": f.finding_type,
+                "confidence": round(f.confidence_raw, 3),
+                "status": f.status,
+                "summary": (f.reasoning_summary or "")[:400],
+                "court_defensible": f.metadata.get("court_defensible", False),
+                "phase": f.metadata.get("analysis_phase", "initial"),
+            })
+
+        # Build initial-findings summary for comparison (deep pass only)
+        initial_context = ""
+        if phase == "deep" and initial_findings:
+            init_items = []
+            for f in initial_findings[:6]:
+                init_items.append({
+                    "tool": f.metadata.get("tool_name", ""),
+                    "type": f.finding_type,
+                    "confidence": round(f.confidence_raw, 3),
+                    "summary": (f.reasoning_summary or "")[:200],
+                })
+            initial_context = (
+                f"\n\nInitial analysis findings (for comparison):\n"
+                f"{_json.dumps(init_items, indent=2)}"
+            )
+
+        if phase == "deep":
+            system_prompt = f"""You are {self.agent_name}, a specialist forensic analysis agent writing the DEEP ANALYSIS section of a court-admissible forensic report.
+
+You have just completed {len(target_findings)} deep forensic tool scans (ML models, Gemini AI vision, heavy analytics).
+You also have the initial analysis findings for comparison.
+
+For each deep finding, produce a synthesis that:
+1. States EXACT metric values (scores, counts, detected objects, text content, coordinates)
+2. COMPARES to the initial analysis — did deep analysis CONFIRM, EXPAND, or CONTRADICT the initial finding?
+3. For Gemini findings: quote the content type, EVERY piece of extracted text, all detected objects/weapons/UI elements, the contextual narrative, and the authenticity verdict
+4. For ML findings: state the model's output metrics and what they mean forensically
+5. Assigns a confidence level with explicit justification based on the data
+6. Flags CRITICAL if clear manipulation or authenticity concern is detected
+
+Do NOT write generic phrases. Every sentence must cite specific data from the tool output.
+If a tool failed, state it explicitly: "Tool X failed — finding omitted from confidence calculation."
+
+Respond ONLY with a JSON array (no preamble, no markdown):
+[{{"tool": "<tool_name>", "analysis": "<3-5 sentence specific deep forensic analysis with comparison to initial>"}}]"""
+        else:
+            system_prompt = f"""You are {self.agent_name}, a specialist forensic analysis agent producing court-admissible analysis.
+
+You have completed {len(target_findings)} forensic tool scans on the evidence.
 Synthesize each finding into a SPECIFIC, DATA-DRIVEN forensic analysis paragraph.
 
-MANDATORY REQUIREMENTS FOR EACH FINDING:
+REQUIREMENTS:
 1. State the EXACT metric values from the tool output (scores, counts, ratios, hashes, etc.)
-2. Interpret what those specific numbers mean forensically — is it within normal range or suspicious?
-3. Cross-reference with other findings where relevant (e.g. "ELA anomalies at same regions as noise inconsistency")
-4. For Gemini/AI findings: quote the content type, specific objects/text/UI elements detected, and any manipulation signals
-5. For metadata findings: state exact timestamps, GPS coordinates, device info, or their absence
-6. State confidence level and WHY (based on data, not intuition)
-7. Flag any finding as CRITICAL if it indicates clear manipulation or authenticity concern
+2. Interpret what those specific numbers mean forensically
+3. Cross-reference with other findings where relevant
+4. For metadata findings: state exact timestamps, GPS coordinates, device info, or their absence
+5. State confidence level and WHY (based on data)
+6. Flag CRITICAL if it indicates clear manipulation or authenticity concern
 
-CRITICAL: Do NOT produce generic phrases like "the tool executed successfully" or "analysis was performed".
-Every sentence must reference specific numbers, names, or detected artifacts from the tool output.
+Do NOT produce generic phrases. Every sentence must reference specific data.
 
-Respond ONLY with a JSON array (no preamble, no markdown), one object per finding in input order:
+Respond ONLY with a JSON array (no preamble, no markdown):
 [{{"tool": "<tool_name>", "analysis": "<2-4 sentence specific forensic analysis>"}}]"""
 
-        user_content = f"""Evidence file: {evidence_context['file_name']}
-MIME type: {evidence_context['mime_type']}
-
-Raw tool findings — INCLUDE all specific values in your analysis:
-{_json.dumps(findings_digest, indent=2)}
-
-Produce a specific, data-driven forensic analysis for each finding."""
+        user_content = (
+            f"Evidence file: {evidence_context['file_name']}\n"
+            f"MIME type: {evidence_context['mime_type']}\n"
+            f"Analysis phase: {phase.upper()}\n\n"
+            f"Tool findings to synthesise:\n{_json.dumps(findings_digest, indent=2)}"
+            f"{initial_context}\n\nProduce the forensic synthesis."
+        )
 
         logger.info(
-            "Running post-analysis LLM synthesis",
+            "Running Groq %s-pass synthesis", phase,
             agent_id=self.agent_id,
-            finding_count=len(self._findings),
+            finding_count=len(target_findings),
         )
 
-        raw_response = await llm_client.generate_synthesis(
-            system_prompt=system_prompt,
-            user_content=user_content,
-            max_tokens=1500,
-        )
-
-        # Parse the LLM response and update findings
         try:
-            # Handle response that may be wrapped in text or markdown
+            raw_response = await llm_client.generate_synthesis(
+                system_prompt=system_prompt,
+                user_content=user_content,
+                max_tokens=1800,
+            )
+        except Exception as groq_err:
+            logger.warning("Groq synthesis API call failed: %s", groq_err,
+                           agent_id=self.agent_id)
+            return
+
+        try:
             response_text = raw_response.strip()
-            # Find JSON array in response
             start = response_text.find("[")
-            end = response_text.rfind("]") + 1
-            if start >= 0 and end > start:
-                syntheses = _json.loads(response_text[start:end])
-            else:
-                logger.warning("LLM synthesis response did not contain JSON array")
+            end   = response_text.rfind("]") + 1
+            if start < 0 or end <= start:
+                logger.warning("Groq synthesis: no JSON array in response",
+                               agent_id=self.agent_id)
                 return
 
-            # Map syntheses back to findings by index
+            syntheses = _json.loads(response_text[start:end])
+
             for i, synth in enumerate(syntheses):
-                if i < len(self._findings):
-                    analysis = synth.get("analysis", "")
+                if i < len(target_findings):
+                    analysis = synth.get("analysis", "").strip()
                     if analysis:
-                        # Prepend LLM synthesis to existing summary
-                        existing = self._findings[i].reasoning_summary or ""
-                        self._findings[i].reasoning_summary = f"{analysis}\n\n{existing}".strip()
-                        self._findings[i].metadata["llm_synthesis"] = analysis
+                        existing = target_findings[i].reasoning_summary or ""
+                        target_findings[i].reasoning_summary = (
+                            f"{analysis}\n\n{existing}".strip()
+                            if existing and existing != analysis
+                            else analysis
+                        )
+                        target_findings[i].metadata["llm_synthesis"] = analysis
+                        target_findings[i].metadata["synthesis_phase"] = phase
 
             logger.info(
-                "Post-analysis LLM synthesis complete",
+                "Groq %s-pass synthesis complete", phase,
                 agent_id=self.agent_id,
-                synthesized_count=min(len(syntheses), len(self._findings)),
+                synthesized_count=min(len(syntheses), len(target_findings)),
             )
-        except (_json.JSONDecodeError, KeyError, TypeError) as parse_err:
+        except Exception as parse_err:
             logger.warning(
-                "Could not parse LLM synthesis response, raw findings preserved",
+                "Groq synthesis parse failed — raw findings preserved: %s", parse_err,
                 agent_id=self.agent_id,
-                error=str(parse_err),
             )
     
     async def self_reflection_pass(

@@ -19,6 +19,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ShieldCheck } from "lucide-react";
 
 import { useSimulation } from "@/hooks/useSimulation";
+import { PageTransition } from "@/components/ui/PageTransition";
+import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { useSound } from "@/hooks/useSound";
 import { startInvestigation, submitHITLDecision } from "@/lib/api";
 import { AGENTS_DATA } from "@/lib/constants";
@@ -35,6 +37,21 @@ import {
 export default function EvidencePage() {
   const router = useRouter();
   const { playSound } = useSound();
+
+  // Stable investigator ID — generated once, stored in sessionStorage and a ref.
+  // NOTE: useRef does NOT accept a lazy-initializer function like useState does.
+  // We must compute the value first, then pass it directly to useRef().
+  const _initInvestigatorId = (): string => {
+    if (typeof window === "undefined") return "REQ-000000";
+    const stored = sessionStorage.getItem("forensic_investigator_id");
+    const validIdPattern = /^REQ-\d{5,10}$/;
+    if (stored && validIdPattern.test(stored)) return stored;
+    const fresh = "REQ-" + (Math.floor(Math.random() * 900000) + 100000);
+    sessionStorage.setItem("forensic_investigator_id", fresh);
+    return fresh;
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const investigatorIdRef = useRef<string>(_initInvestigatorId());
 
   // File upload state
   const [file, setFile] = useState<File | null>(null);
@@ -110,13 +127,8 @@ export default function EvidencePage() {
       startSimulation();
 
       try {
-        const stored = sessionStorage.getItem("forensic_investigator_id");
-        const validIdPattern = /^REQ-\d{5,10}$/;
-        const investigatorId =
-          stored && validIdPattern.test(stored)
-            ? stored
-            : "REQ-" + (Math.floor(Math.random() * 900000) + 100000);
-        sessionStorage.setItem("forensic_investigator_id", investigatorId);
+        // Use the stable ID generated on mount (never regenerates mid-session).
+        const investigatorId = investigatorIdRef.current as unknown as string;
 
         const caseId = "CASE-" + Date.now();
         const res = await startInvestigation(targetFile, caseId, investigatorId);
@@ -138,7 +150,17 @@ export default function EvidencePage() {
         }
       } catch (err: unknown) {
         console.error("Investigation start failed", err);
-        const errorMsg = err instanceof Error ? err.message : "Failed to start investigation";
+        let errorMsg = err instanceof Error ? err.message : "Failed to start investigation";
+        // Surface common backend errors clearly
+        if (errorMsg.includes("422") || errorMsg.toLowerCase().includes("unprocessable")) {
+          errorMsg = "Upload rejected by server — check file type and try again.";
+        } else if (errorMsg.includes("429")) {
+          errorMsg = "Too many investigations started. Please wait a moment and try again.";
+        } else if (errorMsg.includes("413")) {
+          errorMsg = "File is too large. Maximum size is 50 MB.";
+        } else if (errorMsg.includes("401") || errorMsg.includes("Unauthorized")) {
+          errorMsg = "Session expired — please refresh the page and try again.";
+        }
         setValidationError(errorMsg);
         setIsUploading(false);
         resetSimulation();
@@ -166,19 +188,14 @@ export default function EvidencePage() {
     }
   }, [triggerAnalysis]);
 
-  // Validate file
+  // Validate file — uses the single canonical ALLOWED_MIME_TYPES from constants.ts
   const validateFile = (f: File): boolean => {
     setValidationError(null);
     if (f.size > 50 * 1024 * 1024) {
       setValidationError("File must be under 50MB");
       return false;
     }
-    const ALLOWED = new Set([
-      "image/jpeg", "image/png", "image/tiff", "image/webp", "image/gif", "image/bmp",
-      "video/mp4", "video/quicktime", "video/x-msvideo",
-      "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4", "audio/flac",
-    ]);
-    if (!ALLOWED.has(f.type)) {
+    if (!ALLOWED_MIME_TYPES.has(f.type)) {
       setValidationError(`File type "${f.type || "unknown"}" is not supported. Upload an image, video, or audio file.`);
       return false;
     }
@@ -401,6 +418,7 @@ export default function EvidencePage() {
 
       {/* Main content */}
       <main className="max-w-6xl mx-auto relative z-10">
+        <PageTransition>
         <AnimatePresence mode="wait">
           {/* Upload Form */}
           {showUploadForm && (
@@ -461,6 +479,7 @@ export default function EvidencePage() {
             </div>
           )}
         </AnimatePresence>
+      </PageTransition>
       </main>
 
       {/* HITL Checkpoint Modal */}
@@ -471,6 +490,8 @@ export default function EvidencePage() {
         onDecision={handleHITLDecision}
         onDismiss={dismissCheckpoint}
       />
+
+      <GlobalFooter />
 
       {/* Hidden file input */}
       <input

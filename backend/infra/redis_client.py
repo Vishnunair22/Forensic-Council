@@ -151,7 +151,7 @@ class RedisClient:
             value = json.dumps(value)
         
         result = await self.client.set(key, value, ex=ex, px=px, nx=nx, xx=xx)
-        return result is not None or xx
+        return result is True
     
     async def get(self, key: str) -> Optional[Any]:
         """

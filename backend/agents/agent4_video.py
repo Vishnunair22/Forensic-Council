@@ -431,9 +431,16 @@ class Agent4Video(ForensicAgent):
     async def run_investigation(self):
         """
         Override to short-circuit when the evidence is not a video file.
-        Returns a clear finding instead of running tools that will fail on images.
+
+        Always initialises working memory FIRST so the heartbeat shows
+        task progress (including the validation step) even for skipped files.
         """
         from core.react_loop import AgentFinding
+        from core.working_memory import TaskStatus
+
+        # Step 1: always initialise working memory so the heartbeat shows
+        # activity immediately, even when we end up skipping.
+        await self._initialize_working_memory()
 
         file_path = self.evidence_artifact.file_path.lower()
         mime = (self.evidence_artifact.metadata or {}).get("mime_type", "").lower()
@@ -443,7 +450,26 @@ class Agent4Video(ForensicAgent):
         is_image = any(file_path.endswith(ext) for ext in image_exts) or mime.startswith("image/")
         is_audio = any(file_path.endswith(ext) for ext in audio_exts) or mime.startswith("audio/")
 
+        async def _mark_all_complete():
+            """Mark every task complete so the heartbeat shows full progress."""
+            try:
+                state = await self.working_memory.get_state(
+                    session_id=self.session_id, agent_id=self.agent_id
+                )
+                if state:
+                    for task in state.tasks:
+                        await self.working_memory.update_task(
+                            session_id=self.session_id,
+                            agent_id=self.agent_id,
+                            task_id=task.task_id,
+                            status=TaskStatus.COMPLETE,
+                            result_ref="file_type_validation",
+                        )
+            except Exception:
+                pass
+
         if is_image:
+            await _mark_all_complete()
             finding = AgentFinding(
                 agent_id=self.agent_id,
                 finding_type="File type not applicable",
@@ -463,6 +489,7 @@ class Agent4Video(ForensicAgent):
             return self._findings
 
         if is_audio:
+            await _mark_all_complete()
             finding = AgentFinding(
                 agent_id=self.agent_id,
                 finding_type="File type not applicable",
@@ -481,5 +508,7 @@ class Agent4Video(ForensicAgent):
             self._reflection_report = None
             return self._findings
 
-        # For video files, run the full investigation
+        # For video files: skip memory re-init in base class, build registry, run full loop
+        self._skip_memory_init = True
+        self._tool_registry = await self.build_tool_registry()
         return await super().run_investigation()

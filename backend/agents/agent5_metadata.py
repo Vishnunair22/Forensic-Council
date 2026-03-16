@@ -64,6 +64,16 @@ class Agent5Metadata(ForensicAgent):
     11. Self-reflection pass
     """
     
+    # Class-level context injected by the investigation route after Agent 1's
+    # Gemini deep pass.  Agent 5 uses this to cross-validate EXIF metadata
+    # against what Gemini actually observed in the image.
+    _shared_agent1_context: dict = {}
+
+    @classmethod
+    def inject_agent1_context(cls, agent1_gemini_findings: dict) -> None:
+        """Share Agent 1 Gemini vision findings with Agent 5 for EXIF cross-validation."""
+        cls._shared_agent1_context = agent1_gemini_findings or {}
+
     @property
     def agent_name(self) -> str:
         """Human-readable name of this agent."""
@@ -808,6 +818,26 @@ class Agent5Metadata(ForensicAgent):
             except Exception:
                 pass
 
+            # Inject Agent 1 Gemini context for cross-validation (image content vs EXIF)
+            try:
+                a1 = type(self)._shared_agent1_context
+                if a1:
+                    agent1_cross = {
+                        "agent1_content_type": a1.get("gemini_content_type", ""),
+                        "agent1_scene": str(a1.get("gemini_narrative", a1.get("gemini_scene", "")))[:300],
+                        "agent1_objects": a1.get("gemini_detected_objects", []),
+                        "agent1_manipulation_signals": a1.get("gemini_manipulation_signals", []),
+                        "agent1_extracted_text": a1.get("gemini_extracted_text", []),
+                        "agent1_interface_detected": a1.get("gemini_interface", ""),
+                        "agent1_authenticity_verdict": a1.get("gemini_verdict", ""),
+                    }
+                    # Only include non-empty fields
+                    agent1_cross = {k: v for k, v in agent1_cross.items() if v not in ("", None, [], {})}
+                    if agent1_cross:
+                        exif_summary["agent1_image_forensics"] = agent1_cross
+            except Exception:
+                pass
+
             finding = await _gemini.deep_forensic_analysis(
                 file_path=artifact.file_path,
                 exif_summary=exif_summary or None,
@@ -908,3 +938,16 @@ class Agent5Metadata(ForensicAgent):
             "ABSENCE AS SIGNAL principle applies throughout: "
             "every expected-but-absent field is a mandatory Thought trigger."
         )
+    async def run_investigation(self):
+        """
+        Override to ensure working memory is initialised before the base-class
+        loop starts — this makes the heartbeat visible immediately.
+
+        Agent 5 (Metadata) supports all file types, so it never skips; this
+        override exists purely to call _initialize_working_memory() first and
+        set _skip_memory_init so the base class does not re-initialise it.
+        """
+        await self._initialize_working_memory()
+        self._skip_memory_init = True
+        self._tool_registry = await self.build_tool_registry()
+        return await super().run_investigation()

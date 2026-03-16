@@ -26,7 +26,9 @@ frontend/
 │   │   └── ui/                # UI components
 │   │       ├── dialog.tsx             # Dialog/modal component
 │   │       ├── AgentIcon.tsx          # Agent icon display
-│   │       └── AgentResponseText.tsx  # Formatted agent response
+│   │       ├── AgentResponseText.tsx  # Formatted agent response
+│   │       ├── GlobalFooter.tsx       # Global academic disclaimer footer
+│   │       └── PageTransition.tsx     # Smooth page fade-up transition wrapper
 │   │
 │   ├── hooks/                 # Custom React hooks
 │   │   ├── useForensicData.ts    # Forensic data management hook
