@@ -143,7 +143,7 @@ def get_logger(name: str, level: Optional[str] = None) -> "StructuredLogger":
 
     Usage:
         logger = get_logger(__name__)
-        logger.info("Application started", version="1.0.3")
+        logger.info("Application started", version="1.0.4")
     """
     if name not in _logger_cache:
         _logger_cache[name] = StructuredLogger(name, level)

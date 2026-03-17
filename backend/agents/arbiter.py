@@ -66,8 +66,9 @@ class AgentMetrics(BaseModel):
     total_tools_called: int = 0
     tools_succeeded: int = 0
     tools_failed: int = 0
-    error_rate: float = 0.0          # 0.0–1.0 (failed / total)
-    confidence_score: float = 0.0    # avg confidence across real findings
+    tools_not_applicable: int = 0    # tools that don't apply to this file type (not errors)
+    error_rate: float = 0.0          # 0.0–1.0 (failed / applicable tools run)
+    confidence_score: float = 0.0    # avg confidence across real applicable findings
     finding_count: int = 0
     skipped: bool = False            # True when file type not applicable
 
@@ -199,28 +200,60 @@ class CouncilArbiter:
                 return AgentMetrics(
                     agent_id=agent_id, agent_name=agent_name, skipped=True,
                     total_tools_called=0, tools_succeeded=0, tools_failed=0,
-                    error_rate=0.0, confidence_score=0.0, finding_count=0,
+                    tools_not_applicable=0, error_rate=0.0,
+                    confidence_score=0.0, finding_count=0,
                 )
             real = [f for f in findings if str(f.get("finding_type","")).lower() not in _SKIP_FINDING_TYPES]
             total = len(real)
-            # A finding is "failed" if success=False or status=INCOMPLETE with no reasoning
-            failed = sum(
-                1 for f in real
-                if (isinstance(f.get("metadata"), dict) and f["metadata"].get("court_defensible") is False)
-                or f.get("status") == "INCOMPLETE"
+
+            not_applicable_flags = (
+                "ela_not_applicable", "ghost_not_applicable",
             )
-            succeeded = total - failed
-            error_rate = round(failed / total, 3) if total > 0 else 0.0
-            conf_scores = [f.get("calibrated_probability") or f.get("confidence_raw") or 0.0 for f in real]
+            def _is_not_applicable(f: dict) -> bool:
+                meta = f.get("metadata") or {}
+                return any(meta.get(flag) for flag in not_applicable_flags)
+
+            def _is_failed(f: dict) -> bool:
+                if _is_not_applicable(f):
+                    return False  # not-applicable is expected, not a failure
+                meta = f.get("metadata") or {}
+                return (
+                    meta.get("court_defensible") is False
+                    or f.get("status") == "INCOMPLETE"
+                )
+
+            not_applicable = sum(1 for f in real if _is_not_applicable(f))
+            failed = sum(1 for f in real if _is_failed(f))
+            # Applicable = ran and was expected to produce a real result
+            applicable = total - not_applicable
+            succeeded = applicable - failed
+            error_rate = round(failed / applicable, 3) if applicable > 0 else 0.0
+            # Confidence only over findings that actually ran (not not-applicable, not failed)
+            conf_scores = [
+                f.get("calibrated_probability") or f.get("confidence_raw") or 0.0
+                for f in real
+                if not _is_not_applicable(f) and not _is_failed(f)
+            ]
             confidence = round(sum(conf_scores) / len(conf_scores), 3) if conf_scores else 0.0
             return AgentMetrics(
                 agent_id=agent_id, agent_name=agent_name, skipped=False,
                 total_tools_called=total, tools_succeeded=succeeded,
-                tools_failed=failed, error_rate=error_rate,
-                confidence_score=confidence, finding_count=total,
+                tools_failed=failed, tools_not_applicable=not_applicable,
+                error_rate=error_rate, confidence_score=confidence,
+                finding_count=total,
             )
 
+        # Helper: call optional step-progress hook if set externally
+        async def _step(msg: str) -> None:
+            hook = getattr(self, "_step_hook", None)
+            if hook is not None:
+                try:
+                    await hook(msg)
+                except Exception:
+                    pass
+
         # ── Partition agents into active vs skipped ───────────────────────
+        await _step("Gathering all agent findings…")
         all_findings: list[dict[str, Any]] = []
         per_agent_findings: dict[str, list[dict[str, Any]]] = {}
         per_agent_metrics: dict[str, Any] = {}
@@ -247,10 +280,9 @@ class CouncilArbiter:
                     gemini_findings_by_agent[agent_id] = agent_gemini
 
         logger.info(
-            "Arbiter: %d active agents, %d skipped, %d total findings",
-            len(active_agent_results),
-            len(agent_results) - len(active_agent_results),
-            len(all_findings),
+            f"Arbiter: {len(active_agent_results)} active agents, "
+            f"{len(agent_results) - len(active_agent_results)} skipped, "
+            f"{len(all_findings)} total findings"
         )
 
         # ── Compile Gemini findings list ──────────────────────────────────
@@ -258,8 +290,7 @@ class CouncilArbiter:
         for gf_list in gemini_findings_by_agent.values():
             gemini_vision_findings.extend(gf_list)
         if gemini_vision_findings:
-            logger.info("Arbiter: %d Gemini vision findings across %d agent(s)",
-                        len(gemini_vision_findings), len(gemini_findings_by_agent))
+            logger.info(f"Arbiter: {len(gemini_vision_findings)} Gemini vision findings across {len(gemini_findings_by_agent)} agent(s)")
 
         # ── Compute overall confidence + error rate ───────────────────────
         active_metrics = [
@@ -281,9 +312,11 @@ class CouncilArbiter:
         # MANIPULATION DETECTED: confidence indicates tampering
 
         # Run cross-agent comparison
+        await _step("Running cross-modal comparison…")
         comparisons = await self.cross_agent_comparison(all_findings)
 
         # Identify contradictions and run challenge loop
+        await _step("Resolving contested evidence…")
         contested_findings = []
         challenge_results = []
         for comparison in comparisons:
@@ -334,6 +367,7 @@ class CouncilArbiter:
             )
 
         # ── Per-agent Groq narrative (initial vs deep comparison) ──────────
+        await _step("Generating per-agent analysis via Groq…")
         per_agent_analysis: dict[str, str] = {}
         for agent_id, result in active_agent_results.items():
             findings = result.get("findings", [])
@@ -348,12 +382,13 @@ class CouncilArbiter:
                 if narrative:
                     per_agent_analysis[agent_id] = narrative
             except Exception as narr_err:
-                logger.warning("Per-agent narrative failed for %s: %s", agent_id, narr_err)
+                logger.warning(f"Per-agent narrative failed for {agent_id}: {narr_err}")
 
         # ── Contested / incomplete / stub ─────────────────────────────────
         contested_findings_count = len(contested_findings)
 
         # ── Verdict ───────────────────────────────────────────────────────
+        await _step("Calibrating confidence scores and computing verdict…")
         if overall_confidence >= 0.80 and overall_error_rate <= 0.10 and contested_findings_count == 0:
             overall_verdict = "CERTAIN"
         elif overall_confidence >= 0.65 and overall_error_rate <= 0.20:
@@ -382,6 +417,7 @@ class CouncilArbiter:
         )
 
         # ── Executive summary via Groq — only active agents ───────────────
+        await _step("Generating executive summary via Groq…")
         executive_summary = await self._generate_executive_summary(
             len(active_agent_results),
             len(all_findings),
@@ -394,6 +430,7 @@ class CouncilArbiter:
         )
 
         # ── Uncertainty statement ─────────────────────────────────────────
+        await _step("Computing uncertainty bounds…")
         uncertainty_statement = await self._generate_uncertainty_statement(
             len(incomplete_findings),
             len(contested_findings),
@@ -401,6 +438,7 @@ class CouncilArbiter:
         )
 
         # ── Build report ──────────────────────────────────────────────────
+        await _step("Finalising court-ready report…")
         report = ForensicReport(
             session_id=self.session_id,
             case_id=case_id or f"case_{self.session_id}",
@@ -723,41 +761,82 @@ class CouncilArbiter:
         deep_f    = [f for f in findings
                      if (f.get("metadata") or {}).get("analysis_phase") == "deep"]
 
+        _NOT_APPLICABLE_FLAGS = ("ela_not_applicable", "ghost_not_applicable")
+        _NOT_APPLICABLE_KEYS = {"ela_not_applicable", "ghost_not_applicable",
+                                "ela_limitation_note", "ghost_limitation_note",
+                                "file_format_note", "is_camera_format"}
+        _STRIP_KEYS = {"stub_warning", "llm_synthesis", "llm_reasoning",
+                       "synthesis_phase", "analysis_phase", "tool_name", "warning"}
+
         def _fmt(findings_list: list[dict]) -> str:
             out = []
-            for f in findings_list[:8]:
-                out.append({
-                    "tool":       (f.get("metadata") or {}).get("tool_name", f.get("finding_type", "")),
-                    "confidence": round(f.get("confidence_raw", 0), 3),
-                    "status":     f.get("status", ""),
-                    "summary":    (f.get("reasoning_summary") or "")[:300],
-                    "failed":     not (f.get("metadata") or {}).get("court_defensible", True),
-                })
+            for f in findings_list[:12]:
+                meta = f.get("metadata") or {}
+                tool_name = meta.get("tool_name", f.get("finding_type", ""))
+                is_na = any(meta.get(flag) for flag in _NOT_APPLICABLE_FLAGS)
+                is_failed = (
+                    not is_na
+                    and meta.get("court_defensible") is False
+                )
+                # Collect the key metrics Groq needs to cite real numbers
+                key_metrics: dict = {}
+                for k, v in meta.items():
+                    if k.startswith("_") or k in _STRIP_KEYS:
+                        continue
+                    if k in _NOT_APPLICABLE_KEYS:
+                        key_metrics[k] = v
+                        continue
+                    if isinstance(v, (bool, int, float)):
+                        key_metrics[k] = v
+                    elif isinstance(v, str) and len(v) < 200:
+                        key_metrics[k] = v
+                    elif isinstance(v, list) and len(v) <= 10 and all(
+                        isinstance(x, (str, int, float, bool, dict)) for x in v
+                    ):
+                        key_metrics[k] = v
+                entry = {
+                    "tool":            tool_name,
+                    "confidence":      round(f.get("confidence_raw", 0), 3),
+                    "status":          f.get("status", ""),
+                    "applicability":   "NOT_APPLICABLE" if is_na else ("FAILED" if is_failed else "RAN"),
+                    "summary":         (f.get("reasoning_summary") or "")[:400],
+                    "metrics":         key_metrics,
+                }
+                out.append(entry)
             return json.dumps(out, indent=2)
 
+        tools_na = metrics.get("tools_not_applicable", 0)
         has_deep = bool(deep_f)
         comparison_section = ""
         if has_deep:
             comparison_section = (
-                f"\n\nDeep analysis findings ({len(deep_f)} new tool scans):\n{_fmt(deep_f)}"
+                f"\n\nDeep analysis findings ({len(deep_f)} tool scans):\n{_fmt(deep_f)}"
             )
 
         system_prompt = f"""You are the Council Arbiter writing the per-agent analysis section of a forensic report.
 
-Write 2-3 clear, plain-English paragraphs for the {agent_full_name}. Include:
-- What the agent found in initial analysis (key findings with exact metric values)
-- What deep analysis added, confirmed, or changed (if deep analysis was run)
-- The agent's overall reliability: confidence {confidence_pct}% and tool error rate {error_rate_pct}%
-- Any tools that failed and what that means for the completeness of this analysis
-- A plain-English verdict for this agent: AUTHENTIC / SUSPICIOUS / INCONCLUSIVE / NOT APPLICABLE
+Write 2-3 clear, plain-English paragraphs for the {agent_full_name}. Structure:
 
-Do NOT use bullet points. Write in prose. Do NOT repeat raw JSON numbers verbatim — interpret them."""
+PARAGRAPH 1 — Initial analysis results:
+- For each tool with applicability "RAN": cite the EXACT metric values from the "metrics" field and interpret them forensically. Do not paraphrase — state the actual numbers (e.g. "ELA found 3 localised anomaly regions with max deviation 14.2", "YOLO detected person (0.87), laptop (0.76)").
+- For each tool with applicability "NOT_APPLICABLE": briefly explain why the tool does not apply to this file type (use the ela_limitation_note / ghost_limitation_note / file_format_note from metrics). Do NOT treat these as suspicious findings.
+- For each tool with applicability "FAILED": state that it failed and what data is missing as a result.
+
+PARAGRAPH 2 — Deep analysis and cross-validation (if deep analysis was run):
+- What deep tools confirmed, expanded, or contradicted from initial analysis.
+- Exact Gemini findings if present: content type, extracted text, detected objects, authenticity verdict.
+
+PARAGRAPH 3 — Reliability and verdict:
+- Agent confidence: {confidence_pct}%. Tool error rate: {error_rate_pct}% ({tools_ok} of {tools_total} tools succeeded, {tools_na} not applicable to file type).
+- Plain-English verdict for this agent: AUTHENTIC / SUSPICIOUS / INCONCLUSIVE / NOT APPLICABLE.
+
+Do NOT use bullet points. Write in continuous prose. Interpret numbers — do not paste raw JSON."""
 
         user_content = (
             f"Agent: {agent_full_name}\n"
-            f"Confidence score: {confidence_pct}%  |  Tool error rate: {error_rate_pct}%  |  "
-            f"Tools succeeded: {tools_ok}/{tools_total}\n\n"
-            f"Initial analysis findings ({len(initial_f)} tool scans):\n{_fmt(initial_f)}"
+            f"Confidence: {confidence_pct}%  |  Error rate: {error_rate_pct}%  |  "
+            f"Tools succeeded: {tools_ok}/{tools_total}  |  Not applicable: {tools_na}\n\n"
+            f"Initial analysis ({len(initial_f)} tool scans):\n{_fmt(initial_f)}"
             f"{comparison_section}\n\n"
             f"Write the per-agent analysis section."
         )
@@ -769,7 +848,7 @@ Do NOT use bullet points. Write in prose. Do NOT repeat raw JSON numbers verbati
                 max_tokens=600,
             )
         except Exception as e:
-            logger.warning("Per-agent narrative Groq call failed for %s: %s", agent_id, e)
+            logger.warning(f"Per-agent narrative Groq call failed for {agent_id}: {e}")
             return ""
 
     async def _generate_executive_summary(
@@ -801,7 +880,7 @@ Do NOT use bullet points. Write in prose. Do NOT repeat raw JSON numbers verbati
                 if result:
                     return result
             except Exception as exc:
-                logger.warning("LLM executive summary failed, using template: %s", exc)
+                logger.warning(f"LLM executive summary failed, using template: {exc}")
 
         return self._template_executive_summary(
             num_agents, num_findings, cross_modal_confirmed, contested, all_findings
@@ -866,11 +945,14 @@ Do NOT use bullet points. Write in prose. Do NOT repeat raw JSON numbers verbati
         if active_agent_metrics:
             metrics_summary = "\n\nAgent performance metrics (active agents only):\n" + json.dumps([
                 {
-                    "agent": m.get("agent_name", m.get("agent_id","")),
-                    "confidence": f"{m.get('confidence_score',0)*100:.0f}%",
-                    "error_rate": f"{m.get('error_rate',0)*100:.0f}%",
-                    "tools": m.get("total_tools_called", 0),
-                    "findings": m.get("finding_count", 0),
+                    "agent":           m.get("agent_name", m.get("agent_id","")),
+                    "confidence":      f"{m.get('confidence_score',0)*100:.0f}%",
+                    "error_rate":      f"{m.get('error_rate',0)*100:.0f}%",
+                    "tools_ran":       m.get("tools_succeeded", 0),
+                    "tools_failed":    m.get("tools_failed", 0),
+                    "not_applicable":  m.get("tools_not_applicable", 0),
+                    "total_tools":     m.get("total_tools_called", 0),
+                    "findings":        m.get("finding_count", 0),
                 }
                 for m in active_agent_metrics if not m.get("skipped")
             ], indent=2)
@@ -960,7 +1042,7 @@ Write the Executive Summary for this forensic report. Justify the {overall_verdi
                 if result:
                     return result
             except Exception as exc:
-                logger.warning("LLM uncertainty statement failed, using template: %s", exc)
+                logger.warning(f"LLM uncertainty statement failed, using template: {exc}")
 
         return self._template_uncertainty_statement(incomplete, contested, overall_error_rate)
 

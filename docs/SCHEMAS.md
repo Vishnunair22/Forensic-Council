@@ -1,6 +1,6 @@
 # Forensic Council — Data Schemas
 
-**Version:** v1.0.3 | Pydantic (backend) and TypeScript (frontend) models.
+**Version:** v1.0.4 | Pydantic (backend) and TypeScript (frontend) models.
 
 ---
 

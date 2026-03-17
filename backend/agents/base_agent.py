@@ -224,6 +224,14 @@ class ForensicAgent(ABC):
         self._findings: list[AgentFinding] = []
         self._react_chain: list = []
         self._reflection_report: SelfReflectionReport | None = None
+
+        # Tool context: keyed by tool_name, stores last result dict.
+        # Handlers read from this to infer context from prior tool runs.
+        self._tool_context: dict[str, Any] = {}
+
+        # Error and success counters for per-agent confidence/error rate.
+        self._tool_success_count: int = 0
+        self._tool_error_count: int = 0
     
     # Abstract properties that must be overridden
     
@@ -413,7 +421,7 @@ class ForensicAgent(ABC):
                     unavailable=[t["name"] for t in snapshot if not t["available"]],
                 )
         except Exception as _snap_err:
-            logger.warning("Could not inject tool registry snapshot: %s", _snap_err)
+            logger.warning(f"Could not inject tool registry snapshot: {_snap_err}")
 
         # Step 4: Check tool availability
         await self._check_tool_availability()
@@ -535,6 +543,8 @@ class ForensicAgent(ABC):
 
         # ISOLATED namespace for deep pass — avoids re-running initial tasks
         deep_agent_id = f"{self.agent_id}_deep"
+        # Store so _record_tool_error can write to both namespaces during deep pass
+        self._deep_wm_namespace = deep_agent_id
 
         await self.working_memory.initialize(
             session_id=self.session_id,
@@ -611,7 +621,7 @@ class ForensicAgent(ABC):
                 for f in deep_findings:
                     f.metadata["analysis_phase"] = "deep"
             except Exception as synth_ex:
-                logger.warning("Deep synthesis failed, raw findings preserved: %s", synth_ex,
+                logger.warning(f"Deep synthesis failed, raw findings preserved: {synth_ex}",
                                agent_id=self.agent_id)
             self._findings = orig_findings
 
@@ -674,6 +684,43 @@ class ForensicAgent(ABC):
                 unavailable=[t.name for t in unavailable_tools],
             )
     
+    async def _record_tool_result(self, tool_name: str, result: dict) -> None:
+        """
+        Store a successful tool result in _tool_context and increment success counter.
+
+        Call this in every handler after a non-error result so that subsequent
+        handlers can read it for context inference.
+        """
+        self._tool_context[tool_name] = result
+        self._tool_success_count += 1
+
+    async def _record_tool_error(self, tool_name: str, error_msg: str) -> None:
+        """
+        Increment error counter and write last_tool_error to working memory
+        so the heartbeat can broadcast a live ⚠️ progress update.
+
+        Call this in handlers when a tool returns an error or is unavailable.
+        """
+        self._tool_error_count += 1
+        display_name = tool_name.replace("_", " ").title()
+        error_text = f"{display_name} failed — continuing…"
+        try:
+            await self.working_memory.update_state(
+                session_id=self.session_id,
+                agent_id=self.agent_id,
+                updates={"last_tool_error": error_text},
+            )
+            # Also write to deep namespace so heartbeat surfaces errors during deep pass
+            deep_ns = getattr(self, "_deep_wm_namespace", None)
+            if deep_ns:
+                await self.working_memory.update_state(
+                    session_id=self.session_id,
+                    agent_id=deep_ns,
+                    updates={"last_tool_error": error_text},
+                )
+        except Exception:
+            pass  # Never block the investigation on a bookkeeping failure
+
     async def _synthesize_findings_with_llm(self, phase: str = "initial") -> None:
         """
         Post-analysis Groq synthesis: enrich raw tool findings with court-grade prose.
@@ -706,17 +753,59 @@ class ForensicAgent(ABC):
                             if f.metadata.get("analysis_phase", "initial") == "deep"]
         target_findings  = deep_findings if phase == "deep" and deep_findings else self._findings
 
-        # Build compact digest of target findings
+        # Cap digest at 15 findings per phase (raised from 10 to cover all agent tools).
+        # Synthesis is matched back by tool name so ordering doesn't matter.
+        digest_findings = target_findings[:15]
+
+        # Build compact digest.  Keep most metadata keys so Groq can cite exact
+        # values.  Only strip internal bookkeeping keys that have no analytical value.
+        _SKIP_META_KEYS = {
+            "tool_name", "stub_warning", "llm_synthesis", "llm_reasoning",
+            "synthesis_phase", "analysis_phase",
+        }
+        # Keys that describe a not-applicable or limited result — always include these
+        # so Groq can accurately describe the tool's scope for the file type.
+        _ALWAYS_INCLUDE_KEYS = {
+            "ela_not_applicable", "ela_limitation_note",
+            "ghost_not_applicable", "ghost_limitation_note",
+            "file_format_note", "is_camera_format",
+            "court_defensible", "available",
+        }
         findings_digest = []
-        for f in target_findings:
+        for f in digest_findings:
+            raw_metrics: dict = {}
+            for k, v in f.metadata.items():
+                if k.startswith("_"):
+                    continue
+                if k in _SKIP_META_KEYS:
+                    continue
+                if k in _ALWAYS_INCLUDE_KEYS:
+                    raw_metrics[k] = v
+                    continue
+                if isinstance(v, (bool, int, float)):
+                    raw_metrics[k] = v
+                elif isinstance(v, str) and len(v) < 200:
+                    raw_metrics[k] = v
+                elif isinstance(v, list) and len(v) <= 10 and all(
+                    isinstance(x, (str, int, float, bool)) for x in v
+                ):
+                    raw_metrics[k] = v
+            # Derive a human-readable applicability note for the digest header
+            not_applicable = (
+                raw_metrics.get("ela_not_applicable")
+                or raw_metrics.get("ghost_not_applicable")
+            )
+            applicability = "NOT_APPLICABLE" if not_applicable else "RAN"
             findings_digest.append({
                 "tool": f.metadata.get("tool_name", "unknown"),
                 "finding_type": f.finding_type,
                 "confidence": round(f.confidence_raw, 3),
                 "status": f.status,
+                "applicability": applicability,
                 "summary": (f.reasoning_summary or "")[:400],
                 "court_defensible": f.metadata.get("court_defensible", False),
                 "phase": f.metadata.get("analysis_phase", "initial"),
+                "metrics": raw_metrics,
             })
 
         # Build initial-findings summary for comparison (deep pass only)
@@ -735,43 +824,52 @@ class ForensicAgent(ABC):
                 f"{_json.dumps(init_items, indent=2)}"
             )
 
+        tool_list = [f.metadata.get("tool_name", "unknown") for f in digest_findings]
+        tool_list_str = ", ".join(tool_list)
+
         if phase == "deep":
             system_prompt = f"""You are {self.agent_name}, a specialist forensic analysis agent writing the DEEP ANALYSIS section of a court-admissible forensic report.
 
-You have just completed {len(target_findings)} deep forensic tool scans (ML models, Gemini AI vision, heavy analytics).
+You have completed {len(digest_findings)} deep forensic tool scans (ML models, Gemini AI vision, heavy analytics).
 You also have the initial analysis findings for comparison.
 
-For each deep finding, produce a synthesis that:
-1. States EXACT metric values (scores, counts, detected objects, text content, coordinates)
-2. COMPARES to the initial analysis — did deep analysis CONFIRM, EXPAND, or CONTRADICT the initial finding?
-3. For Gemini findings: quote the content type, EVERY piece of extracted text, all detected objects/weapons/UI elements, the contextual narrative, and the authenticity verdict
-4. For ML findings: state the model's output metrics and what they mean forensically
-5. Assigns a confidence level with explicit justification based on the data
-6. Flags CRITICAL if clear manipulation or authenticity concern is detected
+Tools run (use EXACTLY these names in the "tool" field): {tool_list_str}
+
+CRITICAL RULES:
+- If a tool entry has "applicability": "NOT_APPLICABLE" — the tool does not apply to this file type. Write exactly why it does not apply (e.g. "ELA is not applicable to PNG files — measuring PNG→JPEG conversion artefacts would produce false anomaly regions across the entire image."). Do NOT treat this as an error or suspicious finding.
+- If a tool entry has "court_defensible": false AND applicability is "RAN" — the tool genuinely failed. State: "Tool X failed — result excluded from confidence calculation."
+- For every other tool: state EXACT metric values from "metrics", interpret them forensically, compare to initial analysis (CONFIRMED / EXPANDED / CONTRADICTED), and assign confidence with justification.
+- For Gemini findings: quote content type, ALL extracted text, all detected objects/weapons/UI elements, the contextual narrative, and the authenticity verdict word-for-word.
+- Flag CRITICAL only when metrics show clear manipulation evidence.
 
 Do NOT write generic phrases. Every sentence must cite specific data from the tool output.
-If a tool failed, state it explicitly: "Tool X failed — finding omitted from confidence calculation."
+
+IMPORTANT: Return one entry per tool. The "tool" value must exactly match one of: {tool_list_str}
 
 Respond ONLY with a JSON array (no preamble, no markdown):
-[{{"tool": "<tool_name>", "analysis": "<3-5 sentence specific deep forensic analysis with comparison to initial>"}}]"""
+[{{"tool": "<exact_tool_name>", "analysis": "<3-5 sentence specific deep forensic analysis>"}}]"""
         else:
             system_prompt = f"""You are {self.agent_name}, a specialist forensic analysis agent producing court-admissible analysis.
 
-You have completed {len(target_findings)} forensic tool scans on the evidence.
-Synthesize each finding into a SPECIFIC, DATA-DRIVEN forensic analysis paragraph.
+You have completed {len(digest_findings)} forensic tool scans on the evidence.
+Tools run (use EXACTLY these names in the "tool" field): {tool_list_str}
 
-REQUIREMENTS:
-1. State the EXACT metric values from the tool output (scores, counts, ratios, hashes, etc.)
-2. Interpret what those specific numbers mean forensically
-3. Cross-reference with other findings where relevant
-4. For metadata findings: state exact timestamps, GPS coordinates, device info, or their absence
-5. State confidence level and WHY (based on data)
-6. Flag CRITICAL if it indicates clear manipulation or authenticity concern
+CRITICAL RULES:
+- If a tool entry has "applicability": "NOT_APPLICABLE" — write a brief note explaining why the tool does not apply to this file type. Do NOT treat not-applicable tools as suspicious findings or errors. Do NOT mention anomaly counts from these tools.
+- If a tool entry has "court_defensible": false AND applicability is "RAN" — state that the tool failed and its result is excluded.
+- For all other tools: state EXACT metric values from "metrics" (scores, counts, ratios, hashes, object lists, timestamps). Interpret what those numbers mean forensically. Cross-reference with other findings where the data overlaps.
+- For object detection: list every detected class with its confidence score.
+- For metadata/EXIF: state exact timestamps, GPS status, software tags, file format note.
+- For hash/integrity checks: state the hash match result explicitly.
+- Assign a confidence level per tool and explain WHY based on the metric values.
+- Flag CRITICAL only when metrics show clear manipulation evidence (e.g. splicing detected, ghost artifacts confirmed, inconsistent sensor noise).
 
-Do NOT produce generic phrases. Every sentence must reference specific data.
+Do NOT produce generic phrases. Every sentence must reference specific data from the metrics.
+
+IMPORTANT: Return one entry per tool. The "tool" value must exactly match one of: {tool_list_str}
 
 Respond ONLY with a JSON array (no preamble, no markdown):
-[{{"tool": "<tool_name>", "analysis": "<2-4 sentence specific forensic analysis>"}}]"""
+[{{"tool": "<exact_tool_name>", "analysis": "<2-4 sentence specific forensic analysis>"}}]"""
 
         user_content = (
             f"Evidence file: {evidence_context['file_name']}\n"
@@ -784,17 +882,17 @@ Respond ONLY with a JSON array (no preamble, no markdown):
         logger.info(
             "Running Groq %s-pass synthesis", phase,
             agent_id=self.agent_id,
-            finding_count=len(target_findings),
+            finding_count=len(digest_findings),
         )
 
         try:
             raw_response = await llm_client.generate_synthesis(
                 system_prompt=system_prompt,
                 user_content=user_content,
-                max_tokens=1800,
+                max_tokens=3500,
             )
         except Exception as groq_err:
-            logger.warning("Groq synthesis API call failed: %s", groq_err,
+            logger.warning(f"Groq synthesis API call failed: {groq_err}",
                            agent_id=self.agent_id)
             return
 
@@ -809,23 +907,42 @@ Respond ONLY with a JSON array (no preamble, no markdown):
 
             syntheses = _json.loads(response_text[start:end])
 
-            for i, synth in enumerate(syntheses):
-                if i < len(target_findings):
-                    analysis = synth.get("analysis", "").strip()
-                    if analysis:
-                        existing = target_findings[i].reasoning_summary or ""
-                        target_findings[i].reasoning_summary = (
-                            f"{analysis}\n\n{existing}".strip()
-                            if existing and existing != analysis
-                            else analysis
-                        )
-                        target_findings[i].metadata["llm_synthesis"] = analysis
-                        target_findings[i].metadata["synthesis_phase"] = phase
+            # Build tool→finding index for name-based matching.
+            # Groq is asked to return {"tool": "<name>", "analysis": "..."}
+            # but may return fewer items or reorder them.  Match by tool name
+            # first; fall back to positional index only when tool is unknown.
+            tool_to_idx: dict[str, int] = {}
+            for idx, f in enumerate(digest_findings):
+                tool_key = f.metadata.get("tool_name", "")
+                if tool_key and tool_key not in tool_to_idx:
+                    tool_to_idx[tool_key] = idx
+
+            synthesized = 0
+            for pos, synth in enumerate(syntheses):
+                analysis = synth.get("analysis", "").strip()
+                if not analysis:
+                    continue
+                synth_tool = synth.get("tool", "")
+                # Prefer tool-name match, fall back to positional
+                idx = tool_to_idx.get(synth_tool)
+                if idx is None and pos < len(digest_findings):
+                    idx = pos
+                if idx is not None and idx < len(digest_findings):
+                    existing = digest_findings[idx].reasoning_summary or ""
+                    digest_findings[idx].reasoning_summary = (
+                        f"{analysis}\n\n{existing}".strip()
+                        if existing and existing != analysis
+                        else analysis
+                    )
+                    digest_findings[idx].metadata["llm_synthesis"] = analysis
+                    digest_findings[idx].metadata["synthesis_phase"] = phase
+                    synthesized += 1
 
             logger.info(
                 "Groq %s-pass synthesis complete", phase,
                 agent_id=self.agent_id,
-                synthesized_count=min(len(syntheses), len(target_findings)),
+                synthesized_count=synthesized,
+                total_findings=len(digest_findings),
             )
         except Exception as parse_err:
             logger.warning(

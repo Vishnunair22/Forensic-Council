@@ -137,7 +137,7 @@ services:
       - HF_TOKEN=${HF_TOKEN:-}
       - LLM_PROVIDER=${LLM_PROVIDER:-none}
       - LLM_API_KEY=${LLM_API_KEY:-}
-      - LLM_MODEL=${LLM_MODEL:-gpt-4o}
+      - LLM_MODEL=${LLM_MODEL:-llama-3.3-70b-versatile}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-flash}
       - EVIDENCE_STORAGE_PATH=/app/storage/evidence

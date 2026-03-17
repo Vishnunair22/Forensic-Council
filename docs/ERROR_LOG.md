@@ -4,6 +4,74 @@ All production bugs and their resolutions, ordered chronologically.
 
 ---
 
+## 2026-03-16 — Session 5: Full Runtime Audit (v1.0.4)
+
+### Error: Report 404 After Investigation Completes (Race Window)
+
+**Symptom:** Result page polls `/arbiter-status` → gets `"complete"` → fetches `/report` → 404. Intermittent — depends on timing.
+
+**Root Cause:** `run_investigation_task()` set `pipeline._final_report = report` but the `finally` block immediately removed the pipeline from `_active_pipelines`. The in-memory `_final_reports` cache was never populated, so between pipeline eviction and DB persistence completing, the report endpoint had no source to read from.
+
+**Fix:** Cache report in `_final_reports[session_id]` immediately after setting `pipeline._final_report`, before the `finally` block executes.
+
+---
+
+### Error: AttributeError: `_custody_logger` in Inter-Agent Calls
+
+**Symptom:** Agents 2, 3, and 4 crash when making collaborative inter-agent calls (e.g. Agent2 → Agent4 for A/V sync).
+
+**Root Cause:** Inter-agent call handlers referenced `self._custody_logger` (underscore prefix), but `ForensicAgent.__init__()` stores the logger as `self.custody_logger` (no underscore).
+
+**Fix:** Changed `self._custody_logger` → `self.custody_logger` in `agent2_audio.py`, `agent3_object.py`, `agent4_video.py`.
+
+---
+
+### Error: WorkingMemory Crashes When Redis Has Transient Blip
+
+**Symptom:** During Redis reconnection (e.g. container restart), every agent crashes with `ValueError`. Heartbeat loop generates error storms (200ms polling).
+
+**Root Cause:** `get_state()` raised `ValueError` when Redis was `None` or returned an error, with no fallback path.
+
+**Fix:** Added `_local_cache` in-memory dict. All write operations persist to both Redis and local cache. `get_state()` falls back to local cache on Redis failure.
+
+---
+
+### Error: CustodyLogger DB Error Kills Entire Investigation
+
+**Symptom:** Single PostgreSQL timeout during chain-of-custody logging crashes the entire pipeline.
+
+**Root Cause:** The `INSERT INTO chain_of_custody` was not wrapped in try/except. Each agent generates dozens of custody entries per investigation.
+
+**Fix:** Wrapped DB insert in try/except. On failure, logs error and returns entry_id so callers continue.
+
+---
+
+### Error: Frontend Hangs Waiting for Unsupported Agents
+
+**Symptom:** When uploading audio files, UI hangs on "Gathering findings..." because `allAgentsDone` never becomes true.
+
+**Root Cause:** Backend sends `"Not applicable for audio files"` but frontend only matched `"not supported"` and `"Format not supported"`.
+
+**Fix:** Added `"Not applicable"`, `"not applicable"`, and `"Skipping"` to frontend unsupported-agent filter.
+
+---
+
+### Config: Docker-compose LLM_MODEL Default Mismatch
+
+**Symptom:** Fresh Docker deployment with no LLM_MODEL in .env defaults to `gpt-4o` instead of `llama-3.3-70b-versatile`.
+
+**Fix:** Changed `LLM_MODEL=${LLM_MODEL:-gpt-4o}` → `LLM_MODEL=${LLM_MODEL:-llama-3.3-70b-versatile}` in `docker-compose.yml`.
+
+---
+
+### Config: .env.example GEMINI_TIMEOUT Mismatch
+
+**Symptom:** Default GEMINI_TIMEOUT was 30.0s in .env.example but 55.0s in config.py. Deep forensic analysis needs the longer timeout.
+
+**Fix:** Updated .env.example to `GEMINI_TIMEOUT=55.0`.
+
+---
+
 ## 2026-03-16 — Session 4: Backend Deep Audit
 
 ### Error: 404 on Every Resume (Accept/Deep Analysis Buttons Non-Functional)

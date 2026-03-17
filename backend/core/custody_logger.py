@@ -217,18 +217,31 @@ class CustodyLogger:
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         """
         
-        await self._postgres.execute(
-            query,
-            entry_id,
-            entry_type.value,
-            agent_id,
-            session_id,
-            signed.timestamp_utc,
-            content,  # JSONB - will be converted to JSON string
-            signed.content_hash,
-            signed.signature,
-            prior_entry_ref,
-        )
+        try:
+            await self._postgres.execute(
+                query,
+                entry_id,
+                entry_type.value,
+                agent_id,
+                session_id,
+                signed.timestamp_utc,
+                content,  # JSONB - will be converted to JSON string
+                signed.content_hash,
+                signed.signature,
+                prior_entry_ref,
+            )
+        except Exception as db_err:
+            # Custody logging must NEVER crash the investigation pipeline.
+            # Log the failure but return the entry_id so callers don't break.
+            logger.error(
+                "CustodyLogger: failed to persist chain entry",
+                entry_id=str(entry_id),
+                entry_type=entry_type.value,
+                agent_id=agent_id,
+                session_id=str(session_id),
+                error=str(db_err),
+            )
+            return entry_id
         
         logger.info(
             "Logged chain entry",

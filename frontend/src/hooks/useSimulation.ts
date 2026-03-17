@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { AGENTS_DATA } from "@/lib/constants";
-import { AgentResult } from "@/types";
 
 /** Dev-only logger — silenced in production builds */
 const isDev = process.env.NODE_ENV !== "production";
@@ -19,7 +18,7 @@ import { AgentUpdate } from "@/components/evidence";
 type SimulationStatus = "idle" | "analyzing" | "initiating" | "processing" | "awaiting_decision" | "complete" | "error";
 
 type UseSimulationProps = {
-    onAgentComplete?: (result: AgentResult) => void;
+    onAgentComplete?: (result: AgentUpdate) => void;
     onComplete?: () => void;
     playSound?: (type: SoundType) => void;
 };
@@ -31,6 +30,8 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
     const [hitlCheckpoint, setHitlCheckpoint] = useState<HITLCheckpoint | null>(null);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [pipelineMessage, setPipelineMessage] = useState<string>("");
+    const [pipelineThinking, setPipelineThinking] = useState<string>("");
 
     const wsRef = useRef<WebSocket | null>(null);
     const completedAgentsRef = useRef<AgentUpdate[]>([]);
@@ -81,6 +82,16 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                             break;
 
                         case "AGENT_UPDATE":
+                            // Pipeline-level updates come through with agent_id=null.
+                            // Surface them separately so the UI can show "what the backend is doing" in real time.
+                            if (!update.agent_id) {
+                                setPipelineMessage(update.message || "");
+                                const t = (update.data as Record<string, unknown> | null)?.["thinking"];
+                                setPipelineThinking(typeof t === "string" ? t : (update.message || ""));
+                                // Ensure we move out of initiating when pipeline starts streaming
+                                setStatus((prev: SimulationStatus) => prev === "initiating" ? "analyzing" : prev);
+                                break;
+                            }
                             if (update.agent_id && update.data) {
                                 const agentData = update.data as { status?: string; thinking?: string };
                                 const incomingId = update.agent_id;
@@ -141,7 +152,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
 
                                     const nextCompleted = [...completedAgentsRef.current];
                                     setCompletedAgents(nextCompleted);
-                                    onAgentCompleteRef.current?.(newUpdate as AgentResult);
+                                    onAgentCompleteRef.current?.(newUpdate);
 
                                     // Also transition to analyzing if still in initiating
                                     setStatus((prev: SimulationStatus) => prev === "initiating" ? "analyzing" : prev);
@@ -257,6 +268,8 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
         setCompletedAgents([]);
         completedAgentsRef.current = [];
         setAgentUpdates({});
+        setPipelineMessage("");
+        setPipelineThinking("");
         if (newSessionId) {
             setSessionId(newSessionId);
         }
@@ -271,6 +284,8 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
         setAgentUpdates({});
         setHitlCheckpoint(null);
         setErrorMessage(null);
+        setPipelineMessage("");
+        setPipelineThinking("");
 
         if (wsRef.current) {
             wsRef.current.close();
@@ -323,6 +338,8 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
         status,
         agentUpdates,
         completedAgents,
+        pipelineMessage,
+        pipelineThinking,
         startSimulation,
         connectWebSocket,
         resumeInvestigation,

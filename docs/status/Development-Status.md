@@ -1,7 +1,7 @@
 # Development Status
 
 **Last updated:** 2026-03-16
-**Current version:** v1.0.3
+**Current version:** v1.0.4
 **Overall health:** 🟢 Production-ready
 **Actively working on:** —
 **Blocked on:** None

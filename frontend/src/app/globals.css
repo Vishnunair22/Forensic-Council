@@ -31,7 +31,7 @@
   --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255,255,255,0.06);
 
   /* Typography */
-  --font-sans: var(--font-syne);
+  --font-sans: var(--font-poppins);
   --font-mono: var(--font-mono, "JetBrains Mono", "Fira Code", monospace);
 
   /* Legacy compat */
@@ -48,7 +48,7 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-ring: var(--ring);
   --color-ring-offset-background: var(--ring-offset-background);
-  --font-sans: var(--font-syne);
+  --font-sans: var(--font-poppins);
   --font-mono: var(--font-mono);
 }
 
@@ -64,7 +64,7 @@ html {
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-syne), "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-sans), "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -76,23 +76,47 @@ code, kbd, pre, .font-mono {
 
 /* ─── Glass panel utility ─────────────────────────────────────────── */
 .glass-panel {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  box-shadow: var(--glass-shadow);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.058) 0%,
+    rgba(255, 255, 255, 0.022) 50%,
+    rgba(255, 255, 255, 0.040) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(28px) saturate(200%) brightness(1.04);
+  -webkit-backdrop-filter: blur(28px) saturate(200%) brightness(1.04);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.55),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22);
   position: relative;
   overflow: hidden;
 }
 
+/* Top-edge shine */
 .glass-panel::before {
   content: "";
   position: absolute;
   inset-inline: 0;
   top: 0;
   height: 1px;
-  background: linear-gradient(to right, transparent, var(--glass-shine), transparent);
+  background: linear-gradient(to right, transparent, rgba(255,255,255,0.20), transparent);
   pointer-events: none;
+  z-index: 1;
+}
+
+/* Corner specular highlight */
+.glass-panel::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 45%;
+  height: 45%;
+  background: radial-gradient(ellipse at top left, rgba(255,255,255,0.055), transparent 65%);
+  pointer-events: none;
+  z-index: 0;
 }
 
 /* ─── Scan line animation ──────────────────────────────────────────── */
@@ -139,6 +163,34 @@ code, kbd, pre, .font-mono {
 @keyframes envelope-flap-close {
   0%   { transform: rotateX(-180deg); }
   100% { transform: rotateX(0deg); }
+}
+
+@keyframes specimen-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.92); }
+  50%       { opacity: 0.75; transform: scale(1.08); }
+}
+
+@keyframes float-particle {
+  0%   { transform: translateY(0px) scale(1); opacity: 0.6; }
+  50%  { transform: translateY(-6px) scale(1.1); opacity: 0.9; }
+  100% { transform: translateY(0px) scale(1); opacity: 0.6; }
+}
+
+@keyframes scan-glow {
+  0%   { box-shadow: 0 0 8px rgba(0,212,255,0.3); }
+  50%  { box-shadow: 0 0 18px rgba(0,212,255,0.7), 0 0 36px rgba(0,212,255,0.2); }
+  100% { box-shadow: 0 0 8px rgba(0,212,255,0.3); }
+}
+
+@keyframes glass-shimmer-in {
+  0%   { transform: translateX(-120%) skewX(-15deg); opacity: 0; }
+  40%  { opacity: 1; }
+  100% { transform: translateX(250%) skewX(-15deg); opacity: 0; }
+}
+
+@keyframes fade-up-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* ─── Scrollbar ──────────────────────────────────────────────────── */
@@ -207,7 +259,7 @@ button:disabled,
   font-size: 0.875rem;
   line-height: 1.25;
   cursor: pointer;
-  transition: all 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: all 0.20s cubic-bezier(0.25, 1, 0.35, 1);
   position: relative;
   overflow: hidden;
   user-select: none;

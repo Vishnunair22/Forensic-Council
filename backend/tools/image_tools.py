@@ -83,13 +83,43 @@ async def ela_full_image(
         original_path = artifact.file_path
         if not os.path.exists(original_path):
             raise ToolUnavailableError(f"File not found: {original_path}")
-        
+
+        # ELA is only meaningful for JPEG images — it measures the residual error
+        # introduced by re-compression at a slightly lower quality level.  For
+        # lossless formats (PNG, BMP, TIFF) the first JPEG re-save introduces
+        # compression artefacts across the ENTIRE image, so every pixel shows a
+        # large ELA deviation.  Reporting those as "anomaly regions" would produce
+        # thousands of false positives and mislead any downstream analysis.
+        ext = os.path.splitext(original_path)[1].lower()
+        _lossless_exts = (".png", ".bmp", ".tiff", ".tif", ".gif", ".webp")
+        if ext in _lossless_exts:
+            return {
+                "max_anomaly": None,
+                "anomaly_regions": [],
+                "num_anomaly_regions": 0,
+                "mean_ela": None,
+                "std_ela": None,
+                "quality_levels": [],
+                "multi_quality_fusion": False,
+                "ela_not_applicable": True,
+                "ela_limitation_note": (
+                    f"ELA is not applicable to lossless {ext.upper()} files. "
+                    "Standard ELA measures JPEG re-compression residuals — applying it "
+                    "to a lossless source produces artefacts across the entire image "
+                    "that are indistinguishable from manipulation signals. "
+                    "Use frequency-domain analysis, noise fingerprinting, or CFA "
+                    "demosaicing checks instead for this file type."
+                ),
+                "court_defensible": False,
+                "available": True,
+            }
+
         original = Image.open(original_path)
-        
+
         # Convert to RGB if necessary (for PNG with alpha, etc.)
         if original.mode != "RGB":
             original = original.convert("RGB")
-        
+
         original_array = np.array(original, dtype=np.float64)
         
         # Determine quality levels to use
@@ -324,18 +354,42 @@ async def jpeg_ghost_detect(
     """
     if quality_levels is None:
         quality_levels = [50, 60, 70, 80, 90]
-    
+
     try:
         original_path = artifact.file_path
         if not os.path.exists(original_path):
             raise ToolUnavailableError(f"File not found: {original_path}")
-        
+
+        # JPEG ghost detection requires a JPEG source — it looks for the
+        # characteristic variance pattern left when a JPEG is re-saved at a
+        # different quality.  A lossless PNG has no prior JPEG compression
+        # history, so this test will always return zero variance everywhere
+        # and cannot distinguish authentic files from manipulated ones.
+        ext = os.path.splitext(original_path)[1].lower()
+        _lossless_exts = (".png", ".bmp", ".tiff", ".tif", ".gif", ".webp")
+        if ext in _lossless_exts:
+            return {
+                "ghost_detected": False,
+                "confidence": 0.0,
+                "ghost_regions": [],
+                "max_variance": None,
+                "mean_variance": None,
+                "ghost_not_applicable": True,
+                "ghost_limitation_note": (
+                    f"JPEG ghost detection is not applicable to lossless {ext.upper()} files. "
+                    "This technique detects double-JPEG-compression artefacts — a lossless "
+                    "source has no prior JPEG compression history to compare against."
+                ),
+                "court_defensible": False,
+                "available": True,
+            }
+
         original = Image.open(original_path)
-        
+
         # Convert to RGB if necessary
         if original.mode != "RGB":
             original = original.convert("RGB")
-        
+
         original_array = np.array(original, dtype=np.float64)
         
         # Create compressed versions at different quality levels

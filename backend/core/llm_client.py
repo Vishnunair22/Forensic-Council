@@ -83,7 +83,7 @@ class LLMClient:
             elif self.provider == "anthropic":
                 resp = await self._call_anthropic(messages, available_tools)
             else:
-                logger.error("Unknown LLM provider: %s", self.provider)
+                logger.error(f"Unknown LLM provider: {self.provider}")
                 return LLMResponse(content="", provider=self.provider)
 
             resp.latency_ms = (time.monotonic() - t0) * 1000
@@ -96,7 +96,7 @@ class LLMClient:
             return resp
 
         except Exception as exc:
-            logger.error("LLM call failed: %s", exc)
+            logger.error(f"LLM call failed: {exc}")
             return LLMResponse(content="", provider=self.provider)
 
     def _build_messages(
@@ -388,7 +388,7 @@ class LLMClient:
                 ).strip()
 
         except Exception as exc:
-            logger.error("LLM synthesis failed: %s", exc)
+            logger.error(f"LLM synthesis failed: {exc}")
 
         return ""
 
