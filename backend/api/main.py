@@ -93,7 +93,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="Forensic Council API",
     description="Multi-Agent Forensic Evidence Analysis System API",
-    version="1.0.3",
+    version="1.0.4",
     docs_url="/docs" if settings.app_env != "production" else None,
     redoc_url="/redoc" if settings.app_env != "production" else None,
     lifespan=lifespan,
@@ -262,7 +262,7 @@ async def root():
     """Root endpoint."""
     return {
         "name": "Forensic Council API",
-        "version": "1.0.3",
+        "version": "1.0.4",
         "status": "running",
         "docs": "/docs" if settings.app_env != "production" else None,
     }

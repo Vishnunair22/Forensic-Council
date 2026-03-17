@@ -2,7 +2,7 @@
 
 Upload digital evidence. Five specialized AI agents analyze it. Get a cryptographically signed forensic report.
 
-[![Version](https://img.shields.io/badge/version-v1.0.3-blue.svg)](#) [![Status](https://img.shields.io/badge/status-stable-green.svg)](#) [![License](https://img.shields.io/badge/license-MIT-green.svg)](#) [![Python](https://img.shields.io/badge/python-3.12-blue.svg)](#) [![Next.js](https://img.shields.io/badge/next.js-15-black.svg)](#) [![Postgres](https://img.shields.io/badge/postgres-17-blue.svg)](#)
+[![Version](https://img.shields.io/badge/version-v1.0.4-blue.svg)](#) [![Status](https://img.shields.io/badge/status-stable-green.svg)](#) [![License](https://img.shields.io/badge/license-MIT-green.svg)](#) [![Python](https://img.shields.io/badge/python-3.12-blue.svg)](#) [![Next.js](https://img.shields.io/badge/next.js-15-black.svg)](#) [![Postgres](https://img.shields.io/badge/postgres-17-blue.svg)](#)
 
 *A Multi-Agent Forensic Evidence Analysis System with cryptographic chain of custody*
 
@@ -166,14 +166,15 @@ Full caching guide → [`docs/docker/README.md`](docs/docker/README.md)
 
 ## Changelog
 
-**v1.0.3 (2026-03-16)** — Full production hardening across all layers:
+**v1.0.4 (2026-03-16)** — Full production hardening across all layers:
+- **Session 5 runtime audit**: Report race-window fix (report cached before pipeline eviction) · `AttributeError: _custody_logger` in Agents 2/3/4 inter-agent calls · Pipeline `_final_report`/`_error` now initialized on `__init__` · WorkingMemory in-memory fallback survives Redis outages · CustodyLogger DB write wrapped in try/except (never crashes pipeline) · Frontend unsupported-agent detection matches backend `"Not applicable"` strings · Docker-compose `LLM_MODEL` default corrected to `llama-3.3-70b-versatile` · `.env.example` `GEMINI_TIMEOUT` corrected to `55.0`
 - **Session 4 backend audit**: Resume endpoint URL mismatch fixed (was 404 on every Accept/Deep click) · DB report rebuild missing 5 fields · `update_session_status` NOT NULL violation · Qdrant singleton race condition · HTML injection in report renderer · `TransactionContext.fetch` dict args · pytest path and `backend/__init__.py` · CI test job fixed
 - **Session 3 connectivity**: All frontend↔backend URL mappings verified · Docker CORS origins confirmed · WebSocket subprotocol match · MIME type allowlists identical
 - **Critical bug fixes**: `useRef` lazy-init fixed (was breaking every POST), `react_loop` `update_state` missing `agent_id`, deep pass returning combined findings (duplication), stale `agentUpdates` on deep phase start
 - **Deep analysis**: Agent1 Gemini runs first → context injected into Agents 3 & 5 · Phase-aware Groq synthesis (deep pass compares vs initial) · Active-agent-only deep queue
 - **Arbiter**: 5-tier verdict (CERTAIN/LIKELY/UNCERTAIN/INCONCLUSIVE/MANIPULATION DETECTED) · Per-agent Groq narrative · `AgentMetrics` with confidence + error rate · Finding deduplication
 - **UI**: Syne + JetBrains Mono fonts · `MicroscopeScanner` + `EnvelopeCTA` + `GlassCard` · Glass agent cards with skeleton loading · `GlobalFooter` on all pages · `PageTransition` · `cursor: pointer` globally
-- **Audit fixes (v1.0.2–v1.0.3)**: JWT 60-min expiry · Rate limiting · Bootstrap credentials from env vars · Redis/PostgreSQL production hardening · ECDSA signing · numpy<2.0 bound · Test file correct imports
+- **Audit fixes (v1.0.2–v1.0.4)**: JWT 60-min expiry · Rate limiting · Bootstrap credentials from env vars · Redis/PostgreSQL production hardening · ECDSA signing · numpy<2.0 bound · Test file correct imports
 
 Full changelog → [`docs/status/Development-Status.md`](docs/status/Development-Status.md)
 

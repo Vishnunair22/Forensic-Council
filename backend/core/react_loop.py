@@ -541,6 +541,32 @@ class ReActLoopEngine:
         # Audio splice (Agent 2)
         "audio splice": "audio_splice_detect",
         "splice point": "audio_splice_detect",
+        # New tools added
+        "prnu camera sensor fingerprint": "prnu_analysis",
+        "prnu analysis": "prnu_analysis",
+        "cross-region source inconsistency": "prnu_analysis",
+        "cfa demosaicing": "cfa_demosaicing",
+        "cfa pattern consistency": "cfa_demosaicing",
+        "color filter array": "cfa_demosaicing",
+        "voice clone": "voice_clone_detect",
+        "ai speech synthesis detection": "voice_clone_detect",
+        "synthetic speech": "voice_clone_detect",
+        "enf analysis": "enf_analysis",
+        "electrical network frequency": "enf_analysis",
+        "enf splice": "enf_analysis",
+        "recording timestamp": "enf_analysis",
+        "ocr on detected object": "object_text_ocr",
+        "license plates": "object_text_ocr",
+        "object regions": "object_text_ocr",
+        "document authenticity": "document_authenticity",
+        "font inconsistency": "document_authenticity",
+        "document forgery": "document_authenticity",
+        "c2pa": "c2pa_verify",
+        "content credentials": "c2pa_verify",
+        "provenance chain": "c2pa_verify",
+        "thumbnail mismatch": "thumbnail_mismatch",
+        "embedded thumbnail": "thumbnail_mismatch",
+        "post-capture editing evidence": "thumbnail_mismatch",
     }
 
     def __init__(
@@ -1335,14 +1361,41 @@ class ReActLoopEngine:
 
         _TOOL_INTERPRETERS = {
             # ── Image tools ───────────────────────────────────────────────────
-            "ela_full_image": lambda o: (
-                f"ELA detected {o.get('num_anomaly_regions', 0)} anomaly region(s) "
-                f"with a maximum deviation of {o.get('max_anomaly', 0):.1f} "
-                f"({'significant manipulation signature' if o.get('max_anomaly', 0) > 20 else 'within normal compression range'})."
+            “ela_full_image”: lambda o: (
+                # ELA not applicable for lossless formats (PNG, BMP, TIFF, etc.)
+                o.get(“ela_limitation_note”, “”)
+                if o.get(“ela_not_applicable”) else
+                # Make the region count more human and avoid implying that
+                # every connected component is a large “region”.
+                (lambda count, max_a: (
+                    f”ELA detected “
+                    + (
+                        “no anomaly regions “
+                        if count == 0 else
+                        “a small number of localized anomaly regions “
+                        if count < 50 else
+                        “dozens of clustered anomaly regions “
+                        if count < 200 else
+                        “hundreds of clustered anomaly regions “
+                        if count < 2000 else
+                        “extensive anomaly patterns (thousands of small regions) “
+                    )
+                    + f”(~{count} connected region(s)) with a maximum deviation of {max_a:.1f} “
+                    + (
+                        “(significant manipulation signature).”
+                        if max_a > 20
+                        else “within normal compression range.”
+                    )
+                ))(
+                    int(o.get(“num_anomaly_regions”, 0) or 0),
+                    float(o.get(“max_anomaly”, 0) or 0.0),
+                )
             ),
-            "jpeg_ghost_detect": lambda o: (
-                f"JPEG ghost analysis {'detected double-compression artifacts' if o.get('ghost_detected') else 'found no ghost artifacts'} "
-                f"with {o.get('confidence', 0):.0%} confidence across {len(o.get('ghost_regions', []))} region(s)."
+            “jpeg_ghost_detect”: lambda o: (
+                o.get(“ghost_limitation_note”, “JPEG ghost detection: not applicable for this file type.”)
+                if o.get(“ghost_not_applicable”) else
+                f”JPEG ghost analysis {'detected double-compression artifacts' if o.get('ghost_detected') else 'found no ghost artifacts'} “
+                f”with {o.get('confidence', 0):.0%} confidence across {len(o.get('ghost_regions', []))} region(s).”
             ),
             "frequency_domain_analysis": lambda o: (
                 f"Frequency domain analysis yielded anomaly score {o.get('anomaly_score', 0):.3f} "
@@ -1421,7 +1474,7 @@ class ReActLoopEngine:
                 + (f"Dimensions: {o.get('image_dimensions', '')}. " if o.get('image_dimensions') else "")
                 + f"GPS: {'Present' if o.get('gps_coordinates') else 'Absent'}. "
                 + f"{o.get('total_fields_extracted', 0)} EXIF field(s) extracted. "
-                + (f"Missing mandatory fields: {', '.join(str(f) for f in o.get('absent_mandatory_fields', [])[:5])}." if o.get('absent_mandatory_fields') else "All mandatory EXIF fields present.")
+                + (f"Missing mandatory fields: {', '.join(str(f) for f in o.get('absent_mandatory_fields', [])[:5])}." if o.get('absent_mandatory_fields') else (o.get('file_format_note') or "All mandatory EXIF fields present."))
             ),
             # FIXED: gps_timezone_validate returns 'plausible' bool + 'issues' list, NOT 'inconsistent' + 'distance_km'
             "gps_timezone_validate": lambda o: (
@@ -1550,7 +1603,7 @@ class ReActLoopEngine:
                     meta_consistency=str(o.get('gemini_metadata_consistency', '')),
                     iface=o.get('gemini_interface', ''),
                     signals=list(o.get('gemini_manipulation_signals') or o.get('manipulation_signals') or []):
-                    f"✅ Gemini deep forensic complete. "
+                    f"Gemini deep forensic complete. "
                     + f"Content: {ctype}. "
                     + (f"Interface/UI: {iface}. " if iface else "")
                     + (f"Scene: {narrative[:400]}. " if narrative else "")
@@ -1558,8 +1611,153 @@ class ReActLoopEngine:
                     + (f"Text extracted from image ({len(texts)} item(s)): {' | '.join(str(t) for t in texts[:8])}. " if texts else "No text found in image. ")
                     + (f"Authenticity verdict: {verdict}. " if verdict else "")
                     + (f"Metadata vs visual: {meta_consistency[:200]}. " if meta_consistency else "")
-                    + (f"⚠️ Manipulation signals: {'; '.join(str(s) for s in signals[:6])}." if signals else "No manipulation signals detected.")
+                    + (f"Manipulation signals: {'; '.join(str(s) for s in signals[:6])}." if signals else "No manipulation signals detected.")
                 )()
+            ),
+            # ── New tools added in this session ───────────────────────────────
+            "prnu_analysis": lambda o: (
+                f"PRNU camera sensor fingerprint: {o.get('prnu_verdict', 'INCONCLUSIVE')}. "
+                f"Mean block correlation: {o.get('mean_block_correlation', 0):.4f}, "
+                f"min: {o.get('min_block_correlation', 0):.4f}, "
+                f"noise variance CV: {o.get('noise_variance_cv', 0):.4f}. "
+                f"{o.get('outlier_block_count', 0)} of {o.get('total_blocks', 0)} block(s) inconsistent. "
+                + ("MULTI-SOURCE SENSOR DETECTED — possible splice/compositing." if o.get('inconsistent') else "Single camera source confirmed.")
+            ),
+            "cfa_demosaicing": lambda o: (
+                f"CFA demosaicing pattern: {o.get('cfa_verdict', 'INCONCLUSIVE')}. "
+                f"Inconsistency ratio: {o.get('inconsistency_ratio', 0):.4f}, "
+                f"{o.get('outlier_block_count', 0)} outlier block(s) of {o.get('total_blocks_analyzed', 0)}. "
+                f"R/G corr std: {o.get('rg_correlation_std', 0):.4f}, G/B corr std: {o.get('gb_correlation_std', 0):.4f}. "
+                + ("CFA INCONSISTENCY — region may originate from a different sensor pipeline or AI generation." if o.get('inconsistent') else "CFA pattern internally consistent — single sensor pipeline.")
+            ),
+            "voice_clone_detect": lambda o: (
+                f"Voice clone detection: {o.get('verdict', 'UNKNOWN')}. "
+                f"Synthetic probability: {o.get('synthetic_probability', 0):.3f}. "
+                f"Spectral flatness: {o.get('spectral_flatness', 0):.4f}, "
+                f"pitch stability (ZCR std): {o.get('pitch_stability_zcr_std', 0):.4f}, "
+                f"energy CV: {o.get('energy_coefficient_of_variation', 0):.3f}. "
+                + (f"Flags: {'; '.join(o.get('flags', []))}" if o.get('flags') else "No synthetic speech indicators detected.")
+            ),
+            "enf_analysis": lambda o: (
+                (f"ENF analysis: {o.get('verdict', 'NO_ENF_SIGNAL')}. "
+                 f"Grid standard: {o.get('grid_standard', 'unknown')} ({o.get('enf_frequency_hz', '?')} Hz). "
+                 f"Consistency score: {o.get('enf_consistency_score', 0):.4f}. "
+                 f"Splice candidate points: {o.get('splice_candidate_points', 0)}. "
+                 f"Duration analysed: {o.get('duration_analyzed_s', '?')}s."
+                 if o.get('enf_detected') else
+                 f"ENF analysis: {o.get('verdict', 'NO_ENF_SIGNAL')}. "
+                 + (o.get('note', 'No ENF signal present.'))
+                )
+            ),
+            "object_text_ocr": lambda o: (
+                f"Object OCR: text {'found' if o.get('text_found') else 'not found'} "
+                f"in {o.get('regions_analyzed', 0)} region(s), {o.get('total_words', 0)} word(s) total. "
+                + (f"Preview: '{o.get('combined_text_preview', '')[:200]}'" if o.get('text_found') else "No legible text detected.")
+            ),
+            "document_authenticity": lambda o: (
+                f"Document authenticity: {o.get('verdict', 'UNKNOWN')} "
+                f"(forgery score {o.get('forgery_score', 0):.3f}). "
+                f"Font inconsistency CV: {o.get('font_inconsistency_cv', 0):.4f}, "
+                f"frequency peaks: {o.get('frequency_domain_peaks', 0)}. "
+                + (f"Flags: {'; '.join(o.get('flags', []))}" if o.get('flags') else "No forgery indicators detected.")
+            ),
+            "c2pa_verify": lambda o: (
+                f"C2PA Content Credentials: {o.get('verdict', 'UNKNOWN')}. "
+                + ("XMP C2PA present. " if o.get('xmp_c2pa_found') else "")
+                + ("JUMBF manifest present. " if o.get('jumbf_present') else "")
+                + (o.get('forensic_note', '') if o.get('forensic_note') else "")
+            ),
+            "thumbnail_mismatch": lambda o: (
+                f"Thumbnail mismatch: {o.get('verdict', 'NO_THUMBNAIL')}. "
+                + (f"MAD={o.get('mean_absolute_difference', 0):.1f}, "
+                   f"Hamming={o.get('phash_hamming_distance', 'N/A')}. "
+                   if o.get('thumbnail_present') else "")
+                + (o.get('forensic_note', '') if o.get('forensic_note') else "")
+            ),
+            # ── Image tools — missing entries ──────────────────────────────────
+            "ela_anomaly_classify": lambda o: (
+                f"ELA anomaly classification: {o.get('anomaly_block_count', o.get('num_anomaly_regions', 0))} "
+                f"anomalous block(s) out of {o.get('total_blocks', '?')} total. "
+                f"ELA mean: {o.get('ela_mean', 0):.3f}, max deviation: {o.get('max_anomaly', 0)}. "
+                + ("Anomaly detected — possible manipulation." if o.get('anomaly_detected') else "No significant anomaly blocks.")
+            ),
+            "deepfake_frequency_check": lambda o: (
+                f"GAN/deepfake frequency check: anomaly score {o.get('anomaly_score', 0):.3f}, "
+                f"high-frequency ratio {o.get('high_freq_ratio', 0):.4f}. "
+                + ("GAN-style frequency artifacts detected." if o.get('gan_artifact_detected') else "Frequency distribution appears natural — no GAN artifacts.")
+            ),
+            "roi_extract": lambda o: (
+                f"ROI extraction: bounding box {o.get('bounding_box', {})}. "
+                f"Region hash: {str(o.get('roi_hash', o.get('sha256', '')))[:16]}{'...' if o.get('roi_hash') or o.get('sha256') else 'not computed'}."
+            ),
+            "perceptual_hash": lambda o: (
+                f"Perceptual hash (pHash): {o.get('phash', o.get('hash_value', 'not computed'))}. "
+                + (f"Hamming distance from reference: {o.get('hamming_distance')}." if 'hamming_distance' in o else "No reference hash comparison performed.")
+            ),
+            "analyze_image_content": lambda o: (
+                f"CLIP semantic analysis: top match '{o.get('top_match', 'unknown')}' "
+                f"at {o.get('top_confidence', 0):.0%} confidence. "
+                + ("CONCERN FLAG raised — content may be sensitive or anomalous." if o.get('concern_flag') else "No concern flags raised.")
+            ),
+            "sensor_db_query": lambda o: (
+                f"Sensor/PRNU analysis: camera {o.get('camera_make', 'Unknown')} {o.get('camera_model', '')} "
+                f"classified as {o.get('sensor_class', 'unknown')} "
+                f"(PRNU variance {o.get('prnu_variance', 0):.4f}, std {o.get('prnu_block_std', 0):.4f}). "
+                + ("Inconsistent noise profile — possible regional insertion." if o.get('inconsistent_noise_profile') else "Sensor noise profile is internally consistent.")
+            ),
+            # ── Audio tools — missing entries ──────────────────────────────────
+            "audio_splice_detect": lambda o: (
+                f"Audio splice detection: {o.get('splice_count', len(o.get('splice_points', [])))} splice point(s) found. "
+                + ("Splicing detected — audio may have been cut and re-joined." if o.get('splice_detected') else "No splice points detected — audio appears continuous.")
+            ),
+            "background_noise_analysis": lambda o: (
+                f"Background noise consistency: {o.get('inconsistency_count', 0)} segment shift(s) detected "
+                f"across {o.get('segment_count', '?')} segment(s). "
+                + ("INCONSISTENT background noise — possible audio splice or re-recording." if o.get('inconsistency_detected') else "Background noise is consistent throughout recording.")
+            ),
+            "codec_fingerprinting": lambda o: (
+                f"Codec fingerprint: {o.get('codec', o.get('audio_codec', 'unknown'))}, "
+                f"sample rate {o.get('sample_rate', '?')}Hz, channels {o.get('channels', '?')}. "
+                + (f"Encoding chain: {o.get('encoding_chain', o.get('encoding_history', ''))}. " if o.get('encoding_chain') or o.get('encoding_history') else "No multi-generation encoding detected. ")
+                + (f"Duration: {o.get('duration_seconds', o.get('duration', '?'))}s." if o.get('duration_seconds') or o.get('duration') else "")
+            ),
+            "audio_visual_sync": lambda o: (
+                f"A/V sync: offset {o.get('av_offset_ms', o.get('sync_offset_ms', 0)):.1f}ms. "
+                + ("SYNC DRIFT DETECTED — audio and video timestamps diverge." if o.get('sync_drift_detected', o.get('desync_detected')) else "Audio-visual sync is within acceptable tolerance.")
+            ),
+            # ── Video tools — missing entries ──────────────────────────────────
+            "frame_extraction": lambda o: (
+                f"Frame extraction: {o.get('frame_count', 0)} frame(s) extracted "
+                f"(frames {o.get('start_frame', '?')}-{o.get('end_frame', '?')})."
+            ),
+            "frame_consistency_analysis": lambda o: (
+                f"Frame consistency: {o.get('inconsistent_frame_count', 0)} inconsistent frame(s) "
+                f"out of {o.get('total_frames', '?')} analysed. "
+                + ("Frame inconsistency detected — possible splice or compositing." if o.get('inconsistency_detected') else "Frames are visually consistent across the window.")
+            ),
+            "rolling_shutter_validation": lambda o: (
+                f"Rolling shutter: {'VIOLATION detected — inconsistent scanline skew.' if o.get('violation_detected') else 'consistent with claimed device characteristics.'} "
+                + (f"Details: {o.get('details', '')}" if o.get('details') else "")
+            ),
+            "video_metadata": lambda o: (
+                f"Video metadata: codec {o.get('codec', 'unknown')}, "
+                f"{o.get('fps', 0):.1f}fps, {o.get('resolution', '?')}, "
+                f"duration {o.get('duration', '?')}s. "
+                + (f"Encoding tool: {o.get('encoding_tool', '')}." if o.get('encoding_tool') else "No encoding tool recorded in metadata.")
+            ),
+            "anomaly_classification": lambda o: (
+                f"Anomaly classification result: {o.get('classification', 'INCONCLUSIVE')}. "
+                + (f"Details: {o.get('note', '')}" if o.get('note') else "No additional detail available.")
+            ),
+            # ── Metadata tools — missing entries ───────────────────────────────
+            "extract_deep_metadata": lambda o: (
+                f"Deep metadata extraction: {o.get('total_fields', o.get('field_count', 0))} field(s) extracted. "
+                + (f"MakerNotes: {o.get('makernotes_summary', 'none present')}. " if o.get('makernotes_summary') else "No MakerNotes extracted. ")
+                + (f"XMP data: {str(o.get('xmp_summary', ''))[:100]}." if o.get('xmp_summary') else "No XMP data.")
+            ),
+            "get_physical_address": lambda o: (
+                f"GPS reverse geocoding: {o.get('address', o.get('formatted_address', 'no address resolved'))}. "
+                + (f"Coordinates: {o.get('latitude', '?')}, {o.get('longitude', '?')}." if o.get('latitude') else "No GPS coordinates available.")
             ),
         }
 
@@ -1567,7 +1765,10 @@ class ReActLoopEngine:
         if interpreter and tool_result.success:
             try:
                 interpreted_msg = interpreter(output)
-                return f"{tool_label}: {interpreted_msg} This yields a {status} finding at {confidence:.0%} certainty."
+                # Do not restate a hard “{confidence}% certainty” sentence here,
+                # as the UI already shows calibrated confidence and this wording
+                # can be misleading. Keep this as a plain, human-readable summary.
+                return f"{tool_label}: {interpreted_msg}"
             except Exception:
                 pass  # fall through to generic path
 

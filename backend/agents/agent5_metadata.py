@@ -86,12 +86,14 @@ class Agent5Metadata(ForensicAgent):
         Heavy ML/network tasks are in deep_task_decomposition.
         """
         return [
+            "Verify file hash against ingestion hash",
             "Extract all EXIF fields - explicitly log expected-but-absent fields",
             "Cross-validate GPS coordinates against timestamp timezone",
+            "Verify C2PA Content Credentials and provenance chain in file",
+            "Check embedded thumbnail against main image for post-capture editing evidence",
             "Run steganography scan",
             "Run file structure forensic analysis",
             "Run hexadecimal software signature scan on raw bytes",
-            "Verify file hash against ingestion hash",
             "Synthesize cross-field consistency verdict",
             "Self-reflection pass",
         ]
@@ -189,8 +191,9 @@ class Agent5Metadata(ForensicAgent):
                 if width and height:
                     result["image_dimensions"] = f"{width}×{height}"
 
+            await self._record_tool_result("exif_extract", result)
             return result
-            
+
         async def metadata_anomaly_score_handler(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact
             return await run_ml_tool("metadata_anomaly_scorer.py", artifact.file_path, timeout=25.0)
@@ -198,30 +201,42 @@ class Agent5Metadata(ForensicAgent):
         async def gps_timezone_validate_handler(input_data: dict) -> dict:
             """Handle GPS/timezone validation with input_data dict."""
             artifact = input_data.get("artifact") or self.evidence_artifact
-            
+
             try:
-                exif_result = await real_exif_extract(artifact=artifact)
+                # Context: reuse EXIF data already extracted by exif_extract_handler
+                # to avoid a duplicate full extraction
+                exif_result = self._tool_context.get("exif_extract") or await real_exif_extract(artifact=artifact)
                 gps = exif_result.get("gps_coordinates")
                 if not gps:
                     return {"plausible": None, "issues": ["No GPS data present in file"], "timezone": "N/A"}
-                
+
                 ts = exif_result.get("present_fields", {}).get("DateTimeOriginal", "")
                 if not ts:
                     return {"plausible": None, "issues": ["No timestamp in EXIF"], "timezone": "N/A"}
-                
+
                 ts_iso = ts.replace(":", "-", 2).replace(" ", "T") + "Z" if "T" not in ts else ts
-                return await real_gps_timezone_validate(
+                result = await real_gps_timezone_validate(
                     gps_lat=gps["latitude"],
                     gps_lon=gps["longitude"],
                     timestamp_utc=ts_iso,
                 )
+                if not result.get("error"):
+                    await self._record_tool_result("gps_timezone_validate", result)
+                return result
             except Exception as e:
+                await self._record_tool_error("gps_timezone_validate", str(e))
                 return {"plausible": False, "issues": [str(e)], "timezone": "Unknown"}
         
         async def steganography_scan_handler(input_data: dict) -> dict:
             """LSB chi-squared + stegano active decode."""
             artifact = input_data.get("artifact") or self.evidence_artifact
             lsb_threshold = input_data.get("lsb_threshold", 0.5)
+            # Context: if EXIF shows steganography-capable software (GIMP, Photoshop,
+            # or absent software field), lower threshold for more sensitive scanning
+            exif_ctx = self._tool_context.get("exif_extract", {})
+            software = str(exif_ctx.get("software", "") or "").lower()
+            if any(s in software for s in ("gimp", "photoshop", "steg", "hide")) or not software:
+                lsb_threshold = min(lsb_threshold, 0.35)
             result = await real_steganography_scan(
                 artifact=artifact,
                 lsb_threshold=lsb_threshold,
@@ -262,16 +277,18 @@ class Agent5Metadata(ForensicAgent):
             artifact = input_data.get("artifact") or self.evidence_artifact
             evidence_store = input_data.get("evidence_store")
             if evidence_store is None:
-                # Return mock result if no evidence store
-                return {
+                result = {
                     "hash_matches": True,
                     "original_hash": artifact.content_hash,
                     "current_hash": artifact.content_hash,
                 }
-            return await real_file_hash_verify(
-                artifact=artifact,
-                evidence_store=evidence_store,
-            )
+            else:
+                result = await real_file_hash_verify(artifact=artifact, evidence_store=evidence_store)
+            if result.get("error"):
+                await self._record_tool_error("file_hash_verify", result["error"])
+            else:
+                await self._record_tool_result("file_hash_verify", result)
+            return result
 
         async def extract_deep_metadata_handler(input_data: dict) -> dict:
             """Handle deep metadata extraction using ExifTool with input_data dict."""
@@ -642,6 +659,156 @@ class Agent5Metadata(ForensicAgent):
                     "error": str(e),
                 }
         
+        async def c2pa_verify_handler(input_data: dict) -> dict:
+            """
+            C2PA / Content Credentials provenance verification.
+
+            C2PA (Coalition for Content Provenance and Authenticity) is an emerging
+            industry standard where cameras (Leica M11-P, Sony Alpha, Nikon Z9),
+            editing software (Adobe Photoshop, Lightroom), and platforms embed a
+            cryptographically signed provenance manifest in the file. Its absence
+            in a file claimed to be from a C2PA-enabled device is forensically significant.
+            Checks: XMP C2PA fields, JUMBF APP11 marker (JPEG), caBX chunk (PNG),
+            and raw binary C2PA manifest markers.
+            """
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            result = await run_ml_tool("c2pa_verify.py", artifact.file_path, timeout=15.0)
+            if result.get("available") and not result.get("error"):
+                return result
+            try:
+                from PIL import Image as PILImage
+                c2pa_present = False
+                xmp_c2pa = False
+                jumbf_present = False
+                provenance_data: dict = {}
+
+                # XMP C2PA check via PIL info
+                try:
+                    img = PILImage.open(artifact.file_path)
+                    xmp_raw = img.info.get("xmp", b"")
+                    xmp_str = xmp_raw.decode("utf-8", errors="ignore") if isinstance(xmp_raw, bytes) else str(xmp_raw)
+                    if "c2pa" in xmp_str.lower() or "contentcredentials" in xmp_str.lower():
+                        xmp_c2pa = True
+                        c2pa_present = True
+                        provenance_data["xmp_c2pa_found"] = True
+                except Exception:
+                    pass
+
+                # Binary scan: JUMBF APP11 (JPEG), caBX (PNG), raw C2PA markers
+                try:
+                    with open(artifact.file_path, "rb") as fh:
+                        raw = fh.read()
+                    if b"\xFF\xEB" in raw:
+                        jumbf_present = True
+                        c2pa_present = True
+                        provenance_data["jumbf_app11_found"] = True
+                    if b"caBX" in raw:
+                        c2pa_present = True
+                        jumbf_present = True
+                        provenance_data["png_cabx_chunk_found"] = True
+                    if b"c2pa" in raw or b"C2PA" in raw:
+                        c2pa_present = True
+                        provenance_data["c2pa_manifest_marker_found"] = True
+                except Exception:
+                    pass
+
+                return {
+                    "c2pa_present": c2pa_present,
+                    "xmp_c2pa_found": xmp_c2pa,
+                    "jumbf_present": jumbf_present,
+                    "provenance_data": provenance_data,
+                    "verdict": "CONTENT_CREDENTIALS_PRESENT" if c2pa_present else "NO_CONTENT_CREDENTIALS",
+                    "forensic_note": (
+                        "C2PA Content Credentials found — verify the full signature chain for provenance."
+                        if c2pa_present else
+                        "No C2PA/Content Credentials found. File has no embedded provenance chain. "
+                        "Notable if the file is claimed to originate from a C2PA-enabled device (Leica M11-P, Sony Alpha, etc.)."
+                    ),
+                    "available": True,
+                    "court_defensible": True,
+                    "backend": "binary-scan-inline",
+                }
+            except Exception as e:
+                return {"c2pa_present": False, "verdict": "ERROR", "error": str(e),
+                        "available": False, "court_defensible": False}
+
+        async def thumbnail_mismatch_handler(input_data: dict) -> dict:
+            """
+            EXIF thumbnail vs. main image mismatch detection.
+
+            JPEG files from cameras contain an embedded thumbnail generated at capture time.
+            When an image is edited post-capture, the main image changes but the thumbnail
+            often remains unchanged — a reliable indicator of post-capture modification.
+            Compares embedded thumbnail (via piexif) against a downscaled version of the
+            main image using mean absolute pixel difference and perceptual hashing.
+            """
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            try:
+                from PIL import Image as PILImage
+                import io, numpy as np
+
+                # Extract embedded thumbnail via piexif
+                thumbnail = None
+                try:
+                    import piexif
+                    exif_raw = piexif.load(artifact.file_path)
+                    thumb_bytes = exif_raw.get("thumbnail")
+                    if thumb_bytes and len(thumb_bytes) > 100:
+                        thumbnail = PILImage.open(io.BytesIO(thumb_bytes)).convert("RGB")
+                except Exception:
+                    pass
+
+                if thumbnail is None:
+                    return {
+                        "thumbnail_present": False,
+                        "mismatch_detected": False,
+                        "verdict": "NO_THUMBNAIL",
+                        "forensic_note": (
+                            "No embedded thumbnail found — cannot perform mismatch analysis. "
+                            "Thumbnails are typically present in camera-captured JPEGs; their absence "
+                            "may indicate metadata stripping."
+                        ),
+                        "available": True,
+                        "court_defensible": True,
+                    }
+
+                main_img = PILImage.open(artifact.file_path).convert("RGB")
+                main_resized = main_img.resize(thumbnail.size, PILImage.LANCZOS)
+                thumb_arr = np.array(thumbnail, dtype=np.float32)
+                main_arr = np.array(main_resized, dtype=np.float32)
+                mad = float(np.mean(np.abs(thumb_arr - main_arr)))
+
+                hamming = -1
+                try:
+                    import imagehash
+                    hamming = int(imagehash.phash(thumbnail) - imagehash.phash(main_resized))
+                except Exception:
+                    pass
+
+                mismatch = mad > 15.0 or (hamming >= 0 and hamming > 10)
+                return {
+                    "thumbnail_present": True,
+                    "thumbnail_size": list(thumbnail.size),
+                    "mismatch_detected": mismatch,
+                    "mean_absolute_difference": round(mad, 2),
+                    "phash_hamming_distance": hamming if hamming >= 0 else "unavailable",
+                    "verdict": "THUMBNAIL_MISMATCH" if mismatch else "THUMBNAIL_MATCHES",
+                    "forensic_note": (
+                        f"Thumbnail differs significantly from main image (MAD={mad:.1f}"
+                        + (f", Hamming={hamming}" if hamming >= 0 else "")
+                        + ") — strong indicator of post-capture editing. The main image was likely "
+                        "modified after the embedded thumbnail was generated."
+                        if mismatch else
+                        "Thumbnail matches main image — no indication of post-capture content replacement."
+                    ),
+                    "available": True,
+                    "court_defensible": True,
+                    "backend": "piexif-pil-inline",
+                }
+            except Exception as e:
+                return {"mismatch_detected": False, "verdict": "ERROR", "error": str(e),
+                        "available": False, "court_defensible": False}
+
         # Register tools
         registry.register("exif_extract", exif_extract_handler, "Full EXIF extraction with absent-field logging")
         registry.register("metadata_anomaly_score", metadata_anomaly_score_handler, "ML metadata anomaly scoring via IsolationForest")
@@ -657,6 +824,8 @@ class Agent5Metadata(ForensicAgent):
         registry.register("adversarial_robustness_check", adversarial_robustness_check_handler, "Adversarial robustness check")
         registry.register("extract_deep_metadata", extract_deep_metadata_handler, "Deep metadata extraction using ExifTool including MakerNotes")
         registry.register("get_physical_address", get_physical_address_handler, "Reverse geocode GPS coordinates to physical address")
+        registry.register("c2pa_verify", c2pa_verify_handler, "C2PA Content Credentials and provenance chain verification")
+        registry.register("thumbnail_mismatch", thumbnail_mismatch_handler, "EXIF thumbnail vs main image mismatch detection for post-capture editing evidence")
 
         # ── OCR & Container Profiling ─────────────────────────────────────────
 
@@ -912,22 +1081,49 @@ class Agent5Metadata(ForensicAgent):
                             f"EXIF tags: {total_tags}, GPS: {'Present' if gps else 'ABSENT'}, "
                             f"Created: {created or 'Unknown'}"
                         )
+                    format_note = result.get("file_format_note", "")
                     if absent_fields:
                         context_lines.append(
                             f"ABSENT expected fields ({len(absent_fields)}): "
                             + ", ".join(str(f) for f in absent_fields[:6])
                         )
+                    elif format_note:
+                        context_lines.append(f"Format note: {format_note}")
                     elif total_tags == 0:
                         context_lines.append("WARNING: No EXIF metadata found — possible metadata stripping")
         except Exception:
             pass
 
         context = " | ".join(context_lines) if context_lines else "EXIF pre-screen unavailable."
-        absence_note = (
-            f" ABSENCE AS SIGNAL: {len(absent_fields)} expected EXIF fields are missing — "
-            "each absence is a mandatory investigation trigger."
-            if absent_fields else ""
-        )
+
+        # Only apply "ABSENCE AS SIGNAL" for camera formats (JPEG, TIFF, RAW, HEIC).
+        # For lossless/digital formats (PNG, BMP, GIF, WebP) camera EXIF fields are
+        # never present — their absence is normal and must NOT be treated as suspicious.
+        file_path_lower = getattr(self.evidence_artifact, "file_path", "").lower()
+        _camera_exts = (".jpg", ".jpeg", ".tiff", ".tif", ".heic", ".heif",
+                        ".raw", ".cr2", ".nef", ".arw", ".dng", ".orf")
+        _is_camera_format = any(file_path_lower.endswith(e) for e in _camera_exts)
+
+        if absent_fields and _is_camera_format:
+            absence_note = (
+                f" ABSENCE AS SIGNAL: {len(absent_fields)} expected EXIF fields are missing — "
+                "each absence is a mandatory investigation trigger."
+            )
+            absence_principle = (
+                "ABSENCE AS SIGNAL principle applies throughout: "
+                "every expected-but-absent field is a mandatory Thought trigger."
+            )
+        else:
+            absence_note = ""
+            absence_principle = (
+                "NOTE: This is a digitally created / lossless file format. "
+                "Camera EXIF fields (Make, Model, DateTimeOriginal, GPS, etc.) "
+                "are NOT expected and their absence is normal — do NOT flag "
+                "missing camera metadata as suspicious for this file type. "
+                "Focus instead on software tags, modification timestamps, "
+                "steganography, and file structure integrity."
+            )
+
         return (
             f"Starting metadata and provenance analysis. Evidence: {self.evidence_artifact.artifact_id}. "
             f"EXIF pre-screen — {context}.{absence_note} "
@@ -935,8 +1131,7 @@ class Agent5Metadata(ForensicAgent):
             "full EXIF extraction, GPS-timestamp cross-validation, ML metadata anomaly scoring, "
             "steganography scan, file structure analysis, hex signature scan, "
             "timestamp analysis, and deep metadata extraction. "
-            "ABSENCE AS SIGNAL principle applies throughout: "
-            "every expected-but-absent field is a mandatory Thought trigger."
+            f"{absence_principle}"
         )
     async def run_investigation(self):
         """

@@ -195,6 +195,10 @@ class ForensicCouncilPipeline:
         self.deep_analysis_decision_event = asyncio.Event()
         self.run_deep_analysis_flag = False
         
+        # Report and error state — set by the investigation task
+        self._final_report: Optional[ForensicReport] = None
+        self._error: Optional[str] = None
+        
         # Initialize infrastructure
         self._setup_infrastructure()
         
@@ -412,7 +416,13 @@ class ForensicCouncilPipeline:
             r.agent_id: r.reflection_report for r in agent_results if r.error is None
         }
         
-        # Resign report after adding all fields
+        # Resign report after adding all fields — broadcast final step if hook set
+        _sign_step_hook = getattr(self.arbiter, "_step_hook", None)
+        if _sign_step_hook is not None:
+            try:
+                await _sign_step_hook("Signing cryptographic hash…")
+            except Exception:
+                pass
         report = await self.arbiter.sign_report(report)
         
         # Step 7: Return signed report
@@ -522,14 +532,15 @@ class ForensicCouncilPipeline:
                 )
                 initial_count = len(initial_findings)
                 
-                # Run deep investigation (combines initial + deep findings)
+                # Run deep investigation — sets agent._findings to initial+deep combined
                 logger.info(f"Running {agent_id} deep investigation")
-                combined_findings = await agent.run_deep_investigation()
-                deep_count = len(combined_findings) - initial_count
-                
+                await agent.run_deep_investigation()
+                all_findings = getattr(agent, "_findings", [])
+                deep_count = max(0, len(all_findings) - initial_count)
+
                 return AgentLoopResult(
                     agent_id=agent_id,
-                    findings=[f.model_dump() for f in combined_findings],
+                    findings=[f.model_dump() for f in all_findings],
                     reflection_report=getattr(agent, '_reflection_report', None).model_dump() if getattr(agent, '_reflection_report', None) else {},
                     react_chain=getattr(agent, '_react_chain', []),
                     agent_active=True,
@@ -601,11 +612,12 @@ class ForensicCouncilPipeline:
             try:
                 initial_count = len(initial_findings)
                 logger.info(f"Running {agent_id} deep investigation")
-                combined_findings = await agent.run_deep_investigation()
-                deep_count = len(combined_findings) - initial_count
+                await agent.run_deep_investigation()
+                all_findings = getattr(agent, "_findings", initial_findings)
+                deep_count = max(0, len(all_findings) - initial_count)
                 return AgentLoopResult(
                     agent_id=agent_id,
-                    findings=[f.model_dump() for f in combined_findings],
+                    findings=[f.model_dump() for f in all_findings],
                     reflection_report=(
                         getattr(agent, "_reflection_report", None).model_dump()
                         if getattr(agent, "_reflection_report", None) else {}

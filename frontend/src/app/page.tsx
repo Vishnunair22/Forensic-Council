@@ -15,91 +15,220 @@ import { useSound } from "@/hooks/useSound";
 /* ─── Microscope Scanner ─────────────────────────────────────────────────── */
 function MicroscopeScanner() {
   const reduced = useReducedMotion();
+
+  // Specimen cells scattered across the field of view
+  const SPECIMENS = [
+    { pos: "left-[19%] top-[22%]",  delay: 0.6  },
+    { pos: "right-[17%] top-[19%]", delay: 1.4  },
+    { pos: "left-[15%] bottom-[24%]", delay: 2.1 },
+    { pos: "right-[20%] bottom-[27%]", delay: 0.9 },
+    { pos: "left-[43%] top-[14%]",  delay: 1.7  },
+    { pos: "right-[38%] bottom-[15%]", delay: 2.8 },
+  ];
+
+  // Primary cyan data tags (cycle in)
+  const TAGS_A = [
+    { label: "ELA",  val: "0.023",   x: "left-[7%]",   y: "top-[37%]",    delay: 0   },
+    { label: "PRNU", val: "MATCH",   x: "right-[6%]",  y: "top-[43%]",    delay: 0.9 },
+    { label: "GPS",  val: "34.05°N", x: "left-[8%]",   y: "bottom-[33%]", delay: 0.5 },
+    { label: "SHA",  val: "a9f2…",   x: "right-[7%]",  y: "bottom-[29%]", delay: 1.3 },
+  ];
+
+  // Violet data tags (offset timing)
+  const TAGS_B = [
+    { label: "DFT",  val: "−42dB",   x: "left-[14%]",  y: "top-[16%]",    delay: 2.0 },
+    { label: "META", val: "INTACT",  x: "right-[13%]", y: "top-[18%]",    delay: 2.6 },
+    { label: "HASH", val: "VALID",   x: "left-[12%]",  y: "bottom-[17%]", delay: 1.8 },
+    { label: "FFT",  val: "0.91",    x: "right-[11%]", y: "bottom-[21%]", delay: 3.1 },
+  ];
+
   return (
     <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
-      {/* Outer atmosphere glow */}
-      <div className="absolute w-[700px] h-[700px] rounded-full bg-[radial-gradient(circle,rgba(0,212,255,0.04)_0%,transparent_70%)]" />
 
-      {/* Ring stack — concentric rotating rings */}
-      <div className="relative w-[540px] h-[540px]">
-        {/* Ring 1 — outer static */}
-        <div className="absolute inset-0 rounded-full border border-cyan-500/10" />
-        {/* Ring 2 — medium dashed slow CW */}
+      {/* Deep atmosphere — outer depth blur */}
+      <div className="absolute w-[920px] h-[920px] rounded-full"
+        style={{ background: "radial-gradient(circle, rgba(0,212,255,0.022) 0%, transparent 58%)", filter: "blur(32px)" }} />
+      <div className="absolute w-[640px] h-[640px] rounded-full"
+        style={{ background: "radial-gradient(circle, rgba(0,212,255,0.048) 0%, transparent 62%)" }} />
+
+      {/* Main viewport container */}
+      <div className="relative w-[580px] h-[580px]">
+
+        {/* Ring 0 — far outer atmosphere */}
+        <div className="absolute inset-0 rounded-full border border-cyan-500/7"
+          style={{ boxShadow: "inset 0 0 90px rgba(0,212,255,0.018)" }} />
+
+        {/* Ring 1 — outer static rim */}
+        <div className="absolute inset-[18px] rounded-full border border-cyan-500/12" />
+
+        {/* Ring 2 — dashed slow CW with tick marks */}
         <div
-          className="absolute inset-[55px] rounded-full border border-dashed border-cyan-400/15"
-          style={{ animation: reduced ? "none" : "ring-spin-slow 50s linear infinite" }}
+          className="absolute inset-[58px] rounded-full border border-dashed border-cyan-400/18"
+          style={{ animation: reduced ? "none" : "ring-spin-slow 58s linear infinite" }}
         />
-        {/* Ring 3 — inner CCW */}
+
+        {/* Ring 3 — medium CCW */}
         <div
-          className="absolute inset-[110px] rounded-full border border-cyan-500/20"
-          style={{ animation: reduced ? "none" : "ring-spin-reverse 28s linear infinite" }}
+          className="absolute inset-[115px] rounded-full border border-cyan-500/22"
+          style={{ animation: reduced ? "none" : "ring-spin-reverse 32s linear infinite" }}
         />
-        {/* Ring 4 — innermost pulsing */}
+
+        {/* Ring 4 — inner field ring */}
         <div
-          className="absolute inset-[170px] rounded-full border border-cyan-400/30"
+          className="absolute inset-[178px] rounded-full border-2 border-cyan-400/14"
+          style={{ animation: reduced ? "none" : "ring-spin-slow 20s linear infinite reverse" }}
+        />
+
+        {/* Ring 5 — innermost focus ring pulsing */}
+        <div
+          className="absolute inset-[228px] rounded-full border border-cyan-400/38"
           style={{ animation: reduced ? "none" : "pulse-ring 3.5s ease-in-out infinite" }}
         />
 
-        {/* Crosshair */}
-        <div className="absolute top-1/2 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400/25 to-transparent -translate-y-1/2" />
-        <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-cyan-400/25 to-transparent -translate-x-1/2" />
-
-        {/* Corner reticle brackets */}
-        {[
-          "top-[53px] left-[53px] border-t border-l",
-          "top-[53px] right-[53px] border-t border-r",
-          "bottom-[53px] left-[53px] border-b border-l",
-          "bottom-[53px] right-[53px] border-b border-r",
-        ].map((cls, i) => (
-          <div key={i} className={`absolute w-5 h-5 border-cyan-400/40 ${cls}`} />
-        ))}
-
-        {/* Core specimen dot */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-          <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_16px_rgba(0,212,255,0.9)]"
-            style={{ animation: reduced ? "none" : "pulse 2s ease-in-out infinite" }} />
+        {/* Measurement grid — visible inside inner field ring */}
+        <div className="absolute inset-[118px] rounded-full overflow-hidden opacity-[0.18]">
+          <div className="absolute inset-0"
+            style={{
+              backgroundImage: "linear-gradient(rgba(0,212,255,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.3) 1px, transparent 1px)",
+              backgroundSize: "28px 28px",
+            }}
+          />
         </div>
 
-        {/* Horizontal scan beam */}
-        {!reduced && (
+        {/* Crosshair — main axes */}
+        <div className="absolute top-1/2 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400/28 to-transparent -translate-y-1/2" />
+        <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-cyan-400/28 to-transparent -translate-x-1/2" />
+
+        {/* 45° diagonal tics at outer ring */}
+        <div className="absolute inset-[58px] rounded-full overflow-hidden pointer-events-none opacity-20">
+          <div className="absolute top-1/2 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent -translate-y-1/2 rotate-45 scale-x-[1.4]" />
+          <div className="absolute top-1/2 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent -translate-y-1/2 -rotate-45 scale-x-[1.4]" />
+        </div>
+
+        {/* Corner reticle brackets — outer */}
+        {[
+          "top-[57px] left-[57px] border-t-2 border-l-2",
+          "top-[57px] right-[57px] border-t-2 border-r-2",
+          "bottom-[57px] left-[57px] border-b-2 border-l-2",
+          "bottom-[57px] right-[57px] border-b-2 border-r-2",
+        ].map((cls, i) => (
+          <div key={i} className={`absolute w-6 h-6 border-cyan-400/48 ${cls}`} />
+        ))}
+
+        {/* Corner reticle brackets — inner field ring */}
+        {[
+          "top-[178px] left-[178px] border-t border-l",
+          "top-[178px] right-[178px] border-t border-r",
+          "bottom-[178px] left-[178px] border-b border-l",
+          "bottom-[178px] right-[178px] border-b border-r",
+        ].map((cls, i) => (
+          <div key={i} className={`absolute w-4 h-4 border-cyan-400/30 ${cls}`} />
+        ))}
+
+        {/* Specimen cells — evidence particles in the field */}
+        {SPECIMENS.map((s, i) => (
           <motion.div
-            animate={{ left: ["-15%", "115%"] }}
-            transition={{ duration: 3.8, ease: "easeInOut", repeat: Infinity, repeatDelay: 1.8 }}
-            className="absolute top-[20%] bottom-[20%] w-[180px] bg-gradient-to-r from-transparent via-cyan-300/7 to-transparent blur-sm"
+            key={i}
+            className={`absolute ${s.pos}`}
+            initial={{ opacity: 0 }}
+            animate={reduced ? {} : { opacity: [0, 0.55, 0.72, 0.45, 0.60] }}
+            transition={{ delay: s.delay, duration: 3.6 + i * 0.45, repeat: Infinity }}
+          >
+            <div className="w-3.5 h-3.5 rounded-full border border-cyan-400/45 flex items-center justify-center"
+              style={{ boxShadow: "0 0 7px rgba(0,212,255,0.32)" }}>
+              <div className="w-1.5 h-1.5 rounded-full bg-cyan-300/62" />
+            </div>
+          </motion.div>
+        ))}
+
+        {/* Core specimen — primary target with selection ring */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+          <motion.div
+            className="absolute -inset-5 rounded-full border border-cyan-400/30"
+            animate={reduced ? {} : { scale: [1, 1.10, 1], opacity: [0.30, 0.58, 0.30] }}
+            transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
           />
-        )}
-        {/* Vertical scan line */}
+          <div
+            className="w-3 h-3 rounded-full bg-cyan-400"
+            style={{
+              boxShadow: "0 0 18px rgba(0,212,255,0.95), 0 0 36px rgba(0,212,255,0.35)",
+              animation: reduced ? "none" : "scan-glow 2s ease-in-out infinite",
+            }}
+          />
+        </div>
+
+        {/* Horizontal scan beam — wide glow sweep */}
         {!reduced && (
           <motion.div
-            animate={{ top: ["22%", "78%", "22%"] }}
-            transition={{ duration: 4, ease: "linear", repeat: Infinity }}
-            className="absolute left-[22%] right-[22%] h-[1.5px] bg-gradient-to-r from-transparent via-cyan-300/55 to-transparent shadow-[0_0_8px_rgba(0,212,255,0.5)]"
+            animate={{ left: ["-18%", "118%"] }}
+            transition={{ duration: 3.8, ease: "easeInOut", repeat: Infinity, repeatDelay: 2.2 }}
+            className="absolute top-[16%] bottom-[16%] w-[210px] pointer-events-none"
+            style={{
+              background: "linear-gradient(to right, transparent, rgba(0,212,255,0.035), rgba(0,212,255,0.075), rgba(0,212,255,0.035), transparent)",
+              filter: "blur(3px)",
+            }}
           />
         )}
 
-        {/* Floating data readout tags */}
-        {[
-          { label: "ELA",  val: "0.023",   x: "left-[12%]",  y: "top-[38%]",    delay: 0   },
-          { label: "PRNU", val: "MATCH",   x: "right-[11%]", y: "top-[44%]",    delay: 0.9 },
-          { label: "GPS",  val: "34.05°N", x: "left-[13%]",  y: "bottom-[34%]", delay: 0.5 },
-          { label: "SHA",  val: "a9f2…",   x: "right-[12%]", y: "bottom-[30%]", delay: 1.3 },
-        ].map((tag, i) => (
+        {/* Vertical scan line — sharp with glow trail */}
+        {!reduced && (
           <motion.div
-            key={i}
+            animate={{ top: ["18%", "82%", "18%"] }}
+            transition={{ duration: 4.4, ease: "linear", repeat: Infinity }}
+            className="absolute left-[18%] right-[18%] h-[2px] pointer-events-none"
+            style={{
+              background: "linear-gradient(to right, transparent, rgba(0,212,255,0.65), transparent)",
+              boxShadow: "0 0 10px rgba(0,212,255,0.52), 0 0 22px rgba(0,212,255,0.18)",
+            }}
+          />
+        )}
+
+        {/* Secondary violet scan sweep — offset timing, RTL */}
+        {!reduced && (
+          <motion.div
+            animate={{ left: ["118%", "-18%"] }}
+            transition={{ duration: 5.8, ease: "easeInOut", repeat: Infinity, repeatDelay: 1.2, delay: 2.8 }}
+            className="absolute top-[28%] bottom-[28%] w-[160px] pointer-events-none"
+            style={{
+              background: "linear-gradient(to right, transparent, rgba(124,58,237,0.035), rgba(124,58,237,0.055), rgba(124,58,237,0.035), transparent)",
+              filter: "blur(2px)",
+            }}
+          />
+        )}
+
+        {/* Data readout tags — cyan set */}
+        {TAGS_A.map((tag, i) => (
+          <motion.div
+            key={`a${i}`}
             initial={{ opacity: 0 }}
-            animate={reduced ? {} : { opacity: [0, 0.75, 0.75, 0] }}
-            transition={{ delay: tag.delay, duration: 4.5, repeat: Infinity, repeatDelay: 2.5 }}
-            className={`absolute ${tag.x} ${tag.y} font-mono text-[10px] text-cyan-400/80
-              bg-black/70 border border-cyan-500/25 px-2.5 py-1 rounded-lg backdrop-blur-sm
-              shadow-[0_0_12px_rgba(0,212,255,0.1)]`}
+            animate={reduced ? {} : { opacity: [0, 0.82, 0.82, 0] }}
+            transition={{ delay: tag.delay, duration: 5.2, repeat: Infinity, repeatDelay: 2.2 }}
+            className={`absolute ${tag.x} ${tag.y} font-mono text-[10px] text-cyan-400/88
+              bg-black/80 border border-cyan-500/28 px-2.5 py-1 rounded-lg backdrop-blur-sm
+              shadow-[0_0_14px_rgba(0,212,255,0.13)]`}
           >
-            <span className="text-cyan-500/50 mr-1.5">{tag.label}</span>{tag.val}
+            <span className="text-cyan-500/52 mr-1.5">{tag.label}</span>{tag.val}
+          </motion.div>
+        ))}
+
+        {/* Data readout tags — violet set (delayed) */}
+        {TAGS_B.map((tag, i) => (
+          <motion.div
+            key={`b${i}`}
+            initial={{ opacity: 0 }}
+            animate={reduced ? {} : { opacity: [0, 0, 0.72, 0.72, 0] }}
+            transition={{ delay: tag.delay, duration: 4.8, repeat: Infinity, repeatDelay: 3.8 }}
+            className={`absolute ${tag.x} ${tag.y} font-mono text-[10px] text-violet-400/82
+              bg-black/80 border border-violet-500/25 px-2.5 py-1 rounded-lg backdrop-blur-sm
+              shadow-[0_0_12px_rgba(124,58,237,0.10)]`}
+          >
+            <span className="text-violet-500/48 mr-1.5">{tag.label}</span>{tag.val}
           </motion.div>
         ))}
       </div>
 
-      {/* Radial vignette to bleed into hero content */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(3,3,8,0.95)_68%)]" />
+      {/* Radial vignette — fades scanner into hero content */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(3,3,8,0.97)_70%)]" />
     </div>
   );
 }
@@ -174,14 +303,14 @@ function GlassCard({
   glowColor?: "cyan" | "violet" | "emerald";
 }) {
   const glowMap = {
-    cyan:    "hover:border-cyan-400/30 hover:shadow-[0_0_40px_rgba(0,212,255,0.08),inset_0_1px_0_rgba(255,255,255,0.07)]",
-    violet:  "hover:border-violet-400/40 hover:shadow-[0_0_48px_rgba(124,58,237,0.15),inset_0_1px_0_rgba(168,85,247,0.1)]",
-    emerald: "hover:border-emerald-400/30 hover:shadow-[0_0_40px_rgba(16,185,129,0.08)]",
+    cyan:    "hover:border-cyan-400/32 hover:shadow-[0_0_52px_rgba(0,212,255,0.10),0_4px_24px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(0,212,255,0.08)]",
+    violet:  "hover:border-violet-400/42 hover:shadow-[0_0_60px_rgba(124,58,237,0.18),0_4px_24px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(168,85,247,0.12)]",
+    emerald: "hover:border-emerald-400/32 hover:shadow-[0_0_52px_rgba(16,185,129,0.10),0_4px_24px_rgba(0,0,0,0.4)]",
   }[glowColor];
 
   return (
     <div
-      className={`glass-panel rounded-3xl transition-all duration-500
+      className={`glass-panel rounded-3xl transition-all duration-500 ease-out
         ${glowMap} ${className}`}
     >
       {children}
@@ -264,13 +393,18 @@ export default function LandingPage() {
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
   return (
-    <div className="relative bg-[#030308] text-white overflow-x-hidden" style={{ fontFamily: "var(--font-syne), sans-serif" }}>
+    <div className="relative bg-[#030308] text-white overflow-x-hidden" style={{ fontFamily: "var(--font-sans), sans-serif" }}>
 
       {/* ── Background grid + blobs ── */}
       <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff04_1px,transparent_1px),linear-gradient(to_bottom,#ffffff04_1px,transparent_1px)] bg-[size:40px_40px]" />
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[600px] bg-cyan-900/15 rounded-full blur-[130px]" />
-        <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-violet-900/10 rounded-full blur-[110px]" />
+        {/* Subtle dot grid */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle,#ffffff06_1px,transparent_1px)] bg-[size:36px_36px]" />
+        {/* Main cyan halo */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[640px] bg-cyan-900/18 rounded-full blur-[140px]" />
+        {/* Violet depth blob */}
+        <div className="absolute bottom-0 right-0 w-[560px] h-[560px] bg-violet-900/12 rounded-full blur-[120px]" />
+        {/* Subtle indigo accent */}
+        <div className="absolute top-[30%] left-0 w-[400px] h-[400px] bg-indigo-900/8 rounded-full blur-[100px]" />
       </div>
 
       {/* ── Header ── */}
@@ -279,7 +413,7 @@ export default function LandingPage() {
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-gradient-to-br from-cyan-400 to-violet-600 rounded-lg flex items-center justify-center
             font-bold text-[#030308] text-sm shadow-[0_0_20px_rgba(0,212,255,0.3)]"
-            style={{ fontFamily: "var(--font-syne)" }}>FC</div>
+            style={{ fontFamily: "var(--font-sans)" }}>FC</div>
           <span className="text-lg font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
             Forensic Council
           </span>
@@ -363,10 +497,10 @@ export default function LandingPage() {
             ].map((item, i) => (
               <motion.div
                 key={i}
-                initial={{ opacity: 0, y: 32 }}
+                initial={{ opacity: 0, y: 36 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.12, duration: 0.65 }}
+                viewport={{ once: true, margin: "-60px" }}
+                transition={{ delay: i * 0.10, duration: 0.60, ease: [0.22, 1, 0.36, 1] }}
               >
                 <GlassCard className="p-8 flex flex-col items-center text-center mt-8 group hover:scale-[1.01]">
                   {/* Step bubble */}
@@ -501,12 +635,12 @@ export default function LandingPage() {
             <div className="absolute inset-0 bg-black/75 backdrop-blur-2xl" />
 
             <motion.div
-              initial={{ scale: 0.88, opacity: 0, y: 30 }}
+              initial={{ scale: 0.88, opacity: 0, y: 32 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.92, opacity: 0, y: 20 }}
-              transition={{ type: "spring", stiffness: 280, damping: 26 }}
-              className="relative w-full max-w-xl z-10 glass-panel rounded-[2rem] overflow-hidden"
-              style={{ boxShadow: "0 40px 90px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.12)" }}
+              transition={{ type: "spring", stiffness: 300, damping: 28 }}
+              className="relative w-full max-w-xl z-10 glass-panel rounded-[2rem] overflow-hidden border-white/10"
+              style={{ boxShadow: "0 40px 100px rgba(0,0,0,0.85), 0 0 80px rgba(0,212,255,0.06), inset 0 1px 0 rgba(255,255,255,0.12)" }}
             >
               {/* Envelope opening reveal — content slides up from "inside" */}
               <motion.div

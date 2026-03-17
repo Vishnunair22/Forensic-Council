@@ -955,16 +955,38 @@ async def exif_extract_enhanced(
     except Exception:
         pass
     
-    # Explicitly log expected-but-absent fields
-    MANDATORY = ["Make", "Model", "DateTimeOriginal", "ExposureTime",
-                 "FNumber", "ISOSpeedRatings", "FocalLength", "GPSLatitude"]
-    absent_fields = [f for f in MANDATORY if not any(f.lower() in k.lower() 
-                                                      for k in all_metadata)]
-    
+    # Camera EXIF fields that are expected in photographs taken with a camera.
+    # These are NOT expected for screenshots, generated images, or digitally
+    # created files (PNG, BMP, GIF, WebP) — their absence is normal, not
+    # suspicious.  Only flag them as absent when the file format implies a
+    # camera origin (JPEG, TIFF, HEIC, RAW).
+    import os as _os
+    _ext = _os.path.splitext(artifact.file_path)[1].lower()
+    _camera_formats = (".jpg", ".jpeg", ".tiff", ".tif", ".heic", ".heif",
+                       ".raw", ".cr2", ".nef", ".arw", ".dng", ".orf")
+    _is_camera_format = _ext in _camera_formats
+
+    if _is_camera_format:
+        MANDATORY = ["Make", "Model", "DateTimeOriginal", "ExposureTime",
+                     "FNumber", "ISOSpeedRatings", "FocalLength", "GPSLatitude"]
+        absent_fields = [f for f in MANDATORY if not any(f.lower() in k.lower()
+                                                          for k in all_metadata)]
+    else:
+        # For digital/lossless formats (PNG, BMP, GIF, WebP, etc.) camera EXIF
+        # fields are never present — this is expected and not a forensic signal.
+        absent_fields = []
+
     return {
         "all_metadata": all_metadata,
         "absent_mandatory_fields": absent_fields,
         "total_fields_extracted": len(all_metadata),
+        "is_camera_format": _is_camera_format,
+        "file_format_note": (
+            None if _is_camera_format else
+            f"{_ext.upper()} is a digitally created / lossless format — "
+            "camera EXIF fields (Make, Model, DateTimeOriginal, GPS, etc.) "
+            "are not expected and their absence is not a forensic signal."
+        ),
         "court_defensible": True,
         "available": True,
         "backend": "exiftool+hachoir",

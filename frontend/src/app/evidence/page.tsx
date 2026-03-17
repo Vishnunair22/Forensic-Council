@@ -23,7 +23,7 @@ import { PageTransition } from "@/components/ui/PageTransition";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { useSound } from "@/hooks/useSound";
 import { startInvestigation, submitHITLDecision } from "@/lib/api";
-import { AGENTS_DATA } from "@/lib/constants";
+import { AGENTS_DATA, ALLOWED_MIME_TYPES } from "@/lib/constants";
 
 import {
   HeaderSection,
@@ -75,11 +75,16 @@ export default function EvidencePage() {
   const [isNavigating, setIsNavigating] = useState(false);
   const [showArbiterOverlay, setShowArbiterOverlay] = useState(false);
 
+  // Tracks whether analysis_done sound has been played for current session
+  const analysisCompleteSoundedRef = useRef(false);
+
   // Simulation/Analysis state
   const {
     status,
     agentUpdates,
     completedAgents,
+    pipelineMessage,
+    pipelineThinking,
     startSimulation,
     connectWebSocket,
     resumeInvestigation,
@@ -115,6 +120,13 @@ export default function EvidencePage() {
     };
   }, [filePreviewUrl]);
 
+  // Evidence page load sound — plays once on mount (AudioContext unlocked by CTA click on landing)
+  useEffect(() => {
+    const id = setTimeout(() => playSound("page_load"), 280);
+    return () => clearTimeout(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Reset simulation wrapper
   const resetSimulation = useCallback(() => {
     setIsUploading(false);
@@ -133,6 +145,13 @@ export default function EvidencePage() {
       startSimulation();
 
       try {
+        // Yield a frame so React can paint the "initiating" UI before heavy work
+        // (large FormData construction / network handshake can otherwise feel like a freeze).
+        await new Promise<void>((resolve) => {
+          if (typeof window === "undefined") return resolve();
+          window.requestAnimationFrame(() => resolve());
+        });
+
         // Use the stable ID generated on mount (never regenerates mid-session).
         const investigatorId = investigatorIdRef.current;
 
@@ -250,7 +269,7 @@ export default function EvidencePage() {
   // Accept Analysis → skip deep, arbiter compiles, go to results
   const handleAcceptAnalysis = useCallback(async () => {
     if (isNavigating) return;
-    playSound("success");
+    playSound("arbiter_start");
     setIsNavigating(true);
     setShowArbiterOverlay(true); // Show arbiter progress overlay
     try {
@@ -270,6 +289,8 @@ export default function EvidencePage() {
   // Deep Analysis → run heavy ML pass
   const handleDeepAnalysis = useCallback(async () => {
     playSound("think");
+    // Reset sound guard so analysis_done can play again at end of deep phase
+    analysisCompleteSoundedRef.current = false;
     // Clear initial-phase completed agents so allAgentsDone starts fresh in deep phase
     clearCompletedAgents();
     setPhase("deep");
@@ -291,7 +312,7 @@ export default function EvidencePage() {
   // View Results → after deep analysis the arbiter already compiled — just navigate
   const handleViewResults = useCallback(async () => {
     if (isNavigating) return;
-    playSound("complete");
+    playSound("arbiter_start");
     setIsNavigating(true);
     setShowArbiterOverlay(true); // Show arbiter progress overlay
     // Small pause to let the user see the overlay before navigating
@@ -309,9 +330,13 @@ export default function EvidencePage() {
   const unsupportedAgentIds = new Set(
     validCompletedAgents
       .filter(c =>
+        c.error?.includes("Not applicable") ||
+        c.error?.includes("not applicable") ||
         c.error?.includes("not supported") ||
         c.error?.includes("Format not supported") ||
+        c.message?.includes("not applicable") ||
         c.message?.includes("not supported") ||
+        c.message?.includes("Skipping") ||
         c.message?.includes("Skipped") ||
         (c.findings_count === 0 && c.confidence === 0 && !!c.error)
       )
@@ -329,6 +354,17 @@ export default function EvidencePage() {
 
   // Awaiting decision = backend sent PIPELINE_PAUSED
   const awaitingDecision = status === "awaiting_decision";
+
+  // Play analysis_done sound once when initial analysis finishes (PIPELINE_PAUSED)
+  useEffect(() => {
+    if (awaitingDecision && !analysisCompleteSoundedRef.current) {
+      analysisCompleteSoundedRef.current = true;
+      playSound("analysis_done");
+    }
+    if (!awaitingDecision && status === "idle") {
+      analysisCompleteSoundedRef.current = false; // reset for next session
+    }
+  }, [awaitingDecision, status, playSound]);
 
   const hasStartedAnalysis =
     status === "initiating" ||
@@ -380,7 +416,7 @@ export default function EvidencePage() {
           <motion.div
             initial={{ opacity: 0, scale: 0.9, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="flex flex-col items-center gap-6 px-8 py-10 rounded-3xl bg-[#09090f]/95 border border-white/10 shadow-2xl max-w-xs w-full mx-4"
+            className="glass-panel flex flex-col items-center gap-6 px-8 py-10 rounded-3xl shadow-[0_20px_80px_rgba(0,0,0,0.85),0_0_60px_rgba(124,58,237,0.12)] max-w-xs w-full mx-4 border-violet-500/22"
           >
             <div className="relative w-20 h-20 flex items-center justify-center">
               <motion.div
@@ -457,6 +493,7 @@ export default function EvidencePage() {
               phase={phase}
               awaitingDecision={awaitingDecision}
               pipelineStatus={status}
+              pipelineMessage={pipelineMessage || pipelineThinking}
               onAcceptAnalysis={handleAcceptAnalysis}
               onDeepAnalysis={handleDeepAnalysis}
               onNewUpload={handleNewUpload}

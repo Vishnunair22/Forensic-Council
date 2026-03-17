@@ -36,6 +36,7 @@ interface AgentProgressDisplayProps {
   phase: "initial" | "deep";
   awaitingDecision: boolean;
   pipelineStatus?: string;
+  pipelineMessage?: string;
   onAcceptAnalysis?: () => void;
   onDeepAnalysis?: () => void;
   onNewUpload?: () => void;
@@ -177,6 +178,7 @@ export function AgentProgressDisplay({
   phase,
   awaitingDecision,
   pipelineStatus,
+  pipelineMessage,
   onAcceptAnalysis,
   onDeepAnalysis,
   onNewUpload,
@@ -247,11 +249,15 @@ export function AgentProgressDisplay({
   // Detect unsupported agents
   useEffect(() => {
     completedAgents.forEach(agent => {
+      const msg = (agent.message || "").toLowerCase();
+      const err = (agent.error || "").toLowerCase();
       const isUnsupported =
-        agent.error?.includes("not supported") ||
-        agent.error?.includes("Format not supported") ||
-        agent.message?.includes("not supported") ||
-        agent.message?.includes("Skipped") ||
+        err.includes("not supported") ||
+        err.includes("format not supported") ||
+        err.includes("not applicable") ||
+        msg.includes("not supported") ||
+        msg.includes("not applicable") ||
+        msg.includes("skipped") ||
         (agent.findings_count === 0 && agent.confidence === 0 && !!agent.error);
       if (isUnsupported && !unsupportedAgents.has(agent.agent_id)) {
         setUnsupportedAgents(prev => new Set([...prev, agent.agent_id]));
@@ -263,11 +269,14 @@ export function AgentProgressDisplay({
     if (unsupportedAgents.has(agentId)) return "unsupported";
     const completed = completedAgents.find(c => c.agent_id === agentId);
     if (completed) {
+      const msg = (completed.message || "").toLowerCase();
+      const err = (completed.error || "").toLowerCase();
       const isUnsupported =
-        completed.error?.includes("not supported") ||
-        completed.error?.includes("Format not supported") ||
-        completed.message?.includes("not supported") ||
-        completed.message?.includes("Skipped");
+        err.includes("not supported") ||
+        err.includes("not applicable") ||
+        msg.includes("not supported") ||
+        msg.includes("not applicable") ||
+        msg.includes("skipped");
       if (isUnsupported) return "unsupported";
       return completed.error ? "error" : "complete";
     }
@@ -324,39 +333,39 @@ export function AgentProgressDisplay({
             <AnimatePresence key={agent.id}>
               {isRevealed && (
                 <motion.div
-                  initial={{ opacity: 0, y: 28, scale: 0.9 }}
+                  initial={{ opacity: 0, y: 28, scale: 0.92 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.96 }}
-                  transition={{ type: "spring", stiffness: 280, damping: 22 }}
-                  className={[
-                    "relative rounded-2xl p-5 overflow-hidden",
-                    "backdrop-blur-xl backdrop-saturate-150 transition-all duration-400",
-                    status === "running"
-                      ? "bg-cyan-500/[0.04] border border-cyan-400/25 shadow-[0_0_24px_rgba(0,212,255,0.08),inset_0_1px_0_rgba(0,212,255,0.10)]"
-                      : status === "complete"
-                        ? "bg-emerald-500/[0.03] border border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.06),inset_0_1px_0_rgba(16,185,129,0.08)]"
-                        : status === "error"
-                          ? "bg-red-500/[0.04] border border-red-500/22"
-                          : status === "unsupported"
-                            ? "bg-amber-500/[0.03] border border-amber-500/20"
-                            : status === "checking"
-                              ? "bg-violet-500/[0.04] border border-violet-500/22 shadow-[0_0_18px_rgba(124,58,237,0.07)]"
-                              : "bg-white/[0.025] border border-white/[0.07] shadow-[0_4px_24px_rgba(0,0,0,0.35)]",
-                  ].join(" ")}
+                  exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 24 }}
+                  className="glass-panel rounded-2xl p-5 transition-all duration-300"
+                  style={{
+                    borderColor:
+                      status === "running"      ? "rgba(34,211,238,0.28)"   :
+                      status === "complete"     ? "rgba(16,185,129,0.24)"   :
+                      status === "error"        ? "rgba(239,68,68,0.24)"    :
+                      status === "unsupported"  ? "rgba(245,158,11,0.22)"   :
+                      status === "checking"     ? "rgba(139,92,246,0.26)"   :
+                                                  "rgba(255,255,255,0.06)",
+                    boxShadow:
+                      status === "running"  ? "0 8px 32px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(0,0,0,0.22), 0 0 28px rgba(0,212,255,0.10), inset 0 1px 0 rgba(0,212,255,0.10)" :
+                      status === "complete" ? "0 8px 32px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(0,0,0,0.22), 0 0 22px rgba(16,185,129,0.07), inset 0 1px 0 rgba(16,185,129,0.09)" :
+                      status === "checking" ? "0 8px 32px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(0,0,0,0.22), 0 0 22px rgba(124,58,237,0.09)" :
+                      undefined,
+                  }}
                 >
                   {/* Glass top-edge shine */}
-                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent pointer-events-none" />
                   {/* Pulsing glow when running */}
                   {status === "running" && (
-                    <div className="absolute inset-0 rounded-2xl pointer-events-none animate-[pulse-ring_2.8s_ease-in-out_infinite]"
-                      style={{ boxShadow: "inset 0 0 0 1px rgba(0,212,255,0.18)" }} />
+                    <div className="absolute inset-0 rounded-2xl pointer-events-none"
+                      style={{ animation: "pulse-ring 2.8s ease-in-out infinite", boxShadow: "inset 0 0 0 1px rgba(0,212,255,0.18)" }} />
                   )}
-                  {/* Entry scan sweep */}
+                  {/* Entry scan sweep — glass shimmer on reveal */}
                   <motion.div
-                    initial={{ x: "-100%", opacity: 0.85 }}
-                    animate={{ x: "230%", opacity: 0 }}
-                    transition={{ duration: 0.6, ease: "easeOut", delay: 0.04 }}
-                    className="absolute inset-y-0 w-2/5 bg-gradient-to-r from-transparent via-white/8 to-transparent pointer-events-none z-10"
+                    initial={{ x: "-110%", opacity: 0.9 }}
+                    animate={{ x: "260%", opacity: 0 }}
+                    transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1], delay: 0.05 }}
+                    className="absolute inset-y-0 w-2/5 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none z-10"
+                    style={{ transform: "skewX(-8deg)" }}
                   />
 
                   {/* Top row */}
@@ -421,26 +430,26 @@ export function AgentProgressDisplay({
                   {/* Body */}
                   {status === "checking" && (
                     <div className="space-y-2.5">
-                      <p className="text-xs text-violet-300/80 leading-relaxed">
-                        Initiating forensic analysis pipeline…
+                      <p className="text-xs text-violet-300/70 leading-relaxed">
+                        Agent standing by — connecting to analysis pipeline…
                       </p>
                       {/* Loading bar animation */}
                       <div className="w-full h-0.5 bg-white/[0.06] rounded-full overflow-hidden">
                         <motion.div
                           animate={{ x: ["-100%", "200%"] }}
-                          transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-                          className="h-full w-1/2 bg-gradient-to-r from-transparent via-violet-400/70 to-transparent"
+                          transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+                          className="h-full w-1/2 bg-gradient-to-r from-transparent via-violet-400/60 to-transparent"
                         />
                       </div>
                       {/* Skeleton tool lines */}
-                      <div className="space-y-1.5 opacity-30">
-                        {[80, 65, 72].map((w, i) => (
+                      <div className="space-y-1.5 opacity-25">
+                        {[75, 58, 68].map((w, i) => (
                           <motion.div
                             key={i}
                             className="h-1.5 bg-slate-600 rounded-full"
                             style={{ width: `${w}%` }}
-                            animate={{ opacity: [0.3, 0.7, 0.3] }}
-                            transition={{ duration: 1.8, repeat: Infinity, delay: i * 0.2 }}
+                            animate={{ opacity: [0.2, 0.6, 0.2] }}
+                            transition={{ duration: 2.2, repeat: Infinity, delay: i * 0.3 }}
                           />
                         ))}
                       </div>
@@ -453,6 +462,12 @@ export function AgentProgressDisplay({
                         text={thinking}
                         textClassName="text-cyan-300/80"
                       />
+                      {!!pipelineMessage && (
+                        <p className="text-[11px] leading-relaxed text-slate-400">
+                          <span className="text-slate-500 font-semibold">Pipeline:</span>{" "}
+                          {pipelineMessage}
+                        </p>
+                      )}
                       {/* Live progress shimmer */}
                       <div className="w-full h-0.5 bg-white/[0.05] rounded-full overflow-hidden mt-2">
                         <motion.div
@@ -511,7 +526,7 @@ export function AgentProgressDisplay({
       {showInitialDecision && (
         <motion.div
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-          className="mt-10 w-full max-w-lg flex gap-4"
+          className="mt-10 w-full max-w-lg glass-panel rounded-2xl p-4 flex gap-4"
         >
           <motion.button
             onClick={onAcceptAnalysis}
@@ -549,7 +564,7 @@ export function AgentProgressDisplay({
       {showDeepComplete && (
         <motion.div
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-          className="mt-10 w-full max-w-lg flex gap-4"
+          className="mt-10 w-full max-w-lg glass-panel rounded-2xl p-4 flex gap-4"
         >
           <motion.button
             onClick={onNewUpload}
@@ -586,6 +601,11 @@ export function AgentProgressDisplay({
       {!showInitialDecision && !showDeepComplete && (
         <div className="mt-8 text-center">
           <p className="text-sm text-slate-400">{progressText}</p>
+          {!!pipelineMessage && (
+            <p className="text-xs text-slate-500 mt-2 max-w-2xl mx-auto">
+              {pipelineMessage}
+            </p>
+          )}
           {!allAgentsDone && (
             <div className="flex justify-center gap-1 mt-3">
               {[0, 1, 2].map((i) => (

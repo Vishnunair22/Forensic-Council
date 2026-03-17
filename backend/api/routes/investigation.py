@@ -470,9 +470,31 @@ async def _wrap_pipeline_with_broadcasts(
     if pipeline.custody_logger:
         instrument_logger(pipeline.custody_logger)
 
+    # Initialise arbiter step tracking on the pipeline so getArbiterStatus can read it
+    pipeline._arbiter_step = ""
+
     async def instrumented_run(evidence_artifact, session_id=None):
         """Run each agent SEQUENTIALLY with improved real-time updates."""
-        
+
+        # By the time this runs, pipeline._setup_infrastructure() has already created
+        # pipeline.arbiter. Hook it so the arbiter can broadcast step-progress updates.
+        async def _arbiter_step_hook(msg: str) -> None:
+            pipeline._arbiter_step = msg
+            await broadcast_update(
+                ws_session_id,
+                BriefUpdate(
+                    type="AGENT_UPDATE",
+                    session_id=ws_session_id,
+                    agent_id=None,
+                    agent_name=None,
+                    message=f"🔮 {msg}",
+                    data={"status": "deliberating", "thinking": f"🔮 {msg}"},
+                ),
+            )
+
+        if pipeline.arbiter is not None:
+            pipeline.arbiter._step_hook = _arbiter_step_hook
+
         mime = evidence_artifact.metadata.get("mime_type", "application/octet-stream")
         
         _AGENT_MIME_SUPPORT = {
@@ -565,6 +587,25 @@ async def _wrap_pipeline_with_broadcasts(
             "reverse image search":         "🌐 Running reverse image search for prior online appearances…",
             "device fingerprint":           "🔐 Querying device fingerprint database for claimed device…",
             "metadata spoofing":            "🛡️ Testing against metadata spoofing evasion techniques…",
+            # Agent 1 — new deep tools
+            "prnu camera sensor":           "📷 Running PRNU sensor fingerprint — cross-region source check…",
+            "prnu":                         "📷 Analysing PRNU noise residual across image blocks…",
+            "cfa demosaicing":              "🌈 Checking CFA Bayer pattern consistency for splice regions…",
+            "cfa":                          "🌈 Running CFA demosaicing pattern analysis…",
+            # Agent 2 — new tools
+            "voice clone":                  "🤖 Detecting AI voice clone and TTS synthesis artifacts…",
+            "ai speech synthesis":          "🤖 Analysing spectral flatness for TTS synthesis markers…",
+            "enf":                          "⚡ Tracking Electrical Network Frequency for splice detection…",
+            "electrical network":           "⚡ Running ENF analysis — verifying recording timestamp…",
+            # Agent 3 — new tools
+            "object text ocr":              "📄 Running OCR on detected object regions — extracting text…",
+            "ocr on detected":              "📄 Extracting license plates, IDs, and signs via OCR…",
+            "document authenticity":        "📑 Checking document font consistency and forgery artifacts…",
+            # Agent 5 — new tools
+            "c2pa":                         "🔏 Verifying C2PA Content Credentials and provenance chain…",
+            "content credentials":          "🔏 Checking for C2PA/XMP provenance markers…",
+            "thumbnail mismatch":           "🖼️ Comparing embedded thumbnail to main image — edit check…",
+            "embedded thumbnail":           "🖼️ Extracting EXIF thumbnail for post-capture edit detection…",
             # Generic
             "self-reflection":              "🪞 Running self-reflection quality check on findings…",
             "submit":                       "📤 Submitting calibrated findings to Council Arbiter…",
@@ -615,7 +656,20 @@ async def _wrap_pipeline_with_broadcasts(
                     total = len(tasks_list)
                     done = len(completed_t)
                     thinking = ""
-                    if in_progress_t:
+                    # Check if a tool just failed — show error text for one heartbeat cycle
+                    last_error = getattr(wm_state, "last_tool_error", None)
+                    if last_error:
+                        thinking = f"⚠️ {last_error}"
+                        # Clear the error from working memory so it only shows once
+                        try:
+                            await target_memory.update_state(
+                                session_id=_wm_session,
+                                agent_id=wm_agent_id,
+                                updates={"last_tool_error": None},
+                            )
+                        except Exception:
+                            pass
+                    elif in_progress_t:
                         current_task = in_progress_t[0].description
                         friendly = _humanise_task(current_task)
                         progress_frac = f" ({done + 1}/{total})" if total > 0 else ""
@@ -719,6 +773,7 @@ async def _wrap_pipeline_with_broadcasts(
                 )
             )
             
+            agent = None  # guard: defined before try so exception handlers can safely reference it
             try:
                 # Agents expect session_id as UUID
                 from uuid import UUID as _AUUID
@@ -751,8 +806,15 @@ async def _wrap_pipeline_with_broadcasts(
                 
                 # Per-agent timeout: generous enough for cold ML model loads,
                 # but not so long that a hung agent blocks the whole UI.
-                # YOLO/ELA first-run can take 60-120s; subsequent runs are ~10-30s.
-                agent_timeout = min(180, pipeline.config.investigation_timeout * 0.35)
+                #
+                # Agent1 (Image Integrity) can legitimately take longer on first run
+                # (ELA + ML subprocess warm-up). Give it a higher ceiling.
+                base_budget = float(pipeline.config.investigation_timeout)
+                if agent_id == "Agent1":
+                    agent_timeout = min(360, max(240, base_budget * 0.55))
+                else:
+                    # YOLO/ELA first-run can take 60-120s; subsequent runs are ~10-30s.
+                    agent_timeout = min(240, max(120, base_budget * 0.35))
                 logger.info(
                     f"{agent_id} starting with timeout={agent_timeout:.0f}s",
                     agent_id=agent_id,
@@ -873,15 +935,24 @@ async def _wrap_pipeline_with_broadcasts(
             elif result.error:
                 finding_summary = f"Error: {result.error[:120]}"
             
-            # Compute tool error rate from findings metadata
-            tool_error_count = sum(
-                1 for f in result.findings
-                if isinstance(f, dict)
-                and isinstance(f.get("metadata"), dict)
-                and f["metadata"].get("court_defensible") is False
-            ) if result.findings else 0
-            tool_total = len(result.findings) if result.findings else 0
-            tool_error_rate = round(tool_error_count / tool_total, 3) if tool_total > 0 else 0.0
+            # Compute tool error rate — prefer agent-level counters (actual tool call results)
+            # over the court_defensible proxy (which only flags failed fallbacks).
+            # Agent counters track every _record_tool_result / _record_tool_error call.
+            _agent_err = getattr(agent, "_tool_error_count", 0) if agent else 0
+            _agent_ok  = getattr(agent, "_tool_success_count", 0) if agent else 0
+            _agent_total = _agent_err + _agent_ok
+            if _agent_total > 0:
+                tool_error_rate = round(_agent_err / _agent_total, 3)
+            else:
+                # Fallback: derive from court_defensible flags in findings
+                _cd_err = sum(
+                    1 for f in result.findings
+                    if isinstance(f, dict)
+                    and isinstance(f.get("metadata"), dict)
+                    and f["metadata"].get("court_defensible") is False
+                ) if result.findings else 0
+                _cd_total = len(result.findings) if result.findings else 0
+                tool_error_rate = round(_cd_err / _cd_total, 3) if _cd_total > 0 else 0.0
 
             # Broadcast completion
             await broadcast_update(
@@ -903,7 +974,25 @@ async def _wrap_pipeline_with_broadcasts(
             )
             return result, agent
         
-        # FIX: Removed stagger delays - run agents immediately without delays
+        # Pre-broadcast initial thinking phrase for every supported agent BEFORE asyncio.gather.
+        # This is critical: if Agent1's constructor blocks the event loop (ML model loading),
+        # Agents 2-5 would never get to send their own initial broadcasts, leaving those
+        # cards stuck in "checking" state. Broadcasting all phrases upfront ensures all
+        # 5 cards transition to "running" immediately regardless of event-loop scheduling.
+        for _pre_id, _pre_name, _PreClass, _pre_phrase in agent_configs:
+            if mime in _AGENT_MIME_SUPPORT.get(_pre_id, set()):
+                await broadcast_update(
+                    ws_session_id,
+                    BriefUpdate(
+                        type="AGENT_UPDATE",
+                        session_id=ws_session_id,
+                        agent_id=_pre_id,
+                        agent_name=_pre_name,
+                        message=_pre_phrase,
+                        data={"status": "running", "thinking": _pre_phrase},
+                    ),
+                )
+
         tasks = [
             run_single_agent(agent_id, agent_name, AgentClass, thinking_phrase)
             for agent_id, agent_name, AgentClass, thinking_phrase in agent_configs
@@ -1132,6 +1221,7 @@ async def _wrap_pipeline_with_broadcasts(
                             "confidence": 0.0,
                             "findings_count": 0,
                             "error": str(e)[:120],
+                            "tool_error_rate": 1.0,
                             "deep_analysis_pending": False,
                         },
                     )
@@ -1174,7 +1264,8 @@ async def _wrap_pipeline_with_broadcasts(
                         agent_name=agent_name,
                         message=f"Error: {str(r)[:80]}",
                         data={"status": "error", "confidence": 0.0,
-                              "findings_count": 0, "error": str(r)[:120]},
+                              "findings_count": 0, "error": str(r)[:120],
+                              "tool_error_rate": 1.0},
                     )
                 )
             else:
@@ -1226,22 +1317,41 @@ async def _wrap_pipeline_with_broadcasts(
                           "thinking": f"Deep analysis starting for {len(deep_pass_coroutines)} agent(s)…"},
                 )
             )
-            # Agent1 must finish first (Gemini result injected into Agent3 + Agent5)
-            # Run Agent1 separately, then run the rest concurrently.
+            # All agents run concurrently. A background poller detects when Agent1's
+            # Gemini analysis completes and immediately injects the result into Agent3 + Agent5,
+            # so they can use the Gemini context for any subsequent tool calls in their loops.
             agent1_tuple = next((t for t in deep_pass_coroutines if t[0] == "Agent1"), None)
-            others = [t for t in deep_pass_coroutines if t[0] != "Agent1"]
 
+            async def monitor_and_inject_gemini_early(a1_agent) -> None:
+                """Poll Agent1 instance until Gemini result is ready, then inject into Agent3/5."""
+                nonlocal _agent1_gemini_result
+                for _ in range(600):  # poll up to ~5 min (0.5s intervals)
+                    result = getattr(a1_agent, "_gemini_vision_result", None)
+                    if result:
+                        try:
+                            from agents.agent3_object import Agent3Object
+                            from agents.agent5_metadata import Agent5Metadata
+                            Agent3Object.inject_agent1_context(result)
+                            Agent5Metadata.inject_agent1_context(result)
+                            _agent1_gemini_result = result
+                            logger.info(
+                                "Early Gemini inject: Agent3 + Agent5 have Gemini context mid-pass",
+                                has_content_type=bool(result.get("gemini_content_type")),
+                                has_objects=bool(result.get("gemini_detected_objects")),
+                            )
+                        except Exception as _inj_err:
+                            logger.warning(f"Early Gemini inject error: {_inj_err}")
+                        return
+                    await asyncio.sleep(0.5)
+
+            # Build task list: all deep passes run concurrently
+            deep_tasks_list = [run_agent_deep_pass(*t) for t in deep_pass_coroutines]
+
+            # If Agent1 is in the batch, start the early-inject monitor concurrently
             if agent1_tuple:
-                try:
-                    await run_agent_deep_pass(*agent1_tuple)
-                except Exception as _e1:
-                    logger.error(f"Agent1 deep pass raised: {_e1}")
+                deep_tasks_list.append(monitor_and_inject_gemini_early(agent1_tuple[2]))
 
-            if others:
-                await asyncio.gather(
-                    *[run_agent_deep_pass(*t) for t in others],
-                    return_exceptions=True,
-                )
+            await asyncio.gather(*deep_tasks_list, return_exceptions=True)
         elif getattr(pipeline, "run_deep_analysis_flag") and not deep_pass_coroutines:
             logger.info("Deep analysis requested but no deep tasks available for this file type.")
         else:
@@ -1253,10 +1363,10 @@ async def _wrap_pipeline_with_broadcasts(
             BriefUpdate(
                 type="AGENT_UPDATE",
                 session_id=ws_session_id,
-                agent_id="Arbiter",
-                agent_name="Council Arbiter",
-                message="Synthesizing all agent findings with Groq...",
-                data={"status": "deliberating", "thinking": "Running council deliberation..."},
+                agent_id=None,
+                agent_name=None,
+                message="🔮 Council Arbiter deliberating — synthesising all findings…",
+                data={"status": "deliberating", "thinking": "🔮 Council Arbiter deliberating — synthesising all findings…"},
             )
         )
         
@@ -1324,6 +1434,12 @@ async def run_investigation_task(
         )
         
         pipeline._final_report = report
+
+        # Cache in _final_reports BEFORE the finally block removes the pipeline
+        # from _active_pipelines. This prevents a race where the client polls
+        # /report after the task finishes but before the DB write completes.
+        _final_reports[session_id] = (report, datetime.now(timezone.utc))
+
         increment_investigations_completed()
 
         # ── Persist completed report to PostgreSQL ─────────────────────────

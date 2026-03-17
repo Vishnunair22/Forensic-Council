@@ -27,7 +27,7 @@ export function GlobalFooter() {
         </p>
 
         {/* Version tag */}
-        <span className="text-[10px] font-mono text-slate-700 shrink-0">v1.0.3</span>
+        <span className="text-[10px] font-mono text-slate-700 shrink-0">v1.0.5</span>
       </div>
     </footer>
   );

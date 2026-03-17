@@ -81,6 +81,12 @@ class GeminiVisionFinding:
     def to_finding_dict(self, agent_id: str) -> dict[str, Any]:
         """Convert to a dict compatible with AgentFinding / Arbiter schema."""
         signals = self.manipulation_signals + self.contextual_anomalies
+        # Map analysis_type to the tool name registered in each agent's tool registry
+        tool_name = (
+            "gemini_deep_forensic"
+            if self.analysis_type == "deep_forensic_analysis"
+            else f"gemini_{self.analysis_type}"
+        )
         return {
             "agent_id": agent_id,
             "finding_type": f"gemini_vision_{self.analysis_type}",
@@ -89,6 +95,7 @@ class GeminiVisionFinding:
             "evidence_refs": [],
             "reasoning_summary": self.content_description,
             "metadata": {
+                "tool_name": tool_name,
                 "analysis_source": "gemini_vision",
                 "analysis_type": self.analysis_type,
                 "model_used": self.model_used,
@@ -420,7 +427,7 @@ class GeminiVisionClient:
         try:
             encoded, mime_type = self._encode_file(file_path)
         except Exception as exc:
-            logger.warning("Gemini: failed to encode file %s: %s", file_path, exc)
+            logger.warning(f"Gemini: failed to encode file {file_path}: {exc}")
             return GeminiVisionFinding(
                 analysis_type=analysis_type,
                 model_used=self.model,
@@ -444,7 +451,7 @@ class GeminiVisionClient:
             "contents": [{"parts": parts}],
             "generationConfig": {
                 "temperature": 0.1,
-                "maxOutputTokens": 1024,
+                "maxOutputTokens": 2048,
                 "responseMimeType": "application/json",
             },
         }
@@ -461,7 +468,7 @@ class GeminiVisionClient:
             return finding
         except Exception as exc:
             latency_ms = (time.monotonic() - t0) * 1000
-            logger.error("Gemini vision analysis failed (%s): %s", analysis_type, exc)
+            logger.error(f"Gemini vision analysis failed ({analysis_type}): {exc}")
             return GeminiVisionFinding(
                 analysis_type=analysis_type,
                 model_used=self.model,
@@ -526,7 +533,7 @@ class GeminiVisionClient:
                     cleaned = cleaned[:-3]
             data = json.loads(cleaned)
         except json.JSONDecodeError as exc:
-            logger.warning("Gemini: failed to parse JSON response: %s", exc)
+            logger.warning(f"Gemini: failed to parse JSON response: {exc}")
             return GeminiVisionFinding(
                 analysis_type=analysis_type,
                 model_used=self.model,
@@ -799,7 +806,7 @@ class GeminiVisionClient:
 
         except Exception as exc:
             latency_ms = (time.monotonic() - t0) * 1000
-            logger.warning("Local forensic fallback failed: %s", exc)
+            logger.warning(f"Local forensic fallback failed: {exc}")
             return GeminiVisionFinding(
                 analysis_type="deep_forensic_analysis",
                 model_used="local_fallback_error",

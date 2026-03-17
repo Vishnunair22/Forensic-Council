@@ -121,7 +121,7 @@ export function FileUploadSection({
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="w-full rounded-[2rem] overflow-hidden bg-gradient-to-b from-white/[0.05] to-black/60 border border-white/[0.10] shadow-[0_24px_60px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-3xl relative"
+          className="w-full glass-panel rounded-[2rem] overflow-hidden relative"
         >
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
 
@@ -228,10 +228,10 @@ export function FileUploadSection({
           onDragOver={(e) => { e.preventDefault(); if (!isDragging) onDragEnter(); }}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`w-full rounded-[2rem] overflow-hidden bg-gradient-to-b from-white/[0.05] to-black/60 border-2 border-dashed transition-all duration-300 ${isDragging
-              ? "border-emerald-500/70 bg-emerald-500/5"
+          className={`w-full glass-panel rounded-[2rem] overflow-hidden border-2 border-dashed transition-all duration-300 ${isDragging
+              ? "border-emerald-500/70"
               : "border-white/[0.10]"
-            } shadow-[0_24px_60px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-3xl relative cursor-pointer`}
+            } relative cursor-pointer`}
         >
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
 

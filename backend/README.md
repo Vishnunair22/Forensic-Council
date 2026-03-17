@@ -2,7 +2,7 @@
 
 FastAPI backend for the Forensic Council multi-agent forensic evidence analysis system.
 
-**Version:** v1.0.3 | **Python:** 3.12 | **Framework:** FastAPI + asyncpg
+**Version:** v1.0.4 | **Python:** 3.12 | **Framework:** FastAPI + asyncpg
 
 ---
 

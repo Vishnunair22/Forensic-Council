@@ -76,6 +76,12 @@ class WorkingMemoryState(BaseModel):
         default=None,
         description="Live tool catalogue from this agent's ToolRegistry"
     )
+    # Last tool error message — written by base_agent when a tool fails,
+    # read by the heartbeat in investigation.py to surface ⚠️ progress text.
+    last_tool_error: Optional[str] = Field(
+        default=None,
+        description="Last tool failure message for live progress broadcasting"
+    )
     
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -133,6 +139,9 @@ class WorkingMemory:
         self._redis = redis_client
         self._custody_logger = custody_logger
         self._owned_client = redis_client is None
+        # In-memory fallback: stores state when Redis is unavailable.
+        # Keyed by the same "wm:{session_id}:{agent_id}" string.
+        self._local_cache: dict[str, str] = {}
     
     async def __aenter__(self) -> "WorkingMemory":
         """Async context manager entry."""
@@ -183,16 +192,19 @@ class WorkingMemory:
         
         # Store in Redis with 24h TTL
         key = self._get_key(session_id, agent_id)
+        state_json = state.model_dump_json()
+        # Always store in local cache (authoritative fallback)
+        self._local_cache[key] = state_json
         if self._redis is not None:
             try:
-                await self._redis.set(key, state.model_dump_json(), ex=86400)
+                await self._redis.set(key, state_json, ex=86400)
             except Exception as e:
                 logger.warning(
-                    "WorkingMemory.initialize: Redis write failed, running in-memory only",
+                    "WorkingMemory.initialize: Redis write failed, using in-memory fallback",
                     error=str(e),
                 )
         else:
-            logger.warning("WorkingMemory.initialize: Redis unavailable, running in-memory only")
+            logger.warning("WorkingMemory.initialize: Redis unavailable, using in-memory fallback")
         
         # Log to custody logger
         if self._custody_logger:
@@ -252,9 +264,11 @@ class WorkingMemory:
         
         # Store updated state with 24h TTL
         key = self._get_key(session_id, agent_id)
+        state_json = state.model_dump_json()
+        self._local_cache[key] = state_json
         if self._redis is not None:
             try:
-                await self._redis.set(key, state.model_dump_json(), ex=86400)
+                await self._redis.set(key, state_json, ex=86400)
             except Exception as e:
                 logger.warning("WorkingMemory.update_task: Redis write failed", error=str(e))
         
@@ -297,13 +311,19 @@ class WorkingMemory:
             WorkingMemoryState with all tasks
         """
         key = self._get_key(session_id, agent_id)
-        if self._redis is None:
-            raise ValueError(f"No working memory found for {session_id}/{agent_id} (Redis unavailable)")
-        try:
-            data = await self._redis.get(key)
-        except Exception as e:
-            raise ValueError(f"No working memory found for {session_id}/{agent_id}: Redis error: {e}")
-        
+        data = None
+
+        # Try Redis first
+        if self._redis is not None:
+            try:
+                data = await self._redis.get(key)
+            except Exception as e:
+                logger.debug("WorkingMemory.get_state: Redis read failed, trying local cache", error=str(e))
+
+        # Fall back to local cache
+        if data is None:
+            data = self._local_cache.get(key)
+
         if data is None:
             raise ValueError(f"No working memory found for {session_id}/{agent_id}")
         
@@ -378,9 +398,11 @@ class WorkingMemory:
 
         # Persist with 24h TTL
         key = self._get_key(session_id, agent_id)
+        state_json = state.model_dump_json()
+        self._local_cache[key] = state_json
         if self._redis is not None:
             try:
-                await self._redis.set(key, state.model_dump_json(), ex=86400)
+                await self._redis.set(key, state_json, ex=86400)
             except Exception as e:
                 logger.warning("WorkingMemory.update_state: Redis write failed", error=str(e))
 
@@ -419,9 +441,11 @@ class WorkingMemory:
 
         # Persist with 24h TTL
         key = self._get_key(session_id, agent_id)
+        state_json = state.model_dump_json()
+        self._local_cache[key] = state_json
         if self._redis is not None:
             try:
-                await self._redis.set(key, state.model_dump_json(), ex=86400)
+                await self._redis.set(key, state_json, ex=86400)
             except Exception as e:
                 logger.warning("WorkingMemory.increment_iteration: Redis write failed", error=str(e))
 
@@ -464,13 +488,15 @@ class WorkingMemory:
 
         # Persist with 24h TTL
         key = self._get_key(session_id, agent_id)
+        state_json = state.model_dump_json()
+        self._local_cache[key] = state_json
         if self._redis is not None:
             try:
-                await self._redis.set(key, state.model_dump_json(), ex=86400)
+                await self._redis.set(key, state_json, ex=86400)
             except Exception as e:
                 logger.warning("WorkingMemory.restore_from_json: Redis write failed", error=str(e))
         else:
-            logger.warning("WorkingMemory.restore_from_json: Redis unavailable")
+            logger.warning("WorkingMemory.restore_from_json: Redis unavailable, using in-memory fallback")
         
         # Log to custody logger
         if self._custody_logger:

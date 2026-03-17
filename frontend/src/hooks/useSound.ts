@@ -2,13 +2,16 @@
 
 import { useCallback } from "react";
 
-export type SoundType = "success" | "error" | "agent" | "complete" | "think" | "click" | "upload" | "envelope_open" | "envelope_close" | "scan";
+export type SoundType =
+  | "success" | "error" | "agent" | "complete" | "think"
+  | "click" | "upload" | "envelope_open" | "envelope_close" | "scan"
+  | "page_load" | "analysis_done" | "arbiter_start" | "arbiter_done" | "result_reveal";
 
 let globalCtx: AudioContext | null = null;
 
 type AudioContextConstructor = new () => AudioContext;
 
-/** Tiny helper: create a soft reverb-like tail using a convolver with impulse noise */
+/** Soft gain envelope helper — attack + exponential release */
 function createSoftGain(ctx: AudioContext, peakGain: number, attackTime: number, releaseTime: number): GainNode {
     const g = ctx.createGain();
     g.gain.setValueAtTime(0, ctx.currentTime);
@@ -34,7 +37,7 @@ export function useSound() {
 
             const t = ctx.currentTime;
 
-            // ── Master output limiter to prevent clipping ──────────────────
+            // ── Master limiter ────────────────────────────────────────────────────
             const limiter = ctx.createDynamicsCompressor();
             limiter.threshold.value = -6;
             limiter.knee.value = 6;
@@ -45,8 +48,10 @@ export function useSound() {
 
             const out = limiter;
 
+            // ── Sounds ────────────────────────────────────────────────────────────
+
             if (type === "click") {
-                // Ultra-subtle: single sine tick at 880 Hz, 60 ms, very soft
+                // Ultra-subtle: single sine tick, 60 ms
                 const o = ctx.createOscillator();
                 const g = ctx.createGain();
                 o.type = "sine";
@@ -58,9 +63,8 @@ export function useSound() {
                 o.start(t); o.stop(t + 0.07);
 
             } else if (type === "upload" || type === "success") {
-                // Warm two-note rise: 440 → 660 Hz, soft sine, 280 ms
-                const freqs = [440, 660];
-                freqs.forEach((freq, i) => {
+                // Warm two-note rise 440 → 660 Hz, 280 ms
+                [440, 660].forEach((freq, i) => {
                     const delay = i * 0.09;
                     const o = ctx.createOscillator();
                     const g = createSoftGain(ctx, 0.038, 0.012, 0.22);
@@ -71,22 +75,35 @@ export function useSound() {
                 });
 
             } else if (type === "agent") {
-                // Soft water-drop chime: single pentatonic note, triangle wave, 400 ms fade
-                const PITCHES = [349.23, 392, 440, 493.88, 523.25]; // F4 G4 A4 B4 C5
-                const idx = ((window as { __agentChimeIdx?: number }).__agentChimeIdx ?? 0) % PITCHES.length;
+                // Modern UI blip: clean FM-synthesis tick with pitch variation per call
+                // Carrier + modulator for a sharp digital character, 150 ms total
+                const CARRIER_PITCHES = [880, 1046.5, 783.99, 987.77, 1174.66];
+                const idx = ((window as { __agentChimeIdx?: number }).__agentChimeIdx ?? 0) % CARRIER_PITCHES.length;
                 (window as { __agentChimeIdx?: number }).__agentChimeIdx = idx + 1;
-                const freq = PITCHES[idx];
-
-                const o = ctx.createOscillator();
-                const g = createSoftGain(ctx, 0.042, 0.008, 0.38);
-                o.type = "triangle";
-                o.frequency.setValueAtTime(freq * 1.02, t);
-                o.frequency.exponentialRampToValueAtTime(freq, t + 0.04);
-                o.connect(g); g.connect(out);
-                o.start(t); o.stop(t + 0.42);
+                const carrier = ctx.createOscillator();
+                const modulator = ctx.createOscillator();
+                const modGain = ctx.createGain();
+                const envGain = ctx.createGain();
+                // Modulator slightly detuned — creates FM crispness
+                modulator.type = "sine";
+                modulator.frequency.value = CARRIER_PITCHES[idx] * 2.01;
+                modGain.gain.setValueAtTime(CARRIER_PITCHES[idx] * 0.18, t);
+                modGain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+                modulator.connect(modGain);
+                modGain.connect(carrier.frequency);
+                // Carrier: sharp attack, quick exponential decay
+                carrier.type = "sine";
+                carrier.frequency.setValueAtTime(CARRIER_PITCHES[idx], t);
+                carrier.frequency.exponentialRampToValueAtTime(CARRIER_PITCHES[idx] * 0.88, t + 0.10);
+                envGain.gain.setValueAtTime(0, t);
+                envGain.gain.linearRampToValueAtTime(0.036, t + 0.006);
+                envGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+                carrier.connect(envGain); envGain.connect(out);
+                modulator.start(t); modulator.stop(t + 0.10);
+                carrier.start(t); carrier.stop(t + 0.16);
 
             } else if (type === "think") {
-                // Deep breath-in feel: low sine swell 200→280 Hz, 600 ms, very soft
+                // Deep breath-in swell 200 → 280 Hz, 600 ms
                 const o = ctx.createOscillator();
                 const g = ctx.createGain();
                 o.type = "sine";
@@ -100,9 +117,8 @@ export function useSound() {
                 o.start(t); o.stop(t + 0.68);
 
             } else if (type === "complete") {
-                // Soft three-note crystalline chime: C5 E5 G5, triangle, staggered 120 ms
-                const CHORD = [523.25, 659.25, 783.99];
-                CHORD.forEach((freq, i) => {
+                // Crystalline C-E-G chord, triangle, 120 ms stagger
+                [523.25, 659.25, 783.99].forEach((freq, i) => {
                     const delay = i * 0.12;
                     const o = ctx.createOscillator();
                     const g = ctx.createGain();
@@ -116,9 +132,8 @@ export function useSound() {
                 });
 
             } else if (type === "error") {
-                // Gentle dissonance: two slightly detuned sines, very low volume, 400 ms
-                const pairs = [{ f: 320, v: 0.03 }, { f: 305, v: 0.02 }];
-                pairs.forEach(({ f, v }) => {
+                // Gentle dissonance: two detuned sines, 400 ms
+                [{ f: 320, v: 0.030 }, { f: 305, v: 0.020 }].forEach(({ f, v }) => {
                     const o = ctx.createOscillator();
                     const g = ctx.createGain();
                     o.type = "sine";
@@ -131,26 +146,21 @@ export function useSound() {
                 });
 
             } else if (type === "envelope_open") {
-                // Paper rustle (band-pass noise burst) + mechanical latch click
-                // 1. White noise "paper" burst — 80 ms
+                // Paper swish + latch click + C5→E5 confirmation tone
                 const bufLen = Math.ceil(ctx.sampleRate * 0.08);
                 const noiseBuffer = ctx.createBuffer(1, bufLen, ctx.sampleRate);
                 const d = noiseBuffer.getChannelData(0);
                 for (let i = 0; i < bufLen; i++) d[i] = (Math.random() * 2 - 1) * 0.4;
-                const noiseSource = ctx.createBufferSource();
-                noiseSource.buffer = noiseBuffer;
-                // Band-pass filter — paper "swish" frequency range
+                const ns = ctx.createBufferSource();
+                ns.buffer = noiseBuffer;
                 const bpf = ctx.createBiquadFilter();
-                bpf.type = "bandpass";
-                bpf.frequency.value = 1800;
-                bpf.Q.value = 1.5;
+                bpf.type = "bandpass"; bpf.frequency.value = 1800; bpf.Q.value = 1.5;
                 const ng = ctx.createGain();
                 ng.gain.setValueAtTime(0, t);
                 ng.gain.linearRampToValueAtTime(0.25, t + 0.01);
                 ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
-                noiseSource.connect(bpf); bpf.connect(ng); ng.connect(out);
-                noiseSource.start(t); noiseSource.stop(t + 0.09);
-                // 2. Latch click — short sine transient at 1200 Hz, 30 ms
+                ns.connect(bpf); bpf.connect(ng); ng.connect(out);
+                ns.start(t); ns.stop(t + 0.09);
                 const latch = ctx.createOscillator();
                 const lg = ctx.createGain();
                 latch.type = "sine";
@@ -158,14 +168,13 @@ export function useSound() {
                 latch.frequency.exponentialRampToValueAtTime(400, t + 0.09);
                 lg.gain.setValueAtTime(0, t + 0.06);
                 lg.gain.linearRampToValueAtTime(0.06, t + 0.065);
-                lg.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+                lg.gain.exponentialRampToValueAtTime(0.0001, t + 0.10);
                 latch.connect(lg); lg.connect(out);
                 latch.start(t + 0.06); latch.stop(t + 0.11);
-                // 3. Rising confirmation tone — C5→E5, 250 ms, soft
                 [523.25, 659.25].forEach((freq, i) => {
                     const delay = 0.05 + i * 0.1;
                     const o = ctx.createOscillator();
-                    const g = createSoftGain(ctx, 0.032, 0.01, 0.2);
+                    const g = createSoftGain(ctx, 0.032, 0.01, 0.20);
                     o.type = "triangle";
                     o.frequency.value = freq;
                     o.connect(g); g.connect(out);
@@ -173,7 +182,7 @@ export function useSound() {
                 });
 
             } else if (type === "envelope_close") {
-                // Reverse: brief descending tone + soft paper close
+                // Descending C5→G4 + soft paper close
                 [523.25, 392].forEach((freq, i) => {
                     const delay = i * 0.08;
                     const o = ctx.createOscillator();
@@ -183,7 +192,6 @@ export function useSound() {
                     o.connect(g); g.connect(out);
                     o.start(t + delay); o.stop(t + delay + 0.18);
                 });
-                // Soft noise close
                 const bufLen2 = Math.ceil(ctx.sampleRate * 0.06);
                 const nb2 = ctx.createBuffer(1, bufLen2, ctx.sampleRate);
                 const d2 = nb2.getChannelData(0);
@@ -194,26 +202,150 @@ export function useSound() {
                 bf2.type = "bandpass"; bf2.frequency.value = 1200; bf2.Q.value = 1.2;
                 const ng2 = ctx.createGain();
                 ng2.gain.setValueAtTime(0.18, t + 0.12);
-                ng2.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+                ng2.gain.exponentialRampToValueAtTime(0.0001, t + 0.20);
                 ns2.connect(bf2); bf2.connect(ng2); ng2.connect(out);
                 ns2.start(t + 0.12); ns2.stop(t + 0.22);
 
             } else if (type === "scan") {
-                // Electronic scan sweep: FM chirp 300→1800 Hz, 600 ms, soft
+                // Modern scan-activate: clean rising tone + soft noise burst, 500 ms
+                // Sine sweep 420 → 1400 Hz with quick onset — cleaner than sawtooth
+                const sweep = ctx.createOscillator();
+                const sweepGain = ctx.createGain();
+                sweep.type = "sine";
+                sweep.frequency.setValueAtTime(420, t);
+                sweep.frequency.exponentialRampToValueAtTime(1400, t + 0.38);
+                sweepGain.gain.setValueAtTime(0, t);
+                sweepGain.gain.linearRampToValueAtTime(0.022, t + 0.04);
+                sweepGain.gain.linearRampToValueAtTime(0.012, t + 0.34);
+                sweepGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.46);
+                sweep.connect(sweepGain); sweepGain.connect(out);
+                sweep.start(t); sweep.stop(t + 0.48);
+                // Subtle HF noise burst at the start — "system activated" feel
+                const bufLen = Math.ceil(ctx.sampleRate * 0.06);
+                const nb = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+                const d = nb.getChannelData(0);
+                for (let i = 0; i < bufLen; i++) d[i] = (Math.random() * 2 - 1) * 0.05;
+                const ns = ctx.createBufferSource();
+                ns.buffer = nb;
+                const hpf = ctx.createBiquadFilter();
+                hpf.type = "highpass"; hpf.frequency.value = 3200;
+                const ng = ctx.createGain();
+                ng.gain.setValueAtTime(0.12, t); ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+                ns.connect(hpf); hpf.connect(ng); ng.connect(out);
+                ns.start(t); ns.stop(t + 0.08);
+
+            } else if (type === "page_load") {
+                // Electronic system init: HF noise burst + rising sine chirp 200 → 900 Hz
+                const bufLen = Math.ceil(ctx.sampleRate * 0.12);
+                const nb = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+                const d = nb.getChannelData(0);
+                for (let i = 0; i < bufLen; i++) d[i] = (Math.random() * 2 - 1) * 0.10;
+                const ns = ctx.createBufferSource();
+                ns.buffer = nb;
+                const hpf = ctx.createBiquadFilter();
+                hpf.type = "highpass"; hpf.frequency.value = 2600;
+                const ng = ctx.createGain();
+                ng.gain.setValueAtTime(0, t);
+                ng.gain.linearRampToValueAtTime(0.09, t + 0.02);
+                ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+                ns.connect(hpf); hpf.connect(ng); ng.connect(out);
+                ns.start(t); ns.stop(t + 0.15);
+                // Rising chirp
                 const o = ctx.createOscillator();
                 const g = ctx.createGain();
-                o.type = "sawtooth";
-                o.frequency.setValueAtTime(300, t);
-                o.frequency.exponentialRampToValueAtTime(1800, t + 0.5);
-                // HP filter to make it cleaner
-                const hp = ctx.createBiquadFilter();
-                hp.type = "highpass"; hp.frequency.value = 600;
+                o.type = "sine";
+                o.frequency.setValueAtTime(200, t + 0.04);
+                o.frequency.exponentialRampToValueAtTime(900, t + 0.30);
+                g.gain.setValueAtTime(0, t + 0.04);
+                g.gain.linearRampToValueAtTime(0.020, t + 0.08);
+                g.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
+                o.connect(g); g.connect(out);
+                o.start(t + 0.04); o.stop(t + 0.36);
+
+            } else if (type === "analysis_done") {
+                // Ascending 4-note arpeggio: C4 E4 G4 C5 — satisfying major progression
+                const NOTES = [261.63, 329.63, 392.00, 523.25];
+                NOTES.forEach((freq, i) => {
+                    const delay = i * 0.10;
+                    const o = ctx.createOscillator();
+                    const g = ctx.createGain();
+                    o.type = i === 3 ? "triangle" : "sine";
+                    o.frequency.value = freq;
+                    g.gain.setValueAtTime(0, t + delay);
+                    g.gain.linearRampToValueAtTime(0.044, t + delay + 0.012);
+                    g.gain.exponentialRampToValueAtTime(0.0001, t + delay + 0.85);
+                    o.connect(g); g.connect(out);
+                    o.start(t + delay); o.stop(t + delay + 0.90);
+                });
+
+            } else if (type === "arbiter_start") {
+                // Deep authoritative chord: G2 G3 D4 bass + mystery band-pass shimmer
+                const BASS = [98.00, 196.00, 293.66];
+                BASS.forEach((freq, i) => {
+                    const delay = i * 0.07;
+                    const o = ctx.createOscillator();
+                    const g = ctx.createGain();
+                    o.type = "sine";
+                    o.frequency.value = freq;
+                    const peak = i === 0 ? 0.050 : 0.026;
+                    g.gain.setValueAtTime(0, t + delay);
+                    g.gain.linearRampToValueAtTime(peak, t + delay + 0.18);
+                    g.gain.linearRampToValueAtTime(peak * 0.52, t + 0.78);
+                    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.05);
+                    o.connect(g); g.connect(out);
+                    o.start(t + delay); o.stop(t + 1.10);
+                });
+                // Mystery band-pass shimmer
+                const bufLen = Math.ceil(ctx.sampleRate * 0.35);
+                const nb = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+                const d = nb.getChannelData(0);
+                for (let i = 0; i < bufLen; i++) d[i] = (Math.random() * 2 - 1) * 0.055;
+                const ns = ctx.createBufferSource();
+                ns.buffer = nb;
+                const bpf = ctx.createBiquadFilter();
+                bpf.type = "bandpass"; bpf.frequency.value = 680; bpf.Q.value = 4.5;
+                const ng = ctx.createGain();
+                ng.gain.setValueAtTime(0, t + 0.22);
+                ng.gain.linearRampToValueAtTime(0.030, t + 0.32);
+                ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.60);
+                ns.connect(bpf); bpf.connect(ng); ng.connect(out);
+                ns.start(t + 0.22); ns.stop(t + 0.65);
+
+            } else if (type === "arbiter_done") {
+                // Dignified G-major resolution: G4 B4 D5 G5 triangle waves, long sustain
+                const CHORD = [392.00, 493.88, 587.33, 783.99];
+                CHORD.forEach((freq, i) => {
+                    const delay = i * 0.08;
+                    const o = ctx.createOscillator();
+                    const g = ctx.createGain();
+                    o.type = "triangle";
+                    o.frequency.value = freq;
+                    g.gain.setValueAtTime(0, t + delay);
+                    g.gain.linearRampToValueAtTime(0.038, t + delay + 0.012);
+                    g.gain.exponentialRampToValueAtTime(0.0001, t + delay + 1.20);
+                    o.connect(g); g.connect(out);
+                    o.start(t + delay); o.stop(t + delay + 1.25);
+                });
+
+            } else if (type === "result_reveal") {
+                // Upward glissando 280 → 1200 Hz + crystalline C6 ding
+                const o = ctx.createOscillator();
+                const g = ctx.createGain();
+                o.type = "sine";
+                o.frequency.setValueAtTime(280, t);
+                o.frequency.exponentialRampToValueAtTime(1200, t + 0.36);
                 g.gain.setValueAtTime(0, t);
-                g.gain.linearRampToValueAtTime(0.02, t + 0.05);
-                g.gain.linearRampToValueAtTime(0.015, t + 0.45);
-                g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
-                o.connect(hp); hp.connect(g); g.connect(out);
-                o.start(t); o.stop(t + 0.62);
+                g.gain.linearRampToValueAtTime(0.018, t + 0.05);
+                g.gain.exponentialRampToValueAtTime(0.0001, t + 0.44);
+                o.connect(g); g.connect(out);
+                o.start(t); o.stop(t + 0.46);
+                // Crystal C6 ding
+                const o2 = ctx.createOscillator();
+                const g2 = createSoftGain(ctx, 0.038, 0.008, 0.60);
+                o2.type = "triangle";
+                o2.frequency.value = 1046.5;
+                o2.connect(g2); g2.connect(out);
+                o2.start(t + 0.28); o2.stop(t + 0.76);
             }
 
         } catch (e) {

@@ -1,6 +1,6 @@
 # Docker Build Guide — Forensic Council
 
-**Version:** v1.1.0 | **Last updated:** 2026-03-12
+**Version:** v1.0.4 | **Last updated:** 2026-03-16
 
 Complete reference for building, running, and managing the Forensic Council Docker stack from scratch.
 

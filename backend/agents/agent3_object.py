@@ -94,6 +94,7 @@ class Agent3Object(ForensicAgent):
         """
         return [
             "Run full-scene primary object detection",
+            "Run OCR on detected object regions to extract license plates, ID numbers, signs, and visible text",
             "For each detected object below confidence threshold: run secondary classification pass",
             "For each confirmed object: run scale and proportion validation",
             "For each confirmed object: run lighting and shadow consistency check",
@@ -114,6 +115,7 @@ class Agent3Object(ForensicAgent):
             "Run ML-based image splicing detection on objects",
             "Run camera noise fingerprint analysis for region consistency",
             "Run adversarial robustness check against object detection evasion",
+            "Run document authenticity analysis to detect font inconsistency, background irregularity, and digital forgery artifacts",
         ]
 
     @property
@@ -167,7 +169,35 @@ class Agent3Object(ForensicAgent):
                 # Auto-downloads on first call
                 model_path = os.path.join(yolo_cache, "yolov8n.pt")
                 model = YOLO(model_path)
-                results = model(artifact.file_path, conf=0.25, verbose=False)
+
+                # If the artifact is a video, extract a representative frame first.
+                # This prevents "skipped/useless" results for videos and makes the analysis actionable.
+                target_path = artifact.file_path
+                tmp_frame_path: str | None = None
+                try:
+                    fp_lower = str(target_path).lower()
+                    mime = (artifact.metadata or {}).get("mime_type", "").lower() if getattr(artifact, "metadata", None) else ""
+                    is_video = fp_lower.endswith((".mp4", ".avi", ".mov", ".mkv", ".webm", ".wmv", ".flv")) or mime.startswith("video/")
+                    if is_video:
+                        import cv2, tempfile
+                        cap = cv2.VideoCapture(target_path)
+                        if cap.isOpened():
+                            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+                            mid = max(0, frame_count // 2)
+                            if frame_count > 0:
+                                cap.set(cv2.CAP_PROP_POS_FRAMES, mid)
+                            ok, frame = cap.read()
+                            if ok and frame is not None:
+                                with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                                    tmp_frame_path = tmp.name
+                                cv2.imwrite(tmp_frame_path, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+                                target_path = tmp_frame_path
+                        cap.release()
+                except Exception:
+                    # Fall back to passing the original path (YOLO may still handle it in some environments)
+                    pass
+
+                results = model(target_path, conf=0.25, verbose=False)
                 
                 detections = []
                 for r in results:
@@ -185,7 +215,7 @@ class Agent3Object(ForensicAgent):
                 weapon_detections = [d for d in detections 
                                      if any(w in d["class_name"].lower() for w in WEAPON_CLASSES)]
                 
-                return {
+                detection_result = {
                     "detections": detections,
                     "detection_count": len(detections),
                     "weapon_detections": weapon_detections,
@@ -194,9 +224,19 @@ class Agent3Object(ForensicAgent):
                     "available": True,
                     "backend": "ultralytics-yolov8n",
                 }
+                await self._record_tool_result("object_detection", detection_result)
+                return detection_result
             except Exception as e:
                 # Fallback to OpenCV heuristics
                 return await _object_detection_opencv(input_data)
+            finally:
+                # Best-effort cleanup for extracted video frame
+                try:
+                    if "tmp_frame_path" in locals() and tmp_frame_path:
+                        import os
+                        os.unlink(tmp_frame_path)
+                except Exception:
+                    pass
         
         async def _object_detection_opencv(input_data: dict) -> dict:
             """Legacy OpenCV heuristic-based object detection."""
@@ -567,7 +607,7 @@ class Agent3Object(ForensicAgent):
             try:
                 import asyncio
                 response = await asyncio.wait_for(
-                    self._inter_agent_bus.send(call, self._custody_logger),
+                    self._inter_agent_bus.send(call, self.custody_logger),
                     timeout=15.0
                 )
                 return response
@@ -698,6 +738,195 @@ class Agent3Object(ForensicAgent):
                     "confidence": None,
                     "error": str(e),
                 }
+        async def object_text_ocr_handler(input_data: dict) -> dict:
+            """
+            OCR focused on detected object regions.
+
+            Runs text extraction on the full image and on any bounding boxes passed in
+            from prior object_detection output. Captures license plates, ID card numbers,
+            document text, screen content, signs, and other identifying text that is
+            forensically significant but not returned by YOLO detection alone.
+            """
+            import json as _json
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            # Context: pull bboxes from the object_detection result that ran before us
+            ctx_detections = self._tool_context.get("object_detection", {}).get("detections", [])
+            detections = input_data.get("detections") or ctx_detections
+            result = await run_ml_tool("object_text_ocr.py", artifact.file_path,
+                                       extra_args=["--detections", _json.dumps(detections)], timeout=25.0)
+            if result.get("available") and not result.get("error"):
+                return result
+            try:
+                from PIL import Image
+                img = Image.open(artifact.file_path).convert("RGB")
+                w_img, h_img = img.size
+                extracted_texts = []
+
+                # Full-image Tesseract pass
+                try:
+                    import pytesseract
+                    full_text = pytesseract.image_to_string(img, config="--psm 3").strip()
+                    words = [t.strip() for t in full_text.split() if len(t.strip()) > 1]
+                    if words:
+                        extracted_texts.append({
+                            "region": "full_image",
+                            "text": full_text[:500],
+                            "word_count": len(words),
+                            "method": "tesseract",
+                        })
+                except Exception:
+                    pass
+
+                # EasyOCR fallback
+                if not extracted_texts:
+                    try:
+                        import easyocr
+                        reader = easyocr.Reader(["en"], gpu=False, verbose=False)
+                        ocr_results = reader.readtext(artifact.file_path, detail=1)
+                        items = [{"text": t.strip(), "confidence": round(float(c), 3)}
+                                 for _, t, c in ocr_results if c > 0.3 and len(t.strip()) > 1]
+                        if items:
+                            extracted_texts.append({
+                                "region": "full_image",
+                                "text_items": items,
+                                "word_count": len(items),
+                                "method": "easyocr",
+                            })
+                    except Exception:
+                        pass
+
+                # Per-object-bounding-box pass
+                for det in (detections or [])[:5]:
+                    try:
+                        bbox = det.get("bbox") or det.get("bounding_box", {})
+                        if isinstance(bbox, dict):
+                            x1, y1 = int(bbox.get("x", 0)), int(bbox.get("y", 0))
+                            x2, y2 = int(bbox.get("x", 0) + bbox.get("w", w_img)), int(bbox.get("y", 0) + bbox.get("h", h_img))
+                        elif isinstance(bbox, (list, tuple)) and len(bbox) >= 4:
+                            x1, y1, x2, y2 = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
+                        else:
+                            continue
+                        region = img.crop((max(0, x1), max(0, y1), min(w_img, x2), min(h_img, y2)))
+                        if region.size[0] < 10 or region.size[1] < 10:
+                            continue
+                        try:
+                            import pytesseract
+                            region_text = pytesseract.image_to_string(region, config="--psm 6").strip()
+                            if region_text and len(region_text.strip()) > 1:
+                                extracted_texts.append({
+                                    "region": f"object_{det.get('class_name', 'unknown')}",
+                                    "text": region_text[:200],
+                                    "word_count": len(region_text.split()),
+                                    "method": "tesseract_bbox",
+                                })
+                        except Exception:
+                            pass
+                    except Exception:
+                        continue
+
+                combined = " ".join(r.get("text", "") for r in extracted_texts)
+                return {
+                    "text_found": bool(extracted_texts),
+                    "regions_analyzed": len(extracted_texts),
+                    "extracted_regions": extracted_texts[:8],
+                    "combined_text_preview": combined[:400],
+                    "total_words": sum(r.get("word_count", 0) for r in extracted_texts),
+                    "forensic_note": (
+                        f"OCR extracted text from {len(extracted_texts)} region(s). "
+                        "May include license plates, ID numbers, usernames, timestamps, or other identifying information."
+                        if extracted_texts else "No legible text found in image or object regions."
+                    ),
+                    "available": True,
+                    "court_defensible": True,
+                    "backend": "tesseract-easyocr-inline",
+                }
+            except Exception as e:
+                return {"text_found": False, "error": str(e), "available": False, "court_defensible": False}
+
+        async def document_authenticity_handler(input_data: dict) -> dict:
+            """
+            Document authenticity and forgery analysis.
+
+            Analyses images of documents (IDs, passports, receipts, contracts) for signs
+            of digital forgery: font inconsistency from inserted text, background texture
+            irregularity from copy-paste, frequency domain anomalies from repeated elements,
+            and edge sharpness variance from digital text overlaid on scanned backgrounds.
+            """
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            result = await run_ml_tool("document_authenticity.py", artifact.file_path, timeout=35.0)
+            if result.get("available") and not result.get("error"):
+                return result
+            try:
+                import cv2, numpy as np
+                from PIL import Image
+                img = Image.open(artifact.file_path).convert("RGB")
+                arr = np.array(img)
+                gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+                h, w = gray.shape
+                flags = []
+                score = 0.0
+
+                # Check 1: Font/character size consistency via connected components
+                _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+                num_labels, _, stats, _ = cv2.connectedComponentsWithStats(thresh, connectivity=8)
+                char_h = stats[1:, cv2.CC_STAT_HEIGHT]
+                char_w_vals = stats[1:, cv2.CC_STAT_WIDTH]
+                char_mask = (char_h > 3) & (char_h < 80) & (char_w_vals > 2) & (char_w_vals < 100)
+                char_components = char_h[char_mask]
+                font_cv = 0.0
+                if len(char_components) > 20:
+                    font_cv = float(char_components.std() / (char_components.mean() + 1e-6))
+                    if font_cv > 0.6:
+                        flags.append(f"Font size inconsistency (CV={font_cv:.3f}) — possible text insertion from a different source")
+                        score += 0.20
+
+                # Check 2: Background edge density quadrant analysis
+                if h > 100 and w > 100:
+                    from scipy import ndimage
+                    gx = np.abs(ndimage.sobel(gray, axis=1))
+                    gy = np.abs(ndimage.sobel(gray, axis=0))
+                    quad_edges = [(gx + gy)[r*h//2:(r+1)*h//2, c*w//2:(c+1)*w//2].mean()
+                                  for r in range(2) for c in range(2)]
+                    edge_cv = float(np.std(quad_edges) / (np.mean(quad_edges) + 1e-6))
+                    if edge_cv > 0.50:
+                        flags.append(f"Background edge density inconsistency ({edge_cv:.3f}) — regions may have different source material")
+                        score += 0.15
+
+                # Check 3: Frequency domain anomaly peaks (copy-paste leaves periodic peaks)
+                fft = np.fft.fft2(gray.astype(np.float32))
+                magnitude = np.log(np.abs(np.fft.fftshift(fft)) + 1)
+                freq_peaks = int(np.sum(magnitude > magnitude.mean() + 4 * magnitude.std()))
+                if freq_peaks > 50:
+                    flags.append(f"Unusual frequency domain peaks ({freq_peaks}) — possible repeated copied elements")
+                    score += 0.15
+
+                # Check 4: Edge sharpness variance (digital text on scanned background)
+                laplacian_vals = np.abs(cv2.Laplacian(gray, cv2.CV_64F))
+                sharpness_std = float(laplacian_vals.std())
+                if sharpness_std > 60:
+                    flags.append(f"High edge sharpness variance ({sharpness_std:.1f}) — possible digital text insertion on scanned background")
+                    score += 0.10
+
+                verdict = (
+                    "LIKELY_FORGED" if score >= 0.45
+                    else "SUSPICIOUS" if score >= 0.25
+                    else "APPEARS_AUTHENTIC"
+                )
+                return {
+                    "verdict": verdict,
+                    "forgery_score": round(min(score, 0.95), 3),
+                    "flags": flags,
+                    "font_inconsistency_cv": round(font_cv, 4),
+                    "frequency_domain_peaks": freq_peaks,
+                    "character_component_count": int(len(char_components)),
+                    "note": "Document analysis is heuristic — specialized document verification models provide higher accuracy.",
+                    "available": True,
+                    "court_defensible": True,
+                    "backend": "opencv-document-inline",
+                }
+            except Exception as e:
+                return {"verdict": "ERROR", "error": str(e), "available": False, "court_defensible": False}
+
         # CRITICAL: object_detection must be registered FIRST - it's the primary tool for this agent
         registry.register("object_detection", object_detection, "Full-scene object detection using YOLOv8")
         registry.register("secondary_classification", secondary_classification, "Secondary classification pass")
@@ -709,6 +938,8 @@ class Agent3Object(ForensicAgent):
         registry.register("contraband_database", contraband_database_handler, "Contraband and weapons database cross-reference")
         registry.register("inter_agent_call", inter_agent_call_handler, "Inter-agent communication")
         registry.register("adversarial_robustness_check", adversarial_robustness_check_handler, "Adversarial robustness check")
+        registry.register("object_text_ocr", object_text_ocr_handler, "OCR on detected object regions: license plates, IDs, signs, screen content")
+        registry.register("document_authenticity", document_authenticity_handler, "Document forgery analysis: font consistency, background irregularity, frequency anomalies")
 
         # ── Gemini deep forensic analysis handler ──────────────────────────
         _gemini = GeminiVisionClient(self.config)
@@ -840,12 +1071,8 @@ class Agent3Object(ForensicAgent):
         file_path = self.evidence_artifact.file_path.lower()
         mime = (self.evidence_artifact.metadata or {}).get("mime_type", "").lower()
         audio_exts = (".wav", ".mp3", ".flac", ".ogg", ".aac", ".m4a")
-        video_exts = (".mp4", ".avi", ".mov", ".mkv")
-        is_audio_video = (
-            any(file_path.endswith(e) for e in audio_exts + video_exts)
-            or mime.startswith(("audio/", "video/"))
-        )
-        if is_audio_video:
+        is_audio = any(file_path.endswith(e) for e in audio_exts) or mime.startswith("audio/")
+        if is_audio:
             # Mark all tasks complete so the heartbeat shows full progress
             try:
                 state = await self.working_memory.get_state(
@@ -870,7 +1097,7 @@ class Agent3Object(ForensicAgent):
                 status="CONFIRMED",
                 evidence_refs=[],
                 reasoning_summary=(
-                    "Object Detection — The uploaded evidence is an audio or video file. "
+                    "Object Detection — The uploaded evidence is an audio file. "
                     "Scene composition, lighting consistency, and object detection are "
                     "not applicable without visual frames. No spatial analysis performed."
                 ),

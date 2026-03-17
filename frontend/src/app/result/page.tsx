@@ -21,8 +21,6 @@ import {
   ShieldCheck, Search, Layers, XCircle, Shield,
   Hash, Clock, FileText, Cpu, AlertCircle,
 } from "lucide-react";
-import { PageTransition } from "@/components/ui/PageTransition";
-import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { useForensicData, mapReportDtoToReport } from "@/hooks/useForensicData";
@@ -140,7 +138,7 @@ function ArbiterOverlay({ liveMessage }: { liveMessage: string }) {
       <motion.div
         initial={{ opacity: 0, scale: 0.9, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="flex flex-col items-center gap-7 px-8 py-10 rounded-3xl bg-[#090910]/95 border border-white/10 shadow-[0_20px_80px_rgba(0,0,0,0.8)] max-w-[340px] w-full mx-4"
+        className="glass-panel flex flex-col items-center gap-7 px-8 py-10 rounded-3xl shadow-[0_20px_80px_rgba(0,0,0,0.85),0_0_60px_rgba(124,58,237,0.12)] max-w-[340px] w-full mx-4 border-violet-500/20"
       >
         {/* Pulsing shield */}
         <div className="relative w-24 h-24 flex items-center justify-center">
@@ -283,7 +281,7 @@ function AgentSection({ agentId, findings, metrics, narrative }: {
   });
 
   return (
-    <div className={clsx("rounded-2xl border overflow-hidden", cfg.border)}>
+    <div className={clsx("glass-panel rounded-2xl border overflow-hidden", cfg.border)}>
       {/* Header */}
       <button
         onClick={() => setOpen(v => !v)}
@@ -356,7 +354,7 @@ function AgentSection({ agentId, findings, metrics, narrative }: {
 
               {/* Groq narrative — primary display */}
               {narrative ? (
-                <div className="rounded-xl bg-white/[0.025] border border-white/[0.06] p-4">
+                <div className="rounded-xl glass-panel p-4">
                   <p className="text-[10px] text-slate-500 font-mono uppercase tracking-widest mb-2 flex items-center gap-1.5">
                     <span className="text-violet-400">✦</span> Arbiter Analysis
                     {deepFindings.length > 0 && (
@@ -523,7 +521,7 @@ function StatsStrip({ report }: { report: ReportDTO }) {
           key={s.label}
           initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
           transition={{ delay: i * 0.04 }}
-          className="bg-white/[0.025] border border-white/7 rounded-xl p-3 text-center"
+          className="glass-panel rounded-xl p-3 text-center"
         >
           <div className="flex justify-center text-slate-600 mb-1">{s.icon}</div>
           <div className="text-white font-bold text-lg leading-none">{s.value}</div>
@@ -548,6 +546,9 @@ export default function ResultPage() {
   const [arbiterMsg, setArbiterMsg]   = useState("");
   const [errorMsg, setErrorMsg]       = useState("");
   const [activeTab, setActiveTab]     = useState<"summary" | "agents" | "chain">("summary");
+  const [mainTab, setMainTab]         = useState<"current" | "history">("current");
+  const [fullHistory, setFullHistory] = useState<ReportDTO[]>([]);
+  const [selectedHistory, setSelectedHistory] = useState<ReportDTO | null>(null);
 
   const { addToHistory } = useForensicData();
   const { playSound }    = useSound();
@@ -558,6 +559,7 @@ export default function ResultPage() {
   useEffect(() => {
     const sessionId = sessionStorage.getItem("forensic_session_id");
     if (!sessionId) { setState("empty"); return; }
+    const sid = sessionId; // TS: narrow once for async closures
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -568,19 +570,29 @@ export default function ResultPage() {
       if (cancelled) return;
       attempts++;
       try {
-        const s = await getArbiterStatus(sessionId);
+        const s = await getArbiterStatus(sid);
         if (cancelled) return;
 
         if (s.status === "complete") {
           // Fetch full report body
           try {
-            const res = await getReport(sessionId);
+            const res = await getReport(sid);
             if (cancelled) return;
             if (res.status === "complete" && res.report) {
               setReport(res.report);
               setState("ready");
               addToHistory(mapReportDtoToReport(res.report));
-              setTimeout(() => soundRef.current("complete"), 150);
+              // Save full DTO to history
+              try {
+                const stored = sessionStorage.getItem("fc_full_report_history");
+                const hist: ReportDTO[] = stored ? JSON.parse(stored) : [];
+                if (!hist.some(r => r.report_id === res.report!.report_id)) {
+                  const next = [res.report!, ...hist].slice(0, 20);
+                  sessionStorage.setItem("fc_full_report_history", JSON.stringify(next));
+                  setFullHistory(next);
+                }
+              } catch { /* ignore */ }
+              setTimeout(() => soundRef.current("arbiter_done"), 150);
               return;
             }
           } catch (e) {
@@ -594,13 +606,22 @@ export default function ResultPage() {
         } else if (s.status === "not_found") {
           // Fallback: try direct getReport (handles restart / cache scenarios)
           try {
-            const res = await getReport(sessionId);
+            const res = await getReport(sid);
             if (cancelled) return;
             if (res.status === "complete" && res.report) {
               setReport(res.report);
               setState("ready");
               addToHistory(mapReportDtoToReport(res.report));
-              setTimeout(() => soundRef.current("complete"), 150);
+              try {
+                const stored = sessionStorage.getItem("fc_full_report_history");
+                const hist: ReportDTO[] = stored ? JSON.parse(stored) : [];
+                if (!hist.some(r => r.report_id === res.report!.report_id)) {
+                  const next = [res.report!, ...hist].slice(0, 20);
+                  sessionStorage.setItem("fc_full_report_history", JSON.stringify(next));
+                  setFullHistory(next);
+                }
+              } catch { /* ignore */ }
+              setTimeout(() => soundRef.current("arbiter_done"), 150);
               return;
             }
           } catch { /* not ready */ }
@@ -624,9 +645,26 @@ export default function ResultPage() {
 
   useEffect(() => { setMounted(true); }, []);
 
-  const fileName = useMemo(() =>
-    sessionStorage.getItem("forensic_file_name") || report?.case_id || "Evidence File",
-  [report]);
+  // ── Load full DTO history from sessionStorage ────────────────
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const stored = sessionStorage.getItem("fc_full_report_history");
+      if (stored) setFullHistory(JSON.parse(stored) as ReportDTO[]);
+    } catch { /* ignore */ }
+  }, []);
+
+  // Result page reveal sound — plays once on mount
+  useEffect(() => {
+    const id = setTimeout(() => soundRef.current("result_reveal"), 250);
+    return () => clearTimeout(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fileName = useMemo(() => {
+    if (typeof window === "undefined") return report?.case_id || "Evidence File";
+    return sessionStorage.getItem("forensic_file_name") || report?.case_id || "Evidence File";
+  }, [report]);
 
   const handleNew  = useCallback(() => { playSound("click"); sessionStorage.removeItem("forensic_session_id"); sessionStorage.removeItem("forensic_file_name"); sessionStorage.removeItem("forensic_case_id"); router.push("/evidence"); }, [playSound, router]);
   const handleHome = useCallback(() => { playSound("click"); router.push("/"); }, [playSound, router]);
@@ -643,8 +681,9 @@ export default function ResultPage() {
       {/* Background ambience */}
       <div className="fixed inset-0 -z-50 pointer-events-none">
         <div className="absolute inset-0 bg-[#030303]" />
-        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-emerald-900/8 rounded-full blur-[110px]" />
-        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-cyan-900/6 rounded-full blur-[90px]" />
+        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-emerald-900/10 rounded-full blur-[110px]" />
+        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-cyan-900/8 rounded-full blur-[90px]" />
+        <div className="absolute top-1/3 right-0 w-[300px] h-[300px] bg-violet-900/6 rounded-full blur-[80px]" />
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff02_1px,transparent_1px),linear-gradient(to_bottom,#ffffff02_1px,transparent_1px)] bg-[size:40px_40px]" />
       </div>
 
@@ -652,30 +691,53 @@ export default function ResultPage() {
       {state === "arbiter" && <ArbiterOverlay liveMessage={arbiterMsg} />}
 
       {/* ── Header ────────────────────────────────────────────── */}
-      <header className="w-full border-b border-white/[0.05]">
-        <div className="max-w-5xl mx-auto flex items-center justify-between py-4 px-5">
-          <button onClick={handleHome} className="flex items-center gap-2.5 group cursor-pointer">
-            <div className="w-8 h-8 bg-gradient-to-br from-emerald-400/20 to-cyan-500/10 border border-emerald-500/30 rounded-lg flex items-center justify-center font-bold text-emerald-400 text-xs group-hover:border-emerald-400/50 transition-colors">
-              FC
-            </div>
-            <span className="text-sm font-bold text-white/70 group-hover:text-white transition-colors hidden sm:block">
-              Forensic Council
-            </span>
-          </button>
+      <header className="w-full border-b border-white/[0.06] bg-[#030303]/80 backdrop-blur-2xl sticky top-0 z-30">
+        <div className="max-w-5xl mx-auto px-5">
+          {/* Top row: logo + status */}
+          <div className="flex items-center justify-between py-4">
+            <button onClick={handleHome} className="flex items-center gap-2.5 group cursor-pointer">
+              <div className="w-8 h-8 bg-gradient-to-br from-emerald-400/20 to-cyan-500/10 border border-emerald-500/30 rounded-lg flex items-center justify-center font-bold text-emerald-400 text-xs group-hover:border-emerald-400/50 transition-colors">
+                FC
+              </div>
+              <span className="text-sm font-bold text-white/70 group-hover:text-white transition-colors hidden sm:block">
+                Forensic Council
+              </span>
+            </button>
 
-          <div className="flex items-center gap-2 text-xs font-mono text-slate-600">
-            <span className="relative flex h-2 w-2">
-              <span className={clsx(
-                "animate-ping absolute inline-flex h-full w-full rounded-full opacity-60",
-                state === "arbiter" ? "bg-purple-400" : state === "ready" ? "bg-emerald-400" : "bg-red-400"
-              )} />
-              <span className={clsx(
-                "relative inline-flex rounded-full h-2 w-2",
-                state === "arbiter" ? "bg-purple-500" : state === "ready" ? "bg-emerald-500" : "bg-red-500"
-              )} />
-            </span>
-            {state === "arbiter" ? "Arbiter deliberating…" : state === "ready" ? "Report ready" : "Analysis failed"}
+            <div className="flex items-center gap-2 text-xs font-mono text-slate-600">
+              <span className="relative flex h-2 w-2">
+                <span className={clsx(
+                  "animate-ping absolute inline-flex h-full w-full rounded-full opacity-60",
+                  state === "arbiter" ? "bg-purple-400" : state === "ready" ? "bg-emerald-400" : "bg-red-400"
+                )} />
+                <span className={clsx(
+                  "relative inline-flex rounded-full h-2 w-2",
+                  state === "arbiter" ? "bg-purple-500" : state === "ready" ? "bg-emerald-500" : "bg-red-500"
+                )} />
+              </span>
+              {state === "arbiter" ? "Arbiter deliberating…" : state === "ready" ? "Report ready" : "Analysis failed"}
+            </div>
           </div>
+
+          {/* Main tabs — only when report is ready */}
+          {state === "ready" && (
+            <div className="flex gap-1 pb-3">
+              {(["current", "history"] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => { playSound("click"); setMainTab(tab); if (tab === "current") setSelectedHistory(null); }}
+                  className={clsx(
+                    "px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer select-none",
+                    mainTab === tab
+                      ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20"
+                      : "text-slate-500 hover:text-slate-300 hover:bg-white/[0.04] border border-transparent"
+                  )}
+                >
+                  {tab === "current" ? "Current Analysis" : `History${fullHistory.length > 0 ? ` (${fullHistory.length})` : ""}`}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </header>
 
@@ -684,7 +746,7 @@ export default function ResultPage() {
         <AnimatePresence mode="wait">
 
           {/* ── REPORT READY ────────────────────────────────── */}
-          {state === "ready" && report && (
+          {state === "ready" && report && mainTab === "current" && (
             <motion.div
               key="report"
               initial={{ opacity: 0, y: 12 }}
@@ -704,7 +766,7 @@ export default function ResultPage() {
                   { label: "Case ID",        value: report.case_id,     mono: true  },
                   { label: "Report ID",      value: report.report_id.slice(0, 18) + "…", mono: true  },
                 ].map(item => (
-                  <div key={item.label} className="bg-white/[0.025] border border-white/7 rounded-xl px-4 py-3">
+                  <div key={item.label} className="glass-panel rounded-xl px-4 py-3">
                     <p className="text-[10px] text-slate-600 font-mono uppercase tracking-widest mb-1">{item.label}</p>
                     <p className={clsx("text-sm text-white truncate", item.mono && "font-mono")}>{item.value}</p>
                   </div>
@@ -712,7 +774,7 @@ export default function ResultPage() {
               </div>
 
               {/* Section tabs */}
-              <div className="flex gap-1 p-1 rounded-xl bg-white/[0.03] border border-white/7">
+              <div className="flex gap-1 p-1 rounded-xl glass-panel">
                 {(["summary", "agents", "chain"] as const).map(tab => {
                   const labels = { summary: "📋 Summary", agents: "🔬 Agent Analysis", chain: "🔐 Chain & Signature" };
                   return (
@@ -740,7 +802,7 @@ export default function ResultPage() {
                   <motion.div key="sum" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-5">
 
                     {/* Executive summary */}
-                    <div className="bg-white/[0.02] border border-white/7 rounded-2xl p-6">
+                    <div className="glass-panel rounded-2xl p-6">
                       <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
                         <FileCheck className="w-3.5 h-3.5 text-emerald-400" /> Executive Summary
                       </h3>
@@ -751,7 +813,7 @@ export default function ResultPage() {
 
                     {/* Cross-confirmed */}
                     {(report.cross_modal_confirmed?.length ?? 0) > 0 && (
-                      <div className="bg-white/[0.02] border border-white/7 rounded-2xl p-6">
+                      <div className="glass-panel rounded-2xl p-6">
                         <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
                           <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> Cross-Confirmed Findings
                           <span className="normal-case tracking-normal font-normal text-slate-600 ml-1">
@@ -793,7 +855,7 @@ export default function ResultPage() {
 
                     {/* Uncertainty */}
                     {report.uncertainty_statement && (
-                      <div className="bg-white/[0.015] border border-white/7 rounded-2xl p-5">
+                      <div className="glass-panel rounded-2xl p-5">
                         <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
                           <AlertCircle className="w-3.5 h-3.5" /> Limitations & Uncertainty
                         </h3>
@@ -827,7 +889,7 @@ export default function ResultPage() {
                 {/* ── CHAIN TAB ── */}
                 {activeTab === "chain" && (
                   <motion.div key="chain" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-                    <div className="bg-white/[0.02] border border-white/7 rounded-2xl p-6 space-y-4">
+                    <div className="glass-panel rounded-2xl p-6 space-y-4">
                       <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest flex items-center gap-2">
                         <Lock className="w-3.5 h-3.5 text-cyan-400" /> Cryptographic Signature
                       </h3>
@@ -854,7 +916,7 @@ export default function ResultPage() {
                       )}
                     </div>
 
-                    <div className="bg-white/[0.02] border border-white/7 rounded-2xl p-6">
+                    <div className="glass-panel rounded-2xl p-6">
                       <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
                         <Shield className="w-3.5 h-3.5 text-emerald-400" /> Chain of Custody
                       </h3>
@@ -880,6 +942,165 @@ export default function ResultPage() {
                   </motion.div>
                 )}
               </AnimatePresence>
+            </motion.div>
+          )}
+
+          {/* ── HISTORY TAB ─────────────────────────────────── */}
+          {state === "ready" && mainTab === "history" && (
+            <motion.div
+              key="history"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-4"
+            >
+              {/* Selected history report expanded view */}
+              {selectedHistory ? (
+                <div className="space-y-5">
+                  <button
+                    onClick={() => { playSound("click"); setSelectedHistory(null); }}
+                    className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  >
+                    <ChevronUp className="w-4 h-4 rotate-[-90deg]" /> Back to History
+                  </button>
+                  <VerdictBanner report={selectedHistory} />
+                  <StatsStrip report={selectedHistory} />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {[
+                      { label: "Case ID",   value: selectedHistory.case_id,    mono: true  },
+                      { label: "Report ID", value: selectedHistory.report_id.slice(0, 18) + "…", mono: true },
+                      { label: "Signed",    value: selectedHistory.signed_utc?.replace("T", " ").split(".")[0] || "—", mono: true },
+                    ].map(item => (
+                      <div key={item.label} className="glass-panel rounded-xl px-4 py-3">
+                        <p className="text-[10px] text-slate-600 font-mono uppercase tracking-widest mb-1">{item.label}</p>
+                        <p className={clsx("text-sm text-white truncate", item.mono && "font-mono")}>{item.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Inline section tabs for history report */}
+                  <div className="flex gap-1 p-1 rounded-xl glass-panel">
+                    {(["summary", "agents", "chain"] as const).map(tab => {
+                      const labels = { summary: "📋 Summary", agents: "🔬 Agent Analysis", chain: "🔐 Chain & Signature" };
+                      return (
+                        <button key={tab} onClick={() => { playSound("click"); setActiveTab(tab); }}
+                          className={clsx("flex-1 text-sm py-2.5 rounded-lg font-medium transition-all cursor-pointer select-none",
+                            activeTab === tab ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20" : "text-slate-500 hover:text-slate-300 hover:bg-white/[0.04]"
+                          )}>{labels[tab]}</button>
+                      );
+                    })}
+                  </div>
+                  <AnimatePresence mode="wait">
+                    {activeTab === "summary" && (
+                      <motion.div key="hs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
+                        <div className="glass-panel rounded-2xl p-6">
+                          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                            <FileCheck className="w-3.5 h-3.5 text-emerald-400" /> Executive Summary
+                          </h3>
+                          <p className="text-slate-300 text-sm leading-relaxed">{selectedHistory.executive_summary || "No summary available."}</p>
+                        </div>
+                        {selectedHistory.uncertainty_statement && (
+                          <div className="glass-panel rounded-2xl p-5">
+                            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                              <AlertCircle className="w-3.5 h-3.5" /> Limitations & Uncertainty
+                            </h3>
+                            <p className="text-slate-400 text-sm">{selectedHistory.uncertainty_statement}</p>
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+                    {activeTab === "agents" && (
+                      <motion.div key="ha" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+                        {Object.entries(selectedHistory.per_agent_findings ?? {})
+                          .filter(([, arr]) => arr.length > 0)
+                          .map(([id]) => (
+                            <AgentSection
+                              key={id} agentId={id}
+                              findings={selectedHistory.per_agent_findings[id] ?? []}
+                              metrics={selectedHistory.per_agent_metrics?.[id] as AgentMetricsDTO | undefined}
+                              narrative={selectedHistory.per_agent_analysis?.[id]}
+                            />
+                          ))}
+                      </motion.div>
+                    )}
+                    {activeTab === "chain" && (
+                      <motion.div key="hc" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
+                        <div className="glass-panel rounded-2xl p-6 space-y-3">
+                          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                            <Lock className="w-3.5 h-3.5 text-cyan-400" /> Chain of Custody
+                          </h3>
+                          {selectedHistory.report_hash && (
+                            <p className="text-xs font-mono text-slate-400 break-all bg-black/30 rounded-xl p-3">{selectedHistory.report_hash}</p>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              ) : fullHistory.length === 0 ? (
+                /* Empty history */
+                <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4 text-center">
+                  <div className="w-14 h-14 rounded-full bg-slate-500/10 border border-slate-500/20 flex items-center justify-center">
+                    <Clock className="w-7 h-7 text-slate-500" />
+                  </div>
+                  <div>
+                    <p className="text-white font-semibold mb-1">No past investigations</p>
+                    <p className="text-slate-500 text-sm max-w-xs">
+                      Previous analyses will appear here automatically after each investigation.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                /* History list */
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-600 font-mono uppercase tracking-widest px-1">
+                    {fullHistory.length} investigation{fullHistory.length !== 1 ? "s" : ""} on record
+                  </p>
+                  {fullHistory.map((hr, i) => {
+                    const verdictColor = {
+                      CERTAIN: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+                      LIKELY: "text-emerald-300 bg-emerald-500/8 border-emerald-500/15",
+                      "MANIPULATION DETECTED": "text-red-400 bg-red-500/10 border-red-500/20",
+                      INCONCLUSIVE: "text-red-300 bg-red-500/8 border-red-500/15",
+                      UNCERTAIN: "text-amber-400 bg-amber-500/10 border-amber-500/20",
+                    }[hr.overall_verdict] || "text-slate-400 bg-slate-500/10 border-slate-500/20";
+
+                    const totalFindings = Object.values(hr.per_agent_findings ?? {}).flat().length;
+                    const activeAgentCount = Object.values(hr.per_agent_findings ?? {}).filter(a => a.length > 0).length;
+
+                    return (
+                      <motion.button
+                        key={hr.report_id}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.04 }}
+                        onClick={() => { playSound("click"); setSelectedHistory(hr); setActiveTab("summary"); }}
+                        className="w-full text-left glass-panel rounded-2xl p-5 hover:brightness-110 transition-all cursor-pointer border border-white/[0.06] hover:border-white/[0.12] group"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            {/* Verdict badge */}
+                            <span className={clsx("inline-block text-[10px] px-2.5 py-0.5 rounded-full border font-bold font-mono mb-2", verdictColor)}>
+                              {hr.overall_verdict}
+                            </span>
+                            <p className="text-sm text-white font-medium truncate">{hr.case_id}</p>
+                            <p className="text-xs text-slate-500 mt-0.5 font-mono">
+                              {hr.signed_utc?.replace("T", " ").split(".")[0] || "—"}
+                            </p>
+                          </div>
+                          <div className="flex flex-col items-end gap-1.5 shrink-0">
+                            <span className={clsx("text-sm font-bold", (hr.overall_confidence ?? 0) >= 0.75 ? "text-emerald-400" : (hr.overall_confidence ?? 0) >= 0.5 ? "text-amber-400" : "text-red-400")}>
+                              {Math.round((hr.overall_confidence ?? 0) * 100)}%
+                            </span>
+                            <span className="text-[10px] text-slate-600">
+                              {totalFindings} finding{totalFindings !== 1 ? "s" : ""} · {activeAgentCount} agent{activeAgentCount !== 1 ? "s" : ""}
+                            </span>
+                            <ChevronDown className="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-400 -rotate-90 transition-colors" />
+                          </div>
+                        </div>
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -935,7 +1156,7 @@ export default function ResultPage() {
       {/* ── Fixed bottom bar ──────────────────────────────────── */}
       <div className="fixed bottom-0 inset-x-0 z-40">
         <div className="max-w-5xl mx-auto px-5 pb-5">
-          <div className="flex gap-3 p-2.5 rounded-2xl bg-black/85 backdrop-blur-xl border border-white/[0.07] shadow-[0_-8px_40px_rgba(0,0,0,0.7)]">
+          <div className="flex gap-3 p-2.5 rounded-2xl glass-panel shadow-[0_-8px_40px_rgba(0,0,0,0.7)]">
             <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
               onClick={handleNew}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/8 text-slate-300 font-semibold text-sm hover:bg-white/[0.08] hover:text-white transition-all">

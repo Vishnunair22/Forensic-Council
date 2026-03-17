@@ -93,14 +93,14 @@ class Agent4Video(ForensicAgent):
         Exact 10 tasks from architecture document.
         """
         return [
+            "Run AV file identity and container profile to establish baseline codec and stream metadata",
             "Run full-timeline optical flow analysis and generate temporal anomaly heatmap",
             "For each flagged anomaly window: extract frames and run frame-to-frame consistency analysis",
             "Classify each anomaly as EXPLAINABLE or SUSPICIOUS",
             "For frames containing human faces: run face-swap detection",
             "Run frequency-domain GAN artifact detection on extracted frames",
-            "For each suspicious anomaly: issue collaborative call to Agent 2 for audio cross-verification",
             "Validate rolling shutter behavior and compression patterns against claimed device metadata",
-            "Run adversarial robustness check against optical flow evasion",
+            "For each suspicious anomaly: issue collaborative call to Agent 2 for audio cross-verification",
             "Self-reflection pass",
             "Submit calibrated findings to Arbiter with dual anomaly classification list preserved",
         ]
@@ -242,7 +242,7 @@ class Agent4Video(ForensicAgent):
                     "question": input_data.get("question", "Confirm audio-visual sync at flagged timestamp"),
                 }
             )
-            response = await self._inter_agent_bus.send(call, self._custody_logger)
+            response = await self._inter_agent_bus.send(call, self.custody_logger)
             return response
         
         async def adversarial_robustness_check(input_data: dict) -> dict:

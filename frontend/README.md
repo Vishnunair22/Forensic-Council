@@ -2,7 +2,7 @@
 
 Next.js 15 frontend for the Forensic Council multi-agent forensic evidence analysis system.
 
-**Version:** v1.0.3 | **Framework:** Next.js 15 / React 19 | **Styling:** Tailwind CSS v4
+**Version:** v1.0.4 | **Framework:** Next.js 15 / React 19 | **Styling:** Tailwind CSS v4
 
 ---
 

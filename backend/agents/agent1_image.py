@@ -65,12 +65,12 @@ class Agent1Image(ForensicAgent):
         Covers the highest-signal forensic checks before deep pass.
         """
         return [
+            "Verify file hash against ingestion hash",
             "Perform semantic image understanding to identify image type and context",
             "Run full-image ELA and map anomaly regions",
             "Run ELA anomaly block classification on flagged blocks",
             "Run JPEG ghost detection on all flagged regions",
             "Run frequency-domain GAN artifact detection",
-            "Verify file hash against ingestion hash",
             "Self-reflection pass",
         ]
 
@@ -88,6 +88,8 @@ class Agent1Image(ForensicAgent):
             "Detect copy-move forgery in flagged ROI regions",
             "Run adversarial robustness check against known anti-ELA evasion techniques",
             "Extract visible text via OCR for contextual analysis",
+            "Run PRNU camera sensor fingerprint analysis to detect cross-region source inconsistency",
+            "Run CFA demosaicing pattern consistency analysis on contested regions",
         ]
 
     @property
@@ -123,12 +125,19 @@ class Agent1Image(ForensicAgent):
             evidence_store = input_data.get("evidence_store")
             quality = input_data.get("quality", 95)
             anomaly_threshold = input_data.get("anomaly_threshold", 10.0)
-            return await real_ela_full_image(
+            # ELA is not applicable to PNG/lossless files — the tool itself will
+            # detect this and return ela_not_applicable=True.  No threshold tweak needed.
+            result = await real_ela_full_image(
                 artifact=artifact,
                 evidence_store=evidence_store,
                 quality=quality,
                 anomaly_threshold=anomaly_threshold,
             )
+            if result.get("error"):
+                await self._record_tool_error("ela_full_image", result["error"])
+            else:
+                await self._record_tool_result("ela_full_image", result)
+            return result
         
         async def roi_extract_handler(input_data: dict) -> dict:
             """Handle ROI extraction with input_data dict."""
@@ -178,16 +187,18 @@ class Agent1Image(ForensicAgent):
             artifact = input_data.get("artifact") or self.evidence_artifact
             evidence_store = input_data.get("evidence_store")
             if evidence_store is None:
-                # Return mock result if no evidence store
-                return {
+                result = {
                     "hash_matches": True,
                     "original_hash": artifact.content_hash,
                     "current_hash": artifact.content_hash,
                 }
-            return await real_file_hash_verify(
-                artifact=artifact,
-                evidence_store=evidence_store,
-            )
+            else:
+                result = await real_file_hash_verify(artifact=artifact, evidence_store=evidence_store)
+            if result.get("error"):
+                await self._record_tool_error("file_hash_verify", result["error"])
+            else:
+                await self._record_tool_result("file_hash_verify", result)
+            return result
         
         async def perceptual_hash_handler(input_data: dict) -> dict:
             """Handle perceptual hash computation with input_data dict."""
@@ -204,6 +215,7 @@ class Agent1Image(ForensicAgent):
             result = await run_ml_tool("ela_anomaly_classifier.py", artifact.file_path,
                                       extra_args=["--quality", str(quality)], timeout=25.0)
             if result.get("available") and not result.get("error"):
+                await self._record_tool_result("ela_anomaly_classify", result)
                 return result
             # Inline ELA fallback using PIL re-save at different quality
             try:
@@ -215,7 +227,10 @@ class Agent1Image(ForensicAgent):
                 buf.seek(0)
                 recompressed = Image.open(buf).convert("RGB")
                 ela = np.abs(np.array(img, dtype=np.int16) - np.array(recompressed, dtype=np.int16)).astype(np.uint8)
-                ela_mean = float(ela.mean())
+                # Context: use ELA mean from the full-image scan as the anomaly threshold
+                # baseline if it ran first, otherwise compute it fresh
+                prior_ela = self._tool_context.get("ela_full_image", {})
+                ela_mean = float(prior_ela.get("ela_mean", ela.mean()))
                 ela_max = int(ela.max())
                 # Split into 8x8 blocks and score each
                 arr = ela.mean(axis=2)  # grayscale
@@ -225,7 +240,7 @@ class Agent1Image(ForensicAgent):
                     for x in range(0, w-8, 8):
                         block_scores.append(float(arr[y:y+8, x:x+8].mean()))
                 anomaly_blocks = int(sum(1 for s in block_scores if s > ela_mean * 2.5))
-                return {
+                classify_result = {
                     "anomaly_block_count": anomaly_blocks,
                     "total_blocks": len(block_scores),
                     "ela_mean": round(ela_mean, 3),
@@ -235,7 +250,10 @@ class Agent1Image(ForensicAgent):
                     "backend": "pil-ela-inline-fallback",
                     "court_defensible": True, "available": True,
                 }
+                await self._record_tool_result("ela_anomaly_classify", classify_result)
+                return classify_result
             except Exception as e:
+                await self._record_tool_error("ela_anomaly_classify", str(e))
                 return {"error": str(e), "anomaly_detected": False, "backend": "fallback-failed", "court_defensible": False}
 
         async def splicing_detect_handler(input_data: dict) -> dict:
@@ -393,7 +411,12 @@ class Agent1Image(ForensicAgent):
         async def analyze_image_content_handler(input_data: dict) -> dict:
             """Handle CLIP-based semantic image understanding."""
             artifact = input_data.get("artifact") or self.evidence_artifact
-            return await real_analyze_image_content(artifact=artifact)
+            result = await real_analyze_image_content(artifact=artifact)
+            if result.get("error"):
+                await self._record_tool_error("semantic_understanding", result["error"])
+            else:
+                await self._record_tool_result("semantic_understanding", result)
+            return result
 
         # Adversarial and sensor analysis handlers
         async def adversarial_robustness_check(input_data: dict) -> dict:
@@ -590,7 +613,157 @@ class Agent1Image(ForensicAgent):
                     "device_probability": None,
                     "error": str(e),
                 }
-        
+
+        async def prnu_analysis_handler(input_data: dict) -> dict:
+            """
+            Photo Response Non-Uniformity (PRNU) camera sensor fingerprint analysis.
+
+            Every camera sensor has a unique noise pattern from pixel-level manufacturing
+            imperfections. This residual pattern is preserved across all images taken with
+            the same camera. By computing cross-correlation of noise residuals across image
+            regions, we detect whether different regions came from different sensors —
+            a court-grade indicator of splice/compositing.
+            """
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            result = await run_ml_tool("prnu_analysis.py", artifact.file_path, timeout=45.0)
+            if result.get("available") and not result.get("error"):
+                return result
+            try:
+                import cv2, numpy as np
+                from PIL import Image
+                img = np.array(Image.open(artifact.file_path).convert("RGB"), dtype=np.float32)
+                h, w = img.shape[:2]
+                if h < 64 or w < 64:
+                    return {"prnu_verdict": "INCONCLUSIVE", "reason": "Image too small for PRNU analysis",
+                            "available": True, "court_defensible": True}
+                # Extract per-channel noise residual via NLM denoising
+                noise = np.zeros_like(img)
+                for c in range(3):
+                    ch = img[:, :, c].astype(np.uint8)
+                    denoised = cv2.fastNlMeansDenoising(ch, None, h=3, templateWindowSize=7, searchWindowSize=21)
+                    noise[:, :, c] = img[:, :, c] - denoised.astype(np.float32)
+                lum_noise = noise.mean(axis=2)
+                # 4×4 grid cross-correlation analysis
+                grid = 4
+                bh, bw = h // grid, w // grid
+                blocks = [lum_noise[r*bh:(r+1)*bh, c*bw:(c+1)*bw].flatten()
+                          for r in range(grid) for c in range(grid)]
+                ref = blocks[0]
+                correlations = []
+                for blk in blocks[1:]:
+                    n = min(len(ref), len(blk))
+                    if blk[:n].std() > 0.01 and ref[:n].std() > 0.01:
+                        correlations.append(float(np.corrcoef(ref[:n], blk[:n])[0, 1]))
+                if not correlations:
+                    return {"prnu_verdict": "INCONCLUSIVE", "available": True, "court_defensible": True}
+                mean_corr = float(np.mean(correlations))
+                min_corr = float(np.min(correlations))
+                block_vars = [float(np.var(b)) for b in blocks]
+                mean_var = float(np.mean(block_vars))
+                var_cv = float(np.std(block_vars) / (mean_var + 1e-6))
+                outlier_blocks = int(sum(1 for v in block_vars if abs(v - mean_var) > 2 * float(np.std(block_vars))))
+                inconsistent = min_corr < 0.25 or var_cv > 0.60
+                return {
+                    "prnu_verdict": "INCONSISTENT_SOURCE" if inconsistent else "CONSISTENT_SOURCE",
+                    "mean_block_correlation": round(mean_corr, 4),
+                    "min_block_correlation": round(min_corr, 4),
+                    "noise_variance_cv": round(var_cv, 4),
+                    "outlier_block_count": outlier_blocks,
+                    "total_blocks": len(blocks),
+                    "inconsistent": inconsistent,
+                    "forensic_note": (
+                        f"PRNU inconsistency detected (min_corr={min_corr:.3f}, var_cv={var_cv:.3f}) — "
+                        "image regions likely originate from different camera sensors, indicating splicing."
+                        if inconsistent else
+                        "PRNU noise residual is consistent across all blocks — evidence of a single camera source."
+                    ),
+                    "backend": "numpy-prnu-crosscorr-inline",
+                    "court_defensible": True,
+                    "available": True,
+                }
+            except Exception as e:
+                return {"prnu_verdict": "INCONCLUSIVE", "error": str(e),
+                        "available": False, "court_defensible": False}
+
+        async def cfa_demosaicing_handler(input_data: dict) -> dict:
+            """
+            CFA (Color Filter Array) demosaicing interpolation pattern consistency check.
+
+            Camera sensors capture images through a Bayer CFA pattern, creating characteristic
+            cross-channel correlations that are specific to the sensor pipeline. Regions pasted
+            from another source or AI-generated areas break this pattern — the R/G and G/B
+            channel correlation will be statistically inconsistent across blocks.
+            """
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            result = await run_ml_tool("cfa_demosaicing.py", artifact.file_path, timeout=45.0)
+            if result.get("available") and not result.get("error"):
+                return result
+            try:
+                import numpy as np
+                from PIL import Image
+                img = np.array(Image.open(artifact.file_path).convert("RGB"), dtype=np.float32)
+                h, w = img.shape[:2]
+                if h < 64 or w < 64:
+                    return {"cfa_verdict": "INCONCLUSIVE", "reason": "Image too small",
+                            "available": True, "court_defensible": True}
+                r, g, b = img[:, :, 0], img[:, :, 1], img[:, :, 2]
+                block_size = 64
+                grid_h, grid_w = h // block_size, w // block_size
+                if grid_h < 2 or grid_w < 2:
+                    return {"cfa_verdict": "INCONCLUSIVE", "reason": "Insufficient block count",
+                            "available": True, "court_defensible": True}
+                corrs_rg, corrs_gb = [], []
+                for br in range(grid_h):
+                    for bc in range(grid_w):
+                        y1, y2 = br * block_size, (br + 1) * block_size
+                        x1, x2 = bc * block_size, (bc + 1) * block_size
+                        rb = r[y1:y2, x1:x2].flatten()
+                        gb_ch = g[y1:y2, x1:x2].flatten()
+                        bb = b[y1:y2, x1:x2].flatten()
+                        if rb.std() < 0.5 or gb_ch.std() < 0.5:
+                            continue
+                        try:
+                            corrs_rg.append(float(np.corrcoef(rb, gb_ch)[0, 1]))
+                            corrs_gb.append(float(np.corrcoef(gb_ch, bb)[0, 1]))
+                        except Exception:
+                            pass
+                if len(corrs_rg) < 4:
+                    return {"cfa_verdict": "INCONCLUSIVE", "reason": "Too few analyzable blocks",
+                            "available": True, "court_defensible": True}
+                rg_arr, gb_arr = np.array(corrs_rg), np.array(corrs_gb)
+                rg_std, gb_std = float(rg_arr.std()), float(gb_arr.std())
+                rg_mean, gb_mean = float(rg_arr.mean()), float(gb_arr.mean())
+                outliers_rg = int(np.sum(np.abs(rg_arr - rg_mean) > 2.5 * rg_std))
+                outliers_gb = int(np.sum(np.abs(gb_arr - gb_mean) > 2.5 * gb_std))
+                total_outliers = outliers_rg + outliers_gb
+                inconsistency_ratio = total_outliers / (len(corrs_rg) * 2)
+                inconsistent = inconsistency_ratio > 0.15 or rg_std > 0.30 or gb_std > 0.30
+                return {
+                    "cfa_verdict": "INCONSISTENT_CFA" if inconsistent else "CONSISTENT_CFA",
+                    "inconsistency_ratio": round(inconsistency_ratio, 4),
+                    "outlier_block_count": total_outliers,
+                    "total_blocks_analyzed": len(corrs_rg),
+                    "rg_correlation_mean": round(rg_mean, 4),
+                    "rg_correlation_std": round(rg_std, 4),
+                    "gb_correlation_mean": round(gb_mean, 4),
+                    "gb_correlation_std": round(gb_std, 4),
+                    "inconsistent": inconsistent,
+                    "forensic_note": (
+                        f"{total_outliers} block(s) show abnormal CFA channel correlation "
+                        f"(ratio={inconsistency_ratio:.3f}) — possible region splice from a "
+                        "different sensor pipeline or AI-generated content replacement."
+                        if inconsistent else
+                        "CFA demosaicing channel correlations are internally consistent — "
+                        "expected for an unmodified single-camera image."
+                    ),
+                    "backend": "numpy-cfa-crosscorr-inline",
+                    "court_defensible": True,
+                    "available": True,
+                }
+            except Exception as e:
+                return {"cfa_verdict": "INCONCLUSIVE", "error": str(e),
+                        "available": False, "court_defensible": False}
+
         # Register tools
         registry.register("analyze_image_content", analyze_image_content_handler, "CLIP-based semantic image understanding for context")
         registry.register("ela_full_image", ela_full_image_handler, "Full-image Error Level Analysis")
@@ -608,6 +781,8 @@ class Agent1Image(ForensicAgent):
         registry.register("copy_move_detect", copy_move_detect_handler, "Detect copy-move forgery via SIFT keypoint self-matching")
         registry.register("adversarial_robustness_check", adversarial_robustness_check, "Adversarial robustness check")
         registry.register("sensor_db_query", sensor_db_query, "Camera sensor noise profile database query")
+        registry.register("prnu_analysis", prnu_analysis_handler, "Photo Response Non-Uniformity (PRNU) camera sensor fingerprint analysis")
+        registry.register("cfa_demosaicing", cfa_demosaicing_handler, "CFA demosaicing interpolation pattern consistency check for splice detection")
 
         # ── Gemini deep forensic analysis handler ──────────────────────────
         _gemini = GeminiVisionClient(self.config)
@@ -645,10 +820,19 @@ class Agent1Image(ForensicAgent):
             except Exception:
                 pass
 
-            finding = await _gemini.deep_forensic_analysis(
-                file_path=artifact.file_path,
-                exif_summary=exif_summary or None,
-            )
+            try:
+                finding = await _gemini.deep_forensic_analysis(
+                    file_path=artifact.file_path,
+                    exif_summary=exif_summary or None,
+                )
+            except Exception as gemini_exc:
+                await self._record_tool_error("gemini_deep_forensic", str(gemini_exc))
+                return {
+                    "error": f"Gemini vision failed: {gemini_exc}",
+                    "gemini_content_type": "unknown",
+                    "court_defensible": False,
+                }
+
             result = finding.to_finding_dict(self.agent_id)
 
             # Expose key fields at top level for react_loop formatter

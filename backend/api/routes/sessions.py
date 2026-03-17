@@ -356,8 +356,11 @@ async def get_arbiter_status(
         if task and not task.done():
             evt = getattr(pipeline, "deep_analysis_decision_event", None)
             if evt and evt.is_set():
-                return {"status": "running", "message": "Arbiter deliberating — synthesising findings..."}
-            return {"status": "running", "message": "Agents analysing evidence..."}
+                # Return the live arbiter step if available, else a default message
+                live_step = getattr(pipeline, "_arbiter_step", "") or ""
+                msg = live_step if live_step else "Arbiter deliberating — synthesising findings…"
+                return {"status": "running", "message": msg}
+            return {"status": "running", "message": "Agents analysing evidence…"}
 
     # Try DB
     try:
