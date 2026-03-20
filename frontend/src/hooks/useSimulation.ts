@@ -13,7 +13,7 @@ const dbg = {
 
 import { createLiveSocket, BriefUpdate, HITLCheckpoint } from "@/lib/api";
 import { SoundType } from "./useSound";
-import { AgentUpdate } from "@/components/evidence";
+import type { AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
 
 type SimulationStatus = "idle" | "analyzing" | "initiating" | "processing" | "awaiting_decision" | "complete" | "error";
 
@@ -26,7 +26,7 @@ type UseSimulationProps = {
 export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSimulationProps) => {
     const [status, setStatus] = useState<SimulationStatus>("idle");
     const [completedAgents, setCompletedAgents] = useState<AgentUpdate[]>([]);
-    const [agentUpdates, setAgentUpdates] = useState<Record<string, { status: string; thinking: string }>>({});
+    const [agentUpdates, setAgentUpdates] = useState<Record<string, { status: string; thinking: string; tools_done?: number; tools_total?: number }>>({});
     const [hitlCheckpoint, setHitlCheckpoint] = useState<HITLCheckpoint | null>(null);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -93,14 +93,16 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                 break;
                             }
                             if (update.agent_id && update.data) {
-                                const agentData = update.data as { status?: string; thinking?: string };
+                                const agentData = update.data as { status?: string; thinking?: string; tools_done?: number; tools_total?: number };
                                 const incomingId = update.agent_id;
 
-                                setAgentUpdates((prev: Record<string, { status: string; thinking: string }>) => ({
+                                setAgentUpdates((prev: Record<string, { status: string; thinking: string; tools_done?: number; tools_total?: number }>) => ({
                                     ...prev,
                                     [incomingId]: {
                                         status: agentData.status || "running",
                                         thinking: agentData.thinking || "Analyzing...",
+                                        tools_done: typeof agentData.tools_done === "number" ? agentData.tools_done : prev[incomingId]?.tools_done,
+                                        tools_total: typeof agentData.tools_total === "number" ? agentData.tools_total : prev[incomingId]?.tools_total,
                                     }
                                 }));
                                 // Transition from initiating to analyzing on first real agent update
@@ -128,7 +130,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                 const agent = AGENTS_DATA.find(a => a.id === update.agent_id);
                                 if (agent) {
                                     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- WebSocket message data is dynamic
-                                    const { confidence, findings_count, error, deep_analysis_pending, status: agentStatus } = update.data as Record<string, unknown>;
+                                    const { confidence, findings_count, error, deep_analysis_pending, status: agentStatus, agent_verdict, tool_error_rate, section_flags, findings_preview } = update.data as Record<string, unknown>;
                                     const parsedConfidence = (typeof confidence === "number" ? confidence : null) ?? agent.simulation.confidence / 100;
 
                                     const newUpdate: AgentUpdate = {
@@ -140,6 +142,10 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                         findings_count: typeof findings_count === "number" ? findings_count : 1,
                                         error: typeof error === "string" ? error : null,
                                         deep_analysis_pending: typeof deep_analysis_pending === "boolean" ? deep_analysis_pending : undefined,
+                                        agent_verdict: (typeof agent_verdict === "string" ? agent_verdict as AgentUpdate["agent_verdict"] : null) ?? null,
+                                        tool_error_rate: typeof tool_error_rate === "number" ? tool_error_rate : undefined,
+                                        section_flags: Array.isArray(section_flags) ? section_flags as AgentUpdate["section_flags"] : undefined,
+                                        findings_preview: Array.isArray(findings_preview) ? findings_preview as AgentUpdate["findings_preview"] : undefined,
                                     };
 
                                     // Upsert: later AGENT_COMPLETE for the same agent_id always wins

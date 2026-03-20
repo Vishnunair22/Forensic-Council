@@ -114,15 +114,17 @@ RUN addgroup --system --gid 1001 appgroup \
  && adduser  --system --uid  1001 --ingroup appgroup --no-create-home appuser \
  && chown -R appuser:appgroup /app/cache /app/storage
 
-USER appuser
+# NOTE: We do NOT set USER here — the entrypoint starts as root so it can
+# chown runtime-mounted volumes (Docker creates them as root:root on first use),
+# then drops privileges to appuser before exec'ing the API server.
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
     CMD curl -f -s http://localhost:8000/health || exit 1
 
 EXPOSE 8000
 
-# Entrypoint runs model_cache_check.py then exec's the API server.
-# Set SKIP_CACHE_CHECK=1 to bypass the check (useful in CI/CD pipelines).
+# Entrypoint fixes volume permissions, runs cache check, then starts the server.
+# Set SKIP_CACHE_CHECK=1 to bypass the model check (useful in CI/CD pipelines).
 CMD ["sh", "scripts/docker_entrypoint.sh"]
 
 # Default target is production

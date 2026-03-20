@@ -15,21 +15,44 @@ import { AGENTS_DATA } from "@/lib/constants";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { SoundType } from "@/hooks/useSound";
 
+export interface SectionFlag {
+  id: string;
+  label: string;
+  flag: "ok" | "warn" | "bad" | "info";
+  key_signal: string;
+}
+
+export interface FindingPreview {
+  tool: string;
+  summary: string;
+  confidence: number;
+  flag: "ok" | "warn" | "bad" | "info";
+  severity: string;
+}
+
 export interface AgentUpdate {
   agent_id: string;
   agent_name: string;
   message: string;
-  status: "running" | "complete" | "error";
+  status: "running" | "complete" | "error" | "skipped";
   confidence?: number;
   findings_count?: number;
   thinking?: string;
   error?: string | null;
   deep_analysis_pending?: boolean;
+  /** Groq-synthesized overall verdict for this agent */
+  agent_verdict?: "AUTHENTIC" | "LIKELY_MANIPULATED" | "INCONCLUSIVE" | null;
+  /** Tool error / fallback rate (0–1) */
+  tool_error_rate?: number;
+  /** Per-section flags produced by grouped Groq synthesis */
+  section_flags?: SectionFlag[];
+  /** Per-finding preview list (always available, no Groq required) */
+  findings_preview?: FindingPreview[];
 }
 
 interface AgentProgressDisplayProps {
   key?: React.Key;
-  agentUpdates: Record<string, { status: string; thinking: string }>;
+  agentUpdates: Record<string, { status: string; thinking: string; tools_done?: number; tools_total?: number }>;
   completedAgents: AgentUpdate[];
   progressText: string;
   allAgentsDone: boolean;
@@ -91,6 +114,322 @@ function ExpandableText({
           )}
         </button>
       )}
+    </div>
+  );
+}
+
+// ── Findings accordion ───────────────────────────────────────────────────────
+const FLAG_STYLES = {
+  ok:   { dot: "bg-emerald-400",  text: "text-emerald-300", bar: "bg-emerald-500/20", icon: "✓" },
+  warn: { dot: "bg-amber-400",    text: "text-amber-300",   bar: "bg-amber-500/20",   icon: "⚠" },
+  bad:  { dot: "bg-red-400",      text: "text-red-300",     bar: "bg-red-500/20",     icon: "✕" },
+  info: { dot: "bg-slate-500",    text: "text-slate-400",   bar: "bg-white/[0.04]",   icon: "·" },
+} as const;
+
+function FindingsAccordion({
+  sectionFlags,
+  findingsCount,
+}: {
+  sectionFlags: SectionFlag[];
+  findingsCount?: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const badCount  = sectionFlags.filter((s) => s.flag === "bad").length;
+  const warnCount = sectionFlags.filter((s) => s.flag === "warn").length;
+
+  const summaryColor =
+    badCount  > 0 ? "text-red-400"    :
+    warnCount > 0 ? "text-amber-400"  :
+    "text-slate-400";
+
+  return (
+    <div className="rounded-lg border border-white/[0.07] overflow-hidden">
+      {/* ── Accordion header ── */}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label={open ? "Collapse findings" : "Expand findings"}
+        className="w-full flex items-center justify-between px-3 py-2
+          hover:bg-white/[0.03] transition-colors group"
+      >
+        <div className="flex items-center gap-2">
+          {/* Mini flag dots summary */}
+          <div className="flex gap-0.5">
+            {sectionFlags.map((sf) => (
+              <span
+                key={sf.id}
+                className={`w-1.5 h-1.5 rounded-full ${FLAG_STYLES[sf.flag]?.dot ?? "bg-slate-500"}`}
+              />
+            ))}
+          </div>
+          <span className={`text-[11px] font-medium ${summaryColor}`}>
+            {findingsCount ?? sectionFlags.length} finding{(findingsCount ?? sectionFlags.length) !== 1 ? "s" : ""}
+          </span>
+          <span className="text-[10px] text-slate-600">
+            · {sectionFlags.length} section{sectionFlags.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+        <motion.span
+          animate={{ rotate: open ? 180 : 0 }}
+          transition={{ duration: 0.18 }}
+          className="text-slate-600 group-hover:text-slate-400 transition-colors"
+        >
+          <ChevronDown className="w-3.5 h-3.5" />
+        </motion.span>
+      </button>
+
+      {/* ── Expandable section list ── */}
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="findings-body"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22, ease: "easeInOut" }}
+            className="overflow-hidden"
+          >
+            <div className="border-t border-white/[0.06] divide-y divide-white/[0.04]">
+              {sectionFlags.map((sf) => {
+                const style  = FLAG_STYLES[sf.flag] ?? FLAG_STYLES.info;
+                const isExp  = expandedId === sf.id;
+                const hasDetail = !!sf.key_signal;
+
+                return (
+                  <div key={sf.id}>
+                    <button
+                      onClick={() => hasDetail && setExpandedId(isExp ? null : sf.id)}
+                      disabled={!hasDetail}
+                      aria-expanded={hasDetail ? isExp : undefined}
+                      aria-label={hasDetail ? (isExp ? `Collapse ${sf.label}` : `Expand ${sf.label}`) : sf.label}
+                      className={[
+                        "w-full flex items-center gap-2.5 px-3 py-2 transition-colors",
+                        hasDetail
+                          ? "hover:bg-white/[0.03] cursor-pointer group"
+                          : "cursor-default",
+                      ].join(" ")}
+                    >
+                      {/* Color bar */}
+                      <span className={`w-0.5 h-4 rounded-full flex-shrink-0 ${style.bar}`} />
+                      {/* Flag icon */}
+                      <span className={`text-[10px] font-bold flex-shrink-0 w-3 text-center ${style.text}`}>
+                        {style.icon}
+                      </span>
+                      {/* Section label */}
+                      <span className={`text-[11px] font-medium flex-1 text-left ${style.text}`}>
+                        {sf.label}
+                      </span>
+                      {/* Expand chevron */}
+                      {hasDetail && (
+                        <motion.span
+                          animate={{ rotate: isExp ? 180 : 0 }}
+                          transition={{ duration: 0.15 }}
+                          className="text-slate-600 group-hover:text-slate-400 transition-colors flex-shrink-0"
+                        >
+                          <ChevronDown className="w-3 h-3" />
+                        </motion.span>
+                      )}
+                    </button>
+
+                    {/* ── Section key signal detail ── */}
+                    <AnimatePresence initial={false}>
+                      {isExp && sf.key_signal && (
+                        <motion.div
+                          key={`detail-${sf.id}`}
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.16 }}
+                          className="overflow-hidden"
+                        >
+                          <p className="px-8 pb-3 pt-0.5 text-[11px] text-slate-400 leading-relaxed border-l-2 ml-3 border-white/[0.06]">
+                            {sf.key_signal}
+                          </p>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ── Per-finding preview list ─────────────────────────────────────────────────
+function fmtTool(raw: string): string {
+  return raw
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+const SEV_BORDER: Record<string, string> = {
+  CRITICAL: "border-l-red-500",
+  HIGH:     "border-l-red-400",
+  MEDIUM:   "border-l-amber-400",
+  LOW:      "border-l-slate-600/80",
+  INFO:     "border-l-slate-700",
+};
+
+const SEV_LABEL: Record<string, { text: string; cls: string }> = {
+  CRITICAL: { text: "CRITICAL", cls: "text-red-400 bg-red-500/10 border-red-500/20" },
+  HIGH:     { text: "HIGH",     cls: "text-red-300 bg-red-500/10 border-red-500/20" },
+  MEDIUM:   { text: "MEDIUM",   cls: "text-amber-300 bg-amber-500/10 border-amber-500/20" },
+  LOW:      { text: "LOW",      cls: "text-slate-400 bg-white/[0.04] border-white/[0.07]" },
+  INFO:     { text: "INFO",     cls: "text-slate-500 bg-white/[0.03] border-white/[0.06]" },
+};
+
+const CLAMP_CHARS = 150;
+
+function FindingRow({ f }: { f: FindingPreview }) {
+  const [open, setOpen] = useState(false);
+  const needsExpand = f.summary.length > CLAMP_CHARS;
+  const displayText = needsExpand && !open
+    ? f.summary.slice(0, CLAMP_CHARS).trimEnd() + "…"
+    : f.summary;
+  const borderCls = SEV_BORDER[f.severity] ?? SEV_BORDER.LOW;
+  const sev = SEV_LABEL[f.severity] ?? SEV_LABEL.LOW;
+
+  return (
+    <div className={`rounded-lg bg-white/[0.03] border border-white/[0.06] border-l-2 ${borderCls} px-3 py-2 space-y-1.5`}>
+      {/* Header: tool name + severity + confidence */}
+      <div className="flex items-start gap-2">
+        <span className="text-[10px] font-bold text-white/85 tracking-wide flex-1 leading-tight">
+          {fmtTool(f.tool)}
+        </span>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {f.severity !== "LOW" && f.severity !== "INFO" && (
+            <span className={`inline-flex text-[9px] font-bold px-1.5 py-0.5 rounded border tracking-wider ${sev.cls}`}>
+              {sev.text}
+            </span>
+          )}
+          {f.confidence > 0.01 && (
+            <span className="text-[10px] font-mono text-slate-500 bg-white/[0.04] px-1.5 py-0.5 rounded">
+              {Math.round(f.confidence * 100)}%
+            </span>
+          )}
+        </div>
+      </div>
+      {/* Summary */}
+      <p className="text-[11px] text-slate-400 leading-relaxed">
+        {displayText}
+        {needsExpand && (
+          <button
+            onClick={() => setOpen(v => !v)}
+            className="ml-1 text-cyan-400/70 hover:text-cyan-300 transition-colors font-medium"
+          >
+            {open ? "show less" : "show more"}
+          </button>
+        )}
+      </p>
+    </div>
+  );
+}
+
+function FindingsPreviewList({ findings }: { findings: FindingPreview[] }) {
+  const [showAll, setShowAll] = useState(false);
+  const INITIAL_SHOW = 3;
+  const shown = showAll ? findings : findings.slice(0, INITIAL_SHOW);
+  const remaining = findings.length - INITIAL_SHOW;
+
+  return (
+    <div className="space-y-1.5">
+      {shown.map((f, i) => <FindingRow key={i} f={f} />)}
+      {findings.length > INITIAL_SHOW && (
+        <button
+          onClick={() => setShowAll(v => !v)}
+          className="w-full text-[11px] text-slate-400 hover:text-white transition-colors py-2 text-center
+            border border-white/[0.07] rounded-lg bg-white/[0.02] hover:bg-white/[0.05] font-medium"
+        >
+          {showAll
+            ? "↑ Show less"
+            : `↓ ${remaining} more finding${remaining !== 1 ? "s" : ""}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Live animated thinking text ──────────────────────────────────────────────
+/**
+ * Shows the current thinking text with smooth animated transitions.
+ * Text changes trigger a blur-fade-out → slide-up-fade-in transition,
+ * giving a "real-time reasoning" feel. Previous thought lingers dimly
+ * for one cycle as a trail.
+ */
+function LiveThinkingText({ text, active }: { text: string; active: boolean }) {
+  // Debounce text changes to avoid flicker from rapid 200ms heartbeat updates
+  const [displayText, setDisplayText] = useState(text);
+  const [prevText, setPrevText] = useState<string | null>(null);
+  const [key, setKey] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const trailTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (text === displayText) return;
+
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      setPrevText(displayText);
+      setDisplayText(text);
+      setKey(k => k + 1);
+
+      // Clear the trail after it fades out
+      if (trailTimerRef.current) clearTimeout(trailTimerRef.current);
+      trailTimerRef.current = setTimeout(() => setPrevText(null), 1800);
+    }, 150);
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text]);
+
+  return (
+    <div className="relative space-y-1 min-h-[2.5rem]">
+      {/* Trail — previous thought fades out dimly */}
+      <AnimatePresence mode="popLayout">
+        {prevText && prevText !== displayText && (
+          <motion.p
+            key={`trail-${prevText.slice(0, 20)}`}
+            initial={{ opacity: 0.28 }}
+            animate={{ opacity: 0.12 }}
+            exit={{ opacity: 0, filter: "blur(3px)", y: -4 }}
+            transition={{ duration: 1.4, ease: "easeOut" }}
+            className="text-[10px] leading-relaxed text-slate-500/70 line-clamp-1 italic pointer-events-none select-none"
+          >
+            {prevText}
+          </motion.p>
+        )}
+      </AnimatePresence>
+
+      {/* Current thought */}
+      <AnimatePresence mode="wait">
+        <motion.p
+          key={key}
+          initial={{ opacity: 0, y: 6, filter: "blur(4px)" }}
+          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          exit={{ opacity: 0, y: -4, filter: "blur(3px)" }}
+          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          className="text-xs leading-relaxed text-cyan-300/85 whitespace-pre-wrap break-words"
+        >
+          {displayText}
+          {/* Blinking cursor while actively running */}
+          {active && (
+            <motion.span
+              animate={{ opacity: [1, 0, 1] }}
+              transition={{ duration: 0.9, repeat: Infinity, ease: "easeInOut" }}
+              className="inline-block ml-0.5 w-[5px] h-[11px] bg-cyan-400/70 rounded-[1px] align-middle -translate-y-px"
+            />
+          )}
+        </motion.p>
+      </AnimatePresence>
     </div>
   );
 }
@@ -162,8 +501,22 @@ function humaniseThinking(raw: string, agentId: string): string {
   if (r.includes("self-reflection") || r.includes("reflection pass")) return "🪞 Running self-reflection quality check on findings…";
   if (r.includes("submit") || r.includes("arbiter")) return "📤 Submitting calibrated findings to Council Arbiter…";
   if (r.includes("finalizing") || r.includes("finali")) return "✅ Finalising findings…";
-  if (r.includes("initializing") || r.includes("initialising")) return "⚙️ Initialising analysis tasks…";
+  if (r.includes("initializing") || r.includes("initialising")) return "⚙️ Initialising analysis pipeline…";
   if (r.includes("processed") || r.includes("running validation")) return "🔄 Running cross-tool validation…";
+
+  // Pipeline-level messages (no agent id)
+  if (r.includes("all agents") && r.includes("complete")) return "✅ All agents have reported — compiling council findings…";
+  if (r.includes("pipeline") && r.includes("start")) return "⚡ Forensic pipeline starting up…";
+  if (r.includes("dispatching") || r.includes("dispatch")) return "📡 Dispatching agents to evidence…";
+  if (r.includes("calibrating") || r.includes("calibrat")) return "⚖️ Calibrating confidence scores across agents…";
+  if (r.includes("synthesising") || r.includes("synthesizing")) return "🧬 Synthesising cross-modal findings…";
+  if (r.includes("resolving") && r.includes("contest")) return "⚔️ Resolving contested findings between agents…";
+  if (r.includes("paused") || r.includes("awaiting decision")) return "⏸ Pipeline paused — awaiting investigator decision…";
+  if (r.includes("deep analysis") || r.includes("deep scan")) return "🔬 Engaging deep analysis ML models…";
+  if (r.includes("connecting") || r.includes("authenticat")) return "🔐 Authenticating with forensic pipeline…";
+  if (r.includes("upload") || r.includes("ingesting")) return "📥 Ingesting evidence into secure analysis environment…";
+  if (r.includes("queuing") || r.includes("queue")) return "🗂️ Queuing agents for evidence dispatch…";
+  if (r.includes("warming") || r.includes("warm up")) return "🔥 Warming up ML inference engines…";
 
   // Fallback — capitalise raw and append ellipsis
   return raw.charAt(0).toUpperCase() + raw.slice(1);
@@ -241,23 +594,18 @@ export function AgentProgressDisplay({
       const agentId = visibleAgents[currentIndex]?.id;
       if (agentId) setRevealedAgents(prev => new Set([...prev, agentId]));
       currentIndex++;
-    }, 400);
+    }, 200);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, visibleAgents.length, firstVisibleId]);
 
-  // Detect unsupported agents
+  // Detect unsupported agents — use the backend status field as the primary
+  // signal. Message-text heuristics caused false positives (e.g. ELA limitation
+  // notes contain "not applicable" but the agent itself completed fine).
   useEffect(() => {
     completedAgents.forEach(agent => {
-      const msg = (agent.message || "").toLowerCase();
-      const err = (agent.error || "").toLowerCase();
       const isUnsupported =
-        err.includes("not supported") ||
-        err.includes("format not supported") ||
-        err.includes("not applicable") ||
-        msg.includes("not supported") ||
-        msg.includes("not applicable") ||
-        msg.includes("skipped") ||
+        agent.status === "skipped" ||
         (agent.findings_count === 0 && agent.confidence === 0 && !!agent.error);
       if (isUnsupported && !unsupportedAgents.has(agent.agent_id)) {
         setUnsupportedAgents(prev => new Set([...prev, agent.agent_id]));
@@ -269,15 +617,7 @@ export function AgentProgressDisplay({
     if (unsupportedAgents.has(agentId)) return "unsupported";
     const completed = completedAgents.find(c => c.agent_id === agentId);
     if (completed) {
-      const msg = (completed.message || "").toLowerCase();
-      const err = (completed.error || "").toLowerCase();
-      const isUnsupported =
-        err.includes("not supported") ||
-        err.includes("not applicable") ||
-        msg.includes("not supported") ||
-        msg.includes("not applicable") ||
-        msg.includes("skipped");
-      if (isUnsupported) return "unsupported";
+      if (completed.status === "skipped") return "unsupported";
       return completed.error ? "error" : "complete";
     }
     if (agentUpdates[agentId]) return "running";
@@ -288,7 +628,9 @@ export function AgentProgressDisplay({
   const getAgentThinking = (agentId: string) => agentUpdates[agentId]?.thinking || "";
   const getAgentFindings = (agentId: string) => completedAgents.find(c => c.agent_id === agentId);
 
-  const activeCompletedCount = completedAgents.filter(c => !unsupportedAgents.has(c.agent_id)).length;
+  // Count ALL agents that have responded (including skipped/unsupported) so the
+  // header always shows the true total (e.g. "5/5" not "3/5" when 2 are skipped).
+  const activeCompletedCount = completedAgents.length;
   const visibleAgentsCount = visibleAgents.length;
 
   const showInitialDecision = awaitingDecision && phase === "initial";
@@ -303,7 +645,7 @@ export function AgentProgressDisplay({
       className="flex flex-col items-center pt-8"
     >
       {/* Header */}
-      <div className="text-center mb-8">
+      <div className="text-center mb-8" aria-live="polite" aria-atomic="true">
         <h2 className="text-2xl font-bold text-white mb-2">
           {showInitialDecision
             ? "Initial Analysis Complete"
@@ -315,8 +657,8 @@ export function AgentProgressDisplay({
         </h2>
         <p className="text-sm text-slate-400">
           {showInitialDecision || showDeepComplete
-            ? `${activeCompletedCount} of ${visibleAgentsCount} agents reported`
-            : `${activeCompletedCount}/${visibleAgentsCount} agents complete`}
+            ? `${activeCompletedCount} of ${visibleAgentsCount} agents responded`
+            : `${activeCompletedCount}/${visibleAgentsCount} agents responded`}
         </p>
       </div>
 
@@ -337,27 +679,46 @@ export function AgentProgressDisplay({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -8, scale: 0.97 }}
                   transition={{ type: "spring", stiffness: 300, damping: 24 }}
-                  className="glass-panel rounded-2xl p-5 transition-all duration-300"
+                  className={[
+                    "glass-panel rounded-2xl p-5 transition-colors duration-300",
+                    status === "running"  ? "card-running" : "",
+                    status === "waiting" || status === "checking" ? "opacity-55" : "",
+                  ].join(" ")}
                   style={{
                     borderColor:
-                      status === "running"      ? "rgba(34,211,238,0.28)"   :
+                      status === "running"      ? "transparent"             : // border handled by card-running glow
                       status === "complete"     ? "rgba(16,185,129,0.24)"   :
                       status === "error"        ? "rgba(239,68,68,0.24)"    :
                       status === "unsupported"  ? "rgba(245,158,11,0.22)"   :
                       status === "checking"     ? "rgba(139,92,246,0.26)"   :
                                                   "rgba(255,255,255,0.06)",
+                    background:
+                      status === "running"
+                        ? "linear-gradient(160deg, rgba(0,212,255,0.07) 0%, rgba(255,255,255,0.025) 60%)"
+                        : undefined,
                     boxShadow:
-                      status === "running"  ? "0 8px 32px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(0,0,0,0.22), 0 0 28px rgba(0,212,255,0.10), inset 0 1px 0 rgba(0,212,255,0.10)" :
-                      status === "complete" ? "0 8px 32px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(0,0,0,0.22), 0 0 22px rgba(16,185,129,0.07), inset 0 1px 0 rgba(16,185,129,0.09)" :
-                      status === "checking" ? "0 8px 32px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(0,0,0,0.22), 0 0 22px rgba(124,58,237,0.09)" :
+                      status === "complete" ? "0 8px 32px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.10), 0 0 22px rgba(16,185,129,0.07)" :
+                      status === "checking" ? "0 8px 32px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.10), 0 0 22px rgba(124,58,237,0.09)" :
                       undefined,
                   }}
                 >
-                  {/* Glass top-edge shine */}
-                  {/* Pulsing glow when running */}
+                  {/* Top-edge accent line — cyan for running, dimmer for other states */}
+                  <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
+                    style={{
+                      background:
+                        status === "running"
+                          ? "linear-gradient(to right, transparent, rgba(0,212,255,0.7), transparent)"
+                          : status === "complete"
+                            ? "linear-gradient(to right, transparent, rgba(16,185,129,0.35), transparent)"
+                            : status === "checking"
+                              ? "linear-gradient(to right, transparent, rgba(139,92,246,0.4), transparent)"
+                              : "linear-gradient(to right, transparent, rgba(255,255,255,0.06), transparent)",
+                    }}
+                  />
+                  {/* Active indicator stripe — only for running */}
                   {status === "running" && (
-                    <div className="absolute inset-0 rounded-2xl pointer-events-none"
-                      style={{ animation: "pulse-ring 2.8s ease-in-out infinite", boxShadow: "inset 0 0 0 1px rgba(0,212,255,0.18)" }} />
+                    <div className="absolute inset-x-0 top-0 h-[2px] rounded-t-2xl pointer-events-none"
+                      style={{ background: "linear-gradient(to right, transparent, rgba(0,212,255,0.9), rgba(0,212,255,0.9), transparent)" }} />
                   )}
                   {/* Entry scan sweep — glass shimmer on reveal */}
                   <motion.div
@@ -369,9 +730,9 @@ export function AgentProgressDisplay({
                   />
 
                   {/* Top row */}
-                  <div className="flex items-center gap-3 mb-3">
+                  <div className="flex items-start gap-3 mb-3">
                     <div className={[
-                      "w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300",
+                      "w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 mt-0.5",
                       status === "running"
                         ? "bg-cyan-500/15 text-cyan-400 shadow-[0_0_14px_rgba(0,212,255,0.2)]"
                         : status === "complete"
@@ -387,7 +748,7 @@ export function AgentProgressDisplay({
                       <AgentIcon agentId={agent.id} className="w-5 h-5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold text-white truncate">{agent.name}</h3>
+                      <h3 className="text-sm font-semibold text-white leading-snug">{agent.name}</h3>
                       <span className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">{agent.role}</span>
                     </div>
                     <div className="shrink-0">
@@ -433,12 +794,11 @@ export function AgentProgressDisplay({
                       <p className="text-xs text-violet-300/70 leading-relaxed">
                         Agent standing by — connecting to analysis pipeline…
                       </p>
-                      {/* Loading bar animation */}
-                      <div className="w-full h-0.5 bg-white/[0.06] rounded-full overflow-hidden">
-                        <motion.div
-                          animate={{ x: ["-100%", "200%"] }}
-                          transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
-                          className="h-full w-1/2 bg-gradient-to-r from-transparent via-violet-400/60 to-transparent"
+                      {/* Loading bar animation — CSS keyframe so it loops smoothly */}
+                      <div className="w-full h-0.5 bg-white/[0.06] rounded-full overflow-hidden relative">
+                        <div
+                          className="absolute h-full w-[45%] bg-gradient-to-r from-transparent via-violet-400/60 to-transparent rounded-full"
+                          style={{ animation: "bar-slide 1.6s ease-in-out infinite" }}
                         />
                       </div>
                       {/* Skeleton tool lines */}
@@ -458,38 +818,127 @@ export function AgentProgressDisplay({
 
                   {status === "running" && (
                     <div className="space-y-2">
-                      <ExpandableText
-                        text={thinking}
-                        textClassName="text-cyan-300/80"
-                      />
-                      {!!pipelineMessage && (
-                        <p className="text-[11px] leading-relaxed text-slate-400">
-                          <span className="text-slate-500 font-semibold">Pipeline:</span>{" "}
-                          {pipelineMessage}
-                        </p>
-                      )}
-                      {/* Live progress shimmer */}
-                      <div className="w-full h-0.5 bg-white/[0.05] rounded-full overflow-hidden mt-2">
-                        <motion.div
-                          animate={{ x: ["-100%", "220%"] }}
-                          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                          className="h-full w-1/3 bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent"
-                        />
-                      </div>
+                      <LiveThinkingText text={thinking} active={true} />
+                      {/* Tool progress bar */}
+                      {(() => {
+                        const upd = agentUpdates[agent.id];
+                        const toolsTotal = upd?.tools_total ?? 0;
+                        const toolsDone = upd?.tools_done ?? 0;
+                        const pct = toolsTotal > 0
+                          ? Math.min(100, Math.round((toolsDone / toolsTotal) * 100))
+                          : null;
+                        return (
+                          <div className="space-y-1 mt-2">
+                            <div className="relative w-full h-1 bg-white/[0.05] rounded-full overflow-hidden">
+                              {pct !== null ? (
+                                <motion.div
+                                  className="h-full rounded-full bg-gradient-to-r from-cyan-600 to-cyan-400"
+                                  initial={{ width: "0%" }}
+                                  animate={{ width: `${pct}%` }}
+                                  transition={{ duration: 0.4, ease: "easeOut" }}
+                                />
+                              ) : (
+                                /* CSS keyframe-based shimmer — avoids Framer Motion % reference glitch */
+                                <div
+                                  className="absolute h-full w-[40%] bg-gradient-to-r from-transparent via-cyan-400/65 to-transparent rounded-full"
+                                  style={{ animation: "bar-slide 2s ease-in-out infinite" }}
+                                />
+                              )}
+                            </div>
+                            {pct !== null && (
+                              <div className="flex justify-between items-center text-[10px] text-slate-500">
+                                <span>{toolsDone}/{toolsTotal} tools</span>
+                                <span className="font-mono text-cyan-500/70">{pct}%</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 
                   {status === "complete" && completed && (
-                    <div className="space-y-2">
-                      <ExpandableText text={completed.message || "Analysis complete."} />
-                      <div className="flex items-center gap-3 text-[11px] text-slate-500">
-                        {completed.findings_count !== undefined && (
-                          <span>{completed.findings_count} finding{completed.findings_count !== 1 ? "s" : ""}</span>
-                        )}
-                        {completed.confidence !== undefined && (
-                          <span>· {Math.round(completed.confidence * 100)}% conf.</span>
-                        )}
-                      </div>
+                    <div className="space-y-2.5">
+                      {/* Verdict row */}
+                      {completed.agent_verdict && (
+                        <div className={[
+                          "flex items-center gap-2 px-3 py-2 rounded-xl border",
+                          completed.agent_verdict === "AUTHENTIC"
+                            ? "bg-emerald-500/[0.08] border-emerald-500/25"
+                            : completed.agent_verdict === "LIKELY_MANIPULATED"
+                              ? "bg-red-500/[0.08] border-red-500/25"
+                              : "bg-amber-500/[0.08] border-amber-500/25",
+                        ].join(" ")}>
+                          <span className={[
+                            "text-base shrink-0",
+                          ].join(" ")}>
+                            {completed.agent_verdict === "AUTHENTIC" ? "✓" : completed.agent_verdict === "LIKELY_MANIPULATED" ? "⚠" : "?"}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className={[
+                              "text-xs font-bold uppercase tracking-wide leading-none",
+                              completed.agent_verdict === "AUTHENTIC"
+                                ? "text-emerald-300"
+                                : completed.agent_verdict === "LIKELY_MANIPULATED"
+                                  ? "text-red-300"
+                                  : "text-amber-300",
+                            ].join(" ")}>
+                              {completed.agent_verdict.replace(/_/g, " ")}
+                            </p>
+                          </div>
+                          {/* Confidence inline */}
+                          {completed.confidence !== undefined && (
+                            <span className={[
+                              "text-sm font-black tabular-nums font-mono shrink-0",
+                              completed.confidence >= 0.75 ? "text-emerald-400" :
+                              completed.confidence >= 0.5  ? "text-amber-400"   : "text-red-400",
+                            ].join(" ")}>
+                              {Math.round(completed.confidence * 100)}%
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Confidence + error rate pills — shown when no verdict block */}
+                      {!completed.agent_verdict && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {completed.confidence !== undefined && (
+                            <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.07] text-slate-400 font-mono">
+                              {Math.round(completed.confidence * 100)}% conf
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Error rate — always shown, green when clean */}
+                      {completed.tool_error_rate !== undefined && (
+                        <div className="flex items-center gap-1.5">
+                          <span className={[
+                            "inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-mono",
+                            completed.tool_error_rate === 0
+                              ? "bg-emerald-500/[0.06] text-emerald-400/70 border-emerald-500/15"
+                              : completed.tool_error_rate > 0.3
+                                ? "bg-red-500/10 text-red-400 border-red-500/20"
+                                : "bg-amber-500/10 text-amber-400 border-amber-500/20",
+                          ].join(" ")}>
+                            {completed.tool_error_rate === 0
+                              ? "✓ all tools clean"
+                              : `${Math.round(completed.tool_error_rate * 100)}% tool errors`}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Per-finding list (preferred) — falls back to section accordion, then raw message */}
+                      {completed.findings_preview && completed.findings_preview.length > 0 ? (
+                        <FindingsPreviewList findings={completed.findings_preview} />
+                      ) : completed.section_flags && completed.section_flags.length > 0 ? (
+                        <FindingsAccordion
+                          sectionFlags={completed.section_flags}
+                          findingsCount={completed.findings_count}
+                        />
+                      ) : (
+                        <ExpandableText text={completed.message || "Analysis complete."} />
+                      )}
                     </div>
                   )}
 
@@ -525,95 +974,93 @@ export function AgentProgressDisplay({
 
       {showInitialDecision && (
         <motion.div
-          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-          className="mt-10 w-full max-w-lg glass-panel rounded-2xl p-4 flex gap-4"
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3, type: "spring", stiffness: 280, damping: 26 }}
+          className="mt-10 w-full max-w-lg"
         >
-          <motion.button
-            onClick={onAcceptAnalysis}
-            disabled={isNavigating}
-            whileHover={isNavigating ? {} : { scale: 1.02, y: -1 }}
-            whileTap={isNavigating ? {} : { scale: 0.97 }}
-            className="btn flex-1 py-4 rounded-xl
-              bg-emerald-600/20 border border-emerald-500/30 text-emerald-300
-              hover:bg-emerald-600/35 hover:border-emerald-500/55
-              hover:shadow-[0_0_24px_rgba(16,185,129,0.2)]
-              disabled:opacity-55 disabled:cursor-not-allowed"
-          >
-            {isNavigating ? (
-              <><Loader2 className="w-4 h-4 animate-spin" />Compiling Report…</>
-            ) : (
-              <><FileText className="w-4 h-4" />Accept Analysis</>
-            )}
-          </motion.button>
-          <motion.button
-            onClick={onDeepAnalysis}
-            disabled={isNavigating}
-            whileHover={isNavigating ? {} : { scale: 1.02, y: -1 }}
-            whileTap={isNavigating ? {} : { scale: 0.97 }}
-            className="btn flex-1 py-4 rounded-xl
-              bg-cyan-600/20 border border-cyan-500/30 text-cyan-300
-              hover:bg-cyan-600/35 hover:border-cyan-500/55
-              hover:shadow-[0_0_24px_rgba(0,212,255,0.2)]
-              disabled:opacity-55 disabled:cursor-not-allowed"
-          >
-            <Microscope className="w-4 h-4" />Deep Analysis<ArrowRight className="w-4 h-4" />
-          </motion.button>
+          {/* Decision card */}
+          <div className="glass-panel rounded-2xl p-5 space-y-3">
+            <p className="text-xs font-mono text-slate-500 uppercase tracking-widest text-center">Choose next step</p>
+            <div className="flex gap-3">
+              <motion.button
+                onClick={onAcceptAnalysis}
+                disabled={isNavigating}
+                whileHover={isNavigating ? {} : { y: -2 }}
+                whileTap={isNavigating ? {} : { scale: 0.972, y: 1 }}
+                className="btn btn-emerald flex-1 py-3.5 rounded-xl font-semibold"
+              >
+                {isNavigating ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" />Compiling Report…</>
+                ) : (
+                  <><FileText className="w-4 h-4" />Accept Analysis</>
+                )}
+              </motion.button>
+              <motion.button
+                onClick={onDeepAnalysis}
+                disabled={isNavigating}
+                whileHover={isNavigating ? {} : { y: -2 }}
+                whileTap={isNavigating ? {} : { scale: 0.972, y: 1 }}
+                className="btn btn-cyan flex-1 py-3.5 rounded-xl font-semibold"
+              >
+                <Microscope className="w-4 h-4" />Deep Scan<ArrowRight className="w-4 h-4" />
+              </motion.button>
+            </div>
+          </div>
         </motion.div>
       )}
 
       {showDeepComplete && (
         <motion.div
-          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-          className="mt-10 w-full max-w-lg glass-panel rounded-2xl p-4 flex gap-4"
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3, type: "spring", stiffness: 280, damping: 26 }}
+          className="mt-10 w-full max-w-lg"
         >
-          <motion.button
-            onClick={onNewUpload}
-            disabled={isNavigating}
-            whileHover={isNavigating ? {} : { scale: 1.02, y: -1 }}
-            whileTap={isNavigating ? {} : { scale: 0.97 }}
-            className="btn btn-ghost flex-1 py-4 rounded-xl
-              disabled:opacity-55 disabled:cursor-not-allowed"
-          >
-            <RotateCcw className="w-4 h-4" />New Analysis
-          </motion.button>
-          <motion.button
-            onClick={onViewResults}
-            disabled={isNavigating}
-            whileHover={isNavigating ? {} : { scale: 1.02, y: -1 }}
-            whileTap={isNavigating ? {} : { scale: 0.97 }}
-            className="btn flex-1 py-4 rounded-xl
-              bg-gradient-to-r from-emerald-600/30 to-cyan-600/20
-              border border-emerald-500/40 text-emerald-300
-              hover:from-emerald-600/50 hover:to-cyan-600/35
-              hover:shadow-[0_0_24px_rgba(16,185,129,0.25)]
-              disabled:opacity-55 disabled:cursor-not-allowed"
-          >
-            {isNavigating ? (
-              <><Loader2 className="w-4 h-4 animate-spin" />Arbiter Working…</>
-            ) : (
-              <><FileText className="w-4 h-4" />View Results<ArrowRight className="w-4 h-4" /></>
-            )}
-          </motion.button>
+          <div className="glass-panel rounded-2xl p-5 space-y-3">
+            <p className="text-xs font-mono text-slate-500 uppercase tracking-widest text-center">Deep analysis complete</p>
+            <div className="flex gap-3">
+              <motion.button
+                onClick={onNewUpload}
+                disabled={isNavigating}
+                whileHover={isNavigating ? {} : { y: -2 }}
+                whileTap={isNavigating ? {} : { scale: 0.972, y: 1 }}
+                className="btn btn-ghost flex-1 py-3.5 rounded-xl"
+              >
+                <RotateCcw className="w-4 h-4" />New Analysis
+              </motion.button>
+              <motion.button
+                onClick={onViewResults}
+                disabled={isNavigating}
+                whileHover={isNavigating ? {} : { y: -2 }}
+                whileTap={isNavigating ? {} : { scale: 0.972, y: 1 }}
+                className="btn btn-primary flex-1 py-3.5 rounded-xl font-bold"
+              >
+                {isNavigating ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" />Arbiter Working…</>
+                ) : (
+                  <><FileText className="w-4 h-4" />View Results<ArrowRight className="w-4 h-4" /></>
+                )}
+              </motion.button>
+            </div>
+          </div>
         </motion.div>
       )}
 
       {/* Still running */}
       {!showInitialDecision && !showDeepComplete && (
         <div className="mt-8 text-center">
-          <p className="text-sm text-slate-400">{progressText}</p>
+          {/* Status line with animated dot */}
+          <div className="inline-flex items-center gap-2">
+            {!allAgentsDone && (
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-60" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
+              </span>
+            )}
+            <p className="text-sm font-medium text-slate-300">{progressText}</p>
+          </div>
           {!!pipelineMessage && (
-            <p className="text-xs text-slate-500 mt-2 max-w-2xl mx-auto">
-              {pipelineMessage}
-            </p>
-          )}
-          {!allAgentsDone && (
-            <div className="flex justify-center gap-1 mt-3">
-              {[0, 1, 2].map((i) => (
-                <motion.div key={i} animate={{ opacity: [0.3, 1, 0.3] }}
-                  transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
-                  className="w-1.5 h-1.5 rounded-full bg-cyan-400"
-                />
-              ))}
+            <div className="mt-3 max-w-xl mx-auto px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+              <LiveThinkingText text={humaniseThinking(pipelineMessage, "")} active={!allAgentsDone} />
             </div>
           )}
         </div>

@@ -880,11 +880,20 @@ class ReActLoopEngine:
                 self._react_chain.append(observation)
                 await self._log_step(observation)
 
-                # Mark the IN_PROGRESS task as COMPLETE now that the tool has run
+                # Mark the IN_PROGRESS task as COMPLETE now that the tool has run.
+                # Re-read WM here: `state` is a snapshot from the top of this
+                # loop iteration, captured *before* _default_step_generator set
+                # the task to IN_PROGRESS, so scanning `state.tasks` would
+                # never find an IN_PROGRESS entry.  A fresh read reflects the
+                # actual WM state after the update.
                 try:
-                    if state:
-                        from core.working_memory import TaskStatus as _TS
-                        for task in state.tasks:
+                    from core.working_memory import TaskStatus as _TS
+                    fresh_state = await self.working_memory.get_state(
+                        session_id=self.session_id,
+                        agent_id=self.agent_id,
+                    )
+                    if fresh_state:
+                        for task in fresh_state.tasks:
                             if task.status == _TS.IN_PROGRESS:
                                 await self.working_memory.update_task(
                                     session_id=self.session_id,
@@ -894,8 +903,11 @@ class ReActLoopEngine:
                                     result_ref=next_step.tool_name,
                                 )
                                 break
-                except Exception:
-                    pass
+                except Exception as _wm_err:
+                    logger.warning(
+                        f"Task COMPLETE marking failed after tool {next_step.tool_name}: {_wm_err}",
+                        agent_id=self.agent_id,
+                    )
 
                 # Check for tool unavailability HITL trigger
                 if tool_result.unavailable:
@@ -964,15 +976,12 @@ class ReActLoopEngine:
         Returns:
             HITLCheckpointReason if triggered, None otherwise
         """
-        # Trigger at 50% of iteration ceiling without COMPLETE task
-        half_ceiling = self.iteration_ceiling // 2
-        if self._current_iteration >= half_ceiling:
-            # Check if there's a COMPLETE task
-            has_complete = any(
-                task.status == "COMPLETE" for task in state.tasks
-            )
-            if not has_complete and self._current_iteration == half_ceiling:
-                return HITLCheckpointReason.ITERATION_CEILING_50PCT
+        # ITERATION_CEILING_50PCT HITL is disabled: the task-driver loop
+        # advances one task per iteration deterministically, so "no complete
+        # task at half ceiling" is expected during the first few iterations and
+        # would trigger a spurious 300-second pause that freezes the UI.
+        # This trigger was designed for an LLM free-form loop, not the
+        # structured task-decomposition driver.  Leave it out.
 
         # Check for contested findings
         for task in state.tasks:
@@ -1146,15 +1155,49 @@ class ReActLoopEngine:
         """
         from core.working_memory import TaskStatus
 
+        # Force-complete any orphaned IN_PROGRESS tasks before finding the next PENDING.
+        # An IN_PROGRESS task at the start of a NEW iteration means the previous
+        # COMPLETE-marking silently failed (the tool DID run — we have its finding).
+        # Leaving it IN_PROGRESS causes this generator to re-run the same tool on
+        # every subsequent iteration until the ceiling, producing duplicate findings.
+        for task in state.tasks:
+            if task.status == TaskStatus.IN_PROGRESS:
+                try:
+                    await self.working_memory.update_task(
+                        session_id=self.session_id,
+                        agent_id=self.agent_id,
+                        task_id=task.task_id,
+                        status=TaskStatus.COMPLETE,
+                        result_ref="force_completed",
+                    )
+                    logger.debug(
+                        f"Force-completed orphaned IN_PROGRESS task: {task.description}",
+                        agent_id=self.agent_id,
+                    )
+                except Exception as _fc_err:
+                    logger.warning(
+                        f"Could not force-complete orphaned task {task.task_id}: {_fc_err}",
+                        agent_id=self.agent_id,
+                    )
+
+        # Re-read state after any force-completions so PENDING scan is accurate
+        try:
+            state = await self.working_memory.get_state(
+                session_id=self.session_id,
+                agent_id=self.agent_id,
+            )
+        except Exception:
+            pass  # Use existing state if refresh fails
+
         # Find the next PENDING task
         pending_task = None
         for task in state.tasks:
-            if task.status in (TaskStatus.PENDING, TaskStatus.IN_PROGRESS):
+            if task.status == TaskStatus.PENDING:
                 pending_task = task
                 break
 
         if pending_task is None:
-            # All tasks complete → signal loop to stop
+            # All tasks complete (or force-completed) → signal loop to stop
             return None
 
         _SKIP_TASKS = {
@@ -1361,41 +1404,41 @@ class ReActLoopEngine:
 
         _TOOL_INTERPRETERS = {
             # ── Image tools ───────────────────────────────────────────────────
-            “ela_full_image”: lambda o: (
+            "ela_full_image": lambda o: (
                 # ELA not applicable for lossless formats (PNG, BMP, TIFF, etc.)
-                o.get(“ela_limitation_note”, “”)
-                if o.get(“ela_not_applicable”) else
+                o.get("ela_limitation_note", "")
+                if o.get("ela_not_applicable") else
                 # Make the region count more human and avoid implying that
-                # every connected component is a large “region”.
+                # every connected component is a large "region".
                 (lambda count, max_a: (
-                    f”ELA detected “
+                    f"ELA detected "
                     + (
-                        “no anomaly regions “
+                        "no anomaly regions "
                         if count == 0 else
-                        “a small number of localized anomaly regions “
+                        "a small number of localized anomaly regions "
                         if count < 50 else
-                        “dozens of clustered anomaly regions “
+                        "dozens of clustered anomaly regions "
                         if count < 200 else
-                        “hundreds of clustered anomaly regions “
+                        "hundreds of clustered anomaly regions "
                         if count < 2000 else
-                        “extensive anomaly patterns (thousands of small regions) “
+                        "extensive anomaly patterns (thousands of small regions) "
                     )
-                    + f”(~{count} connected region(s)) with a maximum deviation of {max_a:.1f} “
+                    + f"(~{count} connected region(s)) with a maximum deviation of {max_a:.1f} "
                     + (
-                        “(significant manipulation signature).”
+                        "(significant manipulation signature)."
                         if max_a > 20
-                        else “within normal compression range.”
+                        else "within normal compression range."
                     )
                 ))(
-                    int(o.get(“num_anomaly_regions”, 0) or 0),
-                    float(o.get(“max_anomaly”, 0) or 0.0),
+                    int(o.get("num_anomaly_regions", 0) or 0),
+                    float(o.get("max_anomaly", 0) or 0.0),
                 )
             ),
-            “jpeg_ghost_detect”: lambda o: (
-                o.get(“ghost_limitation_note”, “JPEG ghost detection: not applicable for this file type.”)
-                if o.get(“ghost_not_applicable”) else
-                f”JPEG ghost analysis {'detected double-compression artifacts' if o.get('ghost_detected') else 'found no ghost artifacts'} “
-                f”with {o.get('confidence', 0):.0%} confidence across {len(o.get('ghost_regions', []))} region(s).”
+            "jpeg_ghost_detect": lambda o: (
+                o.get("ghost_limitation_note", "JPEG ghost detection: not applicable for this file type.")
+                if o.get("ghost_not_applicable") else
+                f"JPEG ghost analysis {'detected double-compression artifacts' if o.get('ghost_detected') else 'found no ghost artifacts'} "
+                f"with {o.get('confidence', 0):.0%} confidence across {len(o.get('ghost_regions', []))} region(s)."
             ),
             "frequency_domain_analysis": lambda o: (
                 f"Frequency domain analysis yielded anomaly score {o.get('anomaly_score', 0):.3f} "
@@ -1404,9 +1447,13 @@ class ReActLoopEngine:
             ),
             # FIXED: key was 'noise_inconsistency' — actual keys: noise_consistency_score, outlier_region_count, verdict
             "noise_fingerprint": lambda o: (
-                f"PRNU noise fingerprint: {o.get('verdict', 'INCONCLUSIVE')} — "
-                f"consistency score {o.get('noise_consistency_score', 0):.3f}, "
-                f"{o.get('outlier_region_count', 0)} of {o.get('total_regions', 0)} region(s) flagged as outliers."
+                o.get("file_format_note", "PRNU noise fingerprint analysis not applicable for this file type.")
+                if o.get("noise_fingerprint_not_applicable")
+                else (
+                    f"PRNU noise fingerprint: {o.get('verdict', 'INCONCLUSIVE')} — "
+                    f"consistency score {o.get('noise_consistency_score', 0):.3f}, "
+                    f"{o.get('outlier_region_count', 0)} of {o.get('total_regions', 0)} region(s) flagged as outliers."
+                )
             ),
             "copy_move_detect": lambda o: (
                 f"Copy-move detection: {o.get('match_count', o.get('num_matches', 0))} keypoint match(es). "
@@ -1616,12 +1663,16 @@ class ReActLoopEngine:
             ),
             # ── New tools added in this session ───────────────────────────────
             "prnu_analysis": lambda o: (
-                f"PRNU camera sensor fingerprint: {o.get('prnu_verdict', 'INCONCLUSIVE')}. "
-                f"Mean block correlation: {o.get('mean_block_correlation', 0):.4f}, "
-                f"min: {o.get('min_block_correlation', 0):.4f}, "
-                f"noise variance CV: {o.get('noise_variance_cv', 0):.4f}. "
-                f"{o.get('outlier_block_count', 0)} of {o.get('total_blocks', 0)} block(s) inconsistent. "
-                + ("MULTI-SOURCE SENSOR DETECTED — possible splice/compositing." if o.get('inconsistent') else "Single camera source confirmed.")
+                o.get("file_format_note", "PRNU camera fingerprint analysis not applicable for this file type.")
+                if o.get("prnu_not_applicable")
+                else (
+                    f"PRNU camera sensor fingerprint: {o.get('prnu_verdict', 'INCONCLUSIVE')}. "
+                    f"Mean block correlation: {o.get('mean_block_correlation', 0):.4f}, "
+                    f"min: {o.get('min_block_correlation', 0):.4f}, "
+                    f"noise variance CV: {o.get('noise_variance_cv', 0):.4f}. "
+                    f"{o.get('outlier_block_count', 0)} of {o.get('total_blocks', 0)} block(s) inconsistent. "
+                    + ("MULTI-SOURCE SENSOR DETECTED — possible splice/compositing." if o.get('inconsistent') else "Single camera source confirmed.")
+                )
             ),
             "cfa_demosaicing": lambda o: (
                 f"CFA demosaicing pattern: {o.get('cfa_verdict', 'INCONCLUSIVE')}. "
@@ -1676,6 +1727,8 @@ class ReActLoopEngine:
             ),
             # ── Image tools — missing entries ──────────────────────────────────
             "ela_anomaly_classify": lambda o: (
+                o.get("ela_limitation_note", "ELA block classification not applicable for this file format.")
+                if o.get("ela_not_applicable") else
                 f"ELA anomaly classification: {o.get('anomaly_block_count', o.get('num_anomaly_regions', 0))} "
                 f"anomalous block(s) out of {o.get('total_blocks', '?')} total. "
                 f"ELA mean: {o.get('ela_mean', 0):.3f}, max deviation: {o.get('max_anomaly', 0)}. "
@@ -1765,7 +1818,7 @@ class ReActLoopEngine:
         if interpreter and tool_result.success:
             try:
                 interpreted_msg = interpreter(output)
-                # Do not restate a hard “{confidence}% certainty” sentence here,
+                # Do not restate a hard "{confidence}% certainty" sentence here,
                 # as the UI already shows calibrated confidence and this wording
                 # can be misleading. Keep this as a plain, human-readable summary.
                 return f"{tool_label}: {interpreted_msg}"

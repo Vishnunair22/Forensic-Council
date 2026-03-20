@@ -26,8 +26,8 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
-_MAX_RETRIES = 2
-_BASE_BACKOFF = 1.0
+_MAX_RETRIES = 5
+_BASE_BACKOFF = 2.0
 
 
 @dataclass
@@ -88,10 +88,9 @@ class LLMClient:
 
             resp.latency_ms = (time.monotonic() - t0) * 1000
             resp.provider = self.provider
+            tool_name = resp.tool_call.get("name") if resp.tool_call else None
             logger.debug(
-                "LLM call complete provider=%s model=%s latency_ms=%.0f tool=%s",
-                self.provider, self.model, resp.latency_ms,
-                resp.tool_call.get("name") if resp.tool_call else None,
+                f"LLM call complete provider={self.provider} model={self.model} latency_ms={resp.latency_ms:.0f} tool={tool_name}"
             )
             return resp
 
@@ -141,8 +140,7 @@ class LLMClient:
                 if response.status_code in _RETRYABLE_STATUS:
                     wait = _BASE_BACKOFF * (2 ** attempt)
                     logger.warning(
-                        "LLM API %s, retrying in %.1fs (attempt %d/%d)",
-                        response.status_code, wait, attempt + 1, _MAX_RETRIES,
+                        f"LLM API {response.status_code}, retrying in {wait:.1f}s (attempt {attempt + 1}/{_MAX_RETRIES})"
                     )
                     await asyncio.sleep(wait)
                     continue
@@ -150,7 +148,7 @@ class LLMClient:
             except httpx.TimeoutException:
                 if attempt < _MAX_RETRIES - 1:
                     wait = _BASE_BACKOFF * (2 ** attempt)
-                    logger.warning("LLM API timeout, retrying in %.1fs", wait)
+                    logger.warning(f"LLM API timeout, retrying in {wait:.1f}s")
                     await asyncio.sleep(wait)
                 else:
                     raise
@@ -322,6 +320,8 @@ class LLMClient:
         system_prompt: str,
         user_content: str,
         max_tokens: int | None = None,
+        timeout_override: float | None = None,
+        json_mode: bool = True,
     ) -> str:
         """
         Single-shot text generation for Arbiter report synthesis.
@@ -350,13 +350,19 @@ class LLMClient:
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
                 }
-                payload = {
+                payload: dict[str, Any] = {
                     "model": self.model,
                     "messages": messages,
                     "temperature": 0.2,
                     "max_tokens": tokens,
                 }
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                if json_mode:
+                    payload["response_format"] = {"type": "json_object"}
+                # Use a shorter timeout for arbiter synthesis (12 s) so retries
+                # finish within the 40 s per-narrative cap set in arbiter.py.
+                # Agent synthesis (4000 tok grouped Groq) needs up to 25 s.
+                _synth_timeout = timeout_override if timeout_override is not None else min(self.timeout, 12.0)
+                async with httpx.AsyncClient(timeout=_synth_timeout) as client:
                     resp = await self._with_retry(
                         lambda: client.post(url, headers=headers, json=payload)
                     )
@@ -377,7 +383,8 @@ class LLMClient:
                     "messages": [{"role": "user", "content": user_content}],
                     "temperature": 0.2,
                 }
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                _synth_timeout = timeout_override if timeout_override is not None else min(self.timeout, 12.0)
+                async with httpx.AsyncClient(timeout=_synth_timeout) as client:
                     resp = await self._with_retry(
                         lambda: client.post(url, headers=headers, json=payload)
                     )

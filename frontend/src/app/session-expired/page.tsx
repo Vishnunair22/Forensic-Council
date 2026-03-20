@@ -28,22 +28,27 @@ export default function SessionExpiredPage() {
     };
 
     return (
-        <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 text-center">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-900/15 via-black to-black -z-50" />
+        <div className="min-h-screen bg-[#030308] text-white flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(245,158,11,0.07),transparent_60%)] pointer-events-none" />
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none" />
 
             <motion.div
                 initial={{ opacity: 0, y: 24, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ duration: 0.4, ease: "easeOut" }}
-                className="max-w-md w-full p-8 rounded-3xl bg-slate-900/60 border border-amber-500/25 shadow-2xl shadow-amber-500/10 backdrop-blur-xl flex flex-col items-center"
+                className="glass-modal max-w-md w-full p-8 rounded-3xl flex flex-col items-center border-amber-500/20"
+                style={{ borderColor: "rgba(245,158,11,0.18)" }}
             >
-                <div className="w-16 h-16 bg-amber-500/10 text-amber-400 rounded-2xl flex items-center justify-center mb-6">
-                    <ShieldX className="w-8 h-8" />
+                {/* Amber tint top edge */}
+                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-400/40 to-transparent rounded-t-3xl pointer-events-none" />
+
+                <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/25 text-amber-400 rounded-2xl flex items-center justify-center mb-6 shadow-[0_0_28px_rgba(245,158,11,0.15)]">
+                    <ShieldX className="w-8 h-8" aria-hidden="true" />
                 </div>
 
                 <h1 className="text-2xl font-bold mb-3">Session Expired</h1>
 
-                <p className="text-slate-400 mb-8 text-sm leading-relaxed">
+                <p className="text-slate-400 mb-8 text-sm leading-relaxed text-center">
                     Your investigator session has expired or is no longer valid.
                     Please return to the dashboard and authenticate again to
                     continue forensic analysis.
@@ -51,9 +56,15 @@ export default function SessionExpiredPage() {
 
                 <button
                     onClick={handleReturn}
-                    className="w-full py-4 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold transition-all flex items-center justify-center gap-2 group"
+                    className="btn w-full py-4 rounded-xl font-bold"
+                    style={{
+                      background: "linear-gradient(135deg, #d97706 0%, #b45309 100%)",
+                      color: "white",
+                      border: "1px solid rgba(245,158,11,0.4)",
+                      boxShadow: "0 0 24px rgba(245,158,11,0.20)",
+                    }}
                 >
-                    <LogIn className="w-5 h-5" />
+                    <LogIn className="w-5 h-5" aria-hidden="true" />
                     Return to Dashboard
                 </button>
             </motion.div>

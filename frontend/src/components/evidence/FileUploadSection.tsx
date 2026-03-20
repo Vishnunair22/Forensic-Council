@@ -12,6 +12,8 @@ import {
   RotateCcw,
   ArrowRight,
   UploadCloud,
+  FileAudio,
+  File,
 } from "lucide-react";
 
 interface FileUploadSectionProps {
@@ -96,19 +98,23 @@ export function FileUploadSection({
     >
       {/* Title Section */}
       <div className="text-center mb-10">
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm text-cyan-400 backdrop-blur-md mb-6">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full
+          bg-white/[0.05] border border-white/[0.10]
+          text-xs font-mono text-cyan-400 backdrop-blur-md mb-6
+          shadow-[0_0_20px_rgba(0,212,255,0.06)]">
+          <span className="relative flex h-2 w-2" aria-hidden="true">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-70" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
           </span>
-          Evidence Intake Terminal
+          <span className="uppercase tracking-widest">Evidence Intake Terminal</span>
         </div>
-        <h1 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">
+        <h1 className="text-4xl md:text-5xl font-extrabold mb-4 tracking-tight
+          bg-gradient-to-b from-white via-white to-slate-400 bg-clip-text text-transparent leading-[1.05] pb-1">
           Initiate Investigation.
         </h1>
-        <p className="text-slate-400 text-lg font-light max-w-md mx-auto">
+        <p className="text-slate-400 text-base font-normal max-w-md mx-auto leading-relaxed">
           Deploy the{" "}
-          <span className="text-emerald-400 font-medium">
+          <span className="text-emerald-400 font-semibold">
             Council Autonomous Parsing System
           </span>{" "}
           on your digital artifact.
@@ -148,11 +154,11 @@ export function FileUploadSection({
             {!file.type.startsWith("image/") &&
               !file.type.startsWith("video/") && (
                 <div className="flex flex-col items-center justify-center h-52 gap-4">
-                  <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.15)]">
+                  <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/22 flex items-center justify-center shadow-[0_0_22px_rgba(16,185,129,0.16)]">
                     {file.type.startsWith("audio/") ? (
-                      <span className="text-3xl">🎵</span>
+                      <FileAudio className="w-8 h-8 text-emerald-400" aria-hidden="true" />
                     ) : (
-                      <span className="text-3xl">📄</span>
+                      <File className="w-8 h-8 text-slate-400" aria-hidden="true" />
                     )}
                   </div>
                   {file.type.startsWith("audio/") && (
@@ -193,27 +199,27 @@ export function FileUploadSection({
             <button
               onClick={onClear}
               disabled={isUploading}
-              className="flex-1 flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-slate-900/40 border border-slate-700/30 text-slate-300 hover:bg-slate-900/60 disabled:opacity-50 transition-all font-medium"
+              className="btn btn-ghost flex-1 py-3.5 rounded-xl"
             >
-              <RotateCcw className="w-4 h-4 text-slate-400" />
+              <RotateCcw className="w-4 h-4" aria-hidden="true" />
               Clear
             </button>
             <button
               onClick={() => onUpload(file)}
               disabled={isUploading}
-              className="flex-1 flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-emerald-600/30 border border-emerald-500/50 text-emerald-300 hover:bg-emerald-600/50 disabled:opacity-50 transition-all font-medium"
+              className="btn btn-primary flex-1 py-3.5 rounded-xl font-bold"
             >
               {isUploading ? (
                 <>
                   <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity }}>
-                    <UploadCloud className="w-4 h-4" />
+                    <UploadCloud className="w-4 h-4" aria-hidden="true" />
                   </motion.div>
-                  Uploading...
+                  Uploading…
                 </>
               ) : (
                 <>
-                  <ArrowRight className="w-4 h-4" />
-                  Analyze
+                  <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                  Analyze Evidence
                 </>
               )}
             </button>
@@ -228,38 +234,50 @@ export function FileUploadSection({
           onDragOver={(e) => { e.preventDefault(); if (!isDragging) onDragEnter(); }}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`w-full glass-panel rounded-[2rem] overflow-hidden border-2 border-dashed transition-all duration-300 ${isDragging
-              ? "border-emerald-500/70"
-              : "border-white/[0.10]"
-            } relative cursor-pointer`}
+          role="button"
+          tabIndex={0}
+          aria-label="File drop zone — click or press Enter to browse"
+          onClick={() => fileInputRef.current?.click()}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInputRef.current?.click(); } }}
+          className={`w-full glass-panel rounded-[2rem] overflow-hidden border-2 border-dashed
+            transition-all duration-300 relative cursor-pointer
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent
+            ${isDragging
+              ? "border-emerald-500/75 shadow-[inset_0_0_50px_rgba(16,185,129,0.07)]"
+              : "border-white/[0.09] hover:border-emerald-500/42 hover:shadow-[inset_0_0_35px_rgba(16,185,129,0.04)]"
+            }`}
         >
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+          {/* Drag glow */}
+          <motion.div animate={{ opacity: isDragging ? 1 : 0 }} transition={{ duration: 0.2 }}
+            className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.08),transparent_68%)] pointer-events-none" />
 
-          <div
-            className="flex flex-col items-center justify-center py-16 gap-4"
-            onClick={() => fileInputRef.current?.click()}
-          >
+          <div className="flex flex-col items-center justify-center py-16 px-8 gap-4">
             <motion.div
-              animate={{
-                scale: isDragging ? 1.1 : 1,
-              }}
-              className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.15)]"
+              animate={{ scale: isDragging ? 1.12 : 1 }}
+              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+              className={`w-[72px] h-[72px] rounded-2xl flex items-center justify-center transition-all duration-200
+                bg-gradient-to-br from-emerald-500/18 to-emerald-600/8
+                border shadow-[0_0_24px_rgba(16,185,129,0.16)]
+                ${isDragging ? "border-emerald-400/55 shadow-[0_0_36px_rgba(16,185,129,0.28)]" : "border-emerald-500/25"}`}
             >
-              <UploadCloud className="w-8 h-8 text-emerald-400" />
+              <UploadCloud className={`w-8 h-8 transition-colors duration-200 ${isDragging ? "text-emerald-200" : "text-emerald-400"}`} aria-hidden="true" />
             </motion.div>
             <div className="text-center">
-              <p className="text-lg font-semibold text-white mb-1">
-                {isDragging
-                  ? "Drop your evidence here"
-                  : "Drag evidence file here"}
+              <p className="text-base font-semibold text-white mb-1 tracking-wide">
+                {isDragging ? "Drop your evidence here" : "Drag evidence file here"}
               </p>
               <p className="text-sm text-slate-400">
                 or click to select from your system
               </p>
             </div>
-            <p className="text-xs text-slate-500 mt-2">
-              Supported: Images, Video, Audio, Documents
-            </p>
+            <div className="flex gap-2 flex-wrap justify-center mt-1">
+              {["IMAGE", "VIDEO", "AUDIO"].map(t => (
+                <span key={t} className="px-2.5 py-0.5 bg-white/[0.04] border border-white/[0.08]
+                  rounded-full text-[10px] font-mono text-slate-500 tracking-widest">
+                  {t}
+                </span>
+              ))}
+            </div>
           </div>
         </motion.div>
       )}

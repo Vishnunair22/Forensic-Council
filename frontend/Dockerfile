@@ -44,8 +44,13 @@ COPY . .
 # Build-time variables baked into the JS bundle
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_DEMO_PASSWORD
+# INTERNAL_API_URL must be a build-time ARG so next.config.ts rewrites() can
+# resolve it during `next build` — it is NOT available as a runtime-only env var
+# because rewrites are serialised into routes-manifest.json at build time.
+ARG INTERNAL_API_URL=http://forensic_api:8000
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_DEMO_PASSWORD=${NEXT_PUBLIC_DEMO_PASSWORD}
+ENV INTERNAL_API_URL=${INTERNAL_API_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # BuildKit cache mount preserves Next.js compiler cache between rebuilds

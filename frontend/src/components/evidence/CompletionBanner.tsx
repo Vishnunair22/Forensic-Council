@@ -57,8 +57,9 @@ export function CompletionBanner({
           compiled their findings. The evidence has been thoroughly examined from
           multiple perspectives.
         </p>
-        <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm font-medium">
-          <span>✓ {completedCount} of {agentCount} agents reported</span>
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm font-mono tracking-wide">
+          <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
+          <span>{completedCount} of {agentCount} agents reported</span>
         </div>
       </motion.div>
 
@@ -69,13 +70,15 @@ export function CompletionBanner({
         transition={{ delay: 0.4 }}
         className="w-full grid grid-cols-1 md:grid-cols-2 gap-4 mb-8"
       >
-        <div className="p-4 rounded-lg bg-white/5 border border-white/10">
-          <p className="text-sm text-slate-400 mb-2">Analysis Status</p>
-          <p className="text-lg font-semibold text-emerald-400">✓ Complete</p>
+        <div className="p-4 rounded-xl glass-panel border border-white/[0.08]">
+          <p className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Analysis Status</p>
+          <p className="text-base font-semibold text-emerald-400 flex items-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4" aria-hidden="true" /> Complete
+          </p>
         </div>
-        <div className="p-4 rounded-lg bg-white/5 border border-white/10">
-          <p className="text-sm text-slate-400 mb-2">Agents Deployed</p>
-          <p className="text-lg font-semibold text-white">{completedCount} / {agentCount}</p>
+        <div className="p-4 rounded-xl glass-panel border border-white/[0.08]">
+          <p className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">Agents Deployed</p>
+          <p className="text-base font-semibold text-white">{completedCount} <span className="text-slate-500">/ {agentCount}</span></p>
         </div>
       </motion.div>
 
@@ -88,17 +91,17 @@ export function CompletionBanner({
       >
         <button
           onClick={onViewResults}
-          className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-emerald-600/30 border border-emerald-500/50 text-emerald-300 hover:bg-emerald-600/50 transition-all font-semibold group"
+          className="btn btn-primary w-full py-4 rounded-xl font-bold text-base"
         >
-          <FileText className="w-5 h-5 group-hover:scale-110 transition-transform" />
+          <FileText className="w-5 h-5" aria-hidden="true" />
           View Final Report
-          <ArrowRight className="w-4 h-4" />
+          <ArrowRight className="w-4 h-4" aria-hidden="true" />
         </button>
         <button
           onClick={onAnalyzeNew}
-          className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-900/40 border border-slate-700/30 text-slate-300 hover:bg-slate-900/60 transition-all font-medium"
+          className="btn btn-ghost w-full py-3 rounded-xl"
         >
-          <RotateCcw className="w-4 h-4" />
+          <RotateCcw className="w-4 h-4" aria-hidden="true" />
           Analyze New Evidence
         </button>
       </motion.div>

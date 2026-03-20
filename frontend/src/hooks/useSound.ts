@@ -8,8 +8,28 @@ export type SoundType =
   | "page_load" | "analysis_done" | "arbiter_start" | "arbiter_done" | "result_reveal";
 
 let globalCtx: AudioContext | null = null;
+// Chrome's autoplay policy: AudioContext must be created/resumed after a user gesture.
+// We set this flag on the first qualifying DOM event and create the context then.
+let _audioUnlocked = false;
 
 type AudioContextConstructor = new () => AudioContext;
+
+function _tryUnlock() {
+    if (_audioUnlocked) return;
+    _audioUnlocked = true;
+    try {
+        if (typeof window === "undefined") return;
+        const AC = window.AudioContext || (window as unknown as { webkitAudioContext: AudioContextConstructor }).webkitAudioContext;
+        if (AC && !globalCtx) globalCtx = new AC();
+        if (globalCtx?.state === "suspended") globalCtx.resume().catch(() => {});
+    } catch { /* non-critical */ }
+}
+
+// Register once — removes itself after the first gesture.
+if (typeof window !== "undefined") {
+    const _once = () => { _tryUnlock(); window.removeEventListener("pointerdown", _once, true); };
+    window.addEventListener("pointerdown", _once, { capture: true, passive: true });
+}
 
 /** Soft gain envelope helper — attack + exponential release */
 function createSoftGain(ctx: AudioContext, peakGain: number, attackTime: number, releaseTime: number): GainNode {
@@ -24,11 +44,9 @@ export function useSound() {
     const playSound = useCallback((type: SoundType) => {
         try {
             if (typeof window === "undefined") return;
-
-            if (!globalCtx) {
-                const AC = window.AudioContext || (window as unknown as { webkitAudioContext: AudioContextConstructor }).webkitAudioContext;
-                if (AC) globalCtx = new AC();
-            }
+            // Only proceed if user has already interacted — prevents the Chrome
+            // "AudioContext was not allowed to start" warning on programmatic calls.
+            if (!_audioUnlocked || !globalCtx) return;
 
             const ctx = globalCtx;
             if (!ctx) return;

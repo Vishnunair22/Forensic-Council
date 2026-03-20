@@ -59,20 +59,40 @@ class Agent1Image(ForensicAgent):
         return "Agent1_ImageIntegrity"
     
     @property
+    def _is_lossless(self) -> bool:
+        """True if the evidence file is a lossless image (PNG, BMP, TIFF, GIF, WEBP)."""
+        mime = getattr(self.evidence_artifact, "mime_type", "") or ""
+        lossless_mimes = {"image/png", "image/bmp", "image/tiff", "image/gif", "image/webp"}
+        return mime.lower() in lossless_mimes
+
+    @property
     def task_decomposition(self) -> list[str]:
         """
         Initial analysis tasks — fast numpy/OpenCV tools, ~15-20s total.
-        Covers the highest-signal forensic checks before deep pass.
+        For JPEG files: includes ELA and JPEG ghost detection.
+        For lossless (PNG/BMP/TIFF/WEBP/GIF): skips JPEG-specific tools;
+        uses frequency domain, noise fingerprint, and semantic analysis instead.
         """
-        return [
+        base = [
             "Verify file hash against ingestion hash",
             "Perform semantic image understanding to identify image type and context",
-            "Run full-image ELA and map anomaly regions",
-            "Run ELA anomaly block classification on flagged blocks",
-            "Run JPEG ghost detection on all flagged regions",
             "Run frequency-domain GAN artifact detection",
-            "Self-reflection pass",
         ]
+        if self._is_lossless:
+            # Lossless images: ELA and JPEG ghost are not applicable.
+            # Use noise fingerprint and frequency domain as primary integrity checks.
+            return base + [
+                "Run noise footprint analysis for region source inconsistency",
+                "Self-reflection pass",
+            ]
+        else:
+            # JPEG (lossy): full ELA + ghost pipeline
+            return base + [
+                "Run full-image ELA and map anomaly regions",
+                "Run ELA anomaly block classification on flagged blocks",
+                "Run JPEG ghost detection on all flagged regions",
+                "Self-reflection pass",
+            ]
 
     @property
     def deep_task_decomposition(self) -> list[str]:
@@ -94,8 +114,8 @@ class Agent1Image(ForensicAgent):
 
     @property
     def iteration_ceiling(self) -> int:
-        """Maximum iterations — 6 initial tasks × 2 iters each + 2 buffer."""
-        return 14
+        """Maximum iterations — tasks + 3 buffer regardless of file type."""
+        return len(self.task_decomposition) + 3
     
     @property
     def supported_file_types(self) -> list[str]:
@@ -212,6 +232,39 @@ class Agent1Image(ForensicAgent):
         async def ela_anomaly_classify_handler(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact
             quality = input_data.get("quality", 95)
+            # ELA is meaningless for lossless formats — check FIRST, before the ML
+            # subprocess runs, so PNG/BMP/TIFF/GIF/WEBP always return not_applicable
+            # regardless of whether the ML tool is available.
+            # Evidence files may be stored as UUID .bin paths, so check PIL magic bytes
+            # and MIME type in addition to the file extension.
+            import os as _os
+            from PIL import Image as _PILImage
+            _lossless_exts = {".png", ".bmp", ".tiff", ".tif", ".gif", ".webp"}
+            _lossless_pil = {"PNG", "BMP", "TIFF", "GIF", "WEBP"}
+            _lossless_mimes = {"image/png", "image/bmp", "image/tiff", "image/gif", "image/webp"}
+            _ext = _os.path.splitext(artifact.file_path)[1].lower()
+            _mime = getattr(artifact, "mime_type", None) or ""
+            try:
+                _pil_fmt = (_PILImage.open(artifact.file_path).format or "").upper()
+            except Exception:
+                _pil_fmt = ""
+            if _ext in _lossless_exts or _pil_fmt in _lossless_pil or _mime.lower() in _lossless_mimes:
+                not_applicable = {
+                    "ela_not_applicable": True,
+                    "ela_limitation_note": (
+                        "ELA block classification requires JPEG re-compression artifacts; "
+                        "lossless formats (PNG/BMP/TIFF) produce no baseline compression noise, "
+                        "making ELA results forensically unreliable for this file."
+                    ),
+                    "anomaly_detected": False,
+                    "anomaly_block_count": 0,
+                    "num_anomaly_regions": 0,
+                    "court_defensible": True,
+                    "available": True,
+                    "backend": "pil-ela-inline",
+                }
+                await self._record_tool_result("ela_anomaly_classify", not_applicable)
+                return not_applicable
             result = await run_ml_tool("ela_anomaly_classifier.py", artifact.file_path,
                                       extra_args=["--quality", str(quality)], timeout=25.0)
             if result.get("available") and not result.get("error"):
@@ -247,14 +300,14 @@ class Agent1Image(ForensicAgent):
                     "max_anomaly": ela_max,
                     "num_anomaly_regions": anomaly_blocks,
                     "anomaly_detected": anomaly_blocks > 5,
-                    "backend": "pil-ela-inline-fallback",
+                    "backend": "pil-ela-inline",
                     "court_defensible": True, "available": True,
                 }
                 await self._record_tool_result("ela_anomaly_classify", classify_result)
                 return classify_result
             except Exception as e:
                 await self._record_tool_error("ela_anomaly_classify", str(e))
-                return {"error": str(e), "anomaly_detected": False, "backend": "fallback-failed", "court_defensible": False}
+                return {"error": str(e), "anomaly_detected": False, "backend": "tool-exception", "court_defensible": False}
 
         async def splicing_detect_handler(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact
@@ -286,14 +339,32 @@ class Agent1Image(ForensicAgent):
                     "num_inconsistent_blocks": inconsistent,
                     "total_blocks": total_blocks,
                     "inconsistency_ratio": round(inconsistent / total_blocks, 3) if total_blocks else 0,
-                    "backend": "opencv-dct-inline-fallback",
+                    "backend": "opencv-dct-inline",
                     "court_defensible": True, "available": True,
                 }
             except Exception as e:
-                return {"splicing_detected": False, "error": str(e), "backend": "fallback-failed", "court_defensible": False}
+                return {"splicing_detected": False, "error": str(e), "backend": "tool-exception", "court_defensible": False}
 
         async def noise_fingerprint_handler(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact
+            # PRNU noise fingerprint is only meaningful for camera-captured images.
+            # Lossless formats (PNG/BMP/TIFF/GIF/WEBP) are typically screenshots or
+            # digitally-created files with no camera sensor noise pattern.
+            # Running PRNU on them produces spurious INCONSISTENT results (pure digital
+            # images have algorithmically-uniform pixels that violate camera-noise assumptions).
+            if self._is_lossless:
+                return {
+                    "noise_fingerprint_not_applicable": True,
+                    "verdict": "NOT_APPLICABLE",
+                    "file_format_note": (
+                        "PRNU noise fingerprint analysis requires a camera-captured image. "
+                        "This file is a lossless format (PNG/BMP/TIFF/GIF/WEBP), indicating a "
+                        "screenshot or digitally-created image — camera sensor noise patterns "
+                        "are absent by design. PRNU results would be forensically unreliable."
+                    ),
+                    "court_defensible": True,
+                    "available": True,
+                }
             regions = input_data.get("regions", 6)
             result = await run_ml_tool("noise_fingerprint.py", artifact.file_path,
                                       extra_args=["--regions", str(regions)], timeout=25.0)
@@ -322,11 +393,11 @@ class Agent1Image(ForensicAgent):
                     "noise_consistency_score": round(1.0 - std_of_stds / (mean_std + 1e-6), 3),
                     "outlier_region_count": outliers,
                     "total_regions": len(quadrant_stds),
-                    "backend": "opencv-prnu-lite-fallback",
+                    "backend": "opencv-prnu-lite-inline",
                     "court_defensible": True, "available": True,
                 }
             except Exception as e:
-                return {"verdict": "INCONCLUSIVE", "error": str(e), "backend": "fallback-failed", "court_defensible": False}
+                return {"verdict": "INCONCLUSIVE", "error": str(e), "backend": "tool-exception", "court_defensible": False}
 
         async def deepfake_frequency_check_handler(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact
@@ -342,23 +413,31 @@ class Agent1Image(ForensicAgent):
                 fft_shift = np.fft.fftshift(fft)
                 magnitude = np.abs(fft_shift)
                 h, w = magnitude.shape
-                # High-frequency ratio: energy outside center 50%
+                # High-frequency ratio: sum of magnitudes outside the central 50%×50% rectangle.
+                # With sum-of-magnitudes (not squared energy) the outer 75% of pixels still
+                # contribute substantially, so natural photographs land around 0.45–0.65.
+                # GAN-generated images suppress high frequencies → lower than natural range.
                 cy, cx = h // 2, w // 2
                 center_mask = np.zeros((h, w), dtype=bool)
                 center_mask[cy-h//4:cy+h//4, cx-w//4:cx+w//4] = True
                 total_energy = magnitude.sum() + 1e-6
                 high_freq_ratio = float(magnitude[~center_mask].sum() / total_energy)
-                # GAN images often have suppressed high frequencies
-                anomaly_score = round(abs(high_freq_ratio - 0.85), 3)
+                # Natural floor ~0.40; well below → synthetic/GAN suppression signal.
+                # Deviation above natural range is NOT a manipulation signal with this formula.
+                _NATURAL_FLOOR = 0.40
+                suppression = max(0.0, _NATURAL_FLOOR - high_freq_ratio)
+                anomaly_score = round(suppression / _NATURAL_FLOOR, 3)
                 return {
                     "anomaly_score": anomaly_score,
                     "high_freq_ratio": round(high_freq_ratio, 4),
-                    "gan_artifact_detected": anomaly_score > 0.3,
-                    "backend": "fft-inline-fallback",
+                    "gan_artifact_detected": high_freq_ratio < _NATURAL_FLOOR,
+                    "backend": "fft-inline",
                     "court_defensible": True, "available": True,
+                    "evidentiary_weight": "supporting_only",
+                    "limitation_note": "Inline FFT heuristic — full deepfake_frequency.py ML model unavailable. Supporting signal only; requires corroboration.",
                 }
             except Exception as e:
-                return {"anomaly_score": 0, "error": str(e), "backend": "fallback-failed", "court_defensible": False}
+                return {"anomaly_score": 0, "error": str(e), "backend": "tool-exception", "court_defensible": False}
 
         async def copy_move_detect_handler(input_data: dict) -> dict:
             """Detect copy-move forgery using SIFT feature matching."""
@@ -375,7 +454,7 @@ class Agent1Image(ForensicAgent):
                 kp, des = sift.detectAndCompute(img, None)
                 if des is None or len(des) < 10:
                     return {"copy_move_detected": False, "match_count": 0, "num_matches": 0,
-                            "backend": "sift-inline-fallback", "court_defensible": True, "available": True}
+                            "backend": "sift-inline", "court_defensible": True, "available": True}
                 bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
                 matches = bf.match(des, des)
                 # Filter out self-matches (same keypoint) and nearby keypoints
@@ -388,12 +467,12 @@ class Agent1Image(ForensicAgent):
                     "match_count": len(good_matches),
                     "num_matches": len(good_matches),
                     "keypoints_found": len(kp),
-                    "backend": "sift-inline-fallback",
+                    "backend": "sift-inline",
                     "court_defensible": True, "available": True,
                 }
             except Exception as e:
                 return {"copy_move_detected": False, "match_count": 0, "error": str(e),
-                        "backend": "fallback-failed", "court_defensible": False}
+                        "backend": "tool-exception", "court_defensible": False}
 
         async def extract_text_from_image_handler(input_data: dict) -> dict:
             """Handle OCR text extraction with input_data dict."""
@@ -413,9 +492,9 @@ class Agent1Image(ForensicAgent):
             artifact = input_data.get("artifact") or self.evidence_artifact
             result = await real_analyze_image_content(artifact=artifact)
             if result.get("error"):
-                await self._record_tool_error("semantic_understanding", result["error"])
+                await self._record_tool_error("analyze_image_content", result["error"])
             else:
-                await self._record_tool_result("semantic_understanding", result)
+                await self._record_tool_result("analyze_image_content", result)
             return result
 
         # Adversarial and sensor analysis handlers
@@ -623,8 +702,24 @@ class Agent1Image(ForensicAgent):
             the same camera. By computing cross-correlation of noise residuals across image
             regions, we detect whether different regions came from different sensors —
             a court-grade indicator of splice/compositing.
+
+            NOT APPLICABLE for lossless/digitally-created images (PNG/BMP/TIFF) — these
+            have no camera sensor noise and will always produce spurious INCONSISTENT results.
             """
             artifact = input_data.get("artifact") or self.evidence_artifact
+            if self._is_lossless:
+                return {
+                    "prnu_not_applicable": True,
+                    "prnu_verdict": "NOT_APPLICABLE",
+                    "file_format_note": (
+                        "PRNU camera fingerprint analysis is only valid for camera-captured images. "
+                        "Lossless format (PNG/BMP/TIFF/GIF/WEBP) indicates a screenshot or "
+                        "digitally-created file with no camera sensor noise pattern. "
+                        "PRNU analysis on such files produces forensically meaningless results."
+                    ),
+                    "court_defensible": True,
+                    "available": True,
+                }
             result = await run_ml_tool("prnu_analysis.py", artifact.file_path, timeout=45.0)
             if result.get("available") and not result.get("error"):
                 return result

@@ -8,6 +8,7 @@ tribunal escalation, and generates court-admissible reports.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from datetime import datetime, timezone
@@ -112,6 +113,28 @@ class ForensicReport(BaseModel):
     react_chains: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
     self_reflection_outputs: dict[str, dict[str, Any]] = Field(default_factory=dict)
     uncertainty_statement: str
+    # New structured summary fields
+    verdict_sentence: str = ""
+    key_findings: list[str] = Field(default_factory=list)
+    reliability_note: str = ""
+    # New verdict/confidence fields
+    manipulation_probability: float = 0.0
+    # C: Confidence range across all active agent findings
+    confidence_min: float = 0.0
+    confidence_max: float = 0.0
+    confidence_std_dev: float = 0.0
+    # New coverage/agent fields
+    applicable_agent_count: int = 0
+    skipped_agents: dict[str, str] = Field(default_factory=dict)
+    analysis_coverage_note: str = ""
+    # D: Flat per-agent verdict/confidence summary
+    per_agent_summary: dict[str, dict[str, Any]] = Field(
+        default_factory=dict,
+        description=(
+            "Flat summary for each agent: verdict, confidence_pct, tools_ok, "
+            "tools_total, findings, error_rate_pct."
+        ),
+    )
     cryptographic_signature: str = ""
     report_hash: str = ""
     signed_utc: Optional[datetime] = None
@@ -150,6 +173,64 @@ class CouncilArbiter:
         "Agent4": "Video Forensics",
         "Agent5": "Metadata Forensics",
     }
+
+    # ── A: Semantic category map ─────────────────────────────────────────
+    # Maps finding_type keywords → semantic category for cross-agent comparison.
+    # Two findings are "related" only if they share the same semantic category,
+    # not just an overlapping bag-of-words token.
+    _FINDING_CATEGORY_MAP: dict[str, str] = {
+        # Image integrity
+        "ela": "image_integrity", "error_level": "image_integrity",
+        "ghost": "image_integrity", "jpeg_ghost": "image_integrity",
+        "noise": "image_integrity", "frequency": "image_integrity",
+        "prnu": "image_integrity", "chromatic": "image_integrity",
+        # Manipulation signals
+        "splicing": "manipulation", "copy_move": "manipulation",
+        "manipulation": "manipulation", "deepfake": "manipulation",
+        "face_swap": "manipulation", "tamper": "manipulation",
+        "forgery": "manipulation",
+        # Metadata / provenance
+        "exif": "metadata", "gps": "metadata", "metadata": "metadata",
+        "timestamp": "metadata", "geolocation": "metadata",
+        "hex_signature": "metadata", "file_signature": "metadata",
+        # Codec / encoding
+        "codec": "codec", "encoding": "codec", "bitrate": "codec",
+        "compression": "codec", "quantization": "codec",
+        # Audio authenticity
+        "speaker": "audio", "anti_spoofing": "audio", "audio": "audio",
+        "diarization": "audio", "voice": "audio",
+        # Object / scene
+        "yolo": "object_detection", "object": "object_detection",
+        "lighting": "object_detection", "contraband": "object_detection",
+        "scene": "object_detection",
+        # Video motion
+        "optical_flow": "video", "video": "video",
+        "rolling_shutter": "video", "frame": "video",
+        # Steganography
+        "steganography": "steganography", "steg": "steganography",
+        "hidden": "steganography", "lsb": "steganography",
+    }
+
+    # ── B: Tool reliability tiers ────────────────────────────────────────
+    # Weight multiplier applied to each finding's confidence when computing
+    # manipulation_probability. Calibrated tools carry full weight; ML-based
+    # carry 0.75x; heuristic/metadata carry 0.50x.
+    _TOOL_RELIABILITY_TIERS: dict[str, float] = {
+        # Calibrated (highest weight — statistically validated)
+        "ela": 1.0, "jpeg_ghost": 1.0, "prnu_analysis": 1.0,
+        "codec_fingerprint": 1.0, "error_level_analysis": 1.0,
+        "noise_fingerprint": 1.0, "frequency_domain": 1.0,
+        # ML-based (medium weight — model-dependent)
+        "yolo_detection": 0.75, "deepfake_detection": 0.75,
+        "face_swap_detection": 0.75, "speaker_diarization": 0.75,
+        "anti_spoofing": 0.75, "optical_flow_analysis": 0.75,
+        "object_detection": 0.75, "lighting_consistency": 0.75,
+        # Heuristic / metadata (lower weight — easily spoofed)
+        "exif_analysis": 0.5, "metadata_analysis": 0.5,
+        "steganography_scan": 0.5, "hex_signature": 0.5,
+        "gps_analysis": 0.5, "timestamp_analysis": 0.5,
+    }
+    _DEFAULT_TOOL_RELIABILITY = 0.65  # fallback for unrecognised tool names
 
     async def deliberate(
         self,
@@ -208,9 +289,15 @@ class CouncilArbiter:
 
             not_applicable_flags = (
                 "ela_not_applicable", "ghost_not_applicable",
+                "noise_fingerprint_not_applicable", "prnu_not_applicable",
             )
             def _is_not_applicable(f: dict) -> bool:
                 meta = f.get("metadata") or {}
+                # Also treat NOT_APPLICABLE verdict (from lossless-format guards) as not-applicable
+                if str(meta.get("verdict", "")).upper() == "NOT_APPLICABLE":
+                    return True
+                if str(meta.get("prnu_verdict", "")).upper() == "NOT_APPLICABLE":
+                    return True
                 return any(meta.get(flag) for flag in not_applicable_flags)
 
             def _is_failed(f: dict) -> bool:
@@ -242,6 +329,46 @@ class CouncilArbiter:
                 error_rate=error_rate, confidence_score=confidence,
                 finding_count=total,
             )
+
+        def _assign_severity_tier(f: dict) -> str:
+            """Assign INFO/LOW/MEDIUM/HIGH/CRITICAL to a finding."""
+            meta = f.get("metadata") or {}
+            conf = float(f.get("confidence_raw") or 0.0)
+            status_str = str(f.get("status", "")).upper()
+            _na_flags = ("ela_not_applicable", "ghost_not_applicable",
+                         "noise_fingerprint_not_applicable", "prnu_not_applicable")
+            is_na = (
+                any(meta.get(flag) for flag in _na_flags)
+                or str(meta.get("verdict", "")).upper() == "NOT_APPLICABLE"
+                or str(meta.get("prnu_verdict", "")).upper() == "NOT_APPLICABLE"
+            )
+            is_failed = not is_na and meta.get("court_defensible") is False
+
+            if is_na:
+                return "INFO"
+            if meta.get("hash_matches") is True:
+                return "INFO"
+            if is_failed or status_str == "INCOMPLETE":
+                return "LOW"
+
+            _has_manip = (
+                meta.get("manipulation_detected") is True
+                or meta.get("deepfake_detected") is True
+                or meta.get("splicing_detected") is True
+                or meta.get("copy_move_detected") is True
+                or meta.get("mismatch_detected") is True
+                or "INCONSISTENT" in str(meta.get("prnu_verdict", "")).upper()
+            )
+            _has_anomaly = (
+                meta.get("anomaly_detected") is True
+                or meta.get("inconsistency_detected") is True
+                or str(meta.get("verdict", "")).upper() in ("TAMPERED", "SUSPICIOUS", "MANIPULATED")
+            )
+            if _has_manip:
+                return "CRITICAL" if conf >= 0.75 else "HIGH"
+            if _has_anomaly:
+                return "MEDIUM"
+            return "LOW"
 
         # Helper: call optional step-progress hook if set externally
         async def _step(msg: str) -> None:
@@ -279,6 +406,16 @@ class CouncilArbiter:
                 if agent_gemini:
                     gemini_findings_by_agent[agent_id] = agent_gemini
 
+        # Attach severity_tier to every finding now that deduplication is done.
+        for _aid, _flist in per_agent_findings.items():
+            for _f in _flist:
+                if isinstance(_f, dict) and "severity_tier" not in _f:
+                    _f["severity_tier"] = _assign_severity_tier(_f)
+        # Rebuild all_findings with updated dicts
+        all_findings = [f for findings_list in [
+            per_agent_findings[aid] for aid in active_agent_results
+        ] for f in findings_list]
+
         logger.info(
             f"Arbiter: {len(active_agent_results)} active agents, "
             f"{len(agent_results) - len(active_agent_results)} skipped, "
@@ -297,12 +434,34 @@ class CouncilArbiter:
             m for m in per_agent_metrics.values()
             if not m.get("skipped") and m.get("total_tools_called", 0) > 0
         ]
-        overall_confidence = round(
-            sum(m["confidence_score"] for m in active_metrics) / len(active_metrics), 3
-        ) if active_metrics else 0.0
+        # Weighted confidence: weight each agent by reliability × applicable tool count.
+        # An agent with 25% error rate and 4 applicable tools gets far less weight than
+        # one with 0% error rate and 8 tools.
+        _w_sum = 0.0
+        _wc_sum = 0.0
+        for _m in active_metrics:
+            _applicable = _m.get("total_tools_called", 0) - _m.get("tools_not_applicable", 0)
+            if _applicable <= 0:
+                continue
+            _reliability = max(0.0, 1.0 - _m.get("error_rate", 0.0))
+            _weight = _reliability * _applicable
+            _wc_sum += _m["confidence_score"] * _weight
+            _w_sum += _weight
+        overall_confidence = round(_wc_sum / _w_sum, 3) if _w_sum > 0 else 0.0
         overall_error_rate = round(
             sum(m["error_rate"] for m in active_metrics) / len(active_metrics), 3
         ) if active_metrics else 0.0
+
+        # ── C: Confidence range across active agent scores ────────────────
+        _all_conf_scores = [m["confidence_score"] for m in active_metrics if m.get("confidence_score", 0) > 0]
+        if _all_conf_scores:
+            confidence_min = round(min(_all_conf_scores), 3)
+            confidence_max = round(max(_all_conf_scores), 3)
+            _mean = sum(_all_conf_scores) / len(_all_conf_scores)
+            _variance = sum((x - _mean) ** 2 for x in _all_conf_scores) / len(_all_conf_scores)
+            confidence_std_dev = round(_variance ** 0.5, 3)
+        else:
+            confidence_min = confidence_max = confidence_std_dev = 0.0
 
         # ── Verdict ───────────────────────────────────────────────────────
         # CERTAIN:     high confidence, low error, no contested
@@ -316,20 +475,42 @@ class CouncilArbiter:
         comparisons = await self.cross_agent_comparison(all_findings)
 
         # Identify contradictions and run challenge loop
+        # Cap at 5 challenge loops — with many findings the O(n²) comparison can
+        # produce dozens of "contradictions". Beyond 5, we record the contested
+        # finding but skip the loop to avoid sequential custody-log overhead.
+        _MAX_CHALLENGE_LOOPS = 5
         await _step("Resolving contested evidence…")
         contested_findings = []
         challenge_results = []
         for comparison in comparisons:
             if comparison.verdict == FindingVerdict.CONTRADICTION:
-                contested_findings.append(comparison.model_dump(mode="json"))
-                # Run challenge loop for each contradiction
-                agent_a = comparison.finding_a.get("agent_id", "")
-                agent_b = comparison.finding_b.get("agent_id", "")
-                # Challenge the lower-confidence finding
+                _fa = comparison.finding_a
+                _fb = comparison.finding_b
+                _plain = (
+                    f"{self._AGENT_NAMES.get(_fa.get('agent_id',''), _fa.get('agent_id','Unknown'))} "
+                    f"reported \"{_fa.get('finding_type','unknown')}\" as {_fa.get('status','?')} "
+                    f"({(_fa.get('confidence_raw') or 0.0):.0%} confidence), "
+                    f"while {self._AGENT_NAMES.get(_fb.get('agent_id',''), _fb.get('agent_id','Unknown'))} "
+                    f"reported \"{_fb.get('finding_type','unknown')}\" as {_fb.get('status','?')} "
+                    f"({(_fb.get('confidence_raw') or 0.0):.0%} confidence). "
+                    "Flagged for human review."
+                )
+                _entry = comparison.model_dump(mode="json")
+                _entry["plain_description"] = _plain
+                contested_findings.append(_entry)
+                if len(challenge_results) >= _MAX_CHALLENGE_LOOPS:
+                    continue
                 conf_a = comparison.finding_a.get("confidence_raw", 0)
                 conf_b = comparison.finding_b.get("confidence_raw", 0)
-                challenged_agent = agent_b if conf_b < conf_a else agent_a
-                context_from_other = comparison.finding_b if challenged_agent == agent_a else comparison.finding_a
+                challenged_agent = (
+                    comparison.finding_b.get("agent_id", "")
+                    if conf_b < conf_a
+                    else comparison.finding_a.get("agent_id", "")
+                )
+                context_from_other = (
+                    comparison.finding_b if challenged_agent == comparison.finding_a.get("agent_id", "")
+                    else comparison.finding_a
+                )
                 result = await self.challenge_loop(
                     comparison, challenged_agent, context_from_other
                 )
@@ -366,76 +547,236 @@ class CouncilArbiter:
                 stub_count=len(stub_findings),
             )
 
-        # ── Per-agent Groq narrative (initial vs deep comparison) ──────────
-        await _step("Generating per-agent analysis via Groq…")
-        per_agent_analysis: dict[str, str] = {}
-        for agent_id, result in active_agent_results.items():
-            findings = result.get("findings", [])
-            if not findings:
-                continue
-            try:
-                narrative = await self._generate_agent_narrative(
-                    agent_id=agent_id,
-                    findings=findings,
-                    metrics=per_agent_metrics.get(agent_id, {}),
-                )
-                if narrative:
-                    per_agent_analysis[agent_id] = narrative
-            except Exception as narr_err:
-                logger.warning(f"Per-agent narrative failed for {agent_id}: {narr_err}")
-
         # ── Contested / incomplete / stub ─────────────────────────────────
         contested_findings_count = len(contested_findings)
 
-        # ── Verdict ───────────────────────────────────────────────────────
-        await _step("Calibrating confidence scores and computing verdict…")
-        if overall_confidence >= 0.80 and overall_error_rate <= 0.10 and contested_findings_count == 0:
-            overall_verdict = "CERTAIN"
-        elif overall_confidence >= 0.65 and overall_error_rate <= 0.20:
-            overall_verdict = "LIKELY"
-        elif overall_confidence >= 0.50 or (contested_findings_count > 0 and contested_findings_count <= 3):
-            overall_verdict = "UNCERTAIN"
-        elif overall_confidence < 0.50 and overall_error_rate > 0.40:
-            overall_verdict = "INCONCLUSIVE"
-        else:
-            overall_verdict = "REVIEW REQUIRED"
+        # ── applicable_agent_count and skipped_agents ─────────────────────
+        applicable_agent_count = len(active_agent_results)
+        skipped_agents: dict[str, str] = {}
+        for _aid, _findings in per_agent_findings.items():
+            if _is_skipped_agent(_findings):
+                _skip_reason = "Not applicable for this file type"
+                for _f in _findings:
+                    if str(_f.get("finding_type", "")).lower() in _SKIP_FINDING_TYPES:
+                        _r = str(_f.get("reasoning_summary") or _f.get("court_statement") or "")
+                        if _r:
+                            _skip_reason = _r[:200]
+                        break
+                skipped_agents[_aid] = _skip_reason
 
-        # Override verdict if strong manipulation signal detected across multiple agents
-        manipulation_signals = sum(
+        # ── D: per_agent_summary ──────────────────────────────────────────
+        def _agent_verdict(metrics: dict) -> str:
+            if metrics.get("skipped"):
+                return "NOT_APPLICABLE"
+            conf = metrics.get("confidence_score", 0)
+            err = metrics.get("error_rate", 0)
+            if conf >= 0.70 and err <= 0.15:
+                return "AUTHENTIC"
+            if conf < 0.45 or err > 0.40:
+                return "SUSPICIOUS"
+            return "INCONCLUSIVE"
+
+        per_agent_summary: dict[str, dict[str, Any]] = {}
+        for _aid, _m in per_agent_metrics.items():
+            per_agent_summary[_aid] = {
+                "agent_name": self._AGENT_NAMES.get(_aid, _aid),
+                "verdict": _agent_verdict(_m),
+                "confidence_pct": round(_m.get("confidence_score", 0) * 100),
+                "tools_ok": _m.get("tools_succeeded", 0),
+                "tools_total": _m.get("total_tools_called", 0),
+                "findings": _m.get("finding_count", 0),
+                "error_rate_pct": round(_m.get("error_rate", 0) * 100),
+                "skipped": _m.get("skipped", False),
+            }
+
+        # ── analysis_coverage_note ────────────────────────────────────────
+        _total_tools = sum(m.get("total_tools_called", 0) for m in active_metrics)
+        _failed_tools = sum(m.get("tools_failed", 0) for m in active_metrics)
+        _na_tools = sum(m.get("tools_not_applicable", 0) for m in active_metrics)
+        _fallback_count = sum(
             1 for f in all_findings
-            if any(kw in str(f.get("finding_type","")).lower() for kw in
-                   ("manipulation", "deepfake", "splice", "forgery", "gan", "tamper"))
-            and (f.get("calibrated_probability") or f.get("confidence_raw") or 0) >= 0.70
+            if "fallback" in str((f.get("metadata") or {}).get("backend", "")).lower()
+            and not any((f.get("metadata") or {}).get(flag) for flag in ("ela_not_applicable", "ghost_not_applicable"))
         )
-        if manipulation_signals >= 2:
-            overall_verdict = "MANIPULATION DETECTED"
+        _cov_parts: list[str] = []
+        if _failed_tools > 0:
+            _cov_parts.append(f"{_failed_tools} of {_total_tools} applicable tools failed — findings carry reduced evidential weight")
+        if _fallback_count > 0:
+            _cov_parts.append(f"{_fallback_count} tool(s) used simplified fallback implementations (full ML model unavailable)")
+        if _na_tools > 0:
+            _cov_parts.append(f"{_na_tools} tool(s) not applicable to this file type (excluded from verdict)")
+        analysis_coverage_note = (
+            "; ".join(_cov_parts) if _cov_parts
+            else f"All {_total_tools} applicable tools ran successfully across {applicable_agent_count} active agent(s)"
+        )
+
+        # ── manipulation_probability (B: reliability-weighted) ────────────
+        _manip_weighted: list[tuple[float, float]] = []  # (confidence, weight)
+        for _f in all_findings:
+            if _f.get("stub_result"):
+                continue
+            _meta = _f.get("metadata") or {}
+            if _meta.get("court_defensible") is False:
+                continue
+            _is_direct_manip = (
+                _meta.get("manipulation_detected") is True
+                or _meta.get("deepfake_detected") is True
+                or _meta.get("splicing_detected") is True
+                or _meta.get("copy_move_detected") is True
+                or _meta.get("mismatch_detected") is True
+                or ("INCONSISTENT" in str(_meta.get("prnu_verdict", "")).upper()
+                    and _meta.get("prnu_verdict") is not None)
+            )
+            if _is_direct_manip:
+                _c = float(_f.get("calibrated_probability") or _f.get("confidence_raw") or 0.5)
+                if _c >= 0.50:
+                    # Look up the reliability weight for this tool (B)
+                    _tool = str(_meta.get("tool_name", _f.get("finding_type", ""))).lower().replace(" ", "_")
+                    _w = self._TOOL_RELIABILITY_TIERS.get(_tool, self._DEFAULT_TOOL_RELIABILITY)
+                    _manip_weighted.append((_c, _w))
+        _manip_confs = [c for c, _ in _manip_weighted]
+        if not _manip_weighted:
+            manipulation_probability = 0.0
+        elif len(_manip_weighted) == 1:
+            _c0, _w0 = _manip_weighted[0]
+            manipulation_probability = round(_c0 * _w0 * 0.55, 3)
+        else:
+            _top = sorted(_manip_weighted, key=lambda x: x[0] * x[1], reverse=True)[:5]
+            _tw = sum(_w for _, _w in _top)
+            manipulation_probability = round(
+                min(0.95, sum(_c * _w for _c, _w in _top) / _tw) if _tw > 0 else 0.0, 3
+            )
+
+        # ── F: Verdict (tightened thresholds) ────────────────────────────
+        await _step("Calibrating confidence scores and computing verdict…")
+        # Unified verdict vocabulary: AUTHENTIC / LIKELY_AUTHENTIC / INCONCLUSIVE /
+        # LIKELY_MANIPULATED / MANIPULATED
+        # Manipulation signals: court-defensible findings with direct manipulation flags.
+        # Explicit manipulation_signals==0 guard prevents mislabelling clean evidence
+        # when overall_confidence happens to sit below 0.75 due to tool failures.
+        manipulation_signals = len(_manip_confs)
+
+        if manipulation_probability >= 0.72 and manipulation_signals >= 2:
+            overall_verdict = "MANIPULATED"
+        elif manipulation_probability >= 0.45 or manipulation_signals >= 1:
+            overall_verdict = "LIKELY_MANIPULATED"
+        elif (manipulation_signals == 0
+              and overall_confidence >= 0.75
+              and overall_error_rate <= 0.15
+              and contested_findings_count == 0):
+            overall_verdict = "AUTHENTIC"
+        elif (manipulation_signals == 0
+              and overall_confidence >= 0.60
+              and overall_error_rate <= 0.25):
+            overall_verdict = "LIKELY_AUTHENTIC"
+        else:
+            overall_verdict = "INCONCLUSIVE"
 
         logger.info(
-            "Arbiter verdict: %s (confidence=%.2f, error_rate=%.2f, contested=%d, manipulation_signals=%d)",
-            overall_verdict, overall_confidence, overall_error_rate,
-            contested_findings_count, manipulation_signals,
+            f"Arbiter verdict: {overall_verdict} (confidence={overall_confidence:.2f}, "
+            f"conf_range=[{confidence_min:.2f},{confidence_max:.2f}] "
+            f"error_rate={overall_error_rate:.2f}, contested={contested_findings_count}, "
+            f"manipulation_probability={manipulation_probability:.2f}, manipulation_signals={manipulation_signals})"
         )
+        await _step(f"Verdict: {overall_verdict} — synthesising report…")
 
-        # ── Executive summary via Groq — only active agents ───────────────
+        # ── E: Tiered LLM synthesis — fastest/cheapest first ─────────────
+        # Order: structured_summary (JSON, 25s) → per-agent narratives (parallel, 40s)
+        # → executive summary (45s) → uncertainty (30s).
+        # This ensures key_findings/verdict_sentence are always available even if
+        # later calls time out under Groq rate pressure.
+
+        # 1. Structured summary (fastest — JSON mode, short prompt)
+        await _step("Generating structured summary fields…")
+        verdict_sentence, key_findings_list, reliability_note = \
+            await self._generate_structured_summary(
+                overall_verdict=overall_verdict,
+                overall_confidence=overall_confidence,
+                overall_error_rate=overall_error_rate,
+                manipulation_probability=manipulation_probability,
+                applicable_agent_count=applicable_agent_count,
+                all_findings=all_findings,
+                cross_modal_confirmed_count=len(cross_modal_confirmed),
+                contested_count=contested_findings_count,
+                analysis_coverage_note=analysis_coverage_note,
+            )
+
+        # 2. Per-agent narratives (parallel — each capped at 40 s)
+        await _step("Generating per-agent analysis via Groq…")
+        per_agent_analysis: dict[str, str] = {}
+
+        _NARRATIVE_TIMEOUT = 40.0
+
+        async def _one_narrative(aid: str, res: dict) -> tuple[str, str]:
+            findings = res.get("findings", [])
+            if not findings:
+                return aid, ""
+            try:
+                narr = await asyncio.wait_for(
+                    self._generate_agent_narrative(
+                        agent_id=aid,
+                        findings=findings,
+                        metrics=per_agent_metrics.get(aid, {}),
+                    ),
+                    timeout=_NARRATIVE_TIMEOUT,
+                )
+                return aid, narr or ""
+            except asyncio.TimeoutError:
+                logger.warning(f"Per-agent narrative timed out after {_NARRATIVE_TIMEOUT}s for {aid}")
+                return aid, ""
+            except Exception as _narr_err:
+                logger.warning(f"Per-agent narrative failed for {aid}: {_narr_err}")
+                return aid, ""
+
+        narrative_pairs = await asyncio.gather(
+            *[_one_narrative(aid, res) for aid, res in active_agent_results.items()],
+            return_exceptions=False,
+        )
+        for _aid, _narr in narrative_pairs:
+            if _narr:
+                per_agent_analysis[_aid] = _narr
+
+        # 3. Executive summary (heaviest — 45 s cap)
         await _step("Generating executive summary via Groq…")
-        executive_summary = await self._generate_executive_summary(
-            len(active_agent_results),
-            len(all_findings),
-            len(cross_modal_confirmed),
-            len(contested_findings),
-            all_findings=all_findings,
-            gemini_findings=gemini_vision_findings,
-            active_agent_metrics=active_metrics,
-            overall_verdict=overall_verdict,
-        )
+        try:
+            executive_summary = await asyncio.wait_for(
+                self._generate_executive_summary(
+                    len(active_agent_results),
+                    len(all_findings),
+                    len(cross_modal_confirmed),
+                    len(contested_findings),
+                    all_findings=all_findings,
+                    gemini_findings=gemini_vision_findings,
+                    active_agent_metrics=active_metrics,
+                    overall_verdict=overall_verdict,
+                ),
+                timeout=45.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Executive summary Groq call timed out — using template fallback")
+            executive_summary = self._template_executive_summary(
+                len(active_agent_results), len(all_findings),
+                len(cross_modal_confirmed), len(contested_findings), all_findings,
+            )
 
-        # ── Uncertainty statement ─────────────────────────────────────────
+        # 4. Uncertainty statement (30 s cap)
         await _step("Computing uncertainty bounds…")
-        uncertainty_statement = await self._generate_uncertainty_statement(
-            len(incomplete_findings),
-            len(contested_findings),
-            overall_error_rate=overall_error_rate,
-        )
+        try:
+            uncertainty_statement = await asyncio.wait_for(
+                self._generate_uncertainty_statement(
+                    len(incomplete_findings),
+                    len(contested_findings),
+                    overall_error_rate=overall_error_rate,
+                ),
+                timeout=30.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Uncertainty statement timed out — using fallback")
+            uncertainty_statement = (
+                f"Analysis based on {len(all_findings)} findings from "
+                f"{len(active_agent_results)} active agent(s). "
+                f"Overall error rate: {overall_error_rate:.0%}."
+            )
 
         # ── Build report ──────────────────────────────────────────────────
         await _step("Finalising court-ready report…")
@@ -455,6 +796,17 @@ class CouncilArbiter:
             stub_findings=stub_findings,
             gemini_vision_findings=gemini_vision_findings,
             uncertainty_statement=uncertainty_statement,
+            verdict_sentence=verdict_sentence,
+            key_findings=key_findings_list,
+            reliability_note=reliability_note,
+            manipulation_probability=manipulation_probability,
+            confidence_min=confidence_min,
+            confidence_max=confidence_max,
+            confidence_std_dev=confidence_std_dev,
+            per_agent_summary=per_agent_summary,
+            applicable_agent_count=applicable_agent_count,
+            skipped_agents=skipped_agents,
+            analysis_coverage_note=analysis_coverage_note,
         )
 
         return report
@@ -473,17 +825,20 @@ class CouncilArbiter:
                 if agent_a == agent_b:
                     continue  # Only cross-agent
                 
-                type_a = set(finding_a.get("finding_type", "").lower().replace("_", " ").split())
-                type_b = set(finding_b.get("finding_type", "").lower().replace("_", " ").split())
-                
-                stopwords = {
-                    "the", "a", "an", "of", "to", "for", "in", "and", "or",
-                    "full", "deep", "run", "check", "test", "result", "data", "file"
-                }
-                keys_a = {k for k in type_a if k not in stopwords and len(k) > 2}
-                keys_b = {k for k in type_b if k not in stopwords and len(k) > 2}
-                
-                if not keys_a.intersection(keys_b):
+                def _get_category(finding_type: str) -> str | None:
+                    """Map a finding_type to its semantic category, or None."""
+                    ft = finding_type.lower().replace(" ", "_")
+                    for keyword, category in self._FINDING_CATEGORY_MAP.items():
+                        if keyword in ft:
+                            return category
+                    return None
+
+                cat_a = _get_category(finding_a.get("finding_type", ""))
+                cat_b = _get_category(finding_b.get("finding_type", ""))
+
+                # Only compare findings that share the same semantic category.
+                # If either has no recognised category, treat as INDEPENDENT.
+                if not cat_a or not cat_b or cat_a != cat_b:
                     comparisons.append(FindingComparison(
                         finding_a=finding_a,
                         finding_b=finding_b,
@@ -566,114 +921,26 @@ class CouncilArbiter:
                 },
             )
         
-        # Try to re-invoke the challenged agent if factory is available
+        # Record the contradiction without re-running the agent.
+        # Full agent re-invocation was removed — it runs the complete ReAct loop
+        # (2–5 min per agent × up to 5 loops = 10–25 extra minutes) and stalls
+        # the result page.  Contested findings are flagged for human review
+        # instead, which is the correct legal disposition anyway.
         revised_finding = None
         resolved = False
-        
-        if self.agent_factory:
-            try:
-                # Create challenge context for the agent
-                challenge_context = {
-                    "challenge_id": str(challenge_id),
-                    "challenged_finding": contradiction.finding_a,
-                    "contradicting_finding": context_from_other,
-                    "reason": "Cross-agent contradiction detected",
-                    "request": "Re-examine your finding considering the contradicting evidence",
-                }
-                
-                # Re-invoke the challenged agent
-                logger.info(
-                    "Re-invoking challenged agent",
-                    agent_id=agent_id,
-                    challenge_id=str(challenge_id),
-                )
-                
-                revised_result = await self.agent_factory.reinvoke_agent(
-                    agent_id=agent_id,
-                    session_id=self.session_id,
-                    challenge_context=challenge_context,
-                )
-                
-                if revised_result and "findings" in revised_result:
-                    # Find the revised finding matching the original
-                    original_type = contradiction.finding_a.get("finding_type")
-                    for finding in revised_result["findings"]:
-                        if finding.get("finding_type") == original_type:
-                            revised_finding = finding
-                            break
-                    
-                    # If no matching type, take the first finding
-                    if revised_finding is None and revised_result["findings"]:
-                        revised_finding = revised_result["findings"][0]
-                    
-                    # Check if contradiction is resolved
-                    if revised_finding:
-                        # Compare revised finding with the contradicting one
-                        revised_status = revised_finding.get("status", "")
-                        contradicting_status = context_from_other.get("status", "")
-                        
-                        # If both now agree, contradiction is resolved
-                        if revised_status == contradicting_status:
-                            resolved = True
-                            logger.info(
-                                "Challenge resolved - findings now agree",
-                                challenge_id=str(challenge_id),
-                                agreed_status=revised_status,
-                            )
-                        else:
-                            # Check if confidence changed significantly
-                            original_conf = contradiction.finding_a.get("confidence_raw", 0)
-                            revised_conf = revised_finding.get("confidence_raw", 0)
-                            
-                            if abs(revised_conf - original_conf) > 0.1:
-                                # Agent changed its confidence significantly
-                                # This is partial resolution - acknowledge the revision
-                                resolved = True
-                                logger.info(
-                                    "Challenge partially resolved - confidence adjusted",
-                                    challenge_id=str(challenge_id),
-                                    original_confidence=original_conf,
-                                    revised_confidence=revised_conf,
-                                )
-                
-                # Log the challenge outcome
-                if self.custody_logger:
-                    await self.custody_logger.log_entry(
-                        entry_type=EntryType.SELF_REFLECTION,
-                        agent_id=agent_id,
-                        session_id=self.session_id,
-                        content={
-                            "action": "challenge_completed",
-                            "challenge_id": str(challenge_id),
-                            "resolved": resolved,
-                            "has_revised_finding": revised_finding is not None,
-                        },
-                    )
-                
-            except Exception as e:
-                logger.error(
-                    "Challenge loop failed",
-                    challenge_id=str(challenge_id),
-                    error=str(e),
-                    agent_id=agent_id,
-                )
-                # Log failure but still return result
-                if self.custody_logger:
-                    await self.custody_logger.log_entry(
-                        entry_type=EntryType.ERROR,
-                        agent_id="Arbiter",
-                        session_id=self.session_id,
-                        content={
-                            "action": "challenge_failed",
-                            "challenge_id": str(challenge_id),
-                            "error": str(e),
-                        },
-                    )
-        else:
-            logger.warning(
-                "No agent factory available for challenge loop",
-                challenge_id=str(challenge_id),
+
+        if self.custody_logger:
+            await self.custody_logger.log_entry(
+                entry_type=EntryType.SELF_REFLECTION,
                 agent_id=agent_id,
+                session_id=self.session_id,
+                content={
+                    "action": "challenge_recorded",
+                    "challenge_id": str(challenge_id),
+                    "note": "Contested finding logged for human review",
+                    "challenged_finding_type": contradiction.finding_a.get("finding_type"),
+                    "contradicting_finding_type": contradiction.finding_b.get("finding_type"),
+                },
             )
         
         return ChallengeResult(
@@ -846,6 +1113,7 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
                 system_prompt=system_prompt,
                 user_content=user_content,
                 max_tokens=600,
+                json_mode=False,
             )
         except Exception as e:
             logger.warning(f"Per-agent narrative Groq call failed for {agent_id}: {e}")
@@ -990,6 +1258,7 @@ Write the Executive Summary for this forensic report. Justify the {overall_verdi
             system_prompt=system_prompt,
             user_content=user_content,
             max_tokens=800,
+            json_mode=False,
         )
 
     def _template_executive_summary(
@@ -1068,7 +1337,157 @@ Write 2-3 sentences only. Do not use bullet points."""
             system_prompt=system_prompt,
             user_content=user_content,
             max_tokens=200,
+            json_mode=False,
         )
+
+    async def _generate_structured_summary(
+        self,
+        overall_verdict: str,
+        overall_confidence: float,
+        overall_error_rate: float,
+        manipulation_probability: float,
+        applicable_agent_count: int,
+        all_findings: list[dict[str, Any]],
+        cross_modal_confirmed_count: int,
+        contested_count: int,
+        analysis_coverage_note: str,
+    ) -> tuple[str, list[str], str]:
+        """
+        Generate verdict_sentence, key_findings (list), reliability_note.
+        Returns (verdict_sentence, key_findings, reliability_note).
+        """
+        if self.config.llm_api_key and self.config.llm_provider != "none":
+            try:
+                result = await asyncio.wait_for(
+                    self._llm_structured_summary(
+                        overall_verdict, overall_confidence, overall_error_rate,
+                        manipulation_probability, applicable_agent_count,
+                        all_findings, cross_modal_confirmed_count, contested_count,
+                        analysis_coverage_note,
+                    ),
+                    timeout=25.0,
+                )
+                if result:
+                    return result
+            except Exception as exc:
+                logger.warning(f"Structured summary LLM call failed: {exc}")
+
+        return self._template_structured_summary(
+            overall_verdict, overall_confidence, overall_error_rate,
+            manipulation_probability, applicable_agent_count, all_findings,
+            cross_modal_confirmed_count, contested_count, analysis_coverage_note,
+        )
+
+    async def _llm_structured_summary(
+        self,
+        overall_verdict: str,
+        overall_confidence: float,
+        overall_error_rate: float,
+        manipulation_probability: float,
+        applicable_agent_count: int,
+        all_findings: list[dict[str, Any]],
+        cross_modal_confirmed_count: int,
+        contested_count: int,
+        analysis_coverage_note: str,
+    ) -> tuple[str, list[str], str] | None:
+        client = LLMClient(self.config)
+
+        top_findings = sorted(
+            [f for f in all_findings if not f.get("stub_result")],
+            key=lambda f: f.get("confidence_raw", 0), reverse=True,
+        )[:6]
+        findings_brief = [
+            f"{f.get('finding_type','?')} ({f.get('agent_id','?')}) — "
+            f"{(f.get('confidence_raw') or 0):.0%} — {(f.get('reasoning_summary') or '')[:120]}"
+            for f in top_findings
+        ]
+
+        system_prompt = """You are the Council Arbiter. Generate three short forensic summary fields as JSON.
+
+Respond ONLY with valid JSON (no markdown):
+{
+  "verdict_sentence": "<one sentence: what the evidence shows and the final verdict>",
+  "key_findings": ["<finding 1>", "<finding 2>", "<finding 3>", "<finding 4>", "<finding 5>"],
+  "reliability_note": "<one sentence: confidence level and any caveats about reliability>"
+}
+
+Rules:
+- verdict_sentence: state the verdict and primary reason in ≤25 words.
+- key_findings: exactly 3-5 plain English bullet items, each ≤20 words, citing the most important findings. No jargon.
+- reliability_note: ≤20 words. Cite confidence %, error rate, and note if any tools used fallbacks."""
+
+        user_content = (
+            f"Verdict: {overall_verdict}\n"
+            f"Confidence: {overall_confidence*100:.0f}%  |  Error rate: {overall_error_rate*100:.0f}%  |  "
+            f"Manipulation probability: {manipulation_probability*100:.0f}%\n"
+            f"Active agents: {applicable_agent_count}  |  Cross-modal confirmed: {cross_modal_confirmed_count}  |  Contested: {contested_count}\n"
+            f"Coverage: {analysis_coverage_note}\n\n"
+            f"Top findings:\n" + "\n".join(f"- {b}" for b in findings_brief)
+        )
+
+        try:
+            raw = await client.generate_synthesis(
+                system_prompt=system_prompt,
+                user_content=user_content,
+                max_tokens=350,
+                json_mode=True,
+            )
+            if not raw:
+                return None
+            raw = raw.strip()
+            if raw.startswith("```"):
+                raw = raw.split("```", 2)[-1].lstrip("json").strip()
+                if raw.endswith("```"):
+                    raw = raw[:-3].strip()
+            import json as _j
+            data = _j.loads(raw[raw.find("{"):raw.rfind("}")+1])
+            vs = str(data.get("verdict_sentence", ""))
+            kf = [str(x) for x in data.get("key_findings", []) if x][:5]
+            rn = str(data.get("reliability_note", ""))
+            if vs and kf and rn:
+                return vs, kf, rn
+        except Exception:
+            pass
+        return None
+
+    def _template_structured_summary(
+        self,
+        overall_verdict: str,
+        overall_confidence: float,
+        overall_error_rate: float,
+        manipulation_probability: float,
+        applicable_agent_count: int,
+        all_findings: list[dict[str, Any]],
+        cross_modal_confirmed_count: int,
+        contested_count: int,
+        analysis_coverage_note: str,
+    ) -> tuple[str, list[str], str]:
+        _VERDICT_PHRASES = {
+            "AUTHENTIC": "Evidence appears authentic with no manipulation signals detected.",
+            "LIKELY_AUTHENTIC": "Evidence is likely authentic; no significant manipulation indicators found.",
+            "INCONCLUSIVE": "Analysis is inconclusive — insufficient data to confirm authenticity or manipulation.",
+            "LIKELY_MANIPULATED": "Evidence shows probable manipulation signals requiring further investigation.",
+            "MANIPULATED": "Strong manipulation indicators detected across multiple independent agents.",
+        }
+        verdict_sentence = _VERDICT_PHRASES.get(overall_verdict, f"Verdict: {overall_verdict}.")
+
+        top = sorted(
+            [f for f in all_findings if not f.get("stub_result") and f.get("reasoning_summary")],
+            key=lambda f: f.get("confidence_raw", 0), reverse=True,
+        )[:5]
+        key_findings_list = [
+            (f.get("reasoning_summary") or "")[:120]
+            for f in top
+        ]
+        if not key_findings_list:
+            key_findings_list = ["No significant findings were identified."]
+
+        err_note = f"; {overall_error_rate*100:.0f}% tool error rate" if overall_error_rate > 0.05 else ""
+        reliability_note = (
+            f"{overall_confidence*100:.0f}% overall confidence across "
+            f"{applicable_agent_count} active agent(s){err_note}."
+        )
+        return verdict_sentence, key_findings_list, reliability_note
 
     def _template_uncertainty_statement(
         self, incomplete: int, contested: int, overall_error_rate: float = 0.0

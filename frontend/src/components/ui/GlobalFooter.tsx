@@ -15,7 +15,7 @@ export function GlobalFooter() {
         {/* Brand mark */}
         <div className="flex items-center gap-2.5 shrink-0">
           <div className="w-6 h-6 rounded bg-gradient-to-br from-cyan-400/80 to-violet-500/60 flex items-center justify-center">
-            <ShieldCheck className="w-3.5 h-3.5 text-white" />
+            <ShieldCheck className="w-3.5 h-3.5 text-white" aria-hidden="true" />
           </div>
           <span className="text-xs font-semibold text-slate-500 tracking-wide">Forensic Council</span>
         </div>

@@ -142,6 +142,10 @@ services:
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-flash}
       - EVIDENCE_STORAGE_PATH=/app/storage/evidence
       - CALIBRATION_MODELS_PATH=/app/cache/calibration_models
+      # Disable Numba JIT — timezonefinder uses numba with cache=True, but inside
+      # a read-only .venv the locator lookup fails with "no locator available".
+      # NUMBA_DISABLE_JIT=1 makes numba run pure-Python (slightly slower, no error).
+      - NUMBA_DISABLE_JIT=1
     depends_on:
       postgres:
         condition: service_healthy
@@ -228,6 +232,9 @@ services:
         # NEXT_PUBLIC_* vars are baked into the JS bundle at build time.
         NEXT_PUBLIC_DEMO_PASSWORD: "${NEXT_PUBLIC_DEMO_PASSWORD:-inv123!}"
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        # INTERNAL_API_URL is used by next.config.ts rewrites() at build time
+        # so /api/v1/* proxies to the backend via Docker-internal hostname.
+        INTERNAL_API_URL: "http://forensic_api:8000"
     container_name: forensic_ui
     restart: unless-stopped
     ports:

@@ -11,6 +11,7 @@ import { AGENTS_DATA, ALLOWED_MIME_TYPES } from "@/lib/constants";
 import { AgentIcon } from "@/components/ui/AgentIcon";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { useSound } from "@/hooks/useSound";
+import { startInvestigation, type InvestigationResponse } from "@/lib/api";
 
 /* ─── Microscope Scanner ─────────────────────────────────────────────────── */
 function MicroscopeScanner() {
@@ -141,20 +142,48 @@ function MicroscopeScanner() {
           </motion.div>
         ))}
 
-        {/* Core specimen — primary target with selection ring */}
+        {/* Core specimen — forensic evidence file being scanned */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+          {/* Outer selection pulse ring */}
           <motion.div
-            className="absolute -inset-5 rounded-full border border-cyan-400/30"
-            animate={reduced ? {} : { scale: [1, 1.10, 1], opacity: [0.30, 0.58, 0.30] }}
+            className="absolute -inset-10 rounded-full border border-cyan-400/28"
+            animate={reduced ? {} : { scale: [1, 1.10, 1], opacity: [0.28, 0.55, 0.28] }}
             transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
           />
-          <div
-            className="w-3 h-3 rounded-full bg-cyan-400"
-            style={{
-              boxShadow: "0 0 18px rgba(0,212,255,0.95), 0 0 36px rgba(0,212,255,0.35)",
-              animation: reduced ? "none" : "scan-glow 2s ease-in-out infinite",
-            }}
+          {/* Inner rectangular lock frame around document */}
+          <motion.div
+            className="absolute -inset-4 rounded border border-cyan-400/60"
+            animate={reduced ? {} : { opacity: [0.45, 1, 0.45] }}
+            transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
           />
+          {/* Corner lock ticks */}
+          {[
+            "absolute -top-[7px] -left-[7px] border-t-2 border-l-2 w-3 h-3 border-cyan-400/80",
+            "absolute -top-[7px] -right-[7px] border-t-2 border-r-2 w-3 h-3 border-cyan-400/80",
+            "absolute -bottom-[7px] -left-[7px] border-b-2 border-l-2 w-3 h-3 border-cyan-400/80",
+            "absolute -bottom-[7px] -right-[7px] border-b-2 border-r-2 w-3 h-3 border-cyan-400/80",
+          ].map((cls, i) => <div key={i} className={cls} />)}
+          {/* Evidence file icon */}
+          <div
+            className="relative flex items-center justify-center"
+            style={{ animation: reduced ? "none" : "scan-glow 2s ease-in-out infinite" }}
+          >
+            <svg viewBox="0 0 20 26" fill="none" className="w-9 h-[46px]" xmlns="http://www.w3.org/2000/svg">
+              <rect x="1.5" y="1.5" width="14" height="22" rx="2" fill="rgba(0,212,255,0.08)" stroke="rgba(0,212,255,0.88)" strokeWidth="1.4"/>
+              <path d="M11 1.5 L15.5 6.5 L11 6.5 Z" fill="rgba(0,212,255,0.20)" stroke="rgba(0,212,255,0.70)" strokeWidth="1" strokeLinejoin="round"/>
+              <line x1="4" y1="10" x2="12" y2="10" stroke="rgba(0,212,255,0.55)" strokeWidth="1.1" strokeLinecap="round"/>
+              <line x1="4" y1="13.5" x2="13" y2="13.5" stroke="rgba(0,212,255,0.40)" strokeWidth="1.1" strokeLinecap="round"/>
+              <line x1="4" y1="17" x2="10" y2="17" stroke="rgba(0,212,255,0.28)" strokeWidth="1.1" strokeLinecap="round"/>
+            </svg>
+          </div>
+          {/* ANALYZING readout */}
+          <motion.div
+            className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[9px] text-cyan-400/72 tracking-[0.2em]"
+            animate={reduced ? {} : { opacity: [0.45, 1, 0.45] }}
+            transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+          >
+            ANALYZING…
+          </motion.div>
         </div>
 
         {/* Horizontal scan beam — wide glow sweep */}
@@ -303,14 +332,14 @@ function GlassCard({
   glowColor?: "cyan" | "violet" | "emerald";
 }) {
   const glowMap = {
-    cyan:    "hover:border-cyan-400/32 hover:shadow-[0_0_52px_rgba(0,212,255,0.10),0_4px_24px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(0,212,255,0.08)]",
-    violet:  "hover:border-violet-400/42 hover:shadow-[0_0_60px_rgba(124,58,237,0.18),0_4px_24px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(168,85,247,0.12)]",
-    emerald: "hover:border-emerald-400/32 hover:shadow-[0_0_52px_rgba(16,185,129,0.10),0_4px_24px_rgba(0,0,0,0.4)]",
+    cyan:    "hover:border-cyan-400/35 hover:shadow-[0_0_60px_rgba(0,212,255,0.12),0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(0,212,255,0.10)]",
+    violet:  "hover:border-violet-400/45 hover:shadow-[0_0_70px_rgba(124,58,237,0.20),0_8px_32px_rgba(0,0,0,0.50),inset_0_1px_0_rgba(168,85,247,0.14)]",
+    emerald: "hover:border-emerald-400/35 hover:shadow-[0_0_60px_rgba(16,185,129,0.12),0_8px_32px_rgba(0,0,0,0.45)]",
   }[glowColor];
 
   return (
     <div
-      className={`glass-panel rounded-3xl transition-all duration-500 ease-out
+      className={`glass-panel rounded-3xl transition-all duration-400 ease-out card-hover
         ${glowMap} ${className}`}
     >
       {children}
@@ -380,15 +409,50 @@ export default function LandingPage() {
     setIsTransitioning(true);
     playSound("envelope_close");
     setEnvPhase("closing");
+
+    // Generate IDs now so they're consistent between landing and evidence pages.
+    const caseId = "CASE-" + Date.now();
+    const storedId = sessionStorage.getItem("forensic_investigator_id");
+    const validIdPattern = /^REQ-\d{5,10}$/;
+    const investigatorId =
+      storedId && validIdPattern.test(storedId)
+        ? storedId
+        : "REQ-" + (Math.floor(Math.random() * 900000) + 100000);
+
     sessionStorage.setItem("forensic_pending_file_name", file.name);
+    sessionStorage.setItem("forensic_case_id", caseId);
+    sessionStorage.setItem("forensic_investigator_id", investigatorId);
     sessionStorage.setItem("forensic_auto_start", "true");
     (window as { __forensic_pending_file?: File }).__forensic_pending_file = file;
+
+    // Fire the upload immediately while the 380 ms animation plays.
+    // The evidence page will await this already-in-flight Promise instead of
+    // starting a second startInvestigation call from scratch.
+    (
+      window as {
+        __forensic_investigation_promise?: Promise<InvestigationResponse>;
+      }
+    ).__forensic_investigation_promise = startInvestigation(
+      file,
+      caseId,
+      investigatorId
+    );
+
     setTimeout(() => router.push("/evidence"), 380);
   };
 
   useEffect(() => {
     return () => { if (previewUrl) URL.revokeObjectURL(previewUrl); };
   }, [previewUrl]);
+
+  // Close modal on Escape key
+  useEffect(() => {
+    if (!modalOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") handleModalClose(); };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modalOpen]);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
@@ -407,9 +471,20 @@ export default function LandingPage() {
         <div className="absolute top-[30%] left-0 w-[400px] h-[400px] bg-indigo-900/8 rounded-full blur-[100px]" />
       </div>
 
+      {/* Skip-to-content link for keyboard users */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[9999]
+          focus:px-4 focus:py-2 focus:bg-cyan-500 focus:text-black focus:rounded-lg focus:font-semibold focus:text-sm"
+      >
+        Skip to main content
+      </a>
+
       {/* ── Header ── */}
       <header className="fixed top-0 w-full px-6 py-4 flex items-center justify-between
-        border-b border-white/[0.05] bg-[#030308]/80 backdrop-blur-2xl z-50">
+        border-b border-white/[0.05] bg-[#030308]/80 backdrop-blur-2xl z-50"
+        role="banner"
+      >
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-gradient-to-br from-cyan-400 to-violet-600 rounded-lg flex items-center justify-center
             font-bold text-[#030308] text-sm shadow-[0_0_20px_rgba(0,212,255,0.3)]"
@@ -422,9 +497,15 @@ export default function LandingPage() {
       </header>
 
       {/* ══════════════════════════════════════════════════════════
-          HERO
+          MAIN CONTENT
       ══════════════════════════════════════════════════════════ */}
-      <section className="relative w-full min-h-screen flex flex-col items-center justify-center px-6 pt-20 z-10 overflow-hidden">
+      <main id="main-content">
+
+      {/* HERO */}
+      <section
+        aria-labelledby="hero-title"
+        className="relative w-full min-h-screen flex flex-col items-center justify-center px-6 pt-20 z-10 overflow-hidden"
+      >
         <MicroscopeScanner />
 
         <div className="relative z-30 flex flex-col items-center text-center max-w-4xl mx-auto">
@@ -433,6 +514,8 @@ export default function LandingPage() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.7 }}
+            role="status"
+            aria-label="System status: online, all agents ready"
             className="mb-8 inline-flex items-center gap-2.5 px-4 py-2 rounded-full
               bg-white/[0.05] border border-white/[0.10] text-sm text-cyan-400 backdrop-blur-md"
           >
@@ -445,6 +528,7 @@ export default function LandingPage() {
 
           {/* Headline */}
           <motion.h1
+            id="hero-title"
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.9, ease: "easeOut" }}
@@ -477,16 +561,16 @@ export default function LandingPage() {
       {/* ══════════════════════════════════════════════════════════
           HOW IT WORKS
       ══════════════════════════════════════════════════════════ */}
-      <section className="relative z-10 py-32 px-6">
+      <section aria-labelledby="process-title" className="relative z-10 py-32 px-6">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-20">
             <p className="text-xs font-mono text-cyan-500/70 uppercase tracking-[0.25em] mb-3">Process</p>
-            <h2 className="text-4xl md:text-5xl font-bold text-white">How Forensic Council Works</h2>
+            <h2 id="process-title" className="text-4xl md:text-5xl font-bold text-white">How Forensic Council Works</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative">
             {/* Connector line */}
-            <div className="hidden md:block absolute top-[72px] left-[12%] right-[12%] h-px
+            <div className="hidden md:block absolute top-[108px] left-[12%] right-[12%] h-px
               bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent" />
 
             {[
@@ -501,17 +585,22 @@ export default function LandingPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-60px" }}
                 transition={{ delay: i * 0.10, duration: 0.60, ease: [0.22, 1, 0.36, 1] }}
+                className="relative mt-9 group"
               >
-                <GlassCard className="p-8 flex flex-col items-center text-center mt-8 group hover:scale-[1.01]">
-                  {/* Step bubble */}
-                  <div className="absolute -top-9 w-[68px] h-[68px] rounded-full bg-[#030308]
-                    border border-cyan-500/35 flex items-center justify-center
-                    font-mono text-xl text-cyan-400 font-bold
-                    shadow-[0_0_24px_rgba(0,212,255,0.18)] group-hover:scale-110 transition-transform">
-                    {item.step}
-                  </div>
-                  <h3 className="text-lg font-bold text-white mt-7 mb-3 text-center">{item.title}</h3>
-                  <p className="text-slate-400 text-sm leading-relaxed text-justify-section">{item.desc}</p>
+                {/* Step bubble — sibling of GlassCard so glass-panel overflow:hidden doesn't clip it */}
+                <div className="absolute -top-[34px] left-1/2 -translate-x-1/2 w-[68px] h-[68px] rounded-full
+                  bg-gradient-to-b from-[#0a0a18] to-[#050510]
+                  border border-cyan-500/40 flex items-center justify-center z-10
+                  font-mono text-xl text-cyan-300 font-bold
+                  shadow-[0_0_28px_rgba(0,212,255,0.22),inset_0_1px_0_rgba(0,212,255,0.15)]
+                  group-hover:border-cyan-400/65 group-hover:shadow-[0_0_40px_rgba(0,212,255,0.38),inset_0_1px_0_rgba(0,212,255,0.22)]
+                  transition-all duration-300"
+                  aria-hidden="true">
+                  {item.step}
+                </div>
+                <GlassCard className="p-8 pt-12 flex flex-col items-center text-center">
+                  <h3 className="text-base font-bold text-white mb-3 text-center tracking-wide">{item.title}</h3>
+                  <p className="text-slate-400 text-sm leading-relaxed text-center">{item.desc}</p>
                 </GlassCard>
               </motion.div>
             ))}
@@ -522,11 +611,11 @@ export default function LandingPage() {
       {/* ══════════════════════════════════════════════════════════
           MEET THE COUNCIL
       ══════════════════════════════════════════════════════════ */}
-      <section className="relative z-10 pb-32 pt-8 px-6">
+      <section aria-labelledby="council-title" className="relative z-10 pb-32 pt-8 px-6">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <p className="text-xs font-mono text-violet-400/70 uppercase tracking-[0.25em] mb-3">Council Members</p>
-            <h2 className="text-4xl md:text-5xl font-bold mb-5
+            <h2 id="council-title" className="text-4xl md:text-5xl font-bold mb-5
               bg-gradient-to-r from-cyan-300 to-violet-300 bg-clip-text text-transparent inline-block">
               Meet the Council
             </h2>
@@ -543,29 +632,31 @@ export default function LandingPage() {
                 initial={{ opacity: 0, y: 40 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-80px" }}
-                transition={{ delay: i * 0.09, duration: 0.6 }}
-                whileHover={{ y: -6, scale: 1.015 }}
+                transition={{ delay: i * 0.09, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                whileHover={{ y: -5 }}
               >
-                <GlassCard className="p-7 flex flex-col items-center text-center h-full group overflow-hidden">
-                  {/* Subtle colour tint overlay */}
-                  <div className="absolute inset-0 rounded-3xl bg-gradient-to-b from-cyan-500/[0.025] to-transparent pointer-events-none" />
+                <GlassCard className="p-7 flex flex-col items-center text-center h-full group">
+                  {/* Subtle top-center glow tint */}
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-24
+                    bg-gradient-to-b from-cyan-500/[0.06] to-transparent pointer-events-none rounded-t-3xl" />
 
-                  <div className="p-4 bg-cyan-500/10 text-cyan-400 rounded-2xl mb-5
-                    shadow-[inset_0_0_20px_rgba(0,212,255,0.06)] border border-cyan-500/20
-                    relative z-10 group-hover:scale-110 transition-transform duration-400">
+                  <div className="p-4 bg-gradient-to-br from-cyan-500/15 to-cyan-600/5 text-cyan-400 rounded-2xl mb-5
+                    shadow-[inset_0_0_18px_rgba(0,212,255,0.08),0_0_16px_rgba(0,212,255,0.10)] border border-cyan-500/22
+                    relative z-10 group-hover:scale-110 group-hover:shadow-[inset_0_0_22px_rgba(0,212,255,0.14),0_0_28px_rgba(0,212,255,0.20)] transition-all duration-350">
                     <AgentIcon role={agent.role} />
                   </div>
 
-                  <h3 className="text-lg font-bold text-white mb-1.5 relative z-10 text-center">{agent.name}</h3>
-                  <span className="text-[10px] px-3 py-1 rounded-full bg-cyan-950/60 text-cyan-300
-                    border border-cyan-500/20 uppercase tracking-widest font-semibold mb-4 relative z-10">
+                  <h3 className="text-base font-bold text-white mb-1.5 relative z-10 tracking-wide">{agent.name}</h3>
+                  <span className="text-[10px] px-3 py-1 rounded-full
+                    bg-gradient-to-r from-cyan-950/70 to-cyan-900/50
+                    text-cyan-300 border border-cyan-500/22 uppercase tracking-widest font-semibold mb-4 relative z-10">
                     {agent.role}
                   </span>
-                  <p className="text-sm text-slate-400 leading-relaxed mb-5 relative z-10 flex-1 text-justify-section">
+                  <p className="text-sm text-slate-400 leading-relaxed mb-5 relative z-10 flex-1 text-center">
                     {agent.desc}
                   </p>
-                  <div className="w-full pt-4 border-t border-white/[0.06] relative z-10">
-                    <p className="text-[11px] text-cyan-400/80 italic leading-relaxed" style={{ fontFamily: "var(--font-mono), monospace" }}>
+                  <div className="w-full pt-4 border-t border-white/[0.07] relative z-10">
+                    <p className="text-[11px] text-cyan-400/75 italic leading-relaxed" style={{ fontFamily: "var(--font-mono), monospace" }}>
                       &quot;{agent.simulation.thinking}&quot;
                     </p>
                   </div>
@@ -583,29 +674,32 @@ export default function LandingPage() {
             >
               <GlassCard
                 glowColor="violet"
-                className="p-7 flex flex-col items-center text-center h-full group overflow-hidden
-                  border-violet-500/25 bg-gradient-to-br from-violet-500/[0.06] to-transparent"
+                className="p-7 flex flex-col items-center text-center h-full group
+                  border-violet-500/28 bg-gradient-to-br from-violet-500/[0.08] to-violet-900/[0.03]"
               >
-                <div className="absolute inset-0 rounded-3xl bg-[radial-gradient(circle_at_top_right,rgba(124,58,237,0.12),transparent_60%)] pointer-events-none" />
+                <div className="absolute inset-0 rounded-3xl bg-[radial-gradient(ellipse_at_top_right,rgba(124,58,237,0.14),transparent_55%)] pointer-events-none" />
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-24
+                  bg-gradient-to-b from-violet-500/[0.08] to-transparent pointer-events-none rounded-t-3xl" />
 
-                <div className="p-4 bg-violet-500/20 text-violet-300 rounded-2xl mb-5
-                  shadow-[inset_0_0_20px_rgba(124,58,237,0.1)] border border-violet-500/30
-                  relative z-10 group-hover:scale-110 transition-transform duration-400">
-                  <ShieldCheck className="w-8 h-8" />
+                <div className="p-4 bg-gradient-to-br from-violet-500/22 to-violet-600/10 text-violet-300 rounded-2xl mb-5
+                  shadow-[inset_0_0_20px_rgba(124,58,237,0.12),0_0_18px_rgba(124,58,237,0.14)] border border-violet-500/32
+                  relative z-10 group-hover:scale-110 group-hover:shadow-[inset_0_0_24px_rgba(124,58,237,0.18),0_0_32px_rgba(124,58,237,0.25)] transition-all duration-350">
+                  <ShieldCheck className="w-8 h-8" aria-hidden="true" />
                 </div>
 
-                <h3 className="text-lg font-bold text-white mb-1.5 relative z-10 text-center
-                  drop-shadow-[0_0_12px_rgba(124,58,237,0.6)]">Council Arbiter</h3>
-                <span className="text-[10px] px-3 py-1 rounded-full bg-violet-900/60 text-violet-300
-                  border border-violet-500/30 uppercase tracking-widest font-bold mb-4 relative z-10">
+                <h3 className="text-base font-bold text-white mb-1.5 relative z-10 tracking-wide
+                  drop-shadow-[0_0_14px_rgba(124,58,237,0.5)]">Council Arbiter</h3>
+                <span className="text-[10px] px-3 py-1 rounded-full
+                  bg-gradient-to-r from-violet-900/70 to-violet-800/50
+                  text-violet-200 border border-violet-500/32 uppercase tracking-widest font-bold mb-4 relative z-10">
                   Final Verdict
                 </span>
-                <p className="text-sm text-slate-400 leading-relaxed mb-5 relative z-10 flex-1 text-justify-section">
+                <p className="text-sm text-slate-400 leading-relaxed mb-5 relative z-10 flex-1 text-center">
                   Cross-references all agent findings, resolves contradictions via challenge loops and tribunal
                   escalation, and produces a cryptographically signed forensic report with a calibrated confidence score.
                 </p>
-                <div className="w-full pt-4 border-t border-violet-500/20 relative z-10">
-                  <p className="text-[11px] text-violet-300/80 italic leading-relaxed" style={{ fontFamily: "var(--font-mono), monospace" }}>
+                <div className="w-full pt-4 border-t border-violet-500/22 relative z-10">
+                  <p className="text-[11px] text-violet-300/78 italic leading-relaxed" style={{ fontFamily: "var(--font-mono), monospace" }}>
                     &quot;Synthesising cross-modal evidence and resolving logical conflicts…&quot;
                   </p>
                 </div>
@@ -614,6 +708,8 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      </main>{/* end #main-content */}
 
       {/* ── Global Footer ── */}
       <GlobalFooter />
@@ -635,41 +731,53 @@ export default function LandingPage() {
             <div className="absolute inset-0 bg-black/75 backdrop-blur-2xl" />
 
             <motion.div
-              initial={{ scale: 0.88, opacity: 0, y: 32 }}
+              initial={{ scale: 0.90, opacity: 0, y: 28 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.92, opacity: 0, y: 20 }}
-              transition={{ type: "spring", stiffness: 300, damping: 28 }}
-              className="relative w-full max-w-xl z-10 glass-panel rounded-[2rem] overflow-hidden border-white/10"
-              style={{ boxShadow: "0 40px 100px rgba(0,0,0,0.85), 0 0 80px rgba(0,212,255,0.06), inset 0 1px 0 rgba(255,255,255,0.12)" }}
+              exit={{ scale: 0.93, opacity: 0, y: 16 }}
+              transition={{ type: "spring", stiffness: 320, damping: 30 }}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="evidence-modal-title"
+              className="relative w-full max-w-lg z-10 glass-modal rounded-[1.75rem]"
             >
+              {/* Ambient cyan glow behind modal */}
+              <div className="absolute -inset-4 rounded-[2.25rem] bg-cyan-500/[0.04] blur-2xl pointer-events-none -z-10" />
+
               {/* Envelope opening reveal — content slides up from "inside" */}
               <motion.div
-                initial={{ y: 30, opacity: 0 }}
+                initial={{ y: 24, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.12, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ delay: 0.10, duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
               >
                 {/* Modal header */}
-                <div className="px-8 pt-8 pb-5 flex items-start justify-between border-b border-white/[0.06]">
+                <div className="px-7 pt-7 pb-5 flex items-start justify-between border-b border-white/[0.07]">
                   <div>
                     <div className="flex items-center gap-3 mb-1">
-                      <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-500/30
-                        flex items-center justify-center">
-                        <UploadCloud className="w-4 h-4 text-cyan-400" />
+                      <div className="w-9 h-9 rounded-xl
+                        bg-gradient-to-br from-cyan-500/25 to-cyan-600/10
+                        border border-cyan-500/35 flex items-center justify-center
+                        shadow-[0_0_14px_rgba(0,212,255,0.18)]">
+                        <UploadCloud className="w-4.5 h-4.5 text-cyan-300" aria-hidden="true" />
                       </div>
-                      <h2 className="text-xl font-bold text-white">Evidence Intake</h2>
+                      <div>
+                        <h2 id="evidence-modal-title" className="text-lg font-bold text-white tracking-tight">Evidence Intake</h2>
+                        <p className="text-slate-500 text-xs mt-0.5">Submit a digital artifact for council analysis</p>
+                      </div>
                     </div>
-                    <p className="text-slate-500 text-sm ml-11">Submit a digital artifact for council analysis</p>
                   </div>
                   <button
                     onClick={handleModalClose}
-                    className="p-2 text-slate-500 hover:text-white hover:bg-white/10 rounded-xl transition-colors"
+                    // eslint-disable-next-line jsx-a11y/no-autofocus
+                    autoFocus
+                    aria-label="Close evidence intake modal"
+                    className="p-2 text-slate-500 hover:text-white hover:bg-white/[0.08] rounded-xl transition-all duration-200 border border-transparent hover:border-white/[0.10]"
                   >
-                    <X className="w-5 h-5" />
+                    <X className="w-4.5 h-4.5" aria-hidden="true" />
                   </button>
                 </div>
 
                 {/* Modal body */}
-                <div className="px-8 pb-8 pt-6">
+                <div className="px-7 pb-7 pt-5">
                   <AnimatePresence mode="wait">
                     {!file ? (
                       /* ── DROP ZONE ── */
@@ -677,83 +785,109 @@ export default function LandingPage() {
                         <input
                           type="file"
                           ref={fileInputRef}
-                          className="hidden"
+                          className="sr-only"
                           accept="image/*,video/*,audio/*"
+                          aria-label="Upload evidence file"
                           onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
                         />
                         <div
+                          role="button"
+                          tabIndex={0}
+                          aria-label="File drop zone — click or press Enter to browse files"
                           onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                           onDragLeave={() => setIsDragging(false)}
                           onDrop={(e) => { e.preventDefault(); setIsDragging(false); e.dataTransfer.files?.[0] && handleFile(e.dataTransfer.files[0]); }}
                           onClick={() => fileInputRef.current?.click()}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInputRef.current?.click(); } }}
                           className={`relative cursor-pointer rounded-2xl border-2 border-dashed
-                            flex flex-col items-center justify-center py-14 px-8 text-center
+                            flex flex-col items-center justify-center py-12 px-8 text-center
                             transition-all duration-300 group overflow-hidden
-                            ${isDragging ? "border-cyan-400/70 bg-cyan-500/[0.06]" : "border-white/10 bg-white/[0.02] hover:border-cyan-500/40 hover:bg-cyan-500/[0.03]"}`}
+                            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent
+                            ${isDragging
+                              ? "border-cyan-400/75 bg-cyan-500/[0.07] shadow-[inset_0_0_40px_rgba(0,212,255,0.05)]"
+                              : "border-white/[0.09] bg-white/[0.018] hover:border-cyan-500/45 hover:bg-cyan-500/[0.035] hover:shadow-[inset_0_0_30px_rgba(0,212,255,0.04)]"}`}
                         >
-                          <motion.div animate={{ opacity: isDragging ? 1 : 0 }}
-                            className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,212,255,0.07),transparent_70%)] pointer-events-none" />
+                          {/* Drag radial glow */}
+                          <motion.div animate={{ opacity: isDragging ? 1 : 0 }} transition={{ duration: 0.2 }}
+                            className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,212,255,0.08),transparent_68%)] pointer-events-none" />
 
-                          <div className={`relative mb-6 transition-transform duration-300 ${isDragging ? "scale-110" : "group-hover:scale-105"}`}>
-                            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-cyan-500/15 to-violet-600/10
-                              border border-cyan-500/25 flex items-center justify-center
-                              shadow-[0_0_30px_rgba(0,212,255,0.12)] relative">
-                              <div className="absolute inset-[-8px] rounded-[22px] border border-cyan-500/15 border-dashed"
+                          <div className={`relative mb-5 transition-transform duration-300 ${isDragging ? "scale-112" : "group-hover:scale-108"}`}>
+                            <div className="w-[72px] h-[72px] rounded-2xl
+                              bg-gradient-to-br from-cyan-500/18 to-violet-600/12
+                              border border-cyan-500/28 flex items-center justify-center
+                              shadow-[0_0_28px_rgba(0,212,255,0.14),inset_0_1px_0_rgba(255,255,255,0.08)] relative">
+                              <div className="absolute inset-[-7px] rounded-[22px] border border-cyan-500/18 border-dashed"
                                 style={{ animation: "ring-spin-slow 8s linear infinite" }} />
-                              <UploadCloud className={`w-9 h-9 transition-colors ${isDragging ? "text-cyan-300" : "text-cyan-500"}`} />
+                              <UploadCloud className={`w-8 h-8 transition-colors duration-200 ${isDragging ? "text-cyan-200" : "text-cyan-400"}`} aria-hidden="true" />
                             </div>
-                            {[FileImage, FileAudio, FileVideo].map((Icon, i) => (
-                              <div key={i} className="absolute w-7 h-7 rounded-xl bg-black/70 border border-white/[0.10]
-                                flex items-center justify-center"
+                            {[FileImage, FileAudio, FileVideo].map((Icon, idx) => (
+                              <div key={idx}
+                                className="absolute w-6 h-6 rounded-lg bg-[#0a0a18]/90 border border-white/[0.12]
+                                  flex items-center justify-center shadow-sm"
                                 style={{
-                                  top: i === 0 ? "-10px" : "auto",
-                                  bottom: i === 2 ? "-10px" : "auto",
-                                  left: i === 2 ? "-12px" : "auto",
-                                  right: i === 0 ? "-12px" : i === 1 ? "-14px" : "auto",
+                                  top: idx === 0 ? "-8px" : "auto",
+                                  bottom: idx === 2 ? "-8px" : "auto",
+                                  left: idx === 2 ? "-10px" : "auto",
+                                  right: idx === 0 ? "-10px" : idx === 1 ? "-12px" : "auto",
                                 }}>
-                                <Icon className="w-3.5 h-3.5 text-slate-400" />
+                                <Icon className="w-3 h-3 text-slate-400" aria-hidden="true" />
                               </div>
                             ))}
                           </div>
 
-                          <p className="text-white font-semibold text-base mb-1">
+                          <p className="text-white font-semibold text-sm mb-1 tracking-wide">
                             {isDragging ? "Drop to submit evidence" : "Drag & drop your file here"}
                           </p>
-                          <p className="text-slate-500 text-sm mb-5">or click to browse</p>
+                          <p className="text-slate-500 text-xs mb-4">or click to browse</p>
                           <div className="flex gap-2 flex-wrap justify-center">
                             {["IMAGE", "VIDEO", "AUDIO"].map(t => (
-                              <span key={t} className="px-3 py-1 bg-white/[0.04] border border-white/[0.08]
-                                rounded-full text-[10px] font-mono text-slate-500 tracking-wider">
+                              <span key={t} className="px-2.5 py-0.5 bg-white/[0.04] border border-white/[0.08]
+                                rounded-full text-[10px] font-mono text-slate-500 tracking-widest">
                                 {t}
                               </span>
                             ))}
                           </div>
                         </div>
-                        {validationError && <p className="mt-4 text-red-400 text-sm text-center font-medium">{validationError}</p>}
+                        {validationError && (
+                          <motion.p
+                            role="alert"
+                            initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+                            className="mt-3 text-red-400 text-xs text-center font-medium flex items-center justify-center gap-1.5"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" aria-hidden="true" />
+                            {validationError}
+                          </motion.p>
+                        )}
                       </motion.div>
                     ) : (
-                      /* ── FILE PREVIEW ── */
-                      <motion.div key="preview" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="flex flex-col gap-5">
-                        <div className="w-full rounded-2xl overflow-hidden bg-black/40 border border-white/[0.07] relative" style={{ minHeight: 180 }}>
+                      /* ── FILE PREVIEW / SUCCESS ── */
+                      <motion.div key="preview" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="flex flex-col gap-4">
+                        {/* Preview card */}
+                        <div className="w-full rounded-2xl overflow-hidden
+                          bg-gradient-to-b from-white/[0.03] to-black/30
+                          border border-white/[0.08] relative shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                          style={{ minHeight: 168 }}>
                           {previewUrl && file?.type.startsWith("image/") && (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={previewUrl} alt="Evidence preview" className="w-full max-h-64 object-contain" />
+                            <img src={previewUrl} alt="Evidence preview" className="w-full max-h-60 object-contain" />
                           )}
                           {previewUrl && file?.type.startsWith("video/") && (
-                            <video src={previewUrl} className="w-full max-h-64 object-contain" muted autoPlay loop playsInline />
+                            <video src={previewUrl} className="w-full max-h-60 object-contain" muted autoPlay loop playsInline />
                           )}
                           {!previewUrl && file && (
-                            <div className="flex flex-col items-center justify-center h-48 gap-4">
-                              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500/15 to-violet-600/10
-                                border border-cyan-500/20 flex items-center justify-center shadow-[0_0_20px_rgba(0,212,255,0.15)]">
+                            <div className="flex flex-col items-center justify-center h-44 gap-3">
+                              <div className="w-14 h-14 rounded-2xl
+                                bg-gradient-to-br from-cyan-500/18 to-violet-600/10
+                                border border-cyan-500/22 flex items-center justify-center
+                                shadow-[0_0_20px_rgba(0,212,255,0.18)]">
                                 {file.type.startsWith("audio/")
-                                  ? <FileAudio className="w-8 h-8 text-cyan-400" />
-                                  : <File className="w-8 h-8 text-slate-400" />}
+                                  ? <FileAudio className="w-7 h-7 text-cyan-400" aria-hidden="true" />
+                                  : <File className="w-7 h-7 text-slate-400" aria-hidden="true" />}
                               </div>
                               {file.type.startsWith("audio/") && (
-                                <div className="flex items-end gap-1 h-8">
+                                <div className="flex items-end gap-1 h-7">
                                   {[3,7,5,9,6,4,8,5,7,3].map((h, i) => (
-                                    <motion.div key={i} className="w-1.5 bg-cyan-500/60 rounded-full"
+                                    <motion.div key={i} className="w-1.5 bg-gradient-to-t from-cyan-600 to-cyan-400 rounded-full"
                                       animate={{ height: [`${h*3}px`, `${h*3+10}px`, `${h*3}px`] }}
                                       transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.09, ease: "easeInOut" }} />
                                   ))}
@@ -761,26 +895,33 @@ export default function LandingPage() {
                               )}
                             </div>
                           )}
-                          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent px-4 py-3">
-                            <p className="text-xs font-mono text-slate-300 truncate">{file.name}</p>
-                            <p className="text-[10px] text-slate-500 mt-0.5">{(file.size/1024/1024).toFixed(2)} MB · {file.type}</p>
+                          {/* File info overlay */}
+                          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-5 h-5 rounded-md bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                                <span className="text-emerald-400 text-[9px] font-bold">✓</span>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-slate-200 truncate">{file.name}</p>
+                                <p className="text-[10px] text-slate-500 mt-0.5">{(file.size/1024/1024).toFixed(2)} MB · {file.type.split("/")[1]?.toUpperCase() || file.type}</p>
+                              </div>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="flex gap-3">
-                          <button onClick={handleClearFile}
-                            className="flex-1 flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl
-                              bg-white/[0.04] border border-white/[0.10] text-slate-300 font-semibold text-sm
-                              hover:bg-white/[0.08] hover:text-white transition-all">
-                            <RotateCcw className="w-4 h-4" /> New Upload
+                        {/* Action buttons */}
+                        <div className="flex gap-2.5">
+                          <button
+                            onClick={handleClearFile}
+                            className="btn btn-ghost flex-1 py-3 rounded-xl text-sm"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" /> New Upload
                           </button>
-                          <button onClick={handleInitiate}
-                            className="flex-1 flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl
-                              bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-bold text-sm
-                              hover:from-emerald-400 hover:to-cyan-400 hover:scale-[1.02]
-                              hover:shadow-[0_0_30px_rgba(16,185,129,0.4)] transition-all
-                              border border-white/[0.15]">
-                            Initiate Analysis <ArrowRight className="w-4 h-4" />
+                          <button
+                            onClick={handleInitiate}
+                            className="btn btn-primary flex-1 py-3 rounded-xl text-sm font-bold"
+                          >
+                            Initiate Analysis <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
                         </div>
                       </motion.div>

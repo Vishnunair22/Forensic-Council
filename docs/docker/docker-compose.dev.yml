@@ -24,6 +24,24 @@ services:
       - NODE_ENV=development
     volumes:
       - ../../frontend:/app:rw
-      # Protect node_modules and Next.js cache from host overrides
+      # Protect node_modules from host overrides
       - /app/node_modules
-      - /app/.next
+      # Named volume so the Next.js build cache persists across container restarts.
+      # Without this, every restart triggers a full ~120s recompilation on first page load
+      # which can exceed the Caddy response_header_timeout and cause a "page not found" error.
+      - nextjs_cache:/app/.next
+    # Next.js dev-mode webpack compilation is memory-heavy (1373 modules → ~900 MB peak).
+    # The production compose caps the frontend at 512 MB / 0.5 CPU which causes OOM-kills
+    # during compilation, making the container restart in a loop.  Override both limits here
+    # so dev mode runs stably.
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+
+volumes:
+  nextjs_cache:

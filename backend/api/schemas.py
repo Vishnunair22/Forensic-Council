@@ -41,6 +41,7 @@ class AgentFindingDTO(BaseModel):
     robustness_caveat_detail: Optional[str] = None
     reasoning_summary: str
     metadata: Optional[dict[str, Any]] = None  # includes analysis_phase, analysis_source, etc.
+    severity_tier: str = "LOW"   # INFO / LOW / MEDIUM / HIGH / CRITICAL
 
 
 class AgentMetricsDTO(BaseModel):
@@ -77,6 +78,22 @@ class ReportDTO(BaseModel):
     cryptographic_signature: str
     report_hash: str
     signed_utc: Optional[str] = None
+    # Structured summary
+    verdict_sentence: str = ""
+    key_findings: list[str] = []
+    reliability_note: str = ""
+    # Verdict enrichment
+    manipulation_probability: float = 0.0
+    # Confidence range across active agents (C)
+    confidence_min: float = 0.0
+    confidence_max: float = 0.0
+    confidence_std_dev: float = 0.0
+    # Agent coverage
+    applicable_agent_count: int = 0
+    skipped_agents: dict[str, str] = {}
+    analysis_coverage_note: str = ""
+    # Flat per-agent summary (D)
+    per_agent_summary: dict[str, Any] = {}
 
 
 class HITLDecisionRequest(BaseModel):
