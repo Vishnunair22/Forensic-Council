@@ -121,19 +121,19 @@ export function HITLCheckpointModal({
             {/* Checkpoint Details */}
             <div className="space-y-4 my-6">
               {/* Brief */}
-              <div className="p-4 rounded-lg bg-white/5 border border-white/10">
-                <h4 className="text-sm font-semibold text-slate-300 mb-2">
+              <div className="p-4 rounded-xl glass-panel border border-white/[0.08]">
+                <h4 className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">
                   Finding Summary
                 </h4>
-                <p className="text-sm text-slate-300">{checkpoint.brief_text}</p>
+                <p className="text-sm text-slate-300 leading-relaxed">{checkpoint.brief_text}</p>
               </div>
 
               {/* Decision Needed */}
-              <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
-                <h4 className="text-sm font-semibold text-amber-300 mb-2">
+              <div className="p-4 rounded-xl bg-amber-500/[0.06] border border-amber-500/[0.25] backdrop-blur-sm">
+                <h4 className="text-xs font-mono text-amber-400 uppercase tracking-widest mb-2">
                   Action Required
                 </h4>
-                <p className="text-sm text-amber-200">{checkpoint.decision_needed}</p>
+                <p className="text-sm text-amber-200 leading-relaxed">{checkpoint.decision_needed}</p>
               </div>
 
               {/* Decision Options */}
@@ -148,16 +148,22 @@ export function HITLCheckpointModal({
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setSelectedDecision(option.value)}
-                      className={`p-3 rounded-lg border-2 transition-all text-left ${
+                      className={`p-3 rounded-xl border transition-all text-left backdrop-blur-sm ${
                         selectedDecision === option.value
-                          ? `border-${option.color}-500/70 bg-${option.color}-500/20`
-                          : "border-white/10 bg-white/5 hover:bg-white/10"
+                          ? option.color === "emerald"
+                            ? "border-emerald-500/60 bg-emerald-500/15 shadow-[0_0_16px_rgba(16,185,129,0.15)]"
+                            : option.color === "blue"
+                              ? "border-blue-500/60 bg-blue-500/15 shadow-[0_0_16px_rgba(59,130,246,0.15)]"
+                              : option.color === "amber"
+                                ? "border-amber-500/60 bg-amber-500/15 shadow-[0_0_16px_rgba(245,158,11,0.15)]"
+                                : "border-red-500/60 bg-red-500/15 shadow-[0_0_16px_rgba(239,68,68,0.15)]"
+                          : "border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/[0.14]"
                       }`}
                     >
                       <p className="text-sm font-semibold text-white">
                         {option.label}
                       </p>
-                      <p className="text-xs text-slate-400 mt-1">
+                      <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
                         {option.description}
                       </p>
                     </motion.button>
@@ -175,7 +181,7 @@ export function HITLCheckpointModal({
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   placeholder="Explain your decision or provide additional context..."
-                  className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 resize-none"
+                  className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.10] text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/40 resize-none backdrop-blur-sm transition-colors"
                   rows={3}
                   disabled={isSubmitting}
                 />
@@ -194,27 +200,27 @@ export function HITLCheckpointModal({
             </div>
 
             {/* Footer with Actions */}
-            <DialogFooter>
+            <DialogFooter className="gap-2 mt-2">
               <button
                 onClick={onDismiss}
                 disabled={isSubmitting}
-                className="px-4 py-2 rounded-lg border border-slate-700/30 text-slate-300 hover:bg-white/5 transition-all disabled:opacity-50"
+                className="btn btn-ghost px-4 py-2.5 rounded-xl disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={!selectedDecision || isSubmitting}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600/30 border border-emerald-500/50 text-emerald-300 hover:bg-emerald-600/50 disabled:opacity-50 transition-all font-medium"
+                className="btn btn-emerald px-4 py-2.5 rounded-xl font-semibold disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Submitting...
+                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                    Submitting…
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="w-4 h-4" />
+                    <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
                     Submit Decision
                   </>
                 )}

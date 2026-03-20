@@ -302,6 +302,7 @@ class ForensicCouncilPipeline:
         evidence_file_path: str,
         case_id: str,
         investigator_id: str,
+        original_filename: str | None = None,
     ) -> ForensicReport:
         """
         Run a complete forensic investigation on evidence.
@@ -342,6 +343,7 @@ class ForensicCouncilPipeline:
             evidence_file_path,
             session_id,
             investigator_id,
+            original_filename=original_filename,
         )
         
         # Set evidence artifact in agent factory for challenge loops
@@ -398,8 +400,26 @@ class ForensicCouncilPipeline:
                     "react_chain": result.react_chain,
                 }
         
-        # Run deliberation
-        report = await self.arbiter.deliberate(arbiter_results, case_id=case_id)
+        # Run deliberation with a hard 150-second ceiling so the pipeline never
+        # hangs indefinitely if Groq is down. If it times out, regenerate the
+        # report without LLM synthesis (template fallback path in the arbiter).
+        try:
+            report = await asyncio.wait_for(
+                self.arbiter.deliberate(arbiter_results, case_id=case_id),
+                timeout=150.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "arbiter.deliberate() exceeded 150 s — regenerating with LLM disabled",
+                session_id=str(session_id),
+            )
+            # Temporarily disable LLM so deliberate() uses template fallback instantly
+            _saved_key = self.arbiter.config.llm_api_key
+            self.arbiter.config.__dict__["llm_api_key"] = None
+            try:
+                report = await self.arbiter.deliberate(arbiter_results, case_id=case_id)
+            finally:
+                self.arbiter.config.__dict__["llm_api_key"] = _saved_key
         
         # Add additional fields to report
         report.case_linking_flags = await self._collect_case_linking_flags(
@@ -456,10 +476,11 @@ class ForensicCouncilPipeline:
         file_path: str,
         session_id: UUID,
         investigator_id: str,
+        original_filename: str | None = None,
     ) -> EvidenceArtifact:
         """Ingest evidence file and create artifact."""
         file_path_obj = Path(file_path)
-        
+
         # Store in evidence store
         stored_artifact = await self.evidence_store.ingest(
             file_path=file_path,
@@ -467,7 +488,7 @@ class ForensicCouncilPipeline:
             agent_id=investigator_id,
             metadata={
                 "mime_type": self._get_mime_type(file_path),
-                "original_filename": file_path_obj.name,
+                "original_filename": original_filename or file_path_obj.name,
             }
         )
         

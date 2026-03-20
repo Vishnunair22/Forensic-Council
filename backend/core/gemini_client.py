@@ -488,8 +488,7 @@ class GeminiVisionClient:
                     if resp.status_code in {429, 500, 502, 503, 504}:
                         wait = _BASE_BACKOFF * (2 ** attempt)
                         logger.warning(
-                            "Gemini API %d, retrying in %.1fs (attempt %d/%d)",
-                            resp.status_code, wait, attempt + 1, _MAX_RETRIES,
+                            f"Gemini API {resp.status_code}, retrying in {wait:.1f}s (attempt {attempt + 1}/{_MAX_RETRIES})"
                         )
                         await asyncio.sleep(wait)
                         continue

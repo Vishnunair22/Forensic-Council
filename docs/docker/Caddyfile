@@ -81,8 +81,12 @@
             header_up X-Forwarded-Proto {scheme}
 
             transport http {
-                response_header_timeout 30s
-                dial_timeout            5s
+                # 300 s covers Next.js dev-mode on-demand compilation.  First-load
+                # compilation measured at 70–130 s on typical hardware; 300 s gives
+                # generous headroom.  Production builds respond in < 1 s so this is
+                # effectively a no-op in prod.
+                response_header_timeout 300s
+                dial_timeout            10s
             }
         }
     }

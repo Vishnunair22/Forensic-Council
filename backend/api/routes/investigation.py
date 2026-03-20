@@ -47,9 +47,9 @@ router = APIRouter(prefix="/api/v1", tags=["investigation"])
 # ── Per-user upload rate limiter ──────────────────────────────────────────────
 # Limits how many investigations a single authenticated user can start within
 # a rolling window. Prevents a single account from exhausting pipeline capacity.
-_MAX_INVESTIGATIONS_PER_USER = 10      # max concurrent/recent investigations
+_MAX_INVESTIGATIONS_PER_USER = 50      # max investigations per window
 _USER_RATE_WINDOW_SECS = 300           # 5-minute rolling window
-_USER_RATE_LOCKOUT_SECS = 120          # 2-minute lockout after limit hit
+_USER_RATE_LOCKOUT_SECS = 30           # 30-second lockout after limit hit
 
 # In-memory fallback: {user_id: [timestamp, ...]}
 _user_investigation_times: dict[str, list[float]] = {}
@@ -171,11 +171,14 @@ async def start_investigation(
     await _check_investigation_rate_limit(current_user.user_id)
 
     # ── MIME type check ───────────────────────────────────────────────────────
-    if file.content_type not in ALLOWED_MIME_TYPES:
+    # Strip parameters (e.g. "image/jpeg; charset=utf-8" → "image/jpeg") before
+    # checking the allow-list — browsers can append extra content-type params.
+    raw_content_type = (file.content_type or "").split(";")[0].strip().lower()
+    if raw_content_type not in ALLOWED_MIME_TYPES:
         raise HTTPException(
             status_code=400,
             detail=(
-                f"File type '{file.content_type}' is not allowed. "
+                f"File type '{raw_content_type}' is not allowed. "
                 f"Accepted types: {', '.join(sorted(ALLOWED_MIME_TYPES))}"
             ),
         )
@@ -228,8 +231,14 @@ async def start_investigation(
         raise HTTPException(status_code=500, detail="Failed to save uploaded file.")
 
     # ── Register pipeline ─────────────────────────────────────────────────────
-    from orchestration.pipeline import ForensicCouncilPipeline
-    pipeline = ForensicCouncilPipeline()
+    try:
+        from orchestration.pipeline import ForensicCouncilPipeline
+        pipeline = ForensicCouncilPipeline()
+    except Exception as pipe_err:
+        logger.error("Failed to initialise pipeline", session_id=session_id, error=str(pipe_err))
+        try: tmp_path.unlink()
+        except Exception: pass
+        raise HTTPException(status_code=500, detail="Pipeline initialisation failed — please retry.")
     _active_pipelines[session_id] = pipeline
 
     # ── Start background investigation task ───────────────────────────────────
@@ -240,6 +249,7 @@ async def start_investigation(
             evidence_file_path=str(tmp_path),
             case_id=case_id,
             investigator_id=investigator_id,
+            original_filename=file.filename or None,
         )
     )
 
@@ -415,6 +425,7 @@ async def _wrap_pipeline_with_broadcasts(
     evidence_file_path: str,
     case_id: str,
     investigator_id: str,
+    original_filename: str | None = None,
 ):
     """
     Wrap the pipeline execution to broadcast per-agent WebSocket updates.
@@ -623,9 +634,19 @@ async def _wrap_pipeline_with_broadcasts(
 
         results = []
 
+        # ── Pipeline-level progress counter ──────────────────────────────────
+        # Tracks how many agents have completed so far (updated atomically inside
+        # run_single_agent). Used to broadcast real-time pipeline-level messages.
+        _pipeline_completed: list[int] = [0]  # mutable int via list
+        _total_supported = sum(
+            1 for _id, _, _, _ in agent_configs
+            if mime in _AGENT_MIME_SUPPORT.get(_id, set())
+        )
+
         async def make_heartbeat(agent_id: str, agent_name: str, target_memory: WorkingMemory, done_event: asyncio.Event, deep_namespace: str | None = None):
             """Stream live working-memory progress to the WebSocket client."""
             last_thinking = ""
+            last_done = -1
             # Deep pass uses an isolated namespace; use it when provided
             wm_agent_id = deep_namespace if deep_namespace else agent_id
             while not done_event.is_set():
@@ -681,9 +702,12 @@ async def _wrap_pipeline_with_broadcasts(
                     elif total > 0:
                         thinking = f"⚙️ Initialising {total} analysis tasks…"
                     else:
-                        thinking = "⚙️ Starting forensic analysis…"
-                    if thinking and thinking != last_thinking:
+                        # WM state exists but no tasks yet — agent still loading.
+                        # Don't overwrite the pre-broadcast phrase; skip this tick.
+                        thinking = ""
+                    if thinking and (thinking != last_thinking or done != last_done):
                         last_thinking = thinking
+                        last_done = done
                         await broadcast_update(
                             ws_session_id,
                             BriefUpdate(
@@ -692,7 +716,12 @@ async def _wrap_pipeline_with_broadcasts(
                                 agent_id=agent_id,
                                 agent_name=agent_name,
                                 message=thinking,
-                                data={"status": "running", "thinking": thinking},
+                                data={
+                                    "status": "running",
+                                    "thinking": thinking,
+                                    "tools_done": done,
+                                    "tools_total": total,
+                                },
                             )
                         )
                 except Exception as e:
@@ -701,21 +730,10 @@ async def _wrap_pipeline_with_broadcasts(
         async def run_single_agent(agent_id, agent_name, AgentClass, thinking_phrase):
             supported_mimes = _AGENT_MIME_SUPPORT.get(agent_id, set())
             if mime not in supported_mimes:
-                # Step 1: Show "checking" state so card appears active
-                await broadcast_update(
-                    ws_session_id,
-                    BriefUpdate(
-                        type="AGENT_UPDATE",
-                        session_id=ws_session_id,
-                        agent_id=agent_id,
-                        agent_name=agent_name,
-                        message=f"Checking file type compatibility…",
-                        data={"status": "running", "thinking": "🔍 Checking file type compatibility…"},
-                    )
-                )
-                await asyncio.sleep(0.3)
+                # Pre-broadcast already sent "checking" state before asyncio.gather,
+                # so skip the redundant update and go straight to AGENT_COMPLETE.
 
-                # Step 2: Determine a human-friendly file category name
+                # Determine a human-friendly file category name
                 if mime.startswith("image/"):
                     file_cat = "image"
                 elif mime.startswith("video/"):
@@ -746,7 +764,7 @@ async def _wrap_pipeline_with_broadcasts(
                         agent_name=agent_name,
                         message=skip_msg,
                         data={
-                            "status": "complete",
+                            "status": "skipped",
                             "confidence": 0.0,
                             "findings_count": 0,
                             "error": f"Not applicable for {file_cat} files",
@@ -901,7 +919,18 @@ async def _wrap_pipeline_with_broadcasts(
                     f.get("confidence_raw", 0.5) if isinstance(f, dict) else 0.5
                     for f in result.findings
                 ]
-                confidence = sum(confidences) / len(confidences) if confidences else 0.5
+                # Use median to avoid tools that return 0.0 (e.g. CLIP no-match)
+                # dragging down the agent-level confidence unfairly.
+                if confidences:
+                    confidences_sorted = sorted(confidences)
+                    mid = len(confidences_sorted) // 2
+                    confidence = (
+                        confidences_sorted[mid]
+                        if len(confidences_sorted) % 2 == 1
+                        else (confidences_sorted[mid - 1] + confidences_sorted[mid]) / 2
+                    )
+                else:
+                    confidence = 0.5
 
                 # Priority: ELA/key forensic finding > longest > first
                 _PRIORITY_TOOLS = {
@@ -954,7 +983,78 @@ async def _wrap_pipeline_with_broadcasts(
                 _cd_total = len(result.findings) if result.findings else 0
                 tool_error_rate = round(_cd_err / _cd_total, 3) if _cd_total > 0 else 0.0
 
-            # Broadcast completion
+            # Prefer Groq-synthesized confidence + error rate if synthesis ran.
+            # Falls back to the raw-score mean computed above.
+            groq_confidence = getattr(agent, "_agent_confidence", None)
+            groq_error_rate = getattr(agent, "_agent_error_rate", None)
+            final_confidence  = groq_confidence  if groq_confidence  is not None else confidence
+            final_error_rate  = groq_error_rate   if groq_error_rate   is not None else tool_error_rate
+
+            # Pull structured verdict/section metadata from findings metadata.
+            # Findings are AgentFinding objects — access .metadata directly.
+            agent_verdict = None
+            section_flags: list[dict] = []
+            if result.findings:
+                seen_sections: set[str] = set()
+                for f in result.findings:
+                    meta = f.metadata if hasattr(f, "metadata") else (f.get("metadata", {}) if isinstance(f, dict) else {})
+                    if agent_verdict is None:
+                        agent_verdict = meta.get("agent_verdict")
+                    sid = meta.get("section_id", "")
+                    if sid and sid not in seen_sections:
+                        seen_sections.add(sid)
+                        section_flags.append({
+                                "id":        sid,
+                                "label":     meta.get("section_label", sid),
+                                "flag":      meta.get("section_flag", "info"),
+                                "key_signal": meta.get("section_key_signal", ""),
+                            })
+
+            # Rule-based verdict fallback — used when LLM synthesis is disabled
+            # or when Groq did not tag findings with agent_verdict.
+            if agent_verdict is None:
+                if result.findings:
+                    sev_list = [
+                        (f.get("severity_tier", "LOW") or "LOW").upper()
+                        for f in result.findings if isinstance(f, dict)
+                    ]
+                    total_f = len(sev_list) or 1
+                    critical = sev_list.count("CRITICAL")
+                    high     = sev_list.count("HIGH")
+                    medium   = sev_list.count("MEDIUM")
+                    severe_ratio = (critical + high) / total_f
+
+                    if critical > 0 or severe_ratio >= 0.30:
+                        agent_verdict = "LIKELY_MANIPULATED"
+                    elif severe_ratio >= 0.10 or (medium / total_f) >= 0.40 or final_confidence < 0.50:
+                        agent_verdict = "INCONCLUSIVE"
+                    else:
+                        agent_verdict = "AUTHENTIC"
+                elif result.error:
+                    agent_verdict = "INCONCLUSIVE"
+
+            # Build per-finding preview (shown in agent cards when section_flags is empty)
+            findings_preview = []
+            for f in result.findings:
+                if not isinstance(f, dict):
+                    continue
+                meta = f.get("metadata", {}) if isinstance(f.get("metadata"), dict) else {}
+                tool = meta.get("tool_name", "") or f.get("finding_type", "")
+                summary = f.get("reasoning_summary", "")
+                if not summary:
+                    continue
+                # Strip "Tool Name: " prefix if reasoning_summary already contains it
+                if tool and summary.lower().startswith(tool.lower() + ":"):
+                    summary = summary[len(tool) + 1:].strip()
+                findings_preview.append({
+                    "tool": tool,
+                    "summary": summary[:320],
+                    "confidence": f.get("confidence_raw", 0.5),
+                    "flag": meta.get("section_flag", "info"),
+                    "severity": f.get("severity_tier", "LOW"),
+                })
+
+            # Broadcast per-agent completion
             await broadcast_update(
                 ws_session_id,
                 BriefUpdate(
@@ -965,39 +1065,134 @@ async def _wrap_pipeline_with_broadcasts(
                     message=finding_summary,
                     data={
                         "status": "error" if result.error else "complete",
-                        "confidence": confidence,
+                        "confidence": final_confidence,
                         "findings_count": len(result.findings),
                         "error": result.error,
-                        "tool_error_rate": tool_error_rate,
+                        "tool_error_rate": final_error_rate,
+                        "agent_verdict": agent_verdict,
+                        "section_flags": section_flags,
+                        "findings_preview": findings_preview,
                     },
                 )
             )
+
+            # ── Pipeline-level progress update (agent_id=None → pipelineMessage) ──
+            _pipeline_completed[0] += 1
+            _done = _pipeline_completed[0]
+            _total = _total_supported or len(agent_configs)
+            _pipeline_msgs = {
+                1: "🔬 First agent reporting — analysis underway…",
+                2: "🔬 Two agents reporting — forensic scan in progress…",
+                3: "🔬 Three agents reporting — cross-modal validation running…",
+            }
+            if _done < _total:
+                _pl_msg = _pipeline_msgs.get(_done, f"🔬 {_done} of {_total} agents reporting findings…")
+            else:
+                _pl_msg = f"✅ All {_total} applicable agents have reported — awaiting decision…"
+            await broadcast_update(
+                ws_session_id,
+                BriefUpdate(
+                    type="AGENT_UPDATE",
+                    session_id=ws_session_id,
+                    agent_id=None,
+                    agent_name=None,
+                    message=_pl_msg,
+                    data={"status": "running", "thinking": _pl_msg},
+                )
+            )
+
             return result, agent
         
-        # Pre-broadcast initial thinking phrase for every supported agent BEFORE asyncio.gather.
+        # Pre-broadcast initial state for ALL agents BEFORE asyncio.gather.
         # This is critical: if Agent1's constructor blocks the event loop (ML model loading),
         # Agents 2-5 would never get to send their own initial broadcasts, leaving those
-        # cards stuck in "checking" state. Broadcasting all phrases upfront ensures all
-        # 5 cards transition to "running" immediately regardless of event-loop scheduling.
+        # cards stuck in "checking" state. Broadcasting upfront ensures ALL 5 cards
+        # transition from "checking" to "running" immediately regardless of scheduling.
+        # Supported agents show their analysis phrase; unsupported show "checking file type".
         for _pre_id, _pre_name, _PreClass, _pre_phrase in agent_configs:
-            if mime in _AGENT_MIME_SUPPORT.get(_pre_id, set()):
-                await broadcast_update(
-                    ws_session_id,
-                    BriefUpdate(
-                        type="AGENT_UPDATE",
-                        session_id=ws_session_id,
-                        agent_id=_pre_id,
-                        agent_name=_pre_name,
-                        message=_pre_phrase,
-                        data={"status": "running", "thinking": _pre_phrase},
-                    ),
-                )
+            _pre_supported = mime in _AGENT_MIME_SUPPORT.get(_pre_id, set())
+            _broadcast_phrase = _pre_phrase if _pre_supported else "🔍 Checking file type compatibility…"
+            await broadcast_update(
+                ws_session_id,
+                BriefUpdate(
+                    type="AGENT_UPDATE",
+                    session_id=ws_session_id,
+                    agent_id=_pre_id,
+                    agent_name=_pre_name,
+                    message=_broadcast_phrase,
+                    data={"status": "running", "thinking": _broadcast_phrase},
+                ),
+            )
 
         tasks = [
             run_single_agent(agent_id, agent_name, AgentClass, thinking_phrase)
             for agent_id, agent_name, AgentClass, thinking_phrase in agent_configs
         ]
+
+        # ── Pipeline-level initial broadcast + ticker ─────────────────────
+        # Broadcast an initial pipeline message so the status bar is never
+        # blank while agents are running.
+        _init_pl_msg = (
+            f"⚙️ {_total_supported} forensic agent{'s' if _total_supported != 1 else ''} "
+            "scanning evidence in parallel…"
+        )
+        await broadcast_update(
+            ws_session_id,
+            BriefUpdate(
+                type="AGENT_UPDATE",
+                session_id=ws_session_id,
+                agent_id=None,
+                agent_name=None,
+                message=_init_pl_msg,
+                data={"status": "running", "thinking": _init_pl_msg},
+            ),
+        )
+
+        _TICKER_PHRASES = [
+            "🔬 Forensic tools running — extracting pixel-level artifacts…",
+            "⚡ Cross-validating signals across all forensic domains…",
+            "🧠 Pattern recognition models analysing evidence…",
+            "📊 Aggregating forensic findings across active agents…",
+            "🔬 Analysis in progress — building forensic evidence chain…",
+            "🔍 Running advanced statistical anomaly detection…",
+            "⚙️ Tool results queuing — synthesis pipeline active…",
+        ]
+
+        async def _pipeline_ticker(done_event: asyncio.Event) -> None:
+            """Rotate pipeline-level status phrases every ~9 s while agents run."""
+            idx = 0
+            while True:
+                try:
+                    await asyncio.wait_for(done_event.wait(), timeout=9.0)
+                    return
+                except asyncio.TimeoutError:
+                    pass
+                if done_event.is_set():
+                    return
+                phrase = _TICKER_PHRASES[idx % len(_TICKER_PHRASES)]
+                idx += 1
+                await broadcast_update(
+                    ws_session_id,
+                    BriefUpdate(
+                        type="AGENT_UPDATE",
+                        session_id=ws_session_id,
+                        agent_id=None,
+                        agent_name=None,
+                        message=phrase,
+                        data={"status": "running", "thinking": phrase},
+                    ),
+                )
+
+        _ticker_done = asyncio.Event()
+        _ticker_task = asyncio.create_task(_pipeline_ticker(_ticker_done))
+
         raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        _ticker_done.set()
+        try:
+            await asyncio.wait_for(_ticker_task, timeout=1.0)
+        except Exception:
+            _ticker_task.cancel()
         
         results = []
         deep_pass_coroutines = []
@@ -1187,6 +1382,61 @@ async def _wrap_pipeline_with_broadcasts(
                 deep_total = len(deep_findings_serial)
                 deep_err_rate = round(deep_err_count / deep_total, 3) if deep_total > 0 else 0.0
 
+                # Prefer Groq-synthesized scores from deep synthesis pass
+                deep_groq_conf = getattr(agent, "_agent_confidence", None)
+                deep_groq_err  = getattr(agent, "_agent_error_rate",  None)
+                final_deep_conf = deep_groq_conf if deep_groq_conf is not None else confidence
+                final_deep_err  = deep_groq_err  if deep_groq_err  is not None else deep_err_rate
+
+                deep_agent_verdict = None
+                deep_section_flags: list[dict] = []
+                for f in deep_findings_serial:
+                    meta = f.metadata if hasattr(f, "metadata") else (f.get("metadata", {}) if isinstance(f, dict) else {})
+                    if deep_agent_verdict is None:
+                        deep_agent_verdict = meta.get("agent_verdict")
+                    sid = meta.get("section_id", "")
+                    if sid and not any(s["id"] == sid for s in deep_section_flags):
+                        deep_section_flags.append({
+                            "id":        sid,
+                            "label":     meta.get("section_label", sid),
+                            "flag":      meta.get("section_flag", "info"),
+                            "key_signal": meta.get("section_key_signal", ""),
+                        })
+
+                # Rule-based verdict fallback for deep pass
+                if deep_agent_verdict is None and deep_findings_serial:
+                    dsev = [
+                        (f.get("severity_tier", "LOW") or "LOW").upper()
+                        for f in deep_findings_serial if isinstance(f, dict)
+                    ]
+                    dtotal = len(dsev) or 1
+                    dsevere = (dsev.count("CRITICAL") + dsev.count("HIGH")) / dtotal
+                    if dsev.count("CRITICAL") > 0 or dsevere >= 0.30:
+                        deep_agent_verdict = "LIKELY_MANIPULATED"
+                    elif dsevere >= 0.10 or (dsev.count("MEDIUM") / dtotal) >= 0.40 or final_deep_conf < 0.50:
+                        deep_agent_verdict = "INCONCLUSIVE"
+                    else:
+                        deep_agent_verdict = "AUTHENTIC"
+
+                deep_findings_preview = []
+                for f in deep_findings_serial:
+                    if not isinstance(f, dict):
+                        continue
+                    meta = f.get("metadata", {}) if isinstance(f.get("metadata"), dict) else {}
+                    tool = meta.get("tool_name", "") or f.get("finding_type", "")
+                    summary = f.get("reasoning_summary", "")
+                    if not summary:
+                        continue
+                    if tool and summary.lower().startswith(tool.lower() + ":"):
+                        summary = summary[len(tool) + 1:].strip()
+                    deep_findings_preview.append({
+                        "tool": tool,
+                        "summary": summary[:320],
+                        "confidence": f.get("confidence_raw", 0.5),
+                        "flag": meta.get("section_flag", "info"),
+                        "severity": f.get("severity_tier", "LOW"),
+                    })
+
                 await broadcast_update(
                     ws_session_id,
                     BriefUpdate(
@@ -1197,11 +1447,14 @@ async def _wrap_pipeline_with_broadcasts(
                         message=finding_summary,
                         data={
                             "status": "complete",
-                            "confidence": confidence,
+                            "confidence": final_deep_conf,
                             "findings_count": len(deep_findings_serial),
                             "error": None,
-                            "tool_error_rate": deep_err_rate,
+                            "tool_error_rate": final_deep_err,
                             "deep_analysis_pending": False,
+                            "agent_verdict": deep_agent_verdict,
+                            "section_flags": deep_section_flags,
+                            "findings_preview": deep_findings_preview,
                         },
                     )
                 )
@@ -1351,7 +1604,50 @@ async def _wrap_pipeline_with_broadcasts(
             if agent1_tuple:
                 deep_tasks_list.append(monitor_and_inject_gemini_early(agent1_tuple[2]))
 
+            # Deep-phase pipeline ticker
+            _DEEP_TICKER_PHRASES = [
+                "🔬 Heavy ML models running — Gemini vision analysis active…",
+                "⚡ Deep forensic pass in progress — building anomaly heatmaps…",
+                "🧠 AI models cross-examining high-confidence anomalies…",
+                "📡 Advanced spectral and frequency analysis running…",
+                "🔮 Deep evidence chain being reconstructed…",
+                "🔬 Synthesising deep-pass findings across all agents…",
+            ]
+
+            async def _deep_pipeline_ticker(done_event: asyncio.Event) -> None:
+                idx = 0
+                while True:
+                    try:
+                        await asyncio.wait_for(done_event.wait(), timeout=10.0)
+                        return
+                    except asyncio.TimeoutError:
+                        pass
+                    if done_event.is_set():
+                        return
+                    phrase = _DEEP_TICKER_PHRASES[idx % len(_DEEP_TICKER_PHRASES)]
+                    idx += 1
+                    await broadcast_update(
+                        ws_session_id,
+                        BriefUpdate(
+                            type="AGENT_UPDATE",
+                            session_id=ws_session_id,
+                            agent_id=None,
+                            agent_name=None,
+                            message=phrase,
+                            data={"status": "running", "thinking": phrase},
+                        ),
+                    )
+
+            _deep_ticker_done = asyncio.Event()
+            _deep_ticker_task = asyncio.create_task(_deep_pipeline_ticker(_deep_ticker_done))
+
             await asyncio.gather(*deep_tasks_list, return_exceptions=True)
+
+            _deep_ticker_done.set()
+            try:
+                await asyncio.wait_for(_deep_ticker_task, timeout=1.0)
+            except Exception:
+                _deep_ticker_task.cancel()
         elif getattr(pipeline, "run_deep_analysis_flag") and not deep_pass_coroutines:
             logger.info("Deep analysis requested but no deep tasks available for this file type.")
         else:
@@ -1378,6 +1674,7 @@ async def _wrap_pipeline_with_broadcasts(
         evidence_file_path=evidence_file_path,
         case_id=case_id,
         investigator_id=investigator_id,
+        original_filename=original_filename,
     )
 
 
@@ -1387,6 +1684,7 @@ async def run_investigation_task(
     evidence_file_path: str,
     case_id: str,
     investigator_id: str,
+    original_filename: str | None = None,
 ):
     """Background task to run investigation with improved timing."""
     error_msg = None
@@ -1404,8 +1702,8 @@ async def run_investigation_task(
             BriefUpdate(
                 type="AGENT_UPDATE",
                 session_id=session_id,
-                message="Starting forensic analysis...",
-                data={"status": "starting", "thinking": "Loading analysis agents..."},
+                message="🚀 Initialising forensic pipeline — loading specialist agents…",
+                data={"status": "starting", "thinking": "🚀 Initialising forensic pipeline — loading specialist agents…"},
             )
         )
         
@@ -1418,6 +1716,7 @@ async def run_investigation_task(
                 evidence_file_path=evidence_file_path,
                 case_id=case_id,
                 investigator_id=investigator_id,
+                original_filename=original_filename,
             ),
             timeout=float(timeout),
         )
@@ -1518,8 +1817,9 @@ async def run_investigation_task(
         # D1: evict stale entries from _final_reports (older than 24 hours).
         # This prevents unbounded growth when many investigations complete without
         # their reports being fetched.  O(n) scan runs once per completed session.
-        from datetime import datetime, timezone as _tz
-        cutoff = datetime.now(_tz.utc).timestamp() - 86_400
+        # NOTE: do NOT import datetime here — a local import shadows the module-level
+        # `datetime` name and causes UnboundLocalError at line 1640 (Python scoping).
+        cutoff = datetime.now(timezone.utc).timestamp() - 86_400
         stale = [
             sid for sid, (_, cached_at) in list(_final_reports.items())
             if cached_at.timestamp() < cutoff

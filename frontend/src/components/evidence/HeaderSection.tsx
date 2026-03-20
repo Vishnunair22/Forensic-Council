@@ -42,17 +42,24 @@ export function HeaderSection({
         }}
         aria-label="Return to Forensic Council home"
       >
-        <div className="w-10 h-10 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center justify-center font-bold text-emerald-400 group-hover:bg-emerald-500/20 transition-colors shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+        <div className="w-10 h-10 bg-gradient-to-br from-emerald-500/18 to-emerald-600/8
+          border border-emerald-500/35 rounded-xl flex items-center justify-center
+          font-bold text-emerald-300 text-sm
+          group-hover:border-emerald-400/55 group-hover:bg-emerald-500/25
+          transition-all duration-200 shadow-[0_0_18px_rgba(16,185,129,0.14)]">
           FC
         </div>
-        <span className="text-xl font-bold tracking-tight">Forensic Council</span>
+        <div>
+          <span className="text-lg font-bold tracking-tight text-white block leading-tight">Forensic Council</span>
+          <span className="text-[10px] font-mono text-slate-600 uppercase tracking-widest">Evidence Analysis</span>
+        </div>
       </div>
 
       {/* Browse Button */}
       {showBrowse && (
         <button
           onClick={onBrowseClick}
-          className="text-emerald-400 font-mono text-sm hover:underline hover:text-emerald-300 transition-colors"
+          className="btn btn-ghost px-4 py-2 text-sm rounded-xl"
           aria-label="Browse system for new evidence file"
         >
           Browse System

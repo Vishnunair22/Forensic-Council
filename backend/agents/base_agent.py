@@ -232,6 +232,11 @@ class ForensicAgent(ABC):
         # Error and success counters for per-agent confidence/error rate.
         self._tool_success_count: int = 0
         self._tool_error_count: int = 0
+
+        # Groq-synthesized agent-level scores (set by _synthesize_findings_with_llm).
+        # None until synthesis runs; investigation.py reads these for AGENT_COMPLETE.
+        self._agent_confidence: float | None = None
+        self._agent_error_rate: float | None = None
     
     # Abstract properties that must be overridden
     
@@ -723,16 +728,26 @@ class ForensicAgent(ABC):
 
     async def _synthesize_findings_with_llm(self, phase: str = "initial") -> None:
         """
-        Post-analysis Groq synthesis: enrich raw tool findings with court-grade prose.
+        Post-analysis Groq synthesis — grouped, structured, with agent confidence + error rate.
 
-        Called once after initial tools complete AND once after deep tools complete.
-        The `phase` parameter controls the system prompt tone:
-          - "initial": Synthesise fast tool scans into a grounded first-pass analysis.
-          - "deep":    Compare deep ML/Gemini findings against initial findings;
-                       produce a clear IMPROVED or CONFIRMED narrative per finding.
+        Tools are batched into forensic groups (e.g. "Pixel-Level Integrity", "Temporal
+        Edit Detection").  Groq returns a structured JSON object with:
+          - verdict / confidence / error_rate at the agent level
+          - per-section analysis paragraphs citing exact metric values
+          - flag (ok/warn/bad/info) per section for frontend colour-coding
+          - critical_findings list and court_notes
 
-        Updates finding.reasoning_summary in-place.  On failure, raw findings
-        are preserved — this method must NEVER raise.
+        Results are applied back to each finding:
+          - reasoning_summary  ← section analysis prose
+          - metadata.section_*  ← section id, label, flag, key_signal
+          - metadata.agent_confidence / agent_error_rate stored on every finding
+        self._agent_confidence and self._agent_error_rate are also set so
+        investigation.py can broadcast them in AGENT_COMPLETE.
+
+        Phase "deep" receives initial findings as comparison context and expects
+        CONFIRMED / EXPANDED / CONTRADICTED verdicts in the analysis.
+
+        This method must NEVER raise — raw findings are always preserved on failure.
         """
         import json as _json
 
@@ -746,150 +761,436 @@ class ForensicAgent(ABC):
             "file_name": getattr(self.evidence_artifact, "file_path", "unknown"),
         }
 
-        # Separate initial vs deep findings for the deep-pass prompt
+        # ── Per-agent tool groups ─────────────────────────────────────────────
+        # Corroborating tools are batched together so Groq produces one coherent
+        # paragraph per group instead of isolated per-tool sentences.
+        # The agent_key strips the "_deep" suffix so deep-pass agents reuse the
+        # same grouping as their initial-pass counterpart.
+        agent_key = self.agent_id.replace("_deep", "")
+
+        _TOOL_GROUPS: dict[str, list[dict]] = {
+            "Agent1": [
+                {
+                    "id": "pixel_integrity",
+                    "label": "Pixel-Level Integrity",
+                    "tools": ["ela_full_image", "ela_anomaly_classify",
+                              "jpeg_ghost_detect", "noise_fingerprint"],
+                    "desc": "Compression-artifact and noise-consistency checks — primary manipulation signal for JPEG images.",
+                },
+                {
+                    "id": "spectral",
+                    "label": "Spectral & GAN Analysis",
+                    "tools": ["frequency_domain_analysis", "deepfake_frequency_check"],
+                    "desc": "FFT-based analysis for GAN generation artifacts and frequency-domain anomalies.",
+                },
+                {
+                    "id": "structural",
+                    "label": "Structural Manipulation",
+                    "tools": ["copy_move_detect", "splicing_detect"],
+                    "desc": "Copy-move and splice detection — regions cloned from within or outside the image.",
+                },
+                {
+                    "id": "chain_of_custody",
+                    "label": "Chain of Custody",
+                    "tools": ["file_hash_verify", "adversarial_robustness_check"],
+                    "desc": "File integrity since ingestion and anti-forensics evasion robustness.",
+                },
+                {
+                    "id": "content",
+                    "label": "Content Analysis",
+                    "tools": ["analyze_image_content", "extract_text_from_image",
+                              "extract_evidence_text"],
+                    "desc": "Semantic image classification and OCR text extraction.",
+                },
+                {
+                    "id": "deep_validation",
+                    "label": "Deep-Pass Validation",
+                    "tools": ["gemini_deep_forensic", "prnu_analysis",
+                              "cfa_demosaicing", "sensor_db_query"],
+                    "desc": "Gemini AI vision, PRNU sensor fingerprint, and CFA Bayer-pattern consistency.",
+                },
+            ],
+            "Agent2": [
+                {
+                    "id": "voice_authenticity",
+                    "label": "Voice Authenticity",
+                    "tools": ["anti_spoofing_detect", "voice_clone_detect"],
+                    "desc": "Synthetic/AI voice detection via anti-spoofing model and voice-clone heuristics.",
+                },
+                {
+                    "id": "prosody",
+                    "label": "Prosodic Analysis",
+                    "tools": ["prosody_analyze", "prosody_analysis"],
+                    "desc": "Fundamental frequency, jitter, shimmer, and HNR acoustic profile.",
+                },
+                {
+                    "id": "edit_detection",
+                    "label": "Temporal Edit Detection",
+                    "tools": ["audio_splice_detect", "enf_analysis",
+                              "background_noise_analysis"],
+                    "desc": "Splice via signal continuity, ENF electrical-hum analysis, and ambient noise consistency — triple-corroboration of edit points.",
+                },
+                {
+                    "id": "technical_provenance",
+                    "label": "Technical Provenance",
+                    "tools": ["codec_fingerprinting", "audio_visual_sync"],
+                    "desc": "Codec chain re-encoding history and audio-visual lip-sync alignment.",
+                },
+                {
+                    "id": "speaker_map",
+                    "label": "Speaker Map",
+                    "tools": ["speaker_diarize", "speaker_diarization"],
+                    "desc": "Speaker count and segment timeline baseline.",
+                },
+            ],
+            "Agent3": [
+                {
+                    "id": "object_inventory",
+                    "label": "Object Inventory",
+                    "tools": ["object_detection", "secondary_classification"],
+                    "desc": "YOLO primary detection refined by CLIP zero-shot secondary classification.",
+                },
+                {
+                    "id": "threat_assessment",
+                    "label": "Threat Assessment",
+                    "tools": ["contraband_database"],
+                    "desc": "CLIP semantic search across weapon and contraband categories.",
+                },
+                {
+                    "id": "scene_plausibility",
+                    "label": "Scene Plausibility",
+                    "tools": ["lighting_consistency", "scale_validation",
+                              "scene_incongruence"],
+                    "desc": "Lighting direction, scale proportion, and noise-variance compositing triad.",
+                },
+                {
+                    "id": "structural_integrity",
+                    "label": "Structural Integrity",
+                    "tools": ["image_splice_check", "noise_fingerprint",
+                              "splicing_detect"],
+                    "desc": "DCT quantization and PRNU noise-fingerprint splice detection.",
+                },
+                {
+                    "id": "document_analysis",
+                    "label": "Document & Text Analysis",
+                    "tools": ["object_text_ocr", "document_authenticity"],
+                    "desc": "OCR on detected regions and font/background forgery consistency check.",
+                },
+                {
+                    "id": "deep_corroboration",
+                    "label": "Deep AI Corroboration",
+                    "tools": ["gemini_deep_forensic", "adversarial_robustness_check"],
+                    "desc": "Gemini vision scene analysis and adversarial robustness check.",
+                },
+            ],
+            "Agent4": [
+                {
+                    "id": "temporal_integrity",
+                    "label": "Temporal Integrity",
+                    "tools": ["optical_flow_analysis", "optical_flow_analyze",
+                              "frame_consistency_analysis", "frame_consistency",
+                              "anomaly_classification"],
+                    "desc": "Optical-flow anomaly windows, SSIM frame consistency, EXPLAINABLE/SUSPICIOUS classification.",
+                },
+                {
+                    "id": "identity_manipulation",
+                    "label": "Identity Manipulation",
+                    "tools": ["face_swap_detection", "face_swap_detect"],
+                    "desc": "DeepFace embedding face-swap detection — high-priority standalone check.",
+                },
+                {
+                    "id": "ai_generation",
+                    "label": "AI Generation Detection",
+                    "tools": ["deepfake_frequency_check", "deepfake_frequency"],
+                    "desc": "GAN artifact detection via frequency domain — distinct from face-swap, targets fully synthetic frames.",
+                },
+                {
+                    "id": "container_forensics",
+                    "label": "Container & Technical Provenance",
+                    "tools": ["av_file_identity", "mediainfo_profile",
+                              "rolling_shutter_validation", "rolling_shutter"],
+                    "desc": "Codec chain, VFR flag, encoding tool, creation timestamps, and rolling-shutter consistency.",
+                },
+                {
+                    "id": "robustness",
+                    "label": "Adversarial Robustness",
+                    "tools": ["adversarial_robustness_check"],
+                    "desc": "Optical-flow analysis stability under Gaussian noise and brightness perturbation.",
+                },
+            ],
+            "Agent5": [
+                {
+                    "id": "metadata_integrity",
+                    "label": "Core Metadata Integrity",
+                    "tools": ["exif_extract", "metadata_anomaly_score",
+                              "timestamp_analysis", "extract_deep_metadata"],
+                    "desc": "EXIF field audit, ML anomaly scoring, and timestamp cross-consistency check.",
+                },
+                {
+                    "id": "provenance_chain",
+                    "label": "Provenance Chain",
+                    "tools": ["device_fingerprint_db", "c2pa_verify",
+                              "reverse_image_search"],
+                    "desc": "Device EXIF fingerprint, Content Credentials (C2PA), and prior online-appearance check.",
+                },
+                {
+                    "id": "geospatial_validation",
+                    "label": "Geospatial Validation",
+                    "tools": ["gps_timezone_validate", "astronomical_api",
+                              "get_physical_address"],
+                    "desc": "GPS-timezone cross-check and astronomical sun-elevation validation.",
+                },
+                {
+                    "id": "file_tampering",
+                    "label": "File-Level Tampering",
+                    "tools": ["file_structure_analysis", "hex_signature_scan",
+                              "thumbnail_mismatch", "file_hash_verify"],
+                    "desc": "File-format header, hidden software signatures, and EXIF thumbnail vs main-image post-capture edit detection.",
+                },
+                {
+                    "id": "hidden_payload",
+                    "label": "Hidden Payload",
+                    "tools": ["steganography_scan"],
+                    "desc": "LSB and DCT steganographic payload detection — standalone high-severity check.",
+                },
+            ],
+        }
+
+        tool_groups = _TOOL_GROUPS.get(agent_key, [])
+
+        # ── Pre-compute confidence and error rate from raw tool results ────────
+        success_count = self._tool_success_count
+        error_count   = self._tool_error_count
+        total_calls   = success_count + error_count
+
+        _not_applicable_keys = (
+            "ela_not_applicable", "ghost_not_applicable",
+            "noise_fingerprint_not_applicable", "prnu_not_applicable",
+        )
+        defensible_scores = [
+            f.confidence_raw for f in self._findings
+            if f.metadata.get("court_defensible", True)
+            and not any(f.metadata.get(k) for k in _not_applicable_keys)
+        ]
+        pre_confidence = (
+            round(sum(defensible_scores) / len(defensible_scores), 3)
+            if defensible_scores else 0.75
+        )
+        pre_error_rate = round(error_count / total_calls, 3) if total_calls > 0 else 0.0
+
+        fallback_count = sum(
+            1 for f in self._findings
+            if "fallback" in str(f.metadata.get("backend", "")).lower()
+        )
+
+        # ── Select target findings for this phase ─────────────────────────────
         initial_findings = [f for f in self._findings
                             if f.metadata.get("analysis_phase", "initial") == "initial"]
         deep_findings    = [f for f in self._findings
                             if f.metadata.get("analysis_phase", "initial") == "deep"]
         target_findings  = deep_findings if phase == "deep" and deep_findings else self._findings
+        digest_findings  = target_findings[:18]   # raised ceiling to cover all tools
 
-        # Cap digest at 15 findings per phase (raised from 10 to cover all agent tools).
-        # Synthesis is matched back by tool name so ordering doesn't matter.
-        digest_findings = target_findings[:15]
+        # ── Build tool→finding index ──────────────────────────────────────────
+        tool_to_findings: dict[str, list] = {}
+        for f in digest_findings:
+            tname = f.metadata.get("tool_name", "")
+            if tname:
+                tool_to_findings.setdefault(tname, []).append(f)
 
-        # Build compact digest.  Keep most metadata keys so Groq can cite exact
-        # values.  Only strip internal bookkeeping keys that have no analytical value.
-        _SKIP_META_KEYS = {
+        # ── Build grouped digest ───────────────────────────────────────────────
+        _SKIP_META = {
             "tool_name", "stub_warning", "llm_synthesis", "llm_reasoning",
             "synthesis_phase", "analysis_phase",
+            "section_id", "section_label", "section_flag",
+            "section_key_signal", "agent_confidence", "agent_error_rate",
         }
-        # Keys that describe a not-applicable or limited result — always include these
-        # so Groq can accurately describe the tool's scope for the file type.
-        _ALWAYS_INCLUDE_KEYS = {
+        _ALWAYS_META = {
             "ela_not_applicable", "ela_limitation_note",
             "ghost_not_applicable", "ghost_limitation_note",
-            "file_format_note", "is_camera_format",
+            "noise_fingerprint_not_applicable", "prnu_not_applicable",
             "court_defensible", "available",
         }
-        findings_digest = []
-        for f in digest_findings:
-            raw_metrics: dict = {}
+
+        def _compact_metrics(f) -> dict:
+            out: dict = {}
             for k, v in f.metadata.items():
-                if k.startswith("_"):
+                if k.startswith("_") or k in _SKIP_META:
                     continue
-                if k in _SKIP_META_KEYS:
-                    continue
-                if k in _ALWAYS_INCLUDE_KEYS:
-                    raw_metrics[k] = v
+                if k in _ALWAYS_META:
+                    out[k] = v
                     continue
                 if isinstance(v, (bool, int, float)):
-                    raw_metrics[k] = v
+                    out[k] = v
                 elif isinstance(v, str) and len(v) < 200:
-                    raw_metrics[k] = v
-                elif isinstance(v, list) and len(v) <= 10 and all(
+                    out[k] = v
+                elif isinstance(v, list) and len(v) <= 8 and all(
                     isinstance(x, (str, int, float, bool)) for x in v
                 ):
-                    raw_metrics[k] = v
-            # Derive a human-readable applicability note for the digest header
-            not_applicable = (
-                raw_metrics.get("ela_not_applicable")
-                or raw_metrics.get("ghost_not_applicable")
-            )
-            applicability = "NOT_APPLICABLE" if not_applicable else "RAN"
-            findings_digest.append({
-                "tool": f.metadata.get("tool_name", "unknown"),
-                "finding_type": f.finding_type,
-                "confidence": round(f.confidence_raw, 3),
-                "status": f.status,
-                "applicability": applicability,
-                "summary": (f.reasoning_summary or "")[:400],
-                "court_defensible": f.metadata.get("court_defensible", False),
-                "phase": f.metadata.get("analysis_phase", "initial"),
-                "metrics": raw_metrics,
+                    out[k] = v
+            return out
+
+        # Map tool names to their group id for back-application
+        tool_to_group_id: dict[str, str] = {}
+        for grp in tool_groups:
+            for t in grp["tools"]:
+                tool_to_group_id[t] = grp["id"]
+
+        grouped_sections: list[dict] = []
+        grouped_tool_names: set[str] = {t for g in tool_groups for t in g["tools"]}
+
+        for grp in tool_groups:
+            grp_findings = [f for f in digest_findings
+                            if f.metadata.get("tool_name", "") in grp["tools"]]
+            if not grp_findings:
+                continue
+            tools_data = []
+            for f in grp_findings:
+                not_applicable = (
+                    f.metadata.get("ela_not_applicable")
+                    or f.metadata.get("ghost_not_applicable")
+                    or f.metadata.get("noise_fingerprint_not_applicable")
+                    or f.metadata.get("prnu_not_applicable")
+                )
+                tools_data.append({
+                    "tool":            f.metadata.get("tool_name", "unknown"),
+                    "finding_type":    f.finding_type,
+                    "confidence":      round(f.confidence_raw, 3),
+                    "status":          f.status,
+                    "applicability":   "NOT_APPLICABLE" if not_applicable else "RAN",
+                    "court_defensible": f.metadata.get("court_defensible", False),
+                    "backend":         f.metadata.get("backend", ""),
+                    "metrics":         _compact_metrics(f),
+                })
+            grouped_sections.append({
+                "id":          grp["id"],
+                "label":       grp["label"],
+                "description": grp["desc"],
+                "tools_data":  tools_data,
             })
 
-        # Build initial-findings summary for comparison (deep pass only)
+        # Ungrouped findings → "other" section so nothing is lost
+        ungrouped = [f for f in digest_findings
+                     if f.metadata.get("tool_name", "") not in grouped_tool_names]
+        if ungrouped:
+            grouped_sections.append({
+                "id": "other",
+                "label": "Supplementary Analysis",
+                "description": "Additional tool results not grouped above.",
+                "tools_data": [{
+                    "tool":            f.metadata.get("tool_name", "unknown"),
+                    "finding_type":    f.finding_type,
+                    "confidence":      round(f.confidence_raw, 3),
+                    "status":          f.status,
+                    "applicability":   "RAN",
+                    "court_defensible": f.metadata.get("court_defensible", False),
+                    "backend":         f.metadata.get("backend", ""),
+                    "metrics":         _compact_metrics(f),
+                } for f in ungrouped],
+            })
+
+        if not grouped_sections:
+            return
+
+        # ── Initial-findings context for deep pass ────────────────────────────
         initial_context = ""
         if phase == "deep" and initial_findings:
-            init_items = []
-            for f in initial_findings[:6]:
-                init_items.append({
-                    "tool": f.metadata.get("tool_name", ""),
-                    "type": f.finding_type,
-                    "confidence": round(f.confidence_raw, 3),
-                    "summary": (f.reasoning_summary or "")[:200],
-                })
+            init_items = [{
+                "tool":       f.metadata.get("tool_name", ""),
+                "type":       f.finding_type,
+                "confidence": round(f.confidence_raw, 3),
+                "summary":    (f.reasoning_summary or "")[:200],
+            } for f in initial_findings[:8]]
             initial_context = (
-                f"\n\nInitial analysis findings (for comparison):\n"
+                f"\n\nINITIAL analysis findings (compare each deep section against these):\n"
                 f"{_json.dumps(init_items, indent=2)}"
             )
 
-        tool_list = [f.metadata.get("tool_name", "unknown") for f in digest_findings]
-        tool_list_str = ", ".join(tool_list)
+        # ── Build system prompt ───────────────────────────────────────────────
+        section_desc_lines = "\n".join(
+            f'  • {g["label"]} ({g["id"]}): {g["desc"]}'
+            for g in tool_groups
+            if any(s["id"] == g["id"] for s in grouped_sections)
+        )
 
-        if phase == "deep":
-            system_prompt = f"""You are {self.agent_name}, a specialist forensic analysis agent writing the DEEP ANALYSIS section of a court-admissible forensic report.
+        phase_instruction = (
+            "For each section compare findings against the initial analysis — "
+            "label each as CONFIRMED, EXPANDED, or CONTRADICTED. "
+            "For Gemini findings quote content type, ALL extracted text, detected objects, narrative, and verdict."
+            if phase == "deep"
+            else
+            "For each section synthesize ALL tools in that group into one coherent forensic analysis."
+        )
 
-You have completed {len(digest_findings)} deep forensic tool scans (ML models, Gemini AI vision, heavy analytics).
-You also have the initial analysis findings for comparison.
+        system_prompt = f"""You are {self.agent_name}, producing a STRUCTURED forensic evidence report.
 
-Tools run (use EXACTLY these names in the "tool" field): {tool_list_str}
+TOOL GROUPS present in this evidence:
+{section_desc_lines}
 
-CRITICAL RULES:
-- If a tool entry has "applicability": "NOT_APPLICABLE" — the tool does not apply to this file type. Write exactly why it does not apply (e.g. "ELA is not applicable to PNG files — measuring PNG→JPEG conversion artefacts would produce false anomaly regions across the entire image."). Do NOT treat this as an error or suspicious finding.
-- If a tool entry has "court_defensible": false AND applicability is "RAN" — the tool genuinely failed. State: "Tool X failed — result excluded from confidence calculation."
-- For every other tool: state EXACT metric values from "metrics", interpret them forensically, compare to initial analysis (CONFIRMED / EXPANDED / CONTRADICTED), and assign confidence with justification.
-- For Gemini findings: quote content type, ALL extracted text, all detected objects/weapons/UI elements, the contextual narrative, and the authenticity verdict word-for-word.
-- Flag CRITICAL only when metrics show clear manipulation evidence.
+Pre-computed stats (use as baseline; refine with your analysis):
+  • pre_confidence : {pre_confidence}
+  • pre_error_rate : {pre_error_rate}
+  • fallback_count : {fallback_count} tool(s) used inline OpenCV/numpy implementations (valid results, note reduced evidentiary weight)
 
-Do NOT write generic phrases. Every sentence must cite specific data from the tool output.
+RULES:
+1. Write one section entry per group that has tool data.
+2. {phase_instruction}
+3. NOT_APPLICABLE tools: explain WHY (file-type reason) — do NOT flag as suspicious, do NOT reduce confidence. They are expected for this file type.
+4. court_defensible=false tools that RAN and FAILED: state "Tool X failed — excluded from confidence."
+5. backend contains "inline": note "inline implementation — supporting evidentiary weight." Do NOT count as a tool failure.
+6. Cite EXACT numeric metric values (ela_mean, anomaly_score, match_count, etc.) in every analysis sentence.
+7. Corroboration: when 2+ tools in the same group agree, explicitly state "corroborated by [tool]."
+8. flag values: "bad" = manipulation/threat confirmed; "warn" = anomaly detected, inconclusive; "ok" = clean; "info" = chain-of-custody/context.
+9. confidence: weighted mean ONLY of tools that actually RAN (applicability=RAN). NOT_APPLICABLE tools are EXCLUDED from confidence calculation — their absence does NOT lower confidence. If all applicable tools returned clean results with no manipulation signals, confidence MUST be ≥ 0.72. Range 0.0–1.0.
+10. error_rate: ONLY tools with court_defensible=false that actually ran AND failed. NOT_APPLICABLE tools and inline implementations that produced valid results do NOT count as errors. Range 0.0–1.0.
+11. critical_findings: list only when "bad" flag sections exist with clear manipulation evidence.
+12. Do NOT write generic phrases — every sentence must reference specific tool output data.
+13. verdict calibration — choose exactly one:
+    • "AUTHENTIC": all applicable integrity checks pass (no editing signatures, no manipulation flags); absence of EXIF fields alone is NOT a reason for INCONCLUSIVE; NOT_APPLICABLE tools alone are NOT a reason for INCONCLUSIVE.
+    • "LIKELY_MANIPULATED": 2+ independent tools produced "bad" flags with confirmed manipulation evidence.
+    • "INCONCLUSIVE": genuinely mixed evidence (some indicators present, some absent) OR critical applicable tools failed. Do NOT use INCONCLUSIVE when all applicable tools returned clean results.
 
-IMPORTANT: Return one entry per tool. The "tool" value must exactly match one of: {tool_list_str}
-
-Respond ONLY with a JSON array (no preamble, no markdown):
-[{{"tool": "<exact_tool_name>", "analysis": "<3-5 sentence specific deep forensic analysis>"}}]"""
-        else:
-            system_prompt = f"""You are {self.agent_name}, a specialist forensic analysis agent producing court-admissible analysis.
-
-You have completed {len(digest_findings)} forensic tool scans on the evidence.
-Tools run (use EXACTLY these names in the "tool" field): {tool_list_str}
-
-CRITICAL RULES:
-- If a tool entry has "applicability": "NOT_APPLICABLE" — write a brief note explaining why the tool does not apply to this file type. Do NOT treat not-applicable tools as suspicious findings or errors. Do NOT mention anomaly counts from these tools.
-- If a tool entry has "court_defensible": false AND applicability is "RAN" — state that the tool failed and its result is excluded.
-- For all other tools: state EXACT metric values from "metrics" (scores, counts, ratios, hashes, object lists, timestamps). Interpret what those numbers mean forensically. Cross-reference with other findings where the data overlaps.
-- For object detection: list every detected class with its confidence score.
-- For metadata/EXIF: state exact timestamps, GPS status, software tags, file format note.
-- For hash/integrity checks: state the hash match result explicitly.
-- Assign a confidence level per tool and explain WHY based on the metric values.
-- Flag CRITICAL only when metrics show clear manipulation evidence (e.g. splicing detected, ghost artifacts confirmed, inconsistent sensor noise).
-
-Do NOT produce generic phrases. Every sentence must reference specific data from the metrics.
-
-IMPORTANT: Return one entry per tool. The "tool" value must exactly match one of: {tool_list_str}
-
-Respond ONLY with a JSON array (no preamble, no markdown):
-[{{"tool": "<exact_tool_name>", "analysis": "<2-4 sentence specific forensic analysis>"}}]"""
+Be CONCISE — target ≤1400 tokens total. Respond ONLY with valid JSON (no markdown, no preamble):
+{{
+  "verdict": "AUTHENTIC|LIKELY_MANIPULATED|INCONCLUSIVE",
+  "confidence": <float 0-1>,
+  "error_rate": <float 0-1>,
+  "reliability_note": "<≤20 words>",
+  "sections": [
+    {{
+      "id": "<section_id>",
+      "label": "<label>",
+      "flag": "ok|warn|bad|info",
+      "analysis": "<2-3 sentences with exact metric values>",
+      "key_signal": "<1 sentence>"
+    }}
+  ],
+  "critical_findings": ["<string>"],
+  "court_notes": "<1 sentence>"
+}}"""
 
         user_content = (
             f"Evidence file: {evidence_context['file_name']}\n"
             f"MIME type: {evidence_context['mime_type']}\n"
             f"Analysis phase: {phase.upper()}\n\n"
-            f"Tool findings to synthesise:\n{_json.dumps(findings_digest, indent=2)}"
-            f"{initial_context}\n\nProduce the forensic synthesis."
+            f"Grouped tool findings:\n{_json.dumps(grouped_sections, indent=2)}"
+            f"{initial_context}\n\nProduce the structured forensic synthesis."
         )
 
         logger.info(
-            "Running Groq %s-pass synthesis", phase,
+            f"Running Groq {phase}-pass grouped synthesis",
             agent_id=self.agent_id,
-            finding_count=len(digest_findings),
+            section_count=len(grouped_sections),
+            pre_confidence=pre_confidence,
+            pre_error_rate=pre_error_rate,
         )
 
         try:
             raw_response = await llm_client.generate_synthesis(
                 system_prompt=system_prompt,
                 user_content=user_content,
-                max_tokens=3500,
+                max_tokens=1500,  # 3 agents × 1500 = 4500 TPM, within Groq free tier
+                timeout_override=25.0,
             )
         except Exception as groq_err:
             logger.warning(f"Groq synthesis API call failed: {groq_err}",
@@ -898,55 +1199,90 @@ Respond ONLY with a JSON array (no preamble, no markdown):
 
         try:
             response_text = raw_response.strip()
-            start = response_text.find("[")
-            end   = response_text.rfind("]") + 1
+            # Strip markdown fences if Groq wraps in ```json
+            if response_text.startswith("```"):
+                response_text = response_text.split("```", 2)[-1].lstrip("json").strip()
+                if response_text.endswith("```"):
+                    response_text = response_text[:-3].strip()
+
+            start = response_text.find("{")
+            end   = response_text.rfind("}") + 1
             if start < 0 or end <= start:
-                logger.warning("Groq synthesis: no JSON array in response",
-                               agent_id=self.agent_id)
+                logger.warning(
+                    f"Groq grouped synthesis: no JSON object in response. Raw (first 300): {response_text[:300]!r}",
+                    agent_id=self.agent_id,
+                )
                 return
 
-            syntheses = _json.loads(response_text[start:end])
+            report = _json.loads(response_text[start:end])
 
-            # Build tool→finding index for name-based matching.
-            # Groq is asked to return {"tool": "<name>", "analysis": "..."}
-            # but may return fewer items or reorder them.  Match by tool name
-            # first; fall back to positional index only when tool is unknown.
-            tool_to_idx: dict[str, int] = {}
-            for idx, f in enumerate(digest_findings):
-                tool_key = f.metadata.get("tool_name", "")
-                if tool_key and tool_key not in tool_to_idx:
-                    tool_to_idx[tool_key] = idx
+            # ── Extract agent-level scores ────────────────────────────────────
+            groq_confidence  = float(report.get("confidence", pre_confidence))
+            groq_error_rate  = float(report.get("error_rate",  pre_error_rate))
+            groq_verdict     = str(report.get("verdict", "INCONCLUSIVE"))
+            reliability_note = str(report.get("reliability_note", ""))
+            critical_list    = report.get("critical_findings", [])
+            court_notes      = str(report.get("court_notes", ""))
 
+            # Clamp
+            groq_confidence = max(0.0, min(1.0, groq_confidence))
+            groq_error_rate = max(0.0, min(1.0, groq_error_rate))
+
+            # Store on instance so investigation.py can read them for AGENT_COMPLETE
+            self._agent_confidence = groq_confidence
+            self._agent_error_rate = groq_error_rate
+
+            # ── Build section lookup ──────────────────────────────────────────
+            sections_out: dict[str, dict] = {}
+            for sec in report.get("sections", []):
+                sid = sec.get("id", "")
+                if sid:
+                    sections_out[sid] = sec
+
+            # ── Apply section analyses back to findings ────────────────────────
             synthesized = 0
-            for pos, synth in enumerate(syntheses):
-                analysis = synth.get("analysis", "").strip()
-                if not analysis:
+            for f in digest_findings:
+                tname = f.metadata.get("tool_name", "")
+                gid   = tool_to_group_id.get(tname, "other")
+                sec   = sections_out.get(gid) or sections_out.get("other")
+                if not sec:
                     continue
-                synth_tool = synth.get("tool", "")
-                # Prefer tool-name match, fall back to positional
-                idx = tool_to_idx.get(synth_tool)
-                if idx is None and pos < len(digest_findings):
-                    idx = pos
-                if idx is not None and idx < len(digest_findings):
-                    existing = digest_findings[idx].reasoning_summary or ""
-                    digest_findings[idx].reasoning_summary = (
-                        f"{analysis}\n\n{existing}".strip()
-                        if existing and existing != analysis
-                        else analysis
-                    )
-                    digest_findings[idx].metadata["llm_synthesis"] = analysis
-                    digest_findings[idx].metadata["synthesis_phase"] = phase
+
+                analysis    = sec.get("analysis", "").strip()
+                key_signal  = sec.get("key_signal", "").strip()
+                sec_flag    = sec.get("flag", "info")
+                sec_label   = sec.get("label", "")
+
+                if analysis:
+                    f.reasoning_summary = analysis
                     synthesized += 1
 
+                # Tag finding with section metadata
+                f.metadata.update({
+                    "llm_synthesis":     analysis,
+                    "synthesis_phase":   phase,
+                    "section_id":        gid,
+                    "section_label":     sec_label,
+                    "section_flag":      sec_flag,
+                    "section_key_signal": key_signal,
+                    "agent_confidence":  groq_confidence,
+                    "agent_error_rate":  groq_error_rate,
+                    "agent_verdict":     groq_verdict,
+                    "reliability_note":  reliability_note,
+                    "court_notes":       court_notes,
+                    "critical_findings": critical_list,
+                })
+
             logger.info(
-                "Groq %s-pass synthesis complete", phase,
+                f"Groq {phase}-pass grouped synthesis complete — verdict={groq_verdict} conf={groq_confidence:.2f} err={groq_error_rate:.2f}",
                 agent_id=self.agent_id,
+                sections_returned=len(sections_out),
                 synthesized_count=synthesized,
                 total_findings=len(digest_findings),
             )
         except Exception as parse_err:
             logger.warning(
-                "Groq synthesis parse failed — raw findings preserved: %s", parse_err,
+                f"Groq grouped synthesis parse failed — raw findings preserved: {parse_err}",
                 agent_id=self.agent_id,
             )
     

@@ -141,6 +141,17 @@ def _forensic_report_to_dto(report) -> ReportDTO:
         cryptographic_signature=report.cryptographic_signature or "",
         report_hash=report.report_hash or "",
         signed_utc=signed_utc_str,
+        verdict_sentence=getattr(report, "verdict_sentence", "") or "",
+        key_findings=list(getattr(report, "key_findings", []) or []),
+        reliability_note=getattr(report, "reliability_note", "") or "",
+        manipulation_probability=float(getattr(report, "manipulation_probability", 0.0) or 0.0),
+        confidence_min=float(getattr(report, "confidence_min", 0.0) or 0.0),
+        confidence_max=float(getattr(report, "confidence_max", 0.0) or 0.0),
+        confidence_std_dev=float(getattr(report, "confidence_std_dev", 0.0) or 0.0),
+        applicable_agent_count=int(getattr(report, "applicable_agent_count", 0) or 0),
+        skipped_agents=dict(getattr(report, "skipped_agents", {}) or {}),
+        analysis_coverage_note=getattr(report, "analysis_coverage_note", "") or "",
+        per_agent_summary=dict(getattr(report, "per_agent_summary", {}) or {}),
     )
 
 
@@ -498,6 +509,17 @@ async def get_session_report(
                     cryptographic_signature=rd.get("cryptographic_signature", ""),
                     report_hash=rd.get("report_hash", ""),
                     signed_utc=rd.get("signed_utc"),
+                    verdict_sentence=rd.get("verdict_sentence", ""),
+                    key_findings=list(rd.get("key_findings") or []),
+                    reliability_note=rd.get("reliability_note", ""),
+                    manipulation_probability=float(rd.get("manipulation_probability") or 0.0),
+                    confidence_min=float(rd.get("confidence_min") or 0.0),
+                    confidence_max=float(rd.get("confidence_max") or 0.0),
+                    confidence_std_dev=float(rd.get("confidence_std_dev") or 0.0),
+                    applicable_agent_count=int(rd.get("applicable_agent_count") or 0),
+                    skipped_agents=dict(rd.get("skipped_agents") or {}),
+                    analysis_coverage_note=rd.get("analysis_coverage_note", ""),
+                    per_agent_summary=dict(rd.get("per_agent_summary") or {}),
                 )
     except HTTPException:
         raise

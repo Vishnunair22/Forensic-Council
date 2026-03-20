@@ -419,7 +419,7 @@ class QdrantClient:
         
         results = await self.client.scroll(
             collection_name=collection_name,
-            filter=query_filter,
+            scroll_filter=query_filter,
             limit=limit,
             with_vectors=with_vectors,
         )

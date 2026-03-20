@@ -64,6 +64,7 @@ export interface AgentFindingDTO {
   robustness_caveat_detail: string | null;
   reasoning_summary: string;
   metadata: Record<string, unknown> | null;
+  severity_tier?: string; // INFO / LOW / MEDIUM / HIGH / CRITICAL
 }
 
 export interface AgentMetricsDTO {
@@ -72,6 +73,7 @@ export interface AgentMetricsDTO {
   total_tools_called: number;
   tools_succeeded: number;
   tools_failed: number;
+  tools_not_applicable?: number;
   error_rate: number;
   confidence_score: number;
   finding_count: number;
@@ -97,6 +99,29 @@ export interface ReportDTO {
   cryptographic_signature: string;
   report_hash: string;
   signed_utc: string | null;
+  // Structured summary (Groq-synthesized)
+  verdict_sentence?: string;
+  key_findings?: string[];
+  reliability_note?: string;
+  manipulation_probability?: number;
+  // Confidence range across active agents (C)
+  confidence_min?: number;
+  confidence_max?: number;
+  confidence_std_dev?: number;
+  applicable_agent_count?: number;
+  skipped_agents?: Record<string, string>;
+  analysis_coverage_note?: string;
+  // Flat per-agent summary (D)
+  per_agent_summary?: Record<string, {
+    agent_name: string;
+    verdict: string;
+    confidence_pct: number;
+    tools_ok: number;
+    tools_total: number;
+    findings: number;
+    error_rate_pct: number;
+    skipped: boolean;
+  }>;
 }
 
 export interface BriefUpdate {

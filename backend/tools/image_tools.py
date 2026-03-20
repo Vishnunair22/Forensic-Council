@@ -90,9 +90,32 @@ async def ela_full_image(
         # compression artefacts across the ENTIRE image, so every pixel shows a
         # large ELA deviation.  Reporting those as "anomaly regions" would produce
         # thousands of false positives and mislead any downstream analysis.
+        #
+        # NOTE: Evidence files are stored under UUID paths with a generic .bin
+        # extension, so extension-based checks alone are insufficient.  We open
+        # the file first so PIL reads the magic bytes, then check the reported
+        # format.  The extension check is kept as a fast-path for named files.
         ext = os.path.splitext(original_path)[1].lower()
         _lossless_exts = (".png", ".bmp", ".tiff", ".tif", ".gif", ".webp")
-        if ext in _lossless_exts:
+        _lossless_pil_formats = {"PNG", "BMP", "TIFF", "GIF", "WEBP"}
+        _lossless_mimes = {
+            "image/png", "image/bmp", "image/tiff", "image/gif", "image/webp",
+        }
+
+        # Open image now so we can inspect the PIL-detected format
+        original = Image.open(original_path)
+        pil_format = (original.format or "").upper()
+
+        # Derive the display label: prefer MIME type → PIL format → extension
+        mime_type = getattr(artifact, "mime_type", None) or ""
+        is_lossless = (
+            ext in _lossless_exts
+            or pil_format in _lossless_pil_formats
+            or mime_type.lower() in _lossless_mimes
+        )
+        lossless_label = pil_format or ext.lstrip(".").upper() or "LOSSLESS"
+
+        if is_lossless:
             return {
                 "max_anomaly": None,
                 "anomaly_regions": [],
@@ -103,7 +126,7 @@ async def ela_full_image(
                 "multi_quality_fusion": False,
                 "ela_not_applicable": True,
                 "ela_limitation_note": (
-                    f"ELA is not applicable to lossless {ext.upper()} files. "
+                    f"ELA is not applicable to lossless {lossless_label} files. "
                     "Standard ELA measures JPEG re-compression residuals — applying it "
                     "to a lossless source produces artefacts across the entire image "
                     "that are indistinguishable from manipulation signals. "
@@ -113,8 +136,6 @@ async def ela_full_image(
                 "court_defensible": False,
                 "available": True,
             }
-
-        original = Image.open(original_path)
 
         # Convert to RGB if necessary (for PNG with alpha, etc.)
         if original.mode != "RGB":
@@ -365,9 +386,24 @@ async def jpeg_ghost_detect(
         # different quality.  A lossless PNG has no prior JPEG compression
         # history, so this test will always return zero variance everywhere
         # and cannot distinguish authentic files from manipulated ones.
+        #
+        # NOTE: Evidence files use UUID .bin paths — check PIL magic bytes too.
         ext = os.path.splitext(original_path)[1].lower()
         _lossless_exts = (".png", ".bmp", ".tiff", ".tif", ".gif", ".webp")
-        if ext in _lossless_exts:
+        _lossless_pil_formats = {"PNG", "BMP", "TIFF", "GIF", "WEBP"}
+        _lossless_mimes = {"image/png", "image/bmp", "image/tiff", "image/gif", "image/webp"}
+
+        original = Image.open(original_path)
+        pil_format = (original.format or "").upper()
+        mime_type = getattr(artifact, "mime_type", None) or ""
+        is_lossless = (
+            ext in _lossless_exts
+            or pil_format in _lossless_pil_formats
+            or mime_type.lower() in _lossless_mimes
+        )
+        lossless_label = pil_format or ext.lstrip(".").upper() or "LOSSLESS"
+
+        if is_lossless:
             return {
                 "ghost_detected": False,
                 "confidence": 0.0,
@@ -376,15 +412,13 @@ async def jpeg_ghost_detect(
                 "mean_variance": None,
                 "ghost_not_applicable": True,
                 "ghost_limitation_note": (
-                    f"JPEG ghost detection is not applicable to lossless {ext.upper()} files. "
+                    f"JPEG ghost detection is not applicable to lossless {lossless_label} files. "
                     "This technique detects double-JPEG-compression artefacts — a lossless "
                     "source has no prior JPEG compression history to compare against."
                 ),
                 "court_defensible": False,
                 "available": True,
             }
-
-        original = Image.open(original_path)
 
         # Convert to RGB if necessary
         if original.mode != "RGB":
@@ -627,17 +661,26 @@ async def frequency_domain_analysis(
         high_freq_energy = np.sum(magnitude_spectrum[high_freq_mask]**2)
         total_energy = low_freq_energy + high_freq_energy + 1e-10
         
-        # Anomaly score: high frequency energy ratio
-        # Manipulated images often have unusual high-frequency content
+        # Anomaly score: deviation of high-frequency energy ratio from natural image baseline.
+        # Natural images follow a 1/f^2 power spectrum — most squared energy concentrates
+        # in the inscribed-circle low-frequency region. Empirically, the corners (high_freq)
+        # contain ~5–15% of total squared energy for real photos (high_freq_ratio ≈ 0.05–0.15).
+        # The old formula `min(1.0, high_freq_ratio * 5)` scored every image near 1.0.
+        # Fixed: score proportional to excess above natural ceiling (0.20).
         high_freq_ratio = high_freq_energy / total_energy
-        anomaly_score = min(1.0, high_freq_ratio * 5)  # Scale to 0-1
-        
+        _NATURAL_CEIL = 0.20   # above this the spectrum is unusually rich in high frequencies
+        anomaly_score = round(min(1.0, max(0.0, (high_freq_ratio - _NATURAL_CEIL) / _NATURAL_CEIL)), 3)
+
         return {
             "frequency_spectrum": magnitude_normalized.tolist(),
             "dominant_frequencies": top_indices.tolist(),
             "anomaly_score": anomaly_score,
-            "low_freq_ratio": low_freq_energy / total_energy,
-            "high_freq_ratio": high_freq_ratio,
+            "low_freq_ratio": round(low_freq_energy / total_energy, 4),
+            "high_freq_ratio": round(high_freq_ratio, 4),
+            # DFT analysis is a supporting signal, not a standalone court-grade test.
+            # Excluded from confidence weighting; context only.
+            "court_defensible": False,
+            "limitation_note": "Basic DFT high-frequency ratio — supporting signal only, not a standalone manipulation indicator.",
         }
     
     except Exception as e:

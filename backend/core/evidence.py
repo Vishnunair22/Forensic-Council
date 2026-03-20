@@ -56,7 +56,12 @@ class EvidenceArtifact:
     session_id: UUID
     timestamp_utc: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict[str, Any] = field(default_factory=dict)
-    
+
+    @property
+    def mime_type(self) -> str:
+        """Convenience accessor for the MIME type stored in metadata."""
+        return (self.metadata or {}).get("mime_type", "") or ""
+
     @classmethod
     def create_root(
         cls,

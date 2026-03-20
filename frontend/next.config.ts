@@ -33,6 +33,21 @@ const nextConfig: NextConfig = {
     optimizeCss: true,
   },
 
+  // ── Dev-mode file watcher (Windows + Docker fix) ─────────────────────────
+  // On Windows bind mounts, inotify events are not forwarded into the container
+  // so Next.js emits "Unable to add filesystem: <illegal path>" on every
+  // hot-reload cycle.  Switching the webpack watcher to polling silences the
+  // error and restores reliable HMR without any user-visible slowdown.
+  webpack: (config, { dev }) => {
+    if (dev) {
+      config.watchOptions = {
+        poll: 800,
+        aggregateTimeout: 300,
+      };
+    }
+    return config;
+  },
+
   // ── Image optimisation ────────────────────────────────────────────────────
   images: {
     // Next.js built-in WebP/AVIF conversion for any <Image> components.

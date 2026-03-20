@@ -163,8 +163,14 @@ class Agent3Object(ForensicAgent):
             
             try:
                 from ultralytics import YOLO, settings
-                
-                settings.update({'weights_dir': yolo_cache, 'cache_dir': yolo_cache})
+
+                # Only update settings keys that actually exist in this ultralytics version
+                valid_keys = set(settings.keys()) if hasattr(settings, "keys") else set(dict(settings).keys())
+                safe_updates = {k: v for k, v in {
+                    "weights_dir": yolo_cache, "datasets_dir": yolo_cache,
+                }.items() if k in valid_keys}
+                if safe_updates:
+                    settings.update(safe_updates)
                 
                 # Auto-downloads on first call
                 model_path = os.path.join(yolo_cache, "yolov8n.pt")
@@ -347,13 +353,38 @@ class Agent3Object(ForensicAgent):
                         "refined_classifications": None,
                     }
 
+                # CLIP zero-shot scores sum to 1.0 across all labels, so with 10
+                # candidates chance-level is ~10%.  Below 15% the top match is
+                # indistinguishable from noise — do not attribute a label.
+                _CLIP_MIN_CONFIDENCE = 0.15
+                top_conf = round(result.top_confidence, 4)
+                if top_conf < _CLIP_MIN_CONFIDENCE:
+                    return {
+                        "status": "low_confidence",
+                        "court_defensible": True,
+                        "method": "CLIP ViT-B-32 zero-shot classification — targeted label set",
+                        "input_object_class": low_conf_object,
+                        "top_refined_match": None,
+                        "top_confidence": top_conf,
+                        "refined_classifications": [
+                            {"label": cat, "confidence": round(score, 4)}
+                            for cat, score in result.all_scores[:5]
+                        ],
+                        "concern_flag": False,
+                        "classification_note": (
+                            f"Top CLIP match confidence {top_conf:.1%} is at noise/chance level "
+                            f"(<{_CLIP_MIN_CONFIDENCE:.0%} threshold with 10 candidate labels). "
+                            "No reliable classification can be attributed to this region."
+                        ),
+                        "backend": "open-clip ViT-B-32 (shared singleton)",
+                    }
                 return {
                     "status": "real",
                     "court_defensible": True,
                     "method": "CLIP ViT-B-32 zero-shot classification — targeted label set",
                     "input_object_class": low_conf_object,
                     "top_refined_match": result.top_match,
-                    "top_confidence": round(result.top_confidence, 4),
+                    "top_confidence": top_conf,
                     "refined_classifications": [
                         {"label": cat, "confidence": round(score, 4)}
                         for cat, score in result.all_scores[:5]
@@ -388,13 +419,32 @@ class Agent3Object(ForensicAgent):
                     if x2 != x1:
                         angles.append(float(np.degrees(np.arctan2(y2-y1, x2-x1))))
                 angle_std = float(np.std(angles)) if angles else 0.0
-                # Very low angle std = mostly parallel lines = may lack perspective = suspicious
-                scale_consistent = 15.0 < angle_std < 80.0
+                # Interpretation:
+                #   angle_std < 5°  → near-perfectly parallel lines only → likely digitally
+                #                      drawn (synthetic grid/schematic). Real photographs of
+                #                      buildings, roads, or documents routinely have 5–15°.
+                #   5–80°           → normal range; no compositing signal from this check.
+                #   angle_std > 80° → chaotic line distribution; weak incongruence signal.
+                # NOTE: the old lower bound of 15° produced false positives on any
+                # architecture/document/overhead-view photograph.
+                scale_consistent = 5.0 < angle_std < 80.0
                 return {
                     "scale_consistent": scale_consistent,
                     "line_count": len(lines),
                     "angle_std_deg": round(angle_std, 2),
-                    "assessment": "perspective angles appear natural" if scale_consistent else "unusual perspective consistency — possible copy-paste or compositing",
+                    "assessment": (
+                        "perspective angles appear natural"
+                        if scale_consistent
+                        else (
+                            "near-zero line-angle variance — image may be digitally generated or a schematic"
+                            if angle_std <= 5.0
+                            else "very high line-angle variance — weak compositing signal; corroboration needed"
+                        )
+                    ),
+                    # Heuristic signal — ran successfully but requires corroboration.
+                    "court_defensible": True,
+                    "evidentiary_weight": "supporting_only",
+                    "limitation_note": "HoughLinesP angle-distribution check — heuristic signal only; requires corroboration from ELA/PRNU for court use.",
                 }
             except Exception as e:
                 return {"error": f"Scale validation failed: {e}", "scale_consistent": True}
@@ -426,18 +476,35 @@ class Agent3Object(ForensicAgent):
                     "inconsistency_detected": inconsistency,
                     "details": f"Gradient direction std={angle_std:.1f}° across {mask.sum()} high-gradient pixels.",
                     "flags": ["High gradient direction variance — possible lighting splice"] if inconsistency else [],
-                    "backend": "opencv-inline-fallback",
+                    "backend": "opencv-gradient-inline",
                     "court_defensible": True,
                     "available": True,
                 }
             except Exception as e:
                 return {"error": f"Lighting analysis failed: {e}", "inconsistency_detected": False,
-                        "backend": "fallback-failed", "court_defensible": False}
+                        "backend": "tool-exception", "court_defensible": False}
         
         async def scene_incongruence(input_data: dict) -> dict:
             import cv2, numpy as np
             from PIL import Image
             artifact = input_data.get("artifact") or self.evidence_artifact
+            # Lossless/digital files have content-driven Laplacian variance (text vs blank areas)
+            # that is NOT a sensor noise inconsistency — skip sensor-based check
+            if _artifact_is_lossless(artifact):
+                return {
+                    "contextual_anomalies_detected": 0,
+                    "noise_variance_across_quadrants": 0.0,
+                    "mean_noise_level": 0.0,
+                    "quadrant_noise_levels": [],
+                    "anomaly_description": (
+                        "Scene incongruence analysis via sensor noise is not applicable to lossless "
+                        "images (PNG/BMP/TIFF). Laplacian variance differences in screenshots reflect "
+                        "content variation (text vs. blank areas), not camera sensor inconsistency."
+                    ),
+                    "not_applicable": True,
+                    "court_defensible": True,
+                    "available": True,
+                }
             try:
                 img = np.array(Image.open(artifact.file_path).convert("RGB"))
                 gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY).astype(float)
@@ -451,8 +518,9 @@ class Agent3Object(ForensicAgent):
                         quadrant_noise.append(float(lap.var()))
                 noise_std = float(np.std(quadrant_noise))
                 noise_mean = float(np.mean(quadrant_noise))
-                # High variance between quadrant noise = inconsistent sensor noise = insertion
-                anomaly_detected = noise_std > noise_mean * 0.5 and noise_mean > 10
+                # Threshold: std must exceed 3× mean to indicate true sensor noise splice
+                # (0.5× threshold produced false positives on natural images with mixed content)
+                anomaly_detected = noise_std > noise_mean * 3.0 and noise_mean > 10
                 return {
                     "contextual_anomalies_detected": 1 if anomaly_detected else 0,
                     "noise_variance_across_quadrants": round(noise_std, 2),
@@ -516,6 +584,20 @@ class Agent3Object(ForensicAgent):
             
         async def image_splice_check(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact
+            # DCT quantization splicing detection only detects JPEG re-compression inconsistencies.
+            # Lossless files have no JPEG quantization baseline — skip to avoid false positives.
+            if _artifact_is_lossless(artifact):
+                return {
+                    "splicing_detected": False,
+                    "not_applicable": True,
+                    "file_format_note": (
+                        "DCT quantization splice detection requires JPEG compression artifacts. "
+                        "Lossless formats (PNG/BMP/TIFF) have no JPEG baseline — analysis skipped."
+                    ),
+                    "court_defensible": True,
+                    "available": True,
+                    "backend": "not-applicable-lossless",
+                }
             ml_result = await run_ml_tool("splicing_detector.py", artifact.file_path, timeout=25.0)
             if ml_result.get("available") and not ml_result.get("error"):
                 return ml_result
@@ -545,14 +627,37 @@ class Agent3Object(ForensicAgent):
                     "num_inconsistent_blocks": inconsistent_blocks,
                     "total_blocks": total_blocks,
                     "inconsistency_ratio": round(inconsistent_blocks / total_blocks, 3) if total_blocks else 0,
-                    "backend": "opencv-dct-inline-fallback",
+                    "backend": "opencv-dct-inline",
                     "court_defensible": True, "available": True,
                 }
             except Exception as e:
-                return {"splicing_detected": False, "error": str(e), "backend": "fallback-failed", "court_defensible": False}
+                return {"splicing_detected": False, "error": str(e), "backend": "tool-exception", "court_defensible": False}
+
+        def _artifact_is_lossless(artifact) -> bool:
+            """Return True if the artifact is a lossless image format (PNG/BMP/TIFF/GIF/WEBP)."""
+            import os as _os
+            _lossless_exts  = {".png", ".bmp", ".tiff", ".tif", ".gif", ".webp"}
+            _lossless_mimes = {"image/png", "image/bmp", "image/tiff", "image/gif", "image/webp"}
+            ext  = _os.path.splitext(str(artifact.file_path))[1].lower()
+            mime = ((artifact.metadata or {}).get("mime_type", "") if getattr(artifact, "metadata", None) else "").lower()
+            return ext in _lossless_exts or mime in _lossless_mimes
 
         async def noise_fingerprint(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact
+            # PRNU requires camera sensor noise — not applicable for lossless/digital files
+            if _artifact_is_lossless(artifact):
+                return {
+                    "noise_fingerprint_not_applicable": True,
+                    "verdict": "NOT_APPLICABLE",
+                    "file_format_note": (
+                        "PRNU noise fingerprint analysis requires a camera-captured image. "
+                        "This file is a lossless format (PNG/BMP/TIFF/GIF/WEBP), indicating a "
+                        "screenshot or digitally-created image — camera sensor noise patterns are "
+                        "absent by design. PRNU results would be forensically unreliable."
+                    ),
+                    "court_defensible": True,
+                    "available": True,
+                }
             regions = input_data.get("regions", 6)
             ml_result = await run_ml_tool("noise_fingerprint.py", artifact.file_path,
                                           extra_args=["--regions", str(regions)], timeout=25.0)
@@ -583,11 +688,11 @@ class Agent3Object(ForensicAgent):
                     "outlier_region_count": outlier_regions,
                     "total_regions": len(quadrant_stds),
                     "region_noise_stds": [round(s, 3) for s in quadrant_stds],
-                    "backend": "opencv-prnu-lite-fallback",
+                    "backend": "opencv-prnu-lite-inline",
                     "court_defensible": True, "available": True,
                 }
             except Exception as e:
-                return {"verdict": "INCONCLUSIVE", "error": str(e), "backend": "fallback-failed", "court_defensible": False}
+                return {"verdict": "INCONCLUSIVE", "error": str(e), "backend": "tool-exception", "court_defensible": False}
         
         async def inter_agent_call_handler(input_data: dict) -> dict:
             """Real inter-agent call via InterAgentBus (calls Agent 1 for lighting inconsistencies)."""

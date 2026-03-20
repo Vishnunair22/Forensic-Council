@@ -82,16 +82,13 @@ class Agent5Metadata(ForensicAgent):
     @property
     def task_decomposition(self) -> list[str]:
         """
-        Light tasks — EXIF extraction, hash, hex scan (~15-20s total).
-        Heavy ML/network tasks are in deep_task_decomposition.
+        Fast initial tasks — hash, EXIF, GPS, file structure, hex scan (~10-15s total).
+        Steganography, C2PA, thumbnail check, and all ML/network tasks are in deep_task_decomposition.
         """
         return [
             "Verify file hash against ingestion hash",
             "Extract all EXIF fields - explicitly log expected-but-absent fields",
             "Cross-validate GPS coordinates against timestamp timezone",
-            "Verify C2PA Content Credentials and provenance chain in file",
-            "Check embedded thumbnail against main image for post-capture editing evidence",
-            "Run steganography scan",
             "Run file structure forensic analysis",
             "Run hexadecimal software signature scan on raw bytes",
             "Synthesize cross-field consistency verdict",
@@ -102,9 +99,13 @@ class Agent5Metadata(ForensicAgent):
     def deep_task_decomposition(self) -> list[str]:
         """
         Heavy tasks — ML models, network APIs, adversarial checks, Gemini deep forensic analysis.
+        Also includes steganography, C2PA, and thumbnail check (moderate cost, deep-pass only).
         Runs in background after initial findings are returned.
         """
         return [
+            "Verify C2PA Content Credentials and provenance chain in file",
+            "Check embedded thumbnail against main image for post-capture editing evidence",
+            "Run steganography scan",
             "Run Gemini deep forensic analysis: identify content type, extract all text, detect objects and weapons, identify interfaces, describe what is happening, cross-validate metadata",
             "Run ML metadata anomaly scoring to detect field inconsistency",
             "Run astronomical API check for GPS location and claimed date",
@@ -324,7 +325,7 @@ class Agent5Metadata(ForensicAgent):
                 if not gps:
                     return {
                         "status": "no_gps",
-                        "court_defensible": False,
+                        "court_defensible": True,
                         "warning": "No GPS data available for astronomical validation",
                         "sun_elevation_valid": None,
                         "moon_phase_consistent": None,
@@ -334,7 +335,7 @@ class Agent5Metadata(ForensicAgent):
                 if not ts:
                     return {
                         "status": "no_timestamp",
-                        "court_defensible": False,
+                        "court_defensible": True,
                         "warning": "No timestamp available for astronomical validation",
                         "sun_elevation_valid": None,
                         "moon_phase_consistent": None,
@@ -347,7 +348,7 @@ class Agent5Metadata(ForensicAgent):
                 except ValueError:
                     return {
                         "status": "parse_error",
-                        "court_defensible": False,
+                        "court_defensible": True,
                         "warning": f"Could not parse timestamp: {ts}",
                         "sun_elevation_valid": None,
                         "moon_phase_consistent": None,
