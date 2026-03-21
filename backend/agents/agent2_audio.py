@@ -119,8 +119,8 @@ class Agent2Audio(ForensicAgent):
     
     @property
     def iteration_ceiling(self) -> int:
-        """Maximum iterations for the ReAct loop."""
-        return 20
+        """Maximum iterations — tasks + 2 buffer to prevent runaway loops."""
+        return len(self.task_decomposition) + 2
     
     @property
     def supported_file_types(self) -> list[str]:

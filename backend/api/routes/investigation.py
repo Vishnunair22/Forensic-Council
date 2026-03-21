@@ -1343,12 +1343,23 @@ async def _wrap_pipeline_with_broadcasts(
                 if combined_serial:
                     initial_result.findings = combined_serial
 
-                # Step 6: Build AGENT_COMPLETE summary from deep-only findings
-                conf_list = [
-                    (f.get("confidence_raw", 0.5) if isinstance(f, dict) else 0.5)
-                    for f in (deep_findings_serial or combined_serial)
-                ]
-                confidence = (sum(conf_list) / len(conf_list)) if conf_list else 0.5
+                # Step 6: Build AGENT_COMPLETE summary from deep-only findings.
+                # Use ONLY deep_findings_serial — never fall back to combined_serial
+                # which includes initial-phase findings and would contaminate the score.
+                if deep_findings_serial:
+                    conf_list = sorted(
+                        f.get("confidence_raw", 0.5)
+                        for f in deep_findings_serial
+                        if isinstance(f, dict)
+                    )
+                    _mid = len(conf_list) // 2
+                    confidence = (
+                        conf_list[_mid]
+                        if len(conf_list) % 2 == 1
+                        else (conf_list[_mid - 1] + conf_list[_mid]) / 2
+                    ) if conf_list else 0.5
+                else:
+                    confidence = 0.5
 
                 gemini_summaries, other_summaries = [], []
                 for f in deep_findings_serial:

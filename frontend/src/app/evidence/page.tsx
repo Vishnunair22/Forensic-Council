@@ -479,11 +479,10 @@ export default function EvidencePage() {
               <p className="text-purple-300/70 text-sm font-mono">Synthesising all agent findings…</p>
               <p className="text-slate-700 text-xs mt-2">Redirecting to results shortly</p>
             </div>
-            <div className="w-full h-0.5 bg-white/5 rounded-full overflow-hidden">
-              <motion.div
-                animate={{ x: ["-100%", "220%"] }}
-                transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
-                className="h-full w-1/3 bg-gradient-to-r from-transparent via-purple-400 to-transparent"
+            <div className="relative w-full h-0.5 bg-white/5 rounded-full overflow-hidden">
+              <div
+                className="absolute h-full w-[40%] bg-gradient-to-r from-transparent via-purple-400 to-transparent"
+                style={{ animation: "bar-slide 2.2s ease-in-out infinite" }}
               />
             </div>
           </motion.div>
