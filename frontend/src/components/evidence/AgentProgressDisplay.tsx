@@ -145,36 +145,36 @@ function FindingsAccordion({
     "text-slate-400";
 
   return (
-    <div className="rounded-lg border border-white/[0.07] overflow-hidden">
+    <div className="rounded-xl border border-white/[0.05] bg-white/[0.01] overflow-hidden shadow-[0_2px_10px_rgba(0,0,0,0.2)]">
       {/* ── Accordion header ── */}
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-label={open ? "Collapse findings" : "Expand findings"}
-        className="w-full flex items-center justify-between px-3 py-2
-          hover:bg-white/[0.03] transition-colors group"
+        className="w-full flex items-center justify-between px-3.5 py-2.5
+          hover:bg-white/[0.04] transition-colors group"
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           {/* Mini flag dots summary */}
-          <div className="flex gap-0.5">
+          <div className="flex gap-1">
             {sectionFlags.map((sf) => (
               <span
                 key={sf.id}
-                className={`w-1.5 h-1.5 rounded-full ${FLAG_STYLES[sf.flag]?.dot ?? "bg-slate-500"}`}
+                className={`w-1.5 h-1.5 rounded-full shadow-sm ${FLAG_STYLES[sf.flag]?.dot ?? "bg-slate-500"}`}
               />
             ))}
           </div>
-          <span className={`text-[11px] font-medium ${summaryColor}`}>
+          <span className={`text-[11px] font-semibold tracking-wide uppercase ${summaryColor}`}>
             {findingsCount ?? sectionFlags.length} finding{(findingsCount ?? sectionFlags.length) !== 1 ? "s" : ""}
           </span>
-          <span className="text-[10px] text-slate-600">
-            · {sectionFlags.length} section{sectionFlags.length !== 1 ? "s" : ""}
+          <span className="text-[10px] text-slate-600 font-mono">
+            / {sectionFlags.length} section{sectionFlags.length !== 1 ? "s" : ""}
           </span>
         </div>
         <motion.span
           animate={{ rotate: open ? 180 : 0 }}
-          transition={{ duration: 0.18 }}
-          className="text-slate-600 group-hover:text-slate-400 transition-colors"
+          transition={{ duration: 0.2, ease: "anticipate" }}
+          className="text-slate-500 group-hover:text-cyan-400 transition-colors"
         >
           <ChevronDown className="w-3.5 h-3.5" />
         </motion.span>
@@ -188,10 +188,10 @@ function FindingsAccordion({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22, ease: "easeInOut" }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             className="overflow-hidden"
           >
-            <div className="border-t border-white/[0.06] divide-y divide-white/[0.04]">
+            <div className="border-t border-white/[0.04] divide-y divide-white/[0.03] bg-black/20">
               {sectionFlags.map((sf) => {
                 const style  = FLAG_STYLES[sf.flag] ?? FLAG_STYLES.info;
                 const isExp  = expandedId === sf.id;
@@ -205,30 +205,30 @@ function FindingsAccordion({
                       aria-expanded={hasDetail ? isExp : undefined}
                       aria-label={hasDetail ? (isExp ? `Collapse ${sf.label}` : `Expand ${sf.label}`) : sf.label}
                       className={[
-                        "w-full flex items-center gap-2.5 px-3 py-2 transition-colors",
+                        "w-full flex items-center gap-3 px-3.5 py-2.5 transition-colors",
                         hasDetail
-                          ? "hover:bg-white/[0.03] cursor-pointer group"
+                          ? "hover:bg-white/[0.04] cursor-pointer group"
                           : "cursor-default",
                       ].join(" ")}
                     >
                       {/* Color bar */}
-                      <span className={`w-0.5 h-4 rounded-full flex-shrink-0 ${style.bar}`} />
+                      <span className={`w-[2px] h-3.5 rounded-full flex-shrink-0 ${style.bar}`} />
                       {/* Flag icon */}
-                      <span className={`text-[10px] font-bold flex-shrink-0 w-3 text-center ${style.text}`}>
+                      <span className={`text-[10px] font-black flex-shrink-0 w-4 text-center drop-shadow-md ${style.text}`}>
                         {style.icon}
                       </span>
                       {/* Section label */}
-                      <span className={`text-[11px] font-medium flex-1 text-left ${style.text}`}>
+                      <span className={`text-xs font-medium flex-1 text-left tracking-wide ${style.text}`}>
                         {sf.label}
                       </span>
                       {/* Expand chevron */}
                       {hasDetail && (
                         <motion.span
                           animate={{ rotate: isExp ? 180 : 0 }}
-                          transition={{ duration: 0.15 }}
-                          className="text-slate-600 group-hover:text-slate-400 transition-colors flex-shrink-0"
+                          transition={{ duration: 0.2 }}
+                          className="text-slate-600 group-hover:text-cyan-400/70 transition-colors flex-shrink-0"
                         >
-                          <ChevronDown className="w-3 h-3" />
+                          <ChevronDown className="w-3.5 h-3.5" />
                         </motion.span>
                       )}
                     </button>
@@ -241,10 +241,10 @@ function FindingsAccordion({
                           initial={{ height: 0, opacity: 0 }}
                           animate={{ height: "auto", opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.16 }}
-                          className="overflow-hidden"
+                          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                          className="overflow-hidden bg-black/40"
                         >
-                          <p className="px-8 pb-3 pt-0.5 text-[11px] text-slate-400 leading-relaxed border-l-2 ml-3 border-white/[0.06]">
+                          <p className="px-10 pb-3 pt-1 text-[11px] text-slate-400 font-mono leading-relaxed border-l-2 ml-4 border-white/[0.08]">
                             {sf.key_signal}
                           </p>
                         </motion.div>
@@ -297,38 +297,44 @@ function FindingRow({ f }: { f: FindingPreview }) {
   const sev = SEV_LABEL[f.severity] ?? SEV_LABEL.LOW;
 
   return (
-    <div className={`rounded-lg bg-white/[0.03] border border-white/[0.06] border-l-2 ${borderCls} px-3 py-2 space-y-1.5`}>
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.98, y: 5 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      layout
+      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+      className={`rounded-xl bg-gradient-to-br from-white/[0.03] to-white/[0.01] overflow-hidden border border-white/[0.05] border-l-2 ${borderCls} px-4 py-3 space-y-2 shadow-[0_4px_15px_rgba(0,0,0,0.1)]`}
+    >
       {/* Header: tool name + severity + confidence */}
-      <div className="flex items-start gap-2">
-        <span className="text-[10px] font-bold text-white/85 tracking-wide flex-1 leading-tight">
+      <div className="flex items-start gap-3">
+        <span className="text-[11px] font-bold text-white/90 tracking-wider uppercase flex-1 leading-tight">
           {fmtTool(f.tool)}
         </span>
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           {f.severity !== "LOW" && f.severity !== "INFO" && (
-            <span className={`inline-flex text-[9px] font-bold px-1.5 py-0.5 rounded border tracking-wider ${sev.cls}`}>
+            <span className={`inline-flex text-[9px] font-black px-2 py-0.5 rounded shadow-sm tracking-[0.1em] ${sev.cls}`}>
               {sev.text}
             </span>
           )}
           {f.confidence > 0.01 && (
-            <span className="text-[10px] font-mono text-slate-500 bg-white/[0.04] px-1.5 py-0.5 rounded">
+            <span className="text-[9px] font-mono font-bold text-slate-400 bg-black/40 border border-white/[0.08] px-1.5 py-0.5 rounded shadow-inner">
               {Math.round(f.confidence * 100)}%
             </span>
           )}
         </div>
       </div>
       {/* Summary */}
-      <p className="text-[11px] text-slate-400 leading-relaxed">
+      <motion.p layout className="text-xs text-slate-400 leading-relaxed max-w-prose">
         {displayText}
         {needsExpand && (
           <button
             onClick={() => setOpen(v => !v)}
-            className="ml-1 text-cyan-400/70 hover:text-cyan-300 transition-colors font-medium"
+            className="ml-1.5 text-[10px] font-bold uppercase tracking-widest text-cyan-400/80 hover:text-cyan-300 transition-colors"
           >
-            {open ? "show less" : "show more"}
+            {open ? "LESS" : "MORE"}
           </button>
         )}
-      </p>
-    </div>
+      </motion.p>
+    </motion.div>
   );
 }
 
@@ -339,20 +345,23 @@ function FindingsPreviewList({ findings }: { findings: FindingPreview[] }) {
   const remaining = findings.length - INITIAL_SHOW;
 
   return (
-    <div className="space-y-1.5">
-      {shown.map((f, i) => <FindingRow key={i} f={f} />)}
+    <motion.div layout className="space-y-2">
+      <AnimatePresence initial={false}>
+        {shown.map((f, i) => <FindingRow key={`${f.tool}-${i}`} f={f} />)}
+      </AnimatePresence>
       {findings.length > INITIAL_SHOW && (
-        <button
+        <motion.button
+          layout
           onClick={() => setShowAll(v => !v)}
-          className="w-full text-[11px] text-slate-400 hover:text-white transition-colors py-2 text-center
-            border border-white/[0.07] rounded-lg bg-white/[0.02] hover:bg-white/[0.05] font-medium"
+          className="w-full text-[10px] font-bold tracking-widest uppercase text-slate-500 hover:text-cyan-400 transition-colors py-2.5 text-center
+            border border-white/[0.04] border-dashed rounded-xl bg-white/[0.01] hover:bg-cyan-500/10 hover:border-cyan-500/30"
         >
           {showAll
-            ? "↑ Show less"
-            : `↓ ${remaining} more finding${remaining !== 1 ? "s" : ""}`}
-        </button>
+            ? "↑ Collapse list"
+            : `↓ Display ${remaining} more finding${remaining !== 1 ? "s" : ""}`}
+        </motion.button>
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -645,8 +654,11 @@ export function AgentProgressDisplay({
       className="flex flex-col items-center pt-8"
     >
       {/* Header */}
-      <div className="text-center mb-8" aria-live="polite" aria-atomic="true">
-        <h2 className="text-2xl font-bold text-white mb-2">
+      <div className="text-center mb-10" aria-live="polite" aria-atomic="true">
+        <motion.h2 
+          key={phase + String(showInitialDecision) + String(showDeepComplete)}
+          initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}
+          className="text-2xl md:text-3xl font-black text-white mb-2 tracking-tight">
           {showInitialDecision
             ? "Initial Analysis Complete"
             : showDeepComplete
@@ -654,11 +666,11 @@ export function AgentProgressDisplay({
               : phase === "deep"
                 ? "Deep Analysis Running"
                 : "Evidence Analysis"}
-        </h2>
-        <p className="text-sm text-slate-400">
+        </motion.h2>
+        <p className="text-xs font-mono tracking-widest uppercase text-slate-500 font-semibold">
           {showInitialDecision || showDeepComplete
-            ? `${activeCompletedCount} of ${visibleAgentsCount} agents responded`
-            : `${activeCompletedCount}/${visibleAgentsCount} agents responded`}
+            ? `${activeCompletedCount} OF ${visibleAgentsCount} AGENTS RESPONDED`
+            : `${activeCompletedCount} / ${visibleAgentsCount} AGENTS RESPONDED`}
         </p>
       </div>
 
@@ -740,7 +752,7 @@ export function AgentProgressDisplay({
                           : status === "error"
                             ? "bg-red-500/15 text-red-400"
                             : status === "unsupported"
-                              ? "bg-amber-500/15 text-amber-400"
+                              ? "bg-slate-500/15 text-slate-400"
                               : status === "checking"
                                 ? "bg-violet-500/15 text-violet-400"
                                 : "bg-white/[0.06] text-slate-500",
@@ -781,7 +793,7 @@ export function AgentProgressDisplay({
                         </span>
                       )}
                       {status === "unsupported" && (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] text-amber-300 font-medium px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20">
+                        <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-300 font-medium px-2 py-0.5 rounded-full bg-slate-500/10 border border-slate-500/20">
                           <FileX className="w-3.5 h-3.5" />Skipped
                         </span>
                       )}
@@ -910,25 +922,25 @@ export function AgentProgressDisplay({
                         </div>
                       )}
 
-                      {/* Error rate — always shown, green when clean */}
+                      {/* Error rate — always shown */}
                       {completed.tool_error_rate !== undefined && (
                         <div className="flex items-center gap-1.5">
                           <span className={[
                             "inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-mono",
                             completed.tool_error_rate === 0
-                              ? "bg-emerald-500/[0.06] text-emerald-400/70 border-emerald-500/15"
+                              ? "bg-slate-500/[0.06] text-slate-400 border-slate-500/15"
                               : completed.tool_error_rate > 0.3
                                 ? "bg-red-500/10 text-red-400 border-red-500/20"
                                 : "bg-amber-500/10 text-amber-400 border-amber-500/20",
                           ].join(" ")}>
                             {completed.tool_error_rate === 0
-                              ? "✓ all tools clean"
-                              : `${Math.round(completed.tool_error_rate * 100)}% tool errors`}
+                              ? "0% execution errors"
+                              : `${Math.round(completed.tool_error_rate * 100)}% execution errors`}
                           </span>
                         </div>
                       )}
 
-                      {/* Per-finding list (preferred) — falls back to section accordion, then raw message */}
+                      {/* Per-finding list (preferred) — falls back to section accordion, then elegant empty state */}
                       {completed.findings_preview && completed.findings_preview.length > 0 ? (
                         <FindingsPreviewList findings={completed.findings_preview} />
                       ) : completed.section_flags && completed.section_flags.length > 0 ? (
@@ -937,17 +949,24 @@ export function AgentProgressDisplay({
                           findingsCount={completed.findings_count}
                         />
                       ) : (
-                        <ExpandableText text={completed.message || "Analysis complete."} />
+                        <div className="flex flex-col items-center justify-center p-5 border border-white/[0.04] bg-white/[0.015] rounded-xl gap-2 mt-2 shadow-inner">
+                           <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center mb-1">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                           </div>
+                           <span className="text-xs text-slate-400 font-medium text-center leading-relaxed">
+                             {completed.message || "Analysis complete. No anomalies detected."}
+                           </span>
+                        </div>
                       )}
                     </div>
                   )}
 
                   {status === "unsupported" && completed && (
                     <div className="space-y-2">
-                      <p className="text-xs text-amber-300/70 leading-relaxed">
+                      <p className="text-xs text-slate-300/70 leading-relaxed">
                         {completed.message || completed.error || "File type not supported."}
                       </p>
-                      <p className="text-[10px] text-amber-400/50 italic">Not applicable for this evidence type.</p>
+                      <p className="text-[10px] text-slate-400/50 italic">Not applicable for this evidence type.</p>
                     </div>
                   )}
 
@@ -1015,24 +1034,24 @@ export function AgentProgressDisplay({
           transition={{ delay: 0.3, type: "spring", stiffness: 280, damping: 26 }}
           className="mt-10 w-full max-w-lg"
         >
-          <div className="glass-panel rounded-2xl p-5 space-y-3">
-            <p className="text-xs font-mono text-slate-500 uppercase tracking-widest text-center">Deep analysis complete</p>
-            <div className="flex gap-3">
+          <div className="glass-panel rounded-2xl p-6 space-y-5">
+            <p className="text-[10px] font-mono text-cyan-400/80 uppercase tracking-[0.2em] text-center font-bold">Deep analysis complete</p>
+            <div className="flex gap-4">
               <motion.button
-                onClick={onNewUpload}
+                onClick={() => { playSound?.("click"); onNewUpload?.(); }}
                 disabled={isNavigating}
                 whileHover={isNavigating ? {} : { y: -2 }}
                 whileTap={isNavigating ? {} : { scale: 0.972, y: 1 }}
-                className="btn btn-ghost flex-1 py-3.5 rounded-xl"
+                className="btn btn-ghost flex-1 py-4 rounded-xl font-semibold tracking-wide text-xs"
               >
-                <RotateCcw className="w-4 h-4" />New Analysis
+                <RotateCcw className="w-4 h-4 opacity-70" />New Analysis
               </motion.button>
               <motion.button
-                onClick={onViewResults}
+                onClick={() => { playSound?.("click"); onViewResults?.(); }}
                 disabled={isNavigating}
                 whileHover={isNavigating ? {} : { y: -2 }}
                 whileTap={isNavigating ? {} : { scale: 0.972, y: 1 }}
-                className="btn btn-primary flex-1 py-3.5 rounded-xl font-bold"
+                className="btn btn-primary flex-1 py-4 rounded-xl font-bold tracking-wide text-xs"
               >
                 {isNavigating ? (
                   <><Loader2 className="w-4 h-4 animate-spin" />Arbiter Working…</>

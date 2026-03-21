@@ -357,6 +357,7 @@ class CouncilArbiter:
                 or meta.get("splicing_detected") is True
                 or meta.get("copy_move_detected") is True
                 or meta.get("mismatch_detected") is True
+                or meta.get("stego_suspected") is True
                 or "INCONSISTENT" in str(meta.get("prnu_verdict", "")).upper()
             )
             _has_anomaly = (

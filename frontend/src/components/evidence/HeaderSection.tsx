@@ -5,9 +5,8 @@
  * Displays the header with app branding and navigation controls.
  * Located at the top of the evidence page.
  */
-
 import { useRouter } from "next/navigation";
-
+import { motion } from "framer-motion";
 interface HeaderSectionProps {
   /** Status of the investigation */
   status: string;
@@ -25,12 +24,17 @@ export function HeaderSection({
   const router = useRouter();
 
   return (
-    <header className="max-w-6xl mx-auto flex items-center justify-between mb-8 z-10 relative">
+    <motion.header
+      initial={{ y: -40, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      className="max-w-6xl mx-auto flex items-center justify-between mb-12 mt-6 z-40 relative px-6 py-4 glass-panel"
+    >
       {/* Logo and Branding */}
       <div
         role="button"
         tabIndex={0}
-        className="flex items-center space-x-3 cursor-pointer group"
+        className="flex items-center space-x-4 cursor-pointer group"
         onClick={() => {
           if (status !== "analyzing") router.push("/");
         }}
@@ -42,29 +46,28 @@ export function HeaderSection({
         }}
         aria-label="Return to Forensic Council home"
       >
-        <div className="w-10 h-10 bg-gradient-to-br from-emerald-500/18 to-emerald-600/8
-          border border-emerald-500/35 rounded-xl flex items-center justify-center
-          font-bold text-emerald-300 text-sm
-          group-hover:border-emerald-400/55 group-hover:bg-emerald-500/25
-          transition-all duration-200 shadow-[0_0_18px_rgba(16,185,129,0.14)]">
-          FC
+        <div className="relative w-11 h-11 flex items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500/20 to-violet-600/20 border border-cyan-500/30 group-hover:border-cyan-400/60 group-hover:from-cyan-500/30 group-hover:to-violet-600/30 transition-all duration-300 shadow-[0_0_20px_rgba(0,212,255,0.15)] group-hover:shadow-[0_0_30px_rgba(0,212,255,0.3)]">
+          <div className="absolute inset-0 bg-white/5 rounded-xl backdrop-blur-md" />
+          <span className="relative z-10 font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-cyan-200 text-sm tracking-widest">FC</span>
         </div>
-        <div>
-          <span className="text-lg font-bold tracking-tight text-white block leading-tight">Forensic Council</span>
-          <span className="text-[10px] font-mono text-slate-600 uppercase tracking-widest">Evidence Analysis</span>
+        <div className="flex flex-col justify-center">
+          <span className="text-lg font-bold tracking-tight text-white/90 group-hover:text-white transition-colors block leading-tight">Forensic Council</span>
+          <span className="text-[10px] font-mono text-cyan-400/80 group-hover:text-cyan-300 uppercase tracking-[0.2em] transition-colors">Evidence Analysis</span>
         </div>
       </div>
 
       {/* Browse Button */}
       {showBrowse && (
-        <button
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           onClick={onBrowseClick}
-          className="btn btn-ghost px-4 py-2 text-sm rounded-xl"
+          className="btn btn-ghost px-5 py-2.5 text-xs uppercase tracking-wider rounded-xl font-semibold border-white/10"
           aria-label="Browse system for new evidence file"
         >
           Browse System
-        </button>
+        </motion.button>
       )}
-    </header>
+    </motion.header>
   );
 }

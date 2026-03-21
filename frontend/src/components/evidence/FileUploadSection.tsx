@@ -14,7 +14,9 @@ import {
   UploadCloud,
   FileAudio,
   File,
+  ShieldAlert,
 } from "lucide-react";
+import { useSound } from "@/hooks/useSound";
 
 interface FileUploadSectionProps {
   key?: React.Key;
@@ -43,6 +45,7 @@ export function FileUploadSection({
   onClear,
 }: FileUploadSectionProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { playSound } = useSound();
 
   // Memoize file preview URL to avoid memory leaks
   const filePreviewUrl = useMemo(() => {
@@ -65,6 +68,7 @@ export function FileUploadSection({
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
     if (selectedFile) {
+      playSound("click");
       onFileSelect(selectedFile);
     }
   };
@@ -84,6 +88,7 @@ export function FileUploadSection({
     onDragLeave();
     const droppedFile = e.dataTransfer.files?.[0];
     if (droppedFile) {
+      playSound("click");
       onFileDrop(droppedFile);
     }
   };
@@ -97,28 +102,39 @@ export function FileUploadSection({
       className="flex flex-col items-center justify-center min-h-[60vh] max-w-2xl mx-auto"
     >
       {/* Title Section */}
-      <div className="text-center mb-10">
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full
-          bg-white/[0.05] border border-white/[0.10]
-          text-xs font-mono text-cyan-400 backdrop-blur-md mb-6
-          shadow-[0_0_20px_rgba(0,212,255,0.06)]">
-          <span className="relative flex h-2 w-2" aria-hidden="true">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-70" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
+      <div className="text-center mb-12">
+        <motion.div 
+          initial={{ y: -10, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full
+            bg-white/[0.02] border border-white/[0.08]
+            text-xs font-mono text-cyan-400 backdrop-blur-xl mb-8
+            shadow-[0_0_30px_rgba(0,212,255,0.08)] relative overflow-hidden group">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
+          <span className="relative flex h-2 w-2 shadow-[0_0_10px_#00d4ff]" aria-hidden="true">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-80" />
+            <span className="relative inline-flex rounded-full h-full w-full bg-cyan-400" />
           </span>
-          <span className="uppercase tracking-widest">Evidence Intake Terminal</span>
-        </div>
-        <h1 className="text-4xl md:text-5xl font-extrabold mb-4 tracking-tight
-          bg-gradient-to-b from-white via-white to-slate-400 bg-clip-text text-transparent leading-[1.05] pb-1">
+          <span className="uppercase tracking-[0.2em] font-semibold text-[10px] text-cyan-300">Evidence Intake Terminal</span>
+        </motion.div>
+        
+        <motion.h1 
+          initial={{ y: 10, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.1, duration: 0.8, ease: "easeOut" }}
+          className="text-4xl md:text-5xl font-black mb-5 tracking-tight
+            bg-gradient-to-br from-white via-white to-slate-500 bg-clip-text text-transparent leading-[1.1] pb-2">
           Initiate Investigation.
-        </h1>
-        <p className="text-slate-400 text-base font-normal max-w-md mx-auto leading-relaxed">
-          Deploy the{" "}
-          <span className="text-emerald-400 font-semibold">
-            Council Autonomous Parsing System
-          </span>{" "}
-          on your digital artifact.
-        </p>
+        </motion.h1>
+        
+        <motion.p 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2, duration: 0.8 }}
+          className="text-slate-400 text-sm md:text-base font-normal max-w-lg mx-auto leading-relaxed">
+          Deploy the <span className="text-emerald-400 font-semibold tracking-wide">Council Autonomous Parsing System</span> on your digital artifact.
+        </motion.p>
       </div>
 
       {/* File Preview or Upload Area */}
@@ -194,27 +210,27 @@ export function FileUploadSection({
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-3 p-6">
+          <div className="flex gap-4 p-8 bg-black/20 backdrop-blur-xl border-t border-white/[0.04] relative">
             <button
-              onClick={onClear}
+              onClick={() => { playSound("click"); onClear(); }}
               disabled={isUploading}
-              className="btn btn-ghost flex-1 py-3.5 rounded-xl"
+              className="btn btn-ghost flex-1 py-4 rounded-xl text-sm font-semibold tracking-wide"
             >
-              <RotateCcw className="w-4 h-4" aria-hidden="true" />
+              <RotateCcw className="w-4 h-4 opacity-70" aria-hidden="true" />
               Clear
             </button>
             <button
-              onClick={() => onUpload(file)}
+              onClick={() => { playSound("upload"); onUpload(file); }}
               disabled={isUploading}
-              className="btn btn-primary flex-1 py-3.5 rounded-xl font-bold"
+              className="btn btn-primary flex-1 py-4 rounded-xl text-sm font-bold tracking-wide relative overflow-hidden"
             >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-150%] animate-[shimmer_2s_infinite]" />
               {isUploading ? (
                 <>
-                  <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity }}>
+                  <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
                     <UploadCloud className="w-4 h-4" aria-hidden="true" />
                   </motion.div>
-                  Uploading…
+                  Initiating Scan…
                 </>
               ) : (
                 <>
@@ -237,43 +253,52 @@ export function FileUploadSection({
           role="button"
           tabIndex={0}
           aria-label="File drop zone — click or press Enter to browse"
-          onClick={() => fileInputRef.current?.click()}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInputRef.current?.click(); } }}
-          className={`w-full glass-panel rounded-[2rem] overflow-hidden border-2 border-dashed
-            transition-all duration-300 relative cursor-pointer
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent
+          onClick={() => { playSound("click"); fileInputRef.current?.click(); }}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); playSound("click"); fileInputRef.current?.click(); } }}
+          className={`w-full glass-panel group overflow-hidden border-2 border-dashed rounded-[2.5rem]
+            transition-all duration-500 relative cursor-pointer
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-4 focus-visible:ring-offset-black
             ${isDragging
-              ? "border-emerald-500/75 shadow-[inset_0_0_50px_rgba(16,185,129,0.07)]"
-              : "border-white/[0.09] hover:border-emerald-500/42 hover:shadow-[inset_0_0_35px_rgba(16,185,129,0.04)]"
+              ? "border-cyan-400/80 shadow-[0_0_50px_rgba(0,212,255,0.15),inset_0_0_80px_rgba(0,212,255,0.1)] scale-[1.02]"
+              : "border-white/[0.08] hover:border-cyan-500/50 hover:shadow-[0_0_40px_rgba(0,212,255,0.08),inset_0_0_40px_rgba(0,212,255,0.04)]"
             }`}
         >
+          {/* Subtle moving noise texture for the dropzone */}
+          <div className="absolute inset-0 opacity-[0.03] invert dark:invert-0 bg-[url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.85%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E')] mix-blend-overlay pointer-events-none" />
+          
           {/* Drag glow */}
-          <motion.div animate={{ opacity: isDragging ? 1 : 0 }} transition={{ duration: 0.2 }}
-            className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.08),transparent_68%)] pointer-events-none" />
+          <motion.div animate={{ opacity: isDragging ? 1 : 0 }} transition={{ duration: 0.3 }}
+            className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,212,255,0.12),transparent_70%)] pointer-events-none" />
 
-          <div className="flex flex-col items-center justify-center py-16 px-8 gap-4">
+          <div className="flex flex-col items-center justify-center py-20 px-8 gap-6 relative z-10">
             <motion.div
-              animate={{ scale: isDragging ? 1.12 : 1 }}
-              transition={{ type: "spring", stiffness: 300, damping: 20 }}
-              className={`w-[72px] h-[72px] rounded-2xl flex items-center justify-center transition-all duration-200
-                bg-gradient-to-br from-emerald-500/18 to-emerald-600/8
-                border shadow-[0_0_24px_rgba(16,185,129,0.16)]
-                ${isDragging ? "border-emerald-400/55 shadow-[0_0_36px_rgba(16,185,129,0.28)]" : "border-emerald-500/25"}`}
+              animate={{ 
+                scale: isDragging ? 1.15 : 1,
+                y: isDragging ? -5 : 0 
+              }}
+              transition={{ type: "spring", stiffness: 400, damping: 25 }}
+              className={`w-[88px] h-[88px] rounded-2xl flex items-center justify-center transition-all duration-300
+                bg-gradient-to-br border 
+                ${isDragging 
+                  ? "from-cyan-500/20 to-violet-600/20 border-cyan-400/60 shadow-[0_0_40px_rgba(0,212,255,0.3)]" 
+                  : "from-white/[0.03] to-white/[0.01] border-white/10 group-hover:border-cyan-500/30 group-hover:shadow-[0_0_30px_rgba(0,212,255,0.15)] group-hover:from-cyan-500/10 group-hover:to-transparent"}`}
             >
-              <UploadCloud className={`w-8 h-8 transition-colors duration-200 ${isDragging ? "text-emerald-200" : "text-emerald-400"}`} aria-hidden="true" />
+              <UploadCloud className={`w-10 h-10 transition-all duration-300 ${isDragging ? "text-cyan-300 drop-shadow-[0_0_10px_rgba(0,212,255,0.8)]" : "text-slate-400 group-hover:text-cyan-400"}`} strokeWidth={1.5} aria-hidden="true" />
             </motion.div>
+            
             <div className="text-center">
-              <p className="text-base font-semibold text-white mb-1 tracking-wide">
+              <p className={`text-lg font-bold transition-colors duration-300 mb-2 tracking-wide ${isDragging ? "text-cyan-300" : "text-white group-hover:text-cyan-50"}`}>
                 {isDragging ? "Drop your evidence here" : "Drag evidence file here"}
               </p>
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-slate-400 font-medium">
                 or click to select from your system
               </p>
             </div>
-            <div className="flex gap-2 flex-wrap justify-center mt-1">
-              {["IMAGE", "VIDEO", "AUDIO"].map(t => (
-                <span key={t} className="px-2.5 py-0.5 bg-white/[0.04] border border-white/[0.08]
-                  rounded-full text-[10px] font-mono text-slate-500 tracking-widest">
+            
+            <div className="flex gap-2.5 flex-wrap justify-center mt-2">
+              {["IMAGE", "VIDEO", "AUDIO", "DOCUMENT"].map(t => (
+                <span key={t} className="px-3 py-1 bg-black/40 border border-white/[0.06]
+                  rounded-md text-[10px] font-mono text-slate-500 tracking-widest uppercase transition-colors group-hover:border-white/10 group-hover:text-slate-400">
                   {t}
                 </span>
               ))}
@@ -285,11 +310,12 @@ export function FileUploadSection({
       {/* Validation Error */}
       {validationError && (
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-6 p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-sm max-w-md"
+          initial={{ opacity: 0, y: 10, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          className="mt-6 p-4 rounded-xl glass-panel border border-red-500/40 text-red-200 text-sm max-w-md w-full flex items-start gap-3 shadow-[0_8px_30px_rgba(239,68,68,0.2)]"
         >
-          <span className="font-medium">{validationError}</span>
+          <ShieldAlert className="w-5 h-5 text-red-500 shrink-0" />
+          <span className="font-medium leading-relaxed">{validationError}</span>
         </motion.div>
       )}
 
