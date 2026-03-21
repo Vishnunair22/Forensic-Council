@@ -3,17 +3,21 @@
 
 :root {
   /* ─── Core palette ────────────────────────────────────────────── */
-  --background: #030308;
-  --foreground: #eef2ff;
+  --background: #040409;
+  --foreground: #f8fafc;
+
+  --mesh-1: rgba(0, 212, 255, 0.08); /* Cyan */
+  --mesh-2: rgba(124, 58, 237, 0.05); /* Violet */
+  --mesh-3: rgba(16, 185, 129, 0.04); /* Emerald */
 
   /* Cyan accent — primary interactive, scanning elements */
   --accent-cyan: #00d4ff;
-  --accent-cyan-dim: #0891b2;
-  --accent-cyan-glow: rgba(0, 212, 255, 0.35);
+  --accent-cyan-dim: #06b6d4;
+  --accent-cyan-glow: rgba(0, 212, 255, 0.40);
 
   /* Violet accent — arbiter, deep analysis, authority */
-  --accent-violet: #7c3aed;
-  --accent-violet-glow: rgba(124, 58, 237, 0.4);
+  --accent-violet: #8b5cf6;
+  --accent-violet-glow: rgba(139, 92, 246, 0.40);
 
   /* Emerald — success, confirmed, authentic */
   --accent-emerald: #10b981;
@@ -24,11 +28,11 @@
   /* Red — errors, manipulation detected */
   --accent-red: #ef4444;
 
-  /* Glass surface palette */
-  --glass-bg: rgba(255, 255, 255, 0.05);
-  --glass-border: rgba(255, 255, 255, 0.10);
-  --glass-shine: rgba(255, 255, 255, 0.15);
-  --glass-shadow: 0 8px 40px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08);
+  /* Premium Glass surface palette */
+  --glass-bg: rgba(255, 255, 255, 0.015);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-edge-shimmer: rgba(255, 255, 255, 0.12);
+  --glass-shadow: 0 16px 40px -8px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06);
 
   /* Typography */
   --font-sans: var(--font-poppins);
@@ -67,6 +71,40 @@ body {
   font-family: var(--font-sans), "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Abstract Deep Mesh Background */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -20%;
+  z-index: -2;
+  background: 
+    radial-gradient(circle at 15% 30%, var(--mesh-1) 0%, transparent 40%),
+    radial-gradient(circle at 85% 20%, var(--mesh-2) 0%, transparent 45%),
+    radial-gradient(circle at 50% 80%, var(--mesh-3) 0%, transparent 50%);
+  filter: blur(80px);
+  animation: mesh-drift 24s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.025;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+
+@keyframes mesh-drift {
+  0% { transform: translate(0, 0) scale(1.0); }
+  50% { transform: translate(-3%, 4%) scale(1.05); }
+  100% { transform: translate(4%, -2%) scale(0.95); }
 }
 
 /* ─── Monospace elements ──────────────────────────────────────────── */
@@ -74,92 +112,70 @@ code, kbd, pre, .font-mono {
   font-family: var(--font-mono), "JetBrains Mono", "Fira Code", monospace;
 }
 
-/* ─── Glass panel utility ─────────────────────────────────────────── */
+/* ─── Premium Glass Panel ─────────────────────────────────────────── */
 .glass-panel {
   background: linear-gradient(
     145deg,
-    rgba(255, 255, 255, 0.068) 0%,
-    rgba(255, 255, 255, 0.028) 55%,
-    rgba(255, 255, 255, 0.048) 100%
+    rgba(255, 255, 255, 0.035) 0%,
+    rgba(255, 255, 255, 0.015) 50%,
+    rgba(255, 255, 255, 0.025) 100%
   );
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  backdrop-filter: blur(28px) saturate(190%) brightness(1.05);
-  -webkit-backdrop-filter: blur(28px) saturate(190%) brightness(1.05);
-  box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.60),
-    0 3px 10px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  box-shadow: var(--glass-shadow);
   position: relative;
   overflow: hidden;
+  border-radius: 1.25rem;
 }
 
-/* Top-edge shine */
+/* Top-edge internal specular reflection */
 .glass-panel::before {
   content: "";
   position: absolute;
   inset-inline: 0;
   top: 0;
   height: 1px;
-  background: linear-gradient(to right, transparent 5%, rgba(255,255,255,0.26) 40%, rgba(255,255,255,0.26) 60%, transparent 95%);
+  background: linear-gradient(to right, transparent 5%, var(--glass-edge-shimmer) 35%, var(--glass-edge-shimmer) 65%, transparent 95%);
   pointer-events: none;
   z-index: 1;
 }
 
-/* Corner specular highlight */
+/* Corner ambient glow */
 .glass-panel::after {
   content: "";
   position: absolute;
   top: 0;
   left: 0;
-  width: 40%;
-  height: 40%;
-  background: radial-gradient(ellipse at top left, rgba(255,255,255,0.065), transparent 62%);
+  width: 50%;
+  height: 50%;
+  background: radial-gradient(circle at top left, rgba(255,255,255,0.03), transparent 70%);
   pointer-events: none;
   z-index: 0;
 }
 
 /* ─── Glass modal — elevated slab for dialogs ─────────────────────── */
 .glass-modal {
-  background: linear-gradient(
-    160deg,
-    rgba(10, 10, 22, 0.88) 0%,
-    rgba(6, 6, 16, 0.92) 100%
-  );
+  background: linear-gradient(160deg, rgba(14, 14, 20, 0.85) 0%, rgba(6, 6, 12, 0.95) 100%);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(40px) saturate(200%) brightness(1.08);
-  -webkit-backdrop-filter: blur(40px) saturate(200%) brightness(1.08);
-  box-shadow:
-    0 30px 80px rgba(0, 0, 0, 0.80),
-    0 8px 24px rgba(0, 0, 0, 0.50),
-    0 0 0 1px rgba(255, 255, 255, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.30);
-  position: relative;
+  backdrop-filter: blur(48px) saturate(210%);
+  -webkit-backdrop-filter: blur(48px) saturate(210%);
+  box-shadow: 0 40px 100px -10px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.1);
+  border-radius: 1.5rem;
   overflow: hidden;
+  position: relative;
 }
 
 .glass-modal::before {
-  content: "";
-  position: absolute;
-  inset-inline: 0;
-  top: 0;
-  height: 1px;
-  background: linear-gradient(to right, transparent 5%, rgba(255,255,255,0.32) 35%, rgba(0,212,255,0.22) 65%, transparent 95%);
-  pointer-events: none;
-  z-index: 1;
+  content: ""; position: absolute; inset-inline: 0; top: 0; height: 1px;
+  background: linear-gradient(to right, transparent, rgba(255,255,255,0.3), rgba(0,212,255,0.2), transparent);
+  pointer-events: none; z-index: 10;
 }
 
 .glass-modal::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 55%;
-  height: 45%;
-  background: radial-gradient(ellipse at top left, rgba(0,212,255,0.06), transparent 65%);
-  pointer-events: none;
-  z-index: 0;
+  content: ""; position: absolute; top: 0; left: 0; width: 60%; height: 50%;
+  background: radial-gradient(circle at top left, rgba(0,212,255,0.06), transparent 65%);
+  pointer-events: none; z-index: 0;
 }
 
 /* ─── Scan line animation ──────────────────────────────────────────── */
@@ -256,20 +272,14 @@ code, kbd, pre, .font-mono {
 /* Running agent card — visible outer glow that pulses */
 @keyframes running-card-glow {
   0%, 100% {
-    box-shadow: 0 0 0 1.5px rgba(0,212,255,0.40),
-                0 0 24px rgba(0,212,255,0.14),
-                0 8px 32px rgba(0,0,0,0.55),
-                inset 0 1px 0 rgba(255,255,255,0.10);
+    box-shadow: 0 0 0 1px rgba(0,212,255,0.3), 0 0 20px rgba(0,212,255,0.1), var(--glass-shadow);
   }
   50% {
-    box-shadow: 0 0 0 1.5px rgba(0,212,255,0.75),
-                0 0 44px rgba(0,212,255,0.28),
-                0 8px 32px rgba(0,0,0,0.55),
-                inset 0 1px 0 rgba(255,255,255,0.13);
+    box-shadow: 0 0 0 1.5px rgba(0,212,255,0.6), 0 0 40px rgba(0,212,255,0.25), var(--glass-shadow);
   }
 }
 .card-running {
-  animation: running-card-glow 2s ease-in-out infinite;
+  animation: running-card-glow 2.5s ease-in-out infinite;
 }
 
 @keyframes gradient-border-spin {
@@ -426,9 +436,10 @@ button:disabled,
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
 }
 .btn-danger:hover:not(:disabled) {
-  background: rgba(239,68,68,0.22);
-  box-shadow: 0 0 22px rgba(239,68,68,0.22), inset 0 1px 0 rgba(255,255,255,0.06);
-  transform: translateY(-1px);
+  background: rgba(239,68,68,0.25);
+  border-color: rgba(239,68,68,0.6);
+  box-shadow: 0 8px 25px rgba(239,68,68,0.35), inset 0 1px 0 rgba(255,255,255,0.2);
+  transform: translateY(-2px);
 }
 
 /* Icon-only circular button */
@@ -493,8 +504,9 @@ button:disabled,
 
 /* ─── Card hover glow utility ─────────────────────────────────────── */
 .card-hover {
-  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s ease, border-color 0.28s ease;
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.35s ease, border-color 0.35s ease;
 }
 .card-hover:hover {
-  transform: translateY(-4px) scale(1.012);
+  transform: translateY(-5px) scale(1.015);
+  box-shadow: 0 20px 50px -10px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.08);
 }

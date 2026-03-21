@@ -301,6 +301,10 @@ class EvidenceStore:
     
     async def _save_artifact(self, artifact: EvidenceArtifact) -> None:
         """Save artifact to database (auto-creates table if missing)."""
+        if self._postgres is None:
+            logger.warning("EvidenceStore: no postgres client, skipping DB save")
+            return
+            
         query = """
             INSERT INTO evidence_artifacts (
                 artifact_id, parent_id, root_id, artifact_type,
@@ -363,6 +367,9 @@ class EvidenceStore:
         Returns:
             EvidenceArtifact if found, None otherwise
         """
+        if self._postgres is None:
+            return None
+            
         query = """
             SELECT artifact_id, parent_id, root_id, artifact_type,
                    file_path, content_hash, action, agent_id,
@@ -400,6 +407,9 @@ class EvidenceStore:
         Returns:
             VersionTree if found, None otherwise
         """
+        if self._postgres is None:
+            return None
+            
         query = """
             SELECT artifact_id, parent_id, root_id, artifact_type,
                    file_path, content_hash, action, agent_id,

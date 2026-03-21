@@ -42,6 +42,22 @@ from orchestration.session_manager import SessionManager
 logger = get_logger(__name__)
 settings = get_settings()
 
+def _assign_severity_tier(f: dict) -> str:
+    """Assign INFO/LOW/MEDIUM/HIGH/CRITICAL to a finding based on metadata."""
+    meta = f.get("metadata") or {}
+    conf = float(f.get("confidence_raw") or 0.0)
+    status_str = str(f.get("status", "")).upper()
+    na_flags = ("ela_not_applicable", "ghost_not_applicable", "noise_fingerprint_not_applicable", "prnu_not_applicable")
+    is_na = any(meta.get(flag) for flag in na_flags) or str(meta.get("verdict", "")).upper() == "NOT_APPLICABLE" or str(meta.get("prnu_verdict", "")).upper() == "NOT_APPLICABLE"
+    is_failed = not is_na and meta.get("court_defensible") is False
+    if is_na or meta.get("hash_matches") is True: return "INFO"
+    if is_failed or status_str == "INCOMPLETE": return "LOW"
+    has_manip = meta.get("manipulation_detected") is True or meta.get("deepfake_detected") is True or meta.get("splicing_detected") is True or meta.get("copy_move_detected") is True or meta.get("mismatch_detected") is True or "INCONSISTENT" in str(meta.get("prnu_verdict", "")).upper()
+    has_anomaly = meta.get("anomaly_detected") is True or meta.get("inconsistency_detected") is True or str(meta.get("verdict", "")).upper() in ("TAMPERED", "SUSPICIOUS", "MANIPULATED")
+    if has_manip: return "CRITICAL" if conf >= 0.75 else "HIGH"
+    if has_anomaly: return "MEDIUM"
+    return "LOW"
+
 router = APIRouter(prefix="/api/v1", tags=["investigation"])
 
 # ── Per-user upload rate limiter ──────────────────────────────────────────────
@@ -1015,10 +1031,11 @@ async def _wrap_pipeline_with_broadcasts(
             if agent_verdict is None:
                 if result.findings:
                     sev_list = [
-                        (f.get("severity_tier", "LOW") or "LOW").upper()
+                        _assign_severity_tier(f).upper()
                         for f in result.findings if isinstance(f, dict)
                     ]
-                    total_f = len(sev_list) or 1
+                    # Exclude INFO items so NA findings don't drag down confidence ratio unexpectedly
+                    total_f = sum(1 for s in sev_list if s != "INFO") or 1
                     critical = sev_list.count("CRITICAL")
                     high     = sev_list.count("HIGH")
                     medium   = sev_list.count("MEDIUM")
@@ -1026,12 +1043,14 @@ async def _wrap_pipeline_with_broadcasts(
 
                     if critical > 0 or severe_ratio >= 0.30:
                         agent_verdict = "LIKELY_MANIPULATED"
-                    elif severe_ratio >= 0.10 or (medium / total_f) >= 0.40 or final_confidence < 0.50:
+                    elif severe_ratio >= 0.10 or (medium / total_f) >= 0.40 or (final_confidence < 0.50 and total_f > 1):
                         agent_verdict = "INCONCLUSIVE"
                     else:
                         agent_verdict = "AUTHENTIC"
                 elif result.error:
                     agent_verdict = "INCONCLUSIVE"
+                else:
+                    agent_verdict = "AUTHENTIC"
 
             # Build per-finding preview (shown in agent cards when section_flags is empty)
             findings_preview = []
@@ -1051,7 +1070,7 @@ async def _wrap_pipeline_with_broadcasts(
                     "summary": summary[:320],
                     "confidence": f.get("confidence_raw", 0.5),
                     "flag": meta.get("section_flag", "info"),
-                    "severity": f.get("severity_tier", "LOW"),
+                    "severity": _assign_severity_tier(f),
                 })
 
             # Broadcast per-agent completion
@@ -1415,17 +1434,20 @@ async def _wrap_pipeline_with_broadcasts(
                         })
 
                 # Rule-based verdict fallback for deep pass
-                if deep_agent_verdict is None and deep_findings_serial:
-                    dsev = [
-                        (f.get("severity_tier", "LOW") or "LOW").upper()
-                        for f in deep_findings_serial if isinstance(f, dict)
-                    ]
-                    dtotal = len(dsev) or 1
-                    dsevere = (dsev.count("CRITICAL") + dsev.count("HIGH")) / dtotal
-                    if dsev.count("CRITICAL") > 0 or dsevere >= 0.30:
-                        deep_agent_verdict = "LIKELY_MANIPULATED"
-                    elif dsevere >= 0.10 or (dsev.count("MEDIUM") / dtotal) >= 0.40 or final_deep_conf < 0.50:
-                        deep_agent_verdict = "INCONCLUSIVE"
+                if deep_agent_verdict is None:
+                    if deep_findings_serial:
+                        dsev = [
+                            _assign_severity_tier(f).upper()
+                            for f in deep_findings_serial if isinstance(f, dict)
+                        ]
+                        dtotal = sum(1 for s in dsev if s != "INFO") or 1
+                        dsevere = (dsev.count("CRITICAL") + dsev.count("HIGH")) / dtotal
+                        if dsev.count("CRITICAL") > 0 or dsevere >= 0.30:
+                            deep_agent_verdict = "LIKELY_MANIPULATED"
+                        elif dsevere >= 0.10 or (dsev.count("MEDIUM") / dtotal) >= 0.40 or (final_deep_conf < 0.50 and dtotal > 1):
+                            deep_agent_verdict = "INCONCLUSIVE"
+                        else:
+                            deep_agent_verdict = "AUTHENTIC"
                     else:
                         deep_agent_verdict = "AUTHENTIC"
 
@@ -1445,7 +1467,7 @@ async def _wrap_pipeline_with_broadcasts(
                         "summary": summary[:320],
                         "confidence": f.get("confidence_raw", 0.5),
                         "flag": meta.get("section_flag", "info"),
-                        "severity": f.get("severity_tier", "LOW"),
+                        "severity": _assign_severity_tier(f),
                     })
 
                 await broadcast_update(

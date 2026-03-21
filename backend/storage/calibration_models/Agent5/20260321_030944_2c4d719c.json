@@ -1,0 +1,15 @@
+{
+  "model_id": "4744f1fd-209d-4fdb-a174-bc7bc8edc107",
+  "agent_id": "Agent5",
+  "method": "RULE_BASED",
+  "benchmark_dataset": "stub_benchmark",
+  "version": "20260321_030944_2c4d719c",
+  "created_utc": "2026-03-21 03:09:44.849304+00:00",
+  "params": {
+    "method": "sigmoid",
+    "k": 10.0,
+    "x0": 0.5,
+    "baseline_tpr": 0.1,
+    "baseline_fpr": 0.05
+  }
+}
