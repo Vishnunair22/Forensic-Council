@@ -555,13 +555,13 @@ class ForensicAgent(ABC):
             session_id=self.session_id,
             agent_id=deep_agent_id,
             tasks=deep_tasks,
-            iteration_ceiling=len(deep_tasks) + 5,
+            iteration_ceiling=len(deep_tasks) + 2,
         )
 
         loop_engine = ReActLoopEngine(
             agent_id=deep_agent_id,
             session_id=self.session_id,
-            iteration_ceiling=len(deep_tasks) + 5,
+            iteration_ceiling=len(deep_tasks) + 2,
             working_memory=self.working_memory,
             custody_logger=self.custody_logger,
             redis_client=None,

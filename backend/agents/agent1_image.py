@@ -69,7 +69,10 @@ class Agent1Image(ForensicAgent):
     def task_decomposition(self) -> list[str]:
         """
         Initial analysis tasks — fast numpy/OpenCV tools, ~15-20s total.
-        For JPEG files: includes ELA and JPEG ghost detection.
+        For JPEG files: ELA full-image scan + JPEG ghost detection.
+        ELA anomaly block classification is deferred to deep pass so the
+        initial phase stays lean; the deep pass uses the initial ELA map
+        (available via _tool_context) for higher-quality classification.
         For lossless (PNG/BMP/TIFF/WEBP/GIF): skips JPEG-specific tools;
         uses frequency domain, noise fingerprint, and semantic analysis instead.
         """
@@ -86,10 +89,9 @@ class Agent1Image(ForensicAgent):
                 "Self-reflection pass",
             ]
         else:
-            # JPEG (lossy): full ELA + ghost pipeline
+            # JPEG (lossy): ELA map + ghost detection; ELA block classification in deep
             return base + [
                 "Run full-image ELA and map anomaly regions",
-                "Run ELA anomaly block classification on flagged blocks",
                 "Run JPEG ghost detection on all flagged regions",
                 "Self-reflection pass",
             ]
@@ -97,8 +99,10 @@ class Agent1Image(ForensicAgent):
     @property
     def deep_task_decomposition(self) -> list[str]:
         """
-        Deep/heavy tasks — deferred from initial pass plus full ML + Gemini analysis.
-        Runs in background after initial findings are returned.
+        Deep/heavy tasks — Gemini vision, heavy ML models, advanced forensic checks.
+        ELA anomaly block classification runs here for ALL file types:
+        - JPEG: deferred from initial pass; leverages initial ELA map via _tool_context
+        - Lossless: first time it runs (ELA not applicable in initial pass)
         """
         return [
             "Run Gemini deep forensic analysis: identify content type, extract all text, detect objects and weapons, identify interfaces, describe what is happening, cross-validate metadata",
