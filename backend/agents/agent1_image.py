@@ -932,6 +932,14 @@ class Agent1Image(ForensicAgent):
                     "court_defensible": False,
                 }
 
+            if finding.error:
+                await self._record_tool_error("gemini_deep_forensic", finding.error)
+                return {
+                    "error": f"Gemini vision failed: {finding.error}",
+                    "gemini_content_type": "unknown",
+                    "court_defensible": False,
+                }
+
             result = finding.to_finding_dict(self.agent_id)
 
             # Expose key fields at top level for react_loop formatter

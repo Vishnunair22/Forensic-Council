@@ -244,8 +244,10 @@ export function FileUploadSection({
       ) : (
         /* No file selected – drag and drop area */
         <motion.div
+          style={{ perspective: 1000 }}
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
+          whileHover={{ scale: 1.01, rotateX: 2, rotateY: -1 }}
           onDragEnter={handleDragEnter}
           onDragOver={(e) => { e.preventDefault(); if (!isDragging) onDragEnter(); }}
           onDragLeave={handleDragLeave}

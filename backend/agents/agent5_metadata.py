@@ -973,10 +973,10 @@ class Agent5Metadata(ForensicAgent):
             try:
                 exif_initial_findings = [
                     f for f in (self._findings or [])
-                    if f.metadata.get("tool_name") == "exif_extract"
+                    if (f.metadata or {}).get("tool_name") == "exif_extract"
                 ]
                 if exif_initial_findings:
-                    ef = exif_initial_findings[0].metadata
+                    ef = exif_initial_findings[0].metadata or {}
                     extra = {}
                     for field in ["total_fields_extracted", "absent_mandatory_fields",
                                   "gps_coordinates", "datetime_original", "software",
@@ -1008,10 +1008,27 @@ class Agent5Metadata(ForensicAgent):
             except Exception:
                 pass
 
-            finding = await _gemini.deep_forensic_analysis(
-                file_path=artifact.file_path,
-                exif_summary=exif_summary or None,
-            )
+            try:
+                finding = await _gemini.deep_forensic_analysis(
+                    file_path=artifact.file_path,
+                    exif_summary=exif_summary or None,
+                )
+            except Exception as gemini_exc:
+                await self._record_tool_error("gemini_deep_forensic", str(gemini_exc))
+                return {
+                    "error": f"Gemini vision failed: {gemini_exc}",
+                    "gemini_content_type": "unknown",
+                    "court_defensible": False,
+                }
+
+            if finding.error:
+                await self._record_tool_error("gemini_deep_forensic", finding.error)
+                return {
+                    "error": f"Gemini vision failed: {finding.error}",
+                    "gemini_content_type": "unknown",
+                    "court_defensible": False,
+                }
+
             result = finding.to_finding_dict(self.agent_id)
 
             # Expose all key fields for react_loop formatter and report
@@ -1031,6 +1048,7 @@ class Agent5Metadata(ForensicAgent):
             result["filesystem_created"] = exif_summary.get("filesystem_created", "")
             result["filesystem_modified"] = exif_summary.get("filesystem_modified", "")
             result["mime_type_detected"] = exif_summary.get("mime_type_detected", "")
+            await self._record_tool_result("gemini_deep_forensic", result)
             return result
 
         registry.register(

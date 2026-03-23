@@ -233,8 +233,10 @@ class Agent3Object(ForensicAgent):
                 await self._record_tool_result("object_detection", detection_result)
                 return detection_result
             except Exception as e:
-                # Fallback to OpenCV heuristics
-                return await _object_detection_opencv(input_data)
+                # Fallback to OpenCV heuristics — also record result so Gemini handler has context
+                opencv_result = await _object_detection_opencv(input_data)
+                await self._record_tool_result("object_detection", opencv_result)
+                return opencv_result
             finally:
                 # Best-effort cleanup for extracted video frame
                 try:
@@ -1060,23 +1062,35 @@ class Agent3Object(ForensicAgent):
             artifact = input_data.get("artifact") or self.evidence_artifact
 
             # Build cross-agent context: YOLO detections from our initial pass
+            # Check _tool_context first (faster), fall back to scanning _findings
             yolo_context: dict = {}
             try:
-                yolo_findings = [
-                    f for f in (self._findings or [])
-                    if f.metadata.get("tool_name") == "object_detection"
-                ]
-                if yolo_findings:
-                    yolo_out = yolo_findings[0].metadata
-                    yolo_classes = yolo_out.get("classes_found", [])
-                    yolo_count = yolo_out.get("detection_count", 0)
-                    yolo_weapons = [d.get("class_name", "") for d in yolo_out.get("weapon_detections", [])]
+                yolo_cached = self._tool_context.get("object_detection", {})
+                if yolo_cached:
                     yolo_context = {
-                        "yolo_detected_classes": yolo_classes,
-                        "yolo_detection_count": yolo_count,
-                        "yolo_weapon_classes": yolo_weapons,
-                        "yolo_backend": yolo_out.get("backend", ""),
+                        "yolo_detected_classes": yolo_cached.get("classes_found", []),
+                        "yolo_detection_count": yolo_cached.get("detection_count", 0),
+                        "yolo_weapon_classes": [
+                            d.get("class_name", "") for d in yolo_cached.get("weapon_detections", [])
+                        ],
+                        "yolo_backend": yolo_cached.get("backend", ""),
                     }
+                else:
+                    # Fallback: scan findings for object_detection finding
+                    yolo_findings = [
+                        f for f in (self._findings or [])
+                        if (f.metadata or {}).get("tool_name") == "object_detection"
+                    ]
+                    if yolo_findings:
+                        yolo_out = yolo_findings[0].metadata or {}
+                        yolo_context = {
+                            "yolo_detected_classes": yolo_out.get("classes_found", []),
+                            "yolo_detection_count": yolo_out.get("detection_count", 0),
+                            "yolo_weapon_classes": [
+                                d.get("class_name", "") for d in yolo_out.get("weapon_detections", [])
+                            ],
+                            "yolo_backend": yolo_out.get("backend", ""),
+                        }
             except Exception:
                 pass
 
@@ -1100,15 +1114,36 @@ class Agent3Object(ForensicAgent):
                 pass
 
             # Merge contexts into exif_summary-style dict for Gemini
-            context_summary = {}
+            context_summary: dict = {}
             context_summary.update(yolo_context)
             if agent1_context:
                 context_summary["agent1_image_forensics"] = agent1_context
 
-            finding = await _gemini.deep_forensic_analysis(
-                file_path=artifact.file_path,
-                exif_summary=context_summary if context_summary else None,
-            )
+            try:
+                finding = await _gemini.deep_forensic_analysis(
+                    file_path=artifact.file_path,
+                    exif_summary=context_summary if context_summary else None,
+                )
+            except Exception as gemini_exc:
+                await self._record_tool_error("gemini_deep_forensic", str(gemini_exc))
+                return {
+                    "error": f"Gemini vision failed: {gemini_exc}",
+                    "gemini_content_type": "unknown",
+                    "court_defensible": False,
+                    "agent1_context_used": bool(agent1_context),
+                    "yolo_context_used": bool(yolo_context),
+                }
+
+            if finding.error:
+                await self._record_tool_error("gemini_deep_forensic", finding.error)
+                return {
+                    "error": f"Gemini vision failed: {finding.error}",
+                    "gemini_content_type": "unknown",
+                    "court_defensible": False,
+                    "agent1_context_used": bool(agent1_context),
+                    "yolo_context_used": bool(yolo_context),
+                }
+
             result = finding.to_finding_dict(self.agent_id)
 
             # Expose key fields; safely stringify detected_objects (may be dicts)
@@ -1133,6 +1168,7 @@ class Agent3Object(ForensicAgent):
             # Include cross-agent context in result for traceability
             result["agent1_context_used"] = bool(agent1_context)
             result["yolo_context_used"] = bool(yolo_context)
+            await self._record_tool_result("gemini_deep_forensic", result)
             return result
 
         registry.register(

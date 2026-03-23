@@ -340,27 +340,33 @@ function FindingRow({ f }: { f: FindingPreview }) {
 
 function FindingsPreviewList({ findings }: { findings: FindingPreview[] }) {
   const [showAll, setShowAll] = useState(false);
-  const INITIAL_SHOW = 3;
-  const shown = showAll ? findings : findings.slice(0, INITIAL_SHOW);
-  const remaining = findings.length - INITIAL_SHOW;
+  const INITIAL_SHOW = 2; // Reduced from 3 to keep UI cleaner
+  const firstBatch = findings.slice(0, INITIAL_SHOW);
+  const remainingBatch = findings.slice(INITIAL_SHOW);
+  const remaining = remainingBatch.length;
 
   return (
     <motion.div layout className="space-y-2">
       <AnimatePresence initial={false}>
-        {shown.map((f, i) => <FindingRow key={`${f.tool}-${i}`} f={f} />)}
+        {firstBatch.map((f, i) => <FindingRow key={`${f.tool}-first-${i}`} f={f} />)}
       </AnimatePresence>
+      
       {findings.length > INITIAL_SHOW && (
         <motion.button
           layout
           onClick={() => setShowAll(v => !v)}
           className="w-full text-[10px] font-bold tracking-widest uppercase text-slate-500 hover:text-cyan-400 transition-colors py-2.5 text-center
-            border border-white/[0.04] border-dashed rounded-xl bg-white/[0.01] hover:bg-cyan-500/10 hover:border-cyan-500/30"
+            border border-white/[0.04] border-dashed rounded-xl bg-white/[0.01] hover:bg-cyan-500/10 hover:border-cyan-500/30 my-1"
         >
           {showAll
             ? "↑ Collapse list"
             : `↓ Display ${remaining} more finding${remaining !== 1 ? "s" : ""}`}
         </motion.button>
       )}
+
+      <AnimatePresence initial={false}>
+        {showAll && remainingBatch.map((f, i) => <FindingRow key={`${f.tool}-rem-${i}`} f={f} />)}
+      </AnimatePresence>
     </motion.div>
   );
 }
@@ -401,7 +407,7 @@ function LiveThinkingText({ text, active }: { text: string; active: boolean }) {
   }, [text]);
 
   return (
-    <div className="relative space-y-1 min-h-[2.5rem]">
+    <div className="relative space-y-1 min-h-[2.5rem]" aria-live="polite" aria-atomic="true">
       {/* Trail — previous thought fades out dimly */}
       <AnimatePresence mode="popLayout">
         {prevText && prevText !== displayText && (
@@ -550,12 +556,15 @@ export function AgentProgressDisplay({
 }: AgentProgressDisplayProps) {
   const allValidAgents = AGENTS_DATA.filter(a => a.name !== "Council Arbiter");
 
-  // Track unsupported agents
   const [unsupportedAgents, setUnsupportedAgents] = useState<Set<string>>(new Set());
+  const [hiddenUnsupportedAgents, setHiddenUnsupportedAgents] = useState<Set<string>>(new Set());
+  const [showSkipped, setShowSkipped] = useState(false);
 
-  const visibleAgents = phase === "deep"
+  const baseVisibleAgents = phase === "deep"
     ? allValidAgents.filter(a => !unsupportedAgents.has(a.id))
     : allValidAgents;
+    
+  const visibleAgents = baseVisibleAgents.filter(a => !hiddenUnsupportedAgents.has(a.id));
 
   const hasVisibleAgents = visibleAgents.length > 0;
   const firstVisibleAgent = visibleAgents[0];
@@ -622,6 +631,20 @@ export function AgentProgressDisplay({
     });
   }, [completedAgents, unsupportedAgents]);
 
+  // Auto-hide unsupported (skipped) agents after 12 seconds to declutter UI
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    unsupportedAgents.forEach(id => {
+      if (!hiddenUnsupportedAgents.has(id)) {
+        const timer = setTimeout(() => {
+          setHiddenUnsupportedAgents(prev => new Set([...prev, id]));
+        }, 12000);
+        timers.push(timer);
+      }
+    });
+    return () => timers.forEach(clearTimeout);
+  }, [unsupportedAgents, hiddenUnsupportedAgents]);
+
   const getAgentStatus = (agentId: string) => {
     if (unsupportedAgents.has(agentId)) return "unsupported";
     const completed = completedAgents.find(c => c.agent_id === agentId);
@@ -637,10 +660,10 @@ export function AgentProgressDisplay({
   const getAgentThinking = (agentId: string) => agentUpdates[agentId]?.thinking || "";
   const getAgentFindings = (agentId: string) => completedAgents.find(c => c.agent_id === agentId);
 
-  // Count ALL agents that have responded (including skipped/unsupported) so the
-  // header always shows the true total (e.g. "5/5" not "3/5" when 2 are skipped).
+  // Count ALL base agents that have responded (including skipped/unsupported) so the
+  // header always shows the true total (e.g. "5/5" not "5/4" when a card auto-hides).
   const activeCompletedCount = completedAgents.length;
-  const visibleAgentsCount = visibleAgents.length;
+  const visibleAgentsCount = baseVisibleAgents.length;
 
   const showInitialDecision = awaitingDecision && phase === "initial";
   const showDeepComplete = phase === "deep" && (allAgentsDone || pipelineStatus === "complete");
@@ -988,6 +1011,46 @@ export function AgentProgressDisplay({
           );
         })}
       </div>
+
+      {/* ── Skipped Agents Collapse ─────────────────────────────────── */}
+      {hiddenUnsupportedAgents.size > 0 && (
+        <div className="w-full max-w-5xl mt-6 flex flex-col items-center">
+          <button
+            onClick={() => setShowSkipped(s => !s)}
+            className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-colors text-xs font-mono text-slate-400 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50"
+          >
+            <span>{hiddenUnsupportedAgents.size} Skipped Agent{hiddenUnsupportedAgents.size !== 1 ? 's' : ''} (Not Applicable)</span>
+            <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showSkipped ? "rotate-180" : ""}`} />
+          </button>
+          <AnimatePresence>
+            {showSkipped && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden w-full max-w-md mt-3"
+              >
+                <div className="flex flex-col gap-2 p-3 rounded-xl border border-white/[0.04] bg-white/[0.01]">
+                  {Array.from(hiddenUnsupportedAgents).map(agentId => {
+                    const meta = AGENTS_DATA.find(a => a.id === agentId);
+                    if (!meta) return null;
+                    return (
+                      <div key={agentId} className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.02] border border-white/[0.02]">
+                        <div className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-500/50" />
+                          <span className="text-sm text-slate-300 font-medium">{meta.name}</span>
+                        </div>
+                        <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Format Unsupported</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
 
       {/* ── Decision Buttons ─────────────────────────────────────────── */}
 

@@ -340,6 +340,12 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
         setAgentUpdates({});
     }, []);
 
+    const restoreSimulationState = useCallback((savedAgents: AgentUpdate[], restoredStatus: SimulationStatus = "awaiting_decision") => {
+        setCompletedAgents(savedAgents);
+        completedAgentsRef.current = [...savedAgents];
+        setStatus(restoredStatus);
+    }, []);
+
     return {
         status,
         agentUpdates,
@@ -352,6 +358,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
         resetSimulation,
         dismissCheckpoint,
         clearCompletedAgents,
+        restoreSimulationState,
         hitlCheckpoint,
         errorMessage,
         totalAgents: AGENTS_DATA.length

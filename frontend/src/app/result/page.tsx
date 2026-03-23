@@ -5,12 +5,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle, AlertTriangle, ShieldCheck, RotateCcw,
   Home, ChevronDown, Lock, Hash, FileText,
-  Shield, Cpu, AlertCircle, XCircle, Download, Activity, LinkIcon,
+  Shield, Cpu, AlertCircle, XCircle, Download, Activity, LinkIcon, ArrowLeft
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { useForensicData, mapReportDtoToReport } from "@/hooks/useForensicData";
 import { useSound } from "@/hooks/useSound";
+import { HistoryDrawer, type HistoryItem } from "@/components/ui/HistoryDrawer";
 import {
   getReport, getArbiterStatus,
   type ReportDTO, type AgentFindingDTO, type AgentMetricsDTO,
@@ -253,7 +254,7 @@ function AgentCard({
   }, {});
 
   return (
-    <div className={clsx(
+    <motion.div layout className={clsx(
       "rounded-2xl border overflow-hidden transition-all duration-300 relative",
       "bg-gradient-to-b from-white/[0.04] to-white/[0.015]",
       "shadow-[0_4px_20px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.06)]",
@@ -276,7 +277,7 @@ function AgentCard({
         disabled={isSkipped}
         aria-expanded={isSkipped ? undefined : open}
         className={clsx(
-          "w-full flex items-center justify-between px-5 py-4 text-left transition-colors duration-200",
+          "w-full flex items-center justify-between px-5 py-4 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 rounded-xl",
           isSkipped ? "cursor-default" : `hover:${c.bg} cursor-pointer`
         )}
       >
@@ -424,7 +425,7 @@ function AgentCard({
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 }
 
@@ -446,7 +447,8 @@ function AgentDeploymentTable({
   const skippedSet = new Set(Object.keys(skippedAgents ?? {}));
 
   return (
-    <div className="rounded-xl border border-white/[0.07] overflow-hidden">
+    <div className="rounded-xl border border-white/[0.07] overflow-hidden overflow-x-auto">
+      <div className="min-w-[480px]">
       {/* Header row */}
       <div className="grid items-center px-4 py-2 border-b border-white/[0.05] bg-white/[0.02]"
         style={{ gridTemplateColumns: "1fr 90px 52px 52px 60px" }}>
@@ -534,6 +536,7 @@ function AgentDeploymentTable({
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
@@ -643,6 +646,13 @@ export default function ResultPage() {
   const [arbiterMsg, setArbiterMsg] = useState("");
   const [errorMsg, setErrorMsg]     = useState("");
   const [chainOpen, setChainOpen]   = useState(false);
+  
+  const [isDeepPhase, setIsDeepPhase] = useState(false);
+  const historySavedRef = useRef(false);
+
+  useEffect(() => {
+    setIsDeepPhase(sessionStorage.getItem("forensic_is_deep") === "true");
+  }, []);
 
   const { addToHistory } = useForensicData();
   const { playSound }    = useSound();
@@ -782,6 +792,34 @@ export default function ResultPage() {
     router.push("/");
   }, [playSound, router]);
 
+  const handleViewAnalysis = useCallback(() => {
+    playSound("click");
+    sessionStorage.setItem("forensic_restore_view", "true");
+    router.push("/evidence");
+  }, [playSound, router]);
+
+  // History Tracker
+  useEffect(() => {
+    if (state === "ready" && report && !historySavedRef.current) {
+      historySavedRef.current = true;
+      const hItem: HistoryItem = {
+        sessionId: report.session_id,
+        fileName: sessionStorage.getItem("forensic_file_name") || "Unknown File",
+        verdict: report.overall_verdict || "INCONCLUSIVE",
+        timestamp: Date.now(),
+        type: (sessionStorage.getItem("forensic_is_deep") === "true") ? "Deep" : "Initial"
+      };
+      
+      try {
+        const stored = JSON.parse(localStorage.getItem("forensic_history") || "[]");
+        const filtered = stored.filter((h: any) => h.sessionId !== hItem.sessionId);
+        localStorage.setItem("forensic_history", JSON.stringify([hItem, ...filtered]));
+      } catch (e) {
+        console.error("Failed to commit history", e);
+      }
+    }
+  }, [state, report]);
+
   const handleExport = useCallback(() => {
     if (!report) return;
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
@@ -820,6 +858,7 @@ export default function ResultPage() {
           </button>
 
           <div className="flex items-center gap-3">
+            <HistoryDrawer />
             <div
               role="status"
               aria-live="polite"
@@ -1267,18 +1306,31 @@ export default function ResultPage() {
       {state === "ready" && (
         <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-white/[0.06]"
           style={{ background: "rgba(3,3,3,0.88)", backdropFilter: "blur(24px)" }}>
-          <div className="max-w-4xl mx-auto px-5 py-3 flex items-center justify-between gap-3">
+          <div className="max-w-4xl mx-auto px-5 py-3 flex items-center justify-center gap-4 relative">
+            
+            {/* Left Button */}
+            {!isDeepPhase ? (
+              <button
+                onClick={handleViewAnalysis}
+                className="btn btn-ghost px-5 py-2.5 rounded-xl text-sm border border-white/10 hover:border-violet-500/30 font-medium flex items-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" aria-hidden="true" /> View Analysis
+              </button>
+            ) : (
+              <button
+                onClick={handleNew}
+                className="btn btn-emerald px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2"
+              >
+                <RotateCcw className="w-4 h-4" aria-hidden="true" /> New Investigation
+              </button>
+            )}
+
+            {/* Right Button */}
             <button
               onClick={handleHome}
-              className="btn btn-ghost px-4 py-2.5 rounded-xl text-sm"
+              className="btn btn-ghost px-5 py-2.5 rounded-xl text-sm flex items-center gap-2"
             >
-              <Home className="w-4 h-4" aria-hidden="true" /> Home
-            </button>
-            <button
-              onClick={handleNew}
-              className="btn btn-emerald px-5 py-2.5 rounded-xl text-sm font-semibold"
-            >
-              <RotateCcw className="w-4 h-4" aria-hidden="true" /> New Investigation
+              <Home className="w-4 h-4" aria-hidden="true" /> Back to Home
             </button>
           </div>
         </div>

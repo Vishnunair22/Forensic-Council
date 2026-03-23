@@ -237,7 +237,7 @@ class Settings(BaseSettings):
         ),
     )
     gemini_model: str = Field(
-        default="gemini-1.5-flash",
+        default="gemini-flash-latest",
         description=(
             "Gemini model for vision analysis. "
             "gemini-1.5-flash: fast, cost-effective (recommended). "
@@ -252,19 +252,26 @@ class Settings(BaseSettings):
     @field_validator("gemini_api_key")
     @classmethod
     def validate_gemini_api_key(cls, v: Optional[str]) -> Optional[str]:
-        """Warn if Gemini key is missing (optional — agents degrade gracefully)."""
-        if v is None or v == "":
-            import warnings
+        """Warn if Gemini key is missing (optional — agents degrade gracefully).
+
+        Normalises empty or whitespace-only strings to None so that
+        GeminiVisionClient correctly detects "not configured" via
+        ``bool(self.api_key)``.
+        """
+        # Normalise empty / whitespace-only value → None
+        if v is not None and v.strip() == "":
+            v = None
+
+        if v is None:
             warnings.warn(
-                "GEMINI_API_KEY not set. Agents 1, 3, and 5 will skip Gemini vision "
-                "deep analysis. Get a free key at https://aistudio.google.com/apikey",
+                "GEMINI_API_KEY not set. Agents 1, 3, and 5 will use local fallback analysis "
+                "instead of Gemini vision. Get a free key at https://aistudio.google.com/apikey",
                 UserWarning,
             )
         elif len(v) < 20:
-            import warnings
             warnings.warn(
-                "GEMINI_API_KEY appears too short. Agents 1, 3, and 5 may skip Gemini vision "
-                "deep analysis.",
+                "GEMINI_API_KEY appears too short (< 20 chars). Agents 1, 3, and 5 may skip "
+                "Gemini vision deep analysis — verify the key at https://aistudio.google.com/apikey",
                 UserWarning,
             )
         return v
