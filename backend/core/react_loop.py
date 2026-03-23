@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Coroutine, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from core.config import Settings
 from core.custody_logger import CustodyLogger, EntryType
@@ -177,6 +177,11 @@ class AgentFinding(BaseModel):
     metadata: dict[str, Any] = Field(
         default_factory=dict, description="Additional metadata including tool results and court_defensible flag"
     )
+
+    @field_validator("metadata", mode="before")
+    @classmethod
+    def ensure_metadata_is_dict(cls, v: Any) -> dict[str, Any]:
+        return v if v is not None else {}
 
 
 class ReActLoopResult(BaseModel):
@@ -737,7 +742,12 @@ class ReActLoopEngine:
                 # --- Generate AgentFinding from Tool Result ---
                 if tool_result.success:
                     output = tool_result.output or {}
-                    confidence = float(output.get("confidence", 0.75)) if isinstance(output, dict) else 0.75
+                    # Parse confidence from tool result (fall back to 0.75 if missing or null)
+                    raw_conf = output.get("confidence") if isinstance(output, dict) else None
+                    try:
+                        confidence = float(raw_conf) if raw_conf is not None else 0.75
+                    except (TypeError, ValueError):
+                        confidence = 0.75
                     status_val = str(output.get("status", "CONFIRMED")).upper() if isinstance(output, dict) else "CONFIRMED"
                     if status_val not in ("CONFIRMED", "CONTESTED", "INCONCLUSIVE", "INCOMPLETE"):
                         status_val = "CONFIRMED"
@@ -1618,32 +1628,37 @@ class ReActLoopEngine:
             # ── Gemini vision tools (Agents 1, 3, 5 deep pass) ───────────────
             # Gemini findings share common fields via GeminiFinding.to_finding_dict()
             "gemini_identify_content": lambda o: (
+                f"Gemini Vision Error: {o.get('error')}." if o.get('error') else
                 f"Gemini Vision content identification: {o.get('gemini_content_type', o.get('file_type_assessment', 'unknown type'))}. "
                 f"Scene: {str(o.get('gemini_scene', o.get('content_description', '')))[:150]}. "
                 + (f"Manipulation signals: {'; '.join(o.get('gemini_manipulation_signals', o.get('manipulation_signals', [])))[:200]}."
                    if o.get('gemini_manipulation_signals') or o.get('manipulation_signals') else "No manipulation signals identified.")
             ),
             "gemini_cross_validate_manipulation": lambda o: (
+                f"Gemini Vision Error: {o.get('error')}." if o.get('error') else
                 f"Gemini cross-validation: {str(o.get('gemini_authenticity_assessment', o.get('content_description', '')))[:200]}. "
                 + (f"Additional anomalies: {'; '.join(str(s) for s in o.get('gemini_additional_anomalies', o.get('manipulation_signals', [])))[:200]}."
                    if o.get('gemini_additional_anomalies') or o.get('manipulation_signals') else "No additional anomalies identified.")
             ),
             "gemini_object_scene_analysis": lambda o: (
+                f"Gemini Vision Error: {o.get('error')}." if o.get('error') else
                 f"Gemini object/scene analysis: {str(o.get('gemini_scene_coherence', o.get('content_description', '')))[:200]}. "
                 f"Validated objects: {', '.join(str(x) for x in o.get('gemini_validated_objects', o.get('detected_objects', [])))[:150] or 'none identified'}. "
                 + (f"Compositing signals: {'; '.join(str(s) for s in o.get('gemini_compositing_signals', o.get('manipulation_signals', [])))[:200]}."
                    if o.get('gemini_compositing_signals') or o.get('manipulation_signals') else "No compositing signals detected.")
             ),
             "gemini_metadata_visual_consistency": lambda o: (
+                f"Gemini Vision Error: {o.get('error')}." if o.get('error') else
                 f"Gemini metadata-visual consistency: {str(o.get('gemini_metadata_verdict', o.get('content_description', '')))[:200]}. "
                 + (f"Provenance flags: {'; '.join(str(s) for s in o.get('gemini_provenance_flags', o.get('manipulation_signals', [])))[:200]}."
                    if o.get('gemini_provenance_flags') or o.get('manipulation_signals') else "No provenance flags raised.")
             ),
             # ── Comprehensive deep forensic (Agents 1, 3, 5) ──────────────────
             "gemini_deep_forensic": lambda o: (
+                f"Gemini Vision Error: {o.get('error')}." if o.get('error') else
                 (lambda
-                    ctype=o.get('gemini_content_type', o.get('file_type_assessment', 'unknown')),
-                    narrative=str(o.get('gemini_narrative', o.get('content_description', ''))),
+                    ctype=(o.get('gemini_content_type', o.get('file_type_assessment', '')) or "unidentified content"),
+                    narrative=(str(o.get('gemini_narrative', o.get('content_description', ''))) or "Visual analysis complete."),
                     objects=o.get('gemini_detected_objects', o.get('gemini_validated_objects', o.get('detected_objects', []))),
                     texts=o.get('gemini_extracted_text', []),
                     verdict=o.get('gemini_verdict', ''),

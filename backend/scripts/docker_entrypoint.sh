@@ -20,9 +20,19 @@ set -e
 # This runs as root (no USER directive in Dockerfile) then drops privileges below.
 chown -R 1001:1001 /app/storage/evidence /app/cache 2>/dev/null || true
 
-if [ "${SKIP_CACHE_CHECK:-0}" != "1" ]; then
-    runuser -u appuser -- python scripts/model_cache_check.py
+# Check if appuser exists (it is only created in the production stage).
+# In development mode the container runs from the 'development' stage which
+# inherits from 'base' — appuser is never added there, so runuser would fail.
+if id appuser >/dev/null 2>&1; then
+    RUN_AS="runuser -u appuser --"
+else
+    # Dev mode: appuser doesn't exist, run as current user (typically root in dev)
+    RUN_AS=""
 fi
 
-# Drop to appuser and exec the API server
-exec runuser -u appuser -- python scripts/run_api.py
+if [ "${SKIP_CACHE_CHECK:-0}" != "1" ]; then
+    $RUN_AS python scripts/model_cache_check.py
+fi
+
+# Start the API server (drops to appuser in production, runs directly in dev)
+exec $RUN_AS python scripts/run_api.py

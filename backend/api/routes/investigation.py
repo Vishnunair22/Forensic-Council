@@ -1322,9 +1322,9 @@ async def _wrap_pipeline_with_broadcasts(
                         gemini_result = getattr(agent, "_gemini_vision_result", {})
                         if not gemini_result and deep_findings_raw:
                             for f in deep_findings_raw:
-                                tool = (f.metadata.get("tool_name", "") if hasattr(f, "metadata") else "")
+                                tool = ((f.metadata or {}).get("tool_name", "") if hasattr(f, "metadata") else "")
                                 if "gemini" in tool.lower():
-                                    gemini_result = f.metadata if hasattr(f, "metadata") else {}
+                                    gemini_result = f.metadata or {} if hasattr(f, "metadata") else {}
                                     break
                         if gemini_result:
                             _agent1_gemini_result = gemini_result
@@ -1603,39 +1603,47 @@ async def _wrap_pipeline_with_broadcasts(
                           "thinking": f"Deep analysis starting for {len(deep_pass_coroutines)} agent(s)…"},
                 )
             )
-            # All agents run concurrently. A background poller detects when Agent1's
-            # Gemini analysis completes and immediately injects the result into Agent3 + Agent5,
-            # so they can use the Gemini context for any subsequent tool calls in their loops.
+            # ── Sequential Phase 1: Run Agent 1 deep pass first ───────────────
+            # This ensures Agent 1's Gemini result is available for Agent 3 and
+            # Agent 5 before their deep passes start. Running them concurrently
+            # was the root cause of Agent 3 having an empty _shared_agent1_context.
             agent1_tuple = next((t for t in deep_pass_coroutines if t[0] == "Agent1"), None)
 
-            async def monitor_and_inject_gemini_early(a1_agent) -> None:
-                """Poll Agent1 instance until Gemini result is ready, then inject into Agent3/5."""
-                nonlocal _agent1_gemini_result
-                for _ in range(600):  # poll up to ~5 min (0.5s intervals)
-                    result = getattr(a1_agent, "_gemini_vision_result", None)
-                    if result:
-                        try:
-                            from agents.agent3_object import Agent3Object
-                            from agents.agent5_metadata import Agent5Metadata
-                            Agent3Object.inject_agent1_context(result)
-                            Agent5Metadata.inject_agent1_context(result)
-                            _agent1_gemini_result = result
-                            logger.info(
-                                "Early Gemini inject: Agent3 + Agent5 have Gemini context mid-pass",
-                                has_content_type=bool(result.get("gemini_content_type")),
-                                has_objects=bool(result.get("gemini_detected_objects")),
-                            )
-                        except Exception as _inj_err:
-                            logger.warning(f"Early Gemini inject error: {_inj_err}")
-                        return
-                    await asyncio.sleep(0.5)
-
-            # Build task list: all deep passes run concurrently
-            deep_tasks_list = [run_agent_deep_pass(*t) for t in deep_pass_coroutines]
-
-            # If Agent1 is in the batch, start the early-inject monitor concurrently
             if agent1_tuple:
-                deep_tasks_list.append(monitor_and_inject_gemini_early(agent1_tuple[2]))
+                await run_agent_deep_pass(*agent1_tuple)
+
+                # Immediately inject Agent 1 Gemini context into Agent 3 + Agent 5
+                try:
+                    a1_agent_instance = agent1_tuple[2]
+                    gemini_result = getattr(a1_agent_instance, "_gemini_vision_result", {})
+                    if not gemini_result:
+                        # Scan findings as fallback
+                        for f in getattr(a1_agent_instance, "_findings", []):
+                            tool = (f.metadata or {}).get("tool_name", "") if hasattr(f, "metadata") else ""
+                            if "gemini" in tool.lower():
+                                gemini_result = f.metadata or {}
+                                break
+                    if gemini_result:
+                        _agent1_gemini_result = gemini_result
+                        from agents.agent3_object import Agent3Object
+                        from agents.agent5_metadata import Agent5Metadata
+                        Agent3Object.inject_agent1_context(gemini_result)
+                        Agent5Metadata.inject_agent1_context(gemini_result)
+                        logger.info(
+                            "Agent1 Gemini context injected into Agent3 + Agent5 before their deep passes",
+                            has_content_type=bool(gemini_result.get("gemini_content_type")),
+                            has_objects=bool(gemini_result.get("gemini_detected_objects")),
+                            has_text=bool(gemini_result.get("gemini_extracted_text")),
+                        )
+                    else:
+                        logger.info("Agent1 deep pass produced no Gemini result — Agents 3 & 5 will use local analysis")
+                except Exception as _inj_err:
+                    logger.warning(f"Post-Agent1 Gemini inject error: {_inj_err}")
+
+            # ── Concurrent Phase 2: Run remaining agents' deep passes ──────────
+            # Agent 1 already ran above; exclude it from this batch.
+            remaining_deep = [t for t in deep_pass_coroutines if t[0] != "Agent1"]
+            deep_tasks_list = [run_agent_deep_pass(*t) for t in remaining_deep]
 
             # Deep-phase pipeline ticker
             _DEEP_TICKER_PHRASES = [

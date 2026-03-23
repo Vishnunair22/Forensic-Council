@@ -7,6 +7,8 @@
  */
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { HistoryDrawer } from "@/components/ui/HistoryDrawer";
+
 interface HeaderSectionProps {
   /** Status of the investigation */
   status: string;
@@ -56,18 +58,22 @@ export function HeaderSection({
         </div>
       </div>
 
-      {/* Browse Button */}
-      {showBrowse && (
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={onBrowseClick}
-          className="btn btn-ghost px-5 py-2.5 text-xs uppercase tracking-wider rounded-xl font-semibold border-white/10"
-          aria-label="Browse system for new evidence file"
-        >
-          Browse System
-        </motion.button>
-      )}
+      <div className="flex items-center gap-3">
+        <HistoryDrawer />
+        
+        {/* Browse Button */}
+        {showBrowse && (
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={onBrowseClick}
+            className="btn btn-ghost px-5 py-2.5 text-xs uppercase tracking-wider rounded-xl font-semibold border-white/10"
+            aria-label="Browse system for new evidence file"
+          >
+            Browse System
+          </motion.button>
+        )}
+      </div>
     </motion.header>
   );
 }

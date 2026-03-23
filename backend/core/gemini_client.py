@@ -40,7 +40,7 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 _GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
-_DEFAULT_MODEL = "gemini-1.5-flash"
+_DEFAULT_MODEL = "gemini-flash-latest"
 _MAX_RETRIES = 2
 _BASE_BACKOFF = 1.5
 
@@ -135,7 +135,10 @@ class GeminiVisionClient:
         self.api_key: Optional[str] = config.gemini_api_key
         self.model: str = getattr(config, "gemini_model", _DEFAULT_MODEL)
         self.timeout: float = getattr(config, "gemini_timeout", 30.0)
-        self._enabled = bool(self.api_key)
+        
+        # Check if key is missing or is the default placeholder from .env.example
+        is_placeholder = self.api_key and "your_gemini_key" in self.api_key
+        self._enabled = bool(self.api_key) and not is_placeholder
 
     # ------------------------------------------------------------------ #
     #  Public high-level methods used by each agent                        #
@@ -154,7 +157,9 @@ class GeminiVisionClient:
         and any immediately visible anomalies.
         """
         if not self._enabled:
-            return self._disabled_finding("file_content_identification")
+            finding = await self._local_forensic_fallback(file_path)
+            finding.analysis_type = "file_content_identification"
+            return finding
 
         prompt = (
             "You are a forensic file analyst. Examine this file and provide:\n"
@@ -190,7 +195,9 @@ class GeminiVisionClient:
         whether detected ELA hotspots correspond to visible editing boundaries.
         """
         if not self._enabled:
-            return self._disabled_finding("manipulation_cross_validation")
+            finding = await self._local_forensic_fallback(file_path)
+            finding.analysis_type = "manipulation_cross_validation"
+            return finding
 
         findings_text = "\n".join(f"- {f}" for f in preliminary_findings) if preliminary_findings else "None yet."
         prompt = (
@@ -228,16 +235,19 @@ class GeminiVisionClient:
         and flags contextual incongruences.
         """
         if not self._enabled:
-            return self._disabled_finding("object_scene_analysis")
+            finding = await self._local_forensic_fallback(file_path)
+            finding.analysis_type = "object_scene_analysis"
+            return finding
 
         detections_text = "\n".join(f"- {d}" for d in preliminary_detections) if preliminary_detections else "None yet."
         prompt = (
-            "You are a forensic object and scene analysis expert. "
-            "Preliminary ML object detection found:\n"
+            "You are a forensic scene analyst. Preliminary ML object detection found:\n"
             f"{detections_text}\n\n"
-            "Examine this image and provide:\n"
-            "1. VALIDATED_OBJECTS: Confirm or correct the preliminary detections. "
-            "List all significant objects you can identify.\n"
+            "Examine this file and identify all "
+            "relevant objects and contextual features. Specially confirm or correct the preliminary detections in your response. "
+            "Address:\n\n"
+            "1. VALIDATED_OBJECTS: List every clearly identifiable object. "
+            "Be precise. Use a list of strings.\n"
             "2. WEAPONS_CONTRABAND: Are any weapons, dangerous items, or contraband visible? "
             "Be specific. If none, say 'None detected'.\n"
             "3. SCENE_COHERENCE: Is the scene physically plausible? "
@@ -247,9 +257,9 @@ class GeminiVisionClient:
             "5. CONTEXTUAL_FLAGS: Anything contextually unusual or suspicious?\n"
             "6. CONFIDENCE: Your confidence (0.0-1.0).\n\n"
             "Respond ONLY with valid JSON:\n"
-            '{"validated_objects": [str], "weapons_contraband": [str], '
-            '"scene_coherence": str, "compositing_signals": [str], '
-            '"contextual_flags": [str], "confidence": float}'
+            '{"validated_objects": ["items"], "weapons_contraband": ["items"], '
+            '"scene_coherence": "description", "compositing_signals": ["signals"], '
+            '"contextual_flags": ["flags"], "confidence": 0.95}'
         )
 
         return await self._run_vision_analysis(
@@ -349,16 +359,16 @@ class GeminiVisionClient:
             "Respond ONLY with valid JSON matching this exact schema (no markdown, no "
             "preamble, just the JSON object):\n"
             "{\n"
-            '  "content_type": str,\n'
-            '  "scene_description": str,\n'
-            '  "extracted_text": [str],\n'
-            '  "detected_objects": [str],\n'
-            '  "interface_identification": str,\n'
-            '  "contextual_narrative": str,\n'
-            '  "manipulation_signals": [str],\n'
-            '  "metadata_visual_consistency": str,\n'
-            '  "authenticity_verdict": str,\n'
-            '  "confidence": float\n'
+            '  "content_type": "precise description",\n'
+            '  "scene_description": "detailed description",\n'
+            '  "extracted_text": ["verbatim text items"],\n'
+            '  "detected_objects": ["object at location"],\n'
+            '  "interface_identification": "app name and type",\n'
+            '  "contextual_narrative": "depicted event and significance",\n'
+            '  "manipulation_signals": ["forensic anomalies"],\n'
+            '  "metadata_visual_consistency": "consistency assessment",\n'
+            '  "authenticity_verdict": "AUTHENTIC",\n'
+            '  "confidence": 0.95\n'
             "}"
         )
 
@@ -381,7 +391,9 @@ class GeminiVisionClient:
         location, time, and capture device.
         """
         if not self._enabled:
-            return self._disabled_finding("metadata_visual_consistency")
+            finding = await self._local_forensic_fallback(file_path, metadata_summary)
+            finding.analysis_type = "metadata_visual_consistency"
+            return finding
 
         meta_text = json.dumps(metadata_summary, indent=2, default=str) if metadata_summary else "{}"
         prompt = (
@@ -485,14 +497,23 @@ class GeminiVisionClient:
             try:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
                     resp = await client.post(url, json=payload)
-                    if resp.status_code in {429, 500, 502, 503, 504}:
-                        wait = _BASE_BACKOFF * (2 ** attempt)
-                        logger.warning(
-                            f"Gemini API {resp.status_code}, retrying in {wait:.1f}s (attempt {attempt + 1}/{_MAX_RETRIES})"
-                        )
-                        await asyncio.sleep(wait)
-                        continue
-                    resp.raise_for_status()
+                    if resp.status_code != 200:
+                        error_detail = ""
+                        try:
+                            error_detail = resp.text
+                        except Exception:
+                            pass
+                        
+                        if resp.status_code in {429, 500, 502, 503, 504}:
+                            wait = _BASE_BACKOFF * (2 ** attempt)
+                            logger.warning(
+                                f"Gemini API {resp.status_code}, retrying in {wait:.1f}s (attempt {attempt + 1}/{_MAX_RETRIES}). Detail: {error_detail[:200]}"
+                            )
+                            await asyncio.sleep(wait)
+                            continue
+                        else:
+                            logger.error(f"Gemini API error {resp.status_code}: {error_detail[:500]}")
+                            resp.raise_for_status()
                     data = resp.json()
                     # Extract text from Gemini response structure
                     candidates = data.get("candidates", [])

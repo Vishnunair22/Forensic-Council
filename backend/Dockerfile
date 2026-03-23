@@ -28,7 +28,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Install uv (fast Python package manager)
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+# Using pip install to avoid ghcr.io TLS issues on restricted networks
+RUN pip install --no-cache-dir uv
 
 WORKDIR /app
 

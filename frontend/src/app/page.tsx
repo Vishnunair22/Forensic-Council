@@ -44,7 +44,8 @@ function MicroscopeScanner() {
   ];
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
+    <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden sm:overflow-visible" aria-hidden="true">
+      <div className="relative flex items-center justify-center w-full h-full" style={{ transform: "scale(min(1, calc(100vw / 640)))", transformOrigin: "center" }}>
 
       {/* Deep atmosphere — outer depth blur */}
       <div className="absolute w-[920px] h-[920px] rounded-full"
@@ -254,6 +255,7 @@ function MicroscopeScanner() {
             <span className="text-violet-500/48 mr-1.5">{tag.label}</span>{tag.val}
           </motion.div>
         ))}
+      </div>
       </div>
 
       {/* Radial vignette — fades scanner into hero content */}
