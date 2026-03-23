@@ -303,13 +303,14 @@ class ForensicCouncilPipeline:
         case_id: str,
         investigator_id: str,
         original_filename: str | None = None,
+        session_id: UUID | None = None,
     ) -> ForensicReport:
         """
         Run a complete forensic investigation on evidence.
         
         Steps:
         1. Ingest evidence → EvidenceArtifact (with hash)
-        2. Create session_id UUID
+        2. Create session_id UUID (use provided if available)
         3. Instantiate all 5 agents with shared evidence artifact and session
         4. Run agents concurrently (asyncio.gather) — each runs full ReAct loop
         5. Collect all AgentLoopResults
@@ -320,6 +321,7 @@ class ForensicCouncilPipeline:
             evidence_file_path: Path to the evidence file
             case_id: Case identifier
             investigator_id: ID of the investigator running this analysis
+            session_id: Optional existing session_id to use (for continued sessions)
             
         Returns:
             Signed ForensicReport with all findings
@@ -332,7 +334,9 @@ class ForensicCouncilPipeline:
         )
         
         # Step 1 & 2: Create session and ingest evidence
-        session_id = uuid4()
+        # Use provided session_id if available, otherwise create new one
+        if session_id is None:
+            session_id = uuid4()
         self._case_id = case_id
         self._started_at = datetime.now(timezone.utc).isoformat()
         

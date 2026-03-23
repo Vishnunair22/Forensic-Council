@@ -6,12 +6,11 @@ import logging
 import struct
 import os
 
-# Set fallback environment for local code testing
-os.environ["LLM_PROVIDER"] = "none"
-os.environ["LLM_API_KEY"] = "mock_key"
-os.environ["DATABASE_URL"] = "postgresql://mock:mock@localhost:5432/mock"
-os.environ["REDIS_URL"] = "redis://localhost:6379/0"
-os.environ["QDRANT_URL"] = "http://localhost:6333"
+# Set fallback environment for local code testing only if not already set
+if "LLM_PROVIDER" not in os.environ:
+    os.environ["LLM_PROVIDER"] = "none"
+if "LLM_API_KEY" not in os.environ:
+    os.environ["LLM_API_KEY"] = "mock_key"
 
 # Ensure backend modules can be imported
 sys.path.insert(0, str(Path(__file__).parent))
