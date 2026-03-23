@@ -452,7 +452,7 @@ class GeminiVisionClient:
         # Build Gemini request payload
         if mime_type in _VISION_MIME_TYPES:
             parts = [
-                {"inline_data": {"mime_type": mime_type, "data": encoded}},
+                {"inlineData": {"mimeType": mime_type, "data": encoded}},
                 {"text": prompt},
             ]
         else:

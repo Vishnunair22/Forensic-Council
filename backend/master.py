@@ -3,18 +3,23 @@ import os
 
 def run():
     try:
+        from dotenv import load_dotenv
+        load_dotenv(dotenv_path="../.env")
+        
         # Build environment for the test process
         env = os.environ.copy()
-        env["LLM_PROVIDER"] = "none"
-        env["LLM_API_KEY"] = "mock_key"
-        env["DATABASE_URL"] = "postgresql://mock:mock@localhost:5432/mock"
-        env["REDIS_URL"] = "redis://localhost:6379/0"
-        env["QDRANT_URL"] = "http://localhost:6333"
-        env["SIGNING_KEY"] = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+        # Only set defaults if not already in env
+        if "LLM_PROVIDER" not in env:
+            env["LLM_PROVIDER"] = "none"
+        if "LLM_API_KEY" not in env:
+            env["LLM_API_KEY"] = "mock_key"
+        if "DATABASE_URL" not in env:
+            env["DATABASE_URL"] = "postgresql://mock:mock@localhost:5432/mock"
         
+        import sys
         # Run the test script and capture its output (skip pycache)
         result = subprocess.run(
-            [r"d:\Forensic Council\backend\.venv\Scripts\python.exe", "-B", "e2e_test.py"],
+            [sys.executable, "-B", "e2e_test.py"],
             capture_output=True,
             text=True,
             env=env

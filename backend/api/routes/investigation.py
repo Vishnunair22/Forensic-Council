@@ -1711,11 +1711,16 @@ async def _wrap_pipeline_with_broadcasts(
     
     pipeline._run_agents_concurrent = instrumented_run
     
+    # Convert session_id string to UUID for pipeline
+    from uuid import UUID as UUIDType
+    session_uuid = UUIDType(session_id)
+    
     return await pipeline.run_investigation(
         evidence_file_path=evidence_file_path,
         case_id=case_id,
         investigator_id=investigator_id,
         original_filename=original_filename,
+        session_id=session_uuid,
     )
 
 

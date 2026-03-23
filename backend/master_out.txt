@@ -1,61 +1,16 @@
 EXIT_CODE: 1
 ============ STDOUT ============
-2026-03-21 08:31:10,391 [INFO] __main__: Initializing Code-Level E2E Pipeline Test
-2026-03-21 08:31:10,394 [INFO] __main__: Running complete pipeline (initial + deep + arbiter synthesis)...
-{"timestamp": "2026-03-21T03:01:10.394378+00:00", "level": "INFO", "logger": "orchestration.pipeline", "message": "Starting forensic investigation", "location": {"file": "logging.py", "line": 96, "function": "_log"}, "extra": {"case_id": "E2E-TEST-bd2f6a08", "investigator_id": "test_agent", "evidence_path": "e2e_test_image.jpg"}}
-2026-03-21 08:31:10,394 [INFO] orchestration.pipeline: Starting forensic investigation
-{"timestamp": "2026-03-21T03:01:14.456992+00:00", "level": "ERROR", "logger": "infra.redis_client", "message": "Failed to connect to Redis", "location": {"file": "logging.py", "line": 113, "function": "error"}, "extra": {"error": "Error 22 connecting to localhost:6379. The remote computer refused the network connection."}}
-2026-03-21 08:31:14,456 [ERROR] infra.redis_client: Failed to connect to Redis
-{"timestamp": "2026-03-21T03:01:14.456992+00:00", "level": "WARNING", "logger": "orchestration.pipeline", "message": "Failed to connect to Redis", "location": {"file": "logging.py", "line": 96, "function": "_log"}, "extra": {"error": "[RedisConnectionError] Failed to connect to Redis at localhost:6379"}}
-2026-03-21 08:31:14,456 [WARNING] orchestration.pipeline: Failed to connect to Redis
-{"timestamp": "2026-03-21T03:01:16.904099+00:00", "level": "ERROR", "logger": "infra.qdrant_client", "message": "Failed to connect to Qdrant", "location": {"file": "logging.py", "line": 113, "function": "error"}, "extra": {"error": "All connection attempts failed"}}
-2026-03-21 08:31:16,904 [ERROR] infra.qdrant_client: Failed to connect to Qdrant
-{"timestamp": "2026-03-21T03:01:16.904099+00:00", "level": "WARNING", "logger": "orchestration.pipeline", "message": "Failed to connect to Qdrant", "location": {"file": "logging.py", "line": 96, "function": "_log"}, "extra": {"error": "[QdrantConnectionError] Failed to connect to Qdrant at localhost:6333"}}
-2026-03-21 08:31:16,904 [WARNING] orchestration.pipeline: Failed to connect to Qdrant
-{"timestamp": "2026-03-21T03:01:20.972592+00:00", "level": "ERROR", "logger": "infra.postgres_client", "message": "Failed to connect to PostgreSQL", "location": {"file": "logging.py", "line": 113, "function": "error"}, "extra": {"error": "[WinError 1225] The remote computer refused the network connection"}}
-2026-03-21 08:31:20,972 [ERROR] infra.postgres_client: Failed to connect to PostgreSQL
-{"timestamp": "2026-03-21T03:01:20.972592+00:00", "level": "WARNING", "logger": "orchestration.pipeline", "message": "Failed to connect to PostgreSQL", "location": {"file": "logging.py", "line": 96, "function": "_log"}, "extra": {"error": "[DatabaseConnectionError] Failed to connect to PostgreSQL at localhost:5432/forensic_council"}}
-2026-03-21 08:31:20,972 [WARNING] orchestration.pipeline: Failed to connect to PostgreSQL
-{"timestamp": "2026-03-21T03:01:20.982737+00:00", "level": "INFO", "logger": "core.signing", "message": "Derived deterministic key pair for agent", "location": {"file": "logging.py", "line": 96, "function": "_log"}, "extra": {"agent_id": "Arbiter"}}
-2026-03-21 08:31:20,982 [INFO] core.signing: Derived deterministic key pair for agent
-{"timestamp": "2026-03-21T03:01:21.008190+00:00", "level": "INFO", "logger": "infra.storage", "message": "Stored evidence", "location": {"file": "logging.py", "line": 96, "function": "_log"}, "extra": {"dest": "storage\\evidence\\e4ec477f-a353-4d0b-b0b7-5ece3a839daa\\e4ec477f-a353-4d0b-b0b7-5ece3a839daa.bin", "root_id": "e4ec477f-a353-4d0b-b0b7-5ece3a839daa", "artifact_id": "e4ec477f-a353-4d0b-b0b7-5ece3a839daa"}}
-2026-03-21 08:31:21,008 [INFO] infra.storage: Stored evidence
-{"timestamp": "2026-03-21T03:01:21.009245+00:00", "level": "ERROR", "logger": "infra.evidence_store", "message": "Failed to ingest evidence", "location": {"file": "logging.py", "line": 113, "function": "error"}, "extra": {"error": "'NoneType' object has no attribute 'execute'", "file_path": "e2e_test_image.jpg"}}
-2026-03-21 08:31:21,009 [ERROR] infra.evidence_store: Failed to ingest evidence
-2026-03-21 08:31:21,009 [ERROR] __main__: E2E Test failed with exception: [EvidenceStoreError] Failed to ingest evidence: e2e_test_image.jpg. Cause: AttributeError("'NoneType' object has no attribute 'execute'")
 
 ============ STDERR ============
-D:\Forensic Council\backend\core\config.py:258: UserWarning: GEMINI_API_KEY not set. Agents 1, 3, and 5 will skip Gemini vision deep analysis. Get a free key at https://aistudio.google.com/apikey
-  warnings.warn(
-D:\Forensic Council\backend\core\config.py:280: UserWarning: HF_TOKEN not set. Agent 2 speaker diarization will fail gracefully. Get a free token at https://hf.co/settings/tokens
-  warnings.warn(
 Traceback (most recent call last):
-  File "D:\Forensic Council\backend\infra\evidence_store.py", line 179, in ingest
-    await self._save_artifact(artifact)
-  File "D:\Forensic Council\backend\infra\evidence_store.py", line 327, in _save_artifact
-    await self._postgres.execute(query, *args)
-          ^^^^^^^^^^^^^^^^^^^^^^
-AttributeError: 'NoneType' object has no attribute 'execute'
-Traceback (most recent call last):
-  File "D:\Forensic Council\backend\infra\evidence_store.py", line 179, in ingest
-    await self._save_artifact(artifact)
-  File "D:\Forensic Council\backend\infra\evidence_store.py", line 327, in _save_artifact
-    await self._postgres.execute(query, *args)
-          ^^^^^^^^^^^^^^^^^^^^^^
-AttributeError: 'NoneType' object has no attribute 'execute'
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "D:\Forensic Council\backend\e2e_test.py", line 48, in run_e2e_test
-    report = await pipeline.run_investigation(
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "D:\Forensic Council\backend\orchestration\pipeline.py", line 342, in run_investigation
-    evidence_artifact = await self._ingest_evidence(
-                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "D:\Forensic Council\backend\orchestration\pipeline.py", line 485, in _ingest_evidence
-    stored_artifact = await self.evidence_store.ingest(
-                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "D:\Forensic Council\backend\infra\evidence_store.py", line 211, in ingest
-    raise EvidenceStoreError(
-infra.evidence_store.EvidenceStoreError: [EvidenceStoreError] Failed to ingest evidence: e2e_test_image.jpg. Cause: AttributeError("'NoneType' object has no attribute 'execute'")
+  File "D:\Forensic Council\backend\e2e_test.py", line 18, in <module>
+    from orchestration.pipeline import ForensicCouncilPipeline
+  File "D:\Forensic Council\backend\orchestration\__init__.py", line 8, in <module>
+    from orchestration.pipeline import ForensicCouncilPipeline
+  File "D:\Forensic Council\backend\orchestration\pipeline.py", line 18, in <module>
+    from core.config import Settings, get_settings
+  File "D:\Forensic Council\backend\core\__init__.py", line 13, in <module>
+    from core.config import Settings, get_settings
+  File "D:\Forensic Council\backend\core\config.py", line 14, in <module>
+    from pydantic_settings import BaseSettings, SettingsConfigDict
+ModuleNotFoundError: No module named 'pydantic_settings'
