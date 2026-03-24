@@ -52,7 +52,7 @@ The **Forensic Council** is a multi-agent system for forensic evidence analysis.
 - **500 Internal Error**: Check `docker compose logs -f backend`. Common causes: Database connection timeout or Groq API rate limits.
 
 ## 5. Deployment & Build
-- **Local Dev**: Use `./manage.ps1 start` (Windows) or `docker compose up`.
+- **Local Dev**: Use standard `docker compose` commands (see README.md).
 - **Production Build**: Uses `production` target in `backend/Dockerfile` and `runner` in `frontend/Dockerfile`.
 - **Caddy**: Acts as the entry point, handling TLS and API rewrites to avoid CORS.
 

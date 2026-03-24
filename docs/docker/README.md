@@ -168,12 +168,7 @@ A HuggingFace token is **only required** if you want Agent 2 (Audio Forensics) t
 
 Development mode mounts source code as volumes and enables hot-reload for both services. Use this for active development.
 
-**Windows (PowerShell):**
-```powershell
-.\manage.ps1 dev
-```
-
-**Linux / macOS:**
+**Linux / macOS / Windows:**
 ```bash
 docker compose \
   -f docs/docker/docker-compose.yml \
@@ -192,12 +187,7 @@ What you get:
 
 Production mode uses multi-stage Docker builds with optimized images.
 
-**Windows (PowerShell):**
-```powershell
-.\manage.ps1 prod
-```
-
-**Linux / macOS:**
+**Linux / macOS / Windows:**
 ```bash
 docker compose \
   -f docs/docker/docker-compose.yml \
@@ -216,8 +206,6 @@ What you get:
 If you want to run the backend natively (outside Docker) but need the databases:
 
 ```bash
-.\manage.ps1 infra
-# or:
 docker compose \
   -f docs/docker/docker-compose.yml \
   -f docs/docker/docker-compose.infra.yml \
@@ -287,8 +275,6 @@ ML model weights are stored in **Docker named volumes**, not inside the image. T
 
 ```bash
 docker system df -v | grep forensic
-# or:
-.\manage.ps1 cache-status
 ```
 
 ### Why dev and prod share volumes
@@ -353,20 +339,16 @@ docker compose -f docs/docker/docker-compose.yml --env-file .env down -v
 
 ---
 
-## Management Commands
-
-All `manage.ps1` / `manage.sh` targets automatically use `docs/docker/docker-compose.yml` and `.env`.
-
-| Action | PowerShell | Linux/macOS |
-|--------|-----------|-------------|
-| Start production | `.\manage.ps1 up` | `docker compose -f docs/docker/docker-compose.yml --env-file .env up -d --build` |
-| Start dev | `.\manage.ps1 dev` | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml --env-file .env up --build` |
-| Start production-optimized | `.\manage.ps1 prod` | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.prod.yml --env-file .env up -d --build` |
-| Infrastructure only | `.\manage.ps1 infra` | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.infra.yml --env-file .env up -d` |
-| Stop (keep volumes) | `.\manage.ps1 down` | `docker compose -f docs/docker/docker-compose.yml --env-file .env down` |
-| Stop (delete volumes) | `.\manage.ps1 down-clean` | `docker compose -f docs/docker/docker-compose.yml --env-file .env down -v` |
-| View logs | `.\manage.ps1 logs` | `docker compose -f docs/docker/docker-compose.yml --env-file .env logs -f` |
-| Check ML cache | `.\manage.ps1 cache-status` | `docker system df -v \| grep forensic` |
+| Action | Command |
+|--------|---------|
+| Start production | `docker compose -f docs/docker/docker-compose.yml --env-file .env up -d --build` |
+| Start dev | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml --env-file .env up --build` |
+| Start production-optimized | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.prod.yml --env-file .env up -d --build` |
+| Infrastructure only | `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.infra.yml --env-file .env up -d` |
+| Stop (keep volumes) | `docker compose -f docs/docker/docker-compose.yml --env-file .env down` |
+| Stop (delete volumes) | `docker compose -f docs/docker/docker-compose.yml --env-file .env down -v` |
+| View logs | `docker compose -f docs/docker/docker-compose.yml --env-file .env logs -f` |
+| Check ML cache | `docker system df -v \| grep forensic` |
 
 ---
 

@@ -61,14 +61,11 @@ Frontend (Next.js 15) → FastAPI Backend → 5 AI Agents → Arbiter → Signed
 cp .env.example .env
 # Edit .env: set LLM_API_KEY (Groq, required) and GEMINI_API_KEY (recommended)
 
-# 2. Start (Windows PowerShell)
-.\manage.ps1 dev       # development with hot-reload
-.\manage.ps1 prod      # production optimised build
+# 2. Start (Development)
+docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml --env-file .env up --build
 
-# 2. Start (Linux / macOS)
-docker compose -f docs/docker/docker-compose.yml \
-               -f docs/docker/docker-compose.dev.yml \
-               --env-file .env up --build
+# 2. Start (Production)
+docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.prod.yml --env-file .env up -d --build
 ```
 
 **Access:**
@@ -86,14 +83,14 @@ Login: username `investigator`, password = `NEXT_PUBLIC_DEMO_PASSWORD` from `.en
 
 | Command | Action |
 |---------|--------|
-| `.\manage.ps1 up` | Production start |
-| `.\manage.ps1 dev` | Development start (hot-reload) |
-| `.\manage.ps1 prod` | Production-optimised build |
-| `.\manage.ps1 infra` | Postgres + Redis + Qdrant only |
-| `.\manage.ps1 logs` | Tail all logs |
-| `.\manage.ps1 down` | Stop (keep volumes) |
-| `.\manage.ps1 down-clean` | Stop + delete all volumes |
-| `.\manage.ps1 cache-status` | Show ML volume sizes |
+| `docker compose ... up` | Standard start |
+| `docker compose -f ... -f ...dev.yml ... up` | Development start (hot-reload) |
+| `docker compose -f ... -f ...prod.yml ... up` | Production build |
+| `docker compose -f ... -f ...infra.yml ... up` | Postgres + Redis + Qdrant only |
+| `docker compose ... logs -f` | Tail all logs |
+| `docker compose ... down` | Stop (keep volumes) |
+| `docker compose ... down -v` | Stop + delete all volumes |
+| `docker system df -v` | Check ML cache volumes |
 
 ---
 

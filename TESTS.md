@@ -58,7 +58,8 @@ pytest tests/backend/ --cov=backend --cov-report=html
 ### Connectivity Tests (requires running Docker stack)
 
 ```bash
-./manage.sh up
+# 1. Start Infrastructure (Postgres, Redis, Qdrant)
+docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.infra.yml --env-file .env up -d
 # Wait for stack to be healthy, then:
 pytest tests/connectivity/ -v
 ```
