@@ -485,32 +485,18 @@ export default function LandingPage() {
         Skip to main content
       </a>
 
-      {/* ── Header ── */}
-      <header className="fixed top-0 w-full px-6 py-4 flex items-center justify-between
-        border-b border-white/[0.08] bg-[#030308]/85 backdrop-blur-2xl z-50 shadow-[0_4px_30px_rgba(0,0,0,0.5)]"
-        role="banner"
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-gradient-to-br from-cyan-400 to-violet-600 rounded-lg flex items-center justify-center
-            font-bold text-[#030308] text-sm shadow-[0_0_20px_rgba(0,212,255,0.3)]"
-            style={{ fontFamily: "var(--font-sans)" }}>FC</div>
-          <span className="text-lg font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
+      <header className="fixed top-0 left-0 right-0 z-[60] px-6 h-20 flex items-center justify-between pointer-events-none">
+        <div className="flex items-center gap-3 pointer-events-auto cursor-pointer" onClick={() => router.push("/")}>
+          <div className="w-9 h-9 bg-black border border-cyan-500/40 rounded-xl flex items-center justify-center font-black text-cyan-400 text-[11px] shadow-[0_0_15px_rgba(0,212,255,0.2)]">
+            FC
+          </div>
+          <span className="text-[12px] font-black font-heading italic uppercase tracking-[0.2em] text-white/60">
             Forensic Council
           </span>
         </div>
-        <div className="flex items-center gap-8">
-          <nav className="hidden md:flex items-center gap-6">
-            <a href="#process-title" className="text-[12px] font-mono text-slate-300 hover:text-cyan-300 transition-colors uppercase tracking-widest font-semibold">Process</a>
-            <a href="#council-title" className="text-[12px] font-mono text-slate-300 hover:text-cyan-300 transition-colors uppercase tracking-widest font-semibold">The Council</a>
-          </nav>
-          <span className="text-[11px] font-mono text-slate-400 hidden sm:block border-l border-white/20 pl-6 font-bold uppercase tracking-wider">ACADEMIC RESEARCH PROJECT</span>
-        </div>
       </header>
 
-      {/* ══════════════════════════════════════════════════════════
-          MAIN CONTENT
-      ══════════════════════════════════════════════════════════ */}
-      <main id="main-content">
+      <main id="main-content" className="relative z-10">
 
       {/* HERO */}
       <section
@@ -529,7 +515,7 @@ export default function LandingPage() {
             transition={{ duration: 0.9, ease: "easeOut" }}
             className="text-5xl sm:text-6xl md:text-7xl font-extrabold mb-6 tracking-tight
               text-transparent bg-clip-text bg-gradient-to-b from-white via-white to-slate-400
-              leading-[1.05] pb-1"
+              leading-[1.05] pb-1 font-heading"
           >
             Multi-Agent Forensic Evidence Analysis
           </motion.h1>
@@ -984,6 +970,7 @@ export default function LandingPage() {
           </motion.div>
         )}
       </AnimatePresence>
+    <GlobalFooter />
     </div>
   );
 }

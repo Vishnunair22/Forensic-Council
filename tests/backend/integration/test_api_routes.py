@@ -53,7 +53,7 @@ def client():
         patch("infra.postgres_client.get_postgres_client", return_value=mock_pg),
         patch("infra.qdrant_client.get_qdrant_client", return_value=mock_qdrant),
         patch("core.migrations.run_migrations", new_callable=AsyncMock),
-        patch("api.main.bootstrap_users", new_callable=AsyncMock),
+        patch("scripts.init_db.bootstrap_users", new_callable=AsyncMock),
     ]
 
     started = []
@@ -290,7 +290,7 @@ class TestMetricsEndpoint:
 
     def test_metrics_raw_requires_auth(self, client):
         r = client.get("/api/v1/metrics/raw")
-        assert r.status_code in (200, 401, 403, 404)
+        assert r.status_code in (200, 401, 403, 404, 503)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

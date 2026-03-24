@@ -3,60 +3,52 @@
 
 :root {
   /* ─── Core palette ────────────────────────────────────────────── */
-  --background: #020205;
-  --foreground: #f8fafc; /* Lighter white for better contrast */
+  --background: #030308; /* Pure Obsidian */
+  --foreground: #f8fafc;
 
-  --mesh-1: rgba(0, 242, 255, 0.08); /* Increased opacity */
-  --mesh-2: rgba(157, 80, 255, 0.07); /* Increased opacity */
-  --mesh-3: rgba(16, 185, 129, 0.04); /* Increased opacity */
+  --mesh-1: rgba(0, 212, 255, 0.12); /* Brighter Cyan */
+  --mesh-2: rgba(124, 58, 237, 0.10); /* Deeper Violet */
+  --mesh-3: rgba(16, 185, 129, 0.06);
 
   /* Cyan accent — primary interactive, scanning elements */
-  --accent-cyan: #00f2ff;
+  --accent-cyan: #00D4FF;
   --accent-cyan-dim: #0ea5e9;
-  --accent-cyan-glow: rgba(0, 242, 255, 0.35);
+  --accent-cyan-glow: rgba(0, 212, 255, 0.45);
 
   /* Violet accent — arbiter, deep analysis, authority */
-  --accent-violet: #8b5cf6;
-  --accent-violet-glow: rgba(139, 92, 246, 0.40);
+  --accent-violet: #7C3AED;
+  --accent-violet-glow: rgba(124, 58, 237, 0.50);
 
   /* Emerald — success, confirmed, authentic */
-  --accent-emerald: #10b981;
+  --accent-emerald: #10B981;
 
-  /* Amber — warnings, contested, uncertain */
-  --accent-amber: #f59e0b;
-
-  /* Red — errors, manipulation detected */
-  --accent-red: #ef4444;
-
-  /* Premium Glass surface palette (Glass 2.0) */
-  --glass-bg: rgba(15, 15, 25, 0.45);
-  --glass-border: rgba(255, 255, 255, 0.05);
-  --glass-edge-shimmer: rgba(255, 255, 255, 0.08);
+  /* Premium Glass surface palette (Cyber-Noir 2.0) */
+  --glass-bg: rgba(10, 10, 24, 0.40);
+  --glass-border: rgba(0, 212, 255, 0.12);
+  --glass-edge-shimmer: rgba(255, 255, 255, 0.12);
   --glass-shadow: 
-    0 4px 6px -1px rgba(0, 0, 0, 0.1),
-    0 2px 4px -1px rgba(0, 0, 0, 0.06),
-    0 20px 50px -12px rgba(0, 0, 0, 0.8),
+    0 10px 30px -5px rgba(0, 0, 0, 0.6),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
 
   /* Typography */
-  --font-sans: var(--font-poppins);
-  --font-mono: var(--font-mono, "JetBrains Mono", "Fira Code", monospace);
+  --font-sans: var(--font-inter);
+  --font-heading: var(--font-outfit);
+  --font-mono: var(--font-mono, "JetBrains Mono", monospace);
+
+  /* Performance optimization */
+  content-visibility: auto;
 
   /* Legacy compat */
   --ring: var(--accent-cyan);
-  --ring-offset-background: var(--background);
-  --accent: #1e293b;
-  --muted-foreground: #cbd5e1; /* Increased from slate-400 (#94a3b8) to slate-300 (#cbd5e1) */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
   --color-ring: var(--ring);
-  --color-ring-offset-background: var(--ring-offset-background);
-  --font-sans: var(--font-poppins);
+  --font-sans: var(--font-inter);
+  --font-heading: var(--font-outfit);
   --font-mono: var(--font-mono);
 }
 
@@ -114,6 +106,12 @@ body::after {
 /* ─── Monospace elements ──────────────────────────────────────────── */
 code, kbd, pre, .font-mono {
   font-family: var(--font-mono), "JetBrains Mono", "Fira Code", monospace;
+  letter-spacing: -0.02em;
+}
+
+.font-heading {
+  font-family: var(--font-heading), sans-serif;
+  letter-spacing: -0.04em;
 }
 
 /* ─── Premium Glass Panel ─────────────────────────────────────────── */
@@ -474,16 +472,19 @@ button:disabled,
 
 /* Cyan accent */
 .btn-cyan {
-  background: rgba(0,212,255,0.10);
-  color: rgb(103,232,249);
-  border: 1px solid rgba(0,212,255,0.26);
-  box-shadow: inset 0 1px 0 rgba(0,212,255,0.08);
+  background: rgba(0,212,255,0.08);
+  color: #00D4FF;
+  border: 1px solid rgba(0,212,255,0.3);
+  box-shadow: 
+    0 0 20px rgba(0,212,255,0.1),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+  text-shadow: 0 0 8px rgba(0,212,255,0.3);
 }
 .btn-cyan:hover:not(:disabled) {
-  background: rgba(0,212,255,0.18);
-  box-shadow: 0 0 24px rgba(0,212,255,0.22), 0 4px 12px rgba(0,212,255,0.10), inset 0 1px 0 rgba(0,212,255,0.12);
-  border-color: rgba(0,212,255,0.48);
-  transform: translateY(-1px);
+  background: rgba(0,212,255,0.15);
+  box-shadow: 0 0 35px rgba(0,212,255,0.35), 0 4px 12px rgba(0,212,255,0.1);
+  border-color: rgba(0,212,255,0.6);
+  transform: translateY(-2px);
 }
 
 /* Violet/arbiter */

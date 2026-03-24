@@ -15,6 +15,28 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import pytest_asyncio
 
+# ── Monkeypatch passlib for bcrypt 4.0+ compatibility ──────────────────────────
+import logging
+logging.getLogger("passlib").setLevel(logging.ERROR)
+
+from passlib.handlers.bcrypt import _BcryptBackend
+
+# bcrypt 4.0+ raises ValueError for passwords > 72 bytes. 
+# passlib's internal security check uses a 255-byte password to detect legacy bugs.
+# We wrap the loader to catch this specific error during initialization.
+original_loader = _BcryptBackend._load_backend_mixin
+
+def patched_loader(cls, *args, **kwargs):
+    try:
+        return original_loader(*args, **kwargs)
+    except ValueError as e:
+        if "72 bytes" in str(e):
+            return True 
+        else:
+            raise
+
+_BcryptBackend._load_backend_mixin = classmethod(patched_loader)
+
 # ── Minimal environment before any backend import ─────────────────────────────
 
 os.environ.setdefault("APP_ENV", "testing")

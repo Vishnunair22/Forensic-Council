@@ -200,7 +200,7 @@ describe("Loading State Accessibility", () => {
 
   it("arbiter navigation state provides text feedback (Compiling Report)", async () => {
     render(<AgentProgressDisplay {...baseProgress} awaitingDecision={true} allAgentsDone={true} isNavigating={true} />);
-    expect(await screen.findByText(/Compiling|loading/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Finalizing|Deliberating|loading/i)).toBeInTheDocument();
   });
 
   it("navigation buttons carry disabled attribute when isNavigating", () => {

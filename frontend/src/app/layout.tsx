@@ -1,12 +1,18 @@
 import type { Metadata } from "next";
-import { Poppins, JetBrains_Mono } from "next/font/google";
+import { Outfit, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { DevErrorProvider } from "@/components/DevErrorOverlay";
 
-const poppins = Poppins({
+const outfit = Outfit({
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700", "800"],
-  variable: "--font-poppins",
+  variable: "--font-outfit",
+});
+
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-inter",
 });
 
 const jetbrainsMono = JetBrains_Mono({
@@ -26,7 +32,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${poppins.variable} ${jetbrainsMono.variable}`} data-scroll-behavior="smooth">
+    <html lang="en" className={`${outfit.variable} ${inter.variable} ${jetbrainsMono.variable}`} data-scroll-behavior="smooth">
       <body className="antialiased">
         <DevErrorProvider>
           {children}

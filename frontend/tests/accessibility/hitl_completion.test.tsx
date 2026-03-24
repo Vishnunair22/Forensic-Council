@@ -9,17 +9,9 @@
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { HITLCheckpointModal } from "@/components/evidence/HITLCheckpointModal";
-import { CompletionBanner } from "@/components/reports/CompletionBanner";
+import { CompletionBanner } from "@/components/evidence/CompletionBanner";
 
-// Mock framer-motion
-jest.mock("framer-motion", () => ({
-  motion: new Proxy({}, {
-    get: (_t, tag: string) =>
-      ({ children, ...p }: React.PropsWithChildren<Record<string, unknown>>) =>
-        React.createElement(tag, p, children),
-  }),
-  AnimatePresence: ({ children }: React.PropsWithChildren<object>) => <>{children}</>,
-}));
+
 
 const mockCheckpoint = {
   checkpoint_id: "cp-1",
@@ -35,28 +27,27 @@ describe("HITLCheckpointModal Accessibility", () => {
   const onDecision = jest.fn();
 
   it("renders with a clear accessible title", () => {
-    render(<HITLCheckpointModal checkpoint={mockCheckpoint} isOpen={true} onDecision={onDecision} />);
-    expect(screen.getByRole("heading", { name: /human-in-the-loop|analysis|review/i })).toBeInTheDocument();
+    render(<HITLCheckpointModal checkpoint={mockCheckpoint} isOpen={true} isSubmitting={false} onDecision={onDecision} onDismiss={jest.fn()} />);
+    expect(screen.getAllByRole("heading", { name: /investigator|human-in-the-loop|analysis|review|decision/i }).length).toBeGreaterThan(0);
   });
 
   it("describes the decision needed via ARIA labels", () => {
-    render(<HITLCheckpointModal checkpoint={mockCheckpoint} isOpen={true} onDecision={onDecision} />);
+    render(<HITLCheckpointModal checkpoint={mockCheckpoint} isOpen={true} isSubmitting={false} onDecision={onDecision} onDismiss={jest.fn()} />);
     expect(screen.getByText(/Review and confirm/i)).toBeInTheDocument();
   });
 
   it("buttons have distinct accessible names", () => {
-    render(<HITLCheckpointModal checkpoint={mockCheckpoint} isOpen={true} onDecision={onDecision} />);
-    expect(screen.getByRole("button", { name: /approve|confirm|proceed/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /reject|cancel|deny/i })).toBeInTheDocument();
+    render(<HITLCheckpointModal checkpoint={mockCheckpoint} isOpen={true} isSubmitting={false} onDecision={onDecision} onDismiss={jest.fn()} />);
+    expect(screen.getAllByRole("button", { name: /approve|submit/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /cancel/i }).length).toBeGreaterThan(0);
   });
 
-  it("supports keyboard cancellation (Escape key)", () => {
-    // Note: This relies on the implementation using an onClose or similar
-    // We verify if the button itself can be triggered
-    render(<HITLCheckpointModal checkpoint={mockCheckpoint} isOpen={true} onDecision={onDecision} />);
-    const rejectBtn = screen.getByRole("button", { name: /reject/i });
-    fireEvent.click(rejectBtn);
-    expect(onDecision).toHaveBeenCalledWith("REJECT");
+  it("supports cancellation (Cancel button)", () => {
+    const onDismiss = jest.fn();
+    render(<HITLCheckpointModal checkpoint={mockCheckpoint} isOpen={true} isSubmitting={false} onDecision={jest.fn()} onDismiss={onDismiss} />);
+    const cancelBtn = screen.getAllByRole("button", { name: /cancel/i })[0];
+    fireEvent.click(cancelBtn);
+    expect(onDismiss).toHaveBeenCalled();
   });
 });
 
@@ -69,19 +60,19 @@ describe("CompletionBanner Accessibility", () => {
   };
 
   it("announces completion to screen readers", () => {
-    render(<CompletionBanner report={mockReport as any} />);
+    render(<CompletionBanner agentCount={5} completedCount={5} onViewResults={jest.fn()} onAnalyzeNew={jest.fn()} />);
     // Should have role="status" or role="alert" or aria-live
-    const banner = screen.getByRole("status") || screen.getByRole("alert") || document.querySelector("[aria-live]");
-    expect(banner).toBeInTheDocument();
+    const banner = screen.queryByRole("status") || screen.queryByRole("alert") || document.querySelector("[aria-live]");
+    expect(banner).not.toBeNull();
   });
 
   it("presents verdict text clearly", () => {
-    render(<CompletionBanner report={mockReport as any} />);
-    expect(screen.getByText(/CERTAIN/i)).toBeInTheDocument();
+    render(<CompletionBanner agentCount={5} completedCount={5} onViewResults={jest.fn()} onAnalyzeNew={jest.fn()} />);
+    expect(screen.getByText(/Analysis Complete/i)).toBeInTheDocument();
   });
 
   it("contains clickable link to full report", () => {
-    render(<CompletionBanner report={mockReport as any} />);
-    expect(screen.getByRole("link", { name: /view|full|report/i })).toBeInTheDocument();
+    render(<CompletionBanner agentCount={5} completedCount={5} onViewResults={jest.fn()} onAnalyzeNew={jest.fn()} />);
+    expect(screen.getByRole("button", { name: /view|full|report|access/i })).toBeInTheDocument();
   });
 });

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useSound } from "@/hooks/useSound";
 import { clsx } from "clsx";
+import { CyberNoirPanel } from "@/components/ui/CyberNoirPanel";
 
 interface FileUploadSectionProps {
   key?: React.Key;
@@ -124,7 +125,7 @@ export function FileUploadSection({
           initial={{ y: 10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.1, duration: 0.8, ease: "easeOut" }}
-          className="text-4xl md:text-5xl font-black mb-5 tracking-tight
+          className="text-4xl md:text-5xl font-black mb-5 tracking-tight font-heading
             bg-gradient-to-br from-white via-white to-slate-500 bg-clip-text text-transparent leading-[1.1] pb-2">
           Initiate Investigation.
         </motion.h1>
@@ -133,8 +134,8 @@ export function FileUploadSection({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2, duration: 0.8 }}
-          className="text-slate-200 text-sm md:text-base font-medium max-w-lg mx-auto leading-relaxed">
-          Deploy the <span className="text-emerald-400 font-bold tracking-wide">Council Autonomous Parsing System</span> on your digital artifact.
+          className="text-slate-400 text-sm md:text-base font-medium max-w-lg mx-auto leading-relaxed">
+          Deploy the <span className="text-cyan-400 font-bold tracking-wide">Council Autonomous Parsing System</span> on your digital artifact.
         </motion.p>
       </div>
 
@@ -211,21 +212,20 @@ export function FileUploadSection({
             </div>
           </div>
 
-          <div className="flex gap-4 p-8 bg-black/20 backdrop-blur-xl border-t border-white/[0.04] relative">
+          <div className="flex gap-4 p-8 bg-black/40 border-t border-white/[0.08] relative">
             <button
               onClick={() => { playSound("click"); onClear(); }}
               disabled={isUploading}
-              className="btn btn-ghost flex-1 py-4 rounded-xl text-sm font-semibold tracking-wide"
+              className="btn btn-ghost flex-1 py-4 rounded-xl text-xs font-bold uppercase tracking-widest"
             >
               <RotateCcw className="w-4 h-4 opacity-70" aria-hidden="true" />
-              Clear
+              Reset Terminal
             </button>
             <button
               onClick={() => { playSound("upload"); onUpload(file); }}
               disabled={isUploading}
-              className="btn btn-primary flex-1 py-4 rounded-xl text-sm font-bold tracking-wide relative overflow-hidden"
+              className="btn btn-cyan flex-1 py-4 rounded-xl text-xs font-bold uppercase tracking-widest relative overflow-hidden"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-150%] animate-[shimmer_2s_infinite]" />
               {isUploading ? (
                 <>
                   <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
@@ -244,34 +244,29 @@ export function FileUploadSection({
         </motion.div>
       ) : (
         /* No file selected – drag and drop area */
-        <motion.div
-          style={{ perspective: 1000 }}
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          whileHover={{ scale: 1.01, rotateX: 2, rotateY: -1 }}
+        <CyberNoirPanel
+          glow={isDragging ? "cyan" : "none"}
+          intensity={isDragging ? "high" : "medium"}
+          className={clsx(
+            "w-full group overflow-hidden border-2 border-dashed rounded-[3rem] transition-all duration-700 relative cursor-pointer",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50 focus-visible:ring-offset-8 focus-visible:ring-offset-black",
+            isDragging
+              ? "border-cyan-400 shadow-[0_0_80px_rgba(0,212,255,0.15)] scale-[1.03]"
+              : "border-white/10 hover:border-cyan-500/40"
+          )}
+          onClick={() => { playSound("click"); fileInputRef.current?.click(); }}
           onDragEnter={handleDragEnter}
           onDragOver={(e) => { e.preventDefault(); if (!isDragging) onDragEnter(); }}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          role="button"
-          tabIndex={0}
-          aria-label="File drop zone — click or press Enter to browse"
-          onClick={() => { playSound("click"); fileInputRef.current?.click(); }}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); playSound("click"); fileInputRef.current?.click(); } }}
-            className={clsx(
-              "w-full glass-panel group overflow-hidden border-2 border-dashed rounded-[3rem] transition-all duration-700 relative cursor-pointer",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50 focus-visible:ring-offset-8 focus-visible:ring-offset-black",
-              isDragging
-                ? "border-cyan-400 shadow-[0_0_80px_rgba(0,212,255,0.15),inset_0_0_100px_rgba(0,212,255,0.08)] scale-[1.03]"
-                : "border-white/10 hover:border-cyan-500/40 hover:shadow-[0_0_60px_rgba(0,212,255,0.06),inset_0_0_40px_rgba(0,212,255,0.02)]"
-            )}
         >
-          {/* Subtle moving noise texture for the dropzone */}
-          <div className="absolute inset-0 opacity-[0.03] invert dark:invert-0 bg-[url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.85%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E')] mix-blend-overlay pointer-events-none" />
+          {/* Subtle noise texture */}
+          <div className="absolute inset-0 opacity-[0.03] bg-[url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.85%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E')] mix-blend-overlay pointer-events-none" />
           
-          {/* Drag glow */}
-          <motion.div animate={{ opacity: isDragging ? 1 : 0 }} transition={{ duration: 0.3 }}
-            className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,212,255,0.12),transparent_70%)] pointer-events-none" />
+          {/* Scanning laser effect (static visual placeholder, CSS handles animation) */}
+          <div className="absolute inset-0 pointer-events-none">
+             <div className="absolute top-0 left-0 right-0 h-[2px] bg-cyan-400/50 shadow-[0_0_15px_rgba(0,212,255,1)] animate-[scan-v_4s_linear_infinite]" />
+          </div>
 
           <div className="flex flex-col items-center justify-center py-20 px-8 gap-6 relative z-10">
             <motion.div
@@ -283,31 +278,31 @@ export function FileUploadSection({
               className={`w-[88px] h-[88px] rounded-2xl flex items-center justify-center transition-all duration-300
                 bg-gradient-to-br border 
                 ${isDragging 
-                  ? "from-cyan-500/20 to-violet-600/20 border-cyan-400/60 shadow-[0_0_40px_rgba(0,212,255,0.3)]" 
-                  : "from-white/[0.03] to-white/[0.01] border-white/10 group-hover:border-cyan-500/30 group-hover:shadow-[0_0_30px_rgba(0,212,255,0.15)] group-hover:from-cyan-500/10 group-hover:to-transparent"}`}
+                  ? "from-cyan-600/20 to-violet-700/20 border-cyan-400/60 shadow-[0_0_40px_rgba(0,212,255,0.3)]" 
+                  : "from-white/[0.03] to-white/[0.01] border-white/10 group-hover:border-cyan-500/30 group-hover:shadow-[0_0_30px_rgba(0,212,255,0.15)] group-hover:from-cyan-600/10 group-hover:to-transparent"}`}
             >
               <UploadCloud className={`w-10 h-10 transition-all duration-300 ${isDragging ? "text-cyan-300 drop-shadow-[0_0_10px_rgba(0,212,255,0.8)]" : "text-slate-400 group-hover:text-cyan-400"}`} strokeWidth={1.5} aria-hidden="true" />
             </motion.div>
             
             <div className="text-center">
-              <p className={`text-lg font-bold transition-colors duration-300 mb-2 tracking-wide ${isDragging ? "text-cyan-300" : "text-white group-hover:text-cyan-50"}`}>
-                {isDragging ? "Drop your evidence here" : "Drag evidence file here"}
+              <p className={`text-lg font-bold transition-colors duration-300 mb-2 tracking-wide font-heading ${isDragging ? "text-cyan-300" : "text-white group-hover:text-cyan-50"}`}>
+                {isDragging ? "Drop Evidence Specimen" : "Drag Evidence Specimen"}
               </p>
-              <p className="text-sm text-slate-200 font-bold">
-                or click to select from your system
+              <p className="text-xs text-slate-400 font-mono uppercase tracking-widest font-bold">
+                Secure Intake Portal — Click to Browse
               </p>
             </div>
             
             <div className="flex gap-2.5 flex-wrap justify-center mt-2">
               {["IMAGE", "VIDEO", "AUDIO", "DOCUMENT"].map(t => (
-                <span key={t} className="px-3 py-1 bg-black/40 border border-white/[0.15]
-                  rounded-md text-[11px] font-mono text-slate-300 tracking-widest uppercase transition-colors group-hover:border-white/25 group-hover:text-white font-bold">
+                <span key={t} className="px-3 py-1 bg-black/40 border border-white/[0.08]
+                  rounded-md text-[10px] font-mono text-slate-400 tracking-widest uppercase transition-colors group-hover:border-white/20 group-hover:text-white font-bold">
                   {t}
                 </span>
               ))}
             </div>
           </div>
-        </motion.div>
+        </CyberNoirPanel>
       )}
 
       {/* Validation Error */}

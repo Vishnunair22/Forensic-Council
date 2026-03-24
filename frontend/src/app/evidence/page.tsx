@@ -14,8 +14,8 @@
 "use client";
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { CheckCircle2, Circle, AlertCircle, PlayCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { CheckCircle2, Circle } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ShieldCheck } from "lucide-react";
 
@@ -34,6 +34,7 @@ import {
   HITLCheckpointModal,
   AgentUpdate,
 } from "@/components/evidence";
+import { CyberNoirPanel } from "@/components/ui/CyberNoirPanel";
 
 /** Dev-only logger — silenced in production builds */
 const isDev = process.env.NODE_ENV !== "production";
@@ -246,16 +247,18 @@ export default function EvidencePage() {
     }
   }, [triggerAnalysis]);
   
-  // Handle 'sample' query parameter for quick demo
-  const searchParams = useSearchParams();
+  // Handle 'sample' query parameter for quick demo.
+  // useEffect is client-only so window.location is always available here —
+  // this avoids useSearchParams() which suspends the page in Next.js 15
+  // when there is no <Suspense> boundary above the component.
   useEffect(() => {
-    if (searchParams.get('sample') === 'true' && status === 'idle') {
-      // Mock a sample file for the demo
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('sample') === 'true' && status === 'idle') {
       const sampleFile = new File(["sample data"], "sample_evidence.png", { type: "image/png" });
       setFile(sampleFile);
       triggerAnalysis(sampleFile);
     }
-  }, [searchParams, status, triggerAnalysis]);
+  }, [status, triggerAnalysis]);
 
   // Validate file — uses the single canonical ALLOWED_MIME_TYPES from constants.ts
   const validateFile = (f: File): boolean => {
@@ -486,45 +489,45 @@ export default function EvidencePage() {
       {/* Arbiter compiling overlay — shown when user accepts or views results */}
       {showArbiterOverlay && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl"
           role="dialog"
           aria-modal="true"
           aria-label="Council Arbiter deliberating"
         >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 12 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="glass-panel flex flex-col items-center gap-6 px-8 py-10 rounded-3xl shadow-[0_20px_80px_rgba(0,0,0,0.85),0_0_60px_rgba(124,58,237,0.12)] max-w-xs w-full mx-4 border-violet-500/22"
+          <CyberNoirPanel
+            glow="violet"
+            intensity="high"
+            className="flex flex-col items-center gap-7 px-10 py-12 rounded-[3.5rem] shadow-[0_20px_100px_rgba(124,58,237,0.2)] max-w-sm w-full mx-4 border-violet-500/20"
           >
-            <div className="relative w-20 h-20 flex items-center justify-center">
+            <div className="relative w-24 h-24 flex items-center justify-center">
               <motion.div
-                animate={{ scale: [1, 1.2, 1], opacity: [0.2, 0.45, 0.2] }}
-                transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute inset-0 rounded-full bg-purple-500/20 border border-purple-500/30"
+                animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.6, 0.3] }}
+                transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute inset-0 rounded-full bg-violet-500/10 border border-violet-500/20"
               />
-              <div className="relative z-10 w-12 h-12 rounded-full bg-purple-950/80 border border-purple-500/40 flex items-center justify-center shadow-[0_0_30px_rgba(168,85,247,0.4)]">
-                <ShieldCheck className="w-6 h-6 text-purple-300" />
+              <div className="relative z-10 w-14 h-14 rounded-2xl bg-black border border-violet-500/40 flex items-center justify-center shadow-[0_0_40px_rgba(124,58,237,0.3)]">
+                <ShieldCheck className="w-8 h-8 text-violet-400" />
               </div>
               <motion.div
                 animate={{ rotate: 360 }}
-                transition={{ duration: 2.8, repeat: Infinity, ease: "linear" }}
+                transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
                 className="absolute inset-0 pointer-events-none"
               >
-                <div className="absolute top-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-purple-400 shadow-[0_0_6px_rgba(168,85,247,1)]" />
+                <div className="absolute top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-violet-400 shadow-[0_0_10px_rgba(124,58,237,1)]" />
               </motion.div>
             </div>
-            <div className="text-center space-y-1.5">
-              <p className="text-white font-bold">Council Arbiter Deliberating</p>
-              <p className="text-purple-300/70 text-sm font-mono">Synthesising all agent findings…</p>
-              <p className="text-slate-700 text-xs mt-2">Redirecting to results shortly</p>
+            <div className="text-center space-y-2">
+              <h3 className="text-white font-black font-heading italic uppercase tracking-widest text-lg">Arbiter Deliberation</h3>
+              <p className="text-violet-400/80 text-[10px] font-mono uppercase tracking-[0.3em] font-bold italic">Synthesizing Neural Streams</p>
             </div>
-            <div className="relative w-full h-0.5 bg-white/5 rounded-full overflow-hidden">
-              <div
-                className="absolute h-full w-[40%] bg-gradient-to-r from-transparent via-purple-400 to-transparent"
-                style={{ animation: "bar-slide 2.2s ease-in-out infinite" }}
+            <div className="relative w-full h-1 bg-white/5 rounded-full overflow-hidden">
+              <motion.div
+                className="absolute h-full w-[40%] bg-gradient-to-r from-transparent via-violet-400 to-transparent shadow-[0_0_10px_rgba(124,58,237,0.5)]"
+                animate={{ left: ["-100%", "200%"] }}
+                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
               />
             </div>
-          </motion.div>
+          </CyberNoirPanel>
         </div>
       )}
 
@@ -542,35 +545,35 @@ export default function EvidencePage() {
           <motion.div 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-12 flex items-center justify-center"
+            className="mb-14 flex items-center justify-center"
           >
-            <div className="flex items-center gap-4 bg-white/[0.03] border border-white/[0.08] p-1.5 rounded-2xl backdrop-blur-sm">
-              <div className={`flex items-center gap-2.5 px-5 py-2.5 rounded-xl transition-all duration-500 ${
+            <div className="flex items-center gap-2 p-1.5 rounded-[1.5rem] bg-black/40 border border-white/[0.08] backdrop-blur-md shadow-2xl">
+              <div className={`flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-500 font-heading italic uppercase italic tracking-widest text-[10px] font-black ${
                 phase === "initial" 
-                  ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20" 
-                  : "text-slate-500 opacity-60"
+                  ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-[0_0_15px_rgba(0,212,255,0.1)]" 
+                  : "text-slate-600 opacity-60"
               }`}>
                 {phase === "initial" && status !== "complete" && !awaitingDecision ? (
-                  <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
+                  <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#00d4ff]" />
                 ) : (
-                  <CheckCircle2 className={`w-4 h-4 ${phase === "deep" || awaitingDecision || status === "complete" ? "text-cyan-400" : ""}`} />
+                  <CheckCircle2 className={`w-3.5 h-3.5 ${phase === "deep" || awaitingDecision || status === "complete" ? "text-cyan-400" : ""}`} />
                 )}
-                <span className="text-[11px] font-mono uppercase tracking-[0.15em] font-bold">1. Rapid Forensic Scan</span>
+                <span>1. Rapid Forensic Scan</span>
               </div>
               
-              <div className="w-8 h-px bg-white/10" />
+              <div className="w-6 h-px bg-white/10" />
 
-              <div className={`flex items-center gap-2.5 px-5 py-2.5 rounded-xl transition-all duration-500 ${
+              <div className={`flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-500 font-heading italic uppercase italic tracking-widest text-[10px] font-black ${
                 phase === "deep" 
-                  ? "bg-violet-500/10 text-violet-400 border border-violet-500/20 shadow-[0_0_20px_rgba(139,92,246,0.1)]" 
-                  : "text-slate-500 opacity-60"
+                  ? "bg-violet-500/10 text-violet-400 border border-violet-500/20 shadow-[0_0_20px_rgba(139,92,246,0.15)]" 
+                  : "text-slate-600 opacity-60"
               }`}>
                 {phase === "deep" && status !== "complete" ? (
-                  <div className="w-2.5 h-2.5 rounded-full bg-violet-400 animate-pulse shadow-[0_0_8px_rgba(139,92,246,0.8)]" />
+                  <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse shadow-[0_0_10px_rgba(139,92,246,0.8)]" />
                 ) : (
-                  <Circle className={`w-4 h-4 ${phase === "deep" && status === "complete" ? "text-violet-400" : ""}`} />
+                  <Circle className={`w-3.5 h-3.5 ${phase === "deep" && status === "complete" ? "text-violet-400" : ""}`} />
                 )}
-                <span className="text-[11px] font-mono uppercase tracking-[0.15em] font-bold">2. Deep Investigative Analysis</span>
+                <span>2. Deep ML Probe</span>
               </div>
             </div>
           </motion.div>

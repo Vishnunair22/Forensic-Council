@@ -65,7 +65,11 @@ export function CompletionBanner({
         <p className="text-slate-400 text-lg max-w-2xl mx-auto mb-6 leading-relaxed">
           The autonomous synthesis layer has finalised its review. {completedCount} forensic agents have compiled their respective findings across all vectors.
         </p>
-        <div className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-mono tracking-widest uppercase shadow-[0_0_20px_rgba(16,185,129,0.15)]">
+        <div 
+          role="status"
+          aria-live="polite"
+          className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-mono tracking-widest uppercase shadow-[0_0_20px_rgba(16,185,129,0.15)]"
+        >
           <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
           <span>{completedCount} / {agentCount} agents verified</span>
         </div>

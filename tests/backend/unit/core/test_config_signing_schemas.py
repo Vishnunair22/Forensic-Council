@@ -160,7 +160,7 @@ class TestSignContent:
         assert "agent_id" in d or hasattr(entry, "agent_id")
         assert "hash" in d or "content_hash" in d or hasattr(entry, "hash") or hasattr(entry, "content_hash")
         assert "signature" in d or hasattr(entry, "signature")
-        assert "timestamp" in d or hasattr(entry, "timestamp")
+        assert "timestamp_utc" in d or hasattr(entry, "timestamp_utc")
 
     def test_hash_is_deterministic_for_same_content(self):
         e1 = self.sign_content("agent-img", {"result": "clean"})
@@ -215,7 +215,7 @@ class TestSignContent:
 
     def test_timestamp_is_utc(self):
         entry = self.sign_content("agent-img", {"x": 1})
-        ts = getattr(entry, "timestamp", None)
+        ts = getattr(entry, "timestamp_utc", None)
         if ts:
             if isinstance(ts, str):
                 assert "Z" in ts or "+" in ts or ts.endswith("00:00")

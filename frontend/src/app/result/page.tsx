@@ -16,6 +16,7 @@ import {
   getReport, getArbiterStatus,
   type ReportDTO, type AgentFindingDTO, type AgentMetricsDTO,
 } from "@/lib/api";
+import { CyberNoirPanel } from "@/components/ui/CyberNoirPanel";
 
 const isDev = process.env.NODE_ENV !== "production";
 const dbg = { error: isDev ? console.error.bind(console) : () => {} };
@@ -28,19 +29,18 @@ function fmtTool(raw: string): string {
 }
 
 // ─── Agent meta config ────────────────────────────────────────────────────────
-const AGENT_META: Record<string, { name: string; color: "emerald" | "cyan" | "indigo" | "pink" | "amber" }> = {
+const AGENT_META: Record<string, { name: string; color: "emerald" | "cyan" | "violet" | "amber" }> = {
   Agent1: { name: "Image Forensics",   color: "emerald" },
   Agent2: { name: "Audio Forensics",   color: "cyan"    },
-  Agent3: { name: "Object Detection",  color: "indigo"  },
-  Agent4: { name: "Video Forensics",   color: "pink"    },
+  Agent3: { name: "Object Detection",  color: "violet"  },
+  Agent4: { name: "Video Forensics",   color: "violet"    },
   Agent5: { name: "Metadata Analysis", color: "amber"   },
 };
 
 const COLOR_MAP = {
   emerald: { ring: "border-emerald-500/20", accent: "text-emerald-400", bg: "bg-emerald-500/[0.04]" },
   cyan:    { ring: "border-cyan-500/20",    accent: "text-cyan-400",    bg: "bg-cyan-500/[0.04]"    },
-  indigo:  { ring: "border-indigo-500/20",  accent: "text-indigo-400",  bg: "bg-indigo-500/[0.04]"  },
-  pink:    { ring: "border-pink-500/20",    accent: "text-pink-400",    bg: "bg-pink-500/[0.04]"    },
+  violet:  { ring: "border-violet-500/20",  accent: "text-violet-400",  bg: "bg-violet-500/[0.04]"  },
   amber:   { ring: "border-amber-500/20",   accent: "text-amber-400",   bg: "bg-amber-500/[0.04]"   },
 };
 
@@ -78,51 +78,52 @@ function ArbiterOverlay({ liveMsg }: { liveMsg: string }) {
     return () => clearInterval(t);
   }, []);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-lg">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.92 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="flex flex-col items-center gap-6 px-8 py-10 rounded-3xl bg-[#0d0d14] border border-violet-500/25 shadow-[0_20px_80px_rgba(0,0,0,0.85)] max-w-xs w-full mx-4"
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl">
+      <CyberNoirPanel
+        glow="violet"
+        intensity="high"
+        className="flex flex-col items-center gap-7 px-10 py-12 rounded-[3.5rem] shadow-[0_20px_100px_rgba(124,58,237,0.2)] max-w-sm w-full mx-4 border-violet-500/20"
       >
-        <div className="relative w-20 h-20 flex items-center justify-center">
+        <div className="relative w-24 h-24 flex items-center justify-center">
           <motion.div
-            animate={{ scale: [1, 1.25, 1], opacity: [0.15, 0.4, 0.15] }}
-            transition={{ duration: 2.5, repeat: Infinity }}
-            className="absolute inset-0 rounded-full bg-violet-500/20 border border-violet-500/30"
+            animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.6, 0.3] }}
+            transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute inset-0 rounded-full bg-violet-500/10 border border-violet-500/20"
           />
-          <div className="relative z-10 w-12 h-12 rounded-full bg-violet-950/80 border border-violet-500/40 flex items-center justify-center">
-            <ShieldCheck className="w-6 h-6 text-violet-300" />
+          <div className="relative z-10 w-14 h-14 rounded-2xl bg-black border border-violet-500/40 flex items-center justify-center shadow-[0_0_40px_rgba(124,58,237,0.3)]">
+            <ShieldCheck className="w-8 h-8 text-violet-400" />
           </div>
           <motion.div
             animate={{ rotate: 360 }}
             transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
             className="absolute inset-0 pointer-events-none"
           >
-            <div className="absolute top-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-violet-400 shadow-[0_0_8px_rgba(139,92,246,1)]" />
+            <div className="absolute top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-violet-400 shadow-[0_0_10px_rgba(124,58,237,1)]" />
           </motion.div>
         </div>
         <div className="text-center space-y-2">
-          <p className="text-white font-bold text-base">Council Arbiter Deliberating</p>
+          <h3 className="text-white font-black font-heading italic uppercase tracking-widest text-lg">Report Generation</h3>
           <AnimatePresence mode="wait">
             <motion.p
               key={liveMsg || ARBITER_STEPS[step]}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="text-violet-300/70 text-sm font-mono min-h-5"
+              initial={{ opacity: 0, x: -4 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 4 }}
+              className="text-violet-400/80 text-[10px] font-mono uppercase tracking-[0.3em] font-bold italic min-h-5"
             >
               {liveMsg || ARBITER_STEPS[step]}
             </motion.p>
           </AnimatePresence>
-          <p className="text-slate-700 text-xs font-mono">{elapsed}s — typically 15–60s</p>
+          <p className="text-slate-600 text-[9px] font-mono tracking-tighter pt-1 uppercase font-bold opacity-60 italic">— STREAMING NODE {elapsed}s —</p>
         </div>
-        <div className="relative w-full h-0.5 bg-white/5 rounded-full overflow-hidden">
-          <div
-            className="absolute h-full w-[40%] bg-gradient-to-r from-transparent via-violet-400 to-transparent"
-            style={{ animation: "bar-slide 2.2s ease-in-out infinite" }}
+        <div className="relative w-full h-1 bg-white/5 rounded-full overflow-hidden">
+          <motion.div
+            className="absolute h-full w-[40%] bg-gradient-to-r from-transparent via-violet-400 to-transparent shadow-[0_0_10px_rgba(124,58,237,0.5)]"
+            animate={{ left: ["-100%", "200%"] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
           />
         </div>
-      </motion.div>
+      </CyberNoirPanel>
     </div>
   );
 }
@@ -152,15 +153,15 @@ function SeverityBar({ counts, total }: { counts: Record<SeverityKey, number>; t
   if (total === 0) return null;
   return (
     <div className="space-y-4">
-      <h3 className="text-[11px] font-semibold text-slate-500 uppercase tracking-[0.15em] flex items-center gap-2">
-        <Activity className="w-3.5 h-3.5" aria-hidden="true" /> Finding Severity Breakdown
+      <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.25em] flex items-center gap-2 font-mono italic">
+        <Activity className="w-3.5 h-3.5 text-cyan-500/60" aria-hidden="true" /> Structural Breakdown
       </h3>
       {/* Proportional bar */}
-      <div className="flex h-1.5 rounded-full overflow-hidden gap-px">
+      <div className="flex h-2 rounded-full overflow-hidden gap-[2px] bg-white/[0.03] p-0.5 border border-white/[0.05] shadow-inner">
         {SEVERITY_TIERS.filter(t => counts[t] > 0).map(t => (
           <div
             key={t}
-            className={SEVERITY[t].bar}
+            className={clsx("rounded-full transition-all duration-700", SEVERITY[t].bar)}
             style={{ width: `${(counts[t] / total) * 100}%` }}
           />
         ))}
@@ -171,11 +172,11 @@ function SeverityBar({ counts, total }: { counts: Record<SeverityKey, number>; t
           <span
             key={t}
             className={clsx(
-              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono border border-white/[0.06] bg-white/[0.03]",
+              "inline-flex items-center gap-2 px-3 py-1 rounded-xl text-[9px] font-bold font-mono border border-white/[0.06] bg-black/40 shadow-sm uppercase tracking-wider",
               SEVERITY[t].color
             )}
           >
-            <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", SEVERITY[t].dot)} />
+            <span className={clsx("w-2 h-2 rounded-full flex-shrink-0 animate-pulse shadow-[0_0_8px_currentColor]", SEVERITY[t].dot)} />
             {counts[t]} {SEVERITY[t].label}
           </span>
         ))}
@@ -230,10 +231,10 @@ function AgentCard({
   const toolsTotal = agentSummary?.tools_total  ?? metrics?.total_tools_called ?? 0;
 
   const verdLabel =
-    isSkipped              ? { text: "Not Applicable", dot: "bg-slate-600",   textColor: "text-slate-500"   } :
-    summaryVerdict === "AUTHENTIC"  ? { text: "No Anomalies",    dot: "bg-emerald-400", textColor: "text-emerald-300" } :
-    summaryVerdict === "SUSPICIOUS" ? { text: "Anomalies Found", dot: "bg-red-400",     textColor: "text-red-300"     } :
-                                      { text: "Inconclusive",    dot: "bg-amber-400",   textColor: "text-amber-300"   };
+    isSkipped              ? { text: "NOT APPLICABLE", dot: "bg-slate-700",   textColor: "text-slate-600"   } :
+    summaryVerdict === "AUTHENTIC"  ? { text: "NO ANOMALIES",    dot: "bg-emerald-500", textColor: "text-emerald-400" } :
+    summaryVerdict === "SUSPICIOUS" ? { text: "ANOMALIES FOUND", dot: "bg-red-500",     textColor: "text-red-400"     } :
+                                      { text: "INCONCLUSIVE",    dot: "bg-amber-500",   textColor: "text-amber-400"   };
 
   const c = COLOR_MAP[meta.color];
 
@@ -254,65 +255,68 @@ function AgentCard({
   }, {});
 
   return (
-    <motion.div layout className={clsx(
-      "rounded-2xl border overflow-hidden transition-all duration-300 relative",
-      "bg-gradient-to-b from-white/[0.04] to-white/[0.015]",
-      "shadow-[0_4px_20px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.06)]",
-      isSkipped ? "border-white/[0.05] opacity-50" : `${c.ring} hover:shadow-[0_6px_28px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)]`
+    <CyberNoirPanel layout glow={meta.color} intensity="medium" className={clsx(
+      "rounded-3xl border overflow-hidden transition-all duration-300 relative",
+      isSkipped && "opacity-50 grayscale-[0.4]"
     )}>
-      {/* Subtle top accent line */}
-      {!isSkipped && (
-        <div className={clsx(
-          "absolute inset-x-0 top-0 h-[1.5px] opacity-60",
-          meta.color === "emerald" ? "bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" :
-          meta.color === "cyan"    ? "bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" :
-          meta.color === "indigo"  ? "bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent" :
-          meta.color === "pink"    ? "bg-gradient-to-r from-transparent via-pink-500/50 to-transparent" :
-                                     "bg-gradient-to-r from-transparent via-amber-500/50 to-transparent"
-        )} />
-      )}
       {/* Card header — click to expand */}
       <button
         onClick={() => !isSkipped && setOpen(v => !v)}
         disabled={isSkipped}
         aria-expanded={isSkipped ? undefined : open}
         className={clsx(
-          "w-full flex items-center justify-between px-5 py-4 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 rounded-xl",
-          isSkipped ? "cursor-default" : `hover:${c.bg} cursor-pointer`
+          "w-full flex items-center justify-between px-6 py-5 text-left transition-colors duration-200 group/btn",
+          isSkipped ? "cursor-default" : `hover:bg-white/[0.02] cursor-pointer`
         )}
       >
-        <div className="flex items-center gap-3 min-w-0">
-          <span className={clsx("w-2 h-2 rounded-full shrink-0 mt-0.5", verdLabel.dot)} />
+        <div className="flex items-center gap-4 min-w-0">
+          <div className={clsx(
+            "w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border border-white/[0.08] transition-all duration-500",
+            !isSkipped ? `${c.bg} ${c.ring} shadow-[0_0_15px_rgba(0,0,0,0.3)] group-hover/btn:scale-105` : "bg-white/[0.03] border-white/[0.05]"
+          )}>
+             <span className={clsx("w-3 h-3 rounded-full animate-pulse shadow-[0_0_10px_currentColor]", verdLabel.dot.replace("bg-", "text-"))} />
+          </div>
           <div className="min-w-0">
-            <p className={clsx("font-semibold text-sm", c.accent)}>{meta.name}</p>
-            <p className={clsx("text-xs", verdLabel.textColor)}>{verdLabel.text}</p>
+            <h3 className={clsx("font-black font-heading italic uppercase tracking-widest text-sm mb-0.5 transition-colors", !isSkipped ? "text-white group-hover/btn:text-cyan-300" : "text-slate-500")}>
+              {meta.name}
+            </h3>
+            <p className={clsx("text-[9px] font-mono font-bold tracking-[0.2em] uppercase", verdLabel.textColor)}>
+              {verdLabel.text}
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-5 shrink-0">
           {/* Severity badges for severe findings */}
           {!isSkipped && hasSevere && (
-            <div className="hidden sm:flex items-center gap-1">
+            <div className="hidden md:flex items-center gap-1.5 ">
               {sevCounts.CRITICAL > 0 && (
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/20">
-                  {sevCounts.CRITICAL}×CRIT
+                <span className="text-[9px] font-black font-mono px-2 py-0.5 rounded-lg bg-red-500/10 text-red-500 border border-red-500/20 shadow-[0_0_8px_rgba(239,68,68,0.2)]">
+                  {sevCounts.CRITICAL} CRIT
                 </span>
               )}
               {sevCounts.HIGH > 0 && (
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-400 border border-orange-500/20">
-                  {sevCounts.HIGH}×HIGH
+                <span className="text-[9px] font-black font-mono px-2 py-0.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20">
+                  {sevCounts.HIGH} HIGH
                 </span>
               )}
             </div>
           )}
           {!isSkipped && (
             <div className="text-right hidden sm:block">
-              <p className={clsx("font-bold text-sm", confColor(confRatio))}>{Math.round(confRatio * 100)}%</p>
-              <p className="text-slate-600 text-[10px] font-mono">conf</p>
+              <p className={clsx("font-black text-sm tabular-nums font-mono", confColor(confRatio))}>
+                {Math.round(confRatio * 100)}%
+              </p>
+              <p className="text-slate-600 text-[8px] font-mono font-bold uppercase tracking-tighter opacity-60">Confidence</p>
             </div>
           )}
           {!isSkipped && (
-            <ChevronDown className={clsx("w-4 h-4 text-slate-500 transition-transform duration-200", open && "rotate-180")} />
+            <div className={clsx(
+                "p-2 rounded-full bg-white/[0.03] border border-white/[0.05] transition-all duration-300 group-hover/btn:border-white/[0.1] group-hover/btn:bg-white/[0.06]",
+                open && "rotate-180 bg-cyan-500/10 border-cyan-500/30 text-cyan-400"
+            )}>
+                <ChevronDown className="w-4 h-4" />
+            </div>
           )}
         </div>
       </button>
@@ -324,95 +328,78 @@ function AgentCard({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22 }}
+            transition={{ duration: 0.25, ease: "circOut" }}
             className="overflow-hidden"
           >
-            <div className="px-5 pb-5 pt-4 space-y-4 border-t border-white/[0.05]">
+            <div className="px-6 pb-6 pt-2 space-y-6 border-t border-white/[0.05]">
               {/* Stats row */}
-              <div className="flex flex-wrap gap-2 text-xs">
+              <div className="flex flex-wrap gap-2 text-[10px] font-black font-mono tracking-tighter">
                 <span className={clsx(
-                  "px-2.5 py-1 rounded-full font-mono border border-white/5",
-                  confRatio >= 0.75 ? "bg-emerald-500/10 text-emerald-300" :
-                  confRatio >= 0.5  ? "bg-amber-500/10 text-amber-300" :
-                                      "bg-red-500/10 text-red-300"
+                  "px-3 py-1 rounded-lg border border-white/5 uppercase",
+                  confRatio >= 0.75 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                  confRatio >= 0.5  ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
+                                      "bg-red-500/10 text-red-400 border-red-500/20"
                 )}>
-                  {Math.round(confRatio * 100)}% confidence
+                  {Math.round(confRatio * 100)}% RELIABILITY
                 </span>
                 {toolsTotal > 0 && (
-                  <span className="px-2.5 py-1 rounded-full bg-white/[0.04] text-slate-400 font-mono border border-white/5">
-                    {toolsOk}/{toolsTotal} tools ok
+                  <span className="px-3 py-1 rounded-lg bg-white/[0.04] text-slate-400 border border-white/5 uppercase">
+                    {toolsOk}/{toolsTotal} PROBES ACTIVE
                   </span>
                 )}
                 {errPct > 0 && (
                   <span className={clsx(
-                    "px-2.5 py-1 rounded-full font-mono border border-white/5",
-                    errPct < 30 ? "bg-amber-500/10 text-amber-300" : "bg-red-500/10 text-red-300"
+                    "px-3 py-1 rounded-lg border border-white/5 uppercase",
+                    errPct < 30 ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-red-500/10 text-red-500 border-red-500/20"
                   )}>
-                    {errPct}% error rate
+                    {errPct}% ERROR RATE
                   </span>
                 )}
-                <span className="px-2.5 py-1 rounded-full bg-white/[0.04] text-slate-400 font-mono border border-white/5">
-                  {realFindings.length} finding{realFindings.length !== 1 ? "s" : ""}
-                </span>
               </div>
-
-              {/* Mini severity bar for this agent */}
-              {realFindings.length > 0 && (
-                <div className="flex gap-px h-1 rounded-full overflow-hidden">
-                  {SEVERITY_TIERS.filter(t => sevCounts[t] > 0).map(t => (
-                    <div
-                      key={t}
-                      className={SEVERITY[t].bar}
-                      style={{ width: `${(sevCounts[t] / realFindings.length) * 100}%` }}
-                    />
-                  ))}
-                </div>
-              )}
 
               {/* Arbiter narrative */}
               {narrative ? (
-                <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-4">
-                  <p className="text-[10px] text-slate-600 font-mono uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                    <span className="text-violet-400">✦</span> Arbiter Analysis
+                <div className="rounded-2xl bg-black/40 border border-white/[0.08] p-5 shadow-inner">
+                  <p className="text-[9px] text-cyan-500 font-mono font-bold uppercase tracking-[0.4em] mb-3 flex items-center gap-1.5 opacity-80">
+                    <span className="animate-pulse">✦</span> Neural Synthesis
                   </p>
-                  <p className="text-slate-300 text-sm leading-relaxed">{narrative}</p>
+                  <p className="text-slate-300 text-[13px] leading-relaxed font-medium">{narrative}</p>
                 </div>
               ) : (
-                <p className="text-slate-600 text-xs italic">
-                  Narrative synthesis unavailable — see individual findings below.
+                <p className="text-slate-600 text-[11px] italic font-medium opacity-50 px-2 font-mono">
+                  [!] Narrative synthesis packet lost or unavailable.
                 </p>
               )}
 
               {/* Per-tool breakdown */}
               {Object.keys(toolGroups).length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-[10px] text-slate-600 font-mono uppercase tracking-widest flex items-center gap-1.5">
-                    <Cpu className="w-3 h-3" aria-hidden="true" /> Tool Results ({realFindings.length} finding{realFindings.length !== 1 ? "s" : ""})
+                <div className="space-y-3">
+                  <p className="text-[9px] text-slate-500 font-mono font-bold uppercase tracking-[0.4em] flex items-center gap-2 px-2">
+                    <Cpu className="w-3.5 h-3.5 opacity-40" aria-hidden="true" /> Unit Findings [{realFindings.length}]
                   </p>
-                  <div className="rounded-xl border border-white/[0.07] overflow-hidden divide-y divide-white/[0.04]">
-                    {Object.entries(toolGroups).map(([toolName, toolFindings]) => {
+                  <div className="rounded-2xl border border-white/[0.08] overflow-hidden bg-white/[0.02]">
+                    {Object.entries(toolGroups).map(([toolName, toolFindings], idx) => {
                       const avgConf = toolFindings.reduce((s, f) => s + (f.calibrated_probability ?? f.confidence_raw ?? 0), 0) / toolFindings.length;
                       const worstSevTier = (SEVERITY_TIERS.find(t =>
                         toolFindings.some(f => (f.severity_tier ?? "LOW").toUpperCase() === t)
                       ) ?? "LOW") as SeverityKey;
                       const sev = SEVERITY[worstSevTier];
-                      // Best one-line summary from this tool's findings
                       const summary = toolFindings.find(f => f.reasoning_summary)?.reasoning_summary;
                       return (
-                        <div key={toolName} className="px-3 py-2.5 space-y-0.5">
-                          <div className="flex items-center gap-2.5">
-                            <span className={clsx("w-1.5 h-1.5 rounded-full shrink-0", sev.dot)} aria-hidden="true" />
-                            <span className="flex-1 text-xs font-medium text-slate-200 truncate">{fmtTool(toolName)}</span>
-                            <span className="text-[10px] text-slate-600 font-mono shrink-0">
-                              {toolFindings.length} finding{toolFindings.length !== 1 ? "s" : ""}
-                            </span>
-                            <span className={clsx("text-xs font-bold font-mono tabular-nums shrink-0 w-9 text-right", confColor(avgConf))}>
+                        <div key={toolName} className={clsx(
+                            "px-4 py-3.5 space-y-1.5",
+                            idx !== 0 && "border-t border-white/[0.05]"
+                        )}>
+                          <div className="flex items-center gap-3">
+                            <span className={clsx("w-2 h-2 rounded-full shrink-0 shadow-[0_0_8px_currentColor]", sev.dot.replace("bg-", "text-"))} aria-hidden="true" />
+                            <span className="flex-1 text-[11px] font-black font-heading uppercase tracking-widest text-white italic">{fmtTool(toolName)}</span>
+                            <span className={clsx("text-[11px] font-black font-mono tabular-nums", confColor(avgConf))}>
                               {Math.round(avgConf * 100)}%
                             </span>
                           </div>
                           {summary && (
-                            <p className="text-[11px] text-slate-500 leading-relaxed pl-4 line-clamp-2">
-                              {summary.slice(0, 180)}
+                            <p className="text-[11px] text-slate-400 font-medium leading-relaxed pl-5 max-w-2xl opacity-80">
+                              {summary}
                             </p>
                           )}
                         </div>
@@ -425,7 +412,7 @@ function AgentCard({
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </CyberNoirPanel>
   );
 }
 
@@ -447,14 +434,14 @@ function AgentDeploymentTable({
   const skippedSet = new Set(Object.keys(skippedAgents ?? {}));
 
   return (
-    <div className="rounded-xl border border-white/[0.07] overflow-hidden overflow-x-auto">
-      <div className="min-w-[480px]">
+    <div className="rounded-[2rem] border border-white/[0.08] overflow-hidden overflow-x-auto bg-black/40 shadow-2xl">
+      <div className="min-w-[600px]">
       {/* Header row */}
-      <div className="grid items-center px-4 py-2 border-b border-white/[0.05] bg-white/[0.02]"
-        style={{ gridTemplateColumns: "1fr 90px 52px 52px 60px" }}>
-        {["Agent", "Status", "Conf", "Error", "Tools"].map((h, i) => (
+      <div className="grid items-center px-8 py-4 border-b border-white/[0.05] bg-white/[0.02]"
+        style={{ gridTemplateColumns: "1fr 110px 70px 70px 80px" }}>
+        {["Neural Agent", "Status", "Conf", "Limit", "Probes"].map((h, i) => (
           <span key={h} className={clsx(
-            "text-[10px] font-mono text-slate-600 uppercase tracking-widest",
+            "text-[9px] font-black font-mono text-slate-500 uppercase tracking-[0.3em] italic",
             i > 0 && "text-right"
           )}>{h}</span>
         ))}
@@ -477,40 +464,43 @@ function AgentDeploymentTable({
           <div
             key={id}
             className={clsx(
-              "grid items-center px-4 py-3 border-b border-white/[0.04] last:border-0 transition-colors",
-              isSkipped ? "opacity-40" : "hover:bg-white/[0.015]"
+              "grid items-center px-8 py-4 border-b border-white/[0.04] last:border-0 transition-all duration-300",
+              isSkipped ? "opacity-30 grayscale-[0.8]" : "hover:bg-white/[0.02] hover:pl-9"
             )}
-            style={{ gridTemplateColumns: "1fr 90px 52px 52px 60px" }}
+            style={{ gridTemplateColumns: "1fr 110px 70px 70px 80px" }}
           >
             {/* Agent name + role */}
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className={clsx(
-                "w-2 h-2 rounded-full shrink-0",
-                isActive ? c.accent.replace("text-", "bg-") : "bg-slate-700"
-              )} aria-hidden="true" />
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className={clsx(
+                "w-2 h-2 rounded-full shrink-0 shadow-[0_0_10px_currentColor]",
+                isActive ? c.accent.replace("text-", "text-") : "text-slate-700"
+              )} aria-hidden="true">
+                 <div className={clsx("w-full h-full rounded-full animate-pulse", isActive ? c.accent.replace("text-", "bg-") : "bg-slate-700")} />
+              </div>
               <div className="min-w-0">
-                <p className={clsx("text-sm font-medium truncate", isActive ? c.accent : "text-slate-600")}>
+                <p className={clsx("text-xs font-black font-heading uppercase tracking-widest italic", isActive ? "text-white" : "text-slate-600")}>
                   {meta.name}
                 </p>
+                <p className="text-[9px] font-mono text-slate-600 tracking-tighter opacity-60">NODE://AGENT_{id.toUpperCase()}</p>
               </div>
             </div>
 
             {/* Status badge */}
             <div className="flex justify-end">
               {isActive ? (
-                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-mono">
-                  <CheckCircle className="w-2.5 h-2.5" aria-hidden="true" /> Active
+                <span className="inline-flex items-center gap-1.5 text-[9px] px-3 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono font-bold uppercase tracking-wider">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> ONLINE
                 </span>
               ) : (
-                <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-white/[0.04] text-slate-600 border border-white/[0.07] font-mono">
-                  Skipped
+                <span className="inline-flex items-center text-[9px] px-3 py-1 rounded-lg bg-white/[0.03] text-slate-600 border border-white/[0.07] font-mono font-bold uppercase tracking-wider opacity-60">
+                  SHUTDOWN
                 </span>
               )}
             </div>
 
             {/* Conf */}
             <span className={clsx(
-              "text-right text-sm font-bold font-mono tabular-nums",
+              "text-right text-xs font-black font-mono tabular-nums",
               isActive ? confColor(confRatio) : "text-slate-700"
             )}>
               {isActive ? `${Math.round(confRatio * 100)}%` : "—"}
@@ -518,20 +508,20 @@ function AgentDeploymentTable({
 
             {/* Error rate */}
             <span className={clsx(
-              "text-right text-xs font-mono",
+              "text-right text-xs font-mono font-bold",
               !isActive ? "text-slate-700" :
-              errPct > 30 ? "text-red-400" :
-              errPct > 0  ? "text-amber-400" : "text-slate-600"
+              errPct > 30 ? "text-red-500" :
+              errPct > 0  ? "text-amber-500" : "text-slate-700"
             )}>
               {isActive ? (errPct > 0 ? `${errPct}%` : "0%") : "—"}
             </span>
 
             {/* Tools run */}
             <span className={clsx(
-              "text-right text-xs font-mono",
-              isActive ? "text-slate-400" : "text-slate-700"
+              "text-right text-xs font-mono font-bold",
+              isActive ? "text-slate-500" : "text-slate-700"
             )}>
-              {isActive && toolsTotal > 0 ? `${toolsOk}/${toolsTotal}` : isActive ? "—" : "—"}
+              {isActive && toolsTotal > 0 ? `${toolsOk}/${toolsTotal}` : "—"}
             </span>
           </div>
         );
@@ -546,48 +536,53 @@ function CrossModalSection({ findings }: { findings: AgentFindingDTO[] }) {
   const [open, setOpen] = useState(false);
   if (!findings || findings.length === 0) return null;
   return (
-    <div className="rounded-2xl bg-emerald-950/15 border border-emerald-500/20 overflow-hidden">
+    <CyberNoirPanel glow="emerald" intensity="medium" className="rounded-3xl border border-emerald-500/20 overflow-hidden bg-emerald-500/[0.02]">
       <button
         onClick={() => setOpen(v => !v)}
         aria-expanded={open}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.02] transition-colors cursor-pointer"
+        className="w-full flex items-center justify-between px-6 py-5 hover:bg-white/[0.02] transition-colors cursor-pointer group"
       >
-        <span className="flex items-center gap-2 text-sm font-medium text-emerald-300">
-          <LinkIcon className="w-3.5 h-3.5 shrink-0" />
-          {findings.length} Cross-Modal Confirmation{findings.length !== 1 ? "s" : ""}
-          <span className="hidden sm:inline text-[10px] text-emerald-600 font-normal">
-            — independently confirmed by multiple agents
+        <span className="flex items-center gap-3 text-sm font-black font-heading uppercase italic tracking-widest text-emerald-400">
+          <LinkIcon className="w-4 h-4 shrink-0 transition-transform group-hover:rotate-12" />
+          {findings.length} Cross-Modal Confirmations
+          <span className="hidden md:inline text-[9px] text-emerald-600 font-mono font-bold tracking-tighter ml-2 opacity-60">
+            [Independently verified via multiple neural nodes]
           </span>
         </span>
-        <ChevronDown className={clsx("w-4 h-4 text-slate-600 shrink-0 transition-transform duration-200", open && "rotate-180")} />
+        <div className={clsx(
+            "p-1.5 rounded-full bg-white/[0.03] border border-white/[0.05] transition-all duration-300",
+            open && "rotate-180 bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+        )}>
+            <ChevronDown className="w-4 h-4" />
+        </div>
       </button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div
             initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }}
-            transition={{ duration: 0.22 }}
+            transition={{ duration: 0.25, ease: "circOut" }}
             className="overflow-hidden"
           >
-            <div className="px-5 pb-5 border-t border-emerald-500/10 divide-y divide-white/[0.04]">
+            <div className="px-6 pb-6 border-t border-emerald-500/10 divide-y divide-white/[0.04]">
               {findings.slice(0, 10).map((f, i) => (
-                <div key={f.finding_id || i} className="flex items-start gap-2 text-xs py-2.5">
-                  <span className="w-1.5 h-1.5 mt-1.5 rounded-full bg-emerald-400 shrink-0" />
-                  <span className="flex-1 text-slate-300 leading-relaxed">
-                    {f.reasoning_summary?.slice(0, 200) || f.finding_type}
+                <div key={f.finding_id || i} className="flex items-start gap-4 text-xs py-4">
+                  <div className="w-1.5 h-1.5 mt-1.5 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+                  <span className="flex-1 text-slate-300 leading-relaxed font-medium">
+                    {f.reasoning_summary || f.finding_type}
                   </span>
-                  <span className="text-slate-600 font-mono shrink-0 ml-2">
+                  <span className="text-[10px] text-emerald-600 font-black font-heading uppercase italic tracking-widest shrink-0 ml-2 opacity-60">
                     {AGENT_META[f.agent_id]?.name ?? f.agent_id}
                   </span>
                 </div>
               ))}
               {findings.length > 10 && (
-                <p className="text-slate-600 text-xs pt-2.5">+{findings.length - 10} more</p>
+                <p className="text-slate-600 text-[10px] pt-4 font-mono font-bold uppercase tracking-widest opacity-40">+{findings.length - 10} Additional Data Streams</p>
               )}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </CyberNoirPanel>
   );
 }
 
@@ -596,34 +591,39 @@ function ContestedSection({ findings }: { findings: Record<string, unknown>[] })
   const [open, setOpen] = useState(false);
   if (!findings || findings.length === 0) return null;
   return (
-    <div className="rounded-2xl bg-amber-950/15 border border-amber-500/20 overflow-hidden">
+    <CyberNoirPanel glow="amber" intensity="medium" className="rounded-3xl border border-amber-500/20 overflow-hidden bg-amber-500/[0.02]">
       <button
         onClick={() => setOpen(v => !v)}
         aria-expanded={open}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.02] transition-colors cursor-pointer"
+        className="w-full flex items-center justify-between px-6 py-5 hover:bg-white/[0.02] transition-colors cursor-pointer group"
       >
-        <span className="flex items-center gap-2 text-sm font-medium text-amber-300">
-          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+        <span className="flex items-center gap-3 text-sm font-black font-heading uppercase italic tracking-widest text-amber-500">
+          <AlertTriangle className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
           {findings.length} Contested Finding{findings.length !== 1 ? "s" : ""}
-          <span className="hidden sm:inline text-[10px] text-amber-600 font-normal">
-            — agents reached conflicting conclusions
+          <span className="hidden md:inline text-[9px] text-amber-700 font-mono font-bold tracking-tighter ml-2 opacity-60">
+            [Conflict detected — manual validation required]
           </span>
         </span>
-        <ChevronDown className={clsx("w-4 h-4 text-slate-600 shrink-0 transition-transform duration-200", open && "rotate-180")} />
+        <div className={clsx(
+            "p-1.5 rounded-full bg-white/[0.03] border border-white/[0.05] transition-all duration-300",
+            open && "rotate-180 bg-amber-500/10 border-amber-500/30 text-amber-400"
+        )}>
+            <ChevronDown className="w-4 h-4" />
+        </div>
       </button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div
             initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }}
-            transition={{ duration: 0.22 }}
+            transition={{ duration: 0.25, ease: "circOut" }}
             className="overflow-hidden"
           >
-            <div className="px-5 pb-5 border-t border-amber-500/10 divide-y divide-white/[0.04]">
+            <div className="px-6 pb-6 border-t border-amber-500/10 divide-y divide-white/[0.04]">
               {findings.map((f, i) => {
                 const desc = String(f.plain_description ?? "Conflicting findings — manual review required before use in official proceedings.");
                 return (
-                  <div key={i} className="py-3">
-                    <p className="text-slate-400 text-xs leading-relaxed">{desc}</p>
+                  <div key={i} className="py-4">
+                    <p className="text-slate-400 text-xs leading-relaxed font-bold font-mono opacity-80">{desc}</p>
                   </div>
                 );
               })}
@@ -631,7 +631,7 @@ function ContestedSection({ findings }: { findings: Record<string, unknown>[] })
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </CyberNoirPanel>
   );
 }
 
@@ -846,24 +846,24 @@ export default function ResultPage() {
       {state === "arbiter" && <ArbiterOverlay liveMsg={arbiterMsg} />}
 
       {/* Sticky header */}
-      <header className="sticky top-0 z-30 w-full border-b border-white/[0.06] bg-[#030308]/88 backdrop-blur-2xl">
-        <div className="max-w-4xl mx-auto px-5 h-14 flex items-center justify-between">
-          <button onClick={handleHome} className="flex items-center gap-2 group cursor-pointer">
-            <div className="w-7 h-7 bg-gradient-to-br from-emerald-400/20 to-cyan-500/10 border border-emerald-500/30 rounded-lg flex items-center justify-center font-bold text-emerald-400 text-[10px] group-hover:border-emerald-400/50 transition-colors">
+      <header className="sticky top-0 z-50 w-full border-b border-white/[0.06] bg-black/60 backdrop-blur-2xl">
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+          <button onClick={handleHome} className="flex items-center gap-3 group cursor-pointer">
+            <div className="w-8 h-8 bg-black border border-emerald-500/40 rounded-xl flex items-center justify-center font-black text-emerald-400 text-[10px] group-hover:border-emerald-400/80 transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)]">
               FC
             </div>
-            <span className="hidden sm:block text-sm font-bold text-white/60 group-hover:text-white transition-colors">
-              Forensic Council
+            <span className="hidden sm:block text-[11px] font-black font-heading italic uppercase tracking-[0.2em] text-white/40 group-hover:text-white transition-colors">
+              Forensic Council <span className="text-emerald-500/60 ml-1">//</span> HUB
             </span>
           </button>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-5">
             <HistoryDrawer />
             <div
               role="status"
               aria-live="polite"
               aria-label={state === "arbiter" ? "Arbiter deliberating" : state === "ready" ? "Report ready" : "Analysis failed"}
-              className="flex items-center gap-2 text-xs font-mono"
+              className="hidden md:flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-white/[0.03] border border-white/[0.05]"
             >
               <span className="relative flex h-2 w-2" aria-hidden="true">
                 <span className={clsx(
@@ -875,15 +875,15 @@ export default function ResultPage() {
                   state === "arbiter" ? "bg-violet-500" : state === "ready" ? "bg-emerald-500" : "bg-red-500"
                 )} />
               </span>
-              <span className="text-slate-500">
-                {state === "arbiter" ? "Arbiter deliberating…" : state === "ready" ? "Report ready" : "Analysis failed"}
+              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500">
+                {state === "arbiter" ? "Deliberating" : state === "ready" ? "Report Verified" : "System Error"}
               </span>
             </div>
             {state === "ready" && report && (
               <button
                 onClick={handleExport}
                 aria-label="Export report as JSON"
-                className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors px-2.5 py-1.5 rounded-lg hover:bg-white/[0.05] border border-transparent hover:border-white/[0.06] cursor-pointer"
+                className="flex items-center gap-2 text-[10px] text-white/60 font-black font-mono uppercase tracking-widest hover:text-cyan-400 transition-all px-4 py-2 rounded-xl hover:bg-cyan-500/10 border border-white/10 hover:border-cyan-500/40 cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" aria-hidden="true" /> Export
               </button>
@@ -892,84 +892,66 @@ export default function ResultPage() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-5 pt-8 pb-32 space-y-4">
+      <main id="main-content" className="max-w-6xl mx-auto px-6 pt-10 pb-40 space-y-10">
         <AnimatePresence mode="wait">
 
           {/* ─── READY ──────────────────────────────────────────────────────── */}
           {state === "ready" && report && (
             <motion.div
               key="ready"
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="grid grid-cols-12 gap-4 auto-rows-auto pb-20"
+              className="grid grid-cols-12 gap-8 auto-rows-auto pb-20"
             >
               {/* ── Verdict Hero ── */}
               {vc && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.97 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className={clsx(
-                    "col-span-12 rounded-2xl border p-6 sm:p-8 relative overflow-hidden backdrop-blur-sm",
-                    "shadow-[0_8px_40px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)]",
-                    vc.color === "emerald" ? "bg-gradient-to-br from-emerald-950/35 to-emerald-950/15 border-emerald-500/28" :
-                    vc.color === "red"     ? "bg-gradient-to-br from-red-950/35 to-red-950/15 border-red-500/28" :
-                                            "bg-gradient-to-br from-amber-950/35 to-amber-950/15 border-amber-500/28"
-                  )}
+                <CyberNoirPanel
+                  glow={vc.color === "emerald" ? "emerald" : vc.color === "red" ? "red" : "amber"}
+                  intensity="high"
+                  className="col-span-12 rounded-[3rem] p-8 sm:p-10 relative overflow-hidden shadow-[0_20px_100px_rgba(0,0,0,0.6)] border-white/10"
                 >
-                  {/* Top edge shine */}
-                  <div className={clsx(
-                    "absolute inset-x-0 top-0 h-px",
-                    vc.color === "emerald" ? "bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent" :
-                    vc.color === "red"     ? "bg-gradient-to-r from-transparent via-red-400/40 to-transparent" :
-                                            "bg-gradient-to-r from-transparent via-amber-400/40 to-transparent"
-                  )} />
-                  {/* Entry shimmer */}
-                  <motion.div
-                    initial={{ x: "-100%" }}
-                    animate={{ x: "200%", opacity: [0, 0.5, 0] }}
-                    transition={{ duration: 1.4, delay: 0.1 }}
-                    className="absolute inset-y-0 w-1/4 bg-gradient-to-r from-transparent via-white/[0.06] to-transparent pointer-events-none"
-                  />
-
                   {/* Two-col header: verdict info left, confidence % right */}
-                  <div className="flex items-start justify-between gap-4 mb-5">
+                  <div className="flex flex-col md:flex-row items-start justify-between gap-8 mb-8">
                     {/* Left: icon + verdict label + description */}
-                    <div className="flex items-start gap-3 min-w-0">
+                    <div className="flex items-start gap-5 min-w-0">
                       <div className={clsx(
-                        "p-2.5 rounded-xl shrink-0 mt-0.5",
-                        vc.color === "emerald" ? "bg-emerald-500/15 text-emerald-400" :
-                        vc.color === "red"     ? "bg-red-500/15 text-red-400" :
-                                                "bg-amber-500/15 text-amber-400"
+                        "w-16 h-16 rounded-[1.5rem] bg-black border shrink-0 flex items-center justify-center shadow-xl",
+                        vc.color === "emerald" ? "border-emerald-500/40 text-emerald-400 shadow-emerald-500/20" :
+                        vc.color === "red"     ? "border-red-500/40 text-red-500 shadow-red-500/20" :
+                                                "border-amber-500/40 text-amber-500 shadow-amber-500/20"
                       )}>
-                        <vc.Icon className="w-5 h-5" />
+                        <vc.Icon className="w-8 h-8" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-[10px] text-slate-500 font-mono uppercase tracking-[0.18em] mb-0.5">Forensic Verdict</p>
+                        <p className="text-[10px] text-white/40 font-mono font-bold uppercase tracking-[0.4em] mb-2 italic">Neural Consensus // Verdict</p>
                         <h1 className={clsx(
-                          "text-xl sm:text-2xl font-black tracking-tight leading-none",
-                          vc.color === "emerald" ? "text-emerald-300" :
-                          vc.color === "red"     ? "text-red-300" :
-                                                  "text-amber-300"
+                          "text-3xl sm:text-5xl font-black font-heading italic uppercase tracking-tighter leading-none mb-4",
+                          vc.color === "emerald" ? "text-white" :
+                          vc.color === "red"     ? "text-red-500" :
+                                                  "text-amber-500"
                         )}>
                           {vc.label}
                         </h1>
-                        <p className="text-slate-500 text-xs leading-relaxed mt-1.5 max-w-xs">{vc.desc}</p>
+                        <p className="text-slate-400 text-sm font-medium leading-relaxed max-w-md opacity-80">{vc.desc}</p>
                       </div>
                     </div>
 
                     {/* Right: big confidence % */}
-                    <div className="text-right shrink-0">
-                      <p className="text-[10px] text-slate-600 font-mono uppercase tracking-widest mb-0.5">
-                        Confidence
+                    <div className="text-left md:text-right shrink-0 bg-white/[0.03] border border-white/[0.05] p-6 rounded-3xl backdrop-blur-md min-w-[180px]">
+                      <p className="text-[10px] text-white/40 font-mono font-bold uppercase tracking-[0.3em] mb-2">
+                        System Confidence
                       </p>
-                      <p className={clsx("text-4xl sm:text-5xl font-black tabular-nums leading-none", confColor(report.overall_confidence ?? 0))}>
-                        {confPct}%
-                      </p>
+                      <div className="flex items-baseline md:justify-end gap-1">
+                        <p className={clsx("text-5xl sm:text-6xl font-black font-heading italic tabular-nums leading-none tracking-tighter", confColor(report.overall_confidence ?? 0))}>
+                          {confPct}
+                        </p>
+                        <span className="text-2xl font-black font-heading italic text-white/20">%</span>
+                      </div>
                       {(report.confidence_min ?? 0) > 0 &&
                        (report.confidence_max ?? 0) > 0 &&
                        (report.confidence_min ?? 0) !== (report.confidence_max ?? 0) && (
-                        <p className="text-[10px] text-slate-600 font-mono mt-1">
-                          {Math.round((report.confidence_min ?? 0) * 100)}–{Math.round((report.confidence_max ?? 0) * 100)}% range
+                        <p className="text-[10px] text-slate-500 font-mono font-bold mt-3 uppercase tracking-tighter opacity-60">
+                          NODE RANGE: {Math.round((report.confidence_min ?? 0) * 100)}–{Math.round((report.confidence_max ?? 0) * 100)}%
                         </p>
                       )}
                     </div>
@@ -977,119 +959,121 @@ export default function ResultPage() {
 
                   {/* Manipulation probability bar — full width below */}
                   {manipPct > 0 && (
-                    <div className="mb-5">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <p className="text-[10px] text-slate-600 font-mono uppercase tracking-widest">
-                          Manipulation Probability
+                    <div className="mb-8 p-6 bg-black/40 rounded-3xl border border-white/[0.05] shadow-inner">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-[10px] text-white/40 font-mono font-bold uppercase tracking-[0.3em] italic">
+                          Tampering Signal Strength
                         </p>
                         <span className={clsx(
-                          "text-sm font-black tabular-nums font-mono",
-                          manipPct >= 70 ? "text-red-400" :
-                          manipPct >= 40 ? "text-amber-400" :
-                                         "text-emerald-400"
+                          "text-sm font-black font-mono tracking-widest",
+                          manipPct >= 70 ? "text-red-500" :
+                          manipPct >= 40 ? "text-amber-500" :
+                                         "text-emerald-500"
                         )}>
-                          {manipPct}%
+                          {manipPct}% PROBABILITY
                         </span>
                       </div>
-                      <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                      <div className="h-2 bg-white/[0.05] rounded-full overflow-hidden p-0.5 border border-white/[0.05]">
                         <motion.div
                           initial={{ width: 0 }}
                           animate={{ width: `${manipPct}%` }}
-                          transition={{ duration: 0.9, ease: "easeOut", delay: 0.4 }}
+                          transition={{ duration: 1.2, ease: "circOut", delay: 0.2 }}
                           className={clsx(
-                            "h-full rounded-full",
-                            manipPct >= 70 ? "bg-red-500" :
-                            manipPct >= 40 ? "bg-amber-500" :
-                                            "bg-emerald-500"
+                            "h-full rounded-full shadow-[0_0_15px_currentColor]",
+                            manipPct >= 70 ? "bg-red-500 text-red-500/40" :
+                            manipPct >= 40 ? "bg-amber-500 text-amber-500/40" :
+                                            "bg-emerald-500 text-emerald-500/40"
                           )}
                         />
                       </div>
                     </div>
                   )}
 
-                  {/* Divider */}
-                  <div className="h-px bg-white/[0.05] mb-4" />
-
                   {/* Quick stats row */}
-                  <div className="flex flex-wrap gap-x-5 gap-y-2 text-[11px] font-mono text-slate-500">
-                    <span>
-                      <span className="text-white font-bold">{report.applicable_agent_count ?? activeAgentIds.length}</span>
-                      {" "}agents active
+                  <div className="flex flex-wrap items-center gap-x-8 gap-y-3 text-[10px] font-black font-mono uppercase tracking-widest text-white/30 px-2">
+                    <span className="flex items-center gap-2">
+                      <span className="text-white bg-white/10 px-2 py-0.5 rounded-md">{report.applicable_agent_count ?? activeAgentIds.length}</span>
+                      ACTIVE NODES
                     </span>
-                    <span>
-                      <span className="text-white font-bold">{totalFindings}</span>
-                      {" "}findings
+                    <span className="flex items-center gap-2">
+                      <span className="text-white bg-white/10 px-2 py-0.5 rounded-md">{totalFindings}</span>
+                      RAW SIGNALS
                     </span>
                     {crossCount > 0 && (
-                      <span className="text-emerald-400">
-                        <span className="font-bold">{crossCount}</span> cross-confirmed
+                      <span className="flex items-center gap-2 text-emerald-500/60">
+                         <span className="text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">{crossCount}</span> VERIFIED
                       </span>
                     )}
                     {contestedCount > 0 && (
-                      <span className="text-amber-400">
-                        <span className="font-bold">{contestedCount}</span> contested
+                      <span className="flex items-center gap-2 text-amber-500/60">
+                        <span className="text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md">{contestedCount}</span> CONFLICTS
                       </span>
                     )}
-                    {skippedCount > 0 && (
-                      <span>{skippedCount} agent{skippedCount !== 1 ? "s" : ""} skipped</span>
-                    )}
-                    <span className="truncate max-w-[200px] text-slate-600">{fileName}</span>
+                    <span className="text-[9px] truncate max-w-[250px] italic flex items-center gap-2 opacity-40">
+                      <FileText className="w-3 h-3" /> {fileName}
+                    </span>
                   </div>
-                </motion.div>
+                </CyberNoirPanel>
               )}
 
               {/* Finding Severity Breakdown — Bento Card */}
               {totalFindings > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.98 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.25 }}
-                  className="col-span-12 lg:col-span-4 glass-panel p-6 rounded-2xl flex flex-col justify-center"
+                <CyberNoirPanel
+                  glow="cyan"
+                  intensity="low"
+                  className="col-span-12 lg:col-span-4 p-8 rounded-[2.5rem] flex flex-col justify-center border-white/[0.08]"
                 >
                   <SeverityBar counts={severityCounts} total={totalFindings} />
-                </motion.div>
+                </CyberNoirPanel>
               )}
 
               {/* ── 2a. Executive Summary — Bento Card ── */}
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="col-span-12 lg:col-span-7 glass-panel rounded-2xl overflow-hidden flex flex-col"
+              <CyberNoirPanel
+                glow="violet"
+                intensity="low"
+                className="col-span-12 lg:col-span-8 rounded-[2.5rem] overflow-hidden flex flex-col border-white/[0.08]"
               >
-                <div className="px-6 py-4 border-b border-white/[0.06] flex items-center gap-2.5 bg-white/[0.01]">
-                  <FileText className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
-                  <h2 className="text-sm font-semibold text-white">Executive Summary</h2>
+                <div className="px-8 py-5 border-b border-white/[0.06] flex items-center justify-between bg-white/[0.02]">
+                  <div className="flex items-center gap-3">
+                    <FileText className="w-4 h-4 text-violet-400 shrink-0" aria-hidden="true" />
+                    <h2 className="text-[11px] font-black font-heading uppercase tracking-widest text-white italic">Neural Synthesis Update</h2>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-violet-500/40" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-violet-500/20" />
+                  </div>
                 </div>
-                <div className="p-6 space-y-4 flex-1">
-                  <p className="text-slate-200 text-sm font-medium leading-relaxed italic">
+                <div className="p-8 space-y-6 flex-1 bg-black/20">
+                  <p className="text-slate-300 text-lg font-medium leading-relaxed italic border-l-2 border-violet-500/30 pl-5 py-1">
                     "{effectiveVerdictSentence}"
                   </p>
                   {report.key_findings && report.key_findings.length > 0 && (
-                    <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {report.key_findings.map((f, i) => (
-                        <li key={i} className="flex items-start gap-2.5 text-xs text-slate-400 bg-white/[0.03] p-3 rounded-xl border border-white/[0.05]">
-                          <CheckCircle className="mt-0.5 w-3.5 h-3.5 text-emerald-500/70 shrink-0" aria-hidden="true" />
-                          <span className="leading-relaxed">{f}</span>
-                        </li>
+                        <div key={i} className="flex items-start gap-3 text-[11px] text-slate-400 bg-white/[0.03] p-4 rounded-2xl border border-white/[0.05] shadow-sm">
+                          <CheckCircle className="mt-0.5 w-3.5 h-3.5 text-emerald-500/50 shrink-0" aria-hidden="true" />
+                          <span className="leading-relaxed font-medium">{f}</span>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   )}
                 </div>
-              </motion.div>
+              </CyberNoirPanel>
 
               {/* ── 2b. Agent Deployment — Bento Card ── */}
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.35 }}
-                className="col-span-12 lg:col-span-5 glass-panel rounded-2xl overflow-hidden flex flex-col"
+              <CyberNoirPanel
+                glow="cyan"
+                intensity="low"
+                className="col-span-12 rounded-[2.5rem] overflow-hidden flex flex-col border-white/[0.08]"
               >
-                <div className="px-6 py-4 border-b border-white/[0.06] flex items-center gap-2.5 bg-white/[0.01]">
-                  <Cpu className="w-4 h-4 text-cyan-400 shrink-0" aria-hidden="true" />
-                  <h2 className="text-sm font-semibold text-white">Agent Deployment</h2>
+                <div className="px-8 py-5 border-b border-white/[0.06] flex items-center justify-between bg-white/[0.02]">
+                  <div className="flex items-center gap-3">
+                    <Cpu className="w-4 h-4 text-cyan-400 shrink-0" aria-hidden="true" />
+                    <h2 className="text-[11px] font-black font-heading uppercase tracking-widest text-white italic">Sensor Grid Deployment</h2>
+                  </div>
+                  <span className="text-[9px] font-mono font-bold text-slate-500 opacity-40 uppercase tracking-widest italic">All nodes synchronized</span>
                 </div>
-                <div className="p-4 flex-1">
+                <div className="p-6 flex-1 bg-black/20">
                   <AgentDeploymentTable
                     activeIds={activeAgentIds}
                     metrics={report.per_agent_metrics as Record<string, AgentMetricsDTO> | undefined}
@@ -1097,7 +1081,7 @@ export default function ResultPage() {
                     skippedAgents={report.skipped_agents}
                   />
                 </div>
-              </motion.div>
+              </CyberNoirPanel>
 
 
               {/* ══════════════════════════════════════════════════════════ */}
@@ -1105,13 +1089,13 @@ export default function ResultPage() {
               {/* ══════════════════════════════════════════════════════════ */}
               {/* Agent Findings — Bento Row */}
               {activeAgentIds.length > 0 && (
-                <div className="col-span-12 space-y-6 pt-4">
-                  <div className="flex items-center justify-between px-1">
-                    <h2 className="text-xs font-bold text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2">
-                      <Activity className="w-3.5 h-3.5 text-cyan-400" aria-hidden="true" /> Agent Findings
+                <div className="col-span-12 space-y-8 pt-6">
+                  <div className="flex items-center justify-between px-2">
+                    <h2 className="text-[11px] font-black font-heading uppercase italic tracking-[0.3em] text-white/40 flex items-center gap-3">
+                      <Activity className="w-4 h-4 text-cyan-400" aria-hidden="true" /> Raw Neural Probe Stream
                     </h2>
-                    <span className="text-[10px] text-slate-600 font-mono">
-                      tap card to expand ↓
+                    <span className="text-[9px] text-slate-600 font-mono font-bold uppercase tracking-widest opacity-40">
+                      Expand for metadata ↓
                     </span>
                   </div>
                   {activeAgentIds.map(id => (
@@ -1149,18 +1133,20 @@ export default function ResultPage() {
               {/* ── 5. CHAIN OF CUSTODY ────────────────────────────────── */}
               {/* ══════════════════════════════════════════════════════════ */}
               {/* Chain of Custody — Bento Full Width */}
-              <div className="col-span-12 rounded-2xl overflow-hidden
-                bg-gradient-to-b from-white/[0.035] to-white/[0.012]
-                border border-white/[0.07]
-                shadow-[0_4px_16px_rgba(0,0,0,0.30),inset_0_1px_0_rgba(255,255,255,0.06)]">
+              <CyberNoirPanel glow="none" intensity="low" className="col-span-12 rounded-[2.5rem] overflow-hidden border border-white/[0.08] bg-white/[0.01]">
                 <button
                   onClick={() => setChainOpen(v => !v)}
-                  className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.025] transition-colors duration-200 cursor-pointer"
+                  className="w-full flex items-center justify-between px-8 py-5 hover:bg-white/[0.025] transition-all duration-300 cursor-pointer group/chain"
                 >
-                  <span className="flex items-center gap-2 text-sm text-slate-400 font-medium">
-                    <Lock className="w-3.5 h-3.5 text-cyan-400" aria-hidden="true" /> Chain of Custody &amp; Signature
+                  <span className="flex items-center gap-3 text-[11px] font-black font-heading uppercase italic tracking-widest text-slate-400 group-hover/chain:text-cyan-400 transition-colors">
+                    <Lock className="w-4 h-4 text-cyan-500/60" aria-hidden="true" /> Operational Integrity // Chain of Custody
                   </span>
-                  <ChevronDown className={clsx("w-4 h-4 text-slate-600 transition-transform duration-200", chainOpen && "rotate-180")} aria-hidden="true" />
+                  <div className={clsx(
+                      "p-1.5 rounded-full bg-white/[0.03] border border-white/[0.05] transition-all duration-300",
+                      chainOpen && "rotate-180 bg-cyan-500/10 border-cyan-500/30 text-cyan-400"
+                  )}>
+                    <ChevronDown className="w-4 h-4" aria-hidden="true" />
+                  </div>
                 </button>
                 <AnimatePresence initial={false}>
                   {chainOpen && (
@@ -1168,65 +1154,52 @@ export default function ResultPage() {
                       initial={{ height: 0 }}
                       animate={{ height: "auto" }}
                       exit={{ height: 0 }}
-                      transition={{ duration: 0.22 }}
+                      transition={{ duration: 0.3, ease: "circOut" }}
                       className="overflow-hidden"
                     >
-                      <div className="px-5 pb-5 space-y-4 border-t border-white/[0.05]">
-                        <div className="pt-4 space-y-3 text-sm text-slate-400">
+                      <div className="px-8 pb-8 space-y-6 border-t border-white/[0.05] bg-black/20">
+                        <div className="pt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                           {[
-                            { label: "Report ID",  value: report.report_id,  mono: true },
-                            { label: "Session ID", value: report.session_id, mono: true },
-                            { label: "Case ID",    value: report.case_id,    mono: true },
-                            ...(report.signed_utc ? [{ label: "Signed", value: report.signed_utc, mono: true }] : []),
+                            { label: "Neural Token",  value: report.report_id,  mono: true },
+                            { label: "Process ID", value: report.session_id, mono: true },
+                            { label: "Case Handle",    value: report.case_id,    mono: true },
+                            ...(report.signed_utc ? [{ label: "Timestamp", value: report.signed_utc, mono: true }] : []),
                           ].map(({ label, value, mono }) => (
-                            <div key={label} className="flex items-start gap-2">
-                              <Hash className="w-3.5 h-3.5 shrink-0 mt-0.5 text-slate-600" />
-                              <span>
-                                <span className="text-slate-600">{label}: </span>
-                                <span className={clsx("text-slate-300 break-all", mono && "font-mono text-xs")}>
-                                  {value}
-                                </span>
-                              </span>
+                            <div key={label} className="bg-white/[0.02] p-4 rounded-2xl border border-white/[0.04]">
+                                <p className="text-[9px] font-black font-mono text-slate-600 uppercase tracking-widest mb-1.5 italic">{label}</p>
+                                <p className={clsx("text-slate-300 break-all leading-tight", mono && "font-mono text-[10px] font-bold tracking-tight")}>
+                                    {value}
+                                </p>
                             </div>
                           ))}
                         </div>
                         {report.report_hash && (
-                          <div>
-                            <p className="text-[10px] text-slate-600 font-mono uppercase tracking-widest mb-1.5">
-                              Report Hash (SHA-256)
+                          <div className="bg-black/40 rounded-[2rem] p-6 border border-white/[0.06] shadow-inner">
+                            <p className="text-[10px] text-cyan-500/60 font-black font-mono uppercase tracking-[0.3em] mb-3 italic flex items-center gap-2">
+                              <ShieldCheck className="w-4 h-4" /> Integrity Hash [SHA-256]
                             </p>
-                            <p className="text-xs font-mono text-slate-500 break-all bg-black/30 rounded-xl p-3 leading-relaxed">
+                            <p className="text-[11px] font-mono text-slate-400 break-all leading-relaxed bg-black/20 p-4 rounded-2xl border border-white/[0.03]">
                               {report.report_hash}
                             </p>
                           </div>
                         )}
-                        {report.cryptographic_signature && (
-                          <div>
-                            <p className="text-[10px] text-slate-600 font-mono uppercase tracking-widest mb-1.5">
-                              Arbiter Signature
-                            </p>
-                            <p className="text-xs font-mono text-slate-600 break-all bg-black/30 rounded-xl p-3 leading-relaxed">
-                              {report.cryptographic_signature}
-                            </p>
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between gap-4 pt-1">
-                          <div className="flex items-center gap-1.5 text-[10px] text-slate-700">
-                            <Shield className="w-3 h-3 shrink-0" />
-                            Signature guarantees this report has not been altered since generation.
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-6 pt-4 border-t border-white/[0.05]">
+                          <div className="flex items-center gap-2.5 text-[10px] font-mono font-bold text-slate-600 uppercase tracking-tighter opacity-60 italic">
+                            <Shield className="w-3.5 h-3.5 shrink-0" />
+                            Signature Verified by decentralized arbiter consensus protocol.
                           </div>
                           <button
                             onClick={handleExport}
-                            className="flex items-center gap-1.5 text-[10px] text-slate-600 hover:text-slate-400 transition-colors font-mono shrink-0 cursor-pointer"
+                            className="btn btn-ghost px-6 py-2.5 rounded-xl text-[10px] font-black font-mono uppercase tracking-widest border border-white/10 hover:border-cyan-500/40 hover:text-cyan-400 transition-all cursor-pointer"
                           >
-                            <Download className="w-3 h-3" /> Export JSON
+                            <Download className="w-3.5 h-3.5 mr-2" /> Export Raw Packet
                           </button>
                         </div>
                       </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </div>
+              </CyberNoirPanel>
 
             </motion.div>
           )}
@@ -1237,20 +1210,20 @@ export default function ResultPage() {
               key="err"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center min-h-[55vh] gap-6 text-center"
+              className="flex flex-col items-center justify-center min-h-[60vh] gap-8 text-center"
             >
-              <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center">
-                <XCircle className="w-8 h-8 text-red-400" />
+              <div className="w-20 h-20 rounded-[2rem] bg-black border border-red-500/30 flex items-center justify-center shadow-[0_0_50px_rgba(239,68,68,0.2)]">
+                <XCircle className="w-10 h-10 text-red-500 animate-pulse" />
               </div>
-              <div>
-                <h2 className="text-xl font-bold text-white mb-2">Analysis Failed</h2>
-                <p className="text-slate-500 text-sm max-w-sm">{errorMsg || "An unexpected error occurred."}</p>
+              <div className="space-y-3">
+                <h2 className="text-2xl font-black font-heading italic uppercase tracking-tighter text-white">Neural Analysis Interrupted</h2>
+                <p className="text-slate-500 text-sm max-w-sm font-medium opacity-80">{errorMsg || "An unexpected cryptographic error occurred during synthesis."}</p>
               </div>
               <button
                 onClick={handleNew}
-                className="btn btn-violet px-6 py-3 rounded-xl text-sm font-semibold"
+                className="btn btn-cyan px-10 py-4 rounded-[1.5rem] text-xs font-black font-heading italic uppercase tracking-[0.2em] shadow-[0_10px_30px_rgba(0,212,255,0.2)]"
               >
-                New Investigation
+                Re-Initialize Investigation
               </button>
             </motion.div>
           )}
@@ -1261,22 +1234,22 @@ export default function ResultPage() {
               key="empty"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center min-h-[55vh] gap-6 text-center"
+              className="flex flex-col items-center justify-center min-h-[60vh] gap-8 text-center"
             >
-              <div className="w-16 h-16 rounded-full bg-slate-500/10 border border-slate-500/20 flex items-center justify-center">
-                <FileText className="w-8 h-8 text-slate-400" />
+              <div className="w-20 h-20 rounded-[2rem] bg-black border border-white/10 flex items-center justify-center shadow-2xl">
+                <FileText className="w-10 h-10 text-slate-700" />
               </div>
-              <div>
-                <h2 className="text-xl font-bold text-white mb-2">No Report Found</h2>
-                <p className="text-slate-500 text-sm max-w-sm">
-                  No investigation data found for this session. It may have expired or not been started.
+              <div className="space-y-3">
+                <h2 className="text-2xl font-black font-heading italic uppercase tracking-tighter text-white">Null Session</h2>
+                <p className="text-slate-500 text-sm max-w-sm font-medium opacity-80">
+                  No active forensic stream detected in this node. Please return to the terminal.
                 </p>
               </div>
               <button
                 onClick={handleHome}
-                className="btn btn-emerald px-6 py-3 rounded-xl text-sm font-semibold"
+                className="btn btn-ghost px-10 py-4 rounded-[1.5rem] text-xs font-black font-heading italic uppercase tracking-[0.2em] border border-white/10"
               >
-                Back to Home
+                Back to Command Center
               </button>
             </motion.div>
           )}
@@ -1286,41 +1259,43 @@ export default function ResultPage() {
 
       {/* Fixed footer action bar */}
       {state === "ready" && (
-        <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-white/[0.06]"
-          style={{ background: "rgba(3,3,3,0.88)", backdropFilter: "blur(24px)" }}>
-          <div className="max-w-4xl mx-auto px-5 py-3 flex items-center justify-center gap-4 relative">
+        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.08]"
+          style={{ background: "rgba(3,3,3,0.92)", backdropFilter: "blur(32px)" }}>
+          <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-6 relative">
             
-            {/* Left Button */}
-            {!isDeepPhase ? (
-              <button
-                onClick={handleViewAnalysis}
-                className="btn btn-ghost px-5 py-2.5 rounded-xl text-sm border border-white/10 hover:border-violet-500/30 font-medium flex items-center gap-2"
-              >
-                <ArrowLeft className="w-4 h-4" aria-hidden="true" /> View Analysis
-              </button>
-            ) : (
-              <button
-                onClick={handleNew}
-                className="btn btn-emerald px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2"
-              >
-                <RotateCcw className="w-4 h-4" aria-hidden="true" /> New Investigation
-              </button>
-            )}
+            <div className="flex items-center gap-4 w-full sm:w-auto">
+                {!isDeepPhase ? (
+                <button
+                    onClick={handleViewAnalysis}
+                    className="flex-1 sm:flex-none btn btn-ghost px-8 py-3.5 rounded-[1.25rem] text-[11px] font-black font-heading italic uppercase tracking-widest border border-white/10 hover:border-violet-500/40 hover:text-violet-400 transition-all flex items-center justify-center gap-3"
+                >
+                    <ArrowLeft className="w-4 h-4" aria-hidden="true" /> View Probes
+                </button>
+                ) : (
+                <button
+                    onClick={handleNew}
+                    className="flex-1 sm:flex-none btn btn-ghost px-8 py-3.5 rounded-[1.25rem] text-[11px] font-black font-heading italic uppercase tracking-widest border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10 transition-all flex items-center justify-center gap-3"
+                >
+                    <RotateCcw className="w-4 h-4" aria-hidden="true" /> New Session
+                </button>
+                )}
+            </div>
 
-            <button
-              onClick={() => window.print()}
-              className="btn btn-ghost px-5 py-2.5 rounded-xl text-sm border border-white/5 hover:bg-white/5 font-medium flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" aria-hidden="true" /> Download Report
-            </button>
+            <div className="flex items-center gap-4 w-full sm:w-auto">
+                 <button
+                    onClick={() => window.print()}
+                    className="flex-1 sm:flex-none btn btn-ghost px-8 py-3.5 rounded-[1.25rem] text-[11px] font-black font-heading italic uppercase tracking-widest border border-white/10 hover:bg-white/5 transition-all flex items-center justify-center gap-3"
+                >
+                    <Download className="w-4 h-4" aria-hidden="true" /> Print Report
+                </button>
 
-            {/* Right Button */}
-            <button
-              onClick={handleHome}
-              className="btn btn-ghost px-5 py-2.5 rounded-xl text-sm flex items-center gap-2"
-            >
-              <Home className="w-4 h-4" aria-hidden="true" /> Back to Home
-            </button>
+                <button
+                onClick={handleHome}
+                className="flex-1 sm:flex-none btn btn-ghost px-8 py-3.5 rounded-[1.25rem] text-[11px] font-black font-heading italic uppercase tracking-widest bg-white/5 border border-white/10 hover:bg-white/10 transition-all flex items-center justify-center gap-3"
+                >
+                <Home className="w-4 h-4" aria-hidden="true" /> Dashboard
+                </button>
+            </div>
           </div>
         </div>
       )}

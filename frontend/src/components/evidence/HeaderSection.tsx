@@ -48,13 +48,17 @@ export function HeaderSection({
         }}
         aria-label="Return to Forensic Council home"
       >
-        <div className="relative w-11 h-11 flex items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500/20 to-violet-600/20 border border-cyan-500/30 group-hover:border-cyan-400/60 group-hover:from-cyan-500/30 group-hover:to-violet-600/30 transition-all duration-300 shadow-[0_0_20px_rgba(0,212,255,0.15)] group-hover:shadow-[0_0_30px_rgba(0,212,255,0.3)]">
-          <div className="absolute inset-0 bg-white/5 rounded-xl backdrop-blur-md" />
-          <span className="relative z-10 font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-cyan-200 text-sm tracking-widest">FC</span>
+        <div className="relative w-11 h-11 flex items-center justify-center rounded-xl bg-gradient-to-br from-cyan-600/30 to-violet-700/30 border border-cyan-400/30 group-hover:border-cyan-300/60 transition-all duration-300 shadow-[0_0_20px_rgba(0,212,255,0.2)]">
+          <div className="absolute inset-0 bg-black/20 rounded-xl backdrop-blur-md" />
+          <span className="relative z-10 font-black text-white text-sm tracking-widest">FC</span>
         </div>
         <div className="flex flex-col justify-center">
-          <span className="text-lg font-bold tracking-tight text-white group-hover:text-cyan-50 transition-colors block leading-tight">Forensic Council</span>
-          <span className="text-[11px] font-mono text-cyan-300 group-hover:text-cyan-200 uppercase tracking-[0.2em] transition-colors leading-relaxed">Evidence Analysis</span>
+          <span className="text-lg font-bold tracking-tight text-white group-hover:text-cyan-100 transition-colors block leading-tight font-heading">
+            Forensic Council
+          </span>
+          <span className="text-[10px] font-mono text-cyan-400 group-hover:text-cyan-300 uppercase tracking-[0.25em] transition-colors leading-relaxed font-bold">
+            Live Stream
+          </span>
         </div>
       </div>
 

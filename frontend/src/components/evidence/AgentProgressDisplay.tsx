@@ -15,6 +15,7 @@ import { AgentIcon } from "@/components/ui/AgentIcon";
 import { AGENTS_DATA } from "@/lib/constants";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { SoundType } from "@/hooks/useSound";
+import { CyberNoirPanel } from "@/components/ui/CyberNoirPanel";
 
 export interface SectionFlag {
   id: string;
@@ -146,30 +147,30 @@ function FindingsAccordion({
     "text-slate-400";
 
   return (
-    <div className="rounded-xl border border-white/[0.05] bg-white/[0.01] overflow-hidden shadow-[0_2px_10px_rgba(0,0,0,0.2)]">
+    <div className="rounded-2xl border border-white/[0.08] bg-black/40 overflow-hidden shadow-lg mt-2">
       {/* ── Accordion header ── */}
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-label={open ? "Collapse findings" : "Expand findings"}
-        className="w-full flex items-center justify-between px-3.5 py-2.5
-          hover:bg-white/[0.04] transition-colors group"
+        className="w-full flex items-center justify-between px-4 py-3
+          hover:bg-white/[0.05] transition-colors group"
       >
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           {/* Mini flag dots summary */}
-          <div className="flex gap-1">
+          <div className="flex gap-1.5">
             {sectionFlags.map((sf) => (
               <span
                 key={sf.id}
-                className={`w-1.5 h-1.5 rounded-full shadow-sm ${FLAG_STYLES[sf.flag]?.dot ?? "bg-slate-500"}`}
+                className={`w-1.5 h-1.5 rounded-full shadow-[0_0_5px_rgba(0,0,0,0.5)] ${FLAG_STYLES[sf.flag]?.dot ?? "bg-slate-500"}`}
               />
             ))}
           </div>
-          <span className={`text-[12px] font-bold tracking-wide uppercase ${summaryColor}`}>
-            {findingsCount ?? sectionFlags.length} finding{(findingsCount ?? sectionFlags.length) !== 1 ? "s" : ""}
+          <span className={`text-[10px] font-black tracking-[0.2em] uppercase font-mono ${summaryColor}`}>
+            {findingsCount ?? sectionFlags.length} Artifact{(findingsCount ?? sectionFlags.length) !== 1 ? "s" : ""}
           </span>
-          <span className="text-[11px] text-slate-400 font-mono font-bold">
-            / {sectionFlags.length} section{sectionFlags.length !== 1 ? "s" : ""}
+          <span className="text-[9px] text-slate-500 font-mono font-bold tracking-tighter">
+            // {sectionFlags.length} SEC_SCAN
           </span>
         </div>
         <motion.span
@@ -177,7 +178,7 @@ function FindingsAccordion({
           transition={{ duration: 0.2, ease: "anticipate" }}
           className="text-slate-500 group-hover:text-cyan-400 transition-colors"
         >
-          <ChevronDown className="w-3.5 h-3.5" />
+          <ChevronDown className="w-4 h-4" />
         </motion.span>
       </button>
 
@@ -303,35 +304,35 @@ function FindingRow({ f }: { f: FindingPreview }) {
       animate={{ opacity: 1, scale: 1, y: 0 }}
       layout
       transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-      className={`rounded-xl bg-gradient-to-br from-white/[0.03] to-white/[0.01] overflow-hidden border border-white/[0.05] border-l-2 ${borderCls} px-4 py-3 space-y-2 shadow-[0_4px_15px_rgba(0,0,0,0.1)]`}
+      className={`rounded-2xl bg-black/40 overflow-hidden border border-white/[0.08] border-l-4 ${borderCls} px-4 py-3.5 space-y-2.5 shadow-lg group/finding`}
     >
       {/* Header: tool name + severity + confidence */}
       <div className="flex items-start gap-3">
-        <span className="text-[11px] font-bold text-white/90 tracking-wider uppercase flex-1 leading-tight">
+        <span className="text-[10px] font-bold text-cyan-400/90 tracking-[0.15em] uppercase flex-1 leading-tight font-mono">
           {fmtTool(f.tool)}
         </span>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0">
           {f.severity !== "LOW" && f.severity !== "INFO" && (
-            <span className={`inline-flex text-[10px] font-black px-2 py-0.5 rounded shadow-sm tracking-[0.1em] ${sev.cls}`}>
+            <span className={`inline-flex text-[9px] font-black px-2 py-0.5 rounded-md shadow-sm tracking-[0.2em] uppercase font-mono ${sev.cls}`}>
               {sev.text}
             </span>
           )}
           {f.confidence > 0.01 && (
-            <span className="text-[10px] font-mono font-bold text-slate-200 bg-black/60 border border-white/[0.15] px-1.5 py-0.5 rounded shadow-inner">
-              {Math.round(f.confidence * 100)}%
+            <span className="text-[9px] font-mono font-bold text-slate-300 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded shadow-inner uppercase tracking-tighter">
+              {Math.round(f.confidence * 100)}% Match
             </span>
           )}
         </div>
       </div>
       {/* Summary */}
-      <motion.p layout className="text-xs text-slate-200 leading-relaxed max-w-prose font-medium">
+      <motion.p layout className="text-[11px] text-slate-300 leading-relaxed max-w-prose font-medium">
         {displayText}
         {needsExpand && (
           <button
             onClick={() => setOpen(v => !v)}
-            className="ml-1.5 text-[10px] font-bold uppercase tracking-widest text-cyan-400/80 hover:text-cyan-300 transition-colors"
+            className="ml-2 text-[9px] font-black uppercase tracking-[0.2em] text-cyan-400 hover:text-cyan-300 transition-colors"
           >
-            {open ? "LESS" : "MORE"}
+            [{open ? "COLLAPSE" : "EXPAND"}]
           </button>
         )}
       </motion.p>
@@ -341,13 +342,13 @@ function FindingRow({ f }: { f: FindingPreview }) {
 
 function FindingsPreviewList({ findings }: { findings: FindingPreview[] }) {
   const [showAll, setShowAll] = useState(false);
-  const INITIAL_SHOW = 2; // Reduced from 3 to keep UI cleaner
+  const INITIAL_SHOW = 2; 
   const firstBatch = findings.slice(0, INITIAL_SHOW);
   const remainingBatch = findings.slice(INITIAL_SHOW);
   const remaining = remainingBatch.length;
 
   return (
-    <motion.div layout className="space-y-2">
+    <motion.div layout className="space-y-3">
       <AnimatePresence initial={false}>
         {firstBatch.map((f, i) => <FindingRow key={`${f.tool}-first-${i}`} f={f} />)}
       </AnimatePresence>
@@ -356,12 +357,12 @@ function FindingsPreviewList({ findings }: { findings: FindingPreview[] }) {
         <motion.button
           layout
           onClick={() => setShowAll(v => !v)}
-          className="w-full text-[11px] font-bold tracking-widest uppercase text-slate-300 hover:text-cyan-300 transition-colors py-2.5 text-center
-            border border-white/[0.15] border-dashed rounded-xl bg-white/[0.02] hover:bg-cyan-500/20 hover:border-cyan-500/40 my-1"
+          className="w-full text-[9px] font-black tracking-[0.3em] uppercase text-cyan-500/80 hover:text-cyan-400 transition-all py-3 text-center
+            border border-cyan-500/20 border-dashed rounded-2xl bg-cyan-500/[0.03] hover:bg-cyan-500/10 my-1"
         >
           {showAll
-            ? "↑ Collapse list"
-            : `↓ Display ${remaining} more finding${remaining !== 1 ? "s" : ""}`}
+            ? "[-] Hide Suppressed Findings"
+            : `[+] Display ${remaining} Suppressed Finding${remaining !== 1 ? "s" : ""}`}
         </motion.button>
       )}
 
@@ -429,19 +430,20 @@ function LiveThinkingText({ text, active }: { text: string; active: boolean }) {
       <AnimatePresence mode="wait">
         <motion.p
           key={key}
-          initial={{ opacity: 0, y: 6, filter: "blur(4px)" }}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          exit={{ opacity: 0, y: -4, filter: "blur(3px)" }}
+          initial={{ opacity: 0, x: -4, filter: "blur(4px)" }}
+          animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+          exit={{ opacity: 0, x: 4, filter: "blur(3px)" }}
           transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-          className="text-sm leading-relaxed text-cyan-200 whitespace-pre-wrap break-words font-medium"
+          className="text-[13px] leading-relaxed text-cyan-100/90 whitespace-pre-wrap break-words font-medium font-mono tracking-tight"
         >
+          <span className="text-cyan-500 mr-2">»</span>
           {displayText}
           {/* Blinking cursor while actively running */}
           {active && (
             <motion.span
               animate={{ opacity: [1, 0, 1] }}
-              transition={{ duration: 0.9, repeat: Infinity, ease: "easeInOut" }}
-              className="inline-block ml-0.5 w-[5px] h-[11px] bg-cyan-400/70 rounded-[1px] align-middle -translate-y-px"
+              transition={{ duration: 0.8, repeat: Infinity, ease: "easeInOut" }}
+              className="inline-block ml-1.5 w-[6px] h-[13px] bg-cyan-400/80 rounded-[1px] align-middle -translate-y-px shadow-[0_0_8px_#00d4ff]"
             />
           )}
         </motion.p>
@@ -678,28 +680,32 @@ export function AgentProgressDisplay({
       className="flex flex-col items-center pt-8"
     >
       {/* Header */}
-      <div className="text-center mb-10" aria-live="polite" aria-atomic="true">
+      <div className="text-center mb-12" aria-live="polite" aria-atomic="true">
         <motion.h2 
           key={phase + String(showInitialDecision) + String(showDeepComplete)}
           initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}
-          className="text-2xl md:text-3xl font-black text-white mb-2 tracking-tight">
+          className="text-2xl md:text-4xl font-black text-white mb-3 tracking-tighter font-heading uppercase italic">
           {showInitialDecision
-            ? "Initial Analysis Complete"
+            ? "Phase I: Initial Scan Complete"
             : showDeepComplete
-              ? "Deep Analysis Complete"
+              ? "Phase II: Deep Scan Verified"
               : phase === "deep"
-                ? "Deep Analysis Running"
-                : "Evidence Analysis"}
+                ? "Propagating Deep Scans..."
+                : "Active Forensic Stream"}
         </motion.h2>
-        <p className="text-xs font-mono tracking-widest uppercase text-slate-300 font-bold">
-          {showInitialDecision || showDeepComplete
-            ? `${activeCompletedCount} OF ${visibleAgentsCount} AGENTS RESPONDED`
-            : `${activeCompletedCount} / ${visibleAgentsCount} AGENTS RESPONDED`}
-        </p>
+        <div className="flex items-center justify-center gap-3">
+          <div className="h-px w-8 bg-cyan-500/30" />
+          <p className="text-[10px] font-mono tracking-[0.3em] uppercase text-cyan-400 font-bold">
+            {showInitialDecision || showDeepComplete
+              ? `${activeCompletedCount} OF ${visibleAgentsCount} AGENTS TERMINATED`
+              : `${activeCompletedCount} / ${visibleAgentsCount} AGENTS ANALYZING`}
+          </p>
+          <div className="h-px w-8 bg-cyan-500/30" />
+        </div>
       </div>
 
       {/* Agent Cards Bento Grid */}
-      <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="w-full max-w-7xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {visibleAgents.map((agent) => {
           const status = getAgentStatus(agent.id);
           const rawThinking = getAgentThinking(agent.id);
@@ -716,112 +722,62 @@ export function AgentProgressDisplay({
           return (
             <AnimatePresence key={agent.id}>
               {isRevealed && (
-                <motion.div
-                  initial={{ opacity: 0, y: 28, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.97 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                <CyberNoirPanel
+                  glow={
+                    status === "running" ? "cyan" :
+                    status === "complete" ? "emerald" :
+                    status === "error" ? "red" :
+                    status === "checking" ? "violet" : "none"
+                  }
+                  intensity={status === "running" ? "high" : "medium"}
                   className={clsx(
-                    "glass-panel rounded-[2.5rem] p-6 transition-all duration-500 relative group overflow-hidden",
+                    "rounded-[2.5rem] p-6 transition-all duration-500 relative group overflow-hidden border-white/[0.05]",
                     rowSpan,
-                    status === "running" && "ring-2 ring-cyan-500/20 shadow-[0_0_40px_rgba(0,212,255,0.08)] bg-cyan-950/[0.03]",
                     (status === "waiting" || status === "checking") && "opacity-60 grayscale-[0.3]"
                   )}
                 >
-                  {/* Subtle noise texture overlay */}
-                  <div className="absolute inset-0 opacity-[0.015] pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] brightness-150" />
-                  
-                  {/* Status glow accent */}
-                  <div 
-                    className={clsx(
-                      "absolute -top-24 -right-24 w-48 h-48 rounded-full blur-[80px] opacity-[0.08] pointer-events-none transition-colors duration-700",
-                      status === "running" ? "bg-cyan-400" :
-                      status === "complete" ? "bg-emerald-400" :
-                      status === "error" ? "bg-red-400" :
-                      status === "checking" ? "bg-violet-400" : "bg-transparent"
-                    )}
-                  />
-                  {/* Top-edge accent line — cyan for running, dimmer for other states */}
-                  <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
-                    style={{
-                      background:
-                        status === "running"
-                          ? "linear-gradient(to right, transparent, rgba(0,212,255,0.7), transparent)"
-                          : status === "complete"
-                            ? "linear-gradient(to right, transparent, rgba(16,185,129,0.35), transparent)"
-                            : status === "checking"
-                              ? "linear-gradient(to right, transparent, rgba(139,92,246,0.4), transparent)"
-                              : "linear-gradient(to right, transparent, rgba(255,255,255,0.06), transparent)",
-                    }}
-                  />
-                  {/* Active indicator stripe — only for running */}
-                  {status === "running" && (
-                    <div className="absolute inset-x-0 top-0 h-[2px] rounded-t-2xl pointer-events-none"
-                      style={{ background: "linear-gradient(to right, transparent, rgba(0,212,255,0.9), rgba(0,212,255,0.9), transparent)" }} />
-                  )}
-                  {/* Entry scan sweep — glass shimmer on reveal */}
-                  <motion.div
-                    initial={{ x: "-110%", opacity: 0.9 }}
-                    animate={{ x: "260%", opacity: 0 }}
-                    transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1], delay: 0.05 }}
-                    className="absolute inset-y-0 w-2/5 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none z-10"
-                    style={{ transform: "skewX(-8deg)" }}
-                  />
+                  {/* Status indicator bar */}
+                  <div className={clsx(
+                    "absolute top-0 left-0 right-0 h-1 transition-all duration-500",
+                    status === "running" ? "bg-cyan-500 shadow-[0_0_10px_#00d4ff]" :
+                    status === "complete" ? "bg-emerald-500/40" :
+                    status === "error" ? "bg-red-500" :
+                    status === "checking" ? "bg-violet-500/40" : "bg-white/5"
+                  )} />
 
                   {/* Top row */}
-                  <div className="flex items-start gap-3 mb-3">
+                  <div className="flex items-start gap-4 mb-4">
                     <div className={[
-                      "w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 mt-0.5",
+                      "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-300",
                       status === "running"
-                        ? "bg-cyan-500/15 text-cyan-400 shadow-[0_0_14px_rgba(0,212,255,0.2)]"
-                        : status === "complete"
-                          ? "bg-emerald-500/15 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.15)]"
-                          : status === "error"
-                            ? "bg-red-500/15 text-red-400"
-                            : status === "unsupported"
-                              ? "bg-slate-500/15 text-slate-400"
-                              : status === "checking"
-                                ? "bg-violet-500/15 text-violet-400"
-                                : "bg-white/[0.06] text-slate-500",
+                        ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-[0_0_15px_rgba(0,212,255,0.2)]"
+                        : "bg-white/[0.05] text-slate-400 border border-white/10",
                     ].join(" ")}>
-                      <AgentIcon agentId={agent.id} className="w-5 h-5" />
+                      <AgentIcon agentId={agent.id} className="w-6 h-6" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold text-white leading-snug">{agent.name}</h3>
-                      <span className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">{agent.role}</span>
+                      <h3 className="text-[15px] font-bold text-white leading-tight font-heading tracking-tight uppercase italic">{agent.name}</h3>
+                      <span className="text-[10px] uppercase tracking-[0.2em] text-cyan-500/60 font-mono font-bold">{agent.role}</span>
                     </div>
                     <div className="shrink-0">
                       {status === "waiting" && (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-200 font-bold px-2 py-0.5 rounded-full bg-slate-800 border border-white/10">
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse" />Queued
+                        <span className="inline-flex items-center gap-1.5 text-[9px] text-slate-400 font-bold px-2 py-0.5 rounded-full bg-slate-900 border border-white/5 uppercase tracking-widest font-mono">
+                          Queued
                         </span>
                       )}
                       {status === "checking" && (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] text-violet-100 font-bold px-2 py-0.5 rounded-full bg-violet-600/40 border border-violet-400/50 shadow-[0_0_10px_rgba(139,92,246,0.3)]">
-                          <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-60" />
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500" />
-                          </span>Initiating
+                        <span className="inline-flex items-center gap-1.5 text-[9px] text-violet-300 font-bold px-2 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/20 uppercase tracking-widest font-mono animate-pulse">
+                          Linking
                         </span>
                       )}
                       {status === "running" && (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] text-cyan-300 font-medium px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20">
-                          <Loader2 className="w-3 h-3 animate-spin" />Active
+                        <span className="inline-flex items-center gap-1.5 text-[9px] text-cyan-400 font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 uppercase tracking-widest font-mono shadow-[0_0_10px_rgba(0,212,255,0.15)]">
+                          <Loader2 className="w-2.5 h-2.5 animate-spin" />Scan
                         </span>
                       )}
                       {status === "complete" && (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] text-emerald-300 font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                          <CheckCircle2 className="w-3.5 h-3.5" />Done
-                        </span>
-                      )}
-                      {status === "error" && (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] text-red-300 font-medium px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20">
-                          <AlertTriangle className="w-3.5 h-3.5" />Error
-                        </span>
-                      )}
-                      {status === "unsupported" && (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-300 font-medium px-2 py-0.5 rounded-full bg-slate-500/10 border border-slate-500/20">
-                          <FileX className="w-3.5 h-3.5" />Skipped
+                        <span className="inline-flex items-center gap-1.5 text-[9px] text-emerald-400 font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 uppercase tracking-widest font-mono">
+                          <CheckCircle2 className="w-3 h-3" />Terminated
                         </span>
                       )}
                     </div>
@@ -897,25 +853,33 @@ export function AgentProgressDisplay({
                   )}
 
                   {status === "complete" && completed && (
-                    <div className="space-y-2.5">
+                    <div className="space-y-4">
                       {/* Verdict row */}
                       {completed.agent_verdict && (
                         <div className={[
-                          "flex items-center gap-2 px-3 py-2 rounded-xl border",
+                          "flex items-center gap-3 px-4 py-3 rounded-2xl border backdrop-blur-md",
                           completed.agent_verdict === "AUTHENTIC"
-                            ? "bg-emerald-500/[0.08] border-emerald-500/25"
+                            ? "bg-emerald-500/10 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]"
                             : completed.agent_verdict === "LIKELY_MANIPULATED"
-                              ? "bg-red-500/[0.08] border-red-500/25"
-                              : "bg-amber-500/[0.08] border-amber-500/25",
+                              ? "bg-red-500/10 border-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.1)]"
+                              : "bg-amber-500/10 border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.1)]",
                         ].join(" ")}>
-                          <span className={[
-                            "text-base shrink-0",
+                          <div className={[
+                             "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border",
+                             completed.agent_verdict === "AUTHENTIC" ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400" :
+                             completed.agent_verdict === "LIKELY_MANIPULATED" ? "bg-red-500/20 border-red-500/40 text-red-400" :
+                             "bg-amber-500/20 border-amber-500/40 text-amber-400"
                           ].join(" ")}>
-                            {completed.agent_verdict === "AUTHENTIC" ? "✓" : completed.agent_verdict === "LIKELY_MANIPULATED" ? "⚠" : "?"}
-                          </span>
+                            {completed.agent_verdict === "AUTHENTIC" ? "✓" : completed.agent_verdict === "LIKELY_MANIPULATED" ? "!" : "?"}
+                          </div>
                           <div className="flex-1 min-w-0">
                             <p className={[
-                              "text-xs font-bold uppercase tracking-wide leading-none",
+                              "text-[10px] font-bold uppercase tracking-[0.2em] leading-none mb-1 opacity-60",
+                              completed.agent_verdict === "AUTHENTIC" ? "text-emerald-400" :
+                              completed.agent_verdict === "LIKELY_MANIPULATED" ? "text-red-400" : "text-amber-400"
+                            ].join(" ")}>Verdict</p>
+                            <p className={[
+                              "text-xs font-black uppercase tracking-widest leading-none font-heading italic",
                               completed.agent_verdict === "AUTHENTIC"
                                 ? "text-emerald-300"
                                 : completed.agent_verdict === "LIKELY_MANIPULATED"
@@ -927,64 +891,40 @@ export function AgentProgressDisplay({
                           </div>
                           {/* Confidence inline */}
                           {completed.confidence !== undefined && (
-                            <span className={[
-                              "text-sm font-black tabular-nums font-mono shrink-0",
-                              completed.confidence >= 0.75 ? "text-emerald-400" :
-                              completed.confidence >= 0.5  ? "text-amber-400"   : "text-red-400",
-                            ].join(" ")}>
-                              {Math.round(completed.confidence * 100)}%
-                            </span>
+                            <div className="text-right shrink-0">
+                               <p className="text-[9px] font-mono text-slate-500 uppercase tracking-tighter font-bold">Confidence</p>
+                               <span className={[
+                                "text-sm font-black tabular-nums font-mono drop-shadow-[0_0_8px_rgba(0,0,0,0.5)]",
+                                completed.confidence >= 0.75 ? "text-emerald-400" :
+                                completed.confidence >= 0.5  ? "text-amber-400"   : "text-red-400",
+                               ].join(" ")}>
+                                 {Math.round(completed.confidence * 100)}%
+                               </span>
+                            </div>
                           )}
                         </div>
                       )}
 
-                      {/* Confidence + error rate pills — shown when no verdict block */}
-                      {!completed.agent_verdict && (
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {completed.confidence !== undefined && (
-                            <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.07] text-slate-400 font-mono">
-                              {Math.round(completed.confidence * 100)}% conf
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Error rate — always shown */}
-                      {completed.tool_error_rate !== undefined && (
-                        <div className="flex items-center gap-1.5">
-                          <span className={[
-                            "inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-mono",
-                            completed.tool_error_rate === 0
-                              ? "bg-slate-500/[0.06] text-slate-400 border-slate-500/15"
-                              : completed.tool_error_rate > 0.3
-                                ? "bg-red-500/10 text-red-400 border-red-500/20"
-                                : "bg-amber-500/10 text-amber-400 border-amber-500/20",
-                          ].join(" ")}>
-                            {completed.tool_error_rate === 0
-                              ? "0% execution errors"
-                              : `${Math.round(completed.tool_error_rate * 100)}% execution errors`}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Per-finding list (preferred) — falls back to section accordion, then elegant empty state */}
-                      {completed.findings_preview && completed.findings_preview.length > 0 ? (
-                        <FindingsPreviewList findings={completed.findings_preview} />
-                      ) : completed.section_flags && completed.section_flags.length > 0 ? (
-                        <FindingsAccordion
-                          sectionFlags={completed.section_flags}
-                          findingsCount={completed.findings_count}
-                        />
-                      ) : (
-                        <div className="flex flex-col items-center justify-center p-5 border border-white/[0.04] bg-white/[0.015] rounded-xl gap-2 mt-2 shadow-inner">
-                           <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center mb-1">
-                              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                           </div>
-                           <span className="text-xs text-slate-400 font-medium text-center leading-relaxed">
-                             {completed.message || "Analysis complete. No anomalies detected."}
-                           </span>
-                        </div>
-                      )}
+                      {/* Per-finding list */}
+                      <div className="pt-2">
+                        {completed.findings_preview && completed.findings_preview.length > 0 ? (
+                          <FindingsPreviewList findings={completed.findings_preview} />
+                        ) : completed.section_flags && completed.section_flags.length > 0 ? (
+                          <FindingsAccordion
+                            sectionFlags={completed.section_flags}
+                            findingsCount={completed.findings_count}
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center p-6 border border-white/[0.06] bg-black/20 rounded-2xl gap-2 shadow-inner">
+                             <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center mb-1 border border-emerald-500/20">
+                                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                             </div>
+                             <span className="text-[11px] text-slate-400 font-mono uppercase tracking-wider text-center leading-relaxed font-bold">
+                               {completed.message || "Clearance: No Anomalies Detected"}
+                             </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -1007,9 +947,9 @@ export function AgentProgressDisplay({
                   )}
 
                   {status === "waiting" && (
-                    <p className="text-xs text-slate-600">Queued for analysis</p>
+                    <p className="text-xs text-slate-600 font-mono italic">Awaiting dispatch signal...</p>
                   )}
-                </motion.div>
+                </CyberNoirPanel>
               )}
             </AnimatePresence>
           );
@@ -1062,36 +1002,39 @@ export function AgentProgressDisplay({
         <motion.div
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, type: "spring", stiffness: 280, damping: 26 }}
-          className="mt-10 w-full max-w-lg"
+          className="mt-12 w-full max-w-xl"
         >
           {/* Decision card */}
-          <div className="glass-panel rounded-2xl p-5 space-y-3">
-            <p className="text-xs font-mono text-slate-500 uppercase tracking-widest text-center">Choose next step</p>
-            <div className="flex gap-3">
+          <CyberNoirPanel glow="cyan" intensity="medium" className="rounded-[2.5rem] p-8 space-y-6">
+            <div className="text-center space-y-1">
+              <p className="text-[10px] font-mono text-cyan-400 uppercase tracking-[0.4em] font-bold">Investigator Override</p>
+              <h3 className="text-xl font-black text-white font-heading italic uppercase italic">Select Advancement Protocol</h3>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-4">
               <motion.button
                 onClick={onAcceptAnalysis}
                 disabled={isNavigating}
-                whileHover={isNavigating ? {} : { y: -2 }}
-                whileTap={isNavigating ? {} : { scale: 0.972, y: 1 }}
-                className="btn btn-emerald flex-1 py-3.5 rounded-xl font-semibold"
+                whileHover={isNavigating ? {} : { y: -2, scale: 1.02 }}
+                whileTap={isNavigating ? {} : { scale: 0.98 }}
+                className="btn btn-emerald flex-1 py-4 rounded-2xl font-bold uppercase tracking-widest text-xs h-14"
               >
                 {isNavigating ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" />Compiling Report…</>
+                  <><Loader2 className="w-4 h-4 animate-spin" />Finalizing...</>
                 ) : (
-                  <><FileText className="w-4 h-4" />Accept Analysis</>
+                  <><FileText className="w-4 h-4" />Compile Report</>
                 )}
               </motion.button>
               <motion.button
                 onClick={onDeepAnalysis}
                 disabled={isNavigating}
-                whileHover={isNavigating ? {} : { y: -2 }}
-                whileTap={isNavigating ? {} : { scale: 0.972, y: 1 }}
-                className="btn btn-cyan flex-1 py-3.5 rounded-xl font-semibold"
+                whileHover={isNavigating ? {} : { y: -2, scale: 1.02 }}
+                whileTap={isNavigating ? {} : { scale: 0.98 }}
+                className="btn btn-cyan flex-1 py-4 rounded-2xl font-bold uppercase tracking-widest text-xs h-14"
               >
-                <Microscope className="w-4 h-4" />Deep Scan<ArrowRight className="w-4 h-4" />
+                <Microscope className="w-4 h-4" />Deep Scan Protocol<ArrowRight className="w-4 h-4 ml-1" />
               </motion.button>
             </div>
-          </div>
+          </CyberNoirPanel>
         </motion.div>
       )}
 
@@ -1099,35 +1042,38 @@ export function AgentProgressDisplay({
         <motion.div
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, type: "spring", stiffness: 280, damping: 26 }}
-          className="mt-10 w-full max-w-lg"
+          className="mt-12 w-full max-w-xl"
         >
-          <div className="glass-panel rounded-2xl p-6 space-y-5">
-            <p className="text-[10px] font-mono text-cyan-400/80 uppercase tracking-[0.2em] text-center font-bold">Deep analysis complete</p>
-            <div className="flex gap-4">
+          <CyberNoirPanel glow="emerald" intensity="high" className="rounded-[2.5rem] p-8 space-y-6">
+            <div className="text-center space-y-1">
+              <p className="text-[10px] font-mono text-emerald-400 uppercase tracking-[0.4em] font-bold">Verification Complete</p>
+              <h3 className="text-xl font-black text-white font-heading italic uppercase italic">Council Arbiter Verification</h3>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-4">
               <motion.button
                 onClick={() => { playSound?.("click"); onNewUpload?.(); }}
                 disabled={isNavigating}
-                whileHover={isNavigating ? {} : { y: -2 }}
-                whileTap={isNavigating ? {} : { scale: 0.972, y: 1 }}
-                className="btn btn-ghost flex-1 py-4 rounded-xl font-semibold tracking-wide text-xs"
+                whileHover={isNavigating ? {} : { y: -2, scale: 1.02 }}
+                whileTap={isNavigating ? {} : { scale: 0.98 }}
+                className="btn btn-ghost flex-1 py-4 rounded-2xl font-bold uppercase tracking-widest text-xs h-14"
               >
-                <RotateCcw className="w-4 h-4 opacity-70" />New Analysis
+                <RotateCcw className="w-4 h-4 opacity-70" />Reset Terminal
               </motion.button>
               <motion.button
                 onClick={() => { playSound?.("click"); onViewResults?.(); }}
                 disabled={isNavigating}
-                whileHover={isNavigating ? {} : { y: -2 }}
-                whileTap={isNavigating ? {} : { scale: 0.972, y: 1 }}
-                className="btn btn-primary flex-1 py-4 rounded-xl font-bold tracking-wide text-xs"
+                whileHover={isNavigating ? {} : { y: -2, scale: 1.02 }}
+                whileTap={isNavigating ? {} : { scale: 0.98 }}
+                className="btn btn-cyan flex-1 py-4 rounded-2xl font-bold uppercase tracking-widest text-xs h-14 relative overflow-hidden"
               >
                 {isNavigating ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" />Arbiter Working…</>
+                  <><Loader2 className="w-4 h-4 animate-spin" />Deliberating...</>
                 ) : (
-                  <><FileText className="w-4 h-4" />View Results<ArrowRight className="w-4 h-4" /></>
+                  <><FileText className="w-4 h-4" />Access Ledger<ArrowRight className="w-4 h-4 ml-1" /></>
                 )}
               </motion.button>
             </div>
-          </div>
+          </CyberNoirPanel>
         </motion.div>
       )}
 
