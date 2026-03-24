@@ -193,3 +193,17 @@ All production bugs and their resolutions, ordered chronologically.
 **Root Cause:** `<label>` and `<textarea>` had no linking `id`/`htmlFor` attributes.
 
 **Fix:** Added `id="hitl-notes"` to textarea and `htmlFor="hitl-notes"` to label.
+
+---
+
+## 2026-03-24 — Phase 1–5: Production Hardening & Cleanup (v1.0.4)
+
+### Audit: Multi-Agent Pipeline & Instrumentation
+- **Verified**: `ForensicCouncilPipeline` orchestration logic correctly handles cross-agent context injection (Agent 1 Gemini findings → Agents 3 & 5).
+- **Verified**: WebSocket broadcasting correctly instrumented in `investigation.py` to prevent race conditions during UI state transitions.
+- **Verified**: PostgreSQL session persistence (`session_persistence.py`) robustly handles backend restart resilience for all `ReportDTO` fields.
+
+### Structural Cleanup
+- **Purged**: Removed all backend root scratch files (`master.py`, `out.txt`) and dev-only test scripts.
+- **Consolidated**: Documentation synchronized across root, `docs/`, and `frontend/` to ensure v1.0.4 parity.
+- **Hardened**: Verified Docker health-checks, volume permissions (non-root `appuser`), and ML model cache persistence.

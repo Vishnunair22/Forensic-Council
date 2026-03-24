@@ -392,8 +392,9 @@ class ForensicAgent(ABC):
                 }
             )
         
-        # Step 3: Build tool registry
-        self._tool_registry = await self.build_tool_registry()
+        # Step 3: Build tool registry (skip if subclass already built it)
+        if not getattr(self, "_tool_registry", None):
+            self._tool_registry = await self.build_tool_registry()
 
         # Step 3b: Inject live tool catalogue into working memory state so
         # the LLM always sees the actual registered tools (not a static list).

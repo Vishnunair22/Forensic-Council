@@ -70,11 +70,11 @@ function ArbiterOverlay({ liveMsg }: { liveMsg: string }) {
   const [step, setStep] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setStep(p => (p + 1) % ARBITER_STEPS.length), 1800);
+    const t = setInterval(() => setStep((p: number) => (p + 1) % ARBITER_STEPS.length), 1800);
     return () => clearInterval(t);
   }, []);
   useEffect(() => {
-    const t = setInterval(() => setElapsed(p => p + 1), 1000);
+    const t = setInterval(() => setElapsed((p: number) => p + 1), 1000);
     return () => clearInterval(t);
   }, []);
   return (
@@ -901,7 +901,7 @@ export default function ResultPage() {
               key="ready"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="space-y-4"
+              className="grid grid-cols-12 gap-4 auto-rows-auto pb-20"
             >
               {/* ── Verdict Hero ── */}
               {vc && (
@@ -909,7 +909,7 @@ export default function ResultPage() {
                   initial={{ opacity: 0, scale: 0.97 }}
                   animate={{ opacity: 1, scale: 1 }}
                   className={clsx(
-                    "rounded-2xl border p-6 sm:p-8 relative overflow-hidden backdrop-blur-sm",
+                    "col-span-12 rounded-2xl border p-6 sm:p-8 relative overflow-hidden backdrop-blur-sm",
                     "shadow-[0_8px_40px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)]",
                     vc.color === "emerald" ? "bg-gradient-to-br from-emerald-950/35 to-emerald-950/15 border-emerald-500/28" :
                     vc.color === "red"     ? "bg-gradient-to-br from-red-950/35 to-red-950/15 border-red-500/28" :
@@ -1038,54 +1038,58 @@ export default function ResultPage() {
                 </motion.div>
               )}
 
-              {/* ══════════════════════════════════════════════════════════ */}
-              {/* ── 2. ANALYSIS REPORT ─────────────────────────────────── */}
-              {/* ══════════════════════════════════════════════════════════ */}
-              <div className="rounded-2xl overflow-hidden relative glass-panel">
-                {/* Card top-edge shine */}
-                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
+              {/* Finding Severity Breakdown — Bento Card */}
+              {totalFindings > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.25 }}
+                  className="col-span-12 lg:col-span-4 glass-panel p-6 rounded-2xl flex flex-col justify-center"
+                >
+                  <SeverityBar counts={severityCounts} total={totalFindings} />
+                </motion.div>
+              )}
 
-                {/* ── Card header ── */}
-                <div className="px-6 py-4 border-b border-white/[0.06] flex items-center gap-2.5">
+              {/* ── 2a. Executive Summary — Bento Card ── */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="col-span-12 lg:col-span-7 glass-panel rounded-2xl overflow-hidden flex flex-col"
+              >
+                <div className="px-6 py-4 border-b border-white/[0.06] flex items-center gap-2.5 bg-white/[0.01]">
                   <FileText className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
-                  <h2 className="text-sm font-semibold text-white">Analysis Report</h2>
-                  <span className="ml-auto text-[10px] font-mono text-slate-600 truncate max-w-[160px]">
-                    {report.case_id}
-                  </span>
+                  <h2 className="text-sm font-semibold text-white">Executive Summary</h2>
                 </div>
-
-                {/* ── 2a. Executive Summary ── */}
-                <div className="p-6 border-b border-white/[0.05] space-y-3">
-                  <h3 className="text-[11px] font-semibold text-slate-500 uppercase tracking-[0.15em] flex items-center gap-2">
-                    <FileText className="w-3.5 h-3.5" aria-hidden="true" /> Executive Summary
-                  </h3>
-                  <p className="text-slate-200 text-sm font-medium leading-relaxed">
-                    {effectiveVerdictSentence}
+                <div className="p-6 space-y-4 flex-1">
+                  <p className="text-slate-200 text-sm font-medium leading-relaxed italic">
+                    "{effectiveVerdictSentence}"
                   </p>
-                  {report.key_findings && report.key_findings.length > 0 ? (
-                    <ul className="space-y-2 pt-1">
+                  {report.key_findings && report.key_findings.length > 0 && (
+                    <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                       {report.key_findings.map((f, i) => (
-                        <li key={i} className="flex items-start gap-2.5 text-sm text-slate-400">
-                          <span className="mt-2 w-1.5 h-1.5 rounded-full bg-emerald-500/50 shrink-0" aria-hidden="true" />
+                        <li key={i} className="flex items-start gap-2.5 text-xs text-slate-400 bg-white/[0.03] p-3 rounded-xl border border-white/[0.05]">
+                          <CheckCircle className="mt-0.5 w-3.5 h-3.5 text-emerald-500/70 shrink-0" aria-hidden="true" />
                           <span className="leading-relaxed">{f}</span>
                         </li>
                       ))}
                     </ul>
-                  ) : report.executive_summary ? (
-                    <p className="text-slate-400 text-sm leading-relaxed">{report.executive_summary}</p>
-                  ) : null}
-                  {report.reliability_note && (
-                    <p className="text-slate-600 text-xs leading-relaxed border-t border-white/[0.06] pt-3 italic">
-                      {report.reliability_note}
-                    </p>
                   )}
                 </div>
+              </motion.div>
 
-                {/* ── 2b. Agent Deployment Overview ── */}
-                <div className="p-6 border-b border-white/[0.05] space-y-3">
-                  <h3 className="text-[11px] font-semibold text-slate-500 uppercase tracking-[0.15em] flex items-center gap-2">
-                    <Cpu className="w-3.5 h-3.5" aria-hidden="true" /> Agent Deployment
-                  </h3>
+              {/* ── 2b. Agent Deployment — Bento Card ── */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.35 }}
+                className="col-span-12 lg:col-span-5 glass-panel rounded-2xl overflow-hidden flex flex-col"
+              >
+                <div className="px-6 py-4 border-b border-white/[0.06] flex items-center gap-2.5 bg-white/[0.01]">
+                  <Cpu className="w-4 h-4 text-cyan-400 shrink-0" aria-hidden="true" />
+                  <h2 className="text-sm font-semibold text-white">Agent Deployment</h2>
+                </div>
+                <div className="p-4 flex-1">
                   <AgentDeploymentTable
                     activeIds={activeAgentIds}
                     metrics={report.per_agent_metrics as Record<string, AgentMetricsDTO> | undefined}
@@ -1093,40 +1097,16 @@ export default function ResultPage() {
                     skippedAgents={report.skipped_agents}
                   />
                 </div>
+              </motion.div>
 
-                {/* ── 2c. Finding Severity Breakdown ── */}
-                {totalFindings > 0 && (
-                  <div className="p-6 border-b border-white/[0.05]">
-                    <SeverityBar counts={severityCounts} total={totalFindings} />
-                  </div>
-                )}
-
-                {/* ── 2d. Coverage & Limitations ── */}
-                {(report.analysis_coverage_note || report.uncertainty_statement) && (
-                  <div className="px-6 py-5 flex gap-3">
-                    <AlertCircle className="w-4 h-4 text-amber-400/80 shrink-0 mt-0.5" aria-hidden="true" />
-                    <div className="space-y-1.5 min-w-0">
-                      <p className="text-[11px] font-semibold text-amber-400/80 uppercase tracking-[0.15em]">
-                        Limitations
-                      </p>
-                      {report.analysis_coverage_note && (
-                        <p className="text-slate-400 text-sm leading-relaxed">{report.analysis_coverage_note}</p>
-                      )}
-                      {report.uncertainty_statement &&
-                       report.uncertainty_statement !== report.analysis_coverage_note && (
-                        <p className="text-slate-500 text-xs leading-relaxed">{report.uncertainty_statement}</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
 
               {/* ══════════════════════════════════════════════════════════ */}
               {/* ── 3. AGENT FINDINGS ──────────────────────────────────── */}
               {/* ══════════════════════════════════════════════════════════ */}
+              {/* Agent Findings — Bento Row */}
               {activeAgentIds.length > 0 && (
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between px-1 pt-2">
+                <div className="col-span-12 space-y-6 pt-4">
+                  <div className="flex items-center justify-between px-1">
                     <h2 className="text-xs font-bold text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2">
                       <Activity className="w-3.5 h-3.5 text-cyan-400" aria-hidden="true" /> Agent Findings
                     </h2>
@@ -1150,9 +1130,10 @@ export default function ResultPage() {
               {/* ══════════════════════════════════════════════════════════ */}
               {/* ── 4. CORROBORATING EVIDENCE ──────────────────────────── */}
               {/* ══════════════════════════════════════════════════════════ */}
+              {/* Corroborating Evidence — Bento Span */}
               {(crossCount > 0 || contestedCount > 0) && (
-                <div className="space-y-2.5">
-                  <h2 className="text-xs font-bold text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2 px-1 pt-2">
+                <div className="col-span-12 space-y-4 pt-6">
+                  <h2 className="text-xs font-bold text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2 px-1">
                     <LinkIcon className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" /> Corroborating Evidence
                   </h2>
                   {crossCount > 0 && (
@@ -1167,7 +1148,8 @@ export default function ResultPage() {
               {/* ══════════════════════════════════════════════════════════ */}
               {/* ── 5. CHAIN OF CUSTODY ────────────────────────────────── */}
               {/* ══════════════════════════════════════════════════════════ */}
-              <div className="rounded-2xl overflow-hidden
+              {/* Chain of Custody — Bento Full Width */}
+              <div className="col-span-12 rounded-2xl overflow-hidden
                 bg-gradient-to-b from-white/[0.035] to-white/[0.012]
                 border border-white/[0.07]
                 shadow-[0_4px_16px_rgba(0,0,0,0.30),inset_0_1px_0_rgba(255,255,255,0.06)]">
@@ -1324,6 +1306,13 @@ export default function ResultPage() {
                 <RotateCcw className="w-4 h-4" aria-hidden="true" /> New Investigation
               </button>
             )}
+
+            <button
+              onClick={() => window.print()}
+              className="btn btn-ghost px-5 py-2.5 rounded-xl text-sm border border-white/5 hover:bg-white/5 font-medium flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" aria-hidden="true" /> Download Report
+            </button>
 
             {/* Right Button */}
             <button

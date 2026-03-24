@@ -7,6 +7,7 @@ All exceptions inherit from ForensicCouncilBaseException for consistent handling
 """
 
 from typing import Any, Optional
+from uuid import UUID
 
 
 class ForensicCouncilBaseException(Exception):
@@ -69,6 +70,17 @@ class ConfigurationError(ForensicCouncilBaseException):
 class InfrastructureError(ForensicCouncilBaseException):
     """Base class for infrastructure-related errors."""
     pass
+
+
+class CircuitBreakerOpen(InfrastructureError):
+    """Raised when the circuit breaker is open and refusing calls."""
+    
+    def __init__(self, service_name: str, retry_after: float):
+        self.service_name = service_name
+        self.retry_after = retry_after
+        super().__init__(
+            f"Circuit breaker open for {service_name}. Refusing calls for {retry_after:.1f}s"
+        )
 
 
 class DatabaseConnectionError(InfrastructureError):
@@ -187,9 +199,27 @@ class PermittedCallViolationError(InterAgentError):
     pass
 
 
+class ArbiterRechallengeError(InterAgentError):
+    """Raised when an agent attempts to re-challenge an Arbiter challenge."""
+    
+    def __init__(self, agent_id: str):
+        self.agent_id = agent_id
+        super().__init__(
+            f"Arbiter challenges are terminal: {agent_id} cannot re-challenge the Arbiter."
+        )
+
+
 class CircularCallError(InterAgentError):
     """Raised when a circular inter-agent call is detected."""
-    pass
+    
+    def __init__(self, caller: str, callee: str, artifact_id: Optional[UUID]):
+        self.caller = caller
+        self.callee = callee
+        self.artifact_id = artifact_id
+        super().__init__(
+            f"Circular call detected: {caller} -> {callee} on artifact {artifact_id}. "
+            f"Callee cannot re-initiate call to caller on same artifact within same loop."
+        )
 
 
 # -------------------

@@ -154,6 +154,14 @@ class TestBackendAPIConnectivity:
         r = httpx.options(f"{API_BASE}/api/v1/investigate", timeout=10)
         assert r.status_code in (200, 204, 405)
 
+    def test_resume_endpoint_reachable(self):
+        r = httpx.post(f"{API_BASE}/api/v1/sessions/{uuid.uuid4()}/resume", timeout=10)
+        assert r.status_code in (200, 401, 403, 404, 422)
+
+    def test_arbiter_status_endpoint_reachable(self):
+        r = httpx.get(f"{API_BASE}/api/v1/sessions/{uuid.uuid4()}/arbiter-status", timeout=10)
+        assert r.status_code in (200, 401, 403, 404)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # FRONTEND CONNECTIVITY

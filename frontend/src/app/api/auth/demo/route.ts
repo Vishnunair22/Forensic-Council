@@ -1,5 +1,15 @@
 import { NextResponse } from "next/server";
 
+// Retry settings: the backend health check can pass while bootstrap user
+// creation is still in progress (async DB writes after startup). Retry a few
+// times with backoff so the first page-load auth doesn't fail spuriously.
+const MAX_RETRIES = 4;
+const RETRY_DELAY_MS = [500, 1000, 2000, 3000]; // progressive back-off
+
+function sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function POST() {
     const demoUsername = process.env.DEMO_USERNAME || "investigator";
     const demoPassword = process.env.DEMO_PASSWORD || process.env.NEXT_PUBLIC_DEMO_PASSWORD;
@@ -22,39 +32,56 @@ export async function POST() {
         );
     }
 
-    try {
-        const formData = new URLSearchParams();
-        formData.append("username", demoUsername);
-        formData.append("password", demoPassword);
+    const formData = new URLSearchParams();
+    formData.append("username", demoUsername);
+    formData.append("password", demoPassword);
 
-        const res = await fetch(`${apiUrl}/api/v1/auth/login`, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: formData.toString(),
-            // Abort if the backend is unreachable (e.g. still starting up)
-            signal: AbortSignal.timeout(10_000),
-        });
+    let lastError = "";
 
-        if (!res.ok) {
-            const errorData = await res.json().catch(() => ({}));
-            return NextResponse.json(
-                { error: errorData.detail || "Authentication failed" },
-                { status: res.status }
-            );
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        if (attempt > 0) {
+            await sleep(RETRY_DELAY_MS[attempt - 1] ?? 3000);
         }
 
-        const data = await res.json();
-        return NextResponse.json(data);
-    } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : "Unknown error";
-        const isTimeout = msg.includes("timeout") || msg.includes("abort");
-        return NextResponse.json(
-            {
-                error: isTimeout
-                    ? "Backend is not reachable — is the API server running?"
-                    : "Failed to connect to backend auth service",
-            },
-            { status: 503 }
-        );
+        try {
+            const res = await fetch(`${apiUrl}/api/v1/auth/login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: formData.toString(),
+                signal: AbortSignal.timeout(8_000),
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                // Auth credential errors (4xx) are permanent — don't retry.
+                if (res.status >= 400 && res.status < 500) {
+                    return NextResponse.json(
+                        { error: errorData.detail || "Authentication failed" },
+                        { status: res.status }
+                    );
+                }
+                // 5xx from backend — may be transient, retry
+                lastError = errorData.detail || `Backend returned ${res.status}`;
+                continue;
+            }
+
+            const data = await res.json();
+            return NextResponse.json(data);
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : "Unknown error";
+            const isTimeout = msg.includes("timeout") || msg.includes("abort");
+            lastError = isTimeout ? "timeout" : msg;
+            // Connection errors are retryable
+        }
     }
+
+    const isTimeout = lastError === "timeout";
+    return NextResponse.json(
+        {
+            error: isTimeout
+                ? "Backend is not reachable — is the API server running?"
+                : "Failed to connect to backend auth service",
+        },
+        { status: 503 }
+    );
 }

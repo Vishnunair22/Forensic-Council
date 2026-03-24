@@ -177,6 +177,12 @@ async def is_token_blacklisted(token: str) -> bool:
     
     Returns:
         True if token is blacklisted, False otherwise
+    
+    NOTE: Fail-open design — if Redis is unavailable we allow the request
+    through with a warning rather than denying ALL authenticated users.
+    The JWT signature + expiry claims still provide validity guarantees
+    even without the blacklist. This is a deliberate trade-off: a brief
+    Redis outage should not cause a service outage.
     """
     try:
         from infra.redis_client import get_redis_client
@@ -185,11 +191,11 @@ async def is_token_blacklisted(token: str) -> bool:
             result = await redis.get(f"blacklist:{token}")
             return result is not None
         else:
-            logger.error("Redis unavailable — cannot verify token revocation, denying")
-            return True
+            logger.warning("Redis unavailable — token blacklist check skipped, proceeding with JWT claims only")
+            return False
     except Exception as e:
-        logger.error("Redis unavailable — cannot verify token revocation, denying", error=str(e))
-        return True
+        logger.warning("Redis unavailable — token blacklist check skipped, proceeding with JWT claims only", error=str(e))
+        return False
 
 
 async def blacklist_token(token: str, expires_in_seconds: int) -> None:

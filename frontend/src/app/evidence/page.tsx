@@ -14,7 +14,8 @@
 "use client";
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { CheckCircle2, Circle, AlertCircle, PlayCircle } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ShieldCheck } from "lucide-react";
 
@@ -244,6 +245,17 @@ export default function EvidencePage() {
       sessionStorage.removeItem("forensic_auto_start");
     }
   }, [triggerAnalysis]);
+  
+  // Handle 'sample' query parameter for quick demo
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get('sample') === 'true' && status === 'idle') {
+      // Mock a sample file for the demo
+      const sampleFile = new File(["sample data"], "sample_evidence.png", { type: "image/png" });
+      setFile(sampleFile);
+      triggerAnalysis(sampleFile);
+    }
+  }, [searchParams, status, triggerAnalysis]);
 
   // Validate file — uses the single canonical ALLOWED_MIME_TYPES from constants.ts
   const validateFile = (f: File): boolean => {
@@ -524,7 +536,46 @@ export default function EvidencePage() {
       />
 
       {/* Main content */}
-      <main className="max-w-6xl mx-auto relative z-10">
+      <main className="max-w-6xl mx-auto relative z-10 px-6 sm:px-8">
+        {/* Phase Indicator */}
+        {hasStartedAnalysis && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-12 flex items-center justify-center"
+          >
+            <div className="flex items-center gap-4 bg-white/[0.03] border border-white/[0.08] p-1.5 rounded-2xl backdrop-blur-sm">
+              <div className={`flex items-center gap-2.5 px-5 py-2.5 rounded-xl transition-all duration-500 ${
+                phase === "initial" 
+                  ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20" 
+                  : "text-slate-500 opacity-60"
+              }`}>
+                {phase === "initial" && status !== "complete" && !awaitingDecision ? (
+                  <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
+                ) : (
+                  <CheckCircle2 className={`w-4 h-4 ${phase === "deep" || awaitingDecision || status === "complete" ? "text-cyan-400" : ""}`} />
+                )}
+                <span className="text-[11px] font-mono uppercase tracking-[0.15em] font-bold">1. Rapid Forensic Scan</span>
+              </div>
+              
+              <div className="w-8 h-px bg-white/10" />
+
+              <div className={`flex items-center gap-2.5 px-5 py-2.5 rounded-xl transition-all duration-500 ${
+                phase === "deep" 
+                  ? "bg-violet-500/10 text-violet-400 border border-violet-500/20 shadow-[0_0_20px_rgba(139,92,246,0.1)]" 
+                  : "text-slate-500 opacity-60"
+              }`}>
+                {phase === "deep" && status !== "complete" ? (
+                  <div className="w-2.5 h-2.5 rounded-full bg-violet-400 animate-pulse shadow-[0_0_8px_rgba(139,92,246,0.8)]" />
+                ) : (
+                  <Circle className={`w-4 h-4 ${phase === "deep" && status === "complete" ? "text-violet-400" : ""}`} />
+                )}
+                <span className="text-[11px] font-mono uppercase tracking-[0.15em] font-bold">2. Deep Investigative Analysis</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         <PageTransition>
         <AnimatePresence mode="wait">
           {/* Upload Form */}

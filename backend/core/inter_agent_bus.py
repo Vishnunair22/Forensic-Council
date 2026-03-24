@@ -14,7 +14,12 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
-from core.exceptions import ForensicCouncilBaseException
+from core.exceptions import (
+    ForensicCouncilBaseException,
+    PermittedCallViolationError,
+    CircularCallError,
+    ArbiterRechallengeError
+)
 
 
 class InterAgentCallType(str, Enum):
@@ -69,39 +74,7 @@ PERMITTED_CALL_PATHS: dict[str, list[str]] = {
 CALL_RECEIVERS_ONLY = ["Agent1", "Agent5"]
 
 
-class PermittedCallViolationError(ForensicCouncilBaseException):
-    """Raised when an agent attempts to call another agent outside permitted paths."""
-    
-    def __init__(self, caller: str, callee: str):
-        self.caller = caller
-        self.callee = callee
-        super().__init__(
-            f"Call path not permitted: {caller} -> {callee}. "
-            f"Permitted callees for {caller}: {PERMITTED_CALL_PATHS.get(caller, [])}"
-        )
 
-
-class CircularCallError(ForensicCouncilBaseException):
-    """Raised when a circular call dependency is detected."""
-    
-    def __init__(self, caller: str, callee: str, artifact_id: Optional[UUID]):
-        self.caller = caller
-        self.callee = callee
-        self.artifact_id = artifact_id
-        super().__init__(
-            f"Circular call detected: {caller} -> {callee} on artifact {artifact_id}. "
-            f"Callee cannot re-initiate call to caller on same artifact within same loop."
-        )
-
-
-class ArbiterRechallengeError(ForensicCouncilBaseException):
-    """Raised when an agent attempts to re-challenge an Arbiter challenge."""
-    
-    def __init__(self, agent_id: str):
-        self.agent_id = agent_id
-        super().__init__(
-            f"Arbiter challenges are terminal: {agent_id} cannot re-challenge the Arbiter."
-        )
 
 
 class InterAgentBus:
@@ -136,7 +109,7 @@ class InterAgentBus:
         # Track arbiter challenges: agent_id that have been challenged
         self._arbiter_challenges: set[str] = set()
         # Track completed calls on same artifact to detect circular patterns
-        self._completed_calls: list[tuple[str, str, Optional[str]]] = []
+        self._completed_calls: set[tuple[str, str, Optional[str]]] = set()
         # Call history for audit
         self._call_history: list[InterAgentCall] = []
     
@@ -280,7 +253,7 @@ class InterAgentBus:
             call.completed_utc = datetime.now(timezone.utc)
             
             # 9. Track completed call for circular detection
-            self._completed_calls.append((call.caller_agent_id, call.callee_agent_id, artifact_str))
+            self._completed_calls.add((call.caller_agent_id, call.callee_agent_id, artifact_str))
             
             # 10. Store in history
             self._call_history.append(call)

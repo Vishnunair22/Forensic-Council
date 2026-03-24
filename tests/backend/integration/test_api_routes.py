@@ -233,6 +233,14 @@ class TestSessionEndpoints:
         r = client.get(f"/api/v1/sessions/{uuid.uuid4()}/checkpoints")
         assert r.status_code in (200, 401, 403, 404)
 
+    def test_session_resume_endpoint_exists(self, client):
+        r = client.post(f"/api/v1/sessions/{uuid.uuid4()}/resume")
+        assert r.status_code in (200, 401, 403, 404, 422)
+
+    def test_session_arbiter_status_endpoint_exists(self, client):
+        r = client.get(f"/api/v1/sessions/{uuid.uuid4()}/arbiter-status")
+        assert r.status_code in (200, 401, 403, 404)
+
     def test_session_live_ws_endpoint_exists(self, client):
         r = client.get(f"/api/v1/sessions/{uuid.uuid4()}/brief")
         assert r.status_code in (200, 401, 403, 404)

@@ -153,3 +153,9 @@ Parallelising all 5 agents simultaneously on typical analyst hardware causes:
 - Unstable heartbeat timing
 
 Sequential execution trades total wall-clock time for predictable memory usage, linear readable output, and stable streaming.
+
+---
+
+## Frontend Implementation Details
+
+For extremely detailed breakdowns of the Next.js component hierarchy, props, and custom hooks, refer to the **[Component Guide](file:///d:/Forensic%20Council/frontend/COMPONENTS.md)**. The frontend follows a strict separation of concerns between the API layer (`lib/api.ts`), custom hooks (`hooks/useSimulation.ts`), and the accessible component library (`components/evidence/`).

@@ -42,11 +42,19 @@ from orchestration.session_manager import SessionManager
 logger = get_logger(__name__)
 settings = get_settings()
 
-def _assign_severity_tier(f: dict) -> str:
+def _assign_severity_tier(f: Any) -> str:
     """Assign INFO/LOW/MEDIUM/HIGH/CRITICAL to a finding based on metadata."""
-    meta = f.get("metadata") or {}
-    conf = float(f.get("confidence_raw") or 0.0)
-    status_str = str(f.get("status", "")).upper()
+    if hasattr(f, "metadata"):
+        meta = f.metadata or {}
+        conf = getattr(f, "confidence_raw", 0.0)
+        status_str = str(getattr(f, "status", "")).upper()
+    elif isinstance(f, dict):
+        meta = f.get("metadata") or {}
+        conf = float(f.get("confidence_raw") or 0.0)
+        status_str = str(f.get("status", "")).upper()
+    else:
+        return "INFO"
+
     na_flags = ("ela_not_applicable", "ghost_not_applicable", "noise_fingerprint_not_applicable", "prnu_not_applicable")
     is_na = any(meta.get(flag) for flag in na_flags) or str(meta.get("verdict", "")).upper() == "NOT_APPLICABLE" or str(meta.get("prnu_verdict", "")).upper() == "NOT_APPLICABLE"
     is_failed = not is_na and meta.get("court_defensible") is False
@@ -222,7 +230,8 @@ async def start_investigation(
     session_id = str(uuid4())
 
     # ── Stage file to /tmp (non-blocking) ────────────────────────────────────
-    tmp_path = Path("/tmp") / f"{session_id}{file_extension}"
+    import tempfile
+    tmp_path = Path(tempfile.gettempdir()) / f"{session_id}{file_extension}"
     try:
         content = await file.read()
         if not content:
@@ -500,7 +509,7 @@ async def _wrap_pipeline_with_broadcasts(
     # Initialise arbiter step tracking on the pipeline so getArbiterStatus can read it
     pipeline._arbiter_step = ""
 
-    async def instrumented_run(evidence_artifact, session_id=None):
+    async def instrumented_run(evidence_artifact, session_id=None, *args, **kwargs):
         """Run each agent SEQUENTIALLY with improved real-time updates."""
 
         # By the time this runs, pipeline._setup_infrastructure() has already created
@@ -1737,10 +1746,18 @@ async def run_investigation_task(
     
     try:
         # Wait for WebSocket connection (up to 5 seconds)
+        logger.info(f"Background task for {session_id} waiting for WebSocket client...")
+        ws_connected = False
         for _ws_wait in range(50):
             if session_id in _websocket_connections and _websocket_connections[session_id]:
+                ws_connected = True
                 break
             await asyncio.sleep(0.1)
+
+        if ws_connected:
+            logger.info(f"WebSocket client connected for {session_id}. Starting analysis.")
+        else:
+            logger.warning(f"WebSocket client NEVER connected for {session_id} after 5s. Proceeding with analysis anyway for background record.")
         
         # Send initial update
         await broadcast_update(

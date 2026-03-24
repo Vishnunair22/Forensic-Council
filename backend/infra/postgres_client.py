@@ -98,6 +98,7 @@ class PostgresClient:
                 min_size=self._min_pool_size,
                 max_size=self._max_pool_size,
                 init=self._init_connection,
+                timeout=2.0,
             )
             
             # Test connection
@@ -132,8 +133,12 @@ class PostgresClient:
             raise DatabaseConnectionError("PostgreSQL pool not connected. Call connect() first.")
         return self._pool
     
-    # NOTE: acquire() method was removed - it was broken (async generator with yield inside async def)
-    # and never used. Use self.pool.acquire() directly or use the execute/fetch methods.
+    def _process_args(self, args: tuple[Any, ...]) -> list[Any]:
+        """Convert dictionary arguments to JSON strings for JSONB columns."""
+        return [
+            json.dumps(arg) if isinstance(arg, dict) else arg
+            for arg in args
+        ]
 
     async def execute(
         self,
@@ -151,11 +156,7 @@ class PostgresClient:
             Status string from PostgreSQL
         """
         async with self.pool.acquire() as conn:
-            # Convert dict args to JSON strings for JSONB columns
-            processed_args = [
-                json.dumps(arg) if isinstance(arg, dict) else arg
-                for arg in args
-            ]
+            processed_args = self._process_args(args)
             result = await conn.execute(query, *processed_args)
             logger.debug("Executed query", query=query[:100], status=result)
             return result
@@ -177,7 +178,7 @@ class PostgresClient:
         """
         async with self.pool.acquire() as conn:
             processed_args_list = [
-                tuple(json.dumps(arg) if isinstance(arg, dict) else arg for arg in args)
+                tuple(self._process_args(args))
                 for args in args_list
             ]
             await conn.executemany(query, processed_args_list)
@@ -199,11 +200,7 @@ class PostgresClient:
             List of records
         """
         async with self.pool.acquire() as conn:
-            # Convert dict args to JSON strings for JSONB columns
-            processed_args = [
-                json.dumps(arg) if isinstance(arg, dict) else arg
-                for arg in args
-            ]
+            processed_args = self._process_args(args)
             results = await conn.fetch(query, *processed_args)
             logger.debug("Fetched rows", query=query[:100], count=len(results))
             return results
@@ -224,11 +221,7 @@ class PostgresClient:
             Single record or None
         """
         async with self.pool.acquire() as conn:
-            # Convert dict args to JSON strings for JSONB columns
-            processed_args = [
-                json.dumps(arg) if isinstance(arg, dict) else arg
-                for arg in args
-            ]
+            processed_args = self._process_args(args)
             result = await conn.fetchrow(query, *processed_args)
             logger.debug("Fetched single row", query=query[:100], found=result is not None)
             return result
@@ -249,11 +242,7 @@ class PostgresClient:
             Single value or None
         """
         async with self.pool.acquire() as conn:
-            # Convert dict args to JSON strings for JSONB columns
-            processed_args = [
-                json.dumps(arg) if isinstance(arg, dict) else arg
-                for arg in args
-            ]
+            processed_args = self._process_args(args)
             result = await conn.fetchval(query, *processed_args)
             logger.debug("Fetched single value", query=query[:100])
             return result

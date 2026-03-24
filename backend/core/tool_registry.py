@@ -120,7 +120,7 @@ class ToolRegistry:
         input_data: dict[str, Any],
         agent_id: str,
         session_id: uuid.UUID,
-        custody_logger: CustodyLogger
+        custody_logger: Optional[CustodyLogger] = None,
     ) -> ToolResult:
         """
         Execute a tool call with logging and graceful degradation.
@@ -133,7 +133,7 @@ class ToolRegistry:
             input_data: Input parameters for the tool
             agent_id: ID of the agent making the call
             session_id: Session ID for logging
-            custody_logger: Custody logger for audit trail
+            custody_logger: Optional custody logger for audit trail
             
         Returns:
             ToolResult with success/failure status and output

@@ -845,9 +845,15 @@ async def analyze_image_content(
             raise ToolUnavailableError(f"File not found: {original_path}")
 
         analyzer = get_clip_analyzer()
-        
+
         categories = custom_categories if custom_categories else None
-        result = analyzer.analyze_image(original_path, categories=categories)
+        # Run blocking CLIP inference in a thread executor so it doesn't stall
+        # the asyncio event loop (first call loads ~300 MB model from disk).
+        import asyncio as _asyncio
+        loop = _asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            None, lambda: analyzer.analyze_image(original_path, categories=categories)
+        )
         
         if not result.available:
             return {

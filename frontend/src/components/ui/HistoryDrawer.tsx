@@ -64,7 +64,7 @@ export function HistoryDrawer() {
       >
         <span className="flex flex-col items-center gap-2">
            <History className="w-5 h-5 text-violet-400 group-hover:text-violet-300" />
-           <span className="[writing-mode:vertical-lr] rotate-180 text-[10px] font-mono tracking-[0.2em] text-violet-400 uppercase opacity-60 group-hover:opacity-100 mt-2">History</span>
+           <span className="[writing-mode:vertical-lr] rotate-180 text-[12px] font-bold tracking-[0.2em] text-violet-300 uppercase opacity-90 group-hover:opacity-100 mt-2">History</span>
         </span>
       </button>
 
@@ -112,13 +112,13 @@ export function HistoryDrawer() {
                         <div className="space-y-1.5">
                            <div className="flex items-center gap-1.5">
                               <UIcon className={clsx("w-3.5 h-3.5 shrink-0", ui.color)} />
-                              <span className={clsx("text-[10px] font-bold uppercase tracking-wide", ui.color)}>
+                              <span className={clsx("text-[12px] font-black uppercase tracking-wide", ui.color)}>
                                 {item.verdict.replace(/_/g, " ")}
                               </span>
                            </div>
-                           <div className="flex justify-between items-center text-[9px] text-slate-500 font-mono">
-                              <span className="px-1.5 py-0.5 rounded border border-white/10 bg-white/5 uppercase">{item.type} Analysis</span>
-                              <span>{new Date(item.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                           <div className="flex justify-between items-center text-[11px] text-slate-300 font-mono font-bold">
+                              <span className="px-1.5 py-0.5 rounded border border-white/20 bg-white/10 uppercase">{item.type} Analysis</span>
+                              <span className="text-slate-400 font-medium">{new Date(item.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
                            </div>
                         </div>
 

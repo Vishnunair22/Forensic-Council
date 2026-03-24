@@ -40,7 +40,7 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 _GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
-_DEFAULT_MODEL = "gemini-flash-latest"
+_DEFAULT_MODEL = "gemini-1.5-flash-latest"
 _MAX_RETRIES = 2
 _BASE_BACKOFF = 1.5
 
@@ -507,12 +507,17 @@ class GeminiVisionClient:
                         if resp.status_code in {429, 500, 502, 503, 504}:
                             wait = _BASE_BACKOFF * (2 ** attempt)
                             logger.warning(
-                                f"Gemini API {resp.status_code}, retrying in {wait:.1f}s (attempt {attempt + 1}/{_MAX_RETRIES}). Detail: {error_detail[:200]}"
+                                f"Gemini API retryable error {resp.status_code} on attempt {attempt + 1}/{_MAX_RETRIES} "
+                                f"for model {self.model}. Retrying in {wait:.1f}s... "
+                                f"Body: {error_detail[:500]}"
                             )
                             await asyncio.sleep(wait)
                             continue
                         else:
-                            logger.error(f"Gemini API error {resp.status_code}: {error_detail[:500]}")
+                            logger.error(
+                                f"Gemini API non-retryable error {resp.status_code} for model {self.model}. "
+                                f"Body: {error_detail[:1000]}"
+                            )
                             resp.raise_for_status()
                     data = resp.json()
                     # Extract text from Gemini response structure

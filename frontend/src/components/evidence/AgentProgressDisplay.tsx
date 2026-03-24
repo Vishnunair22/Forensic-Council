@@ -5,6 +5,7 @@
  * and decision buttons after each analysis phase.
  */
 
+import { clsx } from "clsx";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, AlertTriangle, Loader2, ArrowRight,
@@ -108,9 +109,9 @@ function ExpandableText({
             hover:text-cyan-300 transition-colors"
         >
           {expanded ? (
-            <><ChevronUp className="w-3 h-3" />Show less</>
+            <><ChevronUp className="w-3.5 h-3.5" />Show less</>
           ) : (
-            <><ChevronDown className="w-3 h-3" />Show more</>
+            <><ChevronDown className="w-3.5 h-3.5" />Show more</>
           )}
         </button>
       )}
@@ -120,10 +121,10 @@ function ExpandableText({
 
 // ── Findings accordion ───────────────────────────────────────────────────────
 const FLAG_STYLES = {
-  ok:   { dot: "bg-emerald-400",  text: "text-emerald-300", bar: "bg-emerald-500/20", icon: "✓" },
-  warn: { dot: "bg-amber-400",    text: "text-amber-300",   bar: "bg-amber-500/20",   icon: "⚠" },
-  bad:  { dot: "bg-red-400",      text: "text-red-300",     bar: "bg-red-500/20",     icon: "✕" },
-  info: { dot: "bg-slate-500",    text: "text-slate-400",   bar: "bg-white/[0.04]",   icon: "·" },
+  ok:   { dot: "bg-emerald-400",  text: "text-emerald-300", bar: "bg-emerald-500/30", icon: "✓" },
+  warn: { dot: "bg-amber-400",    text: "text-amber-200",   bar: "bg-amber-500/30",   icon: "⚠" },
+  bad:  { dot: "bg-red-400",      text: "text-red-200",     bar: "bg-red-500/30",     icon: "✕" },
+  info: { dot: "bg-slate-400",    text: "text-slate-200",   bar: "bg-white/[0.12]",   icon: "·" },
 } as const;
 
 function FindingsAccordion({
@@ -164,10 +165,10 @@ function FindingsAccordion({
               />
             ))}
           </div>
-          <span className={`text-[11px] font-semibold tracking-wide uppercase ${summaryColor}`}>
+          <span className={`text-[12px] font-bold tracking-wide uppercase ${summaryColor}`}>
             {findingsCount ?? sectionFlags.length} finding{(findingsCount ?? sectionFlags.length) !== 1 ? "s" : ""}
           </span>
-          <span className="text-[10px] text-slate-600 font-mono">
+          <span className="text-[11px] text-slate-400 font-mono font-bold">
             / {sectionFlags.length} section{sectionFlags.length !== 1 ? "s" : ""}
           </span>
         </div>
@@ -214,7 +215,7 @@ function FindingsAccordion({
                       {/* Color bar */}
                       <span className={`w-[2px] h-3.5 rounded-full flex-shrink-0 ${style.bar}`} />
                       {/* Flag icon */}
-                      <span className={`text-[10px] font-black flex-shrink-0 w-4 text-center drop-shadow-md ${style.text}`}>
+                      <span className={`text-[12px] font-black flex-shrink-0 w-5 text-center drop-shadow-md ${style.text}`}>
                         {style.icon}
                       </span>
                       {/* Section label */}
@@ -244,7 +245,7 @@ function FindingsAccordion({
                           transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
                           className="overflow-hidden bg-black/40"
                         >
-                          <p className="px-10 pb-3 pt-1 text-[11px] text-slate-400 font-mono leading-relaxed border-l-2 ml-4 border-white/[0.08]">
+                          <p className="px-10 pb-3 pt-1 text-[12px] text-slate-300 font-mono leading-relaxed border-l-2 ml-4 border-white/[0.15]">
                             {sf.key_signal}
                           </p>
                         </motion.div>
@@ -278,11 +279,11 @@ const SEV_BORDER: Record<string, string> = {
 };
 
 const SEV_LABEL: Record<string, { text: string; cls: string }> = {
-  CRITICAL: { text: "CRITICAL", cls: "text-red-400 bg-red-500/10 border-red-500/20" },
-  HIGH:     { text: "HIGH",     cls: "text-red-300 bg-red-500/10 border-red-500/20" },
-  MEDIUM:   { text: "MEDIUM",   cls: "text-amber-300 bg-amber-500/10 border-amber-500/20" },
-  LOW:      { text: "LOW",      cls: "text-slate-400 bg-white/[0.04] border-white/[0.07]" },
-  INFO:     { text: "INFO",     cls: "text-slate-500 bg-white/[0.03] border-white/[0.06]" },
+  CRITICAL: { text: "CRITICAL", cls: "text-red-400 bg-red-500/20 border-red-500/30" },
+  HIGH:     { text: "HIGH",     cls: "text-red-200 bg-red-500/20 border-red-500/30" },
+  MEDIUM:   { text: "MEDIUM",   cls: "text-amber-200 bg-amber-500/20 border-amber-500/30" },
+  LOW:      { text: "LOW",      cls: "text-slate-200 bg-white/[0.1] border-white/[0.15]" },
+  INFO:     { text: "INFO",     cls: "text-slate-300 bg-white/[0.08] border-white/[0.12]" },
 };
 
 const CLAMP_CHARS = 150;
@@ -311,19 +312,19 @@ function FindingRow({ f }: { f: FindingPreview }) {
         </span>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {f.severity !== "LOW" && f.severity !== "INFO" && (
-            <span className={`inline-flex text-[9px] font-black px-2 py-0.5 rounded shadow-sm tracking-[0.1em] ${sev.cls}`}>
+            <span className={`inline-flex text-[10px] font-black px-2 py-0.5 rounded shadow-sm tracking-[0.1em] ${sev.cls}`}>
               {sev.text}
             </span>
           )}
           {f.confidence > 0.01 && (
-            <span className="text-[9px] font-mono font-bold text-slate-400 bg-black/40 border border-white/[0.08] px-1.5 py-0.5 rounded shadow-inner">
+            <span className="text-[10px] font-mono font-bold text-slate-200 bg-black/60 border border-white/[0.15] px-1.5 py-0.5 rounded shadow-inner">
               {Math.round(f.confidence * 100)}%
             </span>
           )}
         </div>
       </div>
       {/* Summary */}
-      <motion.p layout className="text-xs text-slate-400 leading-relaxed max-w-prose">
+      <motion.p layout className="text-xs text-slate-200 leading-relaxed max-w-prose font-medium">
         {displayText}
         {needsExpand && (
           <button
@@ -355,8 +356,8 @@ function FindingsPreviewList({ findings }: { findings: FindingPreview[] }) {
         <motion.button
           layout
           onClick={() => setShowAll(v => !v)}
-          className="w-full text-[10px] font-bold tracking-widest uppercase text-slate-500 hover:text-cyan-400 transition-colors py-2.5 text-center
-            border border-white/[0.04] border-dashed rounded-xl bg-white/[0.01] hover:bg-cyan-500/10 hover:border-cyan-500/30 my-1"
+          className="w-full text-[11px] font-bold tracking-widest uppercase text-slate-300 hover:text-cyan-300 transition-colors py-2.5 text-center
+            border border-white/[0.15] border-dashed rounded-xl bg-white/[0.02] hover:bg-cyan-500/20 hover:border-cyan-500/40 my-1"
         >
           {showAll
             ? "↑ Collapse list"
@@ -432,7 +433,7 @@ function LiveThinkingText({ text, active }: { text: string; active: boolean }) {
           animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           exit={{ opacity: 0, y: -4, filter: "blur(3px)" }}
           transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-          className="text-xs leading-relaxed text-cyan-300/85 whitespace-pre-wrap break-words"
+          className="text-sm leading-relaxed text-cyan-200 whitespace-pre-wrap break-words font-medium"
         >
           {displayText}
           {/* Blinking cursor while actively running */}
@@ -690,15 +691,15 @@ export function AgentProgressDisplay({
                 ? "Deep Analysis Running"
                 : "Evidence Analysis"}
         </motion.h2>
-        <p className="text-xs font-mono tracking-widest uppercase text-slate-500 font-semibold">
+        <p className="text-xs font-mono tracking-widest uppercase text-slate-300 font-bold">
           {showInitialDecision || showDeepComplete
             ? `${activeCompletedCount} OF ${visibleAgentsCount} AGENTS RESPONDED`
             : `${activeCompletedCount} / ${visibleAgentsCount} AGENTS RESPONDED`}
         </p>
       </div>
 
-      {/* Agent Cards Grid */}
-      <div className="w-full max-w-5xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Agent Cards Bento Grid */}
+      <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {visibleAgents.map((agent) => {
           const status = getAgentStatus(agent.id);
           const rawThinking = getAgentThinking(agent.id);
@@ -706,37 +707,40 @@ export function AgentProgressDisplay({
           const completed = getAgentFindings(agent.id);
           const isRevealed = revealedAgents.has(agent.id);
 
+          const rowSpan = 
+            agent.id === "agent-1" ? "lg:col-span-2" : 
+            agent.id === "agent-4" ? "lg:col-span-2" : 
+            agent.id === "agent-5" ? "lg:col-span-3" : 
+            "lg:col-span-1";
+
           return (
             <AnimatePresence key={agent.id}>
               {isRevealed && (
                 <motion.div
-                  initial={{ opacity: 0, y: 28, scale: 0.92 }}
+                  initial={{ opacity: 0, y: 28, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -8, scale: 0.97 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 24 }}
-                  className={[
-                    "glass-panel rounded-2xl p-5 transition-colors duration-300",
-                    status === "running"  ? "card-running" : "",
-                    status === "waiting" || status === "checking" ? "opacity-55" : "",
-                  ].join(" ")}
-                  style={{
-                    borderColor:
-                      status === "running"      ? "transparent"             : // border handled by card-running glow
-                      status === "complete"     ? "rgba(16,185,129,0.24)"   :
-                      status === "error"        ? "rgba(239,68,68,0.24)"    :
-                      status === "unsupported"  ? "rgba(245,158,11,0.22)"   :
-                      status === "checking"     ? "rgba(139,92,246,0.26)"   :
-                                                  "rgba(255,255,255,0.06)",
-                    background:
-                      status === "running"
-                        ? "linear-gradient(160deg, rgba(0,212,255,0.07) 0%, rgba(255,255,255,0.025) 60%)"
-                        : undefined,
-                    boxShadow:
-                      status === "complete" ? "0 8px 32px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.10), 0 0 22px rgba(16,185,129,0.07)" :
-                      status === "checking" ? "0 8px 32px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.10), 0 0 22px rgba(124,58,237,0.09)" :
-                      undefined,
-                  }}
+                  transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                  className={clsx(
+                    "glass-panel rounded-[2.5rem] p-6 transition-all duration-500 relative group overflow-hidden",
+                    rowSpan,
+                    status === "running" && "ring-2 ring-cyan-500/20 shadow-[0_0_40px_rgba(0,212,255,0.08)] bg-cyan-950/[0.03]",
+                    (status === "waiting" || status === "checking") && "opacity-60 grayscale-[0.3]"
+                  )}
                 >
+                  {/* Subtle noise texture overlay */}
+                  <div className="absolute inset-0 opacity-[0.015] pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] brightness-150" />
+                  
+                  {/* Status glow accent */}
+                  <div 
+                    className={clsx(
+                      "absolute -top-24 -right-24 w-48 h-48 rounded-full blur-[80px] opacity-[0.08] pointer-events-none transition-colors duration-700",
+                      status === "running" ? "bg-cyan-400" :
+                      status === "complete" ? "bg-emerald-400" :
+                      status === "error" ? "bg-red-400" :
+                      status === "checking" ? "bg-violet-400" : "bg-transparent"
+                    )}
+                  />
                   {/* Top-edge accent line — cyan for running, dimmer for other states */}
                   <div className="absolute inset-x-0 top-0 h-px rounded-t-2xl pointer-events-none"
                     style={{
@@ -788,12 +792,12 @@ export function AgentProgressDisplay({
                     </div>
                     <div className="shrink-0">
                       {status === "waiting" && (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 font-medium px-2 py-0.5 rounded-full bg-slate-800/50">
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-600 animate-pulse" />Queued
+                        <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-200 font-bold px-2 py-0.5 rounded-full bg-slate-800 border border-white/10">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse" />Queued
                         </span>
                       )}
                       {status === "checking" && (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] text-violet-300 font-medium px-2 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/20">
+                        <span className="inline-flex items-center gap-1.5 text-[11px] text-violet-100 font-bold px-2 py-0.5 rounded-full bg-violet-600/40 border border-violet-400/50 shadow-[0_0_10px_rgba(139,92,246,0.3)]">
                           <span className="relative flex h-2 w-2">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-60" />
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500" />

@@ -39,6 +39,21 @@ from tools.mediainfo_tools import (
     profile_av_container as real_profile_av_container,
     get_av_file_identity as real_get_av_file_identity,
 )
+import os
+import glob
+import io
+import shutil
+import tempfile
+import mimetypes
+from datetime import datetime
+from uuid import UUID
+
+import numpy as np
+import piexif
+import imagehash
+from PIL import Image as PILImage
+from scipy.ndimage import gaussian_filter
+
 from core.gemini_client import GeminiVisionClient
 
 
@@ -82,7 +97,7 @@ class Agent5Metadata(ForensicAgent):
     @property
     def task_decomposition(self) -> list[str]:
         """
-        Fast initial tasks — hash, EXIF, GPS, file structure, hex scan (~10-15s total).
+        Fast initial tasks -- hash, EXIF, GPS, file structure, hex scan (~10-15s total).
         Steganography, C2PA, thumbnail check, and all ML/network tasks are in deep_task_decomposition.
         """
         return [
@@ -98,7 +113,7 @@ class Agent5Metadata(ForensicAgent):
     @property
     def deep_task_decomposition(self) -> list[str]:
         """
-        Heavy tasks — ML models, network APIs, adversarial checks, Gemini deep forensic analysis.
+        Heavy tasks -- ML models, network APIs, adversarial checks, Gemini deep forensic analysis.
         Also includes steganography, C2PA, and thumbnail check (moderate cost, deep-pass only).
         Runs in background after initial findings are returned.
         """
@@ -116,7 +131,7 @@ class Agent5Metadata(ForensicAgent):
     
     @property
     def iteration_ceiling(self) -> int:
-        """Maximum iterations — tasks + 2 buffer to prevent runaway loops."""
+        """Maximum iterations -- tasks + 2 buffer to prevent runaway loops."""
         return len(self.task_decomposition) + 2
     
     @property
@@ -396,12 +411,14 @@ class Agent5Metadata(ForensicAgent):
             computes the PHash of the uploaded image and checks it against
             all hashes stored in the EvidenceStore (previous sessions).
             A near-duplicate match (Hamming distance ≤ 10 bits) suggests
-            the image has appeared in a prior investigation — a significant
+            the image has appeared in a prior investigation -- a significant
             provenance signal.
             """
-            import imagehash
-            from PIL import Image as PILImage
-
+            """
+            Perceptual hash comparison against local evidence store to detect
+            prior appearances of the image -- a reliable forensic indicator of
+            provenance signal.
+            """
             artifact = input_data.get("artifact") or self.evidence_artifact
 
             try:
@@ -410,10 +427,9 @@ class Agent5Metadata(ForensicAgent):
 
                 # Build a hash index from previously seen evidence artifacts
                 prior_matches = []
-                HAMMING_THRESHOLD = 10  # bits — ~6 % bit-error tolerance
+                HAMMING_THRESHOLD = 10  # bits -- ~6 % bit-error tolerance
 
                 # Attempt to scan local storage directory for prior images
-                import os, glob
                 evidence_dir = os.path.dirname(artifact.file_path)
                 candidate_paths = glob.glob(os.path.join(evidence_dir, "**", "*.jpg"), recursive=True) + \
                                   glob.glob(os.path.join(evidence_dir, "**", "*.jpeg"), recursive=True) + \
@@ -440,18 +456,18 @@ class Agent5Metadata(ForensicAgent):
                 return {
                     "status": "real",
                     "court_defensible": True,
-                    "method": "PHash (16×16) perceptual hash comparison — local evidence store",
+                    "method": "PHash (16×16) perceptual hash comparison -- local evidence store",
                     "prior_appearance_found": prior_found,
                     "match_count": len(prior_matches),
                     "matches": prior_matches[:5],  # Return top 5 matches
                     "query_hash": str(query_hash),
                     "hamming_threshold": HAMMING_THRESHOLD,
                     "note": (
-                        f"Found {len(prior_matches)} near-duplicate image(s) in the local evidence store — provenance signal."
+                        f"Found {len(prior_matches)} near-duplicate image(s) in the local evidence store -- provenance signal."
                         if prior_found
                         else "No near-duplicate matches found in the local evidence store."
                     ),
-                    "caveat": "Local PHash comparison only — does not search the open web. TinEye API integration required for web provenance.",
+                    "caveat": "Local PHash comparison only -- does not search the open web. TinEye API integration required for web provenance.",
                 }
             except Exception as e:
                 return {
@@ -469,19 +485,15 @@ class Agent5Metadata(ForensicAgent):
             manufacturer against known EXIF field patterns (e.g. Apple always
             sets LensModel; Canon always sets MakerNote.LensType), and computes
             a simplified PRNU consistency score to detect device signature
-            inconsistencies — a forensic indicator of metadata tampering or
+            inconsistencies -- a forensic indicator of metadata tampering or
             multi-device compositing.
             """
-            import numpy as np
-            from PIL import Image as PILImage
-
             artifact = input_data.get("artifact") or self.evidence_artifact
 
             try:
                 # Extract EXIF metadata
                 exif_fields = {}
                 try:
-                    import piexif
                     exif_raw = piexif.load(artifact.file_path)
                     zeroth = exif_raw.get("0th", {})
                     exif_raw_exif = exif_raw.get("Exif", {})
@@ -505,21 +517,20 @@ class Agent5Metadata(ForensicAgent):
                     inconsistencies.append("Apple make declared but model does not match known Apple devices.")
 
                 if make.startswith("Canon") and software and "Photoshop" in software:
-                    inconsistencies.append("Canon make with Photoshop software field — possible metadata rewrite.")
+                    inconsistencies.append("Canon make with Photoshop software field -- possible metadata rewrite.")
 
                 if make == "" and model != "":
-                    inconsistencies.append("Model declared without Make field — unusual for genuine captures.")
+                    inconsistencies.append("Model declared without Make field -- unusual for genuine captures.")
 
                 # Quick PRNU variance check
                 try:
                     img_gray = np.array(PILImage.open(artifact.file_path).convert("L"), dtype=np.float32)
-                    from scipy.ndimage import gaussian_filter
                     smooth = gaussian_filter(img_gray, sigma=2.0)
                     residual = img_gray - smooth
                     prnu_var = float(residual.var())
                     # GAN images typically have very uniform PRNU (< 1.0)
                     if prnu_var < 0.8:
-                        inconsistencies.append(f"Extremely low PRNU variance ({prnu_var:.3f}) — consistent with synthetic/GAN generation.")
+                        inconsistencies.append(f"Extremely low PRNU variance ({prnu_var:.3f}) -- consistent with synthetic/GAN generation.")
                 except Exception:
                     prnu_var = None
 
@@ -543,7 +554,7 @@ class Agent5Metadata(ForensicAgent):
                         if inconsistencies
                         else "Device fingerprint appears consistent with declared camera metadata."
                     ),
-                    "caveat": "Heuristic analysis — full CameraV PRNU database integration required for definitive attribution.",
+                    "caveat": "Heuristic analysis -- full CameraV PRNU database integration required for definitive attribution.",
                 }
             except Exception as e:
                 return {
@@ -557,19 +568,14 @@ class Agent5Metadata(ForensicAgent):
             """
             Adversarial robustness check for metadata evasion.
 
-            Applies three metadata-level perturbations (timestamp shift ±1s,
-            GPS coordinate jitter ±0.001°, software field overwrite) to a
+            Applies three metadata-level perturbations (timestamp shift +/- one second,
+            GPS coordinate jitter +/- 0.001 degreesrees, software field overwrite) to a
             copy of the file and re-runs the anomaly scorer.  If the anomaly
             score changes significantly the metadata findings are fragile.
             """
-            import numpy as np
-
             artifact = input_data.get("artifact") or self.evidence_artifact
 
             try:
-                import piexif, shutil, tempfile, os
-                from PIL import Image as PILImage
-
                 # Load original anomaly score as baseline
                 try:
                     from scripts.ml_tools.metadata_anomaly_scorer import score_metadata  # type: ignore
@@ -590,7 +596,7 @@ class Agent5Metadata(ForensicAgent):
                     try:
                         exif_raw = piexif.load(tmp_path)
 
-                        # 1 — Shift GPS latitude by ±0.001° if present
+                        # 1 -- Shift GPS latitude by +/-0.001° if present
                         gps = exif_raw.get("GPS", {})
                         if gps.get(piexif.GPSIFD.GPSLatitude):
                             orig_lat = gps[piexif.GPSIFD.GPSLatitude]
@@ -607,7 +613,7 @@ class Agent5Metadata(ForensicAgent):
                         else:
                             perturbation_deltas["gps_jitter_0.001deg"] = 0.0
 
-                        # 2 — Timestamp shift +1 second
+                        # 2 -- Timestamp shift +1 second
                         exif_dt = exif_raw.get("Exif", {}).get(piexif.ExifIFD.DateTimeOriginal)
                         if exif_dt:
                             from datetime import datetime, timedelta
@@ -639,16 +645,16 @@ class Agent5Metadata(ForensicAgent):
                 return {
                     "status": "real",
                     "court_defensible": True,
-                    "method": "Metadata anomaly score perturbation stability — GPS jitter, timestamp shift",
+                    "method": "Metadata anomaly score perturbation stability -- GPS jitter, timestamp shift",
                     "adversarial_pattern_detected": evasion_detected,
                     "original_anomaly_score": round(orig_score, 4),
                     "perturbation_deltas": perturbation_deltas,
                     "evasion_threshold": EVASION_THRESHOLD,
                     "confidence": 0.68 if evasion_detected else 0.85,
                     "note": (
-                        "Metadata anomaly score is highly sensitive to minor perturbations — possible engineered metadata."
+                        "Metadata anomaly score is highly sensitive to minor perturbations -- possible engineered metadata."
                         if evasion_detected
-                        else "Metadata anomaly score is stable under all perturbations — findings are robust."
+                        else "Metadata anomaly score is stable under all perturbations -- findings are robust."
                     ),
                 }
             except Exception as e:
@@ -720,7 +726,7 @@ class Agent5Metadata(ForensicAgent):
                     "provenance_data": provenance_data,
                     "verdict": "CONTENT_CREDENTIALS_PRESENT" if c2pa_present else "NO_CONTENT_CREDENTIALS",
                     "forensic_note": (
-                        "C2PA Content Credentials found — verify the full signature chain for provenance."
+                        "C2PA Content Credentials found -- verify the full signature chain for provenance."
                         if c2pa_present else
                         "No C2PA/Content Credentials found. File has no embedded provenance chain. "
                         "Notable if the file is claimed to originate from a C2PA-enabled device (Leica M11-P, Sony Alpha, etc.)."
@@ -739,19 +745,15 @@ class Agent5Metadata(ForensicAgent):
 
             JPEG files from cameras contain an embedded thumbnail generated at capture time.
             When an image is edited post-capture, the main image changes but the thumbnail
-            often remains unchanged — a reliable indicator of post-capture modification.
+            often remains unchanged -- a reliable indicator of post-capture modification.
             Compares embedded thumbnail (via piexif) against a downscaled version of the
             main image using mean absolute pixel difference and perceptual hashing.
             """
             artifact = input_data.get("artifact") or self.evidence_artifact
             try:
-                from PIL import Image as PILImage
-                import io, numpy as np
-
                 # Extract embedded thumbnail via piexif
                 thumbnail = None
                 try:
-                    import piexif
                     exif_raw = piexif.load(artifact.file_path)
                     thumb_bytes = exif_raw.get("thumbnail")
                     if thumb_bytes and len(thumb_bytes) > 100:
@@ -765,7 +767,7 @@ class Agent5Metadata(ForensicAgent):
                         "mismatch_detected": False,
                         "verdict": "NO_THUMBNAIL",
                         "forensic_note": (
-                            "No embedded thumbnail found — cannot perform mismatch analysis. "
+                            "No embedded thumbnail found -- cannot perform mismatch analysis. "
                             "Thumbnails are typically present in camera-captured JPEGs; their absence "
                             "may indicate metadata stripping."
                         ),
@@ -781,7 +783,6 @@ class Agent5Metadata(ForensicAgent):
 
                 hamming = -1
                 try:
-                    import imagehash
                     hamming = int(imagehash.phash(thumbnail) - imagehash.phash(main_resized))
                 except Exception:
                     pass
@@ -797,10 +798,10 @@ class Agent5Metadata(ForensicAgent):
                     "forensic_note": (
                         f"Thumbnail differs significantly from main image (MAD={mad:.1f}"
                         + (f", Hamming={hamming}" if hamming >= 0 else "")
-                        + ") — strong indicator of post-capture editing. The main image was likely "
+                        + ") -- strong indicator of post-capture editing. The main image was likely "
                         "modified after the embedded thumbnail was generated."
                         if mismatch else
-                        "Thumbnail matches main image — no indication of post-capture content replacement."
+                        "Thumbnail matches main image -- no indication of post-capture content replacement."
                     ),
                     "available": True,
                     "court_defensible": True,
@@ -841,7 +842,7 @@ class Agent5Metadata(ForensicAgent):
         async def mediainfo_profile_handler(input_data: dict) -> dict:
             """Deep AV container profiling: codec, frame rate mode, encoding tool,
             creation/tagged dates, VFR flag, container-codec mismatch,
-            and editing software detection. Fast (<20ms). No model weights.
+            and editing software detection. Fast (less than 20 ms). No model weights.
             """
             artifact = input_data.get("artifact") or self.evidence_artifact
             return await real_profile_av_container(artifact=artifact)
@@ -933,31 +934,28 @@ class Agent5Metadata(ForensicAgent):
                     # Remove empty fields to keep the prompt clean
                     exif_summary = {k: v for k, v in exif_summary.items() if v not in ("", None, False, "False")}
             except Exception:
-                exif_summary = {"note": "EXIF extraction unavailable — visual analysis only"}
+                exif_summary = {"note": "EXIF extraction unavailable -- visual analysis only"}
 
             # Merge any overrides from caller
             exif_summary.update(input_data.get("metadata_summary", {}))
 
-            # Add file system metadata (os.stat) — file name, size, timestamps
-            import os as _os
-            import mimetypes as _mimetypes
+            # Add file system metadata (os.stat) -- file name, size, timestamps
             try:
                 fp = artifact.file_path
-                stat = _os.stat(fp)
-                import datetime as _dt
-                ctime = _dt.datetime.fromtimestamp(stat.st_ctime).strftime("%Y-%m-%d %H:%M:%S")
-                mtime = _dt.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                stat = os.stat(fp)
+                ctime = datetime.fromtimestamp(stat.st_ctime).strftime("%Y-%m-%d %H:%M:%S")
+                mtime = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
                 file_size_bytes = stat.st_size
                 file_size_human = (
                     f"{file_size_bytes / 1_048_576:.2f} MB" if file_size_bytes >= 1_048_576
                     else f"{file_size_bytes / 1024:.1f} KB" if file_size_bytes >= 1024
                     else f"{file_size_bytes} bytes"
                 )
-                mime_guess, _ = _mimetypes.guess_type(fp)
+                mime_guess, _ = mimetypes.guess_type(fp)
                 stored_mime = (artifact.metadata or {}).get("mime_type", "") if artifact.metadata else ""
                 fs_meta = {
-                    "file_name": _os.path.basename(fp),
-                    "file_extension": _os.path.splitext(fp)[1].lower(),
+                    "file_name": os.path.basename(fp),
+                    "file_extension": os.path.splitext(fp)[1].lower(),
                     "file_size_bytes": str(file_size_bytes),
                     "file_size_human": file_size_human,
                     "filesystem_created": ctime,
@@ -1109,7 +1107,7 @@ class Agent5Metadata(ForensicAgent):
                     elif format_note:
                         context_lines.append(f"Format note: {format_note}")
                     elif total_tags == 0:
-                        context_lines.append("WARNING: No EXIF metadata found — possible metadata stripping")
+                        context_lines.append("WARNING: No EXIF metadata found -- possible metadata stripping")
         except Exception:
             pass
 
@@ -1117,7 +1115,7 @@ class Agent5Metadata(ForensicAgent):
 
         # Only apply "ABSENCE AS SIGNAL" for camera formats (JPEG, TIFF, RAW, HEIC).
         # For lossless/digital formats (PNG, BMP, GIF, WebP) camera EXIF fields are
-        # never present — their absence is normal and must NOT be treated as suspicious.
+        # never present -- their absence is normal and must NOT be treated as suspicious.
         file_path_lower = getattr(self.evidence_artifact, "file_path", "").lower()
         _camera_exts = (".jpg", ".jpeg", ".tiff", ".tif", ".heic", ".heif",
                         ".raw", ".cr2", ".nef", ".arw", ".dng", ".orf")
@@ -1125,7 +1123,7 @@ class Agent5Metadata(ForensicAgent):
 
         if absent_fields and _is_camera_format:
             absence_note = (
-                f" ABSENCE AS SIGNAL: {len(absent_fields)} expected EXIF fields are missing — "
+                f" ABSENCE AS SIGNAL: {len(absent_fields)} expected EXIF fields are missing -- "
                 "each absence is a mandatory investigation trigger."
             )
             absence_principle = (
@@ -1137,7 +1135,7 @@ class Agent5Metadata(ForensicAgent):
             absence_principle = (
                 "NOTE: This is a digitally created / lossless file format. "
                 "Camera EXIF fields (Make, Model, DateTimeOriginal, GPS, etc.) "
-                "are NOT expected and their absence is normal — do NOT flag "
+                "are NOT expected and their absence is normal -- do NOT flag "
                 "missing camera metadata as suspicious for this file type. "
                 "Focus instead on software tags, modification timestamps, "
                 "steganography, and file structure integrity."
@@ -1145,7 +1143,7 @@ class Agent5Metadata(ForensicAgent):
 
         return (
             f"Starting metadata and provenance analysis. Evidence: {self.evidence_artifact.artifact_id}. "
-            f"EXIF pre-screen — {context}.{absence_note} "
+            f"EXIF pre-screen -- {context}.{absence_note} "
             f"Proceeding through {len(self.task_decomposition)} tasks: "
             "full EXIF extraction, GPS-timestamp cross-validation, ML metadata anomaly scoring, "
             "steganography scan, file structure analysis, hex signature scan, "
@@ -1155,7 +1153,7 @@ class Agent5Metadata(ForensicAgent):
     async def run_investigation(self):
         """
         Override to ensure working memory is initialised before the base-class
-        loop starts — this makes the heartbeat visible immediately.
+        loop starts -- this makes the heartbeat visible immediately.
 
         Agent 5 (Metadata) supports all file types, so it never skips; this
         override exists purely to call _initialize_working_memory() first and

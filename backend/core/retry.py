@@ -13,6 +13,12 @@ import time
 from typing import Any, Callable, Optional, Tuple, Type, Union
 
 from core.logging import get_logger
+from core.exceptions import (
+    ForensicCouncilBaseException,
+    CircularCallError,
+    ArbiterRechallengeError,
+    CircuitBreakerOpen,
+)
 
 logger = get_logger(__name__)
 
@@ -353,9 +359,7 @@ class CircuitBreaker:
             raise
 
 
-class CircuitBreakerOpen(Exception):
-    """Exception raised when circuit breaker is open."""
-    pass
+
 
 
 # Predefined retry configs for common scenarios

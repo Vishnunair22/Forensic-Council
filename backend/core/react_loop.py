@@ -846,6 +846,15 @@ class ReActLoopEngine:
                         "gemini_object_scene_analysis": "Gemini Vision — Object & Scene Analysis",
                         "gemini_metadata_visual_consistency": "Gemini Vision — Metadata Consistency Check",
                         "gemini_deep_forensic": "Gemini Deep Forensic Analysis",
+                        "prnu_analysis": "PRNU Camera Sensor Fingerprint",
+                        "cfa_demosaicing": "CFA Demosaicing Pattern Analysis",
+                        "voice_clone_detect": "Voice Clone Detection",
+                        "enf_analysis": "ENF Frequency Analysis",
+                        "object_text_ocr": "Object Region OCR",
+                        "document_authenticity": "Document Authenticity Check",
+                        "c2pa_verify": "C2PA Content Credentials",
+                        "thumbnail_mismatch": "Thumbnail Mismatch Detection",
+                        "sensor_db_query": "Camera Sensor DB Query",
                     }
                     tool_label = _TOOL_LABELS.get(
                         next_step.tool_name,
@@ -940,8 +949,7 @@ class ReActLoopEngine:
         return ReActLoopResult(
             session_id=self.session_id,
             agent_id=self.agent_id,
-            completed=(self._current_iteration >= self.iteration_ceiling or 
-                      not self._terminated),
+            completed=(not self._terminated),
             terminated_by_human=self._terminated,
             findings=self._findings,
             hitl_checkpoints=self._hitl_checkpoints,
@@ -1522,7 +1530,7 @@ class ReActLoopEngine:
             ),
             # ── Metadata tools (Agent 5) ─────────────────────────────────────
             # FIXED: exif_extract_enhanced returns total_fields_extracted, absent_mandatory_fields, not has_exif/device_model/absent_fields
-                        "exif_extract": lambda o: (
+            "exif_extract": lambda o: (
                 f"File: {o.get('file_name', 'unknown')} ({o.get('file_size_human', '')}) · {o.get('mime_type', '')}. "
                 + (f"Device: {o.get('device_model', o.get('camera_make', '') + ' ' + o.get('camera_model', '')).strip()}. " if o.get('device_model') or o.get('camera_make') else "Device: not recorded. ")
                 + (f"Captured: {o.get('datetime_original', '')}. " if o.get('datetime_original') else "Capture time: not in EXIF. ")

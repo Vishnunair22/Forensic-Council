@@ -23,6 +23,7 @@ INSECURE_DEFAULTS = {
     "123456",
     "change-me",
     "changeme",
+    "forensic_user",
 }
 
 
@@ -217,7 +218,7 @@ class Settings(BaseSettings):
     investigation_retry_delay: float = Field(default=5.0, description="Base delay between investigation retries (seconds)")
     
     # LLM Configuration
-    llm_provider: str = Field(default="groq", description="LLM provider: groq (recommended), openai, anthropic, or none")
+    llm_provider: str = Field(default="none", description="LLM provider: groq (recommended), openai, anthropic, or none")
     llm_api_key: Optional[str] = Field(default=None, description="API key for LLM provider")
     llm_model: str = Field(default="llama-3.3-70b-versatile", description="LLM model. Groq: llama-3.3-70b-versatile. OpenAI: gpt-4o. Anthropic: claude-3-5-sonnet-20241022")
     llm_temperature: float = Field(default=0.1, description="Temperature for LLM sampling (0.0-1.0)")
@@ -237,10 +238,10 @@ class Settings(BaseSettings):
         ),
     )
     gemini_model: str = Field(
-        default="gemini-flash-latest",
+        default="gemini-1.5-flash-latest",
         description=(
             "Gemini model for vision analysis. "
-            "gemini-1.5-flash: fast, cost-effective (recommended). "
+            "gemini-1.5-flash-latest: fast, cost-effective (recommended). "
             "gemini-1.5-pro: deeper reasoning, higher cost."
         ),
     )

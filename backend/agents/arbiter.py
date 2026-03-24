@@ -330,11 +330,19 @@ class CouncilArbiter:
                 finding_count=total,
             )
 
-        def _assign_severity_tier(f: dict) -> str:
+        def _assign_severity_tier(f: Any) -> str:
             """Assign INFO/LOW/MEDIUM/HIGH/CRITICAL to a finding."""
-            meta = f.get("metadata") or {}
-            conf = float(f.get("confidence_raw") or 0.0)
-            status_str = str(f.get("status", "")).upper()
+            if hasattr(f, "metadata"):
+                meta = f.metadata or {}
+                conf = getattr(f, "confidence_raw", 0.0)
+                status_str = str(getattr(f, "status", "")).upper()
+            elif isinstance(f, dict):
+                meta = f.get("metadata") or {}
+                conf = float(f.get("confidence_raw") or 0.0)
+                status_str = str(f.get("status", "")).upper()
+            else:
+                return "INFO"
+
             _na_flags = ("ela_not_applicable", "ghost_not_applicable",
                          "noise_fingerprint_not_applicable", "prnu_not_applicable")
             is_na = (

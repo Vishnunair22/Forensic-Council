@@ -7,6 +7,7 @@ Supports async context managers and logs connection events.
 """
 
 import asyncio
+import json
 from typing import Any, Optional
 import redis.asyncio as redis
 from redis.asyncio import Redis
@@ -77,6 +78,8 @@ class RedisClient:
                 db=self._db,
                 password=self._password,
                 decode_responses=True,
+                socket_timeout=2.0,
+                socket_connect_timeout=2.0,
             )
             self._client = Redis(connection_pool=self._pool)
             
@@ -151,7 +154,8 @@ class RedisClient:
             value = json.dumps(value)
         
         result = await self.client.set(key, value, ex=ex, px=px, nx=nx, xx=xx)
-        return result is True
+        # redis-py returns True on success for basic SET, but some versions/responses might be "OK"
+        return result is True or result == "OK" or result is not None
     
     async def get(self, key: str) -> Optional[Any]:
         """

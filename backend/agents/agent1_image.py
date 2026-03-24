@@ -966,49 +966,9 @@ class Agent1Image(ForensicAgent):
     
     async def build_initial_thought(self) -> str:
         """
-        Build the contextually-grounded initial thought for the ReAct loop.
-
-        Runs two fast pre-screen tools before the loop starts:
-        1. file_hash_verify — establishes chain-of-custody baseline
-        2. extract_evidence_text — extracts any embedded text (e.g. document
-           images, screenshots with text) for immediate contextual awareness
-
-        The results are incorporated into the opening thought so the LLM
-        starts reasoning from real data, not a cold-start generic prompt.
+        Build the initial thought for the ReAct loop.
+        Constructed from static evidence metadata to avoid duplicate tool execution.
         """
-        context_lines = []
-        # Fast pre-screen: file hash + semantic image understanding
-        try:
-            if self._tool_registry:
-                hash_handler = self._tool_registry._handlers.get("file_hash_verify")
-                if hash_handler:
-                    result = await hash_handler({"artifact": self.evidence_artifact})
-                    h = result.get("sha256_hash", result.get("sha256", result.get("current_hash", "")))
-                    if h:
-                        context_lines.append(f"SHA-256: {h[:16]}...")
-        except Exception:
-            pass
-
-        # Pre-screen: CLIP semantic understanding of what the image contains
-        semantic_context = ""
-        try:
-            if self._tool_registry:
-                clip_handler = self._tool_registry._handlers.get("analyze_image_content")
-                if clip_handler:
-                    clip_result = await clip_handler({"artifact": self.evidence_artifact})
-                    if clip_result and clip_result.get("available"):
-                        top_match = clip_result.get("top_match", "")
-                        top_conf = clip_result.get("top_confidence", 0.0)
-                        concern = clip_result.get("concern_flag", False)
-                        if top_match:
-                            semantic_context = f"CLIP semantic pre-screen: '{top_match}' ({top_conf:.0%})"
-                            if concern:
-                                semantic_context += " — CONCERN FLAG raised"
-                            context_lines.append(semantic_context)
-        except Exception:
-            pass
-
-        context = " | ".join(context_lines) if context_lines else "Pre-screen tools unavailable."
         file_path = getattr(self.evidence_artifact, "file_path", "unknown")
         import os
         file_name = os.path.basename(file_path) if file_path else "unknown"
@@ -1022,7 +982,6 @@ class Agent1Image(ForensicAgent):
         return (
             f"Starting image integrity analysis. "
             f"File: {file_name}{file_size}. Evidence ID: {self.evidence_artifact.artifact_id}. "
-            f"Pre-screen — {context}. "
             f"I will proceed through {len(self.task_decomposition)} initial tasks: "
             f"semantic content identification (CLIP), full-image ELA, ELA anomaly block classification, "
             f"JPEG ghost detection, frequency-domain GAN artifact check, and file hash verification. "

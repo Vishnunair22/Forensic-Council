@@ -4,8 +4,9 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   ChevronRight, ShieldCheck, File, UploadCloud,
   FileImage, FileAudio, FileVideo, X, ArrowRight, RotateCcw,
+  PlayCircle,
 } from "lucide-react";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AGENTS_DATA, ALLOWED_MIME_TYPES } from "@/lib/constants";
 import { AgentIcon } from "@/components/ui/AgentIcon";
@@ -179,8 +180,8 @@ function MicroscopeScanner() {
           </div>
           {/* ANALYZING readout */}
           <motion.div
-            className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[9px] text-cyan-400/72 tracking-[0.2em]"
-            animate={reduced ? {} : { opacity: [0.45, 1, 0.45] }}
+            className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[11px] text-cyan-300 tracking-[0.2em] font-bold"
+            animate={reduced ? {} : { opacity: [0.6, 1, 0.6] }}
             transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
           >
             ANALYZING…
@@ -233,11 +234,11 @@ function MicroscopeScanner() {
             initial={{ opacity: 0 }}
             animate={reduced ? {} : { opacity: [0, 0.82, 0.82, 0] }}
             transition={{ delay: tag.delay, duration: 5.2, repeat: Infinity, repeatDelay: 2.2 }}
-            className={`absolute ${tag.x} ${tag.y} font-mono text-[10px] text-cyan-400/88
-              bg-black/80 border border-cyan-500/28 px-2.5 py-1 rounded-lg backdrop-blur-sm
-              shadow-[0_0_14px_rgba(0,212,255,0.13)]`}
+            className={`absolute ${tag.x} ${tag.y} font-mono text-[11px] text-cyan-200
+              bg-black/90 border border-cyan-500/40 px-2.5 py-1 rounded-lg backdrop-blur-sm
+              shadow-[0_0_14px_rgba(0,212,255,0.18)]`}
           >
-            <span className="text-cyan-500/52 mr-1.5">{tag.label}</span>{tag.val}
+            <span className="text-cyan-400 mr-1.5">{tag.label}</span>{tag.val}
           </motion.div>
         ))}
 
@@ -248,11 +249,11 @@ function MicroscopeScanner() {
             initial={{ opacity: 0 }}
             animate={reduced ? {} : { opacity: [0, 0, 0.72, 0.72, 0] }}
             transition={{ delay: tag.delay, duration: 4.8, repeat: Infinity, repeatDelay: 3.8 }}
-            className={`absolute ${tag.x} ${tag.y} font-mono text-[10px] text-violet-400/82
-              bg-black/80 border border-violet-500/25 px-2.5 py-1 rounded-lg backdrop-blur-sm
-              shadow-[0_0_12px_rgba(124,58,237,0.10)]`}
+            className={`absolute ${tag.x} ${tag.y} font-mono text-[11px] text-violet-200
+              bg-black/90 border border-violet-500/40 px-2.5 py-1 rounded-lg backdrop-blur-sm
+              shadow-[0_0_12px_rgba(124,58,237,0.15)]`}
           >
-            <span className="text-violet-500/48 mr-1.5">{tag.label}</span>{tag.val}
+            <span className="text-violet-400 mr-1.5">{tag.label}</span>{tag.val}
           </motion.div>
         ))}
       </div>
@@ -324,15 +325,17 @@ function EnvelopeCTA({
 }
 
 /* ─── Glass card ─────────────────────────────────────────────────────────── */
+interface GlassCardProps {
+  children: ReactNode;
+  className?: string;
+  glowColor?: "cyan" | "violet" | "emerald";
+}
+
 function GlassCard({
   children,
   className = "",
   glowColor = "cyan",
-}: {
-  children: React.ReactNode;
-  className?: string;
-  glowColor?: "cyan" | "violet" | "emerald";
-}) {
+}: GlassCardProps) {
   const glowMap = {
     cyan:    "hover:border-cyan-400/35 hover:shadow-[0_0_60px_rgba(0,212,255,0.12),0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(0,212,255,0.10)]",
     violet:  "hover:border-violet-400/45 hover:shadow-[0_0_70px_rgba(124,58,237,0.20),0_8px_32px_rgba(0,0,0,0.50),inset_0_1px_0_rgba(168,85,247,0.14)]",
@@ -440,7 +443,7 @@ export default function LandingPage() {
       investigatorId
     );
 
-    setTimeout(() => router.push("/evidence"), 380);
+    setTimeout(() => router.push("/evidence"), 200);
   };
 
   useEffect(() => {
@@ -484,7 +487,7 @@ export default function LandingPage() {
 
       {/* ── Header ── */}
       <header className="fixed top-0 w-full px-6 py-4 flex items-center justify-between
-        border-b border-white/[0.05] bg-[#030308]/80 backdrop-blur-2xl z-50"
+        border-b border-white/[0.08] bg-[#030308]/85 backdrop-blur-2xl z-50 shadow-[0_4px_30px_rgba(0,0,0,0.5)]"
         role="banner"
       >
         <div className="flex items-center gap-3">
@@ -495,7 +498,13 @@ export default function LandingPage() {
             Forensic Council
           </span>
         </div>
-        <span className="text-[10px] font-mono text-slate-600 hidden sm:block">ACADEMIC RESEARCH PROJECT</span>
+        <div className="flex items-center gap-8">
+          <nav className="hidden md:flex items-center gap-6">
+            <a href="#process-title" className="text-[12px] font-mono text-slate-300 hover:text-cyan-300 transition-colors uppercase tracking-widest font-semibold">Process</a>
+            <a href="#council-title" className="text-[12px] font-mono text-slate-300 hover:text-cyan-300 transition-colors uppercase tracking-widest font-semibold">The Council</a>
+          </nav>
+          <span className="text-[11px] font-mono text-slate-400 hidden sm:block border-l border-white/20 pl-6 font-bold uppercase tracking-wider">ACADEMIC RESEARCH PROJECT</span>
+        </div>
       </header>
 
       {/* ══════════════════════════════════════════════════════════
@@ -511,22 +520,6 @@ export default function LandingPage() {
         <MicroscopeScanner />
 
         <div className="relative z-30 flex flex-col items-center text-center max-w-4xl mx-auto">
-          {/* Status pill */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.7 }}
-            role="status"
-            aria-label="System status: online, all agents ready"
-            className="mb-8 inline-flex items-center gap-2.5 px-4 py-2 rounded-full
-              bg-white/[0.05] border border-white/[0.10] text-sm text-cyan-400 backdrop-blur-md"
-          >
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-70" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
-            </span>
-            <span style={{ fontFamily: "var(--font-mono), monospace" }}>System Online — All Agents Ready</span>
-          </motion.div>
 
           {/* Headline */}
           <motion.h1
@@ -546,7 +539,7 @@ export default function LandingPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.25, duration: 0.8 }}
-            className="text-slate-400 text-lg sm:text-xl max-w-2xl mb-12 leading-relaxed font-normal text-justify-section"
+            className="text-slate-300 text-lg sm:text-xl max-w-2xl mb-12 leading-relaxed font-normal"
           >
             Five specialist AI agents independently examine your evidence — pixel integrity, audio authenticity,
             object detection, temporal analysis, and metadata provenance — then the Council Arbiter synthesises
@@ -554,9 +547,12 @@ export default function LandingPage() {
           </motion.p>
 
           {/* CTA */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
-            <EnvelopeCTA onOpen={handleCTAClick} phase={envPhase} />
-          </motion.div>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-6 relative z-10 w-full max-w-2xl px-4">
+            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.45 }} className="w-full sm:w-auto">
+              <EnvelopeCTA onOpen={handleCTAClick} phase={envPhase} />
+            </motion.div>
+            
+          </div>
         </div>
       </section>
 
@@ -566,7 +562,7 @@ export default function LandingPage() {
       <section aria-labelledby="process-title" className="relative z-10 py-32 px-6">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-20">
-            <p className="text-xs font-mono text-cyan-500/70 uppercase tracking-[0.25em] mb-3">Process</p>
+            <p className="text-xs font-mono text-cyan-400 uppercase tracking-[0.25em] mb-3 font-bold">Process</p>
             <h2 id="process-title" className="text-4xl md:text-5xl font-bold text-white">How Forensic Council Works</h2>
           </div>
 
@@ -602,7 +598,7 @@ export default function LandingPage() {
                 </div>
                 <GlassCard className="p-8 pt-12 flex flex-col items-center text-center">
                   <h3 className="text-base font-bold text-white mb-3 text-center tracking-wide">{item.title}</h3>
-                  <p className="text-slate-400 text-sm leading-relaxed text-center">{item.desc}</p>
+                  <p className="text-slate-200 text-sm leading-relaxed text-center font-medium">{item.desc}</p>
                 </GlassCard>
               </motion.div>
             ))}
@@ -616,95 +612,148 @@ export default function LandingPage() {
       <section aria-labelledby="council-title" className="relative z-10 pb-32 pt-8 px-6">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
-            <p className="text-xs font-mono text-violet-400/70 uppercase tracking-[0.25em] mb-3">Council Members</p>
+            <p className="text-xs font-mono text-violet-300 uppercase tracking-[0.25em] mb-3 font-bold">Council Members</p>
             <h2 id="council-title" className="text-4xl md:text-5xl font-bold mb-5
               bg-gradient-to-r from-cyan-300 to-violet-300 bg-clip-text text-transparent inline-block">
               Meet the Council
             </h2>
-            <p className="text-slate-400 text-lg max-w-2xl mx-auto leading-relaxed text-justify-section">
+            <p className="text-slate-200 text-lg max-w-2xl mx-auto leading-relaxed text-justify-section font-medium">
               Five specialist agents analyse evidence independently, then the Council Arbiter synthesises
               their findings into a unified verdict with confidence scoring.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {AGENTS_DATA.map((agent, i) => (
-              <motion.div
-                key={agent.id}
-                initial={{ opacity: 0, y: 40 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-80px" }}
-                transition={{ delay: i * 0.09, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                whileHover={{ y: -5 }}
-              >
-                <GlassCard className="p-7 flex flex-col items-center text-center h-full group">
-                  {/* Subtle top-center glow tint */}
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-24
-                    bg-gradient-to-b from-cyan-500/[0.06] to-transparent pointer-events-none rounded-t-3xl" />
-
-                  <div className="p-4 bg-gradient-to-br from-cyan-500/15 to-cyan-600/5 text-cyan-400 rounded-2xl mb-5
-                    shadow-[inset_0_0_18px_rgba(0,212,255,0.08),0_0_16px_rgba(0,212,255,0.10)] border border-cyan-500/22
-                    relative z-10 group-hover:scale-110 group-hover:shadow-[inset_0_0_22px_rgba(0,212,255,0.14),0_0_28px_rgba(0,212,255,0.20)] transition-all duration-350">
-                    <AgentIcon role={agent.role} />
-                  </div>
-
-                  <h3 className="text-base font-bold text-white mb-1.5 relative z-10 tracking-wide">{agent.name}</h3>
-                  <span className="text-[10px] px-3 py-1 rounded-full
-                    bg-gradient-to-r from-cyan-950/70 to-cyan-900/50
-                    text-cyan-300 border border-cyan-500/22 uppercase tracking-widest font-semibold mb-4 relative z-10">
-                    {agent.role}
-                  </span>
-                  <p className="text-sm text-slate-400 leading-relaxed mb-5 relative z-10 flex-1 text-center">
-                    {agent.desc}
-                  </p>
-                  <div className="w-full pt-4 border-t border-white/[0.07] relative z-10">
-                    <p className="text-[11px] text-cyan-400/75 italic leading-relaxed" style={{ fontFamily: "var(--font-mono), monospace" }}>
-                      &quot;{agent.simulation.thinking}&quot;
-                    </p>
-                  </div>
-                </GlassCard>
-              </motion.div>
-            ))}
-
-            {/* Council Arbiter Card */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 auto-rows-[minmax(180px,auto)]">
+            {/* Agent 1 - Wide span */}
             <motion.div
-              initial={{ opacity: 0, y: 40 }}
+              className="lg:col-span-2 lg:row-span-1"
+              initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-80px" }}
-              transition={{ delay: 0.5, duration: 0.6 }}
-              whileHover={{ y: -6, scale: 1.015 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ delay: 0.1, duration: 0.7 }}
+              whileHover={{ y: -5, scale: 1.01 }}
+            >
+              <GlassCard className="p-7 flex flex-col md:flex-row items-center gap-6 h-full group">
+                <div className="p-4 bg-gradient-to-br from-cyan-500/15 to-cyan-600/5 text-cyan-400 rounded-2xl
+                  shadow-[inset_0_0_18px_rgba(0,212,255,0.08),0_0_16px_rgba(0,212,255,0.10)] border border-cyan-500/22
+                  relative z-10 group-hover:scale-110 transition-transform">
+                  <AgentIcon role={AGENTS_DATA[0].role} />
+                </div>
+                <div className="flex-1 text-center md:text-left">
+                  <h3 className="text-lg font-bold text-white mb-1 tracking-wide">{AGENTS_DATA[0].name}</h3>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-950/70 text-cyan-300 border border-cyan-500/22 uppercase tracking-widest font-semibold mb-3 inline-block">
+                    {AGENTS_DATA[0].role}
+                  </span>
+                  <p className="text-sm text-slate-400 leading-relaxed mb-4">{AGENTS_DATA[0].desc}</p>
+                </div>
+              </GlassCard>
+            </motion.div>
+
+            {/* Agent 2 - Standard */}
+            <motion.div
+              className="lg:col-span-1 lg:row-span-1"
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ delay: 0.2, duration: 0.7 }}
+              whileHover={{ y: -5, scale: 1.01 }}
+            >
+              <GlassCard className="p-6 flex flex-col items-center text-center h-full group">
+                <div className="p-3 bg-gradient-to-br from-cyan-500/15 to-cyan-600/5 text-cyan-400 rounded-xl mb-4
+                  shadow-[inset_0_0_18px_rgba(0,212,255,0.08)] border border-cyan-500/22 group-hover:scale-110 transition-transform">
+                  <AgentIcon role={AGENTS_DATA[1].role} />
+                </div>
+                <h3 className="text-base font-bold text-white mb-1 tracking-wide">{AGENTS_DATA[1].name}</h3>
+                <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">{AGENTS_DATA[1].desc}</p>
+              </GlassCard>
+            </motion.div>
+
+            {/* Agent 3 - Standard */}
+            <motion.div
+              className="lg:col-span-1 lg:row-span-1"
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ delay: 0.3, duration: 0.7 }}
+              whileHover={{ y: -5, scale: 1.01 }}
+            >
+              <GlassCard className="p-6 flex flex-col items-center text-center h-full group">
+                <div className="p-3 bg-gradient-to-br from-cyan-500/15 to-cyan-600/5 text-cyan-400 rounded-xl mb-4
+                  shadow-[inset_0_0_18px_rgba(0,212,255,0.08)] border border-cyan-500/22 group-hover:scale-110 transition-transform">
+                  <AgentIcon role={AGENTS_DATA[2].role} />
+                </div>
+                <h3 className="text-base font-bold text-white mb-1 tracking-wide">{AGENTS_DATA[2].name}</h3>
+                <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">{AGENTS_DATA[2].desc}</p>
+              </GlassCard>
+            </motion.div>
+
+            {/* Council Arbiter - Large Featured span */}
+            <motion.div
+              className="lg:col-span-2 lg:row-span-1"
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ delay: 0.4, duration: 0.7 }}
+              whileHover={{ y: -5, scale: 1.015 }}
             >
               <GlassCard
                 glowColor="violet"
-                className="p-7 flex flex-col items-center text-center h-full group
+                className="p-8 flex flex-col md:flex-row items-center gap-8 h-full group
                   border-violet-500/28 bg-gradient-to-br from-violet-500/[0.08] to-violet-900/[0.03]"
               >
                 <div className="absolute inset-0 rounded-3xl bg-[radial-gradient(ellipse_at_top_right,rgba(124,58,237,0.14),transparent_55%)] pointer-events-none" />
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-24
-                  bg-gradient-to-b from-violet-500/[0.08] to-transparent pointer-events-none rounded-t-3xl" />
-
-                <div className="p-4 bg-gradient-to-br from-violet-500/22 to-violet-600/10 text-violet-300 rounded-2xl mb-5
+                <div className="p-6 bg-gradient-to-br from-violet-500/22 to-violet-600/10 text-violet-300 rounded-2xl
                   shadow-[inset_0_0_20px_rgba(124,58,237,0.12),0_0_18px_rgba(124,58,237,0.14)] border border-violet-500/32
-                  relative z-10 group-hover:scale-110 group-hover:shadow-[inset_0_0_24px_rgba(124,58,237,0.18),0_0_32px_rgba(124,58,237,0.25)] transition-all duration-350">
-                  <ShieldCheck className="w-8 h-8" aria-hidden="true" />
+                  relative z-10 group-hover:scale-110 transition-transform">
+                  <ShieldCheck className="w-10 h-10" aria-hidden="true" />
                 </div>
-
-                <h3 className="text-base font-bold text-white mb-1.5 relative z-10 tracking-wide
-                  drop-shadow-[0_0_14px_rgba(124,58,237,0.5)]">Council Arbiter</h3>
-                <span className="text-[10px] px-3 py-1 rounded-full
-                  bg-gradient-to-r from-violet-900/70 to-violet-800/50
-                  text-violet-200 border border-violet-500/32 uppercase tracking-widest font-bold mb-4 relative z-10">
-                  Final Verdict
-                </span>
-                <p className="text-sm text-slate-400 leading-relaxed mb-5 relative z-10 flex-1 text-center">
-                  Cross-references all agent findings, resolves contradictions via challenge loops and tribunal
-                  escalation, and produces a cryptographically signed forensic report with a calibrated confidence score.
-                </p>
-                <div className="w-full pt-4 border-t border-violet-500/22 relative z-10">
-                  <p className="text-[11px] text-violet-300/78 italic leading-relaxed" style={{ fontFamily: "var(--font-mono), monospace" }}>
-                    &quot;Synthesising cross-modal evidence and resolving logical conflicts…&quot;
+                <div className="flex-1 text-center md:text-left relative z-10">
+                  <h3 className="text-xl font-bold text-white mb-1 tracking-wide drop-shadow-[0_0_14px_rgba(124,58,237,0.5)]">Council Arbiter</h3>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-900/70 text-violet-200 border border-violet-500/32 uppercase tracking-widest font-bold mb-3 inline-block">
+                    Executive Synthesis
+                  </span>
+                  <p className="text-sm text-slate-400 leading-relaxed">
+                    Cross-references findings, resolves contradictions, and produces the final forensic verdict.
                   </p>
                 </div>
+              </GlassCard>
+            </motion.div>
+
+            {/* Agent 4 - Standard */}
+            <motion.div
+              className="lg:col-span-1 lg:row-span-1"
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ delay: 0.5, duration: 0.7 }}
+              whileHover={{ y: -5, scale: 1.01 }}
+            >
+              <GlassCard className="p-6 flex flex-col items-center text-center h-full group">
+                <div className="p-3 bg-gradient-to-br from-cyan-500/15 to-cyan-600/5 text-cyan-400 rounded-xl mb-4
+                  shadow-[inset_0_0_18px_rgba(0,212,255,0.08)] border border-cyan-500/22 group-hover:scale-110 transition-transform">
+                  <AgentIcon role={AGENTS_DATA[3].role} />
+                </div>
+                <h3 className="text-base font-bold text-white mb-1 tracking-wide">{AGENTS_DATA[3].name}</h3>
+                <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">{AGENTS_DATA[3].desc}</p>
+              </GlassCard>
+            </motion.div>
+
+            {/* Agent 5 - Standard */}
+            <motion.div
+              className="lg:col-span-1 lg:row-span-1"
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ delay: 0.6, duration: 0.7 }}
+              whileHover={{ y: -5, scale: 1.01 }}
+            >
+              <GlassCard className="p-6 flex flex-col items-center text-center h-full group">
+                <div className="p-3 bg-gradient-to-br from-cyan-500/15 to-cyan-600/5 text-cyan-400 rounded-xl mb-4
+                  shadow-[inset_0_0_18px_rgba(0,212,255,0.08)] border border-cyan-500/22 group-hover:scale-110 transition-transform">
+                  <AgentIcon role={AGENTS_DATA[4].role} />
+                </div>
+                <h3 className="text-base font-bold text-white mb-1 tracking-wide">{AGENTS_DATA[4].name}</h3>
+                <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">{AGENTS_DATA[4].desc}</p>
               </GlassCard>
             </motion.div>
           </div>

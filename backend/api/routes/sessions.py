@@ -213,9 +213,15 @@ async def live_updates(websocket: WebSocket, session_id: str):
     # ── 1. Wait for the pipeline to be registered (handles edge-case race) ──
     # The HTTP /investigate handler registers the pipeline *before* returning
     # the session_id to the client, so this should resolve almost immediately.
-    for _ in range(20):  # up to 2 s
+    # Higher timeout (12s) to handle slow disk/DB during initial ingestion.
+    pipeline_found = False
+    for i in range(120):  # up to 12 s
         if get_active_pipeline(session_id):
+            pipeline_found = True
             break
+        if i % 20 == 0 and i > 0:
+            import logging
+            logging.getLogger(__name__).info(f"WS for {session_id} still waiting for pipeline registration...")
         await asyncio.sleep(0.1)
 
     # ── 2. Accept the WebSocket BEFORE checking — required by the WS protocol.
@@ -568,7 +574,8 @@ async def get_agent_brief(
         try:
             wm = getattr(pipeline, "working_memory", None)
             if wm is not None:
-                state = await wm.get_state()
+                from uuid import UUID
+                state = await wm.get_state(UUID(session_id), agent_id)
                 if state:
                     # Extract the most recent in-progress task description as brief
                     tasks = getattr(state, "tasks", [])

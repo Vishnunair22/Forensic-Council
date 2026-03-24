@@ -99,7 +99,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Initialize distributed tracing in production
+# Configure CORS — restricted methods and headers
 from core.observability import setup_observability
 setup_observability(app, settings)
 
@@ -307,10 +307,9 @@ async def health_check():
         await qdrant.health_check()
         checks["qdrant"] = "ok"
     except Exception as e:
-        checks["qdrant"] = f"error: {str(e)[:60]}"
-        # Qdrant unavailable degrades vector search but doesn't block core flow
-        # Mark as warning rather than fatal
-        checks["qdrant_note"] = "degraded — vector search unavailable"
+        logger.warning(f"Health check: Qdrant degraded: {e}")
+        checks["qdrant"] = f"degraded: {str(e)[:60]}"
+        checks["qdrant_note"] = "vector search unavailable"
 
     status_code = 200 if overall_healthy else 503
     from fastapi.responses import JSONResponse as _JSONResponse

@@ -49,8 +49,10 @@
         -Server
     }
 
-    # Backend API + WebSocket (matched before catch-all frontend)
-    handle /api/* {
+    # Backend API + WebSocket (only /api/v1/* goes to FastAPI backend).
+    # Next.js API routes live under /api/auth/* and must reach the frontend
+    # container — do NOT widen this rule to /api/* or those routes break.
+    handle /api/v1/* {
         reverse_proxy backend:8000 {
             header_up Host              {host}
             header_up X-Real-IP         {remote_host}

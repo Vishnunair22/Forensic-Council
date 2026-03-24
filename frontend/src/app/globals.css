@@ -3,17 +3,17 @@
 
 :root {
   /* ─── Core palette ────────────────────────────────────────────── */
-  --background: #040409;
-  --foreground: #f8fafc;
+  --background: #020205;
+  --foreground: #f8fafc; /* Lighter white for better contrast */
 
-  --mesh-1: rgba(0, 212, 255, 0.08); /* Cyan */
-  --mesh-2: rgba(124, 58, 237, 0.05); /* Violet */
-  --mesh-3: rgba(16, 185, 129, 0.04); /* Emerald */
+  --mesh-1: rgba(0, 242, 255, 0.08); /* Increased opacity */
+  --mesh-2: rgba(157, 80, 255, 0.07); /* Increased opacity */
+  --mesh-3: rgba(16, 185, 129, 0.04); /* Increased opacity */
 
   /* Cyan accent — primary interactive, scanning elements */
-  --accent-cyan: #00d4ff;
-  --accent-cyan-dim: #06b6d4;
-  --accent-cyan-glow: rgba(0, 212, 255, 0.40);
+  --accent-cyan: #00f2ff;
+  --accent-cyan-dim: #0ea5e9;
+  --accent-cyan-glow: rgba(0, 242, 255, 0.35);
 
   /* Violet accent — arbiter, deep analysis, authority */
   --accent-violet: #8b5cf6;
@@ -28,11 +28,15 @@
   /* Red — errors, manipulation detected */
   --accent-red: #ef4444;
 
-  /* Premium Glass surface palette */
-  --glass-bg: rgba(255, 255, 255, 0.015);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-edge-shimmer: rgba(255, 255, 255, 0.12);
-  --glass-shadow: 0 16px 40px -8px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06);
+  /* Premium Glass surface palette (Glass 2.0) */
+  --glass-bg: rgba(15, 15, 25, 0.45);
+  --glass-border: rgba(255, 255, 255, 0.05);
+  --glass-edge-shimmer: rgba(255, 255, 255, 0.08);
+  --glass-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06),
+    0 20px 50px -12px rgba(0, 0, 0, 0.8),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 
   /* Typography */
   --font-sans: var(--font-poppins);
@@ -42,7 +46,7 @@
   --ring: var(--accent-cyan);
   --ring-offset-background: var(--background);
   --accent: #1e293b;
-  --muted-foreground: #94a3b8;
+  --muted-foreground: #cbd5e1; /* Increased from slate-400 (#94a3b8) to slate-300 (#cbd5e1) */
 }
 
 @theme inline {
@@ -114,19 +118,25 @@ code, kbd, pre, .font-mono {
 
 /* ─── Premium Glass Panel ─────────────────────────────────────────── */
 .glass-panel {
-  background: linear-gradient(
-    145deg,
-    rgba(255, 255, 255, 0.035) 0%,
-    rgba(255, 255, 255, 0.015) 50%,
-    rgba(255, 255, 255, 0.025) 100%
-  );
+  background: var(--glass-bg);
   border: 1px solid var(--glass-border);
-  backdrop-filter: blur(32px) saturate(180%);
-  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
   box-shadow: var(--glass-shadow);
   position: relative;
   overflow: hidden;
-  border-radius: 1.25rem;
+  border-radius: 1.5rem;
+}
+
+/* Glass 2.0 Noise Texture overlay */
+.glass-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.015;
+  pointer-events: none;
 }
 
 /* Top-edge internal specular reflection */
@@ -287,10 +297,11 @@ code, kbd, pre, .font-mono {
 }
 
 /* ─── Scrollbar ──────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 4px; height: 4px; }
+/* Use better sizing for scrollbars to ensure visibility */
+::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.20); }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.20); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.30); }
 
 /* ─── Focus ring ─────────────────────────────────────────────────── */
 :focus-visible {
@@ -379,7 +390,8 @@ button:disabled,
 .btn::before {
   content: "";
   position: absolute;
-  inset-y: 0;
+  top: 0;
+  bottom: 0;
   left: 0;
   width: 35%;
   background: linear-gradient(to right, transparent, rgba(255,255,255,0.14), transparent);

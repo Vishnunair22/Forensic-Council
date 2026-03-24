@@ -91,6 +91,7 @@ class QdrantClient:
                 api_key=self._api_key,
                 https=False,  # Use HTTP for local development
                 check_compatibility=False,  # Disable version check for compatibility
+                timeout=2.0,
             )
             
             # Test connection by getting collections

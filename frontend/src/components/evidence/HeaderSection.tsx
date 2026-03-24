@@ -30,7 +30,7 @@ export function HeaderSection({
       initial={{ y: -40, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-      className="max-w-6xl mx-auto flex items-center justify-between mb-12 mt-6 z-40 relative px-6 py-4 glass-panel"
+      className="sticky top-4 max-w-6xl mx-auto flex items-center justify-between mb-12 z-50 px-8 py-5 glass-panel rounded-[2rem] border-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
     >
       {/* Logo and Branding */}
       <div
@@ -53,8 +53,8 @@ export function HeaderSection({
           <span className="relative z-10 font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-cyan-200 text-sm tracking-widest">FC</span>
         </div>
         <div className="flex flex-col justify-center">
-          <span className="text-lg font-bold tracking-tight text-white/90 group-hover:text-white transition-colors block leading-tight">Forensic Council</span>
-          <span className="text-[10px] font-mono text-cyan-400/80 group-hover:text-cyan-300 uppercase tracking-[0.2em] transition-colors">Evidence Analysis</span>
+          <span className="text-lg font-bold tracking-tight text-white group-hover:text-cyan-50 transition-colors block leading-tight">Forensic Council</span>
+          <span className="text-[11px] font-mono text-cyan-300 group-hover:text-cyan-200 uppercase tracking-[0.2em] transition-colors leading-relaxed">Evidence Analysis</span>
         </div>
       </div>
 

@@ -134,9 +134,11 @@ class LLMClient:
 
     async def _with_retry(self, coro_factory) -> httpx.Response:
         """Execute an HTTP coroutine factory with exponential-backoff retry."""
+        last_response = None
         for attempt in range(_MAX_RETRIES):
             try:
                 response = await coro_factory()
+                last_response = response
                 if response.status_code in _RETRYABLE_STATUS:
                     wait = _BASE_BACKOFF * (2 ** attempt)
                     logger.warning(
@@ -145,13 +147,16 @@ class LLMClient:
                     await asyncio.sleep(wait)
                     continue
                 return response
-            except httpx.TimeoutException:
+            except (httpx.TimeoutException, httpx.NetworkError) as e:
                 if attempt < _MAX_RETRIES - 1:
                     wait = _BASE_BACKOFF * (2 ** attempt)
-                    logger.warning(f"LLM API timeout, retrying in {wait:.1f}s")
+                    logger.warning(f"LLM API {type(e).__name__}, retrying in {wait:.1f}s")
                     await asyncio.sleep(wait)
                 else:
                     raise
+        
+        if last_response is not None:
+            last_response.raise_for_status()
         raise RuntimeError(f"LLM API failed after {_MAX_RETRIES} attempts")
 
     async def _call_groq(
@@ -422,11 +427,13 @@ def parse_llm_step(content: str, tool_call: dict[str, Any] | None) -> dict[str, 
         if content.startswith(prefix):
             rest = content[len(prefix):].strip()
             if "(" in rest:
-                return {
-                    "step_type": "ACTION",
-                    "content": rest,
-                    "tool_name": rest.split("(")[0].strip(),
-                    "tool_input": {},
-                }
+                tool_name = rest.split("(")[0].strip()
+                if tool_name:
+                    return {
+                        "step_type": "ACTION",
+                        "content": rest,
+                        "tool_name": tool_name,
+                        "tool_input": {},
+                    }
 
     return {"step_type": "THOUGHT", "content": content}

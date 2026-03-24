@@ -17,6 +17,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { useSound } from "@/hooks/useSound";
+import { clsx } from "clsx";
 
 interface FileUploadSectionProps {
   key?: React.Key;
@@ -116,7 +117,7 @@ export function FileUploadSection({
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-80" />
             <span className="relative inline-flex rounded-full h-full w-full bg-cyan-400" />
           </span>
-          <span className="uppercase tracking-[0.2em] font-semibold text-[10px] text-cyan-300">Evidence Intake Terminal</span>
+          <span className="uppercase tracking-[0.2em] font-bold text-[12px] text-cyan-200">Evidence Intake Terminal</span>
         </motion.div>
         
         <motion.h1 
@@ -132,8 +133,8 @@ export function FileUploadSection({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2, duration: 0.8 }}
-          className="text-slate-400 text-sm md:text-base font-normal max-w-lg mx-auto leading-relaxed">
-          Deploy the <span className="text-emerald-400 font-semibold tracking-wide">Council Autonomous Parsing System</span> on your digital artifact.
+          className="text-slate-200 text-sm md:text-base font-medium max-w-lg mx-auto leading-relaxed">
+          Deploy the <span className="text-emerald-400 font-bold tracking-wide">Council Autonomous Parsing System</span> on your digital artifact.
         </motion.p>
       </div>
 
@@ -201,10 +202,10 @@ export function FileUploadSection({
 
             {/* File Info */}
             <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent px-6 py-4">
-              <p className="text-sm font-mono text-white truncate font-semibold">
+              <p className="text-sm font-mono text-white truncate font-bold">
                 {file.name}
               </p>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <p className="text-[12px] text-slate-300 mt-0.5 font-medium">
                 {(file.size / 1024 / 1024).toFixed(2)} MB
               </p>
             </div>
@@ -257,13 +258,13 @@ export function FileUploadSection({
           aria-label="File drop zone — click or press Enter to browse"
           onClick={() => { playSound("click"); fileInputRef.current?.click(); }}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); playSound("click"); fileInputRef.current?.click(); } }}
-          className={`w-full glass-panel group overflow-hidden border-2 border-dashed rounded-[2.5rem]
-            transition-all duration-500 relative cursor-pointer
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-4 focus-visible:ring-offset-black
-            ${isDragging
-              ? "border-cyan-400/80 shadow-[0_0_50px_rgba(0,212,255,0.15),inset_0_0_80px_rgba(0,212,255,0.1)] scale-[1.02]"
-              : "border-white/[0.08] hover:border-cyan-500/50 hover:shadow-[0_0_40px_rgba(0,212,255,0.08),inset_0_0_40px_rgba(0,212,255,0.04)]"
-            }`}
+            className={clsx(
+              "w-full glass-panel group overflow-hidden border-2 border-dashed rounded-[3rem] transition-all duration-700 relative cursor-pointer",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50 focus-visible:ring-offset-8 focus-visible:ring-offset-black",
+              isDragging
+                ? "border-cyan-400 shadow-[0_0_80px_rgba(0,212,255,0.15),inset_0_0_100px_rgba(0,212,255,0.08)] scale-[1.03]"
+                : "border-white/10 hover:border-cyan-500/40 hover:shadow-[0_0_60px_rgba(0,212,255,0.06),inset_0_0_40px_rgba(0,212,255,0.02)]"
+            )}
         >
           {/* Subtle moving noise texture for the dropzone */}
           <div className="absolute inset-0 opacity-[0.03] invert dark:invert-0 bg-[url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.85%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E')] mix-blend-overlay pointer-events-none" />
@@ -292,15 +293,15 @@ export function FileUploadSection({
               <p className={`text-lg font-bold transition-colors duration-300 mb-2 tracking-wide ${isDragging ? "text-cyan-300" : "text-white group-hover:text-cyan-50"}`}>
                 {isDragging ? "Drop your evidence here" : "Drag evidence file here"}
               </p>
-              <p className="text-sm text-slate-400 font-medium">
+              <p className="text-sm text-slate-200 font-bold">
                 or click to select from your system
               </p>
             </div>
             
             <div className="flex gap-2.5 flex-wrap justify-center mt-2">
               {["IMAGE", "VIDEO", "AUDIO", "DOCUMENT"].map(t => (
-                <span key={t} className="px-3 py-1 bg-black/40 border border-white/[0.06]
-                  rounded-md text-[10px] font-mono text-slate-500 tracking-widest uppercase transition-colors group-hover:border-white/10 group-hover:text-slate-400">
+                <span key={t} className="px-3 py-1 bg-black/40 border border-white/[0.15]
+                  rounded-md text-[11px] font-mono text-slate-300 tracking-widest uppercase transition-colors group-hover:border-white/25 group-hover:text-white font-bold">
                   {t}
                 </span>
               ))}
@@ -326,7 +327,7 @@ export function FileUploadSection({
         ref={fileInputRef}
         type="file"
         onChange={handleFileChange}
-        className="hidden"
+        className="sr-only"
         accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
         aria-label="Upload evidence file"
       />

@@ -92,6 +92,8 @@ class WorkingMemoryState(BaseModel):
             "current_iteration": self.current_iteration,
             "iteration_ceiling": self.iteration_ceiling,
             "hitl_state": self.hitl_state,
+            "tool_registry_snapshot": self.tool_registry_snapshot,
+            "last_tool_error": self.last_tool_error,
         }
     
     @classmethod
@@ -530,6 +532,11 @@ class WorkingMemory:
             agent_id: Agent identifier
         """
         key = self._get_key(session_id, agent_id)
+        
+        # Clear from local cache first
+        if key in self._local_cache:
+            del self._local_cache[key]
+            
         if self._redis is not None:
             try:
                 await self._redis.delete(key)
