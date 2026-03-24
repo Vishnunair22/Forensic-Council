@@ -15,7 +15,6 @@ import { AgentIcon } from "@/components/ui/AgentIcon";
 import { AGENTS_DATA } from "@/lib/constants";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { SoundType } from "@/hooks/useSound";
-import { CyberNoirPanel } from "@/components/ui/CyberNoirPanel";
 
 export interface SectionFlag {
   id: string;
@@ -106,8 +105,8 @@ function ExpandableText({
       {needsTruncation && (
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="inline-flex items-center gap-0.5 mt-1.5 text-[11px] font-medium text-cyan-400/80
-            hover:text-cyan-300 transition-colors"
+          className="inline-flex items-center gap-0.5 mt-1.5 text-[11px] font-medium text-indigo-400/80
+            hover:text-indigo-300 transition-colors"
         >
           {expanded ? (
             <><ChevronUp className="w-3.5 h-3.5" />Show less</>
@@ -122,10 +121,11 @@ function ExpandableText({
 
 // ── Findings accordion ───────────────────────────────────────────────────────
 const FLAG_STYLES = {
-  ok:   { dot: "bg-emerald-400",  text: "text-emerald-300", bar: "bg-emerald-500/30", icon: "✓" },
-  warn: { dot: "bg-amber-400",    text: "text-amber-200",   bar: "bg-amber-500/30",   icon: "⚠" },
-  bad:  { dot: "bg-red-400",      text: "text-red-200",     bar: "bg-red-500/30",     icon: "✕" },
-  info: { dot: "bg-slate-400",    text: "text-slate-200",   bar: "bg-white/[0.12]",   icon: "·" },
+  ok:   { dot: "bg-emerald-500",  text: "text-emerald-400", bar: "bg-emerald-500/20", icon: "✓" },
+  ok_alt: { dot: "bg-indigo-500", text: "text-indigo-400", bar: "bg-indigo-500/20", icon: "·" },
+  warn: { dot: "bg-amber-500",    text: "text-amber-400",   bar: "bg-amber-500/20",   icon: "⚠" },
+  bad:  { dot: "bg-rose-500",      text: "text-rose-400",     bar: "bg-rose-500/20",     icon: "✕" },
+  info: { dot: "bg-slate-500",    text: "text-slate-400",   bar: "bg-white/[0.08]",   icon: "·" },
 } as const;
 
 function FindingsAccordion({
@@ -141,13 +141,8 @@ function FindingsAccordion({
   const badCount  = sectionFlags.filter((s) => s.flag === "bad").length;
   const warnCount = sectionFlags.filter((s) => s.flag === "warn").length;
 
-  const summaryColor =
-    badCount  > 0 ? "text-red-400"    :
-    warnCount > 0 ? "text-amber-400"  :
-    "text-slate-400";
-
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-black/40 overflow-hidden shadow-lg mt-2">
+    <div className="rounded-xl border border-border-subtle bg-surface-low overflow-hidden shadow-sm mt-2">
       {/* ── Accordion header ── */}
       <button
         onClick={() => setOpen((v) => !v)}
@@ -166,17 +161,14 @@ function FindingsAccordion({
               />
             ))}
           </div>
-          <span className={`text-[10px] font-black tracking-[0.2em] uppercase font-mono ${summaryColor}`}>
+          <span className="text-[10px] font-bold tracking-widest uppercase font-mono text-foreground/40">
             {findingsCount ?? sectionFlags.length} Artifact{(findingsCount ?? sectionFlags.length) !== 1 ? "s" : ""}
-          </span>
-          <span className="text-[9px] text-slate-500 font-mono font-bold tracking-tighter">
-            // {sectionFlags.length} SEC_SCAN
           </span>
         </div>
         <motion.span
           animate={{ rotate: open ? 180 : 0 }}
           transition={{ duration: 0.2, ease: "anticipate" }}
-          className="text-slate-500 group-hover:text-cyan-400 transition-colors"
+          className="text-foreground/20 group-hover:text-indigo-400 transition-colors"
         >
           <ChevronDown className="w-4 h-4" />
         </motion.span>
@@ -223,12 +215,11 @@ function FindingsAccordion({
                       <span className={`text-xs font-medium flex-1 text-left tracking-wide ${style.text}`}>
                         {sf.label}
                       </span>
-                      {/* Expand chevron */}
                       {hasDetail && (
                         <motion.span
                           animate={{ rotate: isExp ? 180 : 0 }}
                           transition={{ duration: 0.2 }}
-                          className="text-slate-600 group-hover:text-cyan-400/70 transition-colors flex-shrink-0"
+                          className="text-foreground/20 group-hover:text-indigo-400/70 transition-colors flex-shrink-0"
                         >
                           <ChevronDown className="w-3.5 h-3.5" />
                         </motion.span>
@@ -246,7 +237,7 @@ function FindingsAccordion({
                           transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
                           className="overflow-hidden bg-black/40"
                         >
-                          <p className="px-10 pb-3 pt-1 text-[12px] text-slate-300 font-mono leading-relaxed border-l-2 ml-4 border-white/[0.15]">
+                          <p className="px-10 pb-3 pt-1 text-[11px] text-foreground/60 font-mono leading-relaxed border-l border-border-bold ml-4">
                             {sf.key_signal}
                           </p>
                         </motion.div>
@@ -300,15 +291,15 @@ function FindingRow({ f }: { f: FindingPreview }) {
 
   return (
     <motion.div 
-      initial={{ opacity: 0, scale: 0.98, y: 5 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
+      initial={{ opacity: 0, y: 5 }}
+      animate={{ opacity: 1, y: 0 }}
       layout
-      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-      className={`rounded-2xl bg-black/40 overflow-hidden border border-white/[0.08] border-l-4 ${borderCls} px-4 py-3.5 space-y-2.5 shadow-lg group/finding`}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      className={`rounded-xl bg-surface-mid overflow-hidden border border-border-subtle border-l-2 ${borderCls} px-4 py-3 space-y-2 shadow-sm group/finding`}
     >
       {/* Header: tool name + severity + confidence */}
       <div className="flex items-start gap-3">
-        <span className="text-[10px] font-bold text-cyan-400/90 tracking-[0.15em] uppercase flex-1 leading-tight font-mono">
+        <span className="text-[10px] font-bold text-indigo-400/90 tracking-widest uppercase flex-1 leading-tight font-mono">
           {fmtTool(f.tool)}
         </span>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -348,7 +339,7 @@ function FindingsPreviewList({ findings }: { findings: FindingPreview[] }) {
   const remaining = remainingBatch.length;
 
   return (
-    <motion.div layout className="space-y-3">
+    <motion.div layout className="space-y-2">
       <AnimatePresence initial={false}>
         {firstBatch.map((f, i) => <FindingRow key={`${f.tool}-first-${i}`} f={f} />)}
       </AnimatePresence>
@@ -357,12 +348,12 @@ function FindingsPreviewList({ findings }: { findings: FindingPreview[] }) {
         <motion.button
           layout
           onClick={() => setShowAll(v => !v)}
-          className="w-full text-[9px] font-black tracking-[0.3em] uppercase text-cyan-500/80 hover:text-cyan-400 transition-all py-3 text-center
-            border border-cyan-500/20 border-dashed rounded-2xl bg-cyan-500/[0.03] hover:bg-cyan-500/10 my-1"
+          className="w-full text-[9px] font-bold tracking-widest uppercase text-foreground/40 hover:text-indigo-400 transition-all py-2 text-center
+            border border-border-subtle border-dashed rounded-xl bg-surface-low hover:bg-surface-high my-1"
         >
           {showAll
-            ? "[-] Hide Suppressed Findings"
-            : `[+] Display ${remaining} Suppressed Finding${remaining !== 1 ? "s" : ""}`}
+            ? "Hide Suppressed Findings"
+            : `Display ${remaining} Suppressed Finding${remaining !== 1 ? "s" : ""}`}
         </motion.button>
       )}
 
@@ -426,24 +417,23 @@ function LiveThinkingText({ text, active }: { text: string; active: boolean }) {
         )}
       </AnimatePresence>
 
-      {/* Current thought */}
       <AnimatePresence mode="wait">
         <motion.p
           key={key}
-          initial={{ opacity: 0, x: -4, filter: "blur(4px)" }}
-          animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
-          exit={{ opacity: 0, x: 4, filter: "blur(3px)" }}
-          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-          className="text-[13px] leading-relaxed text-cyan-100/90 whitespace-pre-wrap break-words font-medium font-mono tracking-tight"
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+          className="text-[12px] leading-relaxed text-foreground/70 whitespace-pre-wrap break-words font-medium font-mono tracking-tight"
         >
-          <span className="text-cyan-500 mr-2">»</span>
+          <span className="text-indigo-400 mr-2">/</span>
           {displayText}
-          {/* Blinking cursor while actively running */}
+          {/* Subtle cursor while actively running */}
           {active && (
             <motion.span
               animate={{ opacity: [1, 0, 1] }}
-              transition={{ duration: 0.8, repeat: Infinity, ease: "easeInOut" }}
-              className="inline-block ml-1.5 w-[6px] h-[13px] bg-cyan-400/80 rounded-[1px] align-middle -translate-y-px shadow-[0_0_8px_#00d4ff]"
+              transition={{ duration: 1, repeat: Infinity }}
+              className="inline-block ml-1 w-[4px] h-[12px] bg-indigo-500/50 align-middle -translate-y-px"
             />
           )}
         </motion.p>
@@ -681,27 +671,26 @@ export function AgentProgressDisplay({
     >
       {/* Header */}
       <div className="text-center mb-12" aria-live="polite" aria-atomic="true">
+        <motion.div 
+          initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+          className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-low border border-border-subtle mb-4">
+          <span className="text-[10px] font-bold font-mono tracking-widest text-indigo-400 uppercase">
+            {activeCompletedCount} / {visibleAgentsCount} Analysed
+          </span>
+        </motion.div>
+        
         <motion.h2 
           key={phase + String(showInitialDecision) + String(showDeepComplete)}
-          initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}
-          className="text-2xl md:text-4xl font-black text-white mb-3 tracking-tighter font-heading uppercase italic">
+          initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+          className="text-2xl md:text-3xl font-black text-foreground mb-3 tracking-tight font-heading uppercase">
           {showInitialDecision
             ? "Phase I: Initial Scan Complete"
             : showDeepComplete
               ? "Phase II: Deep Scan Verified"
               : phase === "deep"
-                ? "Propagating Deep Scans..."
+                ? "Active Deep Forensic Stream"
                 : "Active Forensic Stream"}
         </motion.h2>
-        <div className="flex items-center justify-center gap-3">
-          <div className="h-px w-8 bg-cyan-500/30" />
-          <p className="text-[10px] font-mono tracking-[0.3em] uppercase text-cyan-400 font-bold">
-            {showInitialDecision || showDeepComplete
-              ? `${activeCompletedCount} OF ${visibleAgentsCount} AGENTS TERMINATED`
-              : `${activeCompletedCount} / ${visibleAgentsCount} AGENTS ANALYZING`}
-          </p>
-          <div className="h-px w-8 bg-cyan-500/30" />
-        </div>
       </div>
 
       {/* Agent Cards Bento Grid */}
@@ -722,27 +711,20 @@ export function AgentProgressDisplay({
           return (
             <AnimatePresence key={agent.id}>
               {isRevealed && (
-                <CyberNoirPanel
-                  glow={
-                    status === "running" ? "cyan" :
-                    status === "complete" ? "emerald" :
-                    status === "error" ? "red" :
-                    status === "checking" ? "violet" : "none"
-                  }
-                  intensity={status === "running" ? "high" : "medium"}
+                <div
                   className={clsx(
-                    "rounded-[2.5rem] p-6 transition-all duration-500 relative group overflow-hidden border-white/[0.05]",
+                    "surface-panel rounded-3xl p-6 transition-all duration-500 relative group overflow-hidden border-border-subtle",
                     rowSpan,
-                    (status === "waiting" || status === "checking") && "opacity-60 grayscale-[0.3]"
+                    (status === "waiting" || status === "checking") && "opacity-40"
                   )}
                 >
-                  {/* Status indicator bar */}
+                  {/* Status indicator bar (Top hairline) */}
                   <div className={clsx(
-                    "absolute top-0 left-0 right-0 h-1 transition-all duration-500",
-                    status === "running" ? "bg-cyan-500 shadow-[0_0_10px_#00d4ff]" :
-                    status === "complete" ? "bg-emerald-500/40" :
-                    status === "error" ? "bg-red-500" :
-                    status === "checking" ? "bg-violet-500/40" : "bg-white/5"
+                    "absolute top-0 left-0 right-0 h-0.5 transition-all duration-500",
+                    status === "running" ? "bg-indigo-500 shadow-sm shadow-indigo-500/50" :
+                    status === "complete" ? "bg-emerald-500/20" :
+                    status === "error" ? "bg-rose-500" :
+                    status === "checking" ? "bg-indigo-500/20" : "bg-white/5"
                   )} />
 
                   {/* Top row */}
@@ -750,34 +732,34 @@ export function AgentProgressDisplay({
                     <div className={[
                       "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-300",
                       status === "running"
-                        ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-[0_0_15px_rgba(0,212,255,0.2)]"
-                        : "bg-white/[0.05] text-slate-400 border border-white/10",
+                        ? "bg-indigo-500/5 text-indigo-400 border border-indigo-500/20 shadow-sm"
+                        : "bg-surface-mid text-foreground/30 border border-border-subtle",
                     ].join(" ")}>
                       <AgentIcon agentId={agent.id} className="w-6 h-6" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-[15px] font-bold text-white leading-tight font-heading tracking-tight uppercase italic">{agent.name}</h3>
-                      <span className="text-[10px] uppercase tracking-[0.2em] text-cyan-500/60 font-mono font-bold">{agent.role}</span>
+                      <h3 className="text-sm font-bold text-foreground leading-tight font-heading tracking-tight uppercase">{agent.name}</h3>
+                      <span className="text-[10px] uppercase tracking-widest text-foreground/30 font-mono font-bold">{agent.role}</span>
                     </div>
                     <div className="shrink-0">
                       {status === "waiting" && (
-                        <span className="inline-flex items-center gap-1.5 text-[9px] text-slate-400 font-bold px-2 py-0.5 rounded-full bg-slate-900 border border-white/5 uppercase tracking-widest font-mono">
+                        <span className="inline-flex items-center gap-1.5 text-[9px] text-foreground/40 font-bold px-2 py-0.5 rounded-full bg-surface-low border border-border-subtle uppercase tracking-widest font-mono">
                           Queued
                         </span>
                       )}
                       {status === "checking" && (
-                        <span className="inline-flex items-center gap-1.5 text-[9px] text-violet-300 font-bold px-2 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/20 uppercase tracking-widest font-mono animate-pulse">
+                        <span className="inline-flex items-center gap-1.5 text-[9px] text-indigo-400/60 font-bold px-2 py-0.5 rounded-full bg-indigo-500/5 border border-indigo-500/10 uppercase tracking-widest font-mono">
                           Linking
                         </span>
                       )}
                       {status === "running" && (
-                        <span className="inline-flex items-center gap-1.5 text-[9px] text-cyan-400 font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 uppercase tracking-widest font-mono shadow-[0_0_10px_rgba(0,212,255,0.15)]">
+                        <span className="inline-flex items-center gap-1.5 text-[9px] text-indigo-400 font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 uppercase tracking-widest font-mono shadow-sm shadow-indigo-500/10">
                           <Loader2 className="w-2.5 h-2.5 animate-spin" />Scan
                         </span>
                       )}
                       {status === "complete" && (
-                        <span className="inline-flex items-center gap-1.5 text-[9px] text-emerald-400 font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 uppercase tracking-widest font-mono">
-                          <CheckCircle2 className="w-3 h-3" />Terminated
+                        <span className="inline-flex items-center gap-1.5 text-[9px] text-emerald-500 font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 uppercase tracking-widest font-mono">
+                          <CheckCircle2 className="w-3 h-3" />Finished
                         </span>
                       )}
                     </div>
@@ -824,26 +806,25 @@ export function AgentProgressDisplay({
                           : null;
                         return (
                           <div className="space-y-1 mt-2">
-                            <div className="relative w-full h-1 bg-white/[0.05] rounded-full overflow-hidden">
+                            <div className="relative w-full h-1 bg-surface-low rounded-full overflow-hidden">
                               {pct !== null ? (
                                 <motion.div
-                                  className="h-full rounded-full bg-gradient-to-r from-cyan-600 to-cyan-400"
+                                  className="h-full rounded-full bg-indigo-500"
                                   initial={{ width: "0%" }}
                                   animate={{ width: `${pct}%` }}
                                   transition={{ duration: 0.4, ease: "easeOut" }}
                                 />
                               ) : (
-                                /* CSS keyframe-based shimmer — avoids Framer Motion % reference glitch */
                                 <div
-                                  className="absolute h-full w-[40%] bg-gradient-to-r from-transparent via-cyan-400/65 to-transparent rounded-full"
+                                  className="absolute h-full w-[40%] bg-gradient-to-r from-transparent via-indigo-400/40 to-transparent rounded-full"
                                   style={{ animation: "bar-slide 2s ease-in-out infinite" }}
                                 />
                               )}
                             </div>
                             {pct !== null && (
-                              <div className="flex justify-between items-center text-[10px] text-slate-500">
+                              <div className="flex justify-between items-center text-[10px] text-foreground/30">
                                 <span>{toolsDone}/{toolsTotal} tools</span>
-                                <span className="font-mono text-cyan-500/70">{pct}%</span>
+                                <span className="font-mono text-indigo-400/70">{pct}%</span>
                               </div>
                             )}
                           </div>
@@ -941,15 +922,15 @@ export function AgentProgressDisplay({
                     <div className="space-y-1">
                       <ExpandableText
                         text={completed.error || "An error occurred."}
-                        textClassName="text-red-300/70"
+                        textClassName="text-rose-400"
                       />
                     </div>
                   )}
 
                   {status === "waiting" && (
-                    <p className="text-xs text-slate-600 font-mono italic">Awaiting dispatch signal...</p>
+                    <p className="text-xs text-foreground/20 font-mono italic">Awaiting dispatch...</p>
                   )}
-                </CyberNoirPanel>
+                </div>
               )}
             </AnimatePresence>
           );
@@ -1005,21 +986,21 @@ export function AgentProgressDisplay({
           className="mt-12 w-full max-w-xl"
         >
           {/* Decision card */}
-          <CyberNoirPanel glow="cyan" intensity="medium" className="rounded-[2.5rem] p-8 space-y-6">
+          <div className="surface-panel rounded-3xl p-8 space-y-6 shadow-xl border-border-bold">
             <div className="text-center space-y-1">
-              <p className="text-[10px] font-mono text-cyan-400 uppercase tracking-[0.4em] font-bold">Investigator Override</p>
-              <h3 className="text-xl font-black text-white font-heading italic uppercase italic">Select Advancement Protocol</h3>
+              <p className="text-[10px] font-mono text-indigo-400 uppercase tracking-widest font-bold">Investigator Override</p>
+              <h3 className="text-xl font-black text-foreground font-heading uppercase">Select Advancement Protocol</h3>
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
               <motion.button
                 onClick={onAcceptAnalysis}
                 disabled={isNavigating}
-                whileHover={isNavigating ? {} : { y: -2, scale: 1.02 }}
-                whileTap={isNavigating ? {} : { scale: 0.98 }}
-                className="btn btn-emerald flex-1 py-4 rounded-2xl font-bold uppercase tracking-widest text-xs h-14"
+                whileHover={isNavigating ? {} : { y: -1, scale: 1.01 }}
+                whileTap={isNavigating ? {} : { scale: 0.99 }}
+                className="btn btn-secondary flex-1 py-4 rounded-xl font-bold uppercase tracking-widest text-xs h-14"
               >
                 {isNavigating ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" />Finalizing...</>
+                  <><Loader2 className="w-4 h-4 animate-spin" />Processing...</>
                 ) : (
                   <><FileText className="w-4 h-4" />Compile Report</>
                 )}
@@ -1027,14 +1008,14 @@ export function AgentProgressDisplay({
               <motion.button
                 onClick={onDeepAnalysis}
                 disabled={isNavigating}
-                whileHover={isNavigating ? {} : { y: -2, scale: 1.02 }}
-                whileTap={isNavigating ? {} : { scale: 0.98 }}
-                className="btn btn-cyan flex-1 py-4 rounded-2xl font-bold uppercase tracking-widest text-xs h-14"
+                whileHover={isNavigating ? {} : { y: -1, scale: 1.01 }}
+                whileTap={isNavigating ? {} : { scale: 0.99 }}
+                className="btn btn-primary flex-1 py-4 rounded-xl font-bold uppercase tracking-widest text-xs h-14"
               >
-                <Microscope className="w-4 h-4" />Deep Scan Protocol<ArrowRight className="w-4 h-4 ml-1" />
+                <Microscope className="w-4 h-4" />Deep Scan Protocol
               </motion.button>
             </div>
-          </CyberNoirPanel>
+          </div>
         </motion.div>
       )}
 
@@ -1044,36 +1025,36 @@ export function AgentProgressDisplay({
           transition={{ delay: 0.3, type: "spring", stiffness: 280, damping: 26 }}
           className="mt-12 w-full max-w-xl"
         >
-          <CyberNoirPanel glow="emerald" intensity="high" className="rounded-[2.5rem] p-8 space-y-6">
+          <div className="surface-panel rounded-3xl p-8 space-y-6 shadow-xl border-border-bold">
             <div className="text-center space-y-1">
-              <p className="text-[10px] font-mono text-emerald-400 uppercase tracking-[0.4em] font-bold">Verification Complete</p>
-              <h3 className="text-xl font-black text-white font-heading italic uppercase italic">Council Arbiter Verification</h3>
+              <p className="text-[10px] font-mono text-emerald-500 uppercase tracking-widest font-bold">Verification Complete</p>
+              <h3 className="text-xl font-black text-foreground font-heading uppercase">Council Arbiter Verification</h3>
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
               <motion.button
                 onClick={() => { playSound?.("click"); onNewUpload?.(); }}
                 disabled={isNavigating}
-                whileHover={isNavigating ? {} : { y: -2, scale: 1.02 }}
-                whileTap={isNavigating ? {} : { scale: 0.98 }}
-                className="btn btn-ghost flex-1 py-4 rounded-2xl font-bold uppercase tracking-widest text-xs h-14"
+                whileHover={isNavigating ? {} : { y: -1, scale: 1.01 }}
+                whileTap={isNavigating ? {} : { scale: 0.99 }}
+                className="btn btn-secondary flex-1 py-4 rounded-xl font-bold uppercase tracking-widest text-xs h-14"
               >
                 <RotateCcw className="w-4 h-4 opacity-70" />Reset Terminal
               </motion.button>
               <motion.button
                 onClick={() => { playSound?.("click"); onViewResults?.(); }}
                 disabled={isNavigating}
-                whileHover={isNavigating ? {} : { y: -2, scale: 1.02 }}
-                whileTap={isNavigating ? {} : { scale: 0.98 }}
-                className="btn btn-cyan flex-1 py-4 rounded-2xl font-bold uppercase tracking-widest text-xs h-14 relative overflow-hidden"
+                whileHover={isNavigating ? {} : { y: -1, scale: 1.01 }}
+                whileTap={isNavigating ? {} : { scale: 0.99 }}
+                className="btn btn-primary flex-1 py-4 rounded-xl font-bold uppercase tracking-widest text-xs h-14 relative overflow-hidden"
               >
                 {isNavigating ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" />Deliberating...</>
+                  <><Loader2 className="w-4 h-4 animate-spin" />Finalizing...</>
                 ) : (
                   <><FileText className="w-4 h-4" />Access Ledger<ArrowRight className="w-4 h-4 ml-1" /></>
                 )}
               </motion.button>
             </div>
-          </CyberNoirPanel>
+          </div>
         </motion.div>
       )}
 
@@ -1083,15 +1064,15 @@ export function AgentProgressDisplay({
           {/* Status line with animated dot */}
           <div className="inline-flex items-center gap-2">
             {!allAgentsDone && (
-              <span className="relative flex h-2 w-2 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-60" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
+              <span className="relative flex h-1.5 w-1.5 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-500 opacity-40" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500" />
               </span>
             )}
-            <p className="text-sm font-medium text-slate-300">{progressText}</p>
+            <p className="text-sm font-medium text-foreground/50">{progressText}</p>
           </div>
           {!!pipelineMessage && (
-            <div className="mt-3 max-w-xl mx-auto px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+            <div className="mt-3 max-w-xl mx-auto px-4 py-3 rounded-xl bg-surface-low border border-border-subtle">
               <LiveThinkingText text={humaniseThinking(pipelineMessage, "")} active={!allAgentsDone} />
             </div>
           )}

@@ -1,0 +1,16 @@
+# ============================================================================
+# Forensic Council — Root Docker Compose (Entry Point)
+# ============================================================================
+# This file serves as the main entry point for the Forensic Council stack.
+# It delegates the actual service definitions to the docs/docker/ files
+# while allowing users to run `docker compose up` from the project root.
+# ============================================================================
+
+name: forensic-council
+
+# We use the 'include' feature (Docker Compose 2.20+) to keep the root clean
+# while maintaining the modularity of the docs/docker files.
+include:
+  - path: docs/docker/docker-compose.yml
+
+# Any root-specific overrides can go here (none needed as we want to mirror the base)

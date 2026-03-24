@@ -34,7 +34,8 @@ CACHE_DIRS: dict[str, str] = {
     "PyTorch":         os.getenv("TORCH_HOME",         "/app/cache/torch"),
     "EasyOCR":         os.getenv("EASYOCR_MODEL_DIR",  "/app/cache/easyocr"),
     "YOLO":            os.getenv("YOLO_CONFIG_DIR",    "/app/cache/ultralytics"),
-    "DeepFace":        os.getenv("DEEPFACE_HOME",      "/app/cache/deepface"),
+    # DeepFace removed — deepface is not installed (would pull in 1.8 GB TensorFlow).
+    # Face-swap detection falls back to heuristic analysis when deepface is absent.
     "Numba":           os.getenv("NUMBA_CACHE_DIR",    "/app/cache/numba_cache"),
     "Calibration":     "/app/cache/calibration_models",
 }
@@ -42,10 +43,9 @@ CACHE_DIRS: dict[str, str] = {
 # Minimum expected file count per cache dir to be considered "populated"
 MIN_FILES: dict[str, int] = {
     "HuggingFace": 3,
-    "PyTorch":     1,
+    "PyTorch":     0,   # PyTorch hub models are downloaded lazily per-analysis
     "EasyOCR":     2,
     "YOLO":        1,
-    "DeepFace":    1,
     "Numba":       0,   # generated at runtime, may be empty
     "Calibration": 0,   # generated after first run
 }

@@ -170,11 +170,7 @@ Development mode mounts source code as volumes and enables hot-reload for both s
 
 **Linux / macOS / Windows:**
 ```bash
-docker compose \
-  -f docs/docker/docker-compose.yml \
-  -f docs/docker/docker-compose.dev.yml \
-  --env-file .env \
-  up --build
+docker compose up --build
 ```
 
 What you get:

@@ -476,7 +476,28 @@ async def _wrap_pipeline_with_broadcasts(
             
             type_val = getattr(entry_type, "value", str(entry_type))
             
-            if type_val in ("THOUGHT", "ACTION") and isinstance(content, dict):
+            if type_val == "HITL_CHECKPOINT" and isinstance(content, dict):
+                agent_name = _AGENT_NAMES.get(agent_id, agent_id)
+                await broadcast_update(
+                    ws_session_id,
+                    BriefUpdate(
+                        type="HITL_CHECKPOINT",
+                        session_id=ws_session_id,
+                        agent_id=agent_id,
+                        agent_name=agent_name,
+                        message=f"🚨 HITL Checkpoint: {content.get('reason', 'Review required')}",
+                        data={
+                            "status": "paused",
+                            "checkpoint": {
+                                "id": content.get("checkpoint_id"),
+                                "agent_id": agent_id,
+                                "reason": content.get("reason"),
+                                "brief": content.get("brief"),
+                            }
+                        },
+                    )
+                )
+            elif type_val in ("THOUGHT", "ACTION") and isinstance(content, dict):
                 if content.get("action") == "session_start":
                     return result
                 
@@ -1337,13 +1358,13 @@ async def _wrap_pipeline_with_broadcasts(
                                     break
                         if gemini_result:
                             _agent1_gemini_result = gemini_result
-                            # Import and inject into Agent3 and Agent5
-                            from agents.agent3_object import Agent3Object
-                            from agents.agent5_metadata import Agent5Metadata
-                            Agent3Object.inject_agent1_context(gemini_result)
-                            Agent5Metadata.inject_agent1_context(gemini_result)
+                            # Inject into all applicable agents in the deep pass batch
+                            for aid, aname, ainst, ares in deep_pass_coroutines:
+                                if aid in ("Agent3", "Agent5") and hasattr(ainst, "inject_agent1_context"):
+                                    ainst.inject_agent1_context(gemini_result)
+                            
                             logger.info(
-                                "Agent1 Gemini result injected into Agent3 + Agent5",
+                                "Agent1 Gemini result injected into Agent3 + Agent5 instances",
                                 has_content_type=bool(gemini_result.get("gemini_content_type")),
                                 has_objects=bool(gemini_result.get("gemini_detected_objects")),
                                 has_text=bool(gemini_result.get("gemini_extracted_text")),
@@ -1634,12 +1655,13 @@ async def _wrap_pipeline_with_broadcasts(
                                 break
                     if gemini_result:
                         _agent1_gemini_result = gemini_result
-                        from agents.agent3_object import Agent3Object
-                        from agents.agent5_metadata import Agent5Metadata
-                        Agent3Object.inject_agent1_context(gemini_result)
-                        Agent5Metadata.inject_agent1_context(gemini_result)
+                        # Inject into all applicable agents in the deep pass batch
+                        for aid, aname, ainst, ares in deep_pass_coroutines:
+                            if aid in ("Agent3", "Agent5") and hasattr(ainst, "inject_agent1_context"):
+                                ainst.inject_agent1_context(gemini_result)
+                        
                         logger.info(
-                            "Agent1 Gemini context injected into Agent3 + Agent5 before their deep passes",
+                            "Agent1 Gemini context injected into Agent3 + Agent5 instances before their deep passes",
                             has_content_type=bool(gemini_result.get("gemini_content_type")),
                             has_objects=bool(gemini_result.get("gemini_detected_objects")),
                             has_text=bool(gemini_result.get("gemini_extracted_text")),
@@ -1702,6 +1724,20 @@ async def _wrap_pipeline_with_broadcasts(
             logger.info("Deep analysis requested but no deep tasks available for this file type.")
         else:
             logger.info("User skipped deep analysis.")
+        
+        # Hook into arbiter to broadcast deliberation steps
+        async def arbiter_step_hook(msg: str):
+            await broadcast_update(
+                ws_session_id,
+                BriefUpdate(
+                    type="AGENT_UPDATE",
+                    session_id=ws_session_id,
+                    message=f"🔮 {msg}",
+                    data={"status": "deliberating", "thinking": f"🔮 {msg}"},
+                )
+            )
+        pipeline.arbiter._step_hook = arbiter_step_hook
+        pipeline._arbiter_step = "" # initialize for status polling
         
         # Broadcast arbiter is about to run before returning results to pipeline
         await broadcast_update(

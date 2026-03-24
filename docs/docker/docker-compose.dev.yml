@@ -16,6 +16,18 @@ services:
       - ../../backend:/app:rw
       # Protect the container's venv from being overwritten by local (potentially incompatible) .venv
       - /app/.venv
+      # Protect model cache volumes: the bind-mount above puts the host's
+      # (empty) backend/ directory at /app, which would shadow /app/cache/*.
+      # These anonymous volumes restore the named-volume mounts from the base
+      # compose for each cache subdirectory so models survive host bind-mounts.
+      # Named volumes from base compose (hf_cache, yolo_cache, etc.) take
+      # precedence over the bind mount for these specific sub-paths.
+      - hf_cache:/app/cache/huggingface:rw
+      - torch_cache:/app/cache/torch:rw
+      - easyocr_cache:/app/cache/easyocr:rw
+      - numba_cache:/app/cache/numba_cache:rw
+      - yolo_cache:/app/cache/ultralytics:rw
+      - calibration_models:/app/cache/calibration_models:rw
 
   frontend:
     build:
@@ -45,3 +57,9 @@ services:
 
 volumes:
   nextjs_cache:
+  hf_cache:
+  torch_cache:
+  easyocr_cache:
+  numba_cache:
+  yolo_cache:
+  calibration_models:

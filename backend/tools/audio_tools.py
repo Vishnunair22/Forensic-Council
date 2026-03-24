@@ -186,6 +186,11 @@ async def speaker_diarize(
             "segments": [s.to_dict() for s in segments],
             "duration": duration,
             "sample_rate": sr,
+            "forensic_caveat": (
+                "Speaker segmentation based on spectral energy clusters (librosa). "
+                "For high-fidelity speaker identity authentication, please run a "
+                "deep-learning pass using pyannote.audio."
+            ),
         }
     
     except Exception as e:
@@ -286,11 +291,13 @@ async def anti_spoofing_detect(
             "model_version": "heuristic_v1.0",
             "anomalies": anomalies,
             "metrics": {
-                "spectral_flatness": float(mean_flatness),
-                "pitch_std": float(np.std(f0_valid)) if len(f0_valid) > 0 else None,
-                "rolloff_std": float(rolloff_std),
                 "zcr_mean": float(zcr_mean),
             },
+            "forensic_caveat": (
+                "Anti-spoofing analysis based on spectral centroid variance and "
+                "MFCC discontinuities. This heuristic may not detect sophisticated "
+                "voice clones. For deepfake detection, use SpeechBrain/ECAPA-TDNN."
+            ),
         }
     
     except Exception as e:

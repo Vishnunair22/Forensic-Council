@@ -119,6 +119,11 @@ def _get_exif_data(image: Image.Image, file_path: Optional[str] = None) -> dict[
                 fallback_data["Software"] = "OS File System"
                 fallback_data["Make"] = "Generic"
                 fallback_data["Model"] = "Stripped Device"
+                fallback_data["forensic_caveat"] = (
+                    "Original EXIF metadata is missing. Fallback OS file statistics "
+                    "are being used, which can be easily manipulated and may not "
+                    "reflect the true origin of the evidence."
+                )
 
             return fallback_data
         

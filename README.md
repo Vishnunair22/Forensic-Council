@@ -61,11 +61,8 @@ Frontend (Next.js 15) → FastAPI Backend → 5 AI Agents → Arbiter → Signed
 cp .env.example .env
 # Edit .env: set LLM_API_KEY (Groq, required) and GEMINI_API_KEY (recommended)
 
-# 2. Start (Development)
-docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml --env-file .env up --build
-
-# 2. Start (Production)
-docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.prod.yml --env-file .env up -d --build
+# 2. Start
+docker compose up --build
 ```
 
 **Access:**
@@ -83,13 +80,13 @@ Login: username `investigator`, password = `NEXT_PUBLIC_DEMO_PASSWORD` from `.en
 
 | Command | Action |
 |---------|--------|
-| `docker compose ... up` | Standard start |
-| `docker compose -f ... -f ...dev.yml ... up` | Development start (hot-reload) |
-| `docker compose -f ... -f ...prod.yml ... up` | Production build |
-| `docker compose -f ... -f ...infra.yml ... up` | Postgres + Redis + Qdrant only |
-| `docker compose ... logs -f` | Tail all logs |
-| `docker compose ... down` | Stop (keep volumes) |
-| `docker compose ... down -v` | Stop + delete all volumes |
+| `docker compose up` | Standard start |
+| `docker compose -f docs/docker/docker-compose.dev.yml up` | Development start (hot-reload) |
+| `docker compose -f docs/docker/docker-compose.prod.yml up` | Production build |
+| `docker compose -f docs/docker/docker-compose.infra.yml up` | Postgres + Redis + Qdrant only |
+| `docker compose logs -f` | Tail all logs |
+| `docker compose down` | Stop (keep volumes) |
+| `docker compose down -v` | Stop + delete all volumes |
 | `docker system df -v` | Check ML cache volumes |
 
 ---
@@ -162,6 +159,13 @@ Full caching guide → [`docs/docker/README.md`](docs/docker/README.md)
 ---
 
 ## Changelog
+
+**v1.1.0 (2026-03-24)** — Comprehensive Minimalist Redesign & Robustness Audit:
+- **UI Redesign**: Transitioned from "CyberNoir" neon aesthetic to a premium Indigo/Slate minimalist design system.
+- **Component Standardisation**: Replaced all custom neon panels with `SurfaceCard` and `surface-panel` classes; added index barrels for cleaner imports.
+- **Orchestration**: Simplifed Docker entry point with a root-level `docker-compose.yml` and updated build documentation.
+- **Audit**: Phase 1 of the 5-phase comprehensive codebase audit completed (Cleanup, missing files, and structure).
+- **Security**: Reinforced CSP headers and correlation tracking in FastAPI middleware.
 
 **v1.0.4 (2026-03-16)** — Full production hardening across all layers:
 - **Session 5 runtime audit**: Report race-window fix (report cached before pipeline eviction) · `AttributeError: _custody_logger` in Agents 2/3/4 inter-agent calls · Pipeline `_final_report`/`_error` now initialized on `__init__` · WorkingMemory in-memory fallback survives Redis outages · CustodyLogger DB write wrapped in try/except (never crashes pipeline) · Frontend unsupported-agent detection matches backend `"Not applicable"` strings · Docker-compose `LLM_MODEL` default corrected to `llama-3.3-70b-versatile` · `.env.example` `GEMINI_TIMEOUT` corrected to `55.0`

@@ -133,13 +133,13 @@ services:
       - SIGNING_KEY=${SIGNING_KEY:-change-me-in-development}
       - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
       # Allow requests from both the browser and frontend container
-      - CORS_ALLOWED_ORIGINS=["http://frontend:3000","http://localhost:3000","http://localhost:3001","http://127.0.0.1:3000"]
+      - CORS_ALLOWED_ORIGINS=["http://localhost","http://localhost:80","http://localhost:3000","http://localhost:3001","http://127.0.0.1","http://127.0.0.1:3000","http://frontend:3000","https://localhost","https://127.0.0.1"]
       - HF_TOKEN=${HF_TOKEN:-}
       - LLM_PROVIDER=${LLM_PROVIDER:-none}
       - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-llama-3.3-70b-versatile}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-flash}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
       - EVIDENCE_STORAGE_PATH=/app/storage/evidence
       - CALIBRATION_MODELS_PATH=/app/cache/calibration_models
       # Disable Numba JIT — timezonefinder uses numba with cache=True, but inside
@@ -172,14 +172,12 @@ services:
       - /tmp:nosuid,size=512m
     volumes:
       - evidence_data:/app/storage/evidence:rw
-      - cache_scratch:/app/cache:rw
       - ../../backend/storage/keys:/app/storage/keys:ro
       - hf_cache:/app/cache/huggingface:rw
       - torch_cache:/app/cache/torch:rw
       - easyocr_cache:/app/cache/easyocr:rw
       - numba_cache:/app/cache/numba_cache:rw
       - yolo_cache:/app/cache/ultralytics:rw
-      - deepface_cache:/app/cache/deepface:rw
       - calibration_models:/app/cache/calibration_models:rw
 
   # --------------------------------------------------------------------------
@@ -284,10 +282,8 @@ volumes:
   torch_cache:
   numba_cache:
   yolo_cache:
-  deepface_cache:
   calibration_models:
   easyocr_cache:
-  cache_scratch:
   caddy_data:
   caddy_config:
   caddy_logs:

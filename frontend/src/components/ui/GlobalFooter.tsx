@@ -10,24 +10,24 @@ import { ShieldCheck } from "lucide-react";
 
 export function GlobalFooter() {
   return (
-    <footer className="relative z-10 py-10 mt-12 border-t border-white/[0.04] px-6 bg-gradient-to-b from-transparent to-black/40">
-      <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+    <footer className="relative z-10 py-12 mt-20 border-t border-border-subtle px-6">
+      <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-8">
         {/* Brand mark */}
-        <div className="flex items-center gap-3 shrink-0 opacity-80 hover:opacity-100 transition-opacity">
-          <div className="w-7 h-7 rounded border border-white/10 bg-gradient-to-br from-cyan-900/40 to-violet-900/40 flex items-center justify-center">
-            <ShieldCheck className="w-4 h-4 text-cyan-400" aria-hidden="true" />
+        <div className="flex items-center gap-3 shrink-0 group">
+          <div className="w-8 h-8 rounded-lg border border-border-bold bg-surface-mid flex items-center justify-center shadow-sm transition-all group-hover:border-indigo-400/40">
+            <ShieldCheck className="w-4 h-4 text-indigo-400" aria-hidden="true" />
           </div>
-          <span className="text-xs font-semibold text-slate-200 uppercase tracking-widest">Forensic Council</span>
+          <span className="text-[10px] font-bold text-foreground/40 uppercase tracking-[0.2em]">Forensic Council</span>
         </div>
 
         {/* Disclaimer */}
-        <p className="text-[12px] text-slate-300 text-center leading-loose max-w-lg font-mono">
-          <span className="text-cyan-400">///</span> FORENSIC COUNCIL IS AN ACADEMIC PROJECT. RESULTS ARE AI-GENERATED AND SHOULD NOT BE USED AS SOLE EVIDENCE.
+        <p className="text-[10px] text-foreground/30 text-center leading-relaxed max-w-md font-mono font-bold uppercase tracking-wider">
+          <span className="text-indigo-500/40 mr-1">//</span> ACADEMIC PROJECT. RESULTS ARE AI-GENERATED AND SHOULD NOT BE USED AS SOLE EVIDENCE.
         </p>
 
         {/* Version tag */}
-        <div className="shrink-0 px-3 py-1 rounded-full bg-white/[0.05] border border-white/[0.1]">
-          <span className="text-[11px] font-mono text-slate-400 tracking-wider">v1.2.0</span>
+        <div className="shrink-0 px-3 py-1 rounded-full bg-surface-low border border-border-subtle">
+          <span className="text-[9px] font-mono text-foreground/20 font-bold tracking-widest uppercase">Build v1.2.0</span>
         </div>
       </div>
     </footer>

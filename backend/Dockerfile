@@ -40,7 +40,10 @@ COPY pyproject.toml uv.lock ./
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    UV_HTTP_TIMEOUT=600
+    UV_HTTP_TIMEOUT=600 \
+    # Keep the uv cache inside the BuildKit cache mount, not the container layer.
+    # Also required at build time because /root is read-only when read_only: true.
+    UV_CACHE_DIR=/root/.cache/uv
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project --extra ml
@@ -50,7 +53,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get purge -y gcc && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
-# Copy application source AFTER deps — code changes don't invalidate the dep layer
+# Copy application source — models are NOT baked into the image.
+# They are downloaded once at first container startup by the entrypoint
+# and stored in named Docker volumes (hf_cache, yolo_cache, etc.) so they
+# persist across all future builds and restarts without ever re-downloading.
 COPY . .
 
 ENV PATH="/app/.venv/bin:$PATH" \
@@ -58,17 +64,16 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# ML model cache dirs — mapped to named Docker volumes in docker-compose.
-# Models download ONCE into the volume on first run; they persist across:
-#   - Container restarts
-#   - Image rebuilds (volume is separate from the image)
+# ML model cache dirs — these must match the volume mounts in docker-compose.yml.
+# Models are downloaded by the entrypoint on first run into these volume-backed
+# paths and persist across all subsequent builds and container restarts.
 ENV NUMBA_CACHE_DIR="/app/cache/numba_cache" \
     YOLO_CONFIG_DIR="/app/cache/ultralytics" \
     TORCH_HOME="/app/cache/torch" \
     HF_HOME="/app/cache/huggingface" \
-    DEEPFACE_HOME="/app/cache/deepface" \
     TRANSFORMERS_CACHE="/app/cache/huggingface/transformers" \
     EASYOCR_MODEL_DIR="/app/cache/easyocr"
+# Note: DEEPFACE_HOME intentionally omitted — deepface is not installed.
 
 RUN mkdir -p \
     /app/storage/evidence \
@@ -77,11 +82,10 @@ RUN mkdir -p \
     /app/cache/torch \
     /app/cache/numba_cache \
     /app/cache/ultralytics \
-    /app/cache/deepface \
     /app/cache/calibration_models \
     /app/cache/easyocr
 
-# Pre-compile application bytecode for faster cold starts
+# Pre-compile application bytecode for faster cold starts (excluding caches)
 RUN python -m compileall -q api/ core/ orchestration/ agents/ tools/ scripts/ 2>/dev/null || true
 
 # Make entrypoint executable

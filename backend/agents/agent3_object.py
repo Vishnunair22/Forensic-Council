@@ -45,16 +45,12 @@ class Agent3Object(ForensicAgent):
     12. Submit calibrated findings to Arbiter
     """
     
-    # Class-level context injected by pipeline after Agent 1's initial pass
-    _shared_agent1_context: dict = {}
-
-    @classmethod
-    def inject_agent1_context(cls, agent1_gemini_findings: dict) -> None:
+    def inject_agent1_context(self, agent1_gemini_findings: dict) -> None:
         """
-        Called by pipeline to share Agent 1's Gemini vision findings with Agent 3.
+        Called by pipeline to share Agent 1's Gemini vision findings with this agent instance.
         Agent 3's deep pass reads this to cross-reference object/weapon analysis.
         """
-        cls._shared_agent1_context = agent1_gemini_findings or {}
+        self._agent1_context = agent1_gemini_findings or {}
 
     def __init__(
         self,
@@ -80,6 +76,7 @@ class Agent3Object(ForensicAgent):
             evidence_store=evidence_store,
         )
         self._inter_agent_bus = inter_agent_bus
+        self._agent1_context: dict = {}
     
     @property
     def agent_name(self) -> str:
@@ -93,12 +90,12 @@ class Agent3Object(ForensicAgent):
         Heavy ML tasks are in deep_task_decomposition.
         """
         return [
-            "Run full-scene primary object detection",
+            "Run full-scene object detection",
             "Run OCR on detected object regions to extract license plates, ID numbers, signs, and visible text",
             "For each detected object below confidence threshold: run secondary classification pass",
-            "For each confirmed object: run scale and proportion validation",
-            "For each confirmed object: run lighting and shadow consistency check",
-            "Cross-reference confirmed objects against contraband/weapons database",
+            "For each confirmed object: run scale validation",
+            "For each confirmed object: run lighting consistency check",
+            "Cross-reference confirmed objects against contraband database",
             "Self-reflection pass",
             "Submit calibrated findings to Arbiter",
         ]
@@ -112,7 +109,7 @@ class Agent3Object(ForensicAgent):
         return [
             "Run Gemini deep forensic analysis: identify content type, extract all text, detect objects and weapons, identify interfaces, describe what is happening, cross-validate metadata",
             "Run scene-level contextual incongruence analysis",
-            "Run ML-based image splicing detection on objects",
+            "Run image splicing detection on objects",
             "Run camera noise fingerprint analysis for region consistency",
             "Run adversarial robustness check against object detection evasion",
             "Run document authenticity analysis to detect font inconsistency, background irregularity, and digital forgery artifacts",
@@ -189,14 +186,26 @@ class Agent3Object(ForensicAgent):
                         cap = cv2.VideoCapture(target_path)
                         if cap.isOpened():
                             frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-                            mid = max(0, frame_count // 2)
-                            if frame_count > 0:
-                                cap.set(cv2.CAP_PROP_POS_FRAMES, mid)
-                            ok, frame = cap.read()
-                            if ok and frame is not None:
+                            # Sample 3 frames (beginning, middle, end) and choose the one with most edges
+                            # to avoid black/empty frames at the start of videos.
+                            best_frame = None
+                            max_edges = -1
+                            
+                            sample_points = [0.1, 0.5, 0.9] if frame_count > 10 else [0.5]
+                            for p in sample_points:
+                                cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_count * p))
+                                ok, frame = cap.read()
+                                if ok and frame is not None:
+                                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                                    edge_score = cv2.Laplacian(gray, cv2.CV_64F).var()
+                                    if edge_score > max_edges:
+                                        max_edges = edge_score
+                                        best_frame = frame.copy()
+                            
+                            if best_frame is not None:
                                 with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
                                     tmp_frame_path = tmp.name
-                                cv2.imwrite(tmp_frame_path, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+                                cv2.imwrite(tmp_frame_path, best_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
                                 target_path = tmp_frame_path
                         cap.release()
                 except Exception:
@@ -339,10 +348,15 @@ class Agent3Object(ForensicAgent):
                     ]
 
                     analyzer = get_clip_analyzer()
-                    result = analyzer.analyze_image(
-                        tmp_path,
-                        categories=base_categories,
-                        check_concerns=True,
+                    import asyncio as _asyncio
+                    _loop = _asyncio.get_running_loop()
+                    result = await _loop.run_in_executor(
+                        None,
+                        lambda: analyzer.analyze_image(
+                            tmp_path,
+                            categories=base_categories,
+                            check_concerns=True,
+                        ),
                     )
                 finally:
                     os.unlink(tmp_path)
@@ -551,11 +565,15 @@ class Agent3Object(ForensicAgent):
             
             try:
                 analyzer = get_clip_analyzer()
-                
-                result = analyzer.analyze_image(
-                    artifact.file_path,
-                    categories=None,  # Use default concern categories
-                    check_concerns=True,
+                import asyncio as _asyncio
+                _loop = _asyncio.get_running_loop()
+                result = await _loop.run_in_executor(
+                    None,
+                    lambda: analyzer.analyze_image(
+                        artifact.file_path,
+                        categories=None,  # Use default concern categories
+                        check_concerns=True,
+                    ),
                 )
                 
                 if not result.available:
@@ -1097,7 +1115,7 @@ class Agent3Object(ForensicAgent):
             # Build Agent 1 context (injected by pipeline from Agent 1's Gemini analysis)
             agent1_context: dict = {}
             try:
-                a1 = type(self)._shared_agent1_context
+                a1 = self._agent1_context
                 if a1:
                     agent1_context = {
                         "agent1_image_content_type": a1.get("gemini_content_type", ""),

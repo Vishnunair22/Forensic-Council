@@ -79,15 +79,9 @@ class Agent5Metadata(ForensicAgent):
     11. Self-reflection pass
     """
     
-    # Class-level context injected by the investigation route after Agent 1's
-    # Gemini deep pass.  Agent 5 uses this to cross-validate EXIF metadata
-    # against what Gemini actually observed in the image.
-    _shared_agent1_context: dict = {}
-
-    @classmethod
-    def inject_agent1_context(cls, agent1_gemini_findings: dict) -> None:
-        """Share Agent 1 Gemini vision findings with Agent 5 for EXIF cross-validation."""
-        cls._shared_agent1_context = agent1_gemini_findings or {}
+    def inject_agent1_context(self, agent1_gemini_findings: dict) -> None:
+        """Share Agent 1 Gemini vision findings with this agent instance for EXIF cross-validation."""
+        self._agent1_context = agent1_gemini_findings or {}
 
     @property
     def agent_name(self) -> str:
@@ -988,7 +982,7 @@ class Agent5Metadata(ForensicAgent):
 
             # Inject Agent 1 Gemini context for cross-validation (image content vs EXIF)
             try:
-                a1 = type(self)._shared_agent1_context
+                a1 = getattr(self, "_agent1_context", {})
                 if a1:
                     agent1_cross = {
                         "agent1_content_type": a1.get("gemini_content_type", ""),

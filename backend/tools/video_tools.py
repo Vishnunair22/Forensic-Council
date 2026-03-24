@@ -678,10 +678,14 @@ async def face_swap_detect_deepface(
             "face_swap_detected": False,
             "confidence": 0.0,
             "available": False,
-            "error": "DeepFace not installed. Install deepface>=0.0.93",
+            "forensic_caveat": (
+                "DeepFace library not installed. Discontinuity analysis skipped. "
+                "Falling back to heuristic frequency analysis (FFT) which may "
+                "have lower accuracy for high-quality deepfakes."
+            ),
             "backend": "unavailable",
         }
-    
+
     try:
         video_path = artifact.file_path
         if not os.path.exists(video_path):

@@ -144,6 +144,69 @@ class WorkingMemory:
         # In-memory fallback: stores state when Redis is unavailable.
         # Keyed by the same "wm:{session_id}:{agent_id}" string.
         self._local_cache: dict[str, str] = {}
+        
+        # Lua script for atomic state updates
+        self._lua_update_state = """
+            local key = KEYS[1]
+            local updates_json = ARGV[1]
+            local expire = tonumber(ARGV[2])
+            local session_id = ARGV[3]
+            local agent_id = ARGV[4]
+
+            local current = redis.call('GET', key)
+            local state
+            if current then
+                state = cjson.decode(current)
+            else
+                state = {
+                    session_id = session_id,
+                    agent_id = agent_id,
+                    tasks = {},
+                    current_iteration = 0,
+                    iteration_ceiling = 10
+                }
+            end
+
+            local updates = cjson.decode(updates_json)
+            for k, v in pairs(updates) do
+                state[k] = v
+            end
+
+            local new_json = cjson.encode(state)
+            redis.call('SET', key, new_json, 'EX', expire)
+            return new_json
+        """
+
+        # Lua script for atomic task updates
+        self._lua_update_task = """
+            local key = KEYS[1]
+            local task_id = ARGV[1]
+            local new_status = ARGV[2]
+            local res_ref = ARGV[3]
+            local blk_reason = ARGV[4]
+
+            local current = redis.call('GET', key)
+            if not current then return nil end
+
+            local state = cjson.decode(current)
+            local tasks = state.tasks
+            local found = false
+            for i, task in ipairs(tasks) do
+                if task.task_id == task_id then
+                    task.status = new_status
+                    if res_ref ~= "" then task.result_ref = res_ref end
+                    if blk_reason ~= "" then task.blocked_reason = blk_reason end
+                    found = true
+                    break
+                end
+            end
+
+            if not found then return nil end
+
+            local new_json = cjson.encode(state)
+            redis.call('SET', key, new_json, 'EX', 86400)
+            return new_json
+        """
     
     async def __aenter__(self) -> "WorkingMemory":
         """Async context manager entry."""
@@ -249,6 +312,60 @@ class WorkingMemory:
             result_ref: Optional reference to result
             blocked_reason: Optional reason if blocked
         """
+        # Use Lua script for atomic update if Redis is available
+        key = self._get_key(session_id, agent_id)
+        if self._redis is not None:
+            try:
+                # Lua script expects strings for all ARGV
+                result_json = await self._redis.client.eval(
+                    self._lua_update_task,
+                    1,
+                    key,
+                    str(task_id),
+                    status.value,
+                    result_ref or "",
+                    blocked_reason or ""
+                )
+                
+                if result_json:
+                    self._local_cache[key] = result_json
+                    logger.debug("Updated task atomically via Redis Lua", task_id=str(task_id))
+                else:
+                    logger.warning("Task not found during atomic update", task_id=str(task_id))
+                    # Fallback to legacy behavior if task not found in Redis (might be in local cache only)
+                    await self._legacy_update_task(session_id, agent_id, task_id, status, result_ref, blocked_reason)
+            except Exception as e:
+                logger.warning("Atomic task update failed, falling back", error=str(e))
+                await self._legacy_update_task(session_id, agent_id, task_id, status, result_ref, blocked_reason)
+        else:
+            await self._legacy_update_task(session_id, agent_id, task_id, status, result_ref, blocked_reason)
+        
+        # Log to custody logger
+        if self._custody_logger:
+            await self._custody_logger.log_entry(
+                agent_id=agent_id,
+                session_id=session_id,
+                entry_type=EntryType.MEMORY_WRITE,
+                content={
+                    "operation": "update_task",
+                    "task_id": str(task_id),
+                    "status": status.value,
+                    "result_ref": result_ref,
+                    "blocked_reason": blocked_reason,
+                    "atomic": True
+                },
+            )
+    
+    async def _legacy_update_task(
+        self,
+        session_id: UUID,
+        agent_id: str,
+        task_id: UUID,
+        status: TaskStatus,
+        result_ref: Optional[str] = None,
+        blocked_reason: Optional[str] = None,
+    ) -> None:
+        """Legacy non-atomic task update (fallback)."""
         # Get current state
         state = await self.get_state(session_id, agent_id)
         
@@ -264,30 +381,12 @@ class WorkingMemory:
         else:
             raise ValueError(f"Task {task_id} not found")
         
-        # Store updated state with 24h TTL
+        # Store updated state
         key = self._get_key(session_id, agent_id)
         state_json = state.model_dump_json()
         self._local_cache[key] = state_json
         if self._redis is not None:
-            try:
-                await self._redis.set(key, state_json, ex=86400)
-            except Exception as e:
-                logger.warning("WorkingMemory.update_task: Redis write failed", error=str(e))
-        
-        # Log to custody logger
-        if self._custody_logger:
-            await self._custody_logger.log_entry(
-                agent_id=agent_id,
-                session_id=session_id,
-                entry_type=EntryType.MEMORY_WRITE,
-                content={
-                    "operation": "update_task",
-                    "task_id": str(task_id),
-                    "status": status.value,
-                    "result_ref": result_ref,
-                    "blocked_reason": blocked_reason,
-                },
-            )
+            await self._redis.set(key, state_json, ex=86400)
         
         logger.debug(
             "Updated task",
@@ -383,32 +482,65 @@ class WorkingMemory:
         if agent_id is None:
             agent_id = ""
 
+        # Atomic update via Lua
+        key = self._get_key(session_id, agent_id)
+        if self._redis is not None:
+            try:
+                result_json = await self._redis.client.eval(
+                    self._lua_update_state,
+                    1,
+                    key,
+                    json.dumps(updates),
+                    "86400",
+                    str(session_id),
+                    agent_id
+                )
+                self._local_cache[key] = result_json
+                state = WorkingMemoryState.model_validate_json(result_json)
+            except Exception as e:
+                logger.warning("Atomic state update failed, falling back", error=str(e))
+                state = await self._legacy_update_state(session_id, agent_id, updates)
+        else:
+            state = await self._legacy_update_state(session_id, agent_id, updates)
+
+        # Log
+        if self._custody_logger:
+            await self._custody_logger.log_entry(
+                agent_id=agent_id,
+                session_id=session_id,
+                entry_type=EntryType.MEMORY_WRITE,
+                content={
+                    "operation": "update_state",
+                    "key": key,
+                    "updated_fields": list(updates.keys()),
+                    "atomic": True
+                },
+            )
+
+        return state
+
+    async def _legacy_update_state(
+        self,
+        session_id: UUID,
+        agent_id: str,
+        updates: dict,
+    ) -> WorkingMemoryState:
+        """Legacy non-atomic state update (fallback)."""
         try:
             state = await self.get_state(session_id, agent_id)
         except ValueError:
-            # No state exists yet; create a minimal one
-            state = WorkingMemoryState(
-                session_id=session_id,
-                agent_id=agent_id,
-            )
+            state = WorkingMemoryState(session_id=session_id, agent_id=agent_id)
 
-        # Apply known top-level fields
         for k, v in updates.items():
             if hasattr(state, k):
                 setattr(state, k, v)
-            # else: silently skip unknown fields (they are transient flags)
 
-        # Persist with 24h TTL
         key = self._get_key(session_id, agent_id)
         state_json = state.model_dump_json()
         self._local_cache[key] = state_json
         if self._redis is not None:
-            try:
-                await self._redis.set(key, state_json, ex=86400)
-            except Exception as e:
-                logger.warning("WorkingMemory.update_state: Redis write failed", error=str(e))
+            await self._redis.set(key, state_json, ex=86400)
 
-        # Log
         if self._custody_logger:
             await self._custody_logger.log_entry(
                 agent_id=agent_id,

@@ -67,16 +67,26 @@ dependencies = [
 
 [project.optional-dependencies]
 ml = [
+    # ── PyTorch (CPU-only) ──────────────────────────────────────────────────
+    # Sources below route these to download.pytorch.org/whl/cpu so only
+    # CPU wheels are resolved. This avoids ~5 GB of nvidia/triton/cuda CUDA
+    # packages that default PyPI torch pulls in on Linux (torch+cu128).
     "torch>=2.7",
     "torchvision>=0.22",
     "torchaudio>=2.7",
-    "deepface>=0.0.93",
+    # ── Vision / Object detection ───────────────────────────────────────────
     "ultralytics>=8.3",
     "open-clip-torch>=2.30",
-    "speechbrain>=1.0.2",
-    "pyannote.audio>=3.1",
+    # ── NLP / Vision transformers ───────────────────────────────────────────
     "transformers>=4.52",
     "accelerate>=1.7",
+    # NOTE: deepface intentionally excluded — it hard-requires tensorflow (1.8 GB
+    # CUDA) + opencv-python (conflicts with opencv-contrib-python) + Flask/gunicorn
+    # (unused web servers). Face-swap detection in video_tools.py has a graceful
+    # fallback when deepface is absent.
+    # NOTE: speechbrain and pyannote.audio intentionally excluded — both require
+    # HuggingFace models downloaded at runtime. Audio tools fall back to
+    # librosa-based MFCC analysis when these are absent.
 ]
 dev = [
     "pytest>=8.4",
@@ -130,3 +140,17 @@ exclude_lines = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["core", "infra", "agents", "tools", "orchestration", "reports", "api"]
+
+# ── uv source overrides ────────────────────────────────────────────────────
+# Route torch/torchvision/torchaudio to the official CPU-only PyTorch index.
+# This prevents uv from resolving the default GPU wheels from PyPI which
+# include ~5 GB of CUDA runtime packages (nvidia-*, triton, cuda-*).
+[tool.uv.sources]
+torch      = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+torchaudio  = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name     = "pytorch-cpu"
+url      = "https://download.pytorch.org/whl/cpu"
+explicit = true   # only used for packages that explicitly reference this index

@@ -238,7 +238,7 @@ class Settings(BaseSettings):
         ),
     )
     gemini_model: str = Field(
-        default="gemini-1.5-flash-latest",
+        default="gemini-2.5-flash",
         description=(
             "Gemini model for vision analysis. "
             "gemini-1.5-flash-latest: fast, cost-effective (recommended). "

@@ -684,34 +684,52 @@ class ForensicCouncilPipeline:
             )
         ]
 
-        # --- Cross-agent context injection: Agent 1 → Agent 3 ---
-        # Share Agent 1's Gemini vision analysis with Agent 3 for cross-validated object/weapon detection
+        # --- Phase 2a: Agent 1 deep pass first (Gemini runs here) ---
+        # Agent1 must complete its deep pass before we can inject Gemini context
+        # into Agent3 and Agent5; running it sequentially unlocks cross-agent context.
+        try:
+            agent1_deep_result = await run_agent_deep_only(agent1, "Agent1", a1_init, a1_ok)
+        except Exception as _a1_deep_err:
+            logger.error("Agent1 deep pass raised unexpectedly", error=str(_a1_deep_err))
+            agent1_deep_result = AgentLoopResult(
+                agent_id="Agent1", findings=[], reflection_report={},
+                react_chain=[], error=str(_a1_deep_err), agent_active=False,
+            )
+
+        # --- Cross-agent context injection: Agent 1 → Agent 3 & 5 ---
+        # Agent1's deep pass has now completed so _gemini_vision_result is populated.
         try:
             if agent1 is not None:
                 gemini_result = getattr(agent1, "_gemini_vision_result", {})
-                if not gemini_result and a1_ok:
-                    # Try to extract from findings if direct attribute not set
-                    for f in (a1_init or []):
-                        if hasattr(f, "metadata") and f.metadata.get("tool_name") == "gemini_deep_forensic":
-                            gemini_result = f.metadata
+                if not gemini_result:
+                    # Fallback: extract from deep findings
+                    deep_findings = agent1_deep_result.findings or []
+                    for f in deep_findings:
+                        if isinstance(f, dict) and f.get("metadata", {}).get("tool_name") == "gemini_deep_forensic":
+                            gemini_result = f.get("metadata", {})
                             break
                 if gemini_result:
-                    Agent3Object.inject_agent1_context(gemini_result)
-                    logger.info("Agent 1 Gemini findings injected into Agent 3 context",
-                                has_content_type=bool(gemini_result.get("gemini_content_type")),
-                                has_objects=bool(gemini_result.get("gemini_detected_objects")))
+                    if agent3:
+                        agent3.inject_agent1_context(gemini_result)
+                    if agent5:
+                        agent5.inject_agent1_context(gemini_result)
+                    logger.info(
+                        "Agent 1 Gemini findings injected into Agent 3 and Agent 5 context",
+                        has_content_type=bool(gemini_result.get("gemini_content_type")),
+                        has_objects=bool(gemini_result.get("gemini_detected_objects")),
+                    )
         except Exception as _ctx_err:
-            logger.warning(f"Could not inject Agent 1 context into Agent 3: {_ctx_err}")
+            logger.warning(f"Could not inject Agent 1 context into Agent 3/5: {_ctx_err}")
 
-        # --- Phase 2: All deep passes concurrently ---
-        raw_deep = await asyncio.gather(
-            run_agent_deep_only(agent1, "Agent1", a1_init, a1_ok),
+        # --- Phase 2b: Remaining agents' deep passes concurrently ---
+        raw_deep_rest = await asyncio.gather(
             run_agent_deep_only(agent2, "Agent2", a2_init, a2_ok),
             run_agent_deep_only(agent3, "Agent3", a3_init, a3_ok),
             run_agent_deep_only(agent4, "Agent4", a4_init, a4_ok),
             run_agent_deep_only(agent5, "Agent5", a5_init, a5_ok),
             return_exceptions=True,
         )
+        raw_deep = [agent1_deep_result] + list(raw_deep_rest)
         # Unwrap any exceptions into error results rather than propagating
         agent_ids_deep = ["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"]
         results = []

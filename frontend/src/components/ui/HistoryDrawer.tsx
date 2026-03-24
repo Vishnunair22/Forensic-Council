@@ -59,12 +59,12 @@ export function HistoryDrawer() {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed top-1/2 right-0 -translate-y-1/2 translate-x-[2px] transition-transform hover:translate-x-0 z-40 bg-[#0d0d14] border border-violet-500/30 border-r-0 rounded-l-2xl p-3 shadow-[-4px_0_24px_rgba(139,92,246,0.15)] group"
+        className="fixed top-1/2 right-0 -translate-y-1/2 translate-x-[2px] transition-transform hover:translate-x-0 z-40 bg-surface-high border border-border-bold border-r-0 rounded-l-2xl p-3 shadow-xl group"
         aria-label="Open History"
       >
         <span className="flex flex-col items-center gap-2">
-           <History className="w-5 h-5 text-violet-400 group-hover:text-violet-300" />
-           <span className="[writing-mode:vertical-lr] rotate-180 text-[12px] font-bold tracking-[0.2em] text-violet-300 uppercase opacity-90 group-hover:opacity-100 mt-2">History</span>
+           <History className="w-5 h-5 text-indigo-400 group-hover:text-indigo-300" />
+           <span className="[writing-mode:vertical-lr] rotate-180 text-[10px] font-bold tracking-[0.2em] text-foreground/40 uppercase group-hover:text-foreground/60 mt-2">History</span>
         </span>
       </button>
 
@@ -74,61 +74,61 @@ export function HistoryDrawer() {
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setIsOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+              className="fixed inset-0 bg-background/60 backdrop-blur-sm z-50"
             />
             <motion.div
               initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="fixed inset-y-0 right-0 w-80 max-w-[85vw] bg-[#08080c] border-l border-white/10 z-50 flex flex-col shadow-2xl"
+              className="fixed inset-y-0 right-0 w-80 max-w-[85vw] bg-surface-low border-l border-border-subtle z-50 flex flex-col shadow-2xl"
             >
-              <div className="flex items-center justify-between p-5 border-b border-white/5 bg-white/[0.01]">
-                <h2 className="text-sm font-bold tracking-widest uppercase text-slate-300 flex items-center gap-2">
-                  <History className="w-4 h-4 text-violet-400" /> Analysis History
+              <div className="flex items-center justify-between p-5 border-b border-border-subtle bg-surface-mid">
+                <h2 className="text-[11px] font-bold tracking-widest uppercase text-foreground/60 flex items-center gap-2">
+                  <History className="w-4 h-4 text-indigo-400" /> Analysis History
                 </h2>
-                <button onClick={() => setIsOpen(false)} className="p-1 rounded-full hover:bg-white/10 text-slate-400 transition-colors">
+                <button onClick={() => setIsOpen(false)} className="p-1 rounded-md hover:bg-surface-high text-foreground/40 transition-colors">
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {history.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-slate-500 opacity-60">
+                  <div className="flex flex-col items-center justify-center h-full text-foreground/20">
                     <History className="w-10 h-10 mb-3" />
-                    <p className="text-xs uppercase tracking-widest font-mono">No History Found</p>
+                    <p className="text-[10px] uppercase tracking-widest font-mono font-bold">No History Found</p>
                   </div>
                 ) : (
                   history.map((item) => {
                     const ui = getVerdictUi(item.verdict);
                     const UIcon = ui.Icon;
                     return (
-                      <div key={item.sessionId} className="relative group bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 hover:border-violet-500/30 transition-colors overflow-hidden">
-                        <div className="flex justify-between items-start mb-2 pr-6">
+                      <div key={item.sessionId} className="relative group bg-surface-mid border border-border-subtle rounded-xl p-4 hover:border-indigo-500/30 transition-colors overflow-hidden shadow-sm">
+                        <div className="flex justify-between items-start mb-3 pr-6">
                            <div className="flex items-center gap-2 overflow-hidden">
-                              <FileText className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                              <span className="text-xs font-semibold text-slate-300 truncate" title={item.fileName}>{item.fileName}</span>
+                              <FileText className="w-3.5 h-3.5 text-foreground/20 shrink-0" />
+                              <span className="text-xs font-bold text-foreground/80 truncate" title={item.fileName}>{item.fileName}</span>
                            </div>
                         </div>
 
-                        <div className="space-y-1.5">
-                           <div className="flex items-center gap-1.5">
+                        <div className="space-y-2">
+                           <div className="flex items-center gap-2">
                               <UIcon className={clsx("w-3.5 h-3.5 shrink-0", ui.color)} />
-                              <span className={clsx("text-[12px] font-black uppercase tracking-wide", ui.color)}>
+                              <span className={clsx("text-[11px] font-bold uppercase tracking-wide", ui.color)}>
                                 {item.verdict.replace(/_/g, " ")}
                               </span>
                            </div>
-                           <div className="flex justify-between items-center text-[11px] text-slate-300 font-mono font-bold">
-                              <span className="px-1.5 py-0.5 rounded border border-white/20 bg-white/10 uppercase">{item.type} Analysis</span>
-                              <span className="text-slate-400 font-medium">{new Date(item.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                           <div className="flex justify-between items-center text-[10px] text-foreground/40 font-mono font-bold">
+                              <span className="px-1.5 py-0.5 rounded border border-border-subtle bg-surface-high uppercase text-[9px]">{item.type}</span>
+                              <span className="font-medium">{new Date(item.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
                            </div>
                         </div>
 
                         {/* Inline delete individual element */}
                         <button
                           onClick={() => removeHistoryItem(item.sessionId)}
-                          className="absolute top-2.5 right-2.5 p-1.5 rounded-full hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                          className="absolute top-3 right-3 p-1.5 rounded-md hover:bg-rose-500/10 text-foreground/20 hover:text-rose-500 transition-all opacity-0 group-hover:opacity-100"
                           title="Clear Item"
                         >
-                          <X className="w-3.5 h-3.5" />
+                          <X className="w-3 h-3" />
                         </button>
                       </div>
                     );
@@ -137,10 +137,10 @@ export function HistoryDrawer() {
               </div>
 
               {history.length > 0 && (
-                <div className="p-4 border-t border-white/5 bg-white/[0.01]">
+                <div className="p-4 border-t border-border-subtle bg-surface-mid">
                   <button
                     onClick={clearAllHistory}
-                    className="w-full py-2.5 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20 text-xs font-bold uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-2.5 rounded-lg border border-rose-500/20 bg-rose-500/5 text-rose-500 hover:bg-rose-500/10 text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
                   >
                     <Trash2 className="w-4 h-4" /> Clear All History
                   </button>
