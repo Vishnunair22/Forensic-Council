@@ -9,8 +9,6 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import Home from "@/app/page";
-// Note: Result page might need complex mocks, we'll test structure
-import ResultPage from "@/app/result/page";
 
 // Mocks for Next.js and API
 jest.mock("next/navigation", () => ({

@@ -626,10 +626,11 @@ export default function ResultPage() {
               try {
                 const stored = sessionStorage.getItem("fc_full_report_history");
                 const hist: ReportDTO[] = stored ? JSON.parse(stored) : [];
-                if (!hist.some(r => r.report_id === res.report!.report_id)) {
+                const reportSnap = res.report;
+                if (reportSnap && !hist.some(r => r.report_id === reportSnap.report_id)) {
                   sessionStorage.setItem(
                     "fc_full_report_history",
-                    JSON.stringify([res.report!, ...hist].slice(0, 20))
+                    JSON.stringify([reportSnap, ...hist].slice(0, 20))
                   );
                 }
               } catch { /* ignore storage errors */ }
@@ -789,7 +790,7 @@ export default function ResultPage() {
               FC
             </div>
             <span className="hidden sm:block text-[11px] font-bold uppercase tracking-widest text-foreground/40 group-hover:text-foreground transition-colors">
-              Forensic Council <span className="text-amber-500/60 ml-1">//</span> HUB
+              Forensic Council <span className="text-amber-500/60 ml-1">{"//"}</span> HUB
             </span>
           </button>
 
@@ -944,7 +945,7 @@ export default function ResultPage() {
                 </div>
                 <div className="p-8 space-y-6 flex-1 bg-surface-low">
                   <p className="text-foreground/80 text-lg font-medium leading-relaxed border-l-2 border-amber-500/30 pl-5 py-1">
-                    "{effectiveVerdictSentence}"
+                    &ldquo;{effectiveVerdictSentence}&rdquo;
                   </p>
                   {report.key_findings && report.key_findings.length > 0 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -14,11 +14,12 @@ const nextConfig: NextConfig = {
   // ── TypeScript ────────────────────────────────────────────────────────
   typescript: { ignoreBuildErrors: false },
 
-  // ── ESLint ────────────────────────────────────────────────────────────────
-  // ESLint is run separately in CI (npm run lint).
-  // Disabling here keeps Docker builds fast and avoids eslint-config-next
-  // version skew issues across major Next.js releases.
-  eslint: { ignoreDuringBuilds: true },
+  // ── Turbopack (Next.js 16 default build engine) ───────────────────────────
+  // Turbopack is the default bundler in Next.js 16. Declaring an explicit
+  // turbopack config suppresses the "webpack config + no turbopack config"
+  // warning. The webpack config below is retained for `next dev --webpack`
+  // on Windows Docker bind mounts; it has no effect on Turbopack builds.
+  turbopack: {},
 
   // ── Bundle optimisation ───────────────────────────────────────────────────
   experimental: {
@@ -34,11 +35,10 @@ const nextConfig: NextConfig = {
     optimizeCss: false,
   },
 
-  // ── Dev-mode file watcher (Windows + Docker fix) ─────────────────────────
-  // On Windows bind mounts, inotify events are not forwarded into the container
-  // so Next.js emits "Unable to add filesystem: <illegal path>" on every
-  // hot-reload cycle.  Switching the webpack watcher to polling silences the
-  // error and restores reliable HMR without any user-visible slowdown.
+  // ── Dev-mode file watcher (Windows + Docker fallback) ────────────────────
+  // Used only when running `next dev --webpack`. On Windows bind mounts,
+  // inotify events are not forwarded into the container so switching to
+  // polling restores reliable HMR. No effect on Turbopack builds.
   webpack: (config, { dev }) => {
     if (dev) {
       config.watchOptions = {
@@ -81,15 +81,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // Immutable static assets: JS/CSS chunks are content-hashed by Next.js.
-        // Cache forever — no revalidation needed.
-        source: "/_next/static/:path*",
-        headers: [
-          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
-        ],
-      },
-      {
-        // Fonts: also content-hashed, safe to cache long-term.
+        // Fonts: content-hashed, safe to cache long-term.
         source: "/fonts/:path*",
         headers: [
           { key: "Cache-Control", value: "public, max-age=31536000, immutable" },

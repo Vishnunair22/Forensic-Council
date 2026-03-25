@@ -1,24 +1,18 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Montserrat, JetBrains_Mono } from "next/font/google";
+import { Fira_Sans, Fira_Code } from "next/font/google";
 import "./globals.css";
 import { DevErrorProvider } from "@/components/DevErrorOverlay";
 
-const cormorantGaramond = Cormorant_Garamond({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-  variable: "--font-heading",
-});
-
-const montserrat = Montserrat({
+const firaSans = Fira_Sans({
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700", "800", "900"],
-  variable: "--font-sans",
+  variable: "--font-fira-sans",
 });
 
-const jetbrainsMono = JetBrains_Mono({
+const firaCode = Fira_Code({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-mono",
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-fira-code",
 });
 
 export const metadata: Metadata = {
@@ -32,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${cormorantGaramond.variable} ${montserrat.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" className={`${firaSans.variable} ${firaCode.variable}`}>
       <body className="antialiased">
         <DevErrorProvider>
           {children}

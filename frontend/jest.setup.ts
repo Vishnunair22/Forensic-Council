@@ -16,7 +16,7 @@ jest.mock('@/hooks/useSound', () => ({
 jest.mock('framer-motion', () => ({
   motion: new Proxy({}, {
     get: (_target, tag: string) => {
-      return ({ children, ...props }: any) => {
+      return ({ children, ...props }: { children?: React.ReactNode; [key: string]: unknown }) => {
         // Strip framer-motion specific props that might cause React warnings on native tags
         const cleanProps = { ...props };
         [
@@ -28,6 +28,6 @@ jest.mock('framer-motion', () => ({
       };
     },
   }),
-  AnimatePresence: ({ children }: any) => children,
+  AnimatePresence: ({ children }: { children?: React.ReactNode }) => children,
   useReducedMotion: () => false,
 }));

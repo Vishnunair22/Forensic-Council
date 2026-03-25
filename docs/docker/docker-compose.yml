@@ -60,10 +60,11 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/ > /dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 20s
     deploy:
       resources:
         limits:
@@ -128,7 +129,7 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-forensic_user}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-forensic_pass}
       - POSTGRES_DB=${POSTGRES_DB:-forensic_council}
-      - BOOTSTRAP_INVESTIGATOR_PASSWORD=${NEXT_PUBLIC_DEMO_PASSWORD:-inv123!}
+      - BOOTSTRAP_INVESTIGATOR_PASSWORD=${BOOTSTRAP_INVESTIGATOR_PASSWORD:-inv123!}
       - BOOTSTRAP_ADMIN_PASSWORD=${BOOTSTRAP_ADMIN_PASSWORD:-admin123!}
       - SIGNING_KEY=${SIGNING_KEY:-change-me-in-development}
       - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
@@ -146,7 +147,7 @@ services:
       # Calibration models are pre-trained JSON files baked into the image.
       # Point directly to the image path so agents always load the trained models.
       # The cache/calibration_models volume is kept for runtime-updated model persistence.
-      - CALIBRATION_MODELS_PATH=/app/storage/calibration_models
+      - CALIBRATION_MODELS_PATH=/app/cache/calibration_models
       # Disable Numba JIT — timezonefinder uses numba with cache=True, but inside
       # a read-only .venv the locator lookup fails with "no locator available".
       # NUMBA_DISABLE_JIT=1 makes numba run pure-Python (slightly slower, no error).
@@ -183,6 +184,7 @@ services:
       - easyocr_cache:/app/cache/easyocr:rw
       - numba_cache:/app/cache/numba_cache:rw
       - yolo_cache:/app/cache/ultralytics:rw
+      - calibration_models_cache:/app/cache/calibration_models:rw
 
   # --------------------------------------------------------------------------
   # Reverse Proxy (Caddy) — TLS termination, security headers, rate limiting
@@ -209,10 +211,9 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      # Caddy's :80 block issues a 301 redirect → HTTPS, so wget follows to a
-      # self-signed cert and exits non-zero even when Caddy is healthy.
-      # A TCP probe via nc is the correct approach: it confirms Caddy is listening
-      # on both ports without triggering TLS or redirect logic.
+      # nc TCP probes confirm Caddy is listening on both ports without triggering
+      # TLS handshake or redirect logic (wget/curl would follow the 301 on prod domains
+      # and hit a self-signed cert on localhost, both causing false negatives).
       test: ["CMD-SHELL", "nc -z -w3 localhost 80 && nc -z -w3 localhost 443 || exit 1"]
       interval: 30s
       timeout: 10s
@@ -291,6 +292,7 @@ volumes:
   numba_cache:
   yolo_cache:
   easyocr_cache:
+  calibration_models_cache:
   caddy_data:
   caddy_config:
   caddy_logs:

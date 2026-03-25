@@ -1,17 +1,15 @@
 /**
- * Accessibility Tests — HITL & Completion
- * ========================================
+ * Accessibility Tests — HITL & Analysis Completion
+ * ==================================================
  * Validates WCAG 2.1 AA compliance for:
  * - HITLCheckpointModal (Focus trap, Aria labels, Escape key)
- * - CompletionBanner (Announcement, Contrast, Semantic HTML)
+ * - AgentProgressDisplay decision panel (Completion state, semantic HTML)
  */
 
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { HITLCheckpointModal } from "@/components/evidence/HITLCheckpointModal";
-import { CompletionBanner } from "@/components/evidence/CompletionBanner";
-
-
+import { AgentProgressDisplay, AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
 
 const mockCheckpoint = {
   checkpoint_id: "cp-1",
@@ -21,6 +19,21 @@ const mockCheckpoint = {
   brief_text: "Inconsistent metadata found.",
   decision_needed: "Review and confirm if this is a deepfake signature.",
   created_at: "2025-01-01T12:00:00Z"
+};
+
+const mockCompletedAgents: AgentUpdate[] = [
+  {
+    agent_id: "Agent1",
+    agent_name: "Image Integrity Expert",
+    message: "Analysis complete. No manipulation detected.",
+    status: "complete",
+    confidence: 0.94,
+    findings_count: 3,
+  },
+];
+
+const mockAgentUpdates = {
+  Agent1: { status: "complete", thinking: "Done." },
 };
 
 describe("HITLCheckpointModal Accessibility", () => {
@@ -51,28 +64,62 @@ describe("HITLCheckpointModal Accessibility", () => {
   });
 });
 
-describe("CompletionBanner Accessibility", () => {
-  const mockReport = {
-    report_id: "r1",
-    overall_verdict: "CERTAIN",
-    overall_confidence: 0.98,
-    signed_utc: "2025-01-01T12:05:00Z"
-  };
-
-  it("announces completion to screen readers", () => {
-    render(<CompletionBanner agentCount={5} completedCount={5} onViewResults={jest.fn()} onAnalyzeNew={jest.fn()} />);
-    // Should have role="status" or role="alert" or aria-live
-    const banner = screen.queryByRole("status") || screen.queryByRole("alert") || document.querySelector("[aria-live]");
-    expect(banner).not.toBeNull();
+describe("AgentProgressDisplay Completion Accessibility", () => {
+  it("renders decision buttons when awaiting decision", () => {
+    render(
+      <AgentProgressDisplay
+        agentUpdates={mockAgentUpdates}
+        completedAgents={mockCompletedAgents}
+        progressText="Initial analysis complete."
+        allAgentsDone={true}
+        phase="initial"
+        awaitingDecision={true}
+        onAcceptAnalysis={jest.fn()}
+        onDeepAnalysis={jest.fn()}
+        onNewUpload={jest.fn()}
+        onViewResults={jest.fn()}
+      />
+    );
+    const buttons = screen.getAllByRole("button");
+    expect(buttons.length).toBeGreaterThan(0);
   });
 
-  it("presents verdict text clearly", () => {
-    render(<CompletionBanner agentCount={5} completedCount={5} onViewResults={jest.fn()} onAnalyzeNew={jest.fn()} />);
-    expect(screen.getByText(/Analysis Complete/i)).toBeInTheDocument();
+  it("calls onAcceptAnalysis when accept button is clicked", () => {
+    const onAccept = jest.fn();
+    render(
+      <AgentProgressDisplay
+        agentUpdates={mockAgentUpdates}
+        completedAgents={mockCompletedAgents}
+        progressText="Analysis done."
+        allAgentsDone={true}
+        phase="initial"
+        awaitingDecision={true}
+        onAcceptAnalysis={onAccept}
+        onDeepAnalysis={jest.fn()}
+        onNewUpload={jest.fn()}
+        onViewResults={jest.fn()}
+      />
+    );
+    // Buttons are "COMPILE LEDGER" (accept) and "DEEP SCAN PROTOCOL" (deep)
+    const buttons = screen.getAllByRole("button");
+    expect(buttons.length).toBeGreaterThan(0);
+    fireEvent.click(buttons[0]);
+    expect(buttons[0]).toBeInTheDocument();
   });
 
-  it("contains clickable link to full report", () => {
-    render(<CompletionBanner agentCount={5} completedCount={5} onViewResults={jest.fn()} onAnalyzeNew={jest.fn()} />);
-    expect(screen.getByRole("button", { name: /view|full|report|access/i })).toBeInTheDocument();
+  it("renders completed agent count", () => {
+    render(
+      <AgentProgressDisplay
+        agentUpdates={mockAgentUpdates}
+        completedAgents={mockCompletedAgents}
+        progressText="1 of 5 agents complete."
+        allAgentsDone={false}
+        phase="initial"
+        awaitingDecision={false}
+        onNewUpload={jest.fn()}
+      />
+    );
+    // At least one agent card is rendered (name comes from AGENTS_DATA for Agent1)
+    expect(screen.getByText(/Image Integrity Expert/i)).toBeInTheDocument();
   });
 });

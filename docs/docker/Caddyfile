@@ -27,9 +27,42 @@
     }
 }
 
-# HTTP → HTTPS redirect
+# HTTP → HTTPS redirect for non-localhost domains
 :80 {
-    redir https://{host}{uri} permanent
+    # For localhost development, serve HTTP directly without redirect.
+    # Only redirect to HTTPS when DOMAIN is a real production domain.
+    @production_domain expression {!(({$DOMAIN} == "localhost") || ({$DOMAIN} == ""))}
+    redir @production_domain https://{host}{uri}
+
+    # Localhost HTTP: same path-based routing as the HTTPS block below.
+    # /api/v1/* → FastAPI backend; everything else → Next.js frontend.
+    handle /api/v1/* {
+        reverse_proxy backend:8000 {
+            header_up Host              {host}
+            header_up X-Real-IP         {remote_host}
+            header_up X-Forwarded-For   {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up Upgrade           {http_upgrade}
+            header_up Connection        "{http_connection}"
+            transport http {
+                response_header_timeout 620s
+                dial_timeout            10s
+            }
+        }
+    }
+
+    handle {
+        reverse_proxy frontend:3000 {
+            header_up Host              {host}
+            header_up X-Real-IP         {remote_host}
+            header_up X-Forwarded-For   {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            transport http {
+                response_header_timeout 300s
+                dial_timeout            10s
+            }
+        }
+    }
 }
 
 # Main site block

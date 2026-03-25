@@ -739,8 +739,9 @@ class CouncilArbiter:
 
         narrative_pairs = await asyncio.gather(
             *[_one_narrative(aid, res) for aid, res in active_agent_results.items()],
-            return_exceptions=False,
+            return_exceptions=True,
         )
+        narrative_pairs = [p for p in narrative_pairs if not isinstance(p, BaseException)]
         for _aid, _narr in narrative_pairs:
             if _narr:
                 per_agent_analysis[_aid] = _narr

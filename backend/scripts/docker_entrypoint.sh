@@ -30,7 +30,23 @@ else
     RUN_AS=""
 fi
 
-# ── 2. First-run ML model pre-download (background) ─────────────────────────
+# ── 2a. Seed calibration models into volume on first start ───────────────────
+# Calibration model JSON files are baked into the image at /app/storage/calibration_models.
+# CALIBRATION_MODELS_PATH points to /app/cache/calibration_models (a named Docker volume)
+# so models can be updated at runtime without rebuilding the image.
+# On first start the volume is empty — copy the baked-in models in so agents find them.
+CAL_SRC="/app/storage/calibration_models"
+CAL_DST="${CALIBRATION_MODELS_PATH:-/app/cache/calibration_models}"
+if [ -d "$CAL_SRC" ] && [ -d "$CAL_DST" ]; then
+    CAL_COUNT=$(find "$CAL_DST" -type f -name "*.json" 2>/dev/null | wc -l || echo 0)
+    if [ "${CAL_COUNT:-0}" -lt 1 ]; then
+        echo "  Seeding calibration models into volume: $CAL_SRC → $CAL_DST"
+        cp -r "$CAL_SRC/." "$CAL_DST/" 2>/dev/null || true
+        echo "  Calibration model seed complete."
+    fi
+fi
+
+# ── 2b. First-run ML model pre-download (background) ─────────────────────────
 # Check the HuggingFace and YOLO cache dirs. If they are empty this is the
 # first time the container has started against these volumes.
 # Download models in a background process so the API server starts immediately.

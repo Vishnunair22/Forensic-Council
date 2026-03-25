@@ -373,7 +373,7 @@ DOCKER_BUILDKIT=1 docker compose -f docs/docker/docker-compose.yml --env-file .e
 
 ### `npm ci` fails with `eslint-config-next` version error
 
-This is expected. ESLint is intentionally disabled during `next build` (via `eslint.ignoreDuringBuilds: true` in `next.config.ts`). ESLint only runs on `npm run lint`.
+Next.js 16 uses Turbopack as the default build engine. ESLint does not run during `next build` with Turbopack — it only runs on `npm run lint`. Ensure `eslint` and `eslint-config-next` are on matching major versions (both `^9` / `^16` respectively).
 
 ### `NEXT_PUBLIC_DEMO_PASSWORD not set` error
 

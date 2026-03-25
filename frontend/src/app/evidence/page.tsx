@@ -56,7 +56,6 @@ export default function EvidencePage() {
     sessionStorage.setItem("forensic_investigator_id", fresh);
     return fresh;
   };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const investigatorIdRef = useRef<string>(_initInvestigatorId());
 
   // File upload state
@@ -490,26 +489,45 @@ export default function EvidencePage() {
           aria-modal="true"
           aria-label="Council Arbiter deliberating"
         >
-          <div className="surface-panel flex flex-col items-center gap-4 px-8 py-8 shadow-2xl max-w-sm w-full mx-4 border-border-bold">
+          <div
+            className="flex flex-col items-center gap-5 px-8 py-9 shadow-2xl max-w-sm w-full mx-4 rounded-2xl"
+            style={{
+              background: "rgba(3,11,26,0.92)",
+              backdropFilter: "blur(48px)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              boxShadow: "0 32px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(34,211,238,0.04)"
+            }}
+          >
             <div className="relative w-20 h-20 flex items-center justify-center">
               <motion.div
-                animate={{ scale: [1, 1.1, 1], opacity: [0.1, 0.2, 0.1] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute inset-0 rounded-full bg-amber-500/10"
+                animate={{ scale: [1, 1.15, 1], opacity: [0.08, 0.22, 0.08] }}
+                transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute inset-0 rounded-full blur-xl"
+                style={{ background: "rgba(34,211,238,0.3)" }}
               />
-              <div className="relative z-10 w-12 h-12 rounded bg-surface-high border border-white/10 flex items-center justify-center shadow-lg">
-                <ShieldCheck className="w-7 h-7 text-amber-500 shadow-[0_0_10px_rgba(217,119,6,0.5)]" />
+              <div
+                className="relative z-10 w-12 h-12 rounded-xl flex items-center justify-center shadow-lg"
+                style={{
+                  background: "rgba(34,211,238,0.08)",
+                  border: "1px solid rgba(34,211,238,0.22)",
+                  boxShadow: "0 0 20px rgba(34,211,238,0.15)"
+                }}
+              >
+                <ShieldCheck className="w-6 h-6 text-cyan-400" />
               </div>
             </div>
-            <div className="text-center space-y-1">
-              <h3 className="text-foreground font-bold text-lg">Arbiter Deliberation</h3>
-              <p className="text-foreground/40 text-[10px] font-mono uppercase tracking-widest font-bold">Synthesizing findings</p>
+            <div className="text-center space-y-1.5">
+              <h3 className="text-white font-bold text-lg tracking-tight">Arbiter Deliberation</h3>
+              <p className="text-[9px] font-mono uppercase tracking-widest font-bold" style={{ color: "rgba(34,211,238,0.45)" }}>
+                Synthesizing findings
+              </p>
             </div>
-            <div className="relative w-full h-1 bg-white/5 rounded-full overflow-hidden">
+            <div className="relative w-full h-[2px] rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.05)" }}>
               <motion.div
-                className="absolute h-full w-[40%] bg-amber-500 shadow-[0_0_15px_rgba(217,119,6,0.6)]"
-                animate={{ left: ["-100%", "200%"] }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute h-full w-[40%] rounded-full"
+                style={{ background: "#22D3EE", boxShadow: "0 0 12px rgba(34,211,238,0.7)" }}
+                animate={{ left: ["-50%", "160%"] }}
+                transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
               />
             </div>
           </div>
@@ -534,10 +552,12 @@ export default function EvidencePage() {
           >
             <div className="flex items-center gap-2 p-1 rounded-full bg-surface-low border border-border-subtle shadow-lg">
               <div className={`flex items-center gap-2 px-5 py-2 rounded-full transition-all duration-300 text-[10px] font-bold uppercase tracking-widest ${
-                phase === "initial" 
-                  ? "bg-amber-500 text-black shadow-md shadow-amber-500/20" 
+                phase === "initial"
+                  ? "text-black shadow-md"
                   : "text-foreground/40"
-              }`}>
+              }`}
+                style={phase === "initial" ? { background: "#22D3EE", boxShadow: "0 4px 16px rgba(34,211,238,0.25)" } : {}}
+              >
                 {phase === "initial" && status !== "complete" && !awaitingDecision ? (
                   <div className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />
                 ) : (
@@ -549,10 +569,12 @@ export default function EvidencePage() {
               <div className="w-4 h-px bg-border-bold" />
 
               <div className={`flex items-center gap-2 px-5 py-2 rounded-full transition-all duration-300 text-[10px] font-bold uppercase tracking-widest ${
-                phase === "deep" 
-                  ? "bg-amber-500 text-black shadow-md shadow-amber-500/20" 
+                phase === "deep"
+                  ? "text-black shadow-md"
                   : "text-foreground/40"
-              }`}>
+              }`}
+                style={phase === "deep" ? { background: "#22D3EE", boxShadow: "0 4px 16px rgba(34,211,238,0.25)" } : {}}
+              >
                 {phase === "deep" && status !== "complete" ? (
                   <div className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />
                 ) : phase === "deep" && status === "complete" ? (

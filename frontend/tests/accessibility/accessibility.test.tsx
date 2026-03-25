@@ -63,7 +63,6 @@ describe("Keyboard Navigation", () => {
   });
 
   it("Tab moves through all buttons in decision panel", async () => {
-    const user = userEvent.setup();
     render(<AgentProgressDisplay {...baseProgress} awaitingDecision={true} allAgentsDone={true} />);
     const buttons = screen.getAllByRole("button");
     expect(buttons.length).toBeGreaterThan(0);

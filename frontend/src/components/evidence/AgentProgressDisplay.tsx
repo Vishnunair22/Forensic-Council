@@ -104,8 +104,8 @@ function ExpandableText({
       {needsTruncation && (
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="inline-flex items-center gap-0.5 mt-1.5 text-[11px] font-bold text-amber-500/80
-            hover:text-amber-400 transition-colors uppercase tracking-widest"
+          className="inline-flex items-center gap-0.5 mt-1.5 text-[11px] font-bold transition-colors uppercase tracking-widest"
+          style={{ color: "rgba(34,211,238,0.65)" }}
         >
           {expanded ? (
             <><ChevronUp className="w-3.5 h-3.5" />Show less</>
@@ -164,7 +164,7 @@ function FindingsAccordion({
         <motion.span
           animate={{ rotate: open ? 180 : 0 }}
           transition={{ duration: 0.2, ease: "anticipate" }}
-          className="text-white/20 group-hover:text-amber-500 transition-colors"
+          className="text-white/20 group-hover:text-cyan-400 transition-colors"
         >
           <ChevronDown className="w-4 h-4" />
         </motion.span>
@@ -215,7 +215,7 @@ function FindingsAccordion({
                         <motion.span
                           animate={{ rotate: isExp ? 180 : 0 }}
                           transition={{ duration: 0.2 }}
-                          className="text-white/20 group-hover:text-amber-500/70 transition-colors flex-shrink-0"
+                          className="text-white/20 group-hover:text-cyan-400/70 transition-colors flex-shrink-0"
                         >
                           <ChevronDown className="w-3.5 h-3.5" />
                         </motion.span>
@@ -295,7 +295,7 @@ function FindingRow({ f }: { f: FindingPreview }) {
     >
       {/* Header: tool name + severity + confidence */}
       <div className="flex items-start gap-3">
-        <span className="text-[10px] font-black text-amber-500/90 tracking-[0.2em] uppercase flex-1 leading-tight font-mono">
+        <span className="text-[10px] font-black tracking-[0.2em] uppercase flex-1 leading-tight font-mono" style={{ color: "rgba(34,211,238,0.8)" }}>
           {fmtTool(f.tool)}
         </span>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -317,7 +317,7 @@ function FindingRow({ f }: { f: FindingPreview }) {
         {needsExpand && (
           <button
             onClick={() => setOpen(v => !v)}
-            className="ml-2 text-[9px] font-black uppercase tracking-[0.2em] text-amber-500/60 hover:text-amber-400 transition-colors"
+            className="ml-2 text-[9px] font-black uppercase tracking-[0.2em] transition-colors" style={{ color: "rgba(34,211,238,0.55)" }}
           >
             [{open ? "COLLAPSE" : "EXPAND"}]
           </button>
@@ -344,7 +344,7 @@ function FindingsPreviewList({ findings }: { findings: FindingPreview[] }) {
         <motion.button
           layout
           onClick={() => setShowAll(v => !v)}
-          className="w-full text-[9px] font-black tracking-[0.2em] uppercase text-white/30 hover:text-amber-500 transition-all py-2 text-center
+          className="w-full text-[9px] font-black tracking-[0.2em] uppercase text-white/30 hover:text-cyan-400 transition-all py-2 text-center
             border border-white/5 border-dashed rounded bg-surface-low hover:bg-surface-high my-1"
         >
           {showAll
@@ -422,14 +422,14 @@ function LiveThinkingText({ text, active }: { text: string; active: boolean }) {
           transition={{ duration: 0.25, ease: "easeOut" }}
           className="text-[12px] leading-relaxed text-foreground/70 whitespace-pre-wrap break-words font-medium font-mono tracking-tight"
         >
-          <span className="text-amber-500 mr-2 font-black">/</span>
+          <span className="mr-2 font-black" style={{ color: "#22D3EE" }}>/</span>
           {displayText}
           {/* Subtle cursor while actively running */}
           {active && (
             <motion.span
               animate={{ opacity: [1, 0, 1] }}
               transition={{ duration: 1, repeat: Infinity }}
-              className="inline-block ml-1 w-[4px] h-[12px] bg-amber-500/50 align-middle -translate-y-px"
+              className="inline-block ml-1 w-[4px] h-[12px] align-middle -translate-y-px" style={{ background: "rgba(34,211,238,0.5)" }}
             />
           )}
         </motion.p>
@@ -691,8 +691,9 @@ export function AgentProgressDisplay({
       <div className="text-center mb-7" aria-live="polite" aria-atomic="true">
         <motion.div
           initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
-          className="inline-flex items-center gap-2 px-3 py-1 rounded bg-amber-500/5 border border-amber-500/10 mb-3 text-amber-500 font-mono font-black uppercase text-[10px] tracking-widest shadow-sm">
-          <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+          className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-3 font-mono font-black uppercase text-[10px] tracking-widest shadow-sm"
+          style={{ background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.14)", color: "#22D3EE" }}>
+          <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
           {activeCompletedCount} / {visibleAgentsCount} Analysed
         </motion.div>
 
@@ -708,11 +709,11 @@ export function AgentProgressDisplay({
                 ? "Active Deep Forensic Stream"
                 : "Active Forensic Stream"}
         </motion.h2>
-        <div className="w-12 h-1 bg-amber-500 mx-auto rounded-full opacity-40 shadow-[0_0_10px_rgba(217,119,6,0.3)]" />
+        <div className="w-12 h-[2px] mx-auto rounded-full opacity-50" style={{ background: "#22D3EE", boxShadow: "0 0 10px rgba(34,211,238,0.4)" }} />
       </div>
 
-      {/* Agent Cards Bento Grid */}
-      <div className="w-full max-w-7xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Agent Cards Grid — uniform 2-col */}
+      <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 gap-5">
         {visibleAgents.map((agent) => {
           const status = getAgentStatus(agent.id);
           const rawThinking = getAgentThinking(agent.id);
@@ -720,43 +721,52 @@ export function AgentProgressDisplay({
           const completed = getAgentFindings(agent.id);
           const isRevealed = revealedAgents.has(agent.id);
 
-          const rowSpan =
-            agent.id === "Agent1" ? "lg:col-span-2" :
-            agent.id === "Agent4" ? "lg:col-span-2" :
-            agent.id === "Agent5" ? "lg:col-span-3" :
-            "lg:col-span-1";
-
           return (
             <AnimatePresence key={agent.id}>
               {isRevealed && (
                 <div
                   className={clsx(
-                    "surface-panel-high rounded p-6 transition-all duration-500 relative group overflow-hidden border-white/5",
-                    rowSpan,
+                    "rounded-2xl p-6 transition-all duration-500 relative group overflow-hidden",
                     (status === "waiting" || status === "checking") && "opacity-40"
                   )}
+                  style={{
+                    background: "rgba(255,255,255,0.04)",
+                    backdropFilter: "blur(20px)",
+                    WebkitBackdropFilter: "blur(20px)",
+                    border: "1px solid rgba(255,255,255,0.07)",
+                  }}
                 >
                   {/* Status indicator bar (Top hairline) */}
-                  <div className={clsx(
-                    "absolute top-0 left-0 right-0 h-0.5 transition-all duration-500",
-                    status === "running" ? "bg-amber-500 shadow-[0_0_10px_rgba(217,119,6,0.5)]" :
-                    status === "complete" ? "bg-emerald-500/20" :
-                    status === "error" ? "bg-rose-500" :
-                    status === "checking" ? "bg-amber-500/20" : "bg-white/5"
-                  )} />
+                  <div
+                    className="absolute top-0 left-0 right-0 h-[2px] transition-all duration-500 rounded-full"
+                    style={{
+                      background:
+                        status === "running"  ? "#22D3EE" :
+                        status === "complete" ? "rgba(52,211,153,0.35)" :
+                        status === "error"    ? "#F87171" :
+                        status === "checking" ? "rgba(34,211,238,0.2)" : "rgba(255,255,255,0.04)",
+                      boxShadow: status === "running" ? "0 0 12px rgba(34,211,238,0.6)" : "none",
+                    }}
+                  />
 
                   {/* Top row */}
                   <div className="flex items-start gap-4 mb-4">
-                    <div className={[
-                      "w-10 h-10 rounded flex items-center justify-center shrink-0 transition-all duration-300",
-                      status === "running"
-                        ? "bg-amber-500/5 text-amber-500 border border-amber-500/20 shadow-sm"
-                        : "bg-white/2 text-white/20 border border-white/5",
-                    ].join(" ")}>
+                    <div
+                      className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300"
+                      style={status === "running" ? {
+                        background: "rgba(34,211,238,0.07)",
+                        border: "1px solid rgba(34,211,238,0.22)",
+                        color: "#22D3EE",
+                      } : {
+                        background: "rgba(255,255,255,0.03)",
+                        border: "1px solid rgba(255,255,255,0.06)",
+                        color: "rgba(255,255,255,0.2)",
+                      }}
+                    >
                       <AgentIcon agentId={agent.id} className="w-6 h-6" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-base font-bold text-white leading-tight font-heading tracking-tight uppercase group-hover:text-amber-400 transition-colors">{agent.name}</h3>
+                      <h3 className="text-base font-bold text-white leading-tight font-heading tracking-tight uppercase group-hover:text-cyan-300 transition-colors">{agent.name}</h3>
                       <span className="text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono font-bold">{agent.role}</span>
                     </div>
                     <div className="shrink-0">
@@ -766,12 +776,12 @@ export function AgentProgressDisplay({
                         </span>
                       )}
                       {status === "checking" && (
-                        <span className="inline-flex items-center gap-1.5 text-[9px] text-amber-500/60 font-black px-2 py-0.5 rounded bg-amber-500/5 border border-amber-500/10 uppercase tracking-widest font-mono">
+                        <span className="inline-flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest font-mono" style={{ color: "rgba(34,211,238,0.6)", background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.12)" }}>
                           Linking
                         </span>
                       )}
                       {status === "running" && (
-                        <span className="inline-flex items-center gap-1.5 text-[9px] text-amber-500 font-black px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 uppercase tracking-widest font-mono shadow-sm shadow-amber-500/10">
+                        <span className="inline-flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest font-mono" style={{ color: "#22D3EE", background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.22)", boxShadow: "0 0 8px rgba(34,211,238,0.1)" }}>
                           <Loader2 className="w-2.5 h-2.5 animate-spin" />Scan
                         </span>
                       )}
@@ -802,7 +812,7 @@ export function AgentProgressDisplay({
                       {/* Loading bar animation — CSS keyframe so it loops smoothly */}
                       <div className="w-full h-0.5 bg-white/[0.06] rounded-full overflow-hidden relative">
                         <div
-                          className="absolute h-full w-[45%] bg-gradient-to-r from-transparent via-amber-400/60 to-transparent rounded-full"
+                          className="absolute h-full w-[45%] bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent rounded-full"
                           style={{ animation: "bar-slide 1.6s ease-in-out infinite" }}
                         />
                       </div>
@@ -848,7 +858,8 @@ export function AgentProgressDisplay({
                             <div className="relative w-full h-1 bg-white/5 rounded-full overflow-hidden">
                               {!isStale && pct !== null ? (
                                 <motion.div
-                                  className="h-full rounded-full bg-amber-500 shadow-[0_0_8px_rgba(217,119,6,0.6)]"
+                                  className="h-full rounded-full"
+                                  style={{ background: "#22D3EE", boxShadow: "0 0 8px rgba(34,211,238,0.6)" }}
                                   initial={{ width: "0%" }}
                                   animate={{ width: `${pct}%` }}
                                   transition={{ duration: 0.4, ease: "easeOut" }}
@@ -858,7 +869,7 @@ export function AgentProgressDisplay({
                                   className={`absolute h-full w-[45%] rounded-full ${
                                     isStale
                                       ? "bg-gradient-to-r from-transparent via-rose-500/60 to-transparent"
-                                      : "bg-gradient-to-r from-transparent via-amber-500/40 to-transparent"
+                                      : "bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent"
                                   }`}
                                   style={{ animation: `bar-slide ${isStale ? "1.4s" : "2s"} ease-in-out infinite` }}
                                 />
@@ -870,7 +881,7 @@ export function AgentProgressDisplay({
                               {pct !== null ? (
                                 <>
                                   <span>Verification Units: {toolsDone}/{toolsTotal}</span>
-                                  <span className="font-mono text-amber-500/70">{pct}% Complete</span>
+                                  <span className="font-mono" style={{ color: "rgba(34,211,238,0.65)" }}>{pct}% Complete</span>
                                 </>
                               ) : (
                                 <span className="text-white/10 italic">Initializing tools…</span>
@@ -887,7 +898,7 @@ export function AgentProgressDisplay({
                                     ? "bg-violet-500/10 border border-violet-500/20 text-violet-300/70"
                                     : isApiStep
                                       ? "bg-blue-500/10 border border-blue-500/20 text-blue-300/70"
-                                      : "bg-amber-500/10 border border-amber-500/20 text-amber-300/70"
+                                      : "bg-cyan-500/10 border border-cyan-500/20 text-cyan-300/70"
                                 }`}
                               >
                                 <span className="animate-pulse">●</span>
@@ -915,13 +926,13 @@ export function AgentProgressDisplay({
                             ? "bg-emerald-500/5 border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.05)]"
                             : completed.agent_verdict === "LIKELY_MANIPULATED"
                               ? "bg-rose-500/5 border-rose-500/20 shadow-[0_0_20px_rgba(244,63,94,0.05)]"
-                              : "bg-amber-500/5 border-amber-500/20 shadow-[0_0_20px_rgba(217,119,6,0.05)]",
+                              : "bg-cyan-500/5 border-cyan-500/20 shadow-[0_0_20px_rgba(34,211,238,0.05)]",
                         ].join(" ")}>
                           <div className={[
                              "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border",
                              completed.agent_verdict === "AUTHENTIC" ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400" :
                              completed.agent_verdict === "LIKELY_MANIPULATED" ? "bg-red-500/20 border-red-500/40 text-red-400" :
-                             "bg-amber-500/20 border-amber-500/40 text-amber-400"
+                             "bg-cyan-500/20 border-cyan-500/40 text-cyan-400"
                           ].join(" ")}>
                             {completed.agent_verdict === "AUTHENTIC" ? "✓" : completed.agent_verdict === "LIKELY_MANIPULATED" ? "!" : "?"}
                           </div>
@@ -929,7 +940,7 @@ export function AgentProgressDisplay({
                             <p className={[
                               "text-[10px] font-bold uppercase tracking-[0.2em] leading-none mb-1 opacity-60",
                               completed.agent_verdict === "AUTHENTIC" ? "text-emerald-400" :
-                              completed.agent_verdict === "LIKELY_MANIPULATED" ? "text-red-400" : "text-amber-400"
+                              completed.agent_verdict === "LIKELY_MANIPULATED" ? "text-red-400" : "text-cyan-400"
                             ].join(" ")}>Verdict</p>
                             <p className={[
                               "text-xs font-black uppercase tracking-widest leading-none font-heading italic",
@@ -937,7 +948,7 @@ export function AgentProgressDisplay({
                                 ? "text-emerald-300"
                                 : completed.agent_verdict === "LIKELY_MANIPULATED"
                                   ? "text-red-300"
-                                  : "text-amber-300",
+                                  : "text-cyan-300",
                             ].join(" ")}>
                               {completed.agent_verdict.replace(/_/g, " ")}
                             </p>
@@ -1035,7 +1046,7 @@ export function AgentProgressDisplay({
                     return (
                       <div key={agentId} className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.02] border border-white/[0.02]">
                         <div className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-500/50" />
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-cyan-400/50" />
                           <span className="text-sm text-slate-300 font-medium">{meta.name}</span>
                         </div>
                         <span className="text-[10px] font-black font-mono text-white/20 uppercase tracking-[0.2em]">Incompatible</span>
@@ -1060,7 +1071,7 @@ export function AgentProgressDisplay({
           {/* Decision card */}
           <div className="surface-panel rounded-2xl p-5 space-y-4 shadow-lg border-border-bold">
             <div className="text-center space-y-1">
-              <p className="text-[10px] font-black font-mono text-amber-500 uppercase tracking-[0.3em]">Investigator Protocol</p>
+              <p className="text-[10px] font-black font-mono uppercase tracking-[0.3em]" style={{ color: "#22D3EE" }}>Investigator Protocol</p>
               <h3 className="text-lg font-black text-white font-heading uppercase tracking-tighter">Initial Scan Concluded</h3>
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
@@ -1072,7 +1083,7 @@ export function AgentProgressDisplay({
                 className="btn-premium-glass flex-1 py-3 justify-center text-[11px] font-black uppercase tracking-[0.2em]"
               >
                 {isNavigating ? (
-                  <><Loader2 className="w-4 h-4 animate-spin text-amber-500" />SEALING...</>
+                  <><Loader2 className="w-4 h-4 animate-spin text-cyan-400" />SEALING...</>
                 ) : (
                   <><FileText className="w-4 h-4 text-white/40" />COMPILE LEDGER</>
                 )}
@@ -1137,8 +1148,8 @@ export function AgentProgressDisplay({
           <div className="inline-flex items-center gap-2">
             {!allAgentsDone && (
               <span className="relative flex h-1.5 w-1.5 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-40" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500" />
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-40" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-400" />
               </span>
             )}
             <p className="text-sm font-medium text-foreground/50">{progressText}</p>

@@ -30,8 +30,8 @@ export function HistoryDrawer() {
   };
 
   useEffect(() => {
+    // Load history from storage when drawer opens
     loadHistory();
-    // Re-load history if it opens
   }, [isOpen]);
 
   const removeHistoryItem = (sessionId: string) => {

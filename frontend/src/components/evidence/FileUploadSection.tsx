@@ -107,15 +107,13 @@ export function FileUploadSection({
           initial={{ y: -10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.8, ease: "easeOut" }}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded
-            bg-amber-500/5 border border-amber-500/10
-            text-[9px] font-mono text-amber-500 backdrop-blur-xl mb-5
-            shadow-sm relative overflow-hidden group">
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-5 shadow-sm relative overflow-hidden group"
+            style={{ background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.14)" }}>
           <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-40" />
-            <span className="relative inline-flex rounded-full h-full w-full bg-amber-500" />
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-50" />
+            <span className="relative inline-flex rounded-full h-full w-full bg-cyan-400" />
           </span>
-          <span className="uppercase tracking-[0.4em] font-bold text-amber-500/60 font-sans">Evidence Intake Portal</span>
+          <span className="uppercase tracking-[0.4em] font-bold font-sans text-[9px]" style={{ color: "rgba(34,211,238,0.6)" }}>Evidence Intake Portal</span>
         </motion.div>
 
         <motion.h1
@@ -190,7 +188,7 @@ export function FileUploadSection({
                               repeatType: "reverse",
                               delay: i * 0.05,
                             }}
-                            className="w-1 bg-amber-500/60 rounded-full"
+                            className="w-1 bg-cyan-400/60 rounded-full"
                           />
                       ))}
                     </div>
@@ -244,10 +242,10 @@ export function FileUploadSection({
         <div
           className={clsx(
             "surface-panel-high w-full group overflow-hidden border-2 border-dashed rounded transition-all duration-700 relative cursor-pointer",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 focus-visible:ring-offset-8 focus-visible:ring-offset-background",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50 focus-visible:ring-offset-8 focus-visible:ring-offset-background",
             isDragging
-              ? "border-amber-400 bg-amber-500/5 scale-[1.01]"
-              : "border-white/5 hover:border-amber-500/40"
+              ? "border-cyan-400 bg-cyan-500/5 scale-[1.01]"
+              : "border-white/5 hover:border-cyan-500/35"
           )}
           onClick={() => { playSound("click"); fileInputRef.current?.click(); }}
           onDragEnter={handleDragEnter}
@@ -261,17 +259,18 @@ export function FileUploadSection({
                 scale: isDragging ? 1.05 : 1,
               }}
               transition={{ type: "spring", stiffness: 400, damping: 25 }}
-              className={`w-12 h-12 rounded flex items-center justify-center transition-all duration-300
-                bg-surface-high border
+              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300
+                border
                 ${isDragging
-                  ? "border-amber-400/60 shadow-lg shadow-amber-500/10"
-                  : "border-white/5 group-hover:border-amber-500/30 group-hover:bg-amber-500/5"}`}
+                  ? "border-cyan-400/60 shadow-lg shadow-cyan-500/10"
+                  : "border-white/5 group-hover:border-cyan-500/30 group-hover:bg-cyan-500/5"}`}
+              style={{ background: "rgba(255,255,255,0.04)" }}
             >
-              <UploadCloud className={`w-5 h-5 transition-all duration-300 ${isDragging ? "text-amber-400" : "text-white/20 group-hover:text-amber-500"}`} strokeWidth={1} aria-hidden="true" />
+              <UploadCloud className={`w-5 h-5 transition-all duration-300 ${isDragging ? "text-cyan-400" : "text-white/20 group-hover:text-cyan-400"}`} strokeWidth={1} aria-hidden="true" />
             </motion.div>
 
             <div className="text-center">
-              <p className={`text-sm font-black transition-colors duration-300 mb-1 tracking-tight font-heading uppercase ${isDragging ? "text-amber-400" : "text-white group-hover:text-amber-400"}`}>
+              <p className={`text-sm font-black transition-colors duration-300 mb-1 tracking-tight font-heading uppercase ${isDragging ? "text-cyan-400" : "text-white group-hover:text-cyan-300"}`}>
                 {isDragging ? "Seize specimen" : "Deposit evidence specimen"}
               </p>
               <p className="text-[10px] text-white/20 font-mono uppercase tracking-[0.2em] font-bold">

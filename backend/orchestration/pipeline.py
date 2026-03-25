@@ -637,7 +637,10 @@ class ForensicCouncilPipeline:
             try:
                 initial_count = len(initial_findings)
                 logger.info(f"Running {agent_id} deep investigation")
-                await agent.run_deep_investigation()
+                await asyncio.wait_for(
+                    agent.run_deep_investigation(),
+                    timeout=self.config.investigation_timeout,
+                )
                 all_findings = getattr(agent, "_findings", initial_findings)
                 deep_count = max(0, len(all_findings) - initial_count)
                 return AgentLoopResult(

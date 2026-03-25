@@ -130,7 +130,6 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                             if (update.agent_id) {
                                 const agent = AGENTS_DATA.find(a => a.id === update.agent_id);
                                 if (agent) {
-                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- WebSocket message data is dynamic
                                     const { confidence, findings_count, error, deep_analysis_pending, status: agentStatus, agent_verdict, tool_error_rate, section_flags, findings_preview } = update.data as Record<string, unknown>;
                                     const parsedConfidence = (typeof confidence === "number" ? confidence : null) ?? agent.simulation.confidence / 100;
 
