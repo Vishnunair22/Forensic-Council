@@ -7,10 +7,14 @@ and contextually validating objects, weapons, and contraband.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Any, Optional
 
 from agents.base_agent import ForensicAgent
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 from core.config import Settings
 from core.custody_logger import CustodyLogger
 from core.episodic_memory import EpisodicMemory
@@ -77,7 +81,11 @@ class Agent3Object(ForensicAgent):
         )
         self._inter_agent_bus = inter_agent_bus
         self._agent1_context: dict = {}
-    
+        # Set by pipeline before launching parallel deep passes.
+        # Gemini handler awaits this so tools run in parallel with Agent1's Gemini
+        # and only block at the Gemini call to receive cross-validation context.
+        self._agent1_context_event: Optional[Any] = None
+
     @property
     def agent_name(self) -> str:
         """Human-readable name of this agent."""
@@ -151,7 +159,8 @@ class Agent3Object(ForensicAgent):
             import os
             
             # Set YOLO cache directory BEFORE importing - this controls where models are downloaded
-            yolo_cache = os.getenv("YOLO_CONFIG_DIR", "/app/cache/ultralytics")
+            import pathlib
+            yolo_cache = os.getenv("YOLO_CONFIG_DIR", str(pathlib.Path.home() / ".cache" / "ultralytics"))
             os.makedirs(yolo_cache, exist_ok=True)
             os.environ["YOLO_CONFIG_DIR"] = yolo_cache
             os.environ["ULTRALYTICS_CACHE_DIR"] = yolo_cache
@@ -764,9 +773,10 @@ class Agent3Object(ForensicAgent):
                 def _detect_classes(pil_image) -> set:
                     """Run YOLO or OpenCV fallback and return set of detected class names."""
                     import os
-                    
+
                     # Set YOLO cache directory BEFORE importing
-                    yolo_cache = os.getenv("YOLO_CONFIG_DIR", "/app/cache/ultralytics")
+                    import pathlib
+                    yolo_cache = os.getenv("YOLO_CONFIG_DIR", str(pathlib.Path.home() / ".cache" / "ultralytics"))
                     os.makedirs(yolo_cache, exist_ok=True)
                     os.environ["YOLO_CONFIG_DIR"] = yolo_cache
                     os.environ["ULTRALYTICS_CACHE_DIR"] = yolo_cache
@@ -1076,8 +1086,24 @@ class Agent3Object(ForensicAgent):
             own YOLO detections to provide cross-validated object/weapon analysis.
             Identifies compositing, lighting inconsistencies, UI/interface content,
             and describes the full contextual narrative of what is in the image.
+
+            Parallel deep-pass mode: the pipeline starts Agent3 deep concurrently
+            with Agent1 deep. We run all our tools first, then wait here for Agent1's
+            Gemini results (up to 120 s) before calling our own Gemini so we can
+            feed Agent1's findings as cross-validation context.
             """
             artifact = input_data.get("artifact") or self.evidence_artifact
+
+            # --- Wait for Agent1 Gemini context (parallel deep-pass mode) ---
+            _ctx_event = getattr(self, "_agent1_context_event", None)
+            if _ctx_event is not None and not _ctx_event.is_set():
+                try:
+                    await asyncio.wait_for(asyncio.shield(_ctx_event.wait()), timeout=120.0)
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        f"{self.agent_id}: Agent1 context wait timed out — "
+                        "proceeding with YOLO-only context"
+                    )
 
             # Build cross-agent context: YOLO detections from our initial pass
             # Check _tool_context first (faster), fall back to scanning _findings

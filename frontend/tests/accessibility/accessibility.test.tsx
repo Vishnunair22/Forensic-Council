@@ -75,7 +75,7 @@ describe("Keyboard Navigation", () => {
     const file = new File(["x"], "t.jpg", { type: "image/jpeg" });
     const onUpload = jest.fn();
     render(<FileUploadSection {...baseUpload} file={file} onUpload={onUpload} />);
-    const btn = screen.getByRole("button", { name: /begin|analyze|start/i });
+    const btn = screen.getByRole("button", { name: /begin|analyze|start|audit/i });
     btn.focus();
     expect(document.activeElement).toBe(btn);
     fireEvent.click(btn); // Simulates Enter on focused button
@@ -193,14 +193,14 @@ describe("Loading State Accessibility", () => {
 
   it("upload loading state provides text feedback beyond visual spinner", async () => {
     render(<FileUploadSection {...baseUpload} file={file} isUploading={true} />);
-    const hasText = await screen.findByText(/Initiating/i);
+    const hasText = await screen.findByText(/Initiating|Sealing/i);
     const hasDisabled = document.querySelector("[disabled]");
     expect(hasText || hasDisabled).toBeTruthy();
   });
 
   it("arbiter navigation state provides text feedback (Compiling Report)", async () => {
     render(<AgentProgressDisplay {...baseProgress} awaitingDecision={true} allAgentsDone={true} isNavigating={true} />);
-    expect(await screen.findByText(/Finalizing|Deliberating|loading/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Finalizing|Deliberating|loading|Sealing/i)).toBeInTheDocument();
   });
 
   it("navigation buttons carry disabled attribute when isNavigating", () => {

@@ -1590,10 +1590,17 @@ class ReActLoopEngine:
             ),
             # FIXED: gps_timezone_validate returns 'plausible' bool + 'issues' list, NOT 'inconsistent' + 'distance_km'
             "gps_timezone_validate": lambda o: (
-                ("GPS-timezone is INCONSISTENT — " + "; ".join(o.get('issues', ['Unknown issue']))
-                 if o.get('plausible') is False
-                 else "GPS-timestamp timezone is plausible.")
-                + f" Timezone detected: {o.get('timezone', 'N/A')}."
+                "No GPS coordinates embedded — location origin cannot be verified from metadata."
+                if o.get('plausible') is None and any("no gps" in str(i).lower() or "no gps data" in str(i).lower() for i in o.get('issues', []))
+                else (
+                    "No timestamp in EXIF — GPS-timezone cross-validation not possible."
+                    if o.get('plausible') is None and any("timestamp" in str(i).lower() for i in o.get('issues', []))
+                    else (
+                        "GPS-timezone is INCONSISTENT — " + "; ".join(o.get('issues', ['Unknown issue']))
+                        if o.get('plausible') is False
+                        else f"GPS-timestamp timezone cross-validation passed. Timezone: {o.get('timezone', 'N/A')}."
+                    )
+                )
             ),
             "steganography_scan": lambda o: (
                 f"LSB steganography scan: {'HIDDEN DATA SUSPECTED' if o.get('stego_suspected') else 'no hidden data found'}. "
@@ -1805,9 +1812,11 @@ class ReActLoopEngine:
                 + ("Anomaly detected — possible manipulation." if o.get('anomaly_detected') else "No significant anomaly blocks.")
             ),
             "deepfake_frequency_check": lambda o: (
+                o.get("limitation_note", "GAN/deepfake frequency analysis not applicable for this file format.")
+                if o.get("gan_not_applicable") else
                 f"GAN/deepfake frequency check: anomaly score {o.get('anomaly_score', 0):.3f}, "
                 f"high-frequency ratio {o.get('high_freq_ratio', 0):.4f}. "
-                + ("GAN-style frequency artifacts detected." if o.get('gan_artifact_detected') else "Frequency distribution appears natural — no GAN artifacts.")
+                + ("GAN-style frequency artifacts detected — possible synthetic image origin." if o.get('gan_artifact_detected') else "Frequency distribution appears natural — no GAN artifacts detected.")
             ),
             "roi_extract": lambda o: (
                 f"ROI extraction: bounding box {o.get('bounding_box', {})}. "
@@ -1818,8 +1827,9 @@ class ReActLoopEngine:
                 + (f"Hamming distance from reference: {o.get('hamming_distance')}." if 'hamming_distance' in o else "No reference hash comparison performed.")
             ),
             "analyze_image_content": lambda o: (
-                f"CLIP semantic analysis: top match '{o.get('top_match', 'unknown')}' "
-                f"at {o.get('top_confidence', 0):.0%} confidence. "
+                f"CLIP semantic analysis: image identified as '{o.get('image_type', o.get('top_match', 'unknown'))}' "
+                f"at {o.get('confidence', o.get('top_confidence', 0)):.0%} confidence"
+                + (f" — context: {str(o.get('semantic_context', ''))[:120]}." if o.get('semantic_context') else ". ")
                 + ("CONCERN FLAG raised — content may be sensitive or anomalous." if o.get('concern_flag') else "No concern flags raised.")
             ),
             "sensor_db_query": lambda o: (

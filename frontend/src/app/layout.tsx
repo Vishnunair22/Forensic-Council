@@ -1,23 +1,23 @@
 import type { Metadata } from "next";
-import { Outfit, Inter, JetBrains_Mono } from "next/font/google";
+import { Cormorant_Garamond, Montserrat, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { DevErrorProvider } from "@/components/DevErrorOverlay";
 
-const outfit = Outfit({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700", "800"],
-  variable: "--font-outfit",
-});
-
-const inter = Inter({
+const cormorantGaramond = Cormorant_Garamond({
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700"],
-  variable: "--font-inter",
+  variable: "--font-heading",
+});
+
+const montserrat = Montserrat({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800", "900"],
+  variable: "--font-sans",
 });
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600"],
+  weight: ["400", "500", "600"],
   variable: "--font-mono",
 });
 
@@ -32,7 +32,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${outfit.variable} ${inter.variable} ${jetbrainsMono.variable}`} data-scroll-behavior="smooth">
+    <html lang="en" className={`${cormorantGaramond.variable} ${montserrat.variable} ${jetbrainsMono.variable}`}>
       <body className="antialiased">
         <DevErrorProvider>
           {children}

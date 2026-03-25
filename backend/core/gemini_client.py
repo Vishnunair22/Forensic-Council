@@ -10,9 +10,16 @@ Agent 5 (Metadata/Context) during their deep analysis pass to:
   - Validate consistency between visual content and claimed metadata
   - Detect objects, weapons, documents, and contextual anomalies
 
-Provider routing:
-  - gemini-1.5-flash  → default, fast, cost-effective (recommended)
-  - gemini-1.5-pro    → deeper reasoning, slower
+Provider routing (cascade — first available wins):
+  1. gemini-2.5-pro    → default primary, highest accuracy + thinking support
+  2. gemini-2.5-flash  → fast fallback with thinking support
+  3. gemini-2.0-flash  → last-resort fallback (no thinkingConfig)
+
+Auto-cascade: 404 / "model not found" responses skip immediately to
+the next model; other errors retry with backoff then cascade forward.
+The chain is fully configurable via GEMINI_MODEL + GEMINI_FALLBACK_MODELS.
+
+NOTE: gemini-1.5-* models are deprecated and must not be used.
 
 Vision input:
   - Images: base64-encoded inline (JPEG, PNG, WEBP, GIF, BMP)
@@ -40,9 +47,23 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 _GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
-_DEFAULT_MODEL = "gemini-1.5-flash-latest"
+_DEFAULT_MODEL = "gemini-2.5-pro"
+# Ordered fallback chain: tried in sequence if the primary model fails/is unavailable.
+_DEFAULT_FALLBACK_CHAIN = "gemini-2.5-flash,gemini-2.0-flash"
 _MAX_RETRIES = 2
 _BASE_BACKOFF = 1.5
+
+# Models that support thinkingConfig (budget-based chain-of-thought).
+# gemini-2.0-* and earlier must NOT receive thinkingConfig (returns 400).
+_THINKING_MODEL_PREFIXES = ("gemini-2.5",)
+
+
+class _ModelUnavailableError(Exception):
+    """Raised when the API returns 404 or a 'model not found' body.
+
+    Signals the cascade loop to skip immediately to the next model
+    without backoff — the model simply does not exist on this API key.
+    """
 
 # Supported inline MIME types for Gemini vision
 _VISION_MIME_TYPES = {
@@ -65,7 +86,7 @@ class GeminiVisionFinding:
     report compilation.
     """
     analysis_type: str          # e.g. "file_content_identification"
-    model_used: str             # e.g. "gemini-1.5-flash"
+    model_used: str             # e.g. "gemini-2.5-pro"
     content_description: str    # What the model sees in plain language
     manipulation_signals: list[str] = field(default_factory=list)
     detected_objects: list[str] = field(default_factory=list)
@@ -134,8 +155,16 @@ class GeminiVisionClient:
     def __init__(self, config: Settings):
         self.api_key: Optional[str] = config.gemini_api_key
         self.model: str = getattr(config, "gemini_model", _DEFAULT_MODEL)
-        self.timeout: float = getattr(config, "gemini_timeout", 30.0)
-        
+        # Build ordered fallback chain from comma-separated config string.
+        # Duplicates and the primary model itself are removed; order is preserved.
+        _chain_str: str = getattr(config, "gemini_fallback_models", _DEFAULT_FALLBACK_CHAIN)
+        seen: set[str] = {self.model}
+        self.fallback_chain: list[str] = [
+            m for raw in _chain_str.split(",")
+            if (m := raw.strip()) and m not in seen and not seen.add(m)  # type: ignore[func-returns-value]
+        ]
+        self.timeout: float = getattr(config, "gemini_timeout", 55.0)
+
         # Check if key is missing or is the default placeholder from .env.example
         is_placeholder = self.api_key and "your_gemini_key" in self.api_key
         self._enabled = bool(self.api_key) and not is_placeholder
@@ -459,37 +488,88 @@ class GeminiVisionClient:
             # Non-vision file type — text-only analysis
             parts = [{"text": f"[Non-visual file, MIME: {mime_type}]\n\n{prompt}"}]
 
-        payload = {
-            "contents": [{"parts": parts}],
-            "generationConfig": {
-                "temperature": 0.1,
-                "maxOutputTokens": 4096,
-                "responseMimeType": "application/json",
-            },
+        generation_config: dict = {
+            "temperature": 0.1,
+            "maxOutputTokens": 8192,
+            # NOTE: responseMimeType="application/json" is intentionally omitted.
+            # When set alongside multimodal (image) input it causes Gemini 2.x to
+            # enter a JSON-generation mode that suppresses visual perception,
+            # producing "no visual content detected" responses even for valid images.
+            # We rely on our own _parse_response() JSON extraction instead.
         }
 
-        url = f"{_GEMINI_API_BASE}/models/{self.model}:generateContent?key={self.api_key}"
+        # Thinking models (2.5+, 3+) support thinkingConfig.
+        # Setting thinkingBudget=0 disables chain-of-thought for fast structured
+        # forensic extraction. gemini-2.0-* must NOT receive it (returns 400).
+        if any(p in self.model for p in _THINKING_MODEL_PREFIXES):
+            generation_config["thinkingConfig"] = {"thinkingBudget": 0}
 
-        try:
-            raw_text = await asyncio.wait_for(
-                self._post_with_retry(url, payload),
-                timeout=self.timeout + 5,  # hard cap slightly above httpx timeout
+        payload = {
+            "contents": [{"parts": parts}],
+            "generationConfig": generation_config,
+        }
+
+        # ── Cascade: primary → fallback_chain ────────────────────────────
+        # Build per-model (payload, url) pairs up-front so each model gets
+        # the correct thinkingConfig for its generation family.
+        def _model_entry(m: str, primary_payload: Optional[dict] = None) -> tuple:
+            if primary_payload is not None:
+                return (m, primary_payload, f"{_GEMINI_API_BASE}/models/{m}:generateContent?key={self.api_key}")
+            gen_cfg: dict = {"temperature": 0.1, "maxOutputTokens": 8192}
+            if any(p in m for p in _THINKING_MODEL_PREFIXES):
+                gen_cfg["thinkingConfig"] = {"thinkingBudget": 0}
+            return (
+                m,
+                {"contents": [{"parts": parts}], "generationConfig": gen_cfg},
+                f"{_GEMINI_API_BASE}/models/{m}:generateContent?key={self.api_key}",
             )
-            latency_ms = (time.monotonic() - t0) * 1000
-            finding = self._parse_response(raw_text, analysis_type, latency_ms)
-            return finding
-        except Exception as exc:
-            latency_ms = (time.monotonic() - t0) * 1000
-            logger.error(f"Gemini vision analysis failed ({analysis_type}): {exc}")
-            return GeminiVisionFinding(
-                analysis_type=analysis_type,
-                model_used=self.model,
-                content_description="",
-                error=str(exc),
-                confidence=0.0,
-                court_defensible=False,
-                latency_ms=latency_ms,
-            )
+
+        models_to_try = [_model_entry(self.model, payload)] + [
+            _model_entry(m) for m in self.fallback_chain
+        ]
+
+        last_exc: Exception = RuntimeError("no models attempted")
+        for attempt_model, attempt_payload, attempt_url in models_to_try:
+            try:
+                m_t0 = time.monotonic()
+                raw_text = await asyncio.wait_for(
+                    self._post_with_retry(attempt_url, attempt_payload),
+                    timeout=self.timeout + 5,
+                )
+                m_latency = (time.monotonic() - m_t0) * 1000
+                finding = self._parse_response(raw_text, analysis_type, m_latency)
+                if attempt_model != self.model:
+                    finding.model_used = attempt_model
+                    finding.caveat = (
+                        f"[Fallback: {attempt_model} — primary {self.model} unavailable] "
+                        + finding.caveat
+                    )
+                return finding
+            except _ModelUnavailableError as mue:
+                logger.warning(
+                    f"Gemini model {attempt_model} not available — skipping to next. ({mue})"
+                )
+                last_exc = mue
+            except Exception as exc:
+                logger.warning(
+                    f"Gemini model {attempt_model} failed — trying next in chain. ({exc})"
+                )
+                last_exc = exc
+
+        latency_ms = (time.monotonic() - t0) * 1000
+        logger.error(
+            f"All Gemini models exhausted for {analysis_type}. "
+            f"Chain: {[self.model] + self.fallback_chain}. Last error: {last_exc}"
+        )
+        return GeminiVisionFinding(
+            analysis_type=analysis_type,
+            model_used=self.model,
+            content_description="",
+            error=f"All Gemini models exhausted: {last_exc}",
+            confidence=0.0,
+            court_defensible=False,
+            latency_ms=latency_ms,
+        )
 
     async def _post_with_retry(self, url: str, payload: dict) -> str:
         """POST to Gemini API with exponential-backoff retry."""
@@ -504,6 +584,22 @@ class GeminiVisionClient:
                         except Exception:
                             pass
                         
+                        # 404 means the model doesn't exist on this API key —
+                        # raise immediately (no backoff) so the cascade loop
+                        # can skip to the next model without waiting.
+                        if resp.status_code == 404:
+                            raise _ModelUnavailableError(
+                                f"Model not found (404): {error_detail[:300]}"
+                            )
+                        # Also treat 400 "model not found" body as unavailable.
+                        if resp.status_code == 400 and (
+                            "not found" in error_detail.lower()
+                            or "does not exist" in error_detail.lower()
+                            or "not support" in error_detail.lower()
+                        ):
+                            raise _ModelUnavailableError(
+                                f"Model unavailable (400): {error_detail[:300]}"
+                            )
                         if resp.status_code in {429, 500, 502, 503, 504}:
                             wait = _BASE_BACKOFF * (2 ** attempt)
                             logger.warning(
@@ -550,12 +646,21 @@ class GeminiVisionClient:
             )
 
         try:
-            # Strip markdown fences if present
+            # Strip markdown fences and extract the first JSON object from the response.
+            # Gemini 2.x sometimes wraps JSON in prose or ```json ... ``` blocks.
             cleaned = raw_text.strip()
-            if cleaned.startswith("```"):
-                cleaned = "\n".join(cleaned.split("\n")[1:])
-                if cleaned.endswith("```"):
-                    cleaned = cleaned[:-3]
+            if "```" in cleaned:
+                # Extract content between first ``` pair
+                import re as _re
+                fence_match = _re.search(r"```(?:json)?\s*([\s\S]*?)```", cleaned)
+                if fence_match:
+                    cleaned = fence_match.group(1).strip()
+            # If it still doesn't start with '{', search for the first '{...}' block
+            if not cleaned.startswith("{"):
+                import re as _re
+                obj_match = _re.search(r"\{[\s\S]*\}", cleaned)
+                if obj_match:
+                    cleaned = obj_match.group(0)
             data = json.loads(cleaned)
         except json.JSONDecodeError as exc:
             logger.warning(f"Gemini: failed to parse JSON response: {exc}")
@@ -661,8 +766,10 @@ class GeminiVisionClient:
         """
         Read a file and return (base64_data, mime_type).
 
-        For unsupported vision types, returns the raw bytes anyway —
-        the caller handles the non-vision fallback.
+        Images larger than 3 MB are downscaled before encoding so they fit
+        comfortably within Gemini's inline-data size limits and avoid the
+        silent "no visual content detected" failure that occurs when the
+        base64 payload exceeds ~4 MB in a single generateContent call.
         """
         path = Path(file_path)
         if not path.exists():
@@ -671,7 +778,6 @@ class GeminiVisionClient:
         # Detect MIME type
         mime_type, _ = mimetypes.guess_type(str(path))
         if not mime_type:
-            # Fallback heuristics based on extension
             ext = path.suffix.lower()
             ext_map = {
                 ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
@@ -685,6 +791,38 @@ class GeminiVisionClient:
 
         with open(file_path, "rb") as f:
             raw = f.read()
+
+        # Resize images that are too large for reliable inline-data delivery.
+        # Gemini's effective inline limit is ~4 MB of base64 (~3 MB raw).
+        # We only resize image types; PDFs and other formats are sent as-is.
+        _IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp", "image/bmp", "image/gif"}
+        _MAX_RAW_BYTES = 3 * 1024 * 1024  # 3 MB
+        if mime_type in _IMAGE_MIME_TYPES and len(raw) > _MAX_RAW_BYTES:
+            try:
+                import io
+                from PIL import Image as _PImage
+                img = _PImage.open(io.BytesIO(raw))
+                # Convert palette/RGBA modes that don't survive JPEG re-encode
+                if img.mode not in ("RGB", "L"):
+                    img = img.convert("RGB")
+                # Scale down proportionally until raw size is under limit
+                scale = (_MAX_RAW_BYTES / len(raw)) ** 0.5
+                new_w = max(256, int(img.width * scale))
+                new_h = max(256, int(img.height * scale))
+                img = img.resize((new_w, new_h), _PImage.LANCZOS)
+                buf = io.BytesIO()
+                save_format = "JPEG" if mime_type == "image/jpeg" else "PNG"
+                save_mime   = "image/jpeg" if save_format == "JPEG" else "image/png"
+                img.save(buf, format=save_format, quality=85)
+                raw = buf.getvalue()
+                mime_type = save_mime
+                logger.debug(
+                    f"Gemini: resized large image {path.name} to {new_w}×{new_h} "
+                    f"({len(raw) // 1024} KB) for inline encoding"
+                )
+            except Exception as resize_exc:
+                # If resize fails, fall through and send original — better than failing entirely
+                logger.warning(f"Gemini: image resize failed for {file_path}: {resize_exc}")
 
         return base64.b64encode(raw).decode("utf-8"), mime_type
 

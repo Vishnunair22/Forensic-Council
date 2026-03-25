@@ -1,9 +1,9 @@
 """
-Investigation Routes - FIXED VERSION
-=====================================
+Investigation Routes
+====================
 
-Routes for starting and managing forensic investigations with proper
-real-time updates, faster analysis, and better state management.
+Routes for starting and managing forensic investigations with
+real-time WebSocket updates and two-phase HITL pipeline support.
 """
 
 import asyncio
@@ -55,12 +55,12 @@ def _assign_severity_tier(f: Any) -> str:
     else:
         return "INFO"
 
-    na_flags = ("ela_not_applicable", "ghost_not_applicable", "noise_fingerprint_not_applicable", "prnu_not_applicable")
+    na_flags = ("ela_not_applicable", "ghost_not_applicable", "noise_fingerprint_not_applicable", "prnu_not_applicable", "gan_not_applicable")
     is_na = any(meta.get(flag) for flag in na_flags) or str(meta.get("verdict", "")).upper() == "NOT_APPLICABLE" or str(meta.get("prnu_verdict", "")).upper() == "NOT_APPLICABLE"
     is_failed = not is_na and meta.get("court_defensible") is False
     if is_na or meta.get("hash_matches") is True: return "INFO"
     if is_failed or status_str == "INCOMPLETE": return "LOW"
-    has_manip = meta.get("manipulation_detected") is True or meta.get("deepfake_detected") is True or meta.get("splicing_detected") is True or meta.get("copy_move_detected") is True or meta.get("mismatch_detected") is True or "INCONSISTENT" in str(meta.get("prnu_verdict", "")).upper()
+    has_manip = meta.get("manipulation_detected") is True or meta.get("deepfake_detected") is True or meta.get("splicing_detected") is True or meta.get("copy_move_detected") is True or meta.get("mismatch_detected") is True or meta.get("gan_artifact_detected") is True or "INCONSISTENT" in str(meta.get("prnu_verdict", "")).upper()
     has_anomaly = meta.get("anomaly_detected") is True or meta.get("inconsistency_detected") is True or str(meta.get("verdict", "")).upper() in ("TAMPERED", "SUSPICIOUS", "MANIPULATED")
     if has_manip: return "CRITICAL" if conf >= 0.75 else "HIGH"
     if has_anomaly: return "MEDIUM"
@@ -76,7 +76,10 @@ _USER_RATE_WINDOW_SECS = 300           # 5-minute rolling window
 _USER_RATE_LOCKOUT_SECS = 30           # 30-second lockout after limit hit
 
 # In-memory fallback: {user_id: [timestamp, ...]}
+# Capped at _MEM_RATE_MAX_USERS entries to prevent unbounded growth when Redis
+# is unavailable for an extended period.
 _user_investigation_times: dict[str, list[float]] = {}
+_MEM_RATE_MAX_USERS = 10_000
 
 
 async def _check_investigation_rate_limit(user_id: str) -> None:
@@ -106,10 +109,9 @@ async def _check_investigation_rate_limit(user_id: str) -> None:
                     ),
                     headers={"Retry-After": str(max(ttl, 1))},
                 )
-            pipe = redis.pipeline()
-            pipe.incr(key)
-            pipe.expire(key, _USER_RATE_LOCKOUT_SECS)
-            await pipe.execute()
+            new_count = await redis.incr(key)
+            if new_count == 1:  # first request in this window — fix expiry for the whole window
+                await redis.expire(key, _USER_RATE_WINDOW_SECS)
             return
     except HTTPException:
         raise
@@ -118,6 +120,12 @@ async def _check_investigation_rate_limit(user_id: str) -> None:
 
     # ── In-memory fallback ────────────────────────────────────────────────────
     cutoff = now - _USER_RATE_WINDOW_SECS
+
+    # Evict oldest user entry if dict is at capacity to prevent unbounded growth
+    if user_id not in _user_investigation_times and len(_user_investigation_times) >= _MEM_RATE_MAX_USERS:
+        oldest_uid = next(iter(_user_investigation_times))
+        _user_investigation_times.pop(oldest_uid, None)
+
     times = _user_investigation_times.setdefault(user_id, [])
     times[:] = [t for t in times if t > cutoff]
     if len(times) >= _MAX_INVESTIGATIONS_PER_USER:
@@ -361,8 +369,8 @@ def cleanup_connections():
     _active_pipelines.clear()
     _final_reports.clear()
 
-# Session TTL: keep completed sessions for 24 hours, then evict
-_SESSION_TTL_SECONDS = 86_400  # 24 h
+# Session TTL: configurable via SESSION_TTL_HOURS env var (default 24h)
+_SESSION_TTL_SECONDS = settings.session_ttl_hours * 3600
 
 
 def _evict_stale_sessions() -> None:

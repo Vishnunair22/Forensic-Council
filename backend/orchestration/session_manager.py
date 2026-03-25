@@ -16,6 +16,10 @@ from uuid import UUID, uuid4
 
 import json
 
+from core.logging import get_logger
+
+logger = get_logger(__name__)
+
 
 class SessionStatus(str, Enum):
     """Status of an investigation session."""

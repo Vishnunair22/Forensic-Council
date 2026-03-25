@@ -1,6 +1,6 @@
 # Docker Build Guide — Forensic Council
 
-**Version:** v1.0.4 | **Last updated:** 2026-03-16
+**Version:** v1.0.4 | **Last updated:** 2026-03-25
 
 Complete reference for building, running, and managing the Forensic Council Docker stack from scratch.
 
@@ -133,14 +133,16 @@ finding's `caveat` field.
 3. In `.env`:
    ```dotenv
    GEMINI_API_KEY=AIzaSy_your_gemini_key_here
-   GEMINI_MODEL=gemini-1.5-flash        # Fast, cost-effective (default)
-   # GEMINI_MODEL=gemini-1.5-pro        # Deeper reasoning, higher cost
-   GEMINI_TIMEOUT=30.0                   # API timeout in seconds
+   GEMINI_MODEL=gemini-2.5-pro                              # Primary model (highest accuracy + thinking)
+   GEMINI_FALLBACK_MODELS=gemini-2.5-flash,gemini-2.0-flash  # Ordered fallback chain
+   GEMINI_TIMEOUT=55.0                                                  # API timeout in seconds
    ```
 
-> **Free tier:** Google AI Studio's free tier supports ~60 requests/minute on
-> `gemini-1.5-flash` — more than sufficient for forensic investigations.
-> Production workloads should use a paid API key via Google Cloud.
+   The client automatically cascades through the fallback chain if the primary model is unavailable (404) or rate-limited after retries. Each fallback is tried in order; the first successful response wins.
+
+> **Free tier:** Google AI Studio's free tier supports ~15 requests/minute on
+> `gemini-2.5-pro` — sufficient for development. For higher throughput use
+> `gemini-2.5-flash` as primary or obtain a paid API key via Google Cloud.
 
 ---
 
@@ -168,16 +170,23 @@ A HuggingFace token is **only required** if you want Agent 2 (Audio Forensics) t
 
 Development mode mounts source code as volumes and enables hot-reload for both services. Use this for active development.
 
-**Linux / macOS / Windows:**
+**Linux / macOS / Windows (run from the project root):**
 ```bash
-docker compose up --build
+docker compose \
+  -f docs/docker/docker-compose.yml \
+  -f docs/docker/docker-compose.dev.yml \
+  --env-file .env \
+  up --build
 ```
 
 What you get:
-- Backend: Uvicorn with `--reload` watching source files
-- Frontend: Next.js dev server with Fast Refresh
-- Changes to `.py` or `.ts/.tsx` files auto-restart the relevant service
+- **Backend:** Uvicorn with `--reload` watching all `.py` files — save a file, the API restarts in ~1 s
+- **Frontend:** Next.js dev server with Fast Refresh — React changes reflect instantly without a full reload
+- **Named volumes** for all ML model caches (`hf_cache`, `yolo_cache`, etc.) — shared with production so models never re-download when you switch modes
+- **`nextjs_cache` volume** preserves the Next.js webpack compilation cache across container restarts — avoids the ~120 s cold-compile on every `docker compose up`
 - `/api/v1/` Swagger docs at http://localhost:8000/docs
+
+> **Note:** The dev override (`docker-compose.dev.yml`) raises the frontend memory limit to 2 GB / 2 CPUs. Next.js dev-mode webpack compilation is memory-heavy (~900 MB peak). Running with the production limit (512 MB) causes OOM kills and container restart loops.
 
 ### Production Mode
 

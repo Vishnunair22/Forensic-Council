@@ -8,12 +8,12 @@
 import { clsx } from "clsx";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  CheckCircle2, AlertTriangle, Loader2, ArrowRight,
-  RotateCcw, Microscope, FileText, FileX, ChevronDown, ChevronUp,
+  CheckCircle2, Loader2, ArrowRight,
+  RotateCcw, Microscope, FileText, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { AgentIcon } from "@/components/ui/AgentIcon";
 import { AGENTS_DATA } from "@/lib/constants";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { SoundType } from "@/hooks/useSound";
 
 export interface SectionFlag {
@@ -52,7 +52,6 @@ export interface AgentUpdate {
 }
 
 interface AgentProgressDisplayProps {
-  key?: React.Key;
   agentUpdates: Record<string, { status: string; thinking: string; tools_done?: number; tools_total?: number }>;
   completedAgents: AgentUpdate[];
   progressText: string;
@@ -105,8 +104,8 @@ function ExpandableText({
       {needsTruncation && (
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="inline-flex items-center gap-0.5 mt-1.5 text-[11px] font-medium text-indigo-400/80
-            hover:text-indigo-300 transition-colors"
+          className="inline-flex items-center gap-0.5 mt-1.5 text-[11px] font-bold text-amber-500/80
+            hover:text-amber-400 transition-colors uppercase tracking-widest"
         >
           {expanded ? (
             <><ChevronUp className="w-3.5 h-3.5" />Show less</>
@@ -122,10 +121,10 @@ function ExpandableText({
 // ── Findings accordion ───────────────────────────────────────────────────────
 const FLAG_STYLES = {
   ok:   { dot: "bg-emerald-500",  text: "text-emerald-400", bar: "bg-emerald-500/20", icon: "✓" },
-  ok_alt: { dot: "bg-indigo-500", text: "text-indigo-400", bar: "bg-indigo-500/20", icon: "·" },
+  ok_alt: { dot: "bg-amber-500", text: "text-amber-400", bar: "bg-amber-500/20", icon: "·" },
   warn: { dot: "bg-amber-500",    text: "text-amber-400",   bar: "bg-amber-500/20",   icon: "⚠" },
   bad:  { dot: "bg-rose-500",      text: "text-rose-400",     bar: "bg-rose-500/20",     icon: "✕" },
-  info: { dot: "bg-slate-500",    text: "text-slate-400",   bar: "bg-white/[0.08]",   icon: "·" },
+  info: { dot: "bg-white/40",    text: "text-white/40",   bar: "bg-white/5",   icon: "·" },
 } as const;
 
 function FindingsAccordion({
@@ -138,11 +137,8 @@ function FindingsAccordion({
   const [open, setOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const badCount  = sectionFlags.filter((s) => s.flag === "bad").length;
-  const warnCount = sectionFlags.filter((s) => s.flag === "warn").length;
-
   return (
-    <div className="rounded-xl border border-border-subtle bg-surface-low overflow-hidden shadow-sm mt-2">
+    <div className="rounded border border-white/5 bg-surface-low overflow-hidden shadow-sm mt-2">
       {/* ── Accordion header ── */}
       <button
         onClick={() => setOpen((v) => !v)}
@@ -168,7 +164,7 @@ function FindingsAccordion({
         <motion.span
           animate={{ rotate: open ? 180 : 0 }}
           transition={{ duration: 0.2, ease: "anticipate" }}
-          className="text-foreground/20 group-hover:text-indigo-400 transition-colors"
+          className="text-white/20 group-hover:text-amber-500 transition-colors"
         >
           <ChevronDown className="w-4 h-4" />
         </motion.span>
@@ -219,7 +215,7 @@ function FindingsAccordion({
                         <motion.span
                           animate={{ rotate: isExp ? 180 : 0 }}
                           transition={{ duration: 0.2 }}
-                          className="text-foreground/20 group-hover:text-indigo-400/70 transition-colors flex-shrink-0"
+                          className="text-white/20 group-hover:text-amber-500/70 transition-colors flex-shrink-0"
                         >
                           <ChevronDown className="w-3.5 h-3.5" />
                         </motion.span>
@@ -299,7 +295,7 @@ function FindingRow({ f }: { f: FindingPreview }) {
     >
       {/* Header: tool name + severity + confidence */}
       <div className="flex items-start gap-3">
-        <span className="text-[10px] font-bold text-indigo-400/90 tracking-widest uppercase flex-1 leading-tight font-mono">
+        <span className="text-[10px] font-black text-amber-500/90 tracking-[0.2em] uppercase flex-1 leading-tight font-mono">
           {fmtTool(f.tool)}
         </span>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -321,7 +317,7 @@ function FindingRow({ f }: { f: FindingPreview }) {
         {needsExpand && (
           <button
             onClick={() => setOpen(v => !v)}
-            className="ml-2 text-[9px] font-black uppercase tracking-[0.2em] text-cyan-400 hover:text-cyan-300 transition-colors"
+            className="ml-2 text-[9px] font-black uppercase tracking-[0.2em] text-amber-500/60 hover:text-amber-400 transition-colors"
           >
             [{open ? "COLLAPSE" : "EXPAND"}]
           </button>
@@ -348,8 +344,8 @@ function FindingsPreviewList({ findings }: { findings: FindingPreview[] }) {
         <motion.button
           layout
           onClick={() => setShowAll(v => !v)}
-          className="w-full text-[9px] font-bold tracking-widest uppercase text-foreground/40 hover:text-indigo-400 transition-all py-2 text-center
-            border border-border-subtle border-dashed rounded-xl bg-surface-low hover:bg-surface-high my-1"
+          className="w-full text-[9px] font-black tracking-[0.2em] uppercase text-white/30 hover:text-amber-500 transition-all py-2 text-center
+            border border-white/5 border-dashed rounded bg-surface-low hover:bg-surface-high my-1"
         >
           {showAll
             ? "Hide Suppressed Findings"
@@ -426,14 +422,14 @@ function LiveThinkingText({ text, active }: { text: string; active: boolean }) {
           transition={{ duration: 0.25, ease: "easeOut" }}
           className="text-[12px] leading-relaxed text-foreground/70 whitespace-pre-wrap break-words font-medium font-mono tracking-tight"
         >
-          <span className="text-indigo-400 mr-2">/</span>
+          <span className="text-amber-500 mr-2 font-black">/</span>
           {displayText}
           {/* Subtle cursor while actively running */}
           {active && (
             <motion.span
               animate={{ opacity: [1, 0, 1] }}
               transition={{ duration: 1, repeat: Infinity }}
-              className="inline-block ml-1 w-[4px] h-[12px] bg-indigo-500/50 align-middle -translate-y-px"
+              className="inline-block ml-1 w-[4px] h-[12px] bg-amber-500/50 align-middle -translate-y-px"
             />
           )}
         </motion.p>
@@ -447,7 +443,7 @@ function LiveThinkingText({ text, active }: { text: string; active: boolean }) {
  * Translate the raw working-memory task string into a short, user-friendly
  * action sentence so the card body reads like real forensic work is happening.
  */
-function humaniseThinking(raw: string, agentId: string): string {
+function humaniseThinking(raw: string, _agentId: string): string {
   if (!raw) return "Analyzing evidence…";
 
   // If the backend already humanised the text (contains emoji or progress counter
@@ -549,6 +545,28 @@ export function AgentProgressDisplay({
 }: AgentProgressDisplayProps) {
   const allValidAgents = AGENTS_DATA.filter(a => a.name !== "Council Arbiter");
 
+  // ── Per-agent thinking staleness tracking ─────────────────────────────────
+  // Track when the thinking text last changed so we can show elapsed time
+  // when an agent appears stuck (e.g. during a slow Gemini API call).
+  const lastThinkingTextRef = useRef<Record<string, string>>({});
+  const thinkingStartRef = useRef<Record<string, number>>({});
+  const [elapsedTick, setElapsedTick] = useState(0);
+
+  useEffect(() => {
+    Object.entries(agentUpdates).forEach(([id, upd]) => {
+      const prev = lastThinkingTextRef.current[id];
+      if (upd.thinking && upd.thinking !== prev) {
+        lastThinkingTextRef.current[id] = upd.thinking;
+        thinkingStartRef.current[id] = Date.now();
+      }
+    });
+  }, [agentUpdates]);
+
+  useEffect(() => {
+    const id = setInterval(() => setElapsedTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const [unsupportedAgents, setUnsupportedAgents] = useState<Set<string>>(new Set());
   const [hiddenUnsupportedAgents, setHiddenUnsupportedAgents] = useState<Set<string>>(new Set());
   const [showSkipped, setShowSkipped] = useState(false);
@@ -605,7 +623,7 @@ export function AgentProgressDisplay({
       const agentId = visibleAgents[currentIndex]?.id;
       if (agentId) setRevealedAgents(prev => new Set([...prev, agentId]));
       currentIndex++;
-    }, 200);
+    }, 80);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, visibleAgents.length, firstVisibleId]);
@@ -670,27 +688,27 @@ export function AgentProgressDisplay({
       className="flex flex-col items-center pt-8"
     >
       {/* Header */}
-      <div className="text-center mb-12" aria-live="polite" aria-atomic="true">
-        <motion.div 
+      <div className="text-center mb-7" aria-live="polite" aria-atomic="true">
+        <motion.div
           initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
-          className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-low border border-border-subtle mb-4">
-          <span className="text-[10px] font-bold font-mono tracking-widest text-indigo-400 uppercase">
-            {activeCompletedCount} / {visibleAgentsCount} Analysed
-          </span>
+          className="inline-flex items-center gap-2 px-3 py-1 rounded bg-amber-500/5 border border-amber-500/10 mb-3 text-amber-500 font-mono font-black uppercase text-[10px] tracking-widest shadow-sm">
+          <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+          {activeCompletedCount} / {visibleAgentsCount} Analysed
         </motion.div>
-        
-        <motion.h2 
+
+        <motion.h2
           key={phase + String(showInitialDecision) + String(showDeepComplete)}
           initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-          className="text-2xl md:text-3xl font-black text-foreground mb-3 tracking-tight font-heading uppercase">
+          className="text-2xl md:text-3xl font-black text-white mb-2 tracking-tighter font-heading uppercase">
           {showInitialDecision
-            ? "Phase I: Initial Scan Complete"
+            ? "Phase I Complete"
             : showDeepComplete
-              ? "Phase II: Deep Scan Verified"
+              ? "Phase II Verified"
               : phase === "deep"
                 ? "Active Deep Forensic Stream"
                 : "Active Forensic Stream"}
         </motion.h2>
+        <div className="w-12 h-1 bg-amber-500 mx-auto rounded-full opacity-40 shadow-[0_0_10px_rgba(217,119,6,0.3)]" />
       </div>
 
       {/* Agent Cards Bento Grid */}
@@ -702,10 +720,10 @@ export function AgentProgressDisplay({
           const completed = getAgentFindings(agent.id);
           const isRevealed = revealedAgents.has(agent.id);
 
-          const rowSpan = 
-            agent.id === "agent-1" ? "lg:col-span-2" : 
-            agent.id === "agent-4" ? "lg:col-span-2" : 
-            agent.id === "agent-5" ? "lg:col-span-3" : 
+          const rowSpan =
+            agent.id === "Agent1" ? "lg:col-span-2" :
+            agent.id === "Agent4" ? "lg:col-span-2" :
+            agent.id === "Agent5" ? "lg:col-span-3" :
             "lg:col-span-1";
 
           return (
@@ -713,7 +731,7 @@ export function AgentProgressDisplay({
               {isRevealed && (
                 <div
                   className={clsx(
-                    "surface-panel rounded-3xl p-6 transition-all duration-500 relative group overflow-hidden border-border-subtle",
+                    "surface-panel-high rounded p-6 transition-all duration-500 relative group overflow-hidden border-white/5",
                     rowSpan,
                     (status === "waiting" || status === "checking") && "opacity-40"
                   )}
@@ -721,25 +739,25 @@ export function AgentProgressDisplay({
                   {/* Status indicator bar (Top hairline) */}
                   <div className={clsx(
                     "absolute top-0 left-0 right-0 h-0.5 transition-all duration-500",
-                    status === "running" ? "bg-indigo-500 shadow-sm shadow-indigo-500/50" :
+                    status === "running" ? "bg-amber-500 shadow-[0_0_10px_rgba(217,119,6,0.5)]" :
                     status === "complete" ? "bg-emerald-500/20" :
                     status === "error" ? "bg-rose-500" :
-                    status === "checking" ? "bg-indigo-500/20" : "bg-white/5"
+                    status === "checking" ? "bg-amber-500/20" : "bg-white/5"
                   )} />
 
                   {/* Top row */}
                   <div className="flex items-start gap-4 mb-4">
                     <div className={[
-                      "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-300",
+                      "w-10 h-10 rounded flex items-center justify-center shrink-0 transition-all duration-300",
                       status === "running"
-                        ? "bg-indigo-500/5 text-indigo-400 border border-indigo-500/20 shadow-sm"
-                        : "bg-surface-mid text-foreground/30 border border-border-subtle",
+                        ? "bg-amber-500/5 text-amber-500 border border-amber-500/20 shadow-sm"
+                        : "bg-white/2 text-white/20 border border-white/5",
                     ].join(" ")}>
                       <AgentIcon agentId={agent.id} className="w-6 h-6" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-bold text-foreground leading-tight font-heading tracking-tight uppercase">{agent.name}</h3>
-                      <span className="text-[10px] uppercase tracking-widest text-foreground/30 font-mono font-bold">{agent.role}</span>
+                      <h3 className="text-base font-bold text-white leading-tight font-heading tracking-tight uppercase group-hover:text-amber-400 transition-colors">{agent.name}</h3>
+                      <span className="text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono font-bold">{agent.role}</span>
                     </div>
                     <div className="shrink-0">
                       {status === "waiting" && (
@@ -748,12 +766,12 @@ export function AgentProgressDisplay({
                         </span>
                       )}
                       {status === "checking" && (
-                        <span className="inline-flex items-center gap-1.5 text-[9px] text-indigo-400/60 font-bold px-2 py-0.5 rounded-full bg-indigo-500/5 border border-indigo-500/10 uppercase tracking-widest font-mono">
+                        <span className="inline-flex items-center gap-1.5 text-[9px] text-amber-500/60 font-black px-2 py-0.5 rounded bg-amber-500/5 border border-amber-500/10 uppercase tracking-widest font-mono">
                           Linking
                         </span>
                       )}
                       {status === "running" && (
-                        <span className="inline-flex items-center gap-1.5 text-[9px] text-indigo-400 font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 uppercase tracking-widest font-mono shadow-sm shadow-indigo-500/10">
+                        <span className="inline-flex items-center gap-1.5 text-[9px] text-amber-500 font-black px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 uppercase tracking-widest font-mono shadow-sm shadow-amber-500/10">
                           <Loader2 className="w-2.5 h-2.5 animate-spin" />Scan
                         </span>
                       )}
@@ -762,19 +780,29 @@ export function AgentProgressDisplay({
                           <CheckCircle2 className="w-3 h-3" />Finished
                         </span>
                       )}
+                      {status === "unsupported" && (
+                        <span className="inline-flex items-center gap-1.5 text-[9px] text-slate-500 font-bold px-2 py-0.5 rounded-full bg-slate-500/10 border border-slate-500/20 uppercase tracking-widest font-mono">
+                          N/A
+                        </span>
+                      )}
+                      {status === "error" && (
+                        <span className="inline-flex items-center gap-1.5 text-[9px] text-rose-500 font-bold px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/20 uppercase tracking-widest font-mono">
+                          Error
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   {/* Body */}
                   {status === "checking" && (
                     <div className="space-y-2.5">
-                      <p className="text-xs text-violet-300/70 leading-relaxed">
+                      <p className="text-xs text-amber-300/70 leading-relaxed">
                         Agent standing by — connecting to analysis pipeline…
                       </p>
                       {/* Loading bar animation — CSS keyframe so it loops smoothly */}
                       <div className="w-full h-0.5 bg-white/[0.06] rounded-full overflow-hidden relative">
                         <div
-                          className="absolute h-full w-[45%] bg-gradient-to-r from-transparent via-violet-400/60 to-transparent rounded-full"
+                          className="absolute h-full w-[45%] bg-gradient-to-r from-transparent via-amber-400/60 to-transparent rounded-full"
                           style={{ animation: "bar-slide 1.6s ease-in-out infinite" }}
                         />
                       </div>
@@ -796,7 +824,7 @@ export function AgentProgressDisplay({
                   {status === "running" && (
                     <div className="space-y-2">
                       <LiveThinkingText text={thinking} active={true} />
-                      {/* Tool progress bar */}
+                      {/* Tool progress bar + staleness indicator */}
                       {(() => {
                         const upd = agentUpdates[agent.id];
                         const toolsTotal = upd?.tools_total ?? 0;
@@ -804,28 +832,72 @@ export function AgentProgressDisplay({
                         const pct = toolsTotal > 0
                           ? Math.min(100, Math.round((toolsDone / toolsTotal) * 100))
                           : null;
+
+                        // Elapsed time since thinking text last changed
+                        const startTs = thinkingStartRef.current[agent.id];
+                        // elapsedTick is read to ensure re-render every second
+                        void elapsedTick;
+                        const elapsed = startTs ? Math.floor((Date.now() - startTs) / 1000) : 0;
+                        const isStale = elapsed >= 8;
+                        const isGeminiStep = thinking.toLowerCase().includes("gemini");
+                        const isApiStep = isGeminiStep || thinking.toLowerCase().includes("api") || thinking.toLowerCase().includes("vision");
+
                         return (
-                          <div className="space-y-1 mt-2">
-                            <div className="relative w-full h-1 bg-surface-low rounded-full overflow-hidden">
-                              {pct !== null ? (
+                          <div className="space-y-1.5 mt-2">
+                            {/* Progress bar — indeterminate when stale (API call in-flight) */}
+                            <div className="relative w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                              {!isStale && pct !== null ? (
                                 <motion.div
-                                  className="h-full rounded-full bg-indigo-500"
+                                  className="h-full rounded-full bg-amber-500 shadow-[0_0_8px_rgba(217,119,6,0.6)]"
                                   initial={{ width: "0%" }}
                                   animate={{ width: `${pct}%` }}
                                   transition={{ duration: 0.4, ease: "easeOut" }}
                                 />
                               ) : (
                                 <div
-                                  className="absolute h-full w-[40%] bg-gradient-to-r from-transparent via-indigo-400/40 to-transparent rounded-full"
-                                  style={{ animation: "bar-slide 2s ease-in-out infinite" }}
+                                  className={`absolute h-full w-[45%] rounded-full ${
+                                    isStale
+                                      ? "bg-gradient-to-r from-transparent via-rose-500/60 to-transparent"
+                                      : "bg-gradient-to-r from-transparent via-amber-500/40 to-transparent"
+                                  }`}
+                                  style={{ animation: `bar-slide ${isStale ? "1.4s" : "2s"} ease-in-out infinite` }}
                                 />
                               )}
                             </div>
-                            {pct !== null && (
-                              <div className="flex justify-between items-center text-[10px] text-foreground/30">
-                                <span>{toolsDone}/{toolsTotal} tools</span>
-                                <span className="font-mono text-indigo-400/70">{pct}%</span>
-                              </div>
+
+                            {/* Tool counter row */}
+                            <div className="flex justify-between items-center text-[9px] text-white/20 font-bold uppercase tracking-widest">
+                              {pct !== null ? (
+                                <>
+                                  <span>Verification Units: {toolsDone}/{toolsTotal}</span>
+                                  <span className="font-mono text-amber-500/70">{pct}% Complete</span>
+                                </>
+                              ) : (
+                                <span className="text-white/10 italic">Initializing tools…</span>
+                              )}
+                            </div>
+
+                            {/* Staleness banner — shown after 8 s on same step */}
+                            {isStale && (
+                              <motion.div
+                                initial={{ opacity: 0, y: 2 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-mono font-bold ${
+                                  isGeminiStep
+                                    ? "bg-violet-500/10 border border-violet-500/20 text-violet-300/70"
+                                    : isApiStep
+                                      ? "bg-blue-500/10 border border-blue-500/20 text-blue-300/70"
+                                      : "bg-amber-500/10 border border-amber-500/20 text-amber-300/70"
+                                }`}
+                              >
+                                <span className="animate-pulse">●</span>
+                                {isGeminiStep
+                                  ? `Gemini vision analysis in progress — ${elapsed}s elapsed (30–60s typical)`
+                                  : isApiStep
+                                    ? `Awaiting external API response — ${elapsed}s elapsed`
+                                    : `Processing — ${elapsed}s elapsed`
+                                }
+                              </motion.div>
                             )}
                           </div>
                         );
@@ -838,12 +910,12 @@ export function AgentProgressDisplay({
                       {/* Verdict row */}
                       {completed.agent_verdict && (
                         <div className={[
-                          "flex items-center gap-3 px-4 py-3 rounded-2xl border backdrop-blur-md",
+                          "flex items-center gap-4 px-5 py-4 rounded border backdrop-blur-md",
                           completed.agent_verdict === "AUTHENTIC"
-                            ? "bg-emerald-500/10 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]"
+                            ? "bg-emerald-500/5 border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.05)]"
                             : completed.agent_verdict === "LIKELY_MANIPULATED"
-                              ? "bg-red-500/10 border-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.1)]"
-                              : "bg-amber-500/10 border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.1)]",
+                              ? "bg-rose-500/5 border-rose-500/20 shadow-[0_0_20px_rgba(244,63,94,0.05)]"
+                              : "bg-amber-500/5 border-amber-500/20 shadow-[0_0_20px_rgba(217,119,6,0.05)]",
                         ].join(" ")}>
                           <div className={[
                              "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border",
@@ -942,9 +1014,9 @@ export function AgentProgressDisplay({
         <div className="w-full max-w-5xl mt-6 flex flex-col items-center">
           <button
             onClick={() => setShowSkipped(s => !s)}
-            className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-colors text-xs font-mono text-slate-400 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50"
+            className="flex items-center gap-2 px-4 py-2 rounded border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-colors text-[10px] font-black font-mono text-white/40 uppercase tracking-[0.2em] group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50"
           >
-            <span>{hiddenUnsupportedAgents.size} Skipped Agent{hiddenUnsupportedAgents.size !== 1 ? 's' : ''} (Not Applicable)</span>
+            <span>{hiddenUnsupportedAgents.size} Skipped Units (Not Applicable)</span>
             <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showSkipped ? "rotate-180" : ""}`} />
           </button>
           <AnimatePresence>
@@ -966,7 +1038,7 @@ export function AgentProgressDisplay({
                           <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-500/50" />
                           <span className="text-sm text-slate-300 font-medium">{meta.name}</span>
                         </div>
-                        <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Format Unsupported</span>
+                        <span className="text-[10px] font-black font-mono text-white/20 uppercase tracking-[0.2em]">Incompatible</span>
                       </div>
                     );
                   })}
@@ -983,36 +1055,36 @@ export function AgentProgressDisplay({
         <motion.div
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, type: "spring", stiffness: 280, damping: 26 }}
-          className="mt-12 w-full max-w-xl"
+          className="mt-8 w-full max-w-xl"
         >
           {/* Decision card */}
-          <div className="surface-panel rounded-3xl p-8 space-y-6 shadow-xl border-border-bold">
+          <div className="surface-panel rounded-2xl p-5 space-y-4 shadow-lg border-border-bold">
             <div className="text-center space-y-1">
-              <p className="text-[10px] font-mono text-indigo-400 uppercase tracking-widest font-bold">Investigator Override</p>
-              <h3 className="text-xl font-black text-foreground font-heading uppercase">Select Advancement Protocol</h3>
+              <p className="text-[10px] font-black font-mono text-amber-500 uppercase tracking-[0.3em]">Investigator Protocol</p>
+              <h3 className="text-lg font-black text-white font-heading uppercase tracking-tighter">Initial Scan Concluded</h3>
             </div>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <motion.button
+            <div className="flex flex-col sm:flex-row gap-3">
+               <motion.button
                 onClick={onAcceptAnalysis}
                 disabled={isNavigating}
                 whileHover={isNavigating ? {} : { y: -1, scale: 1.01 }}
                 whileTap={isNavigating ? {} : { scale: 0.99 }}
-                className="btn btn-secondary flex-1 py-4 rounded-xl font-bold uppercase tracking-widest text-xs h-14"
+                className="btn-premium-glass flex-1 py-3 justify-center text-[11px] font-black uppercase tracking-[0.2em]"
               >
                 {isNavigating ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" />Processing...</>
+                  <><Loader2 className="w-4 h-4 animate-spin text-amber-500" />SEALING...</>
                 ) : (
-                  <><FileText className="w-4 h-4" />Compile Report</>
+                  <><FileText className="w-4 h-4 text-white/40" />COMPILE LEDGER</>
                 )}
               </motion.button>
-              <motion.button
+               <motion.button
                 onClick={onDeepAnalysis}
                 disabled={isNavigating}
                 whileHover={isNavigating ? {} : { y: -1, scale: 1.01 }}
                 whileTap={isNavigating ? {} : { scale: 0.99 }}
-                className="btn btn-primary flex-1 py-4 rounded-xl font-bold uppercase tracking-widest text-xs h-14"
+                className="btn-premium-amber flex-1 py-3 justify-center text-[11px] font-black uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(217,119,6,0.2)]"
               >
-                <Microscope className="w-4 h-4" />Deep Scan Protocol
+                <Microscope className="w-4 h-4" />DEEP SCAN PROTOCOL
               </motion.button>
             </div>
           </div>
@@ -1023,34 +1095,34 @@ export function AgentProgressDisplay({
         <motion.div
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, type: "spring", stiffness: 280, damping: 26 }}
-          className="mt-12 w-full max-w-xl"
+          className="mt-8 w-full max-w-xl"
         >
-          <div className="surface-panel rounded-3xl p-8 space-y-6 shadow-xl border-border-bold">
+          <div className="surface-panel rounded-2xl p-5 space-y-4 shadow-lg border-border-bold">
             <div className="text-center space-y-1">
-              <p className="text-[10px] font-mono text-emerald-500 uppercase tracking-widest font-bold">Verification Complete</p>
-              <h3 className="text-xl font-black text-foreground font-heading uppercase">Council Arbiter Verification</h3>
+              <p className="text-[9px] font-mono text-emerald-500 uppercase tracking-widest font-bold">Verification Complete</p>
+              <h3 className="text-base font-bold text-foreground font-heading uppercase">Council Arbiter Verification</h3>
             </div>
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col sm:flex-row gap-3">
               <motion.button
                 onClick={() => { playSound?.("click"); onNewUpload?.(); }}
                 disabled={isNavigating}
                 whileHover={isNavigating ? {} : { y: -1, scale: 1.01 }}
                 whileTap={isNavigating ? {} : { scale: 0.99 }}
-                className="btn btn-secondary flex-1 py-4 rounded-xl font-bold uppercase tracking-widest text-xs h-14"
+                className="btn-premium-glass flex-1 py-3 justify-center text-[11px] font-black uppercase tracking-[0.2em]"
               >
-                <RotateCcw className="w-4 h-4 opacity-70" />Reset Terminal
+                <RotateCcw className="w-4 h-4 opacity-40" />RESET TERMINAL
               </motion.button>
               <motion.button
                 onClick={() => { playSound?.("click"); onViewResults?.(); }}
                 disabled={isNavigating}
                 whileHover={isNavigating ? {} : { y: -1, scale: 1.01 }}
                 whileTap={isNavigating ? {} : { scale: 0.99 }}
-                className="btn btn-primary flex-1 py-4 rounded-xl font-bold uppercase tracking-widest text-xs h-14 relative overflow-hidden"
+                className="btn-premium-amber flex-1 py-3 justify-center text-[11px] font-black uppercase tracking-[0.2em] relative overflow-hidden shadow-[0_0_30px_rgba(217,119,6,0.3)]"
               >
                 {isNavigating ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" />Finalizing...</>
+                  <><Loader2 className="w-4 h-4 animate-spin" />FINALIZING...</>
                 ) : (
-                  <><FileText className="w-4 h-4" />Access Ledger<ArrowRight className="w-4 h-4 ml-1" /></>
+                  <><FileText className="w-4 h-4" />ACCESS LEDGER<ArrowRight className="w-4 h-4 ml-1" /></>
                 )}
               </motion.button>
             </div>
@@ -1065,8 +1137,8 @@ export function AgentProgressDisplay({
           <div className="inline-flex items-center gap-2">
             {!allAgentsDone && (
               <span className="relative flex h-1.5 w-1.5 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-500 opacity-40" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500" />
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-40" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500" />
               </span>
             )}
             <p className="text-sm font-medium text-foreground/50">{progressText}</p>

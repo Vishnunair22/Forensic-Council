@@ -18,7 +18,7 @@ export default function GlobalError({
     }, [error]);
 
     return (
-        <div className="min-h-screen bg-[#030308] text-white flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+        <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
             {/* Background */}
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(239,68,68,0.08),transparent_60%)] pointer-events-none" />
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff04_1px,transparent_1px),linear-gradient(to_bottom,#ffffff04_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none" />
@@ -41,7 +41,7 @@ export default function GlobalError({
                     <AlertTriangle className="w-8 h-8 text-red-400" />
                 </div>
 
-                <h1 className="text-2xl font-bold mb-3 text-white">Pipeline Interrupted</h1>
+                <h1 className="text-2xl font-bold mb-3 text-foreground">Pipeline Interrupted</h1>
 
                 <p className="text-slate-400 mb-8 text-sm leading-relaxed text-center">
                     An unexpected error occurred during the forensic analysis process.

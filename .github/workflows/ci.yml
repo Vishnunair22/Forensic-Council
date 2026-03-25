@@ -94,9 +94,8 @@ jobs:
         # Run from project root so both 'from core.' and 'from backend.core.' imports work
         # pythonpath = . backend is set in pytest.ini
         run: |
-          pip install pytest pytest-asyncio httpx pyyaml
-          pytest tests/backend/ tests/infrastructure/ tests/docker/ \
-            -v --tb=short --ignore=tests/connectivity \
+          uv run pytest tests/backend/ tests/infra/ tests/connectivity/ \
+            -v --tb=short \
             --cov=backend --cov-report=xml --cov-report=term-missing \
             -p no:warnings
 

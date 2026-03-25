@@ -8,10 +8,14 @@ and detecting provenance fabrication.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Any
 
 from agents.base_agent import ForensicAgent
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 from core.config import Settings
 from core.custody_logger import CustodyLogger
 from core.episodic_memory import EpisodicMemory
@@ -862,8 +866,24 @@ class Agent5Metadata(ForensicAgent):
             weapons, identifies interfaces/UIs, describes contextual narrative, and
             performs thorough metadata-vs-visual consistency check using the actual
             EXIF fields extracted by the initial analysis pass.
+
+            Parallel deep-pass mode: the pipeline starts Agent5 deep concurrently
+            with Agent1 deep. We run all EXIF/GPS/structure tools first, then wait
+            here for Agent1's Gemini results (up to 120 s) so we can cross-validate
+            metadata fields against Agent1's vision findings.
             """
             artifact = input_data.get("artifact") or self.evidence_artifact
+
+            # --- Wait for Agent1 Gemini context (parallel deep-pass mode) ---
+            _ctx_event = getattr(self, "_agent1_context_event", None)
+            if _ctx_event is not None and not _ctx_event.is_set():
+                try:
+                    await asyncio.wait_for(asyncio.shield(_ctx_event.wait()), timeout=120.0)
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        f"{self.agent_id}: Agent1 context wait timed out — "
+                        "proceeding with EXIF-only context"
+                    )
 
             # Build the richest possible EXIF summary for Gemini to cross-validate
             exif_summary: dict = {}

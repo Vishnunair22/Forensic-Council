@@ -216,6 +216,7 @@ class Settings(BaseSettings):
     investigation_timeout: int = Field(default=600, description="Max seconds for a single investigation")
     investigation_max_retries: int = Field(default=3, description="Max retry attempts for failed investigations")
     investigation_retry_delay: float = Field(default=5.0, description="Base delay between investigation retries (seconds)")
+    session_ttl_hours: int = Field(default=24, description="Hours to retain completed investigation sessions in memory before eviction")
     
     # LLM Configuration
     llm_provider: str = Field(default="none", description="LLM provider: groq (recommended), openai, anthropic, or none")
@@ -238,11 +239,22 @@ class Settings(BaseSettings):
         ),
     )
     gemini_model: str = Field(
-        default="gemini-2.5-flash",
+        default="gemini-2.5-pro",
         description=(
-            "Gemini model for vision analysis. "
-            "gemini-1.5-flash-latest: fast, cost-effective (recommended). "
-            "gemini-1.5-pro: deeper reasoning, higher cost."
+            "Primary Gemini model for vision analysis. "
+            "gemini-2.5-pro: highest accuracy, supports thinking (recommended). "
+            "gemini-2.5-flash: fast, cost-effective with thinking support. "
+            "NOTE: gemini-1.5-* models are deprecated and will be rejected."
+        ),
+    )
+    gemini_fallback_models: str = Field(
+        default="gemini-2.5-flash,gemini-2.0-flash",
+        description=(
+            "Comma-separated ordered fallback chain tried when the primary model "
+            "is unavailable or fails. Each model is attempted in order; the first "
+            "successful response is used. 404 / model-not-found triggers an "
+            "immediate skip to the next model (no backoff). "
+            "Default: gemini-2.5-flash → gemini-2.0-flash."
         ),
     )
     gemini_timeout: float = Field(
@@ -330,7 +342,6 @@ class Settings(BaseSettings):
     )
 
     # Session Persistence
-    session_ttl_hours: int = Field(default=24, description="Session state TTL in hours")
     enable_session_persistence: bool = Field(default=True, description="Enable PostgreSQL session persistence")
     
     @field_validator("log_level")

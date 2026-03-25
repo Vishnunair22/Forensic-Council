@@ -28,7 +28,7 @@ export default function SessionExpiredPage() {
     };
 
     return (
-        <div className="min-h-screen bg-[#030308] text-white flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+        <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(245,158,11,0.07),transparent_60%)] pointer-events-none" />
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none" />
 
@@ -36,8 +36,7 @@ export default function SessionExpiredPage() {
                 initial={{ opacity: 0, y: 24, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ duration: 0.4, ease: "easeOut" }}
-                className="glass-modal max-w-md w-full p-8 rounded-3xl flex flex-col items-center border-amber-500/20"
-                style={{ borderColor: "rgba(245,158,11,0.18)" }}
+                className="glass-modal max-w-md w-full p-8 rounded-3xl flex flex-col items-center border border-amber-500/20"
             >
                 {/* Amber tint top edge */}
                 <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-400/40 to-transparent rounded-t-3xl pointer-events-none" />
@@ -56,13 +55,7 @@ export default function SessionExpiredPage() {
 
                 <button
                     onClick={handleReturn}
-                    className="btn w-full py-4 rounded-xl font-bold"
-                    style={{
-                      background: "linear-gradient(135deg, #d97706 0%, #b45309 100%)",
-                      color: "white",
-                      border: "1px solid rgba(245,158,11,0.4)",
-                      boxShadow: "0 0 24px rgba(245,158,11,0.20)",
-                    }}
+                    className="btn btn-warning w-full py-4 rounded-xl font-bold"
                 >
                     <LogIn className="w-5 h-5" aria-hidden="true" />
                     Return to Dashboard

@@ -1,6 +1,6 @@
 "use client";
 
-import { Shield, Search, Layout, Database, Video, Mic2, CheckCircle } from "lucide-react";
+import { Shield, Search, Layout, Database, Video, Mic2, CheckCircle, Scale } from "lucide-react";
 import { AGENTS_DATA } from "@/lib/constants";
 
 interface AgentIconProps {
@@ -37,6 +37,7 @@ export const AgentIcon = ({ role, agentId, className, size = 20 }: AgentIconProp
     if (r.includes("temporal") || r.includes("video") || r.includes("frame")) return <Video {...iconProps} />;
     if (r.includes("metadata") || r.includes("context")) return <Database {...iconProps} />;
     if (r.includes("audio") || r.includes("multimedia")) return <Mic2 {...iconProps} />;
+    if (r.includes("arbiter") || r.includes("synthesis")) return <Scale {...iconProps} />;
 
     return <CheckCircle {...iconProps} />;
 };

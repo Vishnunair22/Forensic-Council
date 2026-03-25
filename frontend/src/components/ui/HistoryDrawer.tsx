@@ -1,11 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { X, History, Trash2, ShieldCheck, FileText, AlertTriangle, AlertCircle, CheckCircle } from "lucide-react";
+import { X, History, Trash2, FileText, AlertTriangle, AlertCircle, CheckCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
-import { useRouter } from "next/navigation";
-
 export interface HistoryItem {
   sessionId: string;
   fileName: string;
@@ -14,8 +12,9 @@ export interface HistoryItem {
   type: "Initial" | "Deep";
 }
 
+const isDev = process.env.NODE_ENV !== "production";
+
 export function HistoryDrawer() {
-  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
@@ -26,7 +25,7 @@ export function HistoryDrawer() {
         setHistory(JSON.parse(stored));
       }
     } catch (e) {
-      console.error("Failed to parse history", e);
+      if (isDev) console.error("Failed to parse history", e);
     }
   };
 

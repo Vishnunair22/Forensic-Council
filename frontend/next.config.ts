@@ -30,7 +30,8 @@ const nextConfig: NextConfig = {
       "@radix-ui/react-dialog",
     ],
     // Inline small CSS into JS bundle (saves one HTTP round-trip on first load).
-    optimizeCss: true,
+    // Disabled in dev mode to improve stability.
+    optimizeCss: false,
   },
 
   // ── Dev-mode file watcher (Windows + Docker fix) ─────────────────────────

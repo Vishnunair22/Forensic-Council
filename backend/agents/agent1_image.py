@@ -405,6 +405,27 @@ class Agent1Image(ForensicAgent):
 
         async def deepfake_frequency_check_handler(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact
+            # Lossless images (PNG, BMP, TIFF, screenshots) have naturally low
+            # high-frequency energy — this is a property of clean digital
+            # content, NOT a GAN suppression signal.  Returning a false positive
+            # here would corrupt the verdict for every screenshot submitted.
+            if self._is_lossless:
+                return {
+                    "gan_artifact_detected": False,
+                    "gan_not_applicable": True,
+                    "high_freq_ratio": None,
+                    "anomaly_score": 0.0,
+                    "backend": "skipped-lossless",
+                    "court_defensible": True,
+                    "available": True,
+                    "evidentiary_weight": "not_applicable",
+                    "limitation_note": (
+                        f"GAN/deepfake frequency analysis not applicable to "
+                        f"lossless format ({getattr(artifact, 'mime_type', '') or 'lossless'}). "
+                        "Low high-frequency energy is normal for screenshots and "
+                        "lossless images; FFT suppression is not a GAN signal here."
+                    ),
+                }
             result = await run_ml_tool("deepfake_frequency.py", artifact.file_path, timeout=25.0)
             if result.get("available") and not result.get("error"):
                 return result

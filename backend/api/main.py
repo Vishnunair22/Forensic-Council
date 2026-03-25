@@ -67,9 +67,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if migration_success:
             logger.info("Database migrations completed")
         else:
-            logger.error("Database migrations failed")
+            logger.error(
+                "Database migrations FAILED — schema may be incomplete. "
+                "The server will start but requests may fail. "
+                "Check DB connectivity and migration logs."
+            )
+            # Mark health check as degraded — do not raise, allow startup
+            # so that infra can read the /health endpoint to diagnose.
+            app.state.migrations_ok = False
     except Exception as e:
-        logger.error("Migration error", error=str(e))
+        logger.error("Migration error — server starting in degraded state", error=str(e))
+        app.state.migrations_ok = False
+    else:
+        if not hasattr(app.state, "migrations_ok"):
+            app.state.migrations_ok = True
 
     # Bootstrap default users (idempotent — skips if users already exist)
     try:
@@ -93,7 +104,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="Forensic Council API",
     description="Multi-Agent Forensic Evidence Analysis System API",
-    version="1.1.0",
+    version="1.0.4",
     docs_url="/docs" if settings.app_env != "production" else None,
     redoc_url="/redoc" if settings.app_env != "production" else None,
     lifespan=lifespan,
@@ -262,7 +273,7 @@ async def root():
     """Root endpoint."""
     return {
         "name": "Forensic Council API",
-        "version": "1.1.0",
+        "version": "1.0.4",
         "status": "running",
         "docs": "/docs" if settings.app_env != "production" else None,
     }
@@ -279,6 +290,12 @@ async def health_check():
     """
     checks: dict = {}
     overall_healthy = True
+
+    # ── Migration state ────────────────────────────────────────────────────────
+    migrations_ok = getattr(app.state, "migrations_ok", True)
+    checks["migrations"] = "ok" if migrations_ok else "failed"
+    if not migrations_ok:
+        overall_healthy = False
 
     # ── PostgreSQL ────────────────────────────────────────────────────────────
     try:
@@ -310,6 +327,7 @@ async def health_check():
         logger.warning(f"Health check: Qdrant degraded: {e}")
         checks["qdrant"] = f"degraded: {str(e)[:60]}"
         checks["qdrant_note"] = "vector search unavailable"
+        overall_healthy = False
 
     status_code = 200 if overall_healthy else 503
     from fastapi.responses import JSONResponse as _JSONResponse

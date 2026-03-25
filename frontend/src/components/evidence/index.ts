@@ -10,6 +10,5 @@ export { HeaderSection } from "./HeaderSection";
 export { FileUploadSection } from "./FileUploadSection";
 export { AgentProgressDisplay } from "./AgentProgressDisplay";
 export type { AgentUpdate } from "./AgentProgressDisplay";
-export { CompletionBanner } from "./CompletionBanner";
 export { ErrorDisplay } from "./ErrorDisplay";
 export { HITLCheckpointModal } from "./HITLCheckpointModal";

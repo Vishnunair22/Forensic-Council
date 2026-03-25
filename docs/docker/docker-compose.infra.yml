@@ -1,38 +1,16 @@
 # ============================================================================
 # Forensic Council — Infrastructure-Only Overlay
 # ============================================================================
-# ⚠️  WARNING: This file is an OVERLAY and must ALWAYS be combined with the
-#     base docker-compose.yml. Never run it standalone.
+# Starts only Postgres, Redis, and Qdrant — zeros out backend/frontend/caddy.
+#
+# ⚠️  This is a COMPOSE OVERRIDE FILE, not a standalone file.
+#    It MUST always be combined with docker-compose.yml.
+#    DO NOT run: docker compose -f docker-compose.infra.yml up  ← starts nothing
 #
 # Correct usage:
 #   docker compose -f docs/docker/docker-compose.yml \
 #                  -f docs/docker/docker-compose.infra.yml \
 #                  --env-file .env up -d
-#
-# Or via manage script:
-#   .\manage.ps1 infra
-#   ./manage.sh infra
-# ============================================================================
-# ============================================================================
-# Forensic Council — Docker Compose (Infrastructure Only)
-# ============================================================================
-# Starts only Postgres, Redis, and Qdrant — zeros out backend/frontend/caddy.
-#
-# ⚠️  IMPORTANT: This is a COMPOSE OVERRIDE FILE, not a standalone file.
-#    It MUST always be used together with docker-compose.yml, which defines
-#    the postgres, redis, and qdrant service definitions that this file relies on.
-#
-# Correct usage:
-#   docker compose \
-#     -f docs/docker/docker-compose.yml \
-#     -f docs/docker/docker-compose.infra.yml \
-#     --env-file .env up -d
-#
-# Or via the manager scripts:
-#   ./manage.sh infra          (Linux / macOS)
-#   .\manage.ps1 infra         (Windows PowerShell)
-#
-# DO NOT run:  docker compose -f docker-compose.infra.yml up   ← starts nothing
 # ============================================================================
 
 services:

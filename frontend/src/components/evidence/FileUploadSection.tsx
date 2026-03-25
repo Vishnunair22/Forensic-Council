@@ -20,7 +20,6 @@ import { useSound } from "@/hooks/useSound";
 import { clsx } from "clsx";
 
 interface FileUploadSectionProps {
-  key?: React.Key;
   file: File | null;
   isDragging: boolean;
   isUploading: boolean;
@@ -100,40 +99,40 @@ export function FileUploadSection({
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, y: -20 }}
-      className="flex flex-col items-center justify-center min-h-[60vh] max-w-2xl mx-auto"
+      className="flex flex-col items-center justify-center min-h-[50vh] max-w-xl mx-auto"
     >
       {/* Title Section */}
-      <div className="text-center mb-12">
-        <motion.div 
+      <div className="text-center mb-7">
+        <motion.div
           initial={{ y: -10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.8, ease: "easeOut" }}
-          className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full
-            bg-surface-low border border-border-subtle
-            text-[10px] font-mono text-indigo-400 backdrop-blur-xl mb-8
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded
+            bg-amber-500/5 border border-amber-500/10
+            text-[9px] font-mono text-amber-500 backdrop-blur-xl mb-5
             shadow-sm relative overflow-hidden group">
           <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-500 opacity-40" />
-            <span className="relative inline-flex rounded-full h-full w-full bg-indigo-500" />
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-40" />
+            <span className="relative inline-flex rounded-full h-full w-full bg-amber-500" />
           </span>
-          <span className="uppercase tracking-[0.2em] font-bold text-foreground/60">Evidence Intake Portal</span>
+          <span className="uppercase tracking-[0.4em] font-bold text-amber-500/60 font-sans">Evidence Intake Portal</span>
         </motion.div>
-        
-        <motion.h1 
+
+        <motion.h1
           initial={{ y: 10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.1, duration: 0.8, ease: "easeOut" }}
-          className="text-4xl md:text-5xl font-black mb-5 tracking-tight font-heading
+          className="text-2xl md:text-3xl font-bold mb-2.5 tracking-tight font-heading
             text-foreground leading-[1.1]">
           Initiate Investigation
         </motion.h1>
-        
-        <motion.p 
+
+        <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2, duration: 0.8 }}
-          className="text-foreground/50 text-sm md:text-base font-medium max-w-lg mx-auto leading-relaxed">
-          The <span className="text-indigo-400 font-bold tracking-wide">Council Arbiter</span> will independently process your digital artifact.
+          className="text-white/40 text-[10px] font-bold uppercase tracking-[0.2em] max-w-sm mx-auto leading-relaxed italic">
+          High-Precision Multi-Agent Forensic Auditing
         </motion.p>
       </div>
 
@@ -170,7 +169,7 @@ export function FileUploadSection({
             {!file.type.startsWith("image/") &&
               !file.type.startsWith("video/") && (
                 <div className="flex flex-col items-center justify-center h-52 gap-4">
-                  <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/22 flex items-center justify-center shadow-[0_0_22px_rgba(16,185,129,0.16)]">
+                  <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shadow-[0_0_22px_rgba(16,185,129,0.16)]">
                     {file.type.startsWith("audio/") ? (
                       <FileAudio className="w-8 h-8 text-emerald-400" aria-hidden="true" />
                     ) : (
@@ -180,19 +179,19 @@ export function FileUploadSection({
                   {file.type.startsWith("audio/") && (
                     <div className="flex items-end gap-1 h-8">
                       {[3, 7, 5, 9, 6, 4, 8, 5, 7, 3, 6, 8].map((h, i) => (
-                        <motion.div
-                          key={i}
-                          animate={{
-                            height: `${h}px`,
-                          }}
-                          transition={{
-                            duration: 0.4,
-                            repeat: Infinity,
-                            repeatType: "reverse",
-                            delay: i * 0.05,
-                          }}
-                          className="w-1 bg-emerald-500/60 rounded-full"
-                        />
+                          <motion.div
+                            key={i}
+                            animate={{
+                              height: `${h}px`,
+                            }}
+                            transition={{
+                              duration: 0.4,
+                              repeat: Infinity,
+                              repeatType: "reverse",
+                              delay: i * 0.05,
+                            }}
+                            className="w-1 bg-amber-500/60 rounded-full"
+                          />
                       ))}
                     </div>
                   )}
@@ -210,31 +209,31 @@ export function FileUploadSection({
             </div>
           </div>
 
-          <div className="flex gap-4 p-8 bg-black/40 border-t border-white/[0.08] relative">
+          <div className="flex gap-3 p-4 bg-black/40 border-t border-white/[0.08] relative">
             <button
               onClick={() => { playSound("click"); onClear(); }}
               disabled={isUploading}
-              className="btn btn-ghost flex-1 py-4 rounded-xl text-xs font-bold uppercase tracking-widest"
+              className="btn btn-ghost flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-widest"
             >
-              <RotateCcw className="w-4 h-4 opacity-70" aria-hidden="true" />
-              Reset Terminal
+              <RotateCcw className="w-3.5 h-3.5 opacity-70" aria-hidden="true" />
+              Reset
             </button>
             <button
               onClick={() => { playSound("upload"); onUpload(file); }}
               disabled={isUploading}
-              className="btn btn-primary flex-1 py-4 rounded-xl text-xs font-bold uppercase tracking-widest relative overflow-hidden"
+              className="btn-premium-amber flex-1 py-3 justify-center relative overflow-hidden rounded shadow-[0_0_20px_rgba(217,119,6,0.2)]"
             >
               {isUploading ? (
                 <>
                   <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
                     <UploadCloud className="w-4 h-4" aria-hidden="true" />
                   </motion.div>
-                  Initiating Scan…
+                  SEALING EVIDENCE…
                 </>
               ) : (
                 <>
                   <ArrowRight className="w-4 h-4" aria-hidden="true" />
-                  Analyze Evidence
+                  INITIATE AUDIT
                 </>
               )}
             </button>
@@ -244,11 +243,11 @@ export function FileUploadSection({
         /* No file selected – drag and drop area */
         <div
           className={clsx(
-            "surface-panel w-full group overflow-hidden border-2 border-dashed rounded-[3rem] transition-all duration-700 relative cursor-pointer",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-8 focus-visible:ring-offset-background",
+            "surface-panel-high w-full group overflow-hidden border-2 border-dashed rounded transition-all duration-700 relative cursor-pointer",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 focus-visible:ring-offset-8 focus-visible:ring-offset-background",
             isDragging
-              ? "border-indigo-400 bg-indigo-500/5 scale-[1.01]"
-              : "border-border-bold hover:border-indigo-500/40"
+              ? "border-amber-400 bg-amber-500/5 scale-[1.01]"
+              : "border-white/5 hover:border-amber-500/40"
           )}
           onClick={() => { playSound("click"); fileInputRef.current?.click(); }}
           onDragEnter={handleDragEnter}
@@ -256,34 +255,34 @@ export function FileUploadSection({
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
-          <div className="flex flex-col items-center justify-center py-20 px-8 gap-6 relative z-10">
+          <div className="flex flex-col items-center justify-center py-10 px-6 gap-4 relative z-10">
             <motion.div
-              animate={{ 
+              animate={{
                 scale: isDragging ? 1.05 : 1,
               }}
               transition={{ type: "spring", stiffness: 400, damping: 25 }}
-              className={`w-20 h-20 rounded-2xl flex items-center justify-center transition-all duration-300
-                bg-surface-high border 
-                ${isDragging 
-                  ? "border-indigo-400/60 shadow-lg shadow-indigo-500/10" 
-                  : "border-border-subtle group-hover:border-indigo-500/30 group-hover:bg-surface-mid"}`}
+              className={`w-12 h-12 rounded flex items-center justify-center transition-all duration-300
+                bg-surface-high border
+                ${isDragging
+                  ? "border-amber-400/60 shadow-lg shadow-amber-500/10"
+                  : "border-white/5 group-hover:border-amber-500/30 group-hover:bg-amber-500/5"}`}
             >
-              <UploadCloud className={`w-8 h-8 transition-all duration-300 ${isDragging ? "text-indigo-400" : "text-foreground/40 group-hover:text-indigo-400"}`} strokeWidth={1.5} aria-hidden="true" />
+              <UploadCloud className={`w-5 h-5 transition-all duration-300 ${isDragging ? "text-amber-400" : "text-white/20 group-hover:text-amber-500"}`} strokeWidth={1} aria-hidden="true" />
             </motion.div>
-            
+
             <div className="text-center">
-              <p className={`text-lg font-bold transition-colors duration-300 mb-2 tracking-wide font-heading ${isDragging ? "text-indigo-400" : "text-foreground group-hover:text-indigo-400"}`}>
-                {isDragging ? "Drop Evidence Specimen" : "Drag Evidence Specimen"}
+              <p className={`text-sm font-black transition-colors duration-300 mb-1 tracking-tight font-heading uppercase ${isDragging ? "text-amber-400" : "text-white group-hover:text-amber-400"}`}>
+                {isDragging ? "Seize specimen" : "Deposit evidence specimen"}
               </p>
-              <p className="text-xs text-foreground/30 font-mono uppercase tracking-widest font-bold">
+              <p className="text-[10px] text-white/20 font-mono uppercase tracking-[0.2em] font-bold">
                 Secure Intake Portal — Click to Browse
               </p>
             </div>
-            
-            <div className="flex gap-2.5 flex-wrap justify-center mt-2">
-              {["IMAGE", "VIDEO", "AUDIO", "DOCUMENT"].map(t => (
-                <span key={t} className="px-3 py-1 bg-surface-mid border border-border-subtle
-                  rounded-md text-[10px] font-mono text-foreground/30 tracking-widest uppercase transition-colors group-hover:border-border-bold group-hover:text-foreground/60 font-bold">
+
+            <div className="flex gap-2 flex-wrap justify-center">
+              {["IMAGE", "VIDEO", "AUDIO"].map(t => (
+                <span key={t} className="px-2.5 py-0.5 bg-surface-mid border border-border-subtle
+                  rounded text-[9px] font-mono text-foreground/30 tracking-widest uppercase transition-colors group-hover:border-border-bold group-hover:text-foreground/60 font-bold">
                   {t}
                 </span>
               ))}
@@ -310,7 +309,7 @@ export function FileUploadSection({
         type="file"
         onChange={handleFileChange}
         className="sr-only"
-        accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+        accept="image/*,video/*,audio/*"
         aria-label="Upload evidence file"
       />
     </motion.div>

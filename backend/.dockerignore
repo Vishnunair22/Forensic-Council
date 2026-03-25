@@ -28,6 +28,9 @@ tests/
 storage/evidence/
 storage/keys/
 cache/
+.cache/
+.vector_cache/
+.ipynb_checkpoints/
 
 # Version control
 .git/
@@ -38,33 +41,21 @@ README*
 # OS artifacts
 .DS_Store
 Thumbs.db
+**/.DS_Store
+**/Thumbs.db
 
 # IDE
 .vscode/
 .idea/
 
-# Logs
+# Logs & temporary
 *.log
 logs/
+tmp/
+temp/
 
 # Build artifacts
 dist/
 build/
 *.egg-info/
 *.whl
-
-# ML Cache (IMPORTANT: Do not copy these into build context)
-cache/
-.cache/
-.vector_cache/
-.ipynb_checkpoints/
-
-# System
-**/.DS_Store
-**/Thumbs.db
-
-# Logs & Temporary
-*.log
-logs/
-tmp/
-temp/

@@ -71,11 +71,20 @@ export const AGENTS_DATA: AgentDefinition[] = [
             thinking: "Cross-referencing satellite telemetry...",
             thinkingPhrases: ["Parsing EXIF/XMP tags...", "Verifying device signature...", "Running reverse image search..."]
         }
+    },
+    {
+        id: "Arbiter",
+        name: "Council Arbiter",
+        role: "Synthesis & Verdict",
+        desc: "The final decision-making layer that cross-references all agent reports to reach a definitive forensic conclusion.",
+        simulation: {
+            result: "Verbatim analysis complete. Cross-referencing findings.",
+            confidence: 100,
+            thinking: "Synthesizing multi-agent inputs...",
+            thinkingPhrases: ["Weighting agent confidence scores...", "Identifying conflicting evidence...", "Finalizing verdict signature..."]
+        }
     }
 ];
-
-// Computed helpers for backward compatibility if needed, or direct usage
-export const MOCK_AGENTS = AGENTS_DATA.map(a => ({ name: a.name, role: a.role, desc: a.desc }));
 
 export const ALLOWED_MIME_TYPES = new Set([
     "image/jpeg", "image/png", "image/tiff", "image/webp", "image/gif", "image/bmp",

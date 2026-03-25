@@ -211,7 +211,7 @@ export function HITLCheckpointModal({
               <button
                 onClick={handleSubmit}
                 disabled={!selectedDecision || isSubmitting}
-                className="btn btn-emerald px-4 py-2.5 rounded-xl font-semibold disabled:opacity-50"
+                className="btn btn-primary px-4 py-2.5 rounded-xl font-semibold disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <>

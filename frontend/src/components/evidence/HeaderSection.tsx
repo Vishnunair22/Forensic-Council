@@ -30,36 +30,29 @@ export function HeaderSection({
       initial={{ y: -40, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-      className="sticky top-4 max-w-6xl mx-auto flex items-center justify-between mb-12 z-50 px-8 py-5 surface-panel rounded-3xl border-border-subtle shadow-xl bg-background/80 backdrop-blur-md"
+      className="sticky top-3 max-w-6xl mx-auto flex items-center justify-between mb-6 z-50 px-5 py-3 surface-panel rounded-2xl border-border-subtle shadow-lg bg-background/80 backdrop-blur-md"
     >
       {/* Logo and Branding */}
-      <div
-        role="button"
-        tabIndex={0}
+      <button
+        type="button"
         className="flex items-center space-x-4 cursor-pointer group"
         onClick={() => {
           if (status !== "analyzing") router.push("/");
         }}
-        onKeyDown={(e) => {
-          if ((e.key === "Enter" || e.key === " ") && status !== "analyzing") {
-            e.preventDefault();
-            router.push("/");
-          }
-        }}
         aria-label="Return to Forensic Council home"
       >
-        <div className="relative w-10 h-10 flex items-center justify-center rounded-xl bg-surface-high border border-border-bold group-hover:border-indigo-500/40 transition-all duration-300 shadow-sm">
-          <span className="relative z-10 font-bold text-indigo-400 text-xs tracking-widest">FC</span>
+        <div className="relative w-8 h-8 flex items-center justify-center rounded bg-amber-500/10 border border-amber-500/20 group-hover:border-amber-400/50 transition-all duration-300 shadow-sm">
+          <span className="relative z-10 font-black text-amber-500 text-[10px] tracking-widest">FC</span>
         </div>
         <div className="flex flex-col justify-center">
-          <span className="text-base font-bold tracking-tight text-foreground transition-colors block leading-tight">
+          <span className="text-[11px] font-black tracking-[0.1em] text-white transition-colors block leading-tight uppercase">
             Forensic Council
           </span>
-          <span className="text-[10px] font-mono text-indigo-500/60 uppercase tracking-[0.2em] transition-colors leading-relaxed font-bold">
+          <span className="text-[8px] font-mono text-amber-500/60 uppercase tracking-[0.3em] transition-colors leading-relaxed font-bold">
             Investigation Node
           </span>
         </div>
-      </div>
+      </button>
 
       <div className="flex items-center gap-3">
         <HistoryDrawer />
@@ -70,7 +63,7 @@ export function HeaderSection({
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={onBrowseClick}
-            className="btn btn-secondary px-6 py-2.5 text-[10px] uppercase tracking-widest rounded-xl font-bold border-border-subtle"
+            className="btn-premium-glass px-6 py-2 border-white/5"
             aria-label="Browse system for new evidence file"
           >
             Browse System

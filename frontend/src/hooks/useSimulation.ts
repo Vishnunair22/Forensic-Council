@@ -69,6 +69,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                 if (isProcessingQueue || messageQueue.length === 0) return;
                 isProcessingQueue = true;
 
+                try {
                 while (messageQueue.length > 0) {
                     const update = messageQueue.shift();
                     if (!update) break;
@@ -189,7 +190,9 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                             break;
                     }
                 }
-                isProcessingQueue = false;
+                } finally {
+                    isProcessingQueue = false;
+                }
             };
 
             const handleMessage = (event: MessageEvent) => {

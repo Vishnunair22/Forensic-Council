@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle, AlertTriangle, ShieldCheck, RotateCcw,
-  Home, ChevronDown, Lock, Hash, FileText,
+  Home, ChevronDown, Lock, FileText,
   Shield, Cpu, AlertCircle, XCircle, Download, Activity, LinkIcon, ArrowLeft
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -30,28 +30,28 @@ function fmtTool(raw: string): string {
 }
 
 // ─── Agent meta config ────────────────────────────────────────────────────────
-const AGENT_META: Record<string, { name: string; color: "emerald" | "cyan" | "violet" | "amber" }> = {
-  Agent1: { name: "Image Forensics",   color: "emerald" },
-  Agent2: { name: "Audio Forensics",   color: "cyan"    },
-  Agent3: { name: "Object Detection",  color: "violet"  },
-  Agent4: { name: "Video Forensics",   color: "violet"    },
+const AGENT_META: Record<string, { name: string; color: "amber" | "white" | "rose" | "emerald" }> = {
+  Agent1: { name: "Image Forensics",   color: "amber" },
+  Agent2: { name: "Audio Forensics",   color: "amber"    },
+  Agent3: { name: "Object Detection",  color: "amber"  },
+  Agent4: { name: "Video Forensics",   color: "amber"    },
   Agent5: { name: "Metadata Analysis", color: "amber"   },
 };
 
 const COLOR_MAP = {
   emerald: { ring: "border-emerald-500/20", accent: "text-emerald-400", bg: "bg-emerald-500/[0.04]" },
-  cyan:    { ring: "border-cyan-500/20",    accent: "text-cyan-400",    bg: "bg-cyan-500/[0.04]"    },
-  violet:  { ring: "border-violet-500/20",  accent: "text-violet-400",  bg: "bg-violet-500/[0.04]"  },
   amber:   { ring: "border-amber-500/20",   accent: "text-amber-400",   bg: "bg-amber-500/[0.04]"   },
+  rose:    { ring: "border-rose-500/20",    accent: "text-rose-400",    bg: "bg-rose-500/[0.04]"    },
+  white:   { ring: "border-white/20",       accent: "text-white/80",    bg: "bg-white/[0.04]"       },
 };
 
 // ─── Severity config ──────────────────────────────────────────────────────────
 const SEVERITY = {
-  CRITICAL: { color: "text-red-400",    dot: "bg-red-400",    bar: "bg-red-500",    label: "Critical" },
-  HIGH:     { color: "text-orange-400", dot: "bg-orange-400", bar: "bg-orange-500", label: "High"     },
-  MEDIUM:   { color: "text-amber-400",  dot: "bg-amber-400",  bar: "bg-amber-500",  label: "Medium"   },
-  LOW:      { color: "text-slate-400",  dot: "bg-slate-500",  bar: "bg-slate-600",  label: "Low"      },
-  INFO:     { color: "text-slate-600",  dot: "bg-slate-700",  bar: "bg-slate-700",  label: "Info"     },
+  CRITICAL: { color: "text-rose-500",    dot: "bg-rose-500",    bar: "bg-rose-500",    label: "Critical" },
+  HIGH:     { color: "text-rose-400",    dot: "bg-rose-400",    bar: "bg-rose-400",    label: "High"     },
+  MEDIUM:   { color: "text-amber-500",   dot: "bg-amber-500",   bar: "bg-amber-500",   label: "Medium"   },
+  LOW:      { color: "text-white/40",    dot: "bg-white/40",    bar: "bg-white/20",    label: "Low"      },
+  INFO:     { color: "text-white/20",    dot: "bg-white/20",    bar: "bg-white/10",    label: "Info"     },
 } as const;
 
 type SeverityKey = keyof typeof SEVERITY;
@@ -79,38 +79,41 @@ function ArbiterOverlay({ liveMsg }: { liveMsg: string }) {
     return () => clearInterval(t);
   }, []);
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md">
-      <SurfaceCard className="flex flex-col items-center gap-6 px-10 py-12 shadow-2xl max-w-sm w-full mx-4 border-border-bold">
-        <div className="relative w-20 h-20 flex items-center justify-center">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl">
+      <SurfaceCard className="flex flex-col items-center gap-6 px-10 py-12 shadow-2xl max-w-sm w-full mx-4 border-white/5 bg-surface-high rounded">
+        <div className="relative w-24 h-24 flex items-center justify-center">
           <motion.div
-            animate={{ scale: [1, 1.1, 1], opacity: [0.1, 0.2, 0.1] }}
+            animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.4, 0.1] }}
             transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute inset-0 rounded-full bg-indigo-500/10"
+            className="absolute inset-0 rounded-full bg-amber-500/10 blur-xl"
           />
-          <div className="relative z-10 w-12 h-12 rounded-xl bg-surface-high border border-border-bold flex items-center justify-center shadow-lg">
-            <ShieldCheck className="w-7 h-7 text-indigo-400" />
+          <div className="relative z-10 w-14 h-14 rounded bg-black border border-amber-500/30 flex items-center justify-center shadow-[0_0_20px_rgba(217,119,6,0.2)]">
+            <ShieldCheck className="w-8 h-8 text-amber-500" />
           </div>
         </div>
-        <div className="text-center space-y-2">
-          <h3 className="text-foreground font-bold text-lg">Report Generation</h3>
+        <div className="text-center space-y-3">
+          <h3 className="text-white font-black text-xl font-heading uppercase tracking-tighter">Council Deliberation</h3>
           <AnimatePresence mode="wait">
             <motion.p
               key={liveMsg || ARBITER_STEPS[step]}
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
-              className="text-indigo-400 text-[10px] font-mono uppercase tracking-widest font-bold min-h-5"
+              className="text-amber-500 text-[11px] font-black font-mono uppercase tracking-[0.3em] min-h-5"
             >
               {liveMsg || ARBITER_STEPS[step]}
             </motion.p>
           </AnimatePresence>
-          <p className="text-foreground/20 text-[9px] font-mono tracking-tighter pt-1 uppercase font-bold">— NODE ACTIVE {elapsed}s —</p>
+          <div className="flex flex-col items-center gap-1 pt-2">
+            <p className="text-white/20 text-[9px] font-black font-mono tracking-widest uppercase">NODE ACTIVE</p>
+            <p className="text-amber-500/40 text-[10px] font-black font-mono tracking-widest uppercase">{elapsed}s</p>
+          </div>
         </div>
-        <div className="relative w-full h-1 bg-surface-low rounded-full overflow-hidden">
+        <div className="relative w-full h-1 bg-white/5 rounded-full overflow-hidden">
           <motion.div
-            className="absolute h-full w-[40%] bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]"
+            className="absolute h-full w-[40%] bg-amber-500 shadow-[0_0_15px_rgba(217,119,6,0.6)]"
             animate={{ left: ["-100%", "200%"] }}
-            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
           />
         </div>
       </SurfaceCard>
@@ -121,11 +124,11 @@ function ArbiterOverlay({ liveMsg }: { liveMsg: string }) {
 // ─── Verdict config ───────────────────────────────────────────────────────────
 function verdictConfig(v: string) {
   const u = v?.toUpperCase() ?? "";
-  if (u === "AUTHENTIC" || u === "CERTAIN")
+  if (u === "AUTHENTIC")
     return { label: "Authentic", color: "emerald" as const, Icon: CheckCircle, desc: "No forensic evidence of manipulation found." };
-  if (u === "LIKELY_AUTHENTIC" || u === "LIKELY")
+  if (u === "LIKELY_AUTHENTIC")
     return { label: "Likely Authentic", color: "emerald" as const, Icon: CheckCircle, desc: "Evidence is consistent with authenticity." };
-  if (u === "MANIPULATED" || u === "MANIPULATION DETECTED")
+  if (u === "MANIPULATED")
     return { label: "Manipulation Detected", color: "red" as const, Icon: AlertTriangle, desc: "Forensic signals confirm tampering." };
   if (u === "LIKELY_MANIPULATED")
     return { label: "Likely Manipulated", color: "red" as const, Icon: AlertTriangle, desc: "Significant manipulation signals detected." };
@@ -137,27 +140,15 @@ function verdictConfig(v: string) {
 function confColor(c: number) {
   return c >= 0.75 ? "text-emerald-400" : c >= 0.5 ? "text-amber-400" : "text-red-400";
 }
-
-// ─── Severity breakdown bar ───────────────────────────────────────────────────
 function SeverityBar({ counts, total }: { counts: Record<SeverityKey, number>; total: number }) {
-  if (total === 0) return null;
   return (
     <div className="space-y-4">
-      <h3 className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest flex items-center gap-2 font-mono">
-        <Activity className="w-3.5 h-3.5 text-indigo-400/60" aria-hidden="true" /> Structural Breakdown
-      </h3>
-      <div className="flex h-1.5 rounded-full overflow-hidden gap-1 bg-surface-low border border-border-subtle shadow-inner">
-        {SEVERITY_TIERS.filter(t => counts[t] > 0).map(t => (
-          <div
-            key={t}
-            className={clsx("transition-all duration-700", SEVERITY[t].bar)}
-            style={{ width: `${(counts[t] / total) * 100}%` }}
-          />
-        ))}
+      <div className="flex items-center justify-between">
+        <h3 className="text-[11px] font-bold uppercase tracking-widest text-foreground/40">Signal Severity Breakdown</h3>
+        <span className="text-[10px] font-mono font-bold text-foreground/20 uppercase tracking-widest">{total} Signals</span>
       </div>
-      {/* Pill counts */}
       <div className="flex flex-wrap gap-2">
-        {SEVERITY_TIERS.map(t => counts[t] > 0 && (
+        {SEVERITY_TIERS.map((t) => counts[t] > 0 && (
           <span
             key={t}
             className={clsx(
@@ -215,7 +206,6 @@ function AgentCard({
   const confRatio = agentSummary !== undefined
     ? agentSummary.confidence_pct / 100
     : (metrics?.confidence_score ?? 0);
-  const errPct = agentSummary?.error_rate_pct ?? Math.round((metrics?.error_rate ?? 0) * 100);
   const toolsOk    = agentSummary?.tools_ok    ?? metrics?.tools_succeeded    ?? 0;
   const toolsTotal = agentSummary?.tools_total  ?? metrics?.total_tools_called ?? 0;
 
@@ -233,8 +223,6 @@ function AgentCard({
     const t = ((f.severity_tier ?? "LOW").toUpperCase()) as SeverityKey;
     if (t in sevCounts) sevCounts[t]++;
   });
-  const hasSevere = sevCounts.CRITICAL > 0 || sevCounts.HIGH > 0;
-
   // Group findings by tool / finding_type for per-tool breakdown
   const toolGroups = realFindings.reduce<Record<string, AgentFindingDTO[]>>((acc, f) => {
     const key = f.finding_type || "Unknown Tool";
@@ -245,7 +233,7 @@ function AgentCard({
 
   return (
     <SurfaceCard className={clsx(
-      "p-0 overflow-hidden transition-all duration-300 relative",
+      "p-0 overflow-hidden transition-all duration-300 relative rounded border-white/5 surface-panel-high",
       isSkipped && "opacity-50 grayscale"
     )}>
       {/* Card header — click to expand */}
@@ -255,21 +243,21 @@ function AgentCard({
         aria-expanded={isSkipped ? undefined : open}
         className={clsx(
           "w-full flex items-center justify-between px-6 py-5 text-left transition-colors duration-200 group/btn",
-          isSkipped ? "cursor-default" : "hover:bg-surface-mid cursor-pointer"
+          isSkipped ? "cursor-default" : "hover:bg-white/2 cursor-pointer"
         )}
       >
         <div className="flex items-center gap-4 min-w-0">
           <div className={clsx(
-            "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border border-border-subtle transition-all duration-300 bg-surface-high",
-            !isSkipped && "shadow-sm group-hover/btn:scale-105"
+            "w-12 h-12 rounded flex items-center justify-center shrink-0 border border-white/5 transition-all duration-300 bg-black shadow-inner",
+            !isSkipped && "shadow-sm group-hover/btn:scale-105 group-hover/btn:border-amber-500/30"
           )}>
-             <AgentIcon agentId={agentId} size="md" className={meta.color === "violet" ? "text-indigo-400" : `text-${meta.color}-400`} />
+             <AgentIcon agentId={agentId} size="md" className={c.accent} />
           </div>
           <div className="min-w-0">
-            <h3 className={clsx("font-bold text-sm mb-0.5 transition-colors", !isSkipped ? "text-foreground" : "text-foreground/40")}>
+            <h3 className={clsx("font-black text-sm mb-0.5 transition-colors font-heading uppercase tracking-tight", !isSkipped ? "text-white group-hover/btn:text-amber-400" : "text-white/40")}>
               {meta.name}
             </h3>
-            <p className={clsx("text-[10px] font-mono font-bold uppercase tracking-widest", verdLabel.textColor)}>
+            <p className={clsx("text-[9px] font-black font-mono uppercase tracking-[0.2em]", verdLabel.textColor)}>
               {verdLabel.text}
             </p>
           </div>
@@ -286,8 +274,8 @@ function AgentCard({
           )}
           {!isSkipped && (
             <div className={clsx(
-                "p-1.5 rounded-lg bg-surface-low border border-border-subtle transition-all duration-300",
-                open && "rotate-180 bg-indigo-500/10 border-indigo-500/30 text-indigo-400"
+                "p-1.5 rounded bg-white/5 border border-white/5 transition-all duration-300",
+                open && "rotate-180 bg-amber-500/10 border-amber-500/30 text-amber-500"
             )}>
                 <ChevronDown className="w-4 h-4" />
             </div>
@@ -307,29 +295,29 @@ function AgentCard({
           >
             <div className="px-6 pb-6 pt-2 space-y-6 border-t border-border-subtle">
               {/* Stats row */}
-              <div className="flex flex-wrap gap-2 text-[10px] font-mono font-bold tracking-widest">
+              <div className="flex flex-wrap gap-2 text-[9px] font-black font-mono tracking-[0.2em]">
                 <span className={clsx(
-                  "px-3 py-1 rounded-lg border border-border-subtle uppercase",
-                  confRatio >= 0.75 ? "bg-emerald-500/10 text-emerald-500" :
-                  confRatio >= 0.5  ? "bg-amber-500/10 text-amber-500" :
-                                      "bg-red-500/10 text-red-500"
+                  "px-3 py-1 rounded border uppercase",
+                  confRatio >= 0.75 ? "bg-emerald-500/5 border-emerald-500/20 text-emerald-500" :
+                  confRatio >= 0.5  ? "bg-amber-500/5 border-amber-500/20 text-amber-500" :
+                                      "bg-rose-500/5 border-rose-500/20 text-rose-500"
                 )}>
                   {Math.round(confRatio * 100)}% RELIABILITY
                 </span>
                 {toolsTotal > 0 && (
-                  <span className="px-3 py-1 rounded-lg bg-surface-low text-foreground/40 border border-border-subtle uppercase">
-                    {toolsOk}/{toolsTotal} PROBES ACTIVE
+                  <span className="px-3 py-1 rounded bg-white/2 text-white/20 border border-white/5 uppercase">
+                    {toolsOk}/{toolsTotal} UNIT PROBES
                   </span>
                 )}
               </div>
 
               {/* Arbiter narrative */}
               {narrative ? (
-                <div className="rounded-xl bg-surface-low border border-border-subtle p-5">
-                  <p className="text-foreground/40 text-[9px] font-mono font-bold uppercase tracking-widest mb-3 flex items-center gap-2">
-                    <Activity className="w-3.5 h-3.5" /> Neural Synthesis
+                <div className="rounded bg-black/40 border border-white/5 p-5 shadow-inner">
+                  <p className="text-white/20 text-[9px] font-black font-mono uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                    <Activity className="w-3.5 h-3.5 text-amber-500/60" /> Neural Consensus Narrative
                   </p>
-                  <p className="text-foreground/80 text-sm leading-relaxed font-medium">{narrative}</p>
+                  <p className="text-white/80 text-sm leading-relaxed font-medium">{narrative}</p>
                 </div>
               ) : (
                 <p className="text-foreground/20 text-[11px] italic font-medium opacity-50 px-2 font-mono">
@@ -721,7 +709,6 @@ export default function ResultPage() {
   const manipPct       = Math.round((report?.manipulation_probability ?? 0) * 100);
   const contestedCount = report?.contested_findings?.length ?? 0;
   const crossCount     = report?.cross_modal_confirmed?.length ?? 0;
-  const skippedCount   = Object.keys(report?.skipped_agents ?? {}).length;
 
   const fileName = useMemo(() => {
     if (typeof window === "undefined") return report?.case_id ?? "Evidence File";
@@ -761,11 +748,11 @@ export default function ResultPage() {
       };
       
       try {
-        const stored = JSON.parse(localStorage.getItem("forensic_history") || "[]");
-        const filtered = stored.filter((h: any) => h.sessionId !== hItem.sessionId);
+        const stored = JSON.parse(localStorage.getItem("forensic_history") || "[]") as HistoryItem[];
+        const filtered = stored.filter((h) => h.sessionId !== hItem.sessionId);
         localStorage.setItem("forensic_history", JSON.stringify([hItem, ...filtered]));
       } catch (e) {
-        console.error("Failed to commit history", e);
+        dbg.error("Failed to commit history", e);
       }
     }
   }, [state, report]);
@@ -798,11 +785,11 @@ export default function ResultPage() {
       <header className="sticky top-0 z-50 w-full border-b border-border-subtle bg-background/80 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <button onClick={handleHome} className="flex items-center gap-3 group cursor-pointer">
-            <div className="w-8 h-8 bg-surface-high border border-indigo-500/40 rounded-lg flex items-center justify-center font-bold text-indigo-400 text-[10px] group-hover:border-indigo-400 transition-all shadow-sm">
+            <div className="w-8 h-8 bg-surface-high border border-amber-500/40 rounded-lg flex items-center justify-center font-bold text-amber-400 text-[10px] group-hover:border-amber-400 transition-all shadow-sm">
               FC
             </div>
             <span className="hidden sm:block text-[11px] font-bold uppercase tracking-widest text-foreground/40 group-hover:text-foreground transition-colors">
-              Forensic Council <span className="text-indigo-500/60 ml-1">//</span> HUB
+              Forensic Council <span className="text-amber-500/60 ml-1">//</span> HUB
             </span>
           </button>
 
@@ -824,7 +811,7 @@ export default function ResultPage() {
             {state === "ready" && report && (
               <button
                 onClick={handleExport}
-                className="flex items-center gap-2 text-[10px] text-foreground/60 font-bold uppercase tracking-widest hover:text-indigo-400 transition-all px-4 py-2 rounded-lg hover:bg-surface-mid border border-border-subtle cursor-pointer"
+                className="flex items-center gap-2 text-[10px] text-foreground/60 font-bold uppercase tracking-widest hover:text-amber-400 transition-all px-4 py-2 rounded-lg hover:bg-surface-mid border border-border-subtle cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" /> Export
               </button>
@@ -951,12 +938,12 @@ export default function ResultPage() {
               >
                 <div className="px-8 py-5 border-b border-border-subtle flex items-center justify-between bg-surface-mid">
                   <div className="flex items-center gap-3">
-                    <FileText className="w-4 h-4 text-indigo-400 shrink-0" />
+                    <FileText className="w-4 h-4 text-amber-400 shrink-0" />
                     <h2 className="text-[11px] font-bold uppercase tracking-widest text-foreground">Executive Synthesis</h2>
                   </div>
                 </div>
                 <div className="p-8 space-y-6 flex-1 bg-surface-low">
-                  <p className="text-foreground/80 text-lg font-medium leading-relaxed border-l-2 border-indigo-500/30 pl-5 py-1">
+                  <p className="text-foreground/80 text-lg font-medium leading-relaxed border-l-2 border-amber-500/30 pl-5 py-1">
                     "{effectiveVerdictSentence}"
                   </p>
                   {report.key_findings && report.key_findings.length > 0 && (
@@ -976,7 +963,7 @@ export default function ResultPage() {
               <div className="col-span-12 rounded-[2rem] overflow-hidden flex flex-col surface-panel border-border-subtle shadow-xl">
                 <div className="px-8 py-5 border-b border-border-subtle flex items-center justify-between bg-surface-mid">
                   <div className="flex items-center gap-3">
-                    <Cpu className="w-4 h-4 text-indigo-400 shrink-0" aria-hidden="true" />
+                    <Cpu className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
                     <h2 className="text-[11px] font-bold uppercase tracking-widest text-foreground">Sensor Grid Deployment</h2>
                   </div>
                   <span className="text-[9px] font-mono font-bold text-foreground/20 uppercase tracking-widest">All nodes synchronized</span>
@@ -1000,7 +987,7 @@ export default function ResultPage() {
                 <div className="col-span-12 space-y-8 pt-6">
                   <div className="flex items-center justify-between px-2">
                     <h2 className="text-[11px] font-bold uppercase tracking-widest text-foreground/40 flex items-center gap-3">
-                      <Activity className="w-4 h-4 text-indigo-400" aria-hidden="true" /> Raw Neural Probe Stream
+                      <Activity className="w-4 h-4 text-amber-400" aria-hidden="true" /> Raw Neural Probe Stream
                     </h2>
                     <span className="text-[9px] text-foreground/20 font-mono font-bold uppercase tracking-widest">
                       Expand for metadata ↓
@@ -1046,12 +1033,12 @@ export default function ResultPage() {
                   onClick={() => setChainOpen(v => !v)}
                   className="w-full flex items-center justify-between px-8 py-5 hover:bg-surface-mid transition-all cursor-pointer group/chain"
                 >
-                  <span className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-widest text-foreground/60 group-hover/chain:text-indigo-400 transition-colors">
-                    <Lock className="w-4 h-4 text-indigo-500/60" /> Operational Integrity // Chain of Custody
+                  <span className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-widest text-foreground/60 group-hover/chain:text-amber-400 transition-colors">
+                    <Lock className="w-4 h-4 text-amber-500/60" /> Operational Integrity // Chain of Custody
                   </span>
                   <div className={clsx(
                       "p-1.5 rounded-lg bg-surface-high border border-border-subtle transition-all duration-300",
-                      chainOpen && "rotate-180 bg-indigo-500/10 border-indigo-500/30 text-indigo-400"
+                      chainOpen && "rotate-180 bg-amber-500/10 border-amber-500/30 text-amber-400"
                   )}>
                     <ChevronDown className="w-4 h-4" />
                   </div>
@@ -1083,7 +1070,7 @@ export default function ResultPage() {
                         </div>
                         {report.report_hash && (
                           <div className="bg-surface-low rounded-2xl p-6 border border-border-subtle shadow-inner">
-                            <p className="text-[10px] text-indigo-400/60 font-bold font-mono uppercase tracking-widest mb-3 flex items-center gap-2">
+                            <p className="text-[10px] text-amber-400/60 font-bold font-mono uppercase tracking-widest mb-3 flex items-center gap-2">
                               <ShieldCheck className="w-4 h-4" /> Integrity Hash [SHA-256]
                             </p>
                             <p className="text-[11px] font-mono text-foreground/40 break-all leading-relaxed bg-surface-mid p-4 rounded-xl border border-border-subtle">
@@ -1129,7 +1116,7 @@ export default function ResultPage() {
               </div>
               <button
                 onClick={handleNew}
-                className="btn btn-primary px-10 py-4 rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-indigo-500/20"
+                className="btn btn-primary px-10 py-4 rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-amber-500/20"
               >
                 Re-Initialize Investigation
               </button>
@@ -1167,8 +1154,7 @@ export default function ResultPage() {
 
       {/* Fixed footer action bar */}
       {state === "ready" && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.08]"
-          style={{ background: "rgba(3,3,3,0.92)", backdropFilter: "blur(32px)" }}>
+        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.08] bg-background/95 backdrop-blur-3xl">
           <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-6 relative">
             
             <div className="flex items-center gap-4 w-full sm:w-auto">

@@ -1,0 +1,29 @@
+# Temporary override to run only frontend in dev mode
+services:
+  frontend:
+    build:
+      target: development
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      - INTERNAL_API_URL=http://forensic_api:8000
+    ports:
+      - "3000:3000"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+    volumes:
+      - ./frontend:/app:rw
+      - /app/node_modules
+      - nextjs_cache:/app/.next
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  nextjs_cache:

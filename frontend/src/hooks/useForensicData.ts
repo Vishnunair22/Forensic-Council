@@ -1,18 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Report, AgentResult } from "@/types";
 import { HistorySchema, ReportSchema } from "@/lib/schemas";
+import { ReportDTO } from "@/lib/api";
 
 /** Dev-only logger — silenced in production builds */
 const isDev = process.env.NODE_ENV !== "production";
 const dbg = {
     error: isDev ? console.error.bind(console) : () => {},
-    warn: isDev ? console.warn.bind(console) : () => {},
 };
-
-import { startInvestigation, getReport, ReportDTO } from "@/lib/api";
-import { ALLOWED_MIME_TYPES } from "@/lib/constants";
 
 const HISTORY_KEY = "fc_history";
 const CURRENT_REPORT_KEY = "fc_current_report";
@@ -48,10 +45,6 @@ export const useForensicData = () => {
     const [history, setHistory] = useState<Report[]>([]);
     const [currentReport, setCurrentReport] = useState<Report | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [pollError, setPollError] = useState<string | null>(null);
-    const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-    const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // Load data on mount (from sessionStorage for sensitive data)
     useEffect(() => {
@@ -83,7 +76,6 @@ export const useForensicData = () => {
         }
     }, []);
 
-    // Add to history - defined first so it can be used in pollForReport
     const addToHistory = useCallback((report: Report) => {
         setHistory(prev => {
             if (prev.some(h => h.id === report.id)) return prev;
@@ -94,90 +86,6 @@ export const useForensicData = () => {
             return next;
         });
     }, []);
-
-    // Start analysis - calls the real API
-    const startAnalysis = useCallback(async (
-        file: File,
-        caseId: string,
-        investigatorId: string
-    ): Promise<string> => {
-        setIsAnalyzing(true);
-
-        try {
-            const result = await startInvestigation(file, caseId, investigatorId);
-            setCurrentSessionId(result.session_id);
-            return result.session_id;
-        } catch (error) {
-            dbg.error("Failed to start investigation:", error);
-            throw error;
-        }
-    }, []);
-
-    // Poll for report completion
-    const pollForReport = useCallback(async (sessionId: string): Promise<void> => {
-        // Clear any existing poll
-        if (pollIntervalRef.current) {
-            clearInterval(pollIntervalRef.current);
-        }
-        setPollError(null);
-
-        const MAX_POLL_ATTEMPTS = 60; // 5 min at 5s interval
-        let attempts = 0;
-
-        pollIntervalRef.current = setInterval(async () => {
-            attempts++;
-            if (attempts > MAX_POLL_ATTEMPTS) {
-                if (pollIntervalRef.current) {
-                    clearInterval(pollIntervalRef.current);
-                    pollIntervalRef.current = null;
-                }
-                setIsAnalyzing(false);
-                setPollError("Analysis timed out. The investigation took too long.");
-                return;
-            }
-
-            try {
-                const result = await getReport(sessionId);
-
-                if (result.status === "complete" && result.report) {
-                    // Stop polling
-                    if (pollIntervalRef.current) {
-                        clearInterval(pollIntervalRef.current);
-                        pollIntervalRef.current = null;
-                    }
-
-                    // Map to frontend format
-                    const report = mapReportDtoToReport(result.report);
-                    setCurrentReport(report);
-                    addToHistory(report); // Save to History tab
-                    setIsAnalyzing(false);
-
-                    // Save to sessionStorage (sensitive data should not persist)
-                    if (typeof window !== 'undefined') {
-                        sessionStorage.setItem(CURRENT_REPORT_KEY, JSON.stringify(report));
-                    }
-                }
-            } catch (error) {
-                dbg.error("Failed to poll for report:", error);
-                if (pollIntervalRef.current) {
-                    clearInterval(pollIntervalRef.current);
-                    pollIntervalRef.current = null;
-                }
-                setIsAnalyzing(false);
-                setPollError(error instanceof Error ? error.message : "Failed to retrieve analysis results.");
-            }
-        }, 5000); // Poll every 5 seconds
-    }, [addToHistory]);
-
-    // Get current report
-    const getCurrentReport = useCallback((): Report | null => {
-        return currentReport;
-    }, [currentReport]);
-
-    // Get history
-    const getHistory = useCallback((): Report[] => {
-        return history;
-    }, [history]);
 
     // Save current report
     const saveCurrentReport = useCallback((report: Report) => {
@@ -204,43 +112,13 @@ export const useForensicData = () => {
         }
     }, []);
 
-    // Client-side file validation
-    const validateFile = useCallback((file: File): { valid: boolean; error?: string } => {
-        const MAX_SIZE = 50 * 1024 * 1024; // 50MB
-
-        if (file.size > MAX_SIZE) {
-            return { valid: false, error: "File exceeds 50MB limit." };
-        }
-        if (!ALLOWED_MIME_TYPES.has(file.type)) {
-            return { valid: false, error: "Unsupported format." };
-        }
-        return { valid: true };
-    }, []);
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            if (pollIntervalRef.current) {
-                clearInterval(pollIntervalRef.current);
-            }
-        };
-    }, []);
-
     return {
         history,
         currentReport,
         isLoading,
-        isAnalyzing,
-        pollError,
-        currentSessionId,
-        startAnalysis,
-        pollForReport,
-        getCurrentReport,
-        getHistory,
         saveCurrentReport,
         addToHistory,
         deleteFromHistory,
         clearHistory,
-        validateFile
     };
 };
