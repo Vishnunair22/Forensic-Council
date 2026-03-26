@@ -168,6 +168,24 @@ async def decode_token(token: str) -> TokenData:
         )
 
 
+# Local in-memory cache for recently blacklisted tokens (fallback during Redis outages)
+# This provides a safety net when Redis is unavailable
+_recently_blacklisted: dict[str, float] = {}  # token_hash -> expiry_timestamp
+_LOCAL_BLACKLIST_MAX_AGE = 3600  # 1 hour max age for local blacklist entries
+
+
+def _cleanup_local_blacklist() -> None:
+    """Remove expired entries from local blacklist cache."""
+    import time
+    current_time = time.time()
+    expired_keys = [
+        k for k, v in _recently_blacklisted.items()
+        if current_time > v
+    ]
+    for k in expired_keys:
+        _recently_blacklisted.pop(k, None)
+
+
 async def is_token_blacklisted(token: str) -> bool:
     """
     Check if a token is blacklisted.
@@ -178,24 +196,99 @@ async def is_token_blacklisted(token: str) -> bool:
     Returns:
         True if token is blacklisted, False otherwise
     
-    NOTE: Fail-open design — if Redis is unavailable we allow the request
-    through with a warning rather than denying ALL authenticated users.
-    The JWT signature + expiry claims still provide validity guarantees
-    even without the blacklist. This is a deliberate trade-off: a brief
-    Redis outage should not cause a service outage.
+    SECURITY FIX: Fail-secure design with local cache fallback.
+    - Primary: Check Redis blacklist
+    - Fallback: Check local in-memory cache
+    - If both unavailable in PRODUCTION: Reject the token (fail-secure)
+    - If both unavailable in DEVELOPMENT: Allow with warning (for dev convenience)
+    
+    This prevents revoked tokens from being used during Redis outages.
     """
+    import time
+    import hashlib
+    
+    # Create a hash of the token for local storage (don't store raw tokens)
+    token_hash = hashlib.sha256(token.encode()).hexdigest()[:32]
+    
+    # Cleanup old entries periodically
+    _cleanup_local_blacklist()
+    
+    # Check local cache first (fast path for known blacklisted tokens)
+    if token_hash in _recently_blacklisted:
+        expiry = _recently_blacklisted[token_hash]
+        if time.time() < expiry:
+            return True
+        else:
+            # Expired, remove it
+            _recently_blacklisted.pop(token_hash, None)
+    
     try:
         from infra.redis_client import get_redis_client
+        from core.config import get_settings
+        
         redis = await get_redis_client()
+        settings = get_settings()
+        
         if redis:
             result = await redis.get(f"blacklist:{token}")
-            return result is not None
-        else:
-            logger.warning("Redis unavailable — token blacklist check skipped, proceeding with JWT claims only")
+            if result is not None:
+                # Also cache locally for future lookups during Redis outages
+                # Default to 1 hour if we don't know the exact expiry
+                _recently_blacklisted[token_hash] = time.time() + _LOCAL_BLACKLIST_MAX_AGE
+                return True
             return False
+        else:
+            # Redis unavailable - check if we have it in local cache
+            if token_hash in _recently_blacklisted:
+                return True
+            
+            # Fail-secure in production: if Redis is down and we don't have a local record,
+            # we can't verify the token isn't blacklisted. In production, reject.
+            # In development, allow for convenience.
+            if settings.app_env == "production":
+                logger.error(
+                    "Redis unavailable in production — token blacklist check FAILING SECURE. "
+                    "Token rejected because blacklist cannot be verified."
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Authentication service temporarily unavailable. Please try again.",
+                )
+            else:
+                logger.warning(
+                    "Redis unavailable in development — token blacklist check skipped, "
+                    "proceeding with JWT claims only (fail-open for dev convenience)"
+                )
+                return False
+                
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.warning("Redis unavailable — token blacklist check skipped, proceeding with JWT claims only", error=str(e))
-        return False
+        from core.config import get_settings
+        settings = get_settings()
+        
+        logger.warning("Redis error during blacklist check", error=str(e))
+        
+        # Check local cache as fallback
+        if token_hash in _recently_blacklisted:
+            return True
+        
+        # Fail-secure in production
+        if settings.app_env == "production":
+            logger.error(
+                "Redis error in production — token blacklist check FAILING SECURE. "
+                "Token rejected because blacklist cannot be verified."
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Authentication service temporarily unavailable. Please try again.",
+            )
+        else:
+            logger.warning(
+                "Redis error in development — token blacklist check skipped, "
+                "proceeding with JWT claims only"
+            )
+            return False
 
 
 async def blacklist_token(token: str, expires_in_seconds: int) -> None:

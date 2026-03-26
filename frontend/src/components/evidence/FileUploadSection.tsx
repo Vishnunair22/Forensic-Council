@@ -175,7 +175,7 @@ export function FileUploadSection({
                   </div>
                   {file.type.startsWith("audio/") && (
                     <div className="flex items-end gap-1 h-8" aria-hidden="true">
-                      {[3, 7, 5, 9, 6, 4, 8, 5, 7, 3, 6, 8].map((h, i) => (
+                      {[3, 7, 5, 9, 6, 4, 8, 5, 7, 3, 6, 8].map((_h, i) => (
                           <div
                             key={i}
                             className="w-1 bg-cyan-400/60 rounded-full"

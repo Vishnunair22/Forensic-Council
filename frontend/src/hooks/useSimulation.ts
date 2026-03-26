@@ -311,17 +311,18 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
         const targetId = sessionId || sessionStorage.getItem("forensic_session_id");
         if (!targetId) return;
         try {
+            // Ensure we have a valid session (auth is cookie-based, no token needed)
             const { ensureAuthenticated } = await import("@/lib/api");
-            const token = await ensureAuthenticated();
+            await ensureAuthenticated();
 
-            // Re-import API_BASE or just rely on relative path since we are in the browser
-            // Actually, next.config.ts rewrites /api/v1/ to the backend. Just use relative path.
+            // Auth is now cookie-based (HttpOnly cookies sent automatically)
+            // No Authorization header needed - credentials: 'include' handles cookie sending
             const response = await fetch(`/api/v1/sessions/${targetId}/resume`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
                 },
+                credentials: "include", // Ensure cookies are sent with the request
                 body: JSON.stringify({ deep_analysis: deep })
             });
             if (!response.ok) throw new Error("Failed to resume investigation");

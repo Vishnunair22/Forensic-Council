@@ -37,13 +37,22 @@ services:
       redis-server
       --requirepass "${REDIS_PASSWORD:-forensic_redis_dev_password}"
       --loglevel warning
+    # SECURITY: Run as non-root user, drop all capabilities
+    user: redis
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-forensic_redis_dev_password}", "ping"]
+      # SECURITY FIX: Use REDISCLI_AUTH env var instead of -a flag (password visible in process list)
+      test: ["CMD-SHELL", "redis-cli ping"]
       interval: 5s
       timeout: 3s
       retries: 5
+    environment:
+      - REDISCLI_AUTH=${REDIS_PASSWORD:-forensic_redis_dev_password}
     deploy:
       resources:
         limits:
@@ -52,11 +61,18 @@ services:
         reservations:
           memory: 128M
           cpus: "0.25"
+    networks:
+      - infra_net
 
   qdrant:
     image: qdrant/qdrant:v1.13.6
     container_name: forensic_qdrant
     restart: unless-stopped
+    # SECURITY: Drop all capabilities, run as non-root (qdrant runs as uid 1000)
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
@@ -73,6 +89,8 @@ services:
         reservations:
           memory: 256M
           cpus: "0.5"
+    networks:
+      - infra_net
 
   postgres:
     image: postgres:17-alpine
@@ -87,6 +105,18 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-forensic_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forensic_pass}
       POSTGRES_DB: ${POSTGRES_DB:-forensic_council}
+    # SECURITY: Run as non-root (postgres), drop unnecessary capabilities
+    user: postgres
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+      - FOWNER
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -102,6 +132,8 @@ services:
         reservations:
           memory: 256M
           cpus: "0.25"
+    networks:
+      - infra_net
 
   migration:
     build:
@@ -110,6 +142,11 @@ services:
     container_name: forensic_migration
     restart: "no"
     command: python scripts/init_db.py
+    # SECURITY: Run with minimal privileges
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     environment:
       - POSTGRES_HOST=postgres
       - POSTGRES_USER=${POSTGRES_USER:-forensic_user}
@@ -124,6 +161,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - infra_net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+        reservations:
+          memory: 64M
+          cpus: "0.1"
 
   # --------------------------------------------------------------------------
   # Backend API
@@ -197,6 +244,11 @@ services:
         reservations:
           memory: 512M
           cpus: "0.5"
+    # SECURITY: Run with minimal privileges, no new privileges, read-only filesystem
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     read_only: true
     tmpfs:
       - /tmp:nosuid,size=512m
@@ -209,6 +261,10 @@ services:
       - numba_cache:/app/cache/numba_cache:rw
       - yolo_cache:/app/cache/ultralytics:rw
       - calibration_models_cache:/app/cache/calibration_models:rw
+    # SECURITY: Connect to infrastructure net (redis, postgres, qdrant) and backend net (frontend, caddy)
+    networks:
+      - infra_net
+      - backend_net
 
   # --------------------------------------------------------------------------
   # Reverse Proxy (Caddy) — TLS termination, security headers, rate limiting
@@ -246,6 +302,13 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    # SECURITY: Run with minimal privileges
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE  # Required to bind ports 80/443
     deploy:
       resources:
         limits:
@@ -254,6 +317,10 @@ services:
         reservations:
           memory: 32M
           cpus: "0.1"
+    # SECURITY: Can reach frontend and backend only
+    networks:
+      - frontend_net
+      - backend_net
 
   # --------------------------------------------------------------------------
   # Frontend
@@ -300,6 +367,11 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    # SECURITY: Run with minimal privileges (already runs as 'nextjs' user in Dockerfile)
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     deploy:
       resources:
         limits:
@@ -308,6 +380,10 @@ services:
         reservations:
           memory: 128M
           cpus: "0.25"
+    # SECURITY: Frontend can only reach backend, NOT infrastructure services
+    networks:
+      - frontend_net
+      - backend_net
 
 volumes:
   redis_data:
@@ -323,3 +399,18 @@ volumes:
   caddy_data:
   caddy_config:
   caddy_logs:
+
+# ── Network Segmentation ───────────────────────────────────────────────────────
+# SECURITY: Separate networks to isolate services
+# - infra_net: Backend ↔ Infrastructure (Redis, Postgres, Qdrant)
+# - frontend_net: Caddy ↔ Frontend
+# - backend_net: Frontend ↔ Backend, Caddy ↔ Backend
+# Frontend cannot directly access infrastructure services
+networks:
+  infra_net:
+    driver: bridge
+    internal: false  # Backend needs outbound for external APIs (Groq, Gemini)
+  frontend_net:
+    driver: bridge
+  backend_net:
+    driver: bridge

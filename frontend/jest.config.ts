@@ -12,8 +12,6 @@ const config: Config = {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   testMatch: [
-    '<rootDir>/tests/**/*.test.ts',
-    '<rootDir>/tests/**/*.test.tsx',
     '<rootDir>/../tests/frontend/**/*.test.ts',
     '<rootDir>/../tests/frontend/**/*.test.tsx',
   ],

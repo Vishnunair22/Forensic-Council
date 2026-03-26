@@ -419,11 +419,11 @@ class ForensicCouncilPipeline:
             )
             # Temporarily disable LLM so deliberate() uses template fallback instantly
             _saved_key = self.arbiter.config.llm_api_key
-            self.arbiter.config.__dict__["llm_api_key"] = None
+            self.arbiter.config.llm_api_key = None
             try:
                 report = await self.arbiter.deliberate(arbiter_results, case_id=case_id)
             finally:
-                self.arbiter.config.__dict__["llm_api_key"] = _saved_key
+                self.arbiter.config.llm_api_key = _saved_key
         
         # Add additional fields to report
         report.case_linking_flags = await self._collect_case_linking_flags(
@@ -445,8 +445,8 @@ class ForensicCouncilPipeline:
         if _sign_step_hook is not None:
             try:
                 await _sign_step_hook("Signing cryptographic hash…")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Sign step hook failed", error=str(e))
         report = await self.arbiter.sign_report(report)
         
         # Step 7: Return signed report

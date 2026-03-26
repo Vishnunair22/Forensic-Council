@@ -34,11 +34,9 @@ export function PageTransition({ children, className = "" }: PageTransitionProps
 export function StaggerIn({
   children,
   className = "",
-  staggerDelay = 0.06,
 }: {
   children: React.ReactNode;
   className?: string;
-  staggerDelay?: number;
 }) {
   return (
     <div

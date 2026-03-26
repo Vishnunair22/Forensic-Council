@@ -254,13 +254,13 @@ async def start_investigation(
     except HTTPException:
         if tmp_path.exists():
             try: tmp_path.unlink()
-            except Exception: pass
+            except Exception as _e: logger.debug("Temp file cleanup failed", error=str(_e))
         raise
     except Exception as e:
         logger.error("Failed to stage uploaded file", error=str(e))
         if tmp_path.exists():
             try: tmp_path.unlink()
-            except Exception: pass
+            except Exception as _e: logger.debug("Temp file cleanup failed", error=str(_e))
         raise HTTPException(status_code=500, detail="Failed to save uploaded file.")
 
     # ── 3. Content-based MIME Validation (python-magic) ──────────────────
@@ -290,7 +290,7 @@ async def start_investigation(
     except HTTPException:
         if tmp_path.exists():
             try: tmp_path.unlink()
-            except Exception: pass
+            except Exception as _e: logger.debug("Temp file cleanup failed", error=str(_e))
         raise
     except Exception as e:
         logger.warning("MIME validation skipped", error=str(e))
@@ -302,7 +302,7 @@ async def start_investigation(
     except Exception as pipe_err:
         logger.error("Failed to initialise pipeline", session_id=session_id, error=str(pipe_err))
         try: tmp_path.unlink()
-        except Exception: pass
+        except Exception as _e: logger.debug("Temp file cleanup failed", error=str(_e))
         raise HTTPException(status_code=500, detail="Pipeline initialisation failed — please retry.")
     _active_pipelines[session_id] = pipeline
 
@@ -932,7 +932,7 @@ async def _wrap_pipeline_with_broadcasts(
                     heartbeat_done.set()
                     try:
                         await asyncio.wait_for(heartbeat_task, timeout=2.0)
-                    except:
+                    except Exception:
                         heartbeat_task.cancel()
                 
                 # Broadcast "Groq synthesising" update so the card shows this step

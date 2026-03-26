@@ -71,10 +71,10 @@ export function HistoryDrawer() {
           <>
             <div
               role="button"
-              tabIndex={-1}
+              tabIndex={0}
               aria-label="Close history drawer"
               onClick={() => setIsOpen(false)}
-              onKeyDown={(e) => { if (e.key === "Escape") setIsOpen(false); }}
+              onKeyDown={(e) => { if (e.key === "Escape" || e.key === "Enter" || e.key === " ") setIsOpen(false); }}
               className="fixed inset-0 bg-background/60 backdrop-blur-sm z-50"
             />
             <div

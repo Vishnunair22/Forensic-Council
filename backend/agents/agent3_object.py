@@ -367,8 +367,7 @@ class Agent3Object(ForensicAgent):
                     ]
 
                     analyzer = get_clip_analyzer()
-                    import asyncio as _asyncio
-                    _loop = _asyncio.get_running_loop()
+                    _loop = asyncio.get_running_loop()
                     result = await _loop.run_in_executor(
                         None,
                         lambda: analyzer.analyze_image(
@@ -584,8 +583,7 @@ class Agent3Object(ForensicAgent):
             
             try:
                 analyzer = get_clip_analyzer()
-                import asyncio as _asyncio
-                _loop = _asyncio.get_running_loop()
+                _loop = asyncio.get_running_loop()
                 result = await _loop.run_in_executor(
                     None,
                     lambda: analyzer.analyze_image(

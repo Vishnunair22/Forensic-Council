@@ -70,16 +70,23 @@ export async function POST() {
             // Set the auth cookie via the Next.js cookies API — this is more reliable
             // than forwarding the raw Set-Cookie header, which can be silently stripped
             // or mangled by Next.js App Router header handling.
-            // secure=false: backend uses secure=False in dev; Next.js standalone runs
-            // NODE_ENV=production but the app may still be served over plain HTTP.
-            // The proxy (Caddy) handles HTTPS termination — the cookie is HttpOnly so
-            // it is never exposed to JavaScript regardless of the Secure flag.
+            // 
+            // SECURITY FIX: Use environment-dependent secure flag.
+            // - In production (NODE_ENV=production), secure=true ensures cookies only sent over HTTPS
+            // - In development, secure=false allows localhost HTTP testing
+            // - The proxy (Caddy) handles HTTPS termination — the cookie is HttpOnly so
+            //   it is never exposed to JavaScript regardless of the Secure flag.
+            // - COOKIE_SECURE env var can override this for edge cases (e.g., production HTTP behind trusted proxy)
+            const cookieSecure = process.env.COOKIE_SECURE 
+                ? process.env.COOKIE_SECURE === 'true'
+                : process.env.NODE_ENV === 'production';
+            
             nextRes.cookies.set("access_token", data.access_token as string, {
                 httpOnly: true,
                 path: "/",
                 sameSite: "lax",
                 maxAge: (data.expires_in as number) ?? 3600,
-                secure: false,
+                secure: cookieSecure,
             });
             return nextRes;
         } catch (error: unknown) {
