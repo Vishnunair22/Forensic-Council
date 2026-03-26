@@ -582,8 +582,9 @@ export default function ResultPage() {
   const [report, setReport]         = useState<ReportDTO | null>(null);
   const [arbiterMsg, setArbiterMsg] = useState("");
   const [errorMsg, setErrorMsg]     = useState("");
-  const [chainOpen, setChainOpen]   = useState(false);
-  
+  const [chainOpen, setChainOpen]           = useState(false);
+  const [agentFindingsOpen, setAgentFindingsOpen] = useState(false);
+
   const [isDeepPhase, setIsDeepPhase] = useState(false);
   const historySavedRef = useRef(false);
 
@@ -982,27 +983,49 @@ export default function ResultPage() {
               {/* ══════════════════════════════════════════════════════════ */}
               {/* ── 3. AGENT FINDINGS ──────────────────────────────────── */}
               {/* ══════════════════════════════════════════════════════════ */}
-              {/* Agent Findings — Bento Row */}
+              {/* Agent Findings — Collapsible Section */}
               {activeAgentIds.length > 0 && (
-                <div className="col-span-12 space-y-8 pt-6">
-                  <div className="flex items-center justify-between px-2">
-                    <h2 className="text-[11px] font-bold uppercase tracking-widest text-foreground/40 flex items-center gap-3">
-                      <Activity className="w-4 h-4 text-amber-400" aria-hidden="true" /> Raw Neural Probe Stream
-                    </h2>
-                    <span className="text-[9px] text-foreground/20 font-mono font-bold uppercase tracking-widest">
-                      Expand for metadata ↓
-                    </span>
-                  </div>
-                  {activeAgentIds.map(id => (
-                    <AgentCard
-                      key={id}
-                      agentId={id}
-                      findings={report.per_agent_findings[id] ?? []}
-                      metrics={report.per_agent_metrics?.[id] as AgentMetricsDTO | undefined}
-                      narrative={report.per_agent_analysis?.[id]}
-                      agentSummary={report.per_agent_summary?.[id] as AgentSummary | undefined}
-                    />
-                  ))}
+                <div className="col-span-12 pt-6">
+                  <SurfaceCard className="p-0 overflow-hidden border-white/5">
+                    {/* Collapsible header */}
+                    <button
+                      onClick={() => setAgentFindingsOpen(v => !v)}
+                      aria-expanded={agentFindingsOpen}
+                      className="w-full flex items-center justify-between px-6 py-5 hover:bg-white/2 transition-colors cursor-pointer group"
+                    >
+                      <span className="flex items-center gap-3 text-sm font-bold uppercase tracking-widest text-foreground/70 group-hover:text-amber-400 transition-colors">
+                        <Activity className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
+                        See Agent Findings
+                        <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-surface-mid border border-border-subtle text-foreground/30 normal-case tracking-wider">
+                          {activeAgentIds.length} active agent{activeAgentIds.length !== 1 ? "s" : ""}
+                        </span>
+                      </span>
+                      <div className={clsx(
+                        "p-1.5 rounded-lg bg-surface-low border border-border-subtle transition-all duration-300",
+                        agentFindingsOpen && "rotate-180 bg-amber-500/10 border-amber-500/30 text-amber-400"
+                      )}>
+                        <ChevronDown className="w-4 h-4" aria-hidden="true" />
+                      </div>
+                    </button>
+
+                    {/* Collapsible body */}
+                    {agentFindingsOpen && (
+                      <div className="overflow-hidden border-t border-border-subtle">
+                        <div className="p-6 space-y-5 bg-surface-low/50">
+                          {activeAgentIds.map(id => (
+                            <AgentCard
+                              key={id}
+                              agentId={id}
+                              findings={report.per_agent_findings[id] ?? []}
+                              metrics={report.per_agent_metrics?.[id] as AgentMetricsDTO | undefined}
+                              narrative={report.per_agent_analysis?.[id]}
+                              agentSummary={report.per_agent_summary?.[id] as AgentSummary | undefined}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </SurfaceCard>
                 </div>
               )}
 
@@ -1095,6 +1118,31 @@ export default function ResultPage() {
                   )}
                 </>
               </SurfaceCard>
+
+              {/* ── Back to Home ── */}
+              <div className="col-span-12 flex flex-col items-center py-12 gap-5">
+                <div
+                  className="w-16 h-16 rounded-2xl flex items-center justify-center"
+                  style={{
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+                  }}
+                >
+                  <Home className="w-7 h-7 text-foreground/30" aria-hidden="true" />
+                </div>
+                <div className="text-center space-y-1">
+                  <p className="text-sm font-medium text-foreground/40">Analysis complete</p>
+                  <p className="text-xs text-foreground/20 font-mono">Return to the home page to run a new investigation.</p>
+                </div>
+                <button
+                  onClick={handleHome}
+                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-medium cursor-pointer transition-all hover:bg-surface-mid border border-border-subtle text-foreground/50 hover:text-foreground/70"
+                >
+                  <Home className="w-4 h-4" aria-hidden="true" />
+                  Back to Home
+                </button>
+              </div>
 
             </div>
           )}

@@ -2,24 +2,24 @@
 
 /* ── Theme Variables ──────────────────────────────────────────────────────── */
 @theme {
-  /* Color system — dark forensic theme */
-  --color-background:    #020617;
-  --color-foreground:    #e2e8f0;
+  /* Color system — deep void forensic theme */
+  --color-background:    #080C14;
+  --color-foreground:    #f8fafc;
   --color-primary:       #22d3ee;
 
   /* Surface hierarchy — dark layered panels */
-  --color-surface-low:   #060f1e;
-  --color-surface-mid:   #0a1628;
-  --color-surface-high:  #0f1f35;
+  --color-surface-low:   #0a0f1a;
+  --color-surface-mid:   #0d1420;
+  --color-surface-high:  #111927;
 
   /* Borders */
-  --color-border-subtle: #1a2840;
+  --color-border-subtle: #1a2438;
   --color-border-bold:   #243553;
 
-  /* Typography */
-  --font-sans:    var(--font-poppins), system-ui, -apple-system, sans-serif;
+  /* Typography — Inter for all UI, Fira Code for mono */
+  --font-sans:    var(--font-inter), system-ui, -apple-system, sans-serif;
   --font-mono:    var(--font-fira-code), 'Fira Code', 'Courier New', monospace;
-  --font-heading: var(--font-poppins), system-ui, -apple-system, sans-serif;
+  --font-heading: var(--font-inter), system-ui, -apple-system, sans-serif;
 }
 
 /* ── Base Reset ───────────────────────────────────────────────────────────── */
@@ -34,7 +34,7 @@
   }
 
   body {
-    background-color: #020617;
+    background-color: #080C14;
     color: #e2e8f0;
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
@@ -86,7 +86,35 @@
 /* ── Component Classes ────────────────────────────────────────────────────── */
 @layer components {
 
-  /* Glassmorphism card */
+  /* ── Glass Tier System ──────────────────────────────────────────────────── */
+  /* Tier 1: Large sections / major cards — subtle depth */
+  .glass-t1 {
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 4px 24px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Tier 2: Agent/step cards — lighter floating feel */
+  .glass-t2 {
+    background: rgba(255, 255, 255, 0.035);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 2px 12px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Tier 3: Navbar / modals — dense blur, high contrast */
+  .glass-t3 {
+    background: rgba(12, 16, 28, 0.88);
+    backdrop-filter: blur(40px) saturate(200%);
+    -webkit-backdrop-filter: blur(40px) saturate(200%);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+
+  /* Glassmorphism card (legacy) */
   .glass-ethereal {
     background: rgba(34, 211, 238, 0.02);
     backdrop-filter: blur(24px);

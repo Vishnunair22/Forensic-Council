@@ -4,10 +4,21 @@ import { AlertCircle } from "lucide-react";
 
 export function GlobalFooter() {
   return (
-    <footer className="w-full border-t border-white/5 bg-slate-950/80 backdrop-blur-md py-6 px-6 relative z-50">
+    <footer
+      className="w-full py-5 px-6 relative z-50"
+      style={{
+        borderTop: "1px solid rgba(255,255,255,0.05)",
+        background: "rgba(8,12,20,0.9)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+      }}
+    >
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-center gap-2 text-center">
-        <AlertCircle className="w-4 h-4 text-slate-500" aria-hidden="true" />
-        <p className="text-sm text-slate-500 font-light tracking-wide">
+        <AlertCircle className="w-3.5 h-3.5 shrink-0" style={{ color: "rgba(255,255,255,0.22)" }} aria-hidden="true" />
+        <p
+          className="text-xs font-light"
+          style={{ color: "rgba(255,255,255,0.28)", letterSpacing: "0.02em" }}
+        >
           Forensic Council is an academic project and can occasionally make mistakes.
         </p>
       </div>

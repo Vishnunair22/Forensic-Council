@@ -1,12 +1,12 @@
-import { Poppins, Fira_Code } from "next/font/google";
+import { Inter, Fira_Code } from "next/font/google";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { DevErrorProvider } from "@/components/DevErrorOverlay";
 import "./globals.css";
 
-const poppins = Poppins({
+const inter = Inter({
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-  variable: "--font-poppins",
+  variable: "--font-inter",
+  display: "swap",
 });
 
 const firaCode = Fira_Code({
@@ -27,7 +27,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" dir="ltr" className="dark">
-      <body className={`${poppins.variable} ${firaCode.variable} font-sans bg-slate-950 text-slate-50 antialiased min-h-screen flex flex-col`}>
+      <body className={`${inter.variable} ${firaCode.variable} font-sans bg-slate-950 text-slate-50 antialiased min-h-screen flex flex-col`}>
         {/* Skip navigation — visible on focus for keyboard users */}
         <a
           href="#main-content"
