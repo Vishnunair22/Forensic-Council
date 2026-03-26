@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Optional
 from uuid import UUID, uuid4
@@ -88,6 +88,21 @@ class SessionManager:
         self._redis = redis_client
         self._sessions: dict[UUID, SessionState] = {}
         self._lock = asyncio.Lock()
+
+    async def cleanup_old_sessions(self, max_age_hours: int = 24) -> int:
+        """Evict completed/failed sessions older than max_age_hours to prevent unbounded memory growth."""
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        async with self._lock:
+            expired = [
+                sid for sid, s in self._sessions.items()
+                if s.updated_at < cutoff
+                and s.status in (SessionStatus.COMPLETED, SessionStatus.FAILED)
+            ]
+            for sid in expired:
+                del self._sessions[sid]
+        if expired:
+            logger.info("Evicted stale sessions", count=len(expired))
+        return len(expired)
     
     async def create_session(
         self,

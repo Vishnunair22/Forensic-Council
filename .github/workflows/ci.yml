@@ -52,7 +52,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
-          version: "latest"
+          version: "0.7.x"
 
       - name: Set up Python
         working-directory: backend
@@ -121,7 +121,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build backend (production target)
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: backend
           file: backend/Dockerfile
@@ -181,7 +181,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build frontend (runner target)
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: frontend
           file: frontend/Dockerfile
@@ -205,18 +205,25 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
       - name: Python dependency audit (pip-audit)
         working-directory: backend
         run: |
           uv tool install pip-audit
           uv run pip-audit --requirement <(uv export --no-dev --format requirements-txt) \
             --ignore-vuln GHSA-jfh8-c2jp-5hhc  # cryptography false-positive on some runners
-        continue-on-error: true   # advisory — don't block on transitive issues
+        # continue-on-error: true   # advisory — don't block on transitive issues
 
       - name: Node dependency audit
         working-directory: frontend
         run: npm audit --audit-level=high
-        continue-on-error: true   # advisory
+        # continue-on-error: true   # advisory
 
   # ── Integration smoke test ────────────────────────────────────────────────────
   integration-smoke:
@@ -243,7 +250,16 @@ jobs:
       - name: Start infrastructure only
         run: |
           docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.infra.yml --env-file .env up -d
-          sleep 10
+          echo "Waiting for Postgres and Redis to be ready..."
+          for i in $(seq 1 30); do
+            pg_ok=$(docker exec forensic_postgres pg_isready -U forensic_user 2>/dev/null && echo "yes" || echo "no")
+            redis_ok=$(docker exec forensic_redis redis-cli -a "${REDIS_PASSWORD:-forensic_redis_dev_password}" ping 2>/dev/null | grep -c PONG || echo "0")
+            if [ "$pg_ok" = "yes" ] && [ "$redis_ok" -gt 0 ]; then
+              echo "Infrastructure ready after ${i}x2s"
+              break
+            fi
+            sleep 2
+          done
 
       - name: Start backend
         run: |

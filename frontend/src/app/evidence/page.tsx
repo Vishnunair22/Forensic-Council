@@ -20,7 +20,7 @@ import { useSimulation } from "@/hooks/useSimulation";
 import { PageTransition } from "@/components/ui/PageTransition";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { useSound } from "@/hooks/useSound";
-import { startInvestigation, submitHITLDecision, type InvestigationResponse } from "@/lib/api";
+import { startInvestigation, submitHITLDecision, autoLoginAsInvestigator, type InvestigationResponse } from "@/lib/api";
 import { AGENTS_DATA, ALLOWED_MIME_TYPES } from "@/lib/constants";
 
 import {
@@ -123,6 +123,13 @@ export default function EvidencePage() {
       }
     };
   }, [filePreviewUrl]);
+
+  // Auto-login on mount so auth cookie is set before any investigation call.
+  // Silently succeeds if already authenticated; retries on first API 401 otherwise.
+  useEffect(() => {
+    autoLoginAsInvestigator().catch(() => {/* handled by handleAuthError on first API call */});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Evidence page load sound — plays once on mount (AudioContext unlocked by CTA click on landing)
   useEffect(() => {
@@ -492,8 +499,6 @@ export default function EvidencePage() {
           >
             <div className="relative w-20 h-20 flex items-center justify-center">
               <div
-                
-                
                 className="absolute inset-0 rounded-full blur-xl"
                 style={{ background: "rgba(34,211,238,0.3)" }}
               />
@@ -538,8 +543,8 @@ export default function EvidencePage() {
         {/* Phase Indicator */}
         {hasStartedAnalysis && (
           <div
-            
-            
+            aria-live="polite"
+            aria-label={`Current phase: ${phase === "initial" ? "Forensic Scan" : "Deep ML Probe"}`}
             className="mb-8 flex items-center justify-center"
           >
             <div className="flex items-center gap-2 p-1 rounded-full bg-surface-low border border-border-subtle shadow-lg">
@@ -551,14 +556,14 @@ export default function EvidencePage() {
                 style={phase === "initial" ? { background: "#22D3EE", boxShadow: "0 4px 16px rgba(34,211,238,0.25)" } : {}}
               >
                 {phase === "initial" && status !== "complete" && !awaitingDecision ? (
-                  <div className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" aria-hidden="true" />
                 ) : (
-                  <CheckCircle2 className={`w-3.5 h-3.5 ${phase === "deep" || awaitingDecision || status === "complete" ? "text-black" : ""}`} />
+                  <CheckCircle2 aria-hidden="true" className={`w-3.5 h-3.5 ${phase === "deep" || awaitingDecision || status === "complete" ? "text-black" : ""}`} />
                 )}
                 <span>Forensic Scan</span>
               </div>
-              
-              <div className="w-4 h-px bg-border-bold" />
+
+              <div className="w-4 h-px bg-border-bold" aria-hidden="true" />
 
               <div className={`flex items-center gap-2 px-5 py-2 rounded-full transition-all duration-300 text-[10px] font-bold uppercase tracking-widest ${
                 phase === "deep"
@@ -568,11 +573,11 @@ export default function EvidencePage() {
                 style={phase === "deep" ? { background: "#22D3EE", boxShadow: "0 4px 16px rgba(34,211,238,0.25)" } : {}}
               >
                 {phase === "deep" && status !== "complete" ? (
-                  <div className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" aria-hidden="true" />
                 ) : phase === "deep" && status === "complete" ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-black" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-black" aria-hidden="true" />
                 ) : (
-                  <Circle className="w-3.5 h-3.5" />
+                  <Circle className="w-3.5 h-3.5" aria-hidden="true" />
                 )}
                 <span>Deep ML Probe</span>
               </div>
@@ -653,8 +658,6 @@ export default function EvidencePage() {
         onDecision={handleHITLDecision}
         onDismiss={dismissCheckpoint}
       />
-
-      <GlobalFooter />
 
       {/* Hidden file input */}
       <input

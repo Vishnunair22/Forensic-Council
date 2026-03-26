@@ -9,11 +9,12 @@ from datetime import datetime
 from typing import Any, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class InvestigationRequest(BaseModel):
     """Request to start an investigation."""
+    model_config = ConfigDict(extra="forbid")
     case_id: str = Field(..., description="Case identifier")
     investigator_id: str = Field(..., description="ID of the investigator")
 
@@ -51,6 +52,7 @@ class AgentMetricsDTO(BaseModel):
     total_tools_called: int = 0
     tools_succeeded: int = 0
     tools_failed: int = 0
+    tools_not_applicable: int = 0
     error_rate: float = 0.0
     confidence_score: float = 0.0
     finding_count: int = 0
@@ -98,6 +100,7 @@ class ReportDTO(BaseModel):
 
 class HITLDecisionRequest(BaseModel):
     """Request for human-in-the-loop decision."""
+    model_config = ConfigDict(extra="forbid")
     session_id: str
     checkpoint_id: str
     agent_id: str

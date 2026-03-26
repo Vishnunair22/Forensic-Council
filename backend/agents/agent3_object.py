@@ -26,6 +26,27 @@ from core.ml_subprocess import run_ml_tool
 from infra.evidence_store import EvidenceStore
 from core.gemini_client import GeminiVisionClient
 
+# Module-level YOLO singleton — load once, reuse across all calls
+_yolo_model: Optional[Any] = None
+
+def _get_yolo_model() -> Any:
+    """Return the YOLO model, loading it once on first call."""
+    global _yolo_model
+    if _yolo_model is not None:
+        return _yolo_model
+    import os, pathlib
+    from ultralytics import YOLO, settings as yolo_settings
+    yolo_cache = os.getenv("YOLO_CONFIG_DIR", str(pathlib.Path.home() / ".cache" / "ultralytics"))
+    os.makedirs(yolo_cache, exist_ok=True)
+    os.environ["YOLO_CONFIG_DIR"] = yolo_cache
+    os.environ["ULTRALYTICS_CACHE_DIR"] = yolo_cache
+    valid_keys = set(yolo_settings.keys()) if hasattr(yolo_settings, "keys") else set(dict(yolo_settings).keys())
+    safe_updates = {k: v for k, v in {"weights_dir": yolo_cache, "datasets_dir": yolo_cache}.items() if k in valid_keys}
+    if safe_updates:
+        yolo_settings.update(safe_updates)
+    _yolo_model = YOLO(os.path.join(yolo_cache, "yolov8n.pt"))
+    return _yolo_model
+
 
 class Agent3Object(ForensicAgent):
     """
@@ -168,19 +189,8 @@ class Agent3Object(ForensicAgent):
             artifact = input_data.get("artifact") or self.evidence_artifact
             
             try:
-                from ultralytics import YOLO, settings
-
-                # Only update settings keys that actually exist in this ultralytics version
-                valid_keys = set(settings.keys()) if hasattr(settings, "keys") else set(dict(settings).keys())
-                safe_updates = {k: v for k, v in {
-                    "weights_dir": yolo_cache, "datasets_dir": yolo_cache,
-                }.items() if k in valid_keys}
-                if safe_updates:
-                    settings.update(safe_updates)
-                
-                # Auto-downloads on first call
-                model_path = os.path.join(yolo_cache, "yolov8n.pt")
-                model = YOLO(model_path)
+                # Use module-level singleton — avoids ~200ms reload on every call
+                model = _get_yolo_model()
 
                 # If the artifact is a video, extract a representative frame first.
                 # This prevents "skipped/useless" results for videos and makes the analysis actionable.

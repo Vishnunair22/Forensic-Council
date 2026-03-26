@@ -149,7 +149,7 @@ export function FileUploadSection({
               /* eslint-disable-next-line @next/next/no-img-element -- Dynamic blob URL preview */
               <img
                 src={filePreviewUrl ?? ""}
-                alt="Evidence"
+                alt={`Evidence preview: ${file.name}`}
                 className="w-full max-h-72 object-contain"
               />
             )}
@@ -174,12 +174,10 @@ export function FileUploadSection({
                     )}
                   </div>
                   {file.type.startsWith("audio/") && (
-                    <div className="flex items-end gap-1 h-8">
+                    <div className="flex items-end gap-1 h-8" aria-hidden="true">
                       {[3, 7, 5, 9, 6, 4, 8, 5, 7, 3, 6, 8].map((h, i) => (
                           <div
                             key={i}
-                            
-                            
                             className="w-1 bg-cyan-400/60 rounded-full"
                           />
                       ))}
@@ -232,6 +230,9 @@ export function FileUploadSection({
       ) : (
         /* No file selected – drag and drop area */
         <div
+          role="button"
+          tabIndex={0}
+          aria-label="Upload evidence file. Click or drag and drop an image, video, or audio file here."
           className={clsx(
             "surface-panel-high w-full group overflow-hidden border-2 border-dashed rounded transition-all duration-700 relative cursor-pointer",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50 focus-visible:ring-offset-8 focus-visible:ring-offset-background",
@@ -240,6 +241,12 @@ export function FileUploadSection({
               : "border-white/5 hover:border-cyan-500/35"
           )}
           onClick={() => { playSound("click"); fileInputRef.current?.click(); }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
           onDragEnter={handleDragEnter}
           onDragOver={(e) => { e.preventDefault(); if (!isDragging) onDragEnter(); }}
           onDragLeave={handleDragLeave}
@@ -283,11 +290,11 @@ export function FileUploadSection({
       {/* Validation Error */}
       {validationError && (
         <div
-          
-          
+          role="alert"
+          aria-live="assertive"
           className="mt-6 p-4 rounded-xl glass-ethereal border border-red-500/40 text-red-200 text-sm max-w-md w-full flex items-start gap-3 shadow-[0_8px_30px_rgba(239,68,68,0.2)]"
         >
-          <ShieldAlert className="w-5 h-5 text-red-500 shrink-0" />
+          <ShieldAlert className="w-5 h-5 text-red-500 shrink-0" aria-hidden="true" />
           <span className="font-medium leading-relaxed">{validationError}</span>
         </div>
       )}

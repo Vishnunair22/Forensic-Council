@@ -23,8 +23,12 @@ coverage/
 # Version control
 .git/
 .gitignore
+.github/
 *.md
 README*
+
+# Test files
+tests/
 
 # OS artifacts
 .DS_Store

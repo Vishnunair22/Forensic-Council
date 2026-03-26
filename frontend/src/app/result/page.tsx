@@ -78,16 +78,16 @@ function ArbiterOverlay({ liveMsg }: { liveMsg: string }) {
     return () => clearInterval(t);
   }, []);
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl">
+    <div role="dialog" aria-modal="true" aria-label="Council Deliberation in progress" className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl">
       <SurfaceCard className="flex flex-col items-center gap-6 px-10 py-12 shadow-2xl max-w-sm w-full mx-4 border-white/5 bg-surface-high rounded">
         <div className="relative w-24 h-24 flex items-center justify-center">
           <div
-            
-            
+
+
             className="absolute inset-0 rounded-full bg-amber-500/10 blur-xl"
           />
           <div className="relative z-10 w-14 h-14 rounded bg-black border border-amber-500/30 flex items-center justify-center shadow-[0_0_20px_rgba(217,119,6,0.2)]">
-            <ShieldCheck className="w-8 h-8 text-amber-500" />
+            <ShieldCheck className="w-8 h-8 text-amber-500" aria-hidden="true" />
           </div>
         </div>
         <div className="text-center space-y-3">
@@ -95,9 +95,9 @@ function ArbiterOverlay({ liveMsg }: { liveMsg: string }) {
           <>
             <p
               key={liveMsg || ARBITER_STEPS[step]}
-              
-              
-              
+              aria-live="polite"
+              aria-atomic="true"
+
               className="text-amber-500 text-[11px] font-black font-mono uppercase tracking-[0.3em] min-h-5"
             >
               {liveMsg || ARBITER_STEPS[step]}
@@ -276,7 +276,7 @@ function AgentCard({
                 "p-1.5 rounded bg-white/5 border border-white/5 transition-all duration-300",
                 open && "rotate-180 bg-amber-500/10 border-amber-500/30 text-amber-500"
             )}>
-                <ChevronDown className="w-4 h-4" />
+                <ChevronDown className="w-4 h-4" aria-hidden="true" />
             </div>
           )}
         </div>
@@ -784,7 +784,7 @@ export default function ResultPage() {
       {/* Sticky header */}
       <header className="sticky top-0 z-50 w-full border-b border-border-subtle bg-background/80 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <button onClick={handleHome} className="flex items-center gap-3 group cursor-pointer">
+          <button onClick={handleHome} aria-label="Return to Forensic Council home" className="flex items-center gap-3 group cursor-pointer">
             <div className="w-8 h-8 bg-surface-high border border-amber-500/40 rounded-lg flex items-center justify-center font-bold text-amber-400 text-[10px] group-hover:border-amber-400 transition-all shadow-sm">
               FC
             </div>
@@ -1040,7 +1040,7 @@ export default function ResultPage() {
                       "p-1.5 rounded-lg bg-surface-high border border-border-subtle transition-all duration-300",
                       chainOpen && "rotate-180 bg-amber-500/10 border-amber-500/30 text-amber-400"
                   )}>
-                    <ChevronDown className="w-4 h-4" />
+                    <ChevronDown className="w-4 h-4" aria-hidden="true" />
                   </div>
                 </button>
                 <>

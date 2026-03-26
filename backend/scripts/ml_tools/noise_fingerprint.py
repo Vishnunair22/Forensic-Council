@@ -106,9 +106,9 @@ def analyze_noise_fingerprint(image_path: str, num_regions: int = 6) -> dict:
     if len(outlier_idx) == 0:
         verdict = "CONSISTENT"
     elif len(outlier_idx) <= 1:
-        verdict = "INCONSISTENT"
+        verdict = "INCONCLUSIVE"   # borderline — single outlier region
     else:
-        verdict = "INCONCLUSIVE"
+        verdict = "INCONSISTENT"   # multiple outlier regions = clear tampering signal
 
     return {
         "inconsistent_regions": inconsistent_regions,

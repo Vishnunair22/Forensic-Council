@@ -29,7 +29,7 @@ export const AgentIcon = ({ role, agentId, className, size = 20 }: AgentIconProp
     // Normalize string for checking
     const r = resolvedRole.toLowerCase();
 
-    const iconProps = { className, size: iconSize };
+    const iconProps = { className, size: iconSize, "aria-hidden": true as const };
 
     if (r.includes("integrity") || r.includes("artifact")) return <Shield {...iconProps} />;
     if (r.includes("scene") || r.includes("lighting") || r.includes("reconstruction")) return <Search {...iconProps} />;

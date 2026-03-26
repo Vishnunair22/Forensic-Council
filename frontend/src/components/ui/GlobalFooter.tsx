@@ -1,24 +1,15 @@
 "use client";
 
+import { AlertCircle } from "lucide-react";
+
 export function GlobalFooter() {
   return (
-    <footer
-      className="relative z-10 py-8 mt-12"
-      style={{ borderTop: "1px solid rgba(255,255,255,0.05)", background: "rgba(3,11,26,0.4)" }}
-    >
-      <div className="max-w-5xl mx-auto flex flex-col items-center gap-4">
-        <p className="text-[9px] text-white/40 text-center leading-relaxed max-w-3xl font-sans font-medium uppercase tracking-[0.12em]">
-          Forensic Council is a accadamic project and can occassionally make mistakes.
+    <footer className="w-full border-t border-white/5 bg-slate-950/80 backdrop-blur-md py-6 px-6 relative z-50">
+      <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-center gap-2 text-center">
+        <AlertCircle className="w-4 h-4 text-slate-500" aria-hidden="true" />
+        <p className="text-sm text-slate-500 font-light tracking-wide">
+          Forensic Council is an academic project and can occasionally make mistakes.
         </p>
-        <div
-          className="shrink-0 px-4 py-1.5 rounded-full"
-          style={{
-            background: "rgba(255,255,255,0.02)",
-            border: "1px solid rgba(255,255,255,0.06)"
-          }}
-        >
-          <span className="text-[8px] font-mono text-white/15 tracking-widest uppercase">v1.0.4</span>
-        </div>
       </div>
     </footer>
   );

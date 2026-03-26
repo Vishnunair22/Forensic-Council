@@ -1,5 +1,4 @@
 import '@testing-library/jest-dom';
-import React from 'react';
 
 // Mock window.scrollTo since JSDOM doesn't implement it
 window.scrollTo = jest.fn();
@@ -12,22 +11,18 @@ jest.mock('@/hooks/useSound', () => ({
   }),
 }));
 
-// Mock framer-motion globally to simplify test rendering and avoid layout/animation errors
-jest.mock('framer-motion', () => ({
-  motion: new Proxy({}, {
-    get: (_target, tag: string) => {
-      return ({ children, ...props }: { children?: React.ReactNode; [key: string]: unknown }) => {
-        // Strip framer-motion specific props that might cause React warnings on native tags
-        const cleanProps = { ...props };
-        [
-          'whileHover', 'whileTap', 'whileInView', 'initial', 'animate', 'exit', 
-          'transition', 'viewport', 'drag', 'layout'
-        ].forEach(p => delete cleanProps[p]);
-        
-        return React.createElement(tag, cleanProps, children);
-      };
-    },
-  }),
-  AnimatePresence: ({ children }: { children?: React.ReactNode }) => children,
-  useReducedMotion: () => false,
-}));
+// Mock framer-motion — useScroll/useTransform require a real DOM scroll context
+jest.mock('framer-motion', () => {
+  const React = require('react');
+  return {
+    motion: new Proxy({}, {
+      get: (_: unknown, tag: string) =>
+        React.forwardRef(({ children, ...props }: React.HTMLAttributes<HTMLElement>, ref: React.Ref<HTMLElement>) =>
+          React.createElement(tag, { ...props, ref }, children)
+        ),
+    }),
+    useScroll: () => ({ scrollYProgress: { get: () => 0 } }),
+    useTransform: (_: unknown, __: unknown, output: unknown[]) => ({ get: () => output[0] }),
+    AnimatePresence: ({ children }: { children: React.ReactNode }) => children,
+  };
+});

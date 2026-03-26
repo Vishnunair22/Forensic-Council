@@ -19,9 +19,9 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 
-# BuildKit cache mount keeps npm's package cache between builds → much faster
+# Use npm install with legacy-peer-deps to handle React 19 peer conflicts
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci --prefer-offline --no-audit --no-fund
+    npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund
 
 # ── Stage 1: Development — hot-reload server ─────────────────────────────────
 FROM base AS development
@@ -84,10 +84,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 # Switch to non-root user before the process starts
 USER nextjs
 
-# Health-check: use wget (available in alpine) hitting 0.0.0.0 which is where
-# the standalone server listens. Increase start-period to give Next.js time to boot.
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
-  CMD wget -qO- http://0.0.0.0:3000/ > /dev/null || exit 1
+# Health-check: use the root path (always served by Next.js standalone).
+# Previously used /api/health which is not a defined route and would always fail.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
+  CMD wget -qO- http://localhost:3000/ > /dev/null || exit 1
 
 EXPOSE 3000
 

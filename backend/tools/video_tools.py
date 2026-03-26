@@ -71,59 +71,60 @@ async def optical_flow_analyze(
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             raise ToolUnavailableError(f"Cannot open video: {video_path}")
-        
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        
-        # Read first frame
-        ret, prev_frame = cap.read()
-        if not ret:
-            raise ToolUnavailableError("Cannot read video frames")
-        
-        prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
-        
-        # Accumulate flow magnitudes
-        flow_magnitudes = []
-        frame_idx = 0
-        flagged_frames = []
-        
-        # Create heatmap accumulator
-        heatmap_accumulator = np.zeros((height, width), dtype=np.float32)
-        
-        while True:
-            ret, frame = cap.read()
+
+        try:
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+            # Read first frame
+            ret, prev_frame = cap.read()
             if not ret:
-                break
-            
-            frame_idx += 1
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            
-            # Compute optical flow using Farneback method
-            flow = cv2.calcOpticalFlowFarneback(
-                prev_gray, gray,
-                None,
-                pyr_scale=0.5,
-                levels=3,
-                winsize=15,
-                iterations=3,
-                poly_n=5,
-                poly_sigma=1.2,
-                flags=0
-            )
-            
-            # Compute flow magnitude
-            magnitude = np.sqrt(flow[..., 0]**2 + flow[..., 1]**2)
-            mean_magnitude = np.mean(magnitude)
-            flow_magnitudes.append(mean_magnitude)
-            
-            # Accumulate for heatmap
-            heatmap_accumulator += magnitude
-            
-            prev_gray = gray
-        
-        cap.release()
+                raise ToolUnavailableError("Cannot read video frames")
+
+            prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
+
+            # Accumulate flow magnitudes
+            flow_magnitudes = []
+            frame_idx = 0
+            flagged_frames = []
+
+            # Create heatmap accumulator
+            heatmap_accumulator = np.zeros((height, width), dtype=np.float32)
+
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                frame_idx += 1
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+                # Compute optical flow using Farneback method
+                flow = cv2.calcOpticalFlowFarneback(
+                    prev_gray, gray,
+                    None,
+                    pyr_scale=0.5,
+                    levels=3,
+                    winsize=15,
+                    iterations=3,
+                    poly_n=5,
+                    poly_sigma=1.2,
+                    flags=0
+                )
+
+                # Compute flow magnitude
+                magnitude = np.sqrt(flow[..., 0]**2 + flow[..., 1]**2)
+                mean_magnitude = np.mean(magnitude)
+                flow_magnitudes.append(mean_magnitude)
+
+                # Accumulate for heatmap
+                heatmap_accumulator += magnitude
+
+                prev_gray = gray
+        finally:
+            cap.release()
         
         # Analyze flow magnitudes for anomalies
         if len(flow_magnitudes) > 0:
@@ -228,47 +229,48 @@ async def frame_window_extract(
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             raise ToolUnavailableError(f"Cannot open video: {video_path}")
-        
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        
-        # Validate frame range
-        start_frame = max(0, start_frame)
-        end_frame = min(total_frames, end_frame)
-        
-        if start_frame >= end_frame:
-            raise ToolUnavailableError(f"Invalid frame range: {start_frame} >= {end_frame}")
-        
-        # Create output directory for frames
-        output_dir = os.path.join(
-            os.path.dirname(video_path),
-            f"frames_{artifact.artifact_id}_{start_frame}_{end_frame}"
-        )
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # Seek to start frame
-        cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-        
-        # Extract frames
-        frame_count = 0
-        frame_hashes = []
-        
-        for frame_idx in range(start_frame, end_frame):
-            ret, frame = cap.read()
-            if not ret:
-                break
-            
-            # Save frame
-            frame_path = os.path.join(output_dir, f"frame_{frame_idx:06d}.png")
-            cv2.imwrite(frame_path, frame)
-            
-            # Compute hash
-            frame_hash = hashlib.sha256(frame.tobytes()).hexdigest()
-            frame_hashes.append(frame_hash)
-            
-            frame_count += 1
-        
-        cap.release()
+
+        try:
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+            # Validate frame range
+            start_frame = max(0, start_frame)
+            end_frame = min(total_frames, end_frame)
+
+            if start_frame >= end_frame:
+                raise ToolUnavailableError(f"Invalid frame range: {start_frame} >= {end_frame}")
+
+            # Create output directory for frames
+            output_dir = os.path.join(
+                os.path.dirname(video_path),
+                f"frames_{artifact.artifact_id}_{start_frame}_{end_frame}"
+            )
+            os.makedirs(output_dir, exist_ok=True)
+
+            # Seek to start frame
+            cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+
+            # Extract frames
+            frame_count = 0
+            frame_hashes = []
+
+            for frame_idx in range(start_frame, end_frame):
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                # Save frame
+                frame_path = os.path.join(output_dir, f"frame_{frame_idx:06d}.png")
+                cv2.imwrite(frame_path, frame)
+
+                # Compute hash
+                frame_hash = hashlib.sha256(frame.tobytes()).hexdigest()
+                frame_hashes.append(frame_hash)
+
+                frame_count += 1
+        finally:
+            cap.release()
         
         # Compute combined hash for all frames
         combined_hash = hashlib.sha256("".join(frame_hashes).encode()).hexdigest()
@@ -603,28 +605,29 @@ async def video_metadata_extract(
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             raise ToolUnavailableError(f"Cannot open video: {video_path}")
-        
-        # Extract metadata
-        metadata = {
-            "fps": cap.get(cv2.CAP_PROP_FPS),
-            "frame_count": int(cap.get(cv2.CAP_PROP_FRAME_COUNT)),
-            "width": int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
-            "height": int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-            "fourcc": int(cap.get(cv2.CAP_PROP_FOURCC)),
-            "backend": cap.getBackendName(),
-        }
-        
-        # Convert fourcc to string
-        fourcc = int(metadata["fourcc"])
-        metadata["fourcc_str"] = "".join([chr((fourcc >> 8 * i) & 0xFF) for i in range(4)])
-        
-        # Compute duration
-        if metadata["fps"] > 0:
-            metadata["duration"] = metadata["frame_count"] / metadata["fps"]
-        else:
-            metadata["duration"] = 0
-        
-        cap.release()
+
+        try:
+            # Extract metadata
+            metadata = {
+                "fps": cap.get(cv2.CAP_PROP_FPS),
+                "frame_count": int(cap.get(cv2.CAP_PROP_FRAME_COUNT)),
+                "width": int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                "height": int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                "fourcc": int(cap.get(cv2.CAP_PROP_FOURCC)),
+                "backend": cap.getBackendName(),
+            }
+
+            # Convert fourcc to string
+            fourcc = int(metadata["fourcc"])
+            metadata["fourcc_str"] = "".join([chr((fourcc >> 8 * i) & 0xFF) for i in range(4)])
+
+            # Compute duration
+            if metadata["fps"] > 0:
+                metadata["duration"] = metadata["frame_count"] / metadata["fps"]
+            else:
+                metadata["duration"] = 0
+        finally:
+            cap.release()
         
         # Get file size
         metadata["file_size"] = os.path.getsize(video_path)
@@ -693,34 +696,35 @@ async def face_swap_detect_deepface(
         
         cap = cv2.VideoCapture(video_path)
         fps = cap.get(cv2.CAP_PROP_FPS) or 25
-        
+
         embeddings_timeline = []
         frame_idx = 0
-        
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            
-            # Sample every 0.5 seconds
-            if frame_idx % max(1, int(fps * 0.5)) == 0:
-                try:
-                    result = DeepFace.represent(
-                        frame, model_name="Facenet", enforce_detection=False
-                    )
-                    if result:
-                        emb = np.array(result[0]["embedding"])
-                        embeddings_timeline.append({
-                            "frame": frame_idx,
-                            "timestamp_s": round(frame_idx / fps, 2),
-                            "embedding": emb,
-                            "face_detected": True,
-                        })
-                except Exception:
-                    pass
-            frame_idx += 1
-        
-        cap.release()
+
+        try:
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                # Sample every 0.5 seconds
+                if frame_idx % max(1, int(fps * 0.5)) == 0:
+                    try:
+                        result = DeepFace.represent(
+                            frame, model_name="Facenet", enforce_detection=False
+                        )
+                        if result:
+                            emb = np.array(result[0]["embedding"])
+                            embeddings_timeline.append({
+                                "frame": frame_idx,
+                                "timestamp_s": round(frame_idx / fps, 2),
+                                "embedding": emb,
+                                "face_detected": True,
+                            })
+                    except Exception:
+                        pass
+                frame_idx += 1
+        finally:
+            cap.release()
         
         if len(embeddings_timeline) < 3:
             return {

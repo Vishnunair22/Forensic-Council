@@ -206,7 +206,12 @@ export function DevErrorOverlay({ errorData, onDismiss }: { errorData: ParsedErr
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex flex-col bg-neutral-950/90 backdrop-blur-sm overflow-hidden font-sans tabular-nums selection:bg-rose-500/30">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="dev-error-title"
+      className="fixed inset-0 z-[9999] flex flex-col bg-neutral-950/90 backdrop-blur-sm overflow-hidden font-sans tabular-nums selection:bg-rose-500/30"
+    >
 
       {/* Header Bar */}
       <div className="flex-none bg-rose-950/40 border-b border-rose-500/20 px-6 py-4 flex items-start justify-between shadow-2xl">
@@ -219,7 +224,7 @@ export function DevErrorOverlay({ errorData, onDismiss }: { errorData: ParsedErr
               <span className="px-2 py-0.5 rounded text-xs font-bold tracking-widest uppercase bg-rose-500/20 text-rose-400 border border-rose-500/20">
                 {errorData.category.replace("_", " ")}
               </span>
-              <h1 className="text-xl font-semibold text-neutral-100">{errorData.title}</h1>
+              <h1 id="dev-error-title" className="text-xl font-semibold text-neutral-100">{errorData.title}</h1>
             </div>
             <p className="text-neutral-300 font-mono text-sm leading-relaxed max-w-4xl opacity-90">{errorData.message}</p>
           </div>
@@ -227,10 +232,10 @@ export function DevErrorOverlay({ errorData, onDismiss }: { errorData: ParsedErr
 
         <button
           onClick={onDismiss}
+          aria-label="Dismiss error overlay (Escape)"
           className="p-2 text-neutral-500 hover:text-white hover:bg-white/10 rounded-md transition-colors"
-          title="Dismiss Error (Escape)"
         >
-          <X className="w-5 h-5" />
+          <X className="w-5 h-5" aria-hidden="true" />
         </button>
       </div>
 

@@ -70,21 +70,25 @@ export function HistoryDrawer() {
         {isOpen && (
           <>
             <div
-                
+              role="button"
+              tabIndex={-1}
+              aria-label="Close history drawer"
               onClick={() => setIsOpen(false)}
+              onKeyDown={(e) => { if (e.key === "Escape") setIsOpen(false); }}
               className="fixed inset-0 bg-background/60 backdrop-blur-sm z-50"
             />
             <div
-                
-              
+              role="dialog"
+              aria-modal="true"
+              aria-label="Analysis History"
               className="fixed inset-y-0 right-0 w-80 max-w-[85vw] bg-surface-low border-l border-border-subtle z-50 flex flex-col shadow-2xl"
             >
               <div className="flex items-center justify-between p-5 border-b border-border-subtle bg-surface-mid">
                 <h2 className="text-[11px] font-bold tracking-widest uppercase text-foreground/60 flex items-center gap-2">
-                  <History className="w-4 h-4 text-indigo-400" /> Analysis History
+                  <History className="w-4 h-4 text-indigo-400" aria-hidden="true" /> Analysis History
                 </h2>
-                <button onClick={() => setIsOpen(false)} className="p-1 rounded-md hover:bg-surface-high text-foreground/40 transition-colors">
-                  <X className="w-5 h-5" />
+                <button onClick={() => setIsOpen(false)} aria-label="Close history drawer" className="p-1 rounded-md hover:bg-surface-high text-foreground/40 transition-colors">
+                  <X className="w-5 h-5" aria-hidden="true" />
                 </button>
               </div>
 
@@ -123,10 +127,10 @@ export function HistoryDrawer() {
                         {/* Inline delete individual element */}
                         <button
                           onClick={() => removeHistoryItem(item.sessionId)}
-                          className="absolute top-3 right-3 p-1.5 rounded-md hover:bg-rose-500/10 text-foreground/20 hover:text-rose-500 transition-all opacity-0 group-hover:opacity-100"
-                          title="Clear Item"
+                          aria-label={`Remove ${item.fileName} from history`}
+                          className="absolute top-3 right-3 p-1.5 rounded-md hover:bg-rose-500/10 text-foreground/20 hover:text-rose-500 transition-all focus:opacity-100 group-hover:opacity-100"
                         >
-                          <X className="w-3 h-3" />
+                          <X className="w-3 h-3" aria-hidden="true" />
                         </button>
                       </div>
                     );

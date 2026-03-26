@@ -653,6 +653,37 @@ async def codec_fingerprint(
 # ============================================================================
 # These functions provide enhanced detection using state-of-the-art ML models
 
+# Module-level singletons — models are expensive to load (~seconds each).
+# Loaded on first use and reused for all subsequent calls.
+_pyannote_pipeline: Optional[Any] = None
+_speechbrain_classifier: Optional[Any] = None
+
+
+def _get_pyannote_pipeline() -> Any:
+    global _pyannote_pipeline
+    if _pyannote_pipeline is not None:
+        return _pyannote_pipeline
+    from pyannote.audio import Pipeline
+    hf_token = os.getenv("HF_TOKEN")
+    if not hf_token:
+        raise RuntimeError("HF_TOKEN not set")
+    _pyannote_pipeline = Pipeline.from_pretrained(
+        "pyannote/speaker-diarization-3.1",
+        token=hf_token,
+    )
+    return _pyannote_pipeline
+
+
+def _get_speechbrain_classifier() -> Any:
+    global _speechbrain_classifier
+    if _speechbrain_classifier is not None:
+        return _speechbrain_classifier
+    from speechbrain.inference.classifiers import EncoderClassifier
+    _speechbrain_classifier = EncoderClassifier.from_hparams(
+        source="speechbrain/spkrec-ecapa-voxceleb"
+    )
+    return _speechbrain_classifier
+
 
 async def speaker_diarize_pyannote(
     artifact: EvidenceArtifact,
@@ -680,19 +711,12 @@ async def speaker_diarize_pyannote(
         Falls back to legacy MFCC implementation if pyannote is unavailable.
     """
     try:
-        from pyannote.audio import Pipeline
-        import os
-        
         hf_token = os.getenv("HF_TOKEN")
         if not hf_token:
             # Fall back to legacy implementation
             return await _legacy_speaker_diarize(artifact, num_speakers)
-        
-        pipeline = Pipeline.from_pretrained(
-            "pyannote/speaker-diarization-3.1",
-            token=hf_token
-        )
-        
+
+        pipeline = _get_pyannote_pipeline()
         diarization = pipeline(artifact.file_path, num_speakers=num_speakers)
         
         segments = []
@@ -752,34 +776,31 @@ async def anti_spoofing_speechbrain(
     try:
         import torch
         import torchaudio
-        from speechbrain.inference.classifiers import EncoderClassifier
     except ImportError:
         # Fall back to legacy implementation
         result = await anti_spoofing_detect(artifact)
         result["backend"] = "legacy-heuristic"
         return result
-    
+
     try:
         audio_path = artifact.file_path
         if not os.path.exists(audio_path):
             raise ToolUnavailableError(f"File not found: {audio_path}")
-        
-        # Load SpeechBrain ECAPA model
-        classifier = EncoderClassifier.from_hparams(
-            source="speechbrain/spkrec-ecapa-voxceleb"
-        )
-        
+
+        classifier = _get_speechbrain_classifier()
         signal, fs = torchaudio.load(audio_path)
         
         # Handle multi-channel audio
         if signal.shape[0] > 1:
             signal = torch.mean(signal, dim=0, keepdim=True)
         
-        embeddings = classifier.encode_batch(signal)
-        
+        with torch.no_grad():
+            embeddings = classifier.encode_batch(signal)
+
         # Liveness: compare embedding variance to known-real distribution
         # Low variance in embeddings = synthetic (TTS lacks natural variation)
         embedding_std = float(torch.std(embeddings).item())
+        del embeddings  # free large tensor immediately
         
         # Empirical threshold from VoxCeleb2 — real speech > 0.15 std
         synthetic_probability = max(0.0, min(1.0, 1.0 - (embedding_std / 0.3)))
@@ -921,37 +942,38 @@ async def av_sync_verify(
             raise ToolUnavailableError(f"File not found: {video_path}")
         
         clip = VideoFileClip(video_path)
-        
+        clip_duration = clip.duration  # cache before close to avoid use-after-close
+
         # Audio onset times
         y, sr = librosa.load(video_path, sr=22050, mono=True)
         onset_frames = librosa.onset.onset_detect(y=y, sr=sr, units='time')
         audio_onsets = onset_frames.tolist()
-        
+
         # Video "activity" proxy — frame-level brightness change rate
         # Sample 1 frame per second
         video_activity = []
         prev_brightness = None
-        
-        for t in np.arange(0, min(clip.duration, 60), 1.0):
+
+        for t in np.arange(0, min(clip_duration, 60), 1.0):
             frame = clip.get_frame(t)
             brightness = float(frame.mean())
             if prev_brightness is not None:
                 video_activity.append(abs(brightness - prev_brightness))
             prev_brightness = brightness
-        
+
         clip.close()
-        
+
         if len(video_activity) < 3 or len(audio_onsets) < 2:
             return {
                 "av_sync": "INCONCLUSIVE",
                 "available": True,
                 "note": "Insufficient data for correlation analysis",
             }
-        
+
         # Correlation between audio energy and video activity at 1s resolution
         audio_energy_per_sec = [
             float(np.mean(np.abs(y[int(t*sr):int((t+1)*sr)])))
-            for t in range(min(len(video_activity), int(clip.duration)))
+            for t in range(min(len(video_activity), int(clip_duration)))
         ]
         
         min_len = min(len(video_activity), len(audio_energy_per_sec))

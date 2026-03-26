@@ -14,15 +14,6 @@ import userEvent from "@testing-library/user-event";
 import { FileUploadSection } from "@/components/evidence/FileUploadSection";
 import { AgentProgressDisplay } from "@/components/evidence/AgentProgressDisplay";
 
-jest.mock("framer-motion", () => ({
-  motion: new Proxy({}, {
-    get: (_t, tag: string) =>
-      ({ children, ...p }: React.PropsWithChildren<Record<string, unknown>>) =>
-        React.createElement(tag, p, children),
-  }),
-  AnimatePresence: ({ children }: React.PropsWithChildren<object>) => <>{children}</>,
-}));
-
 jest.mock("@/hooks/useSound", () => ({
   useSound: () => ({ playSound: jest.fn() }),
 }));

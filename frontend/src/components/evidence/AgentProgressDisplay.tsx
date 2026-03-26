@@ -103,13 +103,14 @@ function ExpandableText({
       {needsTruncation && (
         <button
           onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
           className="inline-flex items-center gap-0.5 mt-1.5 text-[11px] font-bold transition-colors uppercase tracking-widest"
           style={{ color: "rgba(34,211,238,0.65)" }}
         >
           {expanded ? (
-            <><ChevronUp className="w-3.5 h-3.5" />Show less</>
+            <><ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />Show less</>
           ) : (
-            <><ChevronDown className="w-3.5 h-3.5" />Show more</>
+            <><ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />Show more</>
           )}
         </button>
       )}
@@ -160,12 +161,8 @@ function FindingsAccordion({
             {findingsCount ?? sectionFlags.length} Artifact{(findingsCount ?? sectionFlags.length) !== 1 ? "s" : ""}
           </span>
         </div>
-        <span
-          
-          
-          className="text-white/20 group-hover:text-cyan-400 transition-colors"
-        >
-          <ChevronDown className="w-4 h-4" />
+        <span aria-hidden="true" className="text-white/20 group-hover:text-cyan-400 transition-colors">
+          <ChevronDown className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`} />
         </span>
       </button>
 

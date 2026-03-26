@@ -58,15 +58,9 @@ export default function GlobalError({
                         Retry Analysis
                     </button>
 
-                    <Link href="/">
-                        <div
-                            
-                            
-                            className="btn-premium-glass w-full py-3.5 rounded-xl flex items-center justify-center gap-2 cursor-pointer"
-                        >
-                            <Home className="w-4 h-4" />
-                            Return to Dashboard
-                        </div>
+                    <Link href="/" className="btn-premium-glass w-full py-3.5 rounded-xl justify-center">
+                        <Home className="w-4 h-4" />
+                        Return to Dashboard
                     </Link>
                 </div>
 

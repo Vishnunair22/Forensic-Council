@@ -107,13 +107,9 @@ def compute_frequency_features(image_path: str) -> dict:
     ]
     checkerboard_energy = float(np.mean(checkerboard_positions))
 
-    # Compare to overall high-frequency energy
-    high_freq_mask = np.zeros((h, w), dtype=bool)
-    for y in range(h):
-        for x in range(w):
-            dist = np.sqrt((y - center_y)**2 + (x - center_x)**2)
-            if dist > min(h, w) * 0.25:
-                high_freq_mask[y, x] = True
+    # Compare to overall high-frequency energy (vectorized — avoids O(h×w) Python loops)
+    _ys, _xs = np.ogrid[:h, :w]
+    high_freq_mask = np.sqrt((_ys - center_y)**2 + (_xs - center_x)**2) > min(h, w) * 0.25
     
     overall_high_freq = float(np.mean(magnitude[high_freq_mask]))
     checkerboard_score = min(1.0, max(0.0, (checkerboard_energy - overall_high_freq) / (overall_high_freq + 1e-6)))

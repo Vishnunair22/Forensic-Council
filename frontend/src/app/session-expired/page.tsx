@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
 import { ShieldX, LogIn } from "lucide-react";
-import { clearAuthToken } from "@/lib/api";
 import { useRouter } from "next/navigation";
 
 /**
@@ -10,19 +8,13 @@ import { useRouter } from "next/navigation";
  *
  * Shown when the API returns 401 and auto-reauth fails, or when
  * the user navigates to a protected page with an expired/missing token.
- * Clears the stale token and redirects to the login flow on the
- * landing page.
+ * Since we use HttpOnly cookies, we don't manually clear tokens here;
+ * the user is simply redirected to re-authenticate.
  */
 export default function SessionExpiredPage() {
     const router = useRouter();
 
-    useEffect(() => {
-        // Clear any stale token immediately on mount
-        clearAuthToken();
-    }, []);
-
     const handleReturn = () => {
-        clearAuthToken();
         router.push("/");
     };
 

@@ -11,6 +11,7 @@ from datetime import timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Header, Request
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 
@@ -62,8 +63,17 @@ async def _is_rate_limited(ip: str) -> bool:
             return False
     except HTTPException:
         raise
-    except Exception:
-        pass  # fall through to in-memory
+    except Exception as e:
+        # FAIL-SECURE: If Redis is configured but unreachable for an auth endpoint,
+        # we MUST DENY access rather than falling back to in-memory, to prevent
+        # multi-worker brute-force bypass.  Only skip if Redis is truly not configured.
+        if settings.redis_host != "localhost" or settings.app_env == "production":
+            logger.error("Redis unreachable for rate limiting - failing secure on auth", error=str(e))
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Security validation service unavailable. Please retry later.",
+            )
+        pass  # allow local fallback in dev only
 
     # In-memory fallback — prune old entries outside the window
     attempts = _failed_attempts[ip]
@@ -252,13 +262,28 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
     await _clear_failed_attempts(client_ip)
     logger.info("User logged in successfully", user_id=user["user_id"], role=user["role"].value)
     
-    return TokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        user_id=user["user_id"],
-        role=user["role"].value,
+    response = JSONResponse(
+        content=TokenResponse(
+            access_token=access_token,
+            token_type="bearer",
+            expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            user_id=user["user_id"],
+            role=user["role"].value,
+        ).model_dump()
     )
+    
+    # Set HttpOnly cookie for production-hardened XSS protection
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        expires=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        samesite="strict",
+        secure=True if settings.app_env == "production" else False,
+    )
+    
+    return response
 
 
 @router.get("/me", response_model=UserResponse)
@@ -341,7 +366,9 @@ async def logout(
     
     logger.info("User logged out", user_id=current_user.user_id)
     
-    return {
+    response = JSONResponse(content={
         "status": "success",
         "message": "Successfully logged out",
-    }
+    })
+    response.delete_cookie("access_token")
+    return response

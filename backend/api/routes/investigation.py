@@ -263,7 +263,39 @@ async def start_investigation(
             except Exception: pass
         raise HTTPException(status_code=500, detail="Failed to save uploaded file.")
 
-    # ── Register pipeline ─────────────────────────────────────────────────────
+    # ── 3. Content-based MIME Validation (python-magic) ──────────────────
+    import magic
+    try:
+        head = content[:2048]
+        mime = magic.from_buffer(head, mime=True)
+        claimed_ext = os.path.splitext(file.filename)[1].lower()
+        
+        is_valid_mime = False
+        if mime.startswith("image/"):
+            is_valid_mime = claimed_ext in [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"]
+        elif mime == "application/pdf":
+            is_valid_mime = claimed_ext == ".pdf"
+        elif mime == "text/plain":
+            is_valid_mime = claimed_ext in [".txt", ".log", ".csv", ".json"]
+        elif mime.startswith("video/"):
+            is_valid_mime = claimed_ext in [".mp4", ".mov", ".avi", ".mkv"]
+        else:
+            is_valid_mime = True # Fallback
+            
+        if not is_valid_mime:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Security violation: File content (detected as {mime}) does not match extension {claimed_ext}."
+            )
+    except HTTPException:
+        if tmp_path.exists():
+            try: tmp_path.unlink()
+            except Exception: pass
+        raise
+    except Exception as e:
+        logger.warning("MIME validation skipped", error=str(e))
+
+    # ── 4. Register pipeline ──────────────────────────────────────────────────
     try:
         from orchestration.pipeline import ForensicCouncilPipeline
         pipeline = ForensicCouncilPipeline()

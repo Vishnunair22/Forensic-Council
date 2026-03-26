@@ -21,6 +21,7 @@ from api.routes.investigation import (
     clear_session_websockets,
     register_websocket,
     unregister_websocket,
+    _assign_severity_tier,
 )
 from api.schemas import SessionInfo, ReportDTO, AgentFindingDTO
 from api.routes.investigation import _final_reports, _active_tasks
@@ -62,7 +63,7 @@ def _forensic_report_to_dto(report) -> ReportDTO:
                 meta = _json.loads(meta)
             except Exception:
                 meta = {}
-        return AgentFindingDTO(
+        dto = AgentFindingDTO(
             finding_id=str(d.get("finding_id", "")),
             agent_id=str(d.get("agent_id", "")),
             agent_name=str(d.get("agent_name", d.get("agent_id", ""))),
@@ -77,6 +78,8 @@ def _forensic_report_to_dto(report) -> ReportDTO:
             reasoning_summary=str(d.get("reasoning_summary") or ""),
             metadata=meta if meta else None,
         )
+        dto.severity_tier = _assign_severity_tier(d)
+        return dto
 
     def _is_real_finding(f) -> bool:
         """Filter out pure no-op placeholder findings."""
@@ -241,70 +244,35 @@ async def live_updates(websocket: WebSocket, session_id: str):
         return
 
     # ── 3. Authenticate via post-connect AUTH message ──────────────────────
-    try:
-        auth_raw = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
-        auth_data = json.loads(auth_raw)
+    # ── 3. Authenticate via HttpOnly cookie in upgrade headers ─────────────
+    # Cookies are automatically sent by the browser in the initial WS upgrade HTTP request.
+    token = websocket.cookies.get("access_token")
+    
+    if not token:
+        # Fallback to subprotocols for non-browser clients if needed
+        for protocol in websocket.scope.get("subprotocols", []):
+            if protocol.startswith("token."):
+                token = protocol[6:]
+                break
 
-        if auth_data.get("type") != "AUTH":
-            await websocket.send_json({
-                "type": "ERROR",
-                "session_id": session_id,
-                "message": "First message must be AUTH",
-                "agent_id": None,
-                "agent_name": None,
-                "data": None,
-            })
-            await websocket.close(code=4001, reason="Missing AUTH message")
-            return
-
-        token = auth_data.get("token")
-        if not token:
-            await websocket.send_json({
-                "type": "ERROR",
-                "session_id": session_id,
-                "message": "Missing token in AUTH message",
-                "agent_id": None,
-                "agent_name": None,
-                "data": None,
-            })
-            await websocket.close(code=4001, reason="Missing token")
-            return
-
-        try:
-            token_data = await decode_token(token)
-        except Exception:
-            await websocket.send_json({
-                "type": "ERROR",
-                "session_id": session_id,
-                "message": "Invalid or expired token",
-                "agent_id": None,
-                "agent_name": None,
-                "data": None,
-            })
-            await websocket.close(code=4001, reason="Invalid token")
-            return
-
-    except asyncio.TimeoutError:
+    if not token:
         await websocket.send_json({
             "type": "ERROR",
             "session_id": session_id,
-            "message": "Authentication timeout",
-            "agent_id": None,
-            "agent_name": None,
-            "data": None,
+            "message": "Authentication required. Missing access token.",
         })
-        await websocket.close(code=4001, reason="Auth timeout")
+        await websocket.close(code=4001, reason="Authentication required")
         return
-    except (json.JSONDecodeError, Exception):
+
+    try:
+        token_data = await decode_token(token)
+    except Exception:
         await websocket.send_json({
             "type": "ERROR",
             "session_id": session_id,
-            "message": "Authentication failed",
-            "agent_id": None,
-            "agent_name": None,
-            "data": None,
+            "message": "Invalid or expired session. Please log in again.",
         })
-        await websocket.close(code=4001, reason="Auth error")
+        await websocket.close(code=4001, reason="Invalid session")
         return
 
     # ── 4. Register and send welcome ──────────────────────────────────────

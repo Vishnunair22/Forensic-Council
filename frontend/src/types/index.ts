@@ -1,9 +1,3 @@
-export type Agent = {
-    name: string;
-    role: string;
-    desc: string;
-};
-
 export type AgentResult = {
     id: string;
     name: string;

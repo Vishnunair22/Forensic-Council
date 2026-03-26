@@ -11,7 +11,7 @@ export default function NotFound() {
       <div className="relative z-10 max-w-md w-full flex flex-col items-center gap-6">
         {/* Icon */}
         <div className="w-20 h-20 rounded-2xl bg-indigo-500/10 border border-indigo-500/25 flex items-center justify-center shadow-[0_0_40px_rgba(99,102,241,0.15)]">
-          <ShieldAlert className="w-10 h-10 text-indigo-400" />
+          <ShieldAlert className="w-10 h-10 text-indigo-400" aria-hidden="true" />
         </div>
 
         {/* Headline */}

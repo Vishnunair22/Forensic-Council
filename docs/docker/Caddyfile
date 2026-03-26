@@ -44,11 +44,17 @@
             header_up X-Forwarded-Proto {scheme}
             header_up Upgrade           {http_upgrade}
             header_up Connection        "{http_connection}"
+            # flush_interval -1: disable buffering for WebSocket and SSE streams
+            flush_interval -1
             transport http {
                 response_header_timeout 620s
                 dial_timeout            10s
             }
         }
+    }
+
+    request_body {
+        max_size 55MB
     }
 
     handle {
@@ -71,15 +77,24 @@
 # When DOMAIN=forensic.yourdomain.com → auto Let's Encrypt.
 {$DOMAIN:localhost} {
 
-    # Security headers
+    # Compress all responses (Caddy handles this; Next.js compress is disabled)
+    encode zstd gzip
+
+    # Security headers applied to every response
     header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-        X-Content-Type-Options    "nosniff"
-        X-XSS-Protection          "1; mode=block"
-        X-Frame-Options           "DENY"
-        Referrer-Policy           "strict-origin-when-cross-origin"
-        Permissions-Policy        "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+        Strict-Transport-Security  "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options     "nosniff"
+        X-XSS-Protection           "0"
+        X-Frame-Options            "DENY"
+        Referrer-Policy            "strict-origin-when-cross-origin"
+        Permissions-Policy         "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+        Content-Security-Policy    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss: ws:; frame-ancestors 'none';"
         -Server
+    }
+
+    # Global upload limit enforcement at the proxy level
+    request_body {
+        max_size 55MB
     }
 
     # Backend API + WebSocket (only /api/v1/* goes to FastAPI backend).
@@ -97,6 +112,9 @@
             health_uri      /health
             health_interval 10s
             health_timeout  5s
+
+            # flush_interval -1: disable buffering for WebSocket and SSE streams
+            flush_interval -1
 
             transport http {
                 response_header_timeout 620s

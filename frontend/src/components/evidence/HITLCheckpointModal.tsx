@@ -137,15 +137,15 @@ export function HITLCheckpointModal({
 
               {/* Decision Options */}
               <div className="space-y-3">
-                <h4 className="text-sm font-semibold text-slate-300">
+                <h4 id="hitl-decision-label" className="text-sm font-semibold text-slate-300">
                   Your Decision
                 </h4>
-                <div className="grid grid-cols-2 gap-3">
+                <div role="radiogroup" aria-labelledby="hitl-decision-label" className="grid grid-cols-2 gap-3">
                   {decisionOptions.map((option) => (
                     <button
                       key={option.value}
-                      
-                      
+                      role="radio"
+                      aria-checked={selectedDecision === option.value}
                       onClick={() => setSelectedDecision(option.value)}
                       className={`p-3 rounded-xl border transition-all text-left backdrop-blur-sm ${
                         selectedDecision === option.value

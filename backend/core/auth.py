@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -217,21 +217,27 @@ async def blacklist_token(token: str, expires_in_seconds: int) -> None:
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_optional),
 ) -> User:
     """
     Dependency to get the current authenticated user from JWT token.
-    
-    Args:
-        credentials: HTTP Bearer credentials
-    
-    Returns:
-        Authenticated User object
-    
-    Raises:
-        HTTPException: If authentication fails
+    Checks Authorization header first, then falls back to 'access_token' cookie.
     """
-    token = credentials.credentials
+    token = None
+    if credentials:
+        token = credentials.credentials
+    else:
+        # Fallback to HttpOnly cookie for production-hardened XSS protection
+        token = request.cookies.get("access_token")
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     token_data = await decode_token(token)
     
     # In production, fetch user from database
@@ -299,8 +305,13 @@ async def get_current_user_optional(
     """
     if not credentials:
         return None
-    
+
     try:
-        return await get_current_user(credentials)
+        token_data = await decode_token(credentials.credentials)
+        return User(
+            user_id=token_data.user_id,
+            username=token_data.username,
+            role=token_data.role,
+        )
     except HTTPException:
         return None

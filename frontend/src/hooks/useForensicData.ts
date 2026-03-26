@@ -97,12 +97,14 @@ export const useForensicData = () => {
 
     // Delete from history
     const deleteFromHistory = useCallback((id: string) => {
-        const newHistory = history.filter(h => h.id !== id);
-        setHistory(newHistory);
-        if (typeof window !== 'undefined') {
-            sessionStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
-        }
-    }, [history]);
+        setHistory(prev => {
+            const next = prev.filter(h => h.id !== id);
+            if (typeof window !== 'undefined') {
+                sessionStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+            }
+            return next;
+        });
+    }, []);
 
     // Clear history
     const clearHistory = useCallback(() => {

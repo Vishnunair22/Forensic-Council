@@ -32,15 +32,20 @@ const API_BASE =
     : // Browser: empty string → relative path → no cross-origin request
     "";
 
-// WebSocket requires an absolute URL — derive from the public-facing API URL.
-// This remains cross-origin but browsers don't apply the same CORS rules to
-// WS upgrades; the backend validates via its AUTH message handshake instead.
-const _WS_HTTP_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const WS_BASE = _WS_HTTP_BASE.replace(
-  /^https?/,
-  (m) => (m === "https" ? "wss" : "ws")
-);
+// WebSocket — must use the SAME origin as the page so the browser sends the
+// HttpOnly auth cookie with the upgrade request.  Connecting cross-origin
+// (e.g. ws://localhost:8000 from a page on localhost:3000) causes the browser
+// to omit the cookie, which closes the WS immediately with code 4001.
+// Using window.location.host means the WS upgrade goes through the same
+// origin (Next.js dev server or Caddy) which rewrites it to the backend —
+// the proxy forwards all request headers including Cookie.
+const WS_BASE =
+  typeof window !== "undefined"
+    ? `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}`
+    : (() => {
+        const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        return base.replace(/^https?/, (m) => (m === "https" ? "wss" : "ws"));
+      })();
 
 // Token storage key
 const TOKEN_KEY = "forensic_auth_token";
@@ -180,57 +185,8 @@ export interface UserInfo {
   role: string;
 }
 
-/**
- * Authentication Functions
- */
-
-/**
- * Get the auth token from sessionStorage.
- * SessionStorage is more secure than localStorage as it's cleared when the tab closes.
- */
-export function getAuthToken(): string | null {
-  if (typeof window === "undefined") return null;
-  
-  const token = sessionStorage.getItem(TOKEN_KEY);
-  if (!token) return null;
-  
-  // Check if token has expired
-  const expiryStr = sessionStorage.getItem(TOKEN_EXPIRY_KEY);
-  if (expiryStr) {
-    const expiry = parseInt(expiryStr, 10);
-    if (Date.now() > expiry) {
-      clearAuthToken();
-      return null;
-    }
-  }
-  
-  return token;
-}
-
-/**
- * Set the auth token in sessionStorage with expiration tracking.
- */
-export function setAuthToken(token: string, expiresIn?: number): void {
-  if (typeof window === "undefined") return;
-  sessionStorage.setItem(TOKEN_KEY, token);
-  
-  // Set expiration time (default 1 hour if not provided)
-  const expirationMs = (expiresIn || 3600) * 1000;
-  const expiry = Date.now() + expirationMs;
-  sessionStorage.setItem(TOKEN_EXPIRY_KEY, expiry.toString());
-}
-
-/**
- * Clear the auth token and expiration from sessionStorage.
- */
-export function clearAuthToken(): void {
-  if (typeof window === "undefined") return;
-  sessionStorage.removeItem(TOKEN_KEY);
-  sessionStorage.removeItem(TOKEN_EXPIRY_KEY);
-}
-
 export function isAuthenticated(): boolean {
-  return !!getAuthToken();
+  return true; // With HttpOnly cookies, we assume authed if server doesn't return 401
 }
 
 export async function login(username: string, password: string): Promise<TokenResponse> {
@@ -242,6 +198,7 @@ export async function login(username: string, password: string): Promise<TokenRe
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: formData.toString(),
+    credentials: "include", // Required for cookies
   });
 
   if (!response.ok) {
@@ -250,7 +207,6 @@ export async function login(username: string, password: string): Promise<TokenRe
   }
 
   const data: TokenResponse = await response.json();
-  setAuthToken(data.access_token, data.expires_in);
   return data;
 }
 
@@ -263,38 +219,27 @@ export async function autoLoginAsInvestigator(): Promise<TokenResponse> {
   }
 
   const data: TokenResponse = await response.json();
-  setAuthToken(data.access_token, data.expires_in);
   return data;
 }
 
-export async function ensureAuthenticated(): Promise<string> {
-  let token = getAuthToken();
-  if (!token) {
-    const authData = await autoLoginAsInvestigator();
-    token = authData.access_token;
-  }
-  return token;
+export async function ensureAuthenticated(): Promise<void> {
+  // We don't check for token locally anymore; assume authed or let 401 trigger logic
 }
 
 export async function logout(): Promise<void> {
-  const token = getAuthToken();
-  if (token) {
-    try {
-      await fetch(`${API_BASE}/api/v1/auth/logout`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-    } catch {
-      // ignore
-    }
+  try {
+    await fetch(`${API_BASE}/api/v1/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+    });
+  } catch {
+    // ignore
   }
-  clearAuthToken();
 }
 
 export async function getCurrentUser(): Promise<UserInfo> {
-  const token = await ensureAuthenticated();
   const response = await fetch(`${API_BASE}/api/v1/auth/me`, {
-    headers: { Authorization: `Bearer ${token}` },
+    credentials: "include",
   });
 
   if (!response.ok) {
@@ -319,23 +264,22 @@ async function handleAuthError<T>(
       error instanceof Error &&
       (error.message.includes("Invalid or expired token") ||
         error.message.includes("401") ||
-        error.message.includes("Unauthorized"))
+        error.message.includes("Unauthorized") ||
+        error.message.includes("Not authenticated"))
     ) {
       if (!retried) {
         retried = true;
-        dbg.warn("Token invalid, clearing and re-authenticating...");
-        clearAuthToken();
+        dbg.warn("Token invalid, re-authenticating...");
         try {
+          await autoLoginAsInvestigator();
           return await operation();
         } catch {
-          clearAuthToken();
           if (typeof window !== "undefined") {
             window.location.href = "/session-expired";
           }
           throw error;
         }
       } else {
-        clearAuthToken();
         if (typeof window !== "undefined") {
           window.location.href = "/session-expired";
         }
@@ -346,8 +290,7 @@ async function handleAuthError<T>(
 }
 
 async function getAuthHeaders(): Promise<HeadersInit> {
-  const token = await ensureAuthenticated();
-  return { Authorization: `Bearer ${token}` };
+  return {}; // Auth now handled via HttpOnly cookies automatically
 }
 
 /**
@@ -375,11 +318,10 @@ export async function startInvestigation(
     formData.append("case_id", caseId);
     formData.append("investigator_id", investigatorId);
 
-    const headers = await getAuthHeaders();
     const response = await fetch(`${API_BASE}/api/v1/investigate`, {
       method: "POST",
-      headers,
       body: formData,
+      credentials: "include", // Send HttpOnly cookie
     });
 
     if (!response.ok) {
@@ -406,9 +348,8 @@ export interface ArbiterStatusResponse {
  */
 export async function getArbiterStatus(sessionId: string): Promise<ArbiterStatusResponse> {
   return handleAuthError(async () => {
-    const headers = await getAuthHeaders();
     const response = await fetch(`${API_BASE}/api/v1/sessions/${sessionId}/arbiter-status`, {
-      headers,
+      credentials: "include",
     });
     if (!response.ok) return { status: "not_found" };
     return response.json();
@@ -420,9 +361,8 @@ export async function getArbiterStatus(sessionId: string): Promise<ArbiterStatus
  */
 export async function getReport(sessionId: string): Promise<ReportResponse> {
   return handleAuthError(async () => {
-    const headers = await getAuthHeaders();
     const response = await fetch(`${API_BASE}/api/v1/sessions/${sessionId}/report`, {
-      headers,
+      credentials: "include",
     });
 
     if (response.status === 404) throw new Error("Session not found");
@@ -440,9 +380,8 @@ export async function getReport(sessionId: string): Promise<ReportResponse> {
 
 export async function getBrief(sessionId: string, agentId: string): Promise<string> {
   return handleAuthError(async () => {
-    const headers = await getAuthHeaders();
     const response = await fetch(`${API_BASE}/api/v1/sessions/${sessionId}/brief/${agentId}`, {
-      headers,
+      credentials: "include",
     });
 
     if (response.status === 404) return "No brief available.";
@@ -458,9 +397,8 @@ export async function getBrief(sessionId: string, agentId: string): Promise<stri
 
 export async function getCheckpoints(sessionId: string): Promise<HITLCheckpoint[]> {
   return handleAuthError(async () => {
-    const headers = await getAuthHeaders();
     const response = await fetch(`${API_BASE}/api/v1/sessions/${sessionId}/checkpoints`, {
-      headers,
+      credentials: "include",
     });
 
     if (response.status === 404) return [];
@@ -475,10 +413,10 @@ export async function getCheckpoints(sessionId: string): Promise<HITLCheckpoint[
 
 export async function submitHITLDecision(decision: HITLDecisionRequest): Promise<void> {
   return handleAuthError(async () => {
-    const headers = await getAuthHeaders();
     const response = await fetch(`${API_BASE}/api/v1/hitl/decision`, {
       method: "POST",
-      headers: { ...headers, "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify(decision),
     });
 
@@ -494,8 +432,8 @@ export async function submitHITLDecision(decision: HITLDecisionRequest): Promise
  *
  * IMPORTANT — connection lifecycle:
  *   1. Client opens WS to /api/v1/sessions/{id}/live
- *   2. `onopen` fires → client sends {"type":"AUTH","token":"..."}
- *   3. Server validates token, registers the socket, sends {"type":"CONNECTED"}
+ *   2. `onopen` fires
+ *   3. Server validates cookie, registers the socket, sends {"type":"CONNECTED"}
  *   4. The `connected` Promise resolves only on step 3 (CONNECTED message).
  *      This ensures broadcasts that start immediately after /investigate
  *      are never lost because the socket wasn't registered yet.
@@ -535,14 +473,8 @@ export function createLiveSocket(
   }, 12_000);
 
   ws.onopen = () => {
-    dbg.log("[WS] Connected, sending AUTH");
-    const token = getAuthToken();
-    if (token) {
-      ws.send(JSON.stringify({ type: "AUTH", token }));
-    } else {
-      // No token — will be rejected server-side
-      safeReject(new Error("No auth token available for WebSocket"));
-    }
+    dbg.log("[WS] Connected");
+    // AUTH message no longer needed; server checks cookie on handshake
   };
 
   ws.onerror = (event) => {

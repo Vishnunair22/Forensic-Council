@@ -103,8 +103,8 @@ async def ela_full_image(
         }
 
         # Open image now so we can inspect the PIL-detected format
-        original = Image.open(original_path)
-        pil_format = (original.format or "").upper()
+        with Image.open(original_path) as _probe:
+            pil_format = (_probe.format or "").upper()
 
         # Derive the display label: prefer MIME type → PIL format → extension
         mime_type = getattr(artifact, "mime_type", None) or ""
@@ -137,33 +137,32 @@ async def ela_full_image(
                 "available": True,
             }
 
-        # Convert to RGB if necessary (for PNG with alpha, etc.)
-        if original.mode != "RGB":
-            original = original.convert("RGB")
-
+        # Open, convert to RGB, extract array, then close immediately
+        with Image.open(original_path) as _img:
+            original = _img.convert("RGB") if _img.mode != "RGB" else _img.copy()
         original_array = np.array(original, dtype=np.float64)
-        
+
         # Determine quality levels to use
         if multi_quality:
             quality_levels = [70, 80, 90, 95]
         else:
             quality_levels = [quality]
-        
+
         # Multi-quality sweep: compute ELA at each quality level
         ela_maps = []
         temp_files = []
-        
+
         try:
             for q in quality_levels:
                 # Save at quality level
                 with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
                     tmp_path = tmp.name
                     temp_files.append(tmp_path)
-                
+
                 original.save(tmp_path, "JPEG", quality=q)
-                resaved = Image.open(tmp_path)
-                resaved_array = np.array(resaved, dtype=np.float64)
-                
+                with Image.open(tmp_path) as _resaved:
+                    resaved_array = np.array(_resaved, dtype=np.float64)
+
                 # Compute ELA map (absolute difference)
                 ela_map = np.abs(original_array - resaved_array)
                 # Convert to grayscale intensity (average across RGB channels)
@@ -291,12 +290,9 @@ async def roi_extract(
         if not os.path.exists(original_path):
             raise ToolUnavailableError(f"File not found: {original_path}")
         
-        original = Image.open(original_path)
-        
-        # Convert to RGB if necessary
-        if original.mode != "RGB":
-            original = original.convert("RGB")
-        
+        with Image.open(original_path) as _img:
+            original = _img.convert("RGB") if _img.mode != "RGB" else _img.copy()
+
         # Extract bounding box parameters
         x = bounding_box.get("x", 0)
         y = bounding_box.get("y", 0)
@@ -393,8 +389,8 @@ async def jpeg_ghost_detect(
         _lossless_pil_formats = {"PNG", "BMP", "TIFF", "GIF", "WEBP"}
         _lossless_mimes = {"image/png", "image/bmp", "image/tiff", "image/gif", "image/webp"}
 
-        original = Image.open(original_path)
-        pil_format = (original.format or "").upper()
+        with Image.open(original_path) as _probe:
+            pil_format = (_probe.format or "").upper()
         mime_type = getattr(artifact, "mime_type", None) or ""
         is_lossless = (
             ext in _lossless_exts
@@ -420,25 +416,24 @@ async def jpeg_ghost_detect(
                 "available": True,
             }
 
-        # Convert to RGB if necessary
-        if original.mode != "RGB":
-            original = original.convert("RGB")
-
+        # Open, convert to RGB, extract array, then close immediately
+        with Image.open(original_path) as _img:
+            original = _img.convert("RGB") if _img.mode != "RGB" else _img.copy()
         original_array = np.array(original, dtype=np.float64)
-        
+
         # Create compressed versions at different quality levels
         compressed_arrays = []
         temp_files = []
-        
+
         try:
             for quality in quality_levels:
                 with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
                     tmp_path = tmp.name
                     temp_files.append(tmp_path)
-                
+
                 original.save(tmp_path, "JPEG", quality=quality)
-                compressed = Image.open(tmp_path)
-                compressed_arrays.append(np.array(compressed, dtype=np.float64))
+                with Image.open(tmp_path) as _compressed:
+                    compressed_arrays.append(np.array(_compressed, dtype=np.float64))
             
             # Stack all compressed versions
             stacked = np.stack(compressed_arrays, axis=0)
@@ -574,12 +569,9 @@ async def compute_perceptual_hash(
         if not os.path.exists(original_path):
             raise ToolUnavailableError(f"File not found: {original_path}")
         
-        original = Image.open(original_path)
-        
-        # Convert to RGB if necessary
-        if original.mode != "RGB":
-            original = original.convert("RGB")
-        
+        with Image.open(original_path) as _img:
+            original = _img.convert("RGB") if _img.mode != "RGB" else _img.copy()
+
         # Compute various perceptual hashes
         phash = str(imagehash.phash(original, hash_size=hash_size))
         ahash = str(imagehash.average_hash(original, hash_size=hash_size))
@@ -622,12 +614,8 @@ async def frequency_domain_analysis(
         if not os.path.exists(original_path):
             raise ToolUnavailableError(f"File not found: {original_path}")
         
-        original = Image.open(original_path)
-        
-        # Convert to grayscale
-        if original.mode != "L":
-            original = original.convert("L")
-        
+        with Image.open(original_path) as _img:
+            original = _img.convert("L") if _img.mode != "L" else _img.copy()
         img_array = np.array(original, dtype=np.float64)
         
         # Apply 2D DFT
@@ -722,10 +710,9 @@ async def extract_text_from_image(
             raise ToolUnavailableError(f"File not found: {original_path}")
 
         # Load image with PIL and convert to OpenCV format
-        pil_image = PILImage.open(original_path)
-        if pil_image.mode != "RGB":
-            pil_image = pil_image.convert("RGB")
-        
+        with PILImage.open(original_path) as _pil:
+            pil_image = _pil.convert("RGB") if _pil.mode != "RGB" else _pil.copy()
+
         # Convert PIL to OpenCV (RGB to BGR)
         img = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
         

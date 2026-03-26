@@ -7,15 +7,15 @@ const nextConfig: NextConfig = {
   output: "standalone",
 
   // ── Compression ──────────────────────────────────────────────────────────
-  // Enables gzip on all responses from the Next.js server.
-  // If serving behind Caddy/nginx, set to false — the reverse proxy handles it.
-  compress: true,
+  // Disabled: Caddy handles compression via `encode zstd gzip` in Caddyfile.
+  // Enabling both causes double-compression (wasted CPU, slightly larger output).
+  compress: false,
 
   // ── TypeScript ────────────────────────────────────────────────────────
   typescript: { ignoreBuildErrors: false },
 
-  // ── Turbopack (Next.js 16 default build engine) ───────────────────────────
-  // Turbopack is the default bundler in Next.js 16. Declaring an explicit
+  // ── Turbopack (Next.js 15 default build engine) ───────────────────────────
+  // Turbopack is the default bundler in Next.js 15. Declaring an explicit
   // turbopack config suppresses the "webpack config + no turbopack config"
   // warning. The webpack config below is retained for `next dev --webpack`
   // on Windows Docker bind mounts; it has no effect on Turbopack builds.
@@ -44,6 +44,15 @@ const nextConfig: NextConfig = {
       config.watchOptions = {
         poll: 800,
         aggregateTimeout: 300,
+      };
+      // Normalise Windows backslash paths to forward slashes in source maps.
+      // Without this, Chrome receives paths like "d:\Forensic Council\src\..."
+      // which it treats as invalid filesystem URIs and logs:
+      // "Unable to add filesystem: <illegal path>"
+      config.output = {
+        ...config.output,
+        devtoolModuleFilenameTemplate: (info: { absoluteResourcePath: string }) =>
+          info.absoluteResourcePath.replace(/\\/g, "/"),
       };
     }
     return config;

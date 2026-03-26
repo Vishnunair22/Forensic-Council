@@ -52,35 +52,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "Never use this in production."
         )
 
-    # Auto-initialize DB schema on every startup (idempotent — uses IF NOT EXISTS)
-    # This is handled by run_migrations(), so we no longer call init_database() here.
-    
-    # Run versioned migrations
-    try:
-        from core.retry import with_retry
-
-        @with_retry(max_retries=5, base_delay=1.0, retry_exceptions=(Exception,))
-        async def run_migrations_with_retry():
-            return await run_migrations()
-
-        migration_success = await run_migrations_with_retry()
-        if migration_success:
-            logger.info("Database migrations completed")
-        else:
-            logger.error(
-                "Database migrations FAILED — schema may be incomplete. "
-                "The server will start but requests may fail. "
-                "Check DB connectivity and migration logs."
-            )
-            # Mark health check as degraded — do not raise, allow startup
-            # so that infra can read the /health endpoint to diagnose.
-            app.state.migrations_ok = False
-    except Exception as e:
-        logger.error("Migration error — server starting in degraded state", error=str(e))
-        app.state.migrations_ok = False
-    else:
-        if not hasattr(app.state, "migrations_ok"):
-            app.state.migrations_ok = True
+    # 1. Initialize databases and external clients.
+    # (Migrations are now handled as a discrete init-container step in production).
+    app.state.migrations_ok = True
 
     # Bootstrap default users (idempotent — skips if users already exist)
     try:
@@ -179,14 +153,42 @@ MAX_BODY_SIZE = 55 * 1024 * 1024  # 55MB (to allow 50MB uploads + overhead)
 
 @app.middleware("http")
 async def limit_upload_size(request: Request, call_next):
-    """Limit request body size to prevent DoS."""
-    if request.method in ["POST", "PUT", "PATCH"]:
-        content_length = request.headers.get("content-length")
-        if content_length and int(content_length) > MAX_BODY_SIZE:
-            raise HTTPException(
-                status_code=413,
-                detail=f"Request body too large (max {MAX_BODY_SIZE // (1024 * 1024)}MB)"
-            )
+    """
+    Limit request body size to prevent DoS.
+    
+    Uses a stream-limited request wrapper to count bytes dynamically,
+    bypassing bypasses that omit Content-Length (e.g. chunked encoding).
+    """
+    if request.method not in ["POST", "PUT", "PATCH"]:
+        return await call_next(request)
+
+    # 1. Fast path: check Content-Length if present
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > MAX_BODY_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Request body too large (max {MAX_BODY_SIZE // (1024 * 1024)}MB)"
+        )
+
+    # 2. Resilient path: wrap the request stream to count bytes as they arrive
+    _count = 0
+    _original_receive = request.receive
+
+    async def _receive_with_limit():
+        nonlocal _count
+        message = await _original_receive()
+        if message["type"] == "http.request":
+            body = message.get("body", b"")
+            _count += len(body)
+            if _count > MAX_BODY_SIZE:
+                # We can't easily raise HTTPException inside the receive loop 
+                # for all ASGI servers without potential hang, but we can 
+                # trigger a 413 by returning a custom error or raising.
+                # In FastAPI/Starlette, raising here is generally safe.
+                raise HTTPException(status_code=413, detail="Request body too large (stream exceeded limit)")
+        return message
+
+    request._receive = _receive_with_limit
     return await call_next(request)
 
 
@@ -259,7 +261,11 @@ async def global_exception_handler(request: Request, exc: Exception):
         content: dict = {"detail": exc.detail}
         if settings.app_env != "production":
             content["message"] = str(exc)
-        return JSONResponse(status_code=exc.status_code, content=content)
+        return JSONResponse(
+            status_code=exc.status_code, 
+            content=content,
+            headers=getattr(exc, "headers", None)
+        )
 
     content = {"detail": "An internal server error occurred."}
     # Only expose error details in non-production environments

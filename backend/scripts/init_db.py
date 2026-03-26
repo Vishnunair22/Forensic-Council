@@ -55,15 +55,17 @@ async def init_database() -> bool:
             logger.error("Migration failed — schema may be incomplete")
             return False
 
+        # Bootstrap users before calling status() — status() disconnects the
+        # pool in its finally block (when _owned_client=True), so this must
+        # happen while the connection is still open.
+        await bootstrap_users(manager.client)
+
         status = await manager.status()
         logger.info(
             "Schema up to date",
             version=status["current_version"],
             applied=status["applied_count"],
         )
-
-        # Bootstrap users using the same client the migration manager opened
-        await bootstrap_users(manager.client)
 
         logger.info("Database initialisation complete")
         return True

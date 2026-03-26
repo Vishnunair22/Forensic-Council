@@ -103,6 +103,28 @@ services:
           memory: 256M
           cpus: "0.25"
 
+  migration:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    container_name: forensic_migration
+    restart: "no"
+    command: python scripts/init_db.py
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=${POSTGRES_USER:-forensic_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-forensic_pass}
+      - POSTGRES_DB=${POSTGRES_DB:-forensic_council}
+      # Bootstrap credentials must match the backend and frontend demo password.
+      # Without these the investigator user is never written to the database,
+      # and auth falls back to an in-memory store that can fail under certain
+      # startup race conditions.
+      - BOOTSTRAP_ADMIN_PASSWORD=${BOOTSTRAP_ADMIN_PASSWORD:-admin123!}
+      - BOOTSTRAP_INVESTIGATOR_PASSWORD=${BOOTSTRAP_INVESTIGATOR_PASSWORD:-inv123!}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   # --------------------------------------------------------------------------
   # Backend API
   # --------------------------------------------------------------------------
@@ -159,6 +181,8 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
+      migration:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s

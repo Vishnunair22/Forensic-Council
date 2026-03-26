@@ -27,7 +27,7 @@ export async function POST() {
 
     if (!demoPassword) {
         return NextResponse.json(
-            { error: "Demo credentials not configured on server. Set NEXT_PUBLIC_DEMO_PASSWORD in .env" },
+            { error: "Demo credentials not configured on server. Set DEMO_PASSWORD or NEXT_PUBLIC_DEMO_PASSWORD in .env" },
             { status: 500 }
         );
     }
@@ -66,7 +66,22 @@ export async function POST() {
             }
 
             const data = await res.json();
-            return NextResponse.json(data);
+            const nextRes = NextResponse.json(data);
+            // Set the auth cookie via the Next.js cookies API — this is more reliable
+            // than forwarding the raw Set-Cookie header, which can be silently stripped
+            // or mangled by Next.js App Router header handling.
+            // secure=false: backend uses secure=False in dev; Next.js standalone runs
+            // NODE_ENV=production but the app may still be served over plain HTTP.
+            // The proxy (Caddy) handles HTTPS termination — the cookie is HttpOnly so
+            // it is never exposed to JavaScript regardless of the Secure flag.
+            nextRes.cookies.set("access_token", data.access_token as string, {
+                httpOnly: true,
+                path: "/",
+                sameSite: "lax",
+                maxAge: (data.expires_in as number) ?? 3600,
+                secure: false,
+            });
+            return nextRes;
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : "Unknown error";
             const isTimeout = msg.includes("timeout") || msg.includes("abort");
