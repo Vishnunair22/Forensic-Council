@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import { AlertTriangle, RefreshCcw, Home } from "lucide-react";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
 
 export default function GlobalError({
@@ -23,10 +22,10 @@ export default function GlobalError({
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(239,68,68,0.08),transparent_60%)] pointer-events-none" />
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff04_1px,transparent_1px),linear-gradient(to_bottom,#ffffff04_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none" />
 
-            <motion.div
-                initial={{ opacity: 0, y: 24, scale: 0.94 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            <div
+                
+                
+                
                 className="relative max-w-md w-full p-8 rounded-3xl
                   bg-white/[0.03] border border-red-500/25
                   shadow-[0_0_60px_rgba(239,68,68,0.08),inset_0_1px_0_rgba(255,255,255,0.06)]
@@ -49,25 +48,25 @@ export default function GlobalError({
                 </p>
 
                 <div className="w-full space-y-3">
-                    <motion.button
+                    <button
                         onClick={() => reset()}
-                        whileHover={{ scale: 1.02, y: -1 }}
-                        whileTap={{ scale: 0.97 }}
-                        className="btn btn-danger w-full py-3.5 rounded-xl"
+                        
+                        
+                        className="btn-premium-amber w-full py-3.5 rounded-xl"
                     >
                         <RefreshCcw className="w-4 h-4" />
                         Retry Analysis
-                    </motion.button>
+                    </button>
 
                     <Link href="/">
-                        <motion.div
-                            whileHover={{ scale: 1.02, y: -1 }}
-                            whileTap={{ scale: 0.97 }}
-                            className="btn btn-ghost w-full py-3.5 rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                        <div
+                            
+                            
+                            className="btn-premium-glass w-full py-3.5 rounded-xl flex items-center justify-center gap-2 cursor-pointer"
                         >
                             <Home className="w-4 h-4" />
                             Return to Dashboard
-                        </motion.div>
+                        </div>
                     </Link>
                 </div>
 
@@ -79,7 +78,7 @@ export default function GlobalError({
                         )}
                     </div>
                 )}
-            </motion.div>
+            </div>
 
             <div className="absolute bottom-0 w-full">
                 <GlobalFooter />

@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 import { HistoryDrawer } from "@/components/ui/HistoryDrawer";
 
 interface HeaderSectionProps {
@@ -14,10 +13,10 @@ export function HeaderSection({ status, showBrowse, onBrowseClick }: HeaderSecti
   const router = useRouter();
 
   return (
-    <motion.header
-      initial={{ y: -40, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+    <header
+      
+      
+      
       className="sticky top-3 max-w-6xl mx-auto flex items-center justify-between mb-6 z-50 px-5 py-3 rounded-2xl shadow-xl"
       style={{
         background: "rgba(3,11,26,0.80)",
@@ -55,17 +54,17 @@ export function HeaderSection({ status, showBrowse, onBrowseClick }: HeaderSecti
       <div className="flex items-center gap-3">
         <HistoryDrawer />
         {showBrowse && (
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+          <button
+            
+            
             onClick={onBrowseClick}
             className="btn-premium-glass px-5 py-2"
             aria-label="Browse system for new evidence file"
           >
             Browse System
-          </motion.button>
+          </button>
         )}
       </div>
-    </motion.header>
+    </header>
   );
 }

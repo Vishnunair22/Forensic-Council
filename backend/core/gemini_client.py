@@ -112,7 +112,11 @@ class GeminiVisionFinding:
             "agent_id": agent_id,
             "finding_type": f"gemini_vision_{self.analysis_type}",
             "confidence_raw": self.confidence,
-            "status": "CONFIRMED" if self.confidence >= 0.6 else "INCOMPLETE",
+            "status": "CONFIRMED" if (
+            self.confidence >= 0.6
+            or getattr(self, "_authenticity_verdict", "").upper()
+            in ("SUSPICIOUS", "LIKELY_MANIPULATED", "AI_GENERATED")
+        ) else "INCOMPLETE",
             "evidence_refs": [],
             "reasoning_summary": self.content_description,
             "metadata": {
@@ -132,6 +136,12 @@ class GeminiVisionFinding:
                 "metadata_visual_consistency": getattr(self, "_metadata_visual_consistency", ""),
                 "analysis_phase": "deep",
                 "latency_ms": round(self.latency_ms, 1),
+                # Map authenticity_verdict to standard manipulation flags so the
+                # arbiter's _is_direct_manip check registers Gemini findings.
+                "manipulation_detected": getattr(self, "_authenticity_verdict", "").upper()
+                    in ("SUSPICIOUS", "LIKELY_MANIPULATED"),
+                "deepfake_detected": getattr(self, "_authenticity_verdict", "").upper()
+                    == "AI_GENERATED",
             },
             "court_defensible": self.court_defensible,
             "caveat": self.caveat,
@@ -163,7 +173,7 @@ class GeminiVisionClient:
             m for raw in _chain_str.split(",")
             if (m := raw.strip()) and m not in seen and not seen.add(m)  # type: ignore[func-returns-value]
         ]
-        self.timeout: float = getattr(config, "gemini_timeout", 55.0)
+        self.timeout: float = getattr(config, "gemini_timeout", 40.0)
 
         # Check if key is missing or is the default placeholder from .env.example
         is_placeholder = self.api_key and "your_gemini_key" in self.api_key
@@ -624,9 +634,11 @@ class GeminiVisionClient:
                             if "text" in part:
                                 return part["text"]
                     return ""
-            except httpx.TimeoutException:
+            except (httpx.TimeoutException, httpx.ConnectError) as net_err:
                 if attempt < _MAX_RETRIES - 1:
-                    await asyncio.sleep(_BASE_BACKOFF * (2 ** attempt))
+                    wait = _BASE_BACKOFF * (2 ** attempt)
+                    logger.warning(f"Gemini networking error ({type(net_err).__name__}) - retrying in {wait:.1f}s...")
+                    await asyncio.sleep(wait)
                 else:
                     raise
         raise RuntimeError(f"Gemini API failed after {_MAX_RETRIES} attempts")

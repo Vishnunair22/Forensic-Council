@@ -1366,19 +1366,31 @@ async def _wrap_pipeline_with_broadcasts(
                                     break
                         if gemini_result:
                             _agent1_gemini_result = gemini_result
-                            # Inject into all applicable agents in the deep pass batch
-                            for aid, aname, ainst, ares in deep_pass_coroutines:
-                                if aid in ("Agent3", "Agent5") and hasattr(ainst, "inject_agent1_context"):
-                                    ainst.inject_agent1_context(gemini_result)
-                            
-                            logger.info(
-                                "Agent1 Gemini result injected into Agent3 + Agent5 instances",
-                                has_content_type=bool(gemini_result.get("gemini_content_type")),
-                                has_objects=bool(gemini_result.get("gemini_detected_objects")),
-                                has_text=bool(gemini_result.get("gemini_extracted_text")),
-                            )
+                        else:
+                            # Inject a stub so Agent3/5 know Gemini is unavailable
+                            # rather than waiting for data that never arrives
+                            gemini_result = {"gemini_unavailable": True}
+                        # Inject into all applicable agents in the deep pass batch
+                        for aid, aname, ainst, ares in deep_pass_coroutines:
+                            if aid in ("Agent3", "Agent5") and hasattr(ainst, "inject_agent1_context"):
+                                ainst.inject_agent1_context(gemini_result)
+                        
+                        logger.info(
+                            "Agent1 Gemini context injected into Agent3 + Agent5 instances",
+                            has_content_type=bool(gemini_result.get("gemini_content_type")),
+                            has_objects=bool(gemini_result.get("gemini_detected_objects")),
+                            has_text=bool(gemini_result.get("gemini_extracted_text")),
+                            gemini_unavailable=bool(gemini_result.get("gemini_unavailable")),
+                        )
                     except Exception as ctx_err:
                         logger.warning(f"Could not inject Agent1 Gemini context: {ctx_err}")
+                        # Still inject a stub so Agent3/5 don't hang
+                        for aid, aname, ainst, ares in deep_pass_coroutines:
+                            if aid in ("Agent3", "Agent5") and hasattr(ainst, "inject_agent1_context"):
+                                try:
+                                    ainst.inject_agent1_context({"gemini_unavailable": True})
+                                except Exception:
+                                    pass
 
                 # Step 5: Prepare deep-only findings list for the broadcast
                 deep_findings_serial: list[dict] = []
@@ -1570,7 +1582,7 @@ async def _wrap_pipeline_with_broadcasts(
             agent_id = agent_configs[i][0]
             agent_name = agent_configs[i][1]
             
-            if isinstance(r, Exception):
+            if isinstance(r, BaseException):
                 logger.error(f"{agent_id} raised exception: {str(r)}")
                 results.append(AgentLoopResult(
                     agent_id=agent_id,
@@ -1592,6 +1604,15 @@ async def _wrap_pipeline_with_broadcasts(
                               "tool_error_rate": 1.0},
                     )
                 )
+            elif not isinstance(r, tuple) or len(r) != 2:
+                logger.error(f"{agent_id} returned unexpected result type: {type(r)}")
+                results.append(AgentLoopResult(
+                    agent_id=agent_id,
+                    findings=[],
+                    reflection_report={},
+                    react_chain=[],
+                    error=f"Unexpected result type: {type(r).__name__}",
+                ))
             else:
                 result_obj, agent_instance = r
                 results.append(result_obj)

@@ -16,8 +16,6 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Circle, ShieldCheck } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
-
 import { useSimulation } from "@/hooks/useSimulation";
 import { PageTransition } from "@/components/ui/PageTransition";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
@@ -70,7 +68,7 @@ export default function EvidencePage() {
     typeof window !== "undefined" && sessionStorage.getItem("forensic_auto_start") === "true"
   );
 
-  // Phase tracking: initial analysis vs deep analysis
+  // Phase tracking:  analysis vs deep analysis
   const [phase, setPhase] = useState<"initial" | "deep">("initial");
 
   // HITL state
@@ -133,7 +131,7 @@ export default function EvidencePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // State restoring guard to prevent initial mount flicker
+  // State restoring guard to prevent  mount flicker
   const isRestoringRef = useRef(typeof window !== "undefined" ? sessionStorage.getItem("forensic_restore_view") === "true" : false);
 
   // Restore state if returning from Result page
@@ -400,7 +398,7 @@ export default function EvidencePage() {
   // Awaiting decision = backend sent PIPELINE_PAUSED
   const awaitingDecision = status === "awaiting_decision";
 
-  // Play analysis_done sound once when initial analysis finishes (PIPELINE_PAUSED)
+  // Play analysis_done sound once when  analysis finishes (PIPELINE_PAUSED)
   useEffect(() => {
     if (awaitingDecision && !analysisCompleteSoundedRef.current) {
       analysisCompleteSoundedRef.current = true;
@@ -490,18 +488,12 @@ export default function EvidencePage() {
           aria-label="Council Arbiter deliberating"
         >
           <div
-            className="flex flex-col items-center gap-5 px-8 py-9 shadow-2xl max-w-sm w-full mx-4 rounded-2xl"
-            style={{
-              background: "rgba(3,11,26,0.92)",
-              backdropFilter: "blur(48px)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              boxShadow: "0 32px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(34,211,238,0.04)"
-            }}
+            className="surface-panel-high flex flex-col items-center gap-5 px-8 py-9 shadow-[0_32px_80px_rgba(0,0,0,0.8),_0_0_0_1px_rgba(34,211,238,0.04)] max-w-sm w-full mx-4 rounded-2xl"
           >
             <div className="relative w-20 h-20 flex items-center justify-center">
-              <motion.div
-                animate={{ scale: [1, 1.15, 1], opacity: [0.08, 0.22, 0.08] }}
-                transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+              <div
+                
+                
                 className="absolute inset-0 rounded-full blur-xl"
                 style={{ background: "rgba(34,211,238,0.3)" }}
               />
@@ -523,11 +515,11 @@ export default function EvidencePage() {
               </p>
             </div>
             <div className="relative w-full h-[2px] rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.05)" }}>
-              <motion.div
+              <div
                 className="absolute h-full w-[40%] rounded-full"
                 style={{ background: "#22D3EE", boxShadow: "0 0 12px rgba(34,211,238,0.7)" }}
-                animate={{ left: ["-50%", "160%"] }}
-                transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+                
+                
               />
             </div>
           </div>
@@ -545,9 +537,9 @@ export default function EvidencePage() {
       <main className="max-w-6xl mx-auto relative z-10">
         {/* Phase Indicator */}
         {hasStartedAnalysis && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
+          <div
+            
+            
             className="mb-8 flex items-center justify-center"
           >
             <div className="flex items-center gap-2 p-1 rounded-full bg-surface-low border border-border-subtle shadow-lg">
@@ -585,11 +577,11 @@ export default function EvidencePage() {
                 <span>Deep ML Probe</span>
               </div>
             </div>
-          </motion.div>
+          </div>
         )}
 
         <PageTransition>
-        <AnimatePresence mode="wait">
+        <>
           {/* Upload Form */}
           {showUploadForm && (
             <FileUploadSection
@@ -610,7 +602,7 @@ export default function EvidencePage() {
             />
           )}
 
-          {/* Agent Progress — handles both initial and deep phases */}
+          {/* Agent Progress — handles both  and deep phases */}
           {showAgentProgress && (
             <AgentProgressDisplay
               key="agent-progress"
@@ -649,7 +641,7 @@ export default function EvidencePage() {
               />
             </div>
           )}
-        </AnimatePresence>
+        </>
       </PageTransition>
       </main>
 

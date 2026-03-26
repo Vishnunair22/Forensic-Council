@@ -81,6 +81,15 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // HTML pages — never cache: browser must revalidate on every visit.
+        // Next.js 15 defaults to s-maxage=31536000 for static pages which
+        // causes stale HTML to persist in the browser cache across deploys.
+        source: "/(|evidence|result|session-expired)",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+        ],
+      },
+      {
         // Fonts: content-hashed, safe to cache long-term.
         source: "/fonts/:path*",
         headers: [

@@ -31,7 +31,7 @@
 :80 {
     # For localhost development, serve HTTP directly without redirect.
     # Only redirect to HTTPS when DOMAIN is a real production domain.
-    @production_domain expression {!(({$DOMAIN} == "localhost") || ({$DOMAIN} == ""))}
+    @production_domain not host localhost 127.0.0.1
     redir @production_domain https://{host}{uri}
 
     # Localhost HTTP: same path-based routing as the HTTPS block below.

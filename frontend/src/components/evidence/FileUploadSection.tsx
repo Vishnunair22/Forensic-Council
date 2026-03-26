@@ -7,7 +7,6 @@
  */
 
 import { useRef, useMemo, useEffect } from "react";
-import { motion } from "framer-motion";
 import {
   RotateCcw,
   ArrowRight,
@@ -94,19 +93,19 @@ export function FileUploadSection({
   };
 
   return (
-    <motion.div
+    <div
       key="upload"
-      initial={{ opacity: 0, scale: 0.98 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, y: -20 }}
+      
+      
+      
       className="flex flex-col items-center justify-center min-h-[50vh] max-w-xl mx-auto"
     >
       {/* Title Section */}
       <div className="text-center mb-7">
-        <motion.div
-          initial={{ y: -10, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
+        <div
+          
+          
+          
           className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-5 shadow-sm relative overflow-hidden group"
             style={{ background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.14)" }}>
           <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
@@ -114,33 +113,33 @@ export function FileUploadSection({
             <span className="relative inline-flex rounded-full h-full w-full bg-cyan-400" />
           </span>
           <span className="uppercase tracking-[0.4em] font-bold font-sans text-[9px]" style={{ color: "rgba(34,211,238,0.6)" }}>Evidence Intake Portal</span>
-        </motion.div>
+        </div>
 
-        <motion.h1
-          initial={{ y: 10, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.1, duration: 0.8, ease: "easeOut" }}
+        <h1
+          
+          
+          
           className="text-2xl md:text-3xl font-bold mb-2.5 tracking-tight font-heading
             text-foreground leading-[1.1]">
           Initiate Investigation
-        </motion.h1>
+        </h1>
 
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2, duration: 0.8 }}
+        <p
+          
+          
+          
           className="text-white/40 text-[10px] font-bold uppercase tracking-[0.2em] max-w-sm mx-auto leading-relaxed italic">
           High-Precision Multi-Agent Forensic Auditing
-        </motion.p>
+        </p>
       </div>
 
       {/* File Preview or Upload Area */}
       {file ? (
         /* File selected – preview + action buttons */
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="w-full glass-panel rounded-[2rem] overflow-hidden relative"
+        <div
+          
+          
+          className="w-full glass-ethereal rounded-[2rem] overflow-hidden relative"
         >
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
 
@@ -177,17 +176,10 @@ export function FileUploadSection({
                   {file.type.startsWith("audio/") && (
                     <div className="flex items-end gap-1 h-8">
                       {[3, 7, 5, 9, 6, 4, 8, 5, 7, 3, 6, 8].map((h, i) => (
-                          <motion.div
+                          <div
                             key={i}
-                            animate={{
-                              height: `${h}px`,
-                            }}
-                            transition={{
-                              duration: 0.4,
-                              repeat: Infinity,
-                              repeatType: "reverse",
-                              delay: i * 0.05,
-                            }}
+                            
+                            
                             className="w-1 bg-cyan-400/60 rounded-full"
                           />
                       ))}
@@ -211,7 +203,7 @@ export function FileUploadSection({
             <button
               onClick={() => { playSound("click"); onClear(); }}
               disabled={isUploading}
-              className="btn btn-ghost flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-widest"
+              className="btn-premium-glass flex-1 py-2 rounded-lg text-[10px] font-bold uppercase tracking-[0.15em]"
             >
               <RotateCcw className="w-3.5 h-3.5 opacity-70" aria-hidden="true" />
               Reset
@@ -223,9 +215,9 @@ export function FileUploadSection({
             >
               {isUploading ? (
                 <>
-                  <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
+                  <div  >
                     <UploadCloud className="w-4 h-4" aria-hidden="true" />
-                  </motion.div>
+                  </div>
                   SEALING EVIDENCE…
                 </>
               ) : (
@@ -236,7 +228,7 @@ export function FileUploadSection({
               )}
             </button>
           </div>
-        </motion.div>
+        </div>
       ) : (
         /* No file selected – drag and drop area */
         <div
@@ -254,11 +246,9 @@ export function FileUploadSection({
           onDrop={handleDrop}
         >
           <div className="flex flex-col items-center justify-center py-10 px-6 gap-4 relative z-10">
-            <motion.div
-              animate={{
-                scale: isDragging ? 1.05 : 1,
-              }}
-              transition={{ type: "spring", stiffness: 400, damping: 25 }}
+            <div
+              
+              
               className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300
                 border
                 ${isDragging
@@ -267,7 +257,7 @@ export function FileUploadSection({
               style={{ background: "rgba(255,255,255,0.04)" }}
             >
               <UploadCloud className={`w-5 h-5 transition-all duration-300 ${isDragging ? "text-cyan-400" : "text-white/20 group-hover:text-cyan-400"}`} strokeWidth={1} aria-hidden="true" />
-            </motion.div>
+            </div>
 
             <div className="text-center">
               <p className={`text-sm font-black transition-colors duration-300 mb-1 tracking-tight font-heading uppercase ${isDragging ? "text-cyan-400" : "text-white group-hover:text-cyan-300"}`}>
@@ -292,14 +282,14 @@ export function FileUploadSection({
 
       {/* Validation Error */}
       {validationError && (
-        <motion.div
-          initial={{ opacity: 0, y: 10, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          className="mt-6 p-4 rounded-xl glass-panel border border-red-500/40 text-red-200 text-sm max-w-md w-full flex items-start gap-3 shadow-[0_8px_30px_rgba(239,68,68,0.2)]"
+        <div
+          
+          
+          className="mt-6 p-4 rounded-xl glass-ethereal border border-red-500/40 text-red-200 text-sm max-w-md w-full flex items-start gap-3 shadow-[0_8px_30px_rgba(239,68,68,0.2)]"
         >
           <ShieldAlert className="w-5 h-5 text-red-500 shrink-0" />
           <span className="font-medium leading-relaxed">{validationError}</span>
-        </motion.div>
+        </div>
       )}
 
       {/* Hidden file input */}
@@ -311,6 +301,6 @@ export function FileUploadSection({
         accept="image/*,video/*,audio/*"
         aria-label="Upload evidence file"
       />
-    </motion.div>
+    </div>
   );
 }

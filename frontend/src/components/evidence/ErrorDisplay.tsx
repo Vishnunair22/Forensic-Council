@@ -6,7 +6,6 @@
  * Shows error details and recovery options.
  */
 
-import { motion } from "framer-motion";
 import { AlertCircle, RotateCcw, X } from "lucide-react";
 
 interface ErrorDisplayProps {
@@ -23,10 +22,10 @@ export function ErrorDisplay({
   showRetry = true,
 }: ErrorDisplayProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
+    <div
+      
+      
+      
       className="w-full max-w-2xl mx-auto"
     >
       <div className="p-6 rounded-2xl bg-red-500/[0.06] border border-red-500/25 backdrop-blur-xl shadow-[0_0_40px_rgba(239,68,68,0.06),inset_0_1px_0_rgba(255,255,255,0.04)]">
@@ -46,13 +45,13 @@ export function ErrorDisplay({
             {/* Action Buttons */}
             <div className="flex gap-3 flex-wrap">
               {showRetry && onRetry && (
-                <button onClick={onRetry} className="btn btn-danger">
+                <button onClick={onRetry} className="btn-premium-amber">
                   <RotateCcw className="w-4 h-4" />
                   Try Again
                 </button>
               )}
               {onDismiss && (
-                <button onClick={onDismiss} className="btn btn-ghost">
+                <button onClick={onDismiss} className="btn-premium-glass">
                   <X className="w-4 h-4" />
                   Dismiss
                 </button>
@@ -61,6 +60,6 @@ export function ErrorDisplay({
           </div>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

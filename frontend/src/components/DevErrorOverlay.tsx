@@ -389,7 +389,7 @@ export function DevErrorProvider({ children }: { children: ReactNode }) {
     setErrorData(classifyError(error, componentStack));
   };
 
-  // If in production, strip out the wrapper completely to save bytes and prevent layout shifts
+  // If in production, strip out the wrapper completely to save bytes and prevent  shifts
   if (process.env.NODE_ENV !== 'development') {
     return <>{children}</>;
   }

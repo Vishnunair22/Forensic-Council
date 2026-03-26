@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle, AlertTriangle, ShieldCheck, RotateCcw,
   Home, ChevronDown, Lock, FileText,
@@ -82,9 +81,9 @@ function ArbiterOverlay({ liveMsg }: { liveMsg: string }) {
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl">
       <SurfaceCard className="flex flex-col items-center gap-6 px-10 py-12 shadow-2xl max-w-sm w-full mx-4 border-white/5 bg-surface-high rounded">
         <div className="relative w-24 h-24 flex items-center justify-center">
-          <motion.div
-            animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.4, 0.1] }}
-            transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+          <div
+            
+            
             className="absolute inset-0 rounded-full bg-amber-500/10 blur-xl"
           />
           <div className="relative z-10 w-14 h-14 rounded bg-black border border-amber-500/30 flex items-center justify-center shadow-[0_0_20px_rgba(217,119,6,0.2)]">
@@ -93,27 +92,27 @@ function ArbiterOverlay({ liveMsg }: { liveMsg: string }) {
         </div>
         <div className="text-center space-y-3">
           <h3 className="text-white font-black text-xl font-heading uppercase tracking-tighter">Council Deliberation</h3>
-          <AnimatePresence mode="wait">
-            <motion.p
+          <>
+            <p
               key={liveMsg || ARBITER_STEPS[step]}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
+              
+              
+              
               className="text-amber-500 text-[11px] font-black font-mono uppercase tracking-[0.3em] min-h-5"
             >
               {liveMsg || ARBITER_STEPS[step]}
-            </motion.p>
-          </AnimatePresence>
+            </p>
+          </>
           <div className="flex flex-col items-center gap-1 pt-2">
             <p className="text-white/20 text-[9px] font-black font-mono tracking-widest uppercase">NODE ACTIVE</p>
             <p className="text-amber-500/40 text-[10px] font-black font-mono tracking-widest uppercase">{elapsed}s</p>
           </div>
         </div>
         <div className="relative w-full h-1 bg-white/5 rounded-full overflow-hidden">
-          <motion.div
+          <div
             className="absolute h-full w-[40%] bg-amber-500 shadow-[0_0_15px_rgba(217,119,6,0.6)]"
-            animate={{ left: ["-100%", "200%"] }}
-            transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+            
+            
           />
         </div>
       </SurfaceCard>
@@ -284,13 +283,13 @@ function AgentCard({
       </button>
 
       {/* Expandable body */}
-      <AnimatePresence initial={false}>
+      <>
         {open && !isSkipped && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: "circOut" }}
+          <div
+            
+            
+            
+            
             className="overflow-hidden"
           >
             <div className="px-6 pb-6 pt-2 space-y-6 border-t border-border-subtle">
@@ -363,9 +362,9 @@ function AgentCard({
                 </div>
               )}
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      </>
     </SurfaceCard>
   );
 }
@@ -500,11 +499,11 @@ function CrossModalSection({ findings }: { findings: AgentFindingDTO[] }) {
             <ChevronDown className="w-4 h-4" />
         </div>
       </button>
-      <AnimatePresence initial={false}>
+      <>
         {open && (
-          <motion.div
-            initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }}
-            transition={{ duration: 0.25, ease: "circOut" }}
+          <div
+              
+            
             className="overflow-hidden"
           >
             <div className="px-6 pb-6 border-t border-emerald-500/10 divide-y divide-border-subtle">
@@ -520,9 +519,9 @@ function CrossModalSection({ findings }: { findings: AgentFindingDTO[] }) {
                 </div>
               ))}
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      </>
     </SurfaceCard>
   );
 }
@@ -549,11 +548,11 @@ function ContestedSection({ findings }: { findings: Record<string, unknown>[] })
             <ChevronDown className="w-4 h-4" />
         </div>
       </button>
-      <AnimatePresence initial={false}>
+      <>
         {open && (
-          <motion.div
-            initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }}
-            transition={{ duration: 0.25, ease: "circOut" }}
+          <div
+              
+            
             className="overflow-hidden"
           >
             <div className="px-6 pb-6 border-t border-amber-500/10 divide-y divide-border-subtle">
@@ -566,9 +565,9 @@ function ContestedSection({ findings }: { findings: Record<string, unknown>[] })
                 );
               })}
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      </>
     </SurfaceCard>
   );
 }
@@ -822,14 +821,14 @@ export default function ResultPage() {
       </header>
 
       <main id="main-content" className="max-w-6xl mx-auto px-6 pt-10 pb-40 space-y-10">
-        <AnimatePresence mode="wait">
+        <>
 
           {/* ─── READY ──────────────────────────────────────────────────────── */}
           {state === "ready" && report && (
-            <motion.div
+            <div
               key="ready"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
+              
+              
               className="grid grid-cols-12 gap-8 auto-rows-auto pb-20"
             >
               {/* ── Verdict Hero ── */}
@@ -894,10 +893,10 @@ export default function ResultPage() {
                         </span>
                       </div>
                       <div className="h-1.5 bg-surface-low rounded-full overflow-hidden border border-border-subtle">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${manipPct}%` }}
-                          transition={{ duration: 1.2, ease: "circOut", delay: 0.2 }}
+                        <div
+                          
+                          
+                          
                           className={clsx(
                             "h-full rounded-full shadow-sm",
                             manipPct >= 70 ? "bg-red-500" :
@@ -1044,13 +1043,13 @@ export default function ResultPage() {
                     <ChevronDown className="w-4 h-4" />
                   </div>
                 </button>
-                <AnimatePresence initial={false}>
+                <>
                   {chainOpen && (
-                    <motion.div
-                      initial={{ height: 0 }}
-                      animate={{ height: "auto" }}
-                      exit={{ height: 0 }}
-                      transition={{ duration: 0.3, ease: "circOut" }}
+                    <div
+                      
+                      
+                      
+                      
                       className="overflow-hidden"
                     >
                       <div className="px-8 pb-8 space-y-6 border-t border-border-subtle bg-surface-mid/50">
@@ -1086,26 +1085,26 @@ export default function ResultPage() {
                           </div>
                           <button
                             onClick={handleExport}
-                            className="btn btn-secondary px-6 py-2.5 rounded-xl text-[10px] font-bold font-mono uppercase tracking-widest"
+                            className="btn-premium-glass px-6 py-2.5 rounded-xl text-[10px] font-bold font-mono uppercase tracking-widest"
                           >
                             <Download className="w-3.5 h-3.5 mr-2" /> Export Raw Packet
                           </button>
                         </div>
                       </div>
-                    </motion.div>
+                    </div>
                   )}
-                </AnimatePresence>
+                </>
               </SurfaceCard>
 
-            </motion.div>
+            </div>
           )}
 
           {/* ─── ERROR ──────────────────────────────────────────────────────── */}
           {state === "error" && (
-            <motion.div
+            <div
               key="err"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+              
+              
               className="flex flex-col items-center justify-center min-h-[60vh] gap-8 text-center"
             >
               <div className="w-20 h-20 rounded-3xl bg-surface-low border border-rose-500/20 flex items-center justify-center shadow-lg shadow-rose-500/5">
@@ -1117,19 +1116,19 @@ export default function ResultPage() {
               </div>
               <button
                 onClick={handleNew}
-                className="btn btn-primary px-10 py-4 rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-amber-500/20"
+                className="btn-premium-amber px-10 py-4 rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-amber-500/20"
               >
                 Re-Initialize Investigation
               </button>
-            </motion.div>
+            </div>
           )}
 
           {/* ─── EMPTY ──────────────────────────────────────────────────────── */}
           {state === "empty" && (
-            <motion.div
+            <div
               key="empty"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+              
+              
               className="flex flex-col items-center justify-center min-h-[60vh] gap-8 text-center"
             >
               <div className="w-20 h-20 rounded-3xl bg-surface-low border border-border-subtle flex items-center justify-center shadow-lg">
@@ -1143,14 +1142,14 @@ export default function ResultPage() {
               </div>
               <button
                 onClick={handleHome}
-                className="btn btn-secondary px-10 py-4 rounded-xl text-xs font-bold uppercase tracking-widest"
+                className="btn-premium-glass px-10 py-4 rounded-xl text-xs font-bold uppercase tracking-widest"
               >
                 Back to Command Center
               </button>
-            </motion.div>
+            </div>
           )}
 
-        </AnimatePresence>
+        </>
       </main>
 
       {/* Fixed footer action bar */}
@@ -1162,14 +1161,14 @@ export default function ResultPage() {
                 {!isDeepPhase ? (
                 <button
                     onClick={handleViewAnalysis}
-                    className="flex-1 sm:flex-none btn btn-secondary px-8 py-3.5 rounded-xl text-[11px] font-bold uppercase tracking-widest hover:text-indigo-400 transition-all flex items-center justify-center gap-3"
+                    className="flex-1 sm:flex-none btn-premium-glass px-8 py-3.5 rounded-xl text-[11px] font-bold uppercase tracking-widest hover:text-indigo-400 transition-all flex items-center justify-center gap-3"
                 >
                     <ArrowLeft className="w-4 h-4" aria-hidden="true" /> View Probes
                 </button>
                 ) : (
                 <button
                     onClick={handleNew}
-                    className="flex-1 sm:flex-none btn btn-secondary px-8 py-3.5 rounded-xl text-[11px] font-bold uppercase tracking-widest text-emerald-500 hover:border-emerald-500/20 hover:bg-emerald-500/5 transition-all flex items-center justify-center gap-3"
+                    className="flex-1 sm:flex-none btn-premium-glass px-8 py-3.5 rounded-xl text-[11px] font-bold uppercase tracking-widest text-emerald-500 hover:border-emerald-500/20 hover:bg-emerald-500/5 transition-all flex items-center justify-center gap-3"
                 >
                     <RotateCcw className="w-4 h-4" aria-hidden="true" /> New Session
                 </button>
@@ -1179,14 +1178,14 @@ export default function ResultPage() {
             <div className="flex items-center gap-4 w-full sm:w-auto">
                  <button
                     onClick={() => window.print()}
-                    className="flex-1 sm:flex-none btn btn-secondary px-8 py-3.5 rounded-xl text-[11px] font-bold uppercase tracking-widest hover:bg-surface-high transition-all flex items-center justify-center gap-3"
+                    className="flex-1 sm:flex-none btn-premium-glass px-8 py-3.5 rounded-xl text-[11px] font-bold uppercase tracking-widest hover:bg-surface-high transition-all flex items-center justify-center gap-3"
                 >
                     <Download className="w-4 h-4" aria-hidden="true" /> Print Report
                 </button>
 
                 <button
                 onClick={handleHome}
-                className="flex-1 sm:flex-none btn btn-primary px-8 py-3.5 rounded-xl text-[11px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-3"
+                className="flex-1 sm:flex-none btn-premium-amber px-8 py-3.5 rounded-xl text-[11px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-3"
                 >
                 <Home className="w-4 h-4" aria-hidden="true" /> Dashboard
                 </button>

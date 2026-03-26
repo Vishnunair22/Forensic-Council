@@ -26,11 +26,11 @@ export default function NotFound() {
 
         {/* Actions */}
         <div className="flex flex-col sm:flex-row gap-3 w-full">
-          <Link href="/" className="btn btn-violet flex-1 py-3 rounded-xl font-medium">
+          <Link href="/" className="btn-premium-amber flex-1 py-3 rounded-xl font-medium">
             <Home className="w-4 h-4" aria-hidden="true" />
             Dashboard
           </Link>
-          <Link href="/evidence" className="btn btn-ghost flex-1 py-3 rounded-xl">
+          <Link href="/evidence" className="btn-premium-glass flex-1 py-3 rounded-xl">
             <ArrowLeft className="w-4 h-4" aria-hidden="true" />
             New Investigation
           </Link>

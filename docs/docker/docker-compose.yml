@@ -60,7 +60,7 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333' 2>/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -205,6 +205,9 @@ services:
       - caddy_logs:/var/log/caddy
     environment:
       - DOMAIN=${DOMAIN:-localhost}
+      # Suppress quic-go UDP buffer warning — net.core.rmem_max can't be set
+      # per-container on Docker Desktop / WSL2 without host kernel changes.
+      - QUIC_GO_DISABLE_RECEIVE_BUFFER_WARNING=1
     depends_on:
       frontend:
         condition: service_healthy

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import { motion } from "framer-motion";
 import { ShieldX, LogIn } from "lucide-react";
 import { clearAuthToken } from "@/lib/api";
 import { useRouter } from "next/navigation";
@@ -32,10 +31,10 @@ export default function SessionExpiredPage() {
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(245,158,11,0.07),transparent_60%)] pointer-events-none" />
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none" />
 
-            <motion.div
-                initial={{ opacity: 0, y: 24, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.4, ease: "easeOut" }}
+            <div
+                
+                
+                
                 className="glass-modal max-w-md w-full p-8 rounded-3xl flex flex-col items-center border border-amber-500/20"
             >
                 {/* Amber tint top edge */}
@@ -55,12 +54,12 @@ export default function SessionExpiredPage() {
 
                 <button
                     onClick={handleReturn}
-                    className="btn btn-warning w-full py-4 rounded-xl font-bold"
+                    className="btn-premium-amber w-full py-4 rounded-xl font-bold"
                 >
                     <LogIn className="w-5 h-5" aria-hidden="true" />
                     Return to Dashboard
                 </button>
-            </motion.div>
+            </div>
         </div>
     );
 }

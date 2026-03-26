@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from "react";
 import { X, History, Trash2, FileText, AlertTriangle, AlertCircle, CheckCircle } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 export interface HistoryItem {
   sessionId: string;
@@ -67,17 +66,17 @@ export function HistoryDrawer() {
         </span>
       </button>
 
-      <AnimatePresence>
+      <>
         {isOpen && (
           <>
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            <div
+                
               onClick={() => setIsOpen(false)}
               className="fixed inset-0 bg-background/60 backdrop-blur-sm z-50"
             />
-            <motion.div
-              initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            <div
+                
+              
               className="fixed inset-y-0 right-0 w-80 max-w-[85vw] bg-surface-low border-l border-border-subtle z-50 flex flex-col shadow-2xl"
             >
               <div className="flex items-center justify-between p-5 border-b border-border-subtle bg-surface-mid">
@@ -145,10 +144,10 @@ export function HistoryDrawer() {
                   </button>
                 </div>
               )}
-            </motion.div>
+            </div>
           </>
         )}
-      </AnimatePresence>
+      </>
     </>
   );
 }

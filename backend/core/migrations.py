@@ -332,6 +332,18 @@ class MigrationManager:
     async def get_applied_migrations(self) -> List[int]:
         """Get list of applied migration versions."""
         try:
+            # Check existence first to avoid a postgres ERROR log on first start
+            exists = await self.client.fetch_val(
+                """
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                    AND table_name = 'schema_migrations'
+                )
+                """
+            )
+            if not exists:
+                return []
             result = await self.client.fetch(
                 "SELECT version FROM schema_migrations ORDER BY version"
             )

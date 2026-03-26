@@ -160,7 +160,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                     setCompletedAgents(nextCompleted);
                                     onAgentCompleteRef.current?.(newUpdate);
 
-                                    // Also transition to analyzing if still in initiating
+                                    // Also  to analyzing if still in initiating
                                     setStatus((prev: SimulationStatus) => prev === "initiating" ? "analyzing" : prev);
                                 }
                             }

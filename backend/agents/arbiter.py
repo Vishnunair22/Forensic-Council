@@ -430,6 +430,25 @@ class CouncilArbiter:
             f"{len(agent_results) - len(active_agent_results)} skipped, "
             f"{len(all_findings)} total findings"
         )
+        
+        # ── Early return if no active agents reported ────────────────────
+        if not active_agent_results:
+            logger.warning("Arbiter: No active agents produced findings. Generating empty report.")
+            return ForensicReport(
+                session_id=self.session_id,
+                case_id=case_id or f"case_{self.session_id}",
+                executive_summary="No forensic agents produced findings for this evidence. Please verify the file integrity and try again.",
+                per_agent_findings=per_agent_findings,
+                per_agent_metrics=per_agent_metrics,
+                per_agent_analysis={},
+                overall_confidence=0.0,
+                overall_error_rate=0.0,
+                overall_verdict="INCONCLUSIVE",
+                uncertainty_statement="No analysis was possible with the selected agents.",
+                verdict_sentence="No analysis results available.",
+                key_findings=[],
+                reliability_note="Analysis was skipped for all agents.",
+            )
 
         # ── Compile Gemini findings list ──────────────────────────────────
         gemini_vision_findings: list[dict[str, Any]] = []
@@ -697,18 +716,28 @@ class CouncilArbiter:
 
         # 1. Structured summary (fastest — JSON mode, short prompt)
         await _step("Generating structured summary fields…")
-        verdict_sentence, key_findings_list, reliability_note = \
-            await self._generate_structured_summary(
-                overall_verdict=overall_verdict,
-                overall_confidence=overall_confidence,
-                overall_error_rate=overall_error_rate,
-                manipulation_probability=manipulation_probability,
-                applicable_agent_count=applicable_agent_count,
-                all_findings=all_findings,
-                cross_modal_confirmed_count=len(cross_modal_confirmed),
-                contested_count=contested_findings_count,
-                analysis_coverage_note=analysis_coverage_note,
-            )
+        try:
+            verdict_sentence, key_findings_list, reliability_note = \
+                await self._generate_structured_summary(
+                    overall_verdict=overall_verdict,
+                    overall_confidence=overall_confidence,
+                    overall_error_rate=overall_error_rate,
+                    manipulation_probability=manipulation_probability,
+                    applicable_agent_count=applicable_agent_count,
+                    all_findings=all_findings,
+                    cross_modal_confirmed_count=len(cross_modal_confirmed),
+                    contested_count=contested_findings_count,
+                    analysis_coverage_note=analysis_coverage_note,
+                )
+        except Exception as _struct_err:
+            logger.warning(f"Structured summary failed: {_struct_err}")
+            # Use template-based fallback directly
+            verdict_sentence, key_findings_list, reliability_note = \
+                self._template_structured_summary(
+                    overall_verdict, overall_confidence, overall_error_rate,
+                    manipulation_probability, applicable_agent_count, all_findings,
+                    len(cross_modal_confirmed), contested_findings_count, analysis_coverage_note
+                )
 
         # 2. Per-agent narratives (parallel — each capped at 40 s)
         await _step("Generating per-agent analysis via Groq…")

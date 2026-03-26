@@ -7,7 +7,6 @@
  */
 
 import { useState } from "react";
-import { motion } from "framer-motion";
 import {
   Dialog,
   DialogContent,
@@ -143,10 +142,10 @@ export function HITLCheckpointModal({
                 </h4>
                 <div className="grid grid-cols-2 gap-3">
                   {decisionOptions.map((option) => (
-                    <motion.button
+                    <button
                       key={option.value}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
+                      
+                      
                       onClick={() => setSelectedDecision(option.value)}
                       className={`p-3 rounded-xl border transition-all text-left backdrop-blur-sm ${
                         selectedDecision === option.value
@@ -166,7 +165,7 @@ export function HITLCheckpointModal({
                       <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
                         {option.description}
                       </p>
-                    </motion.button>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -189,13 +188,13 @@ export function HITLCheckpointModal({
 
               {/* Error Message */}
               {decisionError && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
+                <div
+                  
+                  
                   className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-sm"
                 >
                   {decisionError}
-                </motion.div>
+                </div>
               )}
             </div>
 
@@ -204,14 +203,14 @@ export function HITLCheckpointModal({
               <button
                 onClick={onDismiss}
                 disabled={isSubmitting}
-                className="btn btn-ghost px-4 py-2.5 rounded-xl disabled:opacity-50"
+                className="btn-premium-glass px-4 py-2.5 rounded-[10px] disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={!selectedDecision || isSubmitting}
-                className="btn btn-primary px-4 py-2.5 rounded-xl font-semibold disabled:opacity-50"
+                className="btn-premium-amber px-4 py-2.5 rounded-[10px] font-semibold disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <>

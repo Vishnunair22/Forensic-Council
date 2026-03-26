@@ -6,7 +6,6 @@
  */
 
 import { clsx } from "clsx";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, Loader2, ArrowRight,
   RotateCcw, Microscope, FileText, ChevronDown, ChevronUp,
@@ -161,24 +160,24 @@ function FindingsAccordion({
             {findingsCount ?? sectionFlags.length} Artifact{(findingsCount ?? sectionFlags.length) !== 1 ? "s" : ""}
           </span>
         </div>
-        <motion.span
-          animate={{ rotate: open ? 180 : 0 }}
-          transition={{ duration: 0.2, ease: "anticipate" }}
+        <span
+          
+          
           className="text-white/20 group-hover:text-cyan-400 transition-colors"
         >
           <ChevronDown className="w-4 h-4" />
-        </motion.span>
+        </span>
       </button>
 
       {/* ── Expandable section list ── */}
-      <AnimatePresence initial={false}>
+      <>
         {open && (
-          <motion.div
+          <div
             key="findings-body"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            
+            
+            
+            
             className="overflow-hidden"
           >
             <div className="border-t border-white/[0.04] divide-y divide-white/[0.03] bg-black/20">
@@ -212,40 +211,40 @@ function FindingsAccordion({
                         {sf.label}
                       </span>
                       {hasDetail && (
-                        <motion.span
-                          animate={{ rotate: isExp ? 180 : 0 }}
-                          transition={{ duration: 0.2 }}
+                        <span
+                          
+                          
                           className="text-white/20 group-hover:text-cyan-400/70 transition-colors flex-shrink-0"
                         >
                           <ChevronDown className="w-3.5 h-3.5" />
-                        </motion.span>
+                        </span>
                       )}
                     </button>
 
                     {/* ── Section key signal detail ── */}
-                    <AnimatePresence initial={false}>
+                    <>
                       {isExp && sf.key_signal && (
-                        <motion.div
+                        <div
                           key={`detail-${sf.id}`}
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                          
+                          
+                          
+                          
                           className="overflow-hidden bg-black/40"
                         >
                           <p className="px-10 pb-3 pt-1 text-[11px] text-foreground/60 font-mono leading-relaxed border-l border-border-bold ml-4">
                             {sf.key_signal}
                           </p>
-                        </motion.div>
+                        </div>
                       )}
-                    </AnimatePresence>
+                    </>
                   </div>
                 );
               })}
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      </>
     </div>
   );
 }
@@ -286,11 +285,11 @@ function FindingRow({ f }: { f: FindingPreview }) {
   const sev = SEV_LABEL[f.severity] ?? SEV_LABEL.LOW;
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 5 }}
-      animate={{ opacity: 1, y: 0 }}
-      layout
-      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+    <div 
+      
+      
+      
+      
       className={`rounded-xl bg-surface-mid overflow-hidden border border-border-subtle border-l-2 ${borderCls} px-4 py-3 space-y-2 shadow-sm group/finding`}
     >
       {/* Header: tool name + severity + confidence */}
@@ -312,7 +311,7 @@ function FindingRow({ f }: { f: FindingPreview }) {
         </div>
       </div>
       {/* Summary */}
-      <motion.p layout className="text-[11px] text-slate-300 leading-relaxed max-w-prose font-medium">
+      <p  className="text-[11px] text-slate-300 leading-relaxed max-w-prose font-medium">
         {displayText}
         {needsExpand && (
           <button
@@ -322,8 +321,8 @@ function FindingRow({ f }: { f: FindingPreview }) {
             [{open ? "COLLAPSE" : "EXPAND"}]
           </button>
         )}
-      </motion.p>
-    </motion.div>
+      </p>
+    </div>
   );
 }
 
@@ -335,14 +334,14 @@ function FindingsPreviewList({ findings }: { findings: FindingPreview[] }) {
   const remaining = remainingBatch.length;
 
   return (
-    <motion.div layout className="space-y-2">
-      <AnimatePresence initial={false}>
+    <div  className="space-y-2">
+      <>
         {firstBatch.map((f, i) => <FindingRow key={`${f.tool}-first-${i}`} f={f} />)}
-      </AnimatePresence>
+      </>
       
       {findings.length > INITIAL_SHOW && (
-        <motion.button
-          layout
+        <button
+          
           onClick={() => setShowAll(v => !v)}
           className="w-full text-[9px] font-black tracking-[0.2em] uppercase text-white/30 hover:text-cyan-400 transition-all py-2 text-center
             border border-white/5 border-dashed rounded bg-surface-low hover:bg-surface-high my-1"
@@ -350,13 +349,13 @@ function FindingsPreviewList({ findings }: { findings: FindingPreview[] }) {
           {showAll
             ? "Hide Suppressed Findings"
             : `Display ${remaining} Suppressed Finding${remaining !== 1 ? "s" : ""}`}
-        </motion.button>
+        </button>
       )}
 
-      <AnimatePresence initial={false}>
+      <>
         {showAll && remainingBatch.map((f, i) => <FindingRow key={`${f.tool}-rem-${i}`} f={f} />)}
-      </AnimatePresence>
-    </motion.div>
+      </>
+    </div>
   );
 }
 
@@ -398,42 +397,42 @@ function LiveThinkingText({ text, active }: { text: string; active: boolean }) {
   return (
     <div className="relative space-y-1 min-h-[2.5rem]" aria-live="polite" aria-atomic="true">
       {/* Trail — previous thought fades out dimly */}
-      <AnimatePresence mode="popLayout">
+      <>
         {prevText && prevText !== displayText && (
-          <motion.p
+          <p
             key={`trail-${prevText.slice(0, 20)}`}
-            initial={{ opacity: 0.28 }}
-            animate={{ opacity: 0.12 }}
-            exit={{ opacity: 0, filter: "blur(3px)", y: -4 }}
-            transition={{ duration: 1.4, ease: "easeOut" }}
+            
+            
+            
+            
             className="text-[10px] leading-relaxed text-slate-500/70 line-clamp-1 italic pointer-events-none select-none"
           >
             {prevText}
-          </motion.p>
+          </p>
         )}
-      </AnimatePresence>
+      </>
 
-      <AnimatePresence mode="wait">
-        <motion.p
+      <>
+        <p
           key={key}
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -4 }}
-          transition={{ duration: 0.25, ease: "easeOut" }}
+          
+          
+          
+          
           className="text-[12px] leading-relaxed text-foreground/70 whitespace-pre-wrap break-words font-medium font-mono tracking-tight"
         >
           <span className="mr-2 font-black" style={{ color: "#22D3EE" }}>/</span>
           {displayText}
           {/* Subtle cursor while actively running */}
           {active && (
-            <motion.span
-              animate={{ opacity: [1, 0, 1] }}
-              transition={{ duration: 1, repeat: Infinity }}
+            <span
+              
+              
               className="inline-block ml-1 w-[4px] h-[12px] align-middle -translate-y-px" style={{ background: "rgba(34,211,238,0.5)" }}
             />
           )}
-        </motion.p>
-      </AnimatePresence>
+        </p>
+      </>
     </div>
   );
 }
@@ -461,7 +460,7 @@ function humaniseThinking(raw: string, _agentId: string): string {
   if (r.includes("ocr") || r.includes("visible text")) return "📄 Extracting all visible text from the image…";
   if (r.includes("adversarial")) return "🛡️ Testing against anti-forensics evasion techniques…";
 
-  // Agent-1 initial
+  // Agent-1 
   if (r.includes("ela") && r.includes("full")) return "🔬 Running Error Level Analysis across full image…";
   if (r.includes("ela") && r.includes("block")) return "🧩 Classifying ELA anomaly blocks in flagged regions…";
   if (r.includes("ela") && r.includes("roi")) return "🔍 Re-analysing flagged ROIs with noise footprint…";
@@ -680,26 +679,26 @@ export function AgentProgressDisplay({
   const showDeepComplete = phase === "deep" && (allAgentsDone || pipelineStatus === "complete");
 
   return (
-    <motion.div
+    <div
       key="progress"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
+      
+      
+      
       className="flex flex-col items-center pt-8"
     >
       {/* Header */}
       <div className="text-center mb-7" aria-live="polite" aria-atomic="true">
-        <motion.div
-          initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+        <div
+           
           className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-3 font-mono font-black uppercase text-[10px] tracking-widest shadow-sm"
           style={{ background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.14)", color: "#22D3EE" }}>
           <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
           {activeCompletedCount} / {visibleAgentsCount} Analysed
-        </motion.div>
+        </div>
 
-        <motion.h2
+        <h2
           key={phase + String(showInitialDecision) + String(showDeepComplete)}
-          initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+           
           className="text-2xl md:text-3xl font-black text-white mb-2 tracking-tighter font-heading uppercase">
           {showInitialDecision
             ? "Phase I Complete"
@@ -708,7 +707,7 @@ export function AgentProgressDisplay({
               : phase === "deep"
                 ? "Active Deep Forensic Stream"
                 : "Active Forensic Stream"}
-        </motion.h2>
+        </h2>
         <div className="w-12 h-[2px] mx-auto rounded-full opacity-50" style={{ background: "#22D3EE", boxShadow: "0 0 10px rgba(34,211,238,0.4)" }} />
       </div>
 
@@ -722,19 +721,13 @@ export function AgentProgressDisplay({
           const isRevealed = revealedAgents.has(agent.id);
 
           return (
-            <AnimatePresence key={agent.id}>
+            <>
               {isRevealed && (
                 <div
                   className={clsx(
-                    "rounded-2xl p-6 transition-all duration-500 relative group overflow-hidden",
+                    "glass-ethereal rounded-2xl p-6 transition-all duration-500 relative group overflow-hidden",
                     (status === "waiting" || status === "checking") && "opacity-40"
                   )}
-                  style={{
-                    background: "rgba(255,255,255,0.04)",
-                    backdropFilter: "blur(20px)",
-                    WebkitBackdropFilter: "blur(20px)",
-                    border: "1px solid rgba(255,255,255,0.07)",
-                  }}
                 >
                   {/* Status indicator bar (Top hairline) */}
                   <div
@@ -819,12 +812,12 @@ export function AgentProgressDisplay({
                       {/* Skeleton tool lines */}
                       <div className="space-y-1.5 opacity-25">
                         {[75, 58, 68].map((w, i) => (
-                          <motion.div
+                          <div
                             key={i}
                             className="h-1.5 bg-slate-600 rounded-full"
                             style={{ width: `${w}%` }}
-                            animate={{ opacity: [0.2, 0.6, 0.2] }}
-                            transition={{ duration: 2.2, repeat: Infinity, delay: i * 0.3 }}
+                            
+                            
                           />
                         ))}
                       </div>
@@ -857,12 +850,12 @@ export function AgentProgressDisplay({
                             {/* Progress bar — indeterminate when stale (API call in-flight) */}
                             <div className="relative w-full h-1 bg-white/5 rounded-full overflow-hidden">
                               {!isStale && pct !== null ? (
-                                <motion.div
+                                <div
                                   className="h-full rounded-full"
                                   style={{ background: "#22D3EE", boxShadow: "0 0 8px rgba(34,211,238,0.6)" }}
-                                  initial={{ width: "0%" }}
-                                  animate={{ width: `${pct}%` }}
-                                  transition={{ duration: 0.4, ease: "easeOut" }}
+                                  
+                                  
+                                  
                                 />
                               ) : (
                                 <div
@@ -890,9 +883,9 @@ export function AgentProgressDisplay({
 
                             {/* Staleness banner — shown after 8 s on same step */}
                             {isStale && (
-                              <motion.div
-                                initial={{ opacity: 0, y: 2 }}
-                                animate={{ opacity: 1, y: 0 }}
+                              <div
+                                
+                                
                                 className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-mono font-bold ${
                                   isGeminiStep
                                     ? "bg-violet-500/10 border border-violet-500/20 text-violet-300/70"
@@ -908,7 +901,7 @@ export function AgentProgressDisplay({
                                     ? `Awaiting external API response — ${elapsed}s elapsed`
                                     : `Processing — ${elapsed}s elapsed`
                                 }
-                              </motion.div>
+                              </div>
                             )}
                           </div>
                         );
@@ -1015,7 +1008,7 @@ export function AgentProgressDisplay({
                   )}
                 </div>
               )}
-            </AnimatePresence>
+            </>
           );
         })}
       </div>
@@ -1030,13 +1023,13 @@ export function AgentProgressDisplay({
             <span>{hiddenUnsupportedAgents.size} Skipped Units (Not Applicable)</span>
             <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showSkipped ? "rotate-180" : ""}`} />
           </button>
-          <AnimatePresence>
+          <>
             {showSkipped && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
+              <div
+                
+                
+                
+                
                 className="overflow-hidden w-full max-w-md mt-3"
               >
                 <div className="flex flex-col gap-2 p-3 rounded-xl border border-white/[0.04] bg-white/[0.01]">
@@ -1054,18 +1047,18 @@ export function AgentProgressDisplay({
                     );
                   })}
                 </div>
-              </motion.div>
+              </div>
             )}
-          </AnimatePresence>
+          </>
         </div>
       )}
 
       {/* ── Decision Buttons ─────────────────────────────────────────── */}
 
       {showInitialDecision && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, type: "spring", stiffness: 280, damping: 26 }}
+        <div
+           
+          
           className="mt-8 w-full max-w-xl"
         >
           {/* Decision card */}
@@ -1075,11 +1068,11 @@ export function AgentProgressDisplay({
               <h3 className="text-lg font-black text-white font-heading uppercase tracking-tighter">Initial Scan Concluded</h3>
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
-               <motion.button
+               <button
                 onClick={onAcceptAnalysis}
                 disabled={isNavigating}
-                whileHover={isNavigating ? {} : { y: -1, scale: 1.01 }}
-                whileTap={isNavigating ? {} : { scale: 0.99 }}
+                
+                
                 className="btn-premium-glass flex-1 py-3 justify-center text-[11px] font-black uppercase tracking-[0.2em]"
               >
                 {isNavigating ? (
@@ -1087,25 +1080,25 @@ export function AgentProgressDisplay({
                 ) : (
                   <><FileText className="w-4 h-4 text-white/40" />COMPILE LEDGER</>
                 )}
-              </motion.button>
-               <motion.button
+              </button>
+               <button
                 onClick={onDeepAnalysis}
                 disabled={isNavigating}
-                whileHover={isNavigating ? {} : { y: -1, scale: 1.01 }}
-                whileTap={isNavigating ? {} : { scale: 0.99 }}
+                
+                
                 className="btn-premium-amber flex-1 py-3 justify-center text-[11px] font-black uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(217,119,6,0.2)]"
               >
                 <Microscope className="w-4 h-4" />DEEP SCAN PROTOCOL
-              </motion.button>
+              </button>
             </div>
           </div>
-        </motion.div>
+        </div>
       )}
 
       {showDeepComplete && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, type: "spring", stiffness: 280, damping: 26 }}
+        <div
+           
+          
           className="mt-8 w-full max-w-xl"
         >
           <div className="surface-panel rounded-2xl p-5 space-y-4 shadow-lg border-border-bold">
@@ -1114,20 +1107,20 @@ export function AgentProgressDisplay({
               <h3 className="text-base font-bold text-foreground font-heading uppercase">Council Arbiter Verification</h3>
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
-              <motion.button
+              <button
                 onClick={() => { playSound?.("click"); onNewUpload?.(); }}
                 disabled={isNavigating}
-                whileHover={isNavigating ? {} : { y: -1, scale: 1.01 }}
-                whileTap={isNavigating ? {} : { scale: 0.99 }}
+                
+                
                 className="btn-premium-glass flex-1 py-3 justify-center text-[11px] font-black uppercase tracking-[0.2em]"
               >
                 <RotateCcw className="w-4 h-4 opacity-40" />RESET TERMINAL
-              </motion.button>
-              <motion.button
+              </button>
+              <button
                 onClick={() => { playSound?.("click"); onViewResults?.(); }}
                 disabled={isNavigating}
-                whileHover={isNavigating ? {} : { y: -1, scale: 1.01 }}
-                whileTap={isNavigating ? {} : { scale: 0.99 }}
+                
+                
                 className="btn-premium-amber flex-1 py-3 justify-center text-[11px] font-black uppercase tracking-[0.2em] relative overflow-hidden shadow-[0_0_30px_rgba(217,119,6,0.3)]"
               >
                 {isNavigating ? (
@@ -1135,10 +1128,10 @@ export function AgentProgressDisplay({
                 ) : (
                   <><FileText className="w-4 h-4" />ACCESS LEDGER<ArrowRight className="w-4 h-4 ml-1" /></>
                 )}
-              </motion.button>
+              </button>
             </div>
           </div>
-        </motion.div>
+        </div>
       )}
 
       {/* Still running */}
@@ -1161,6 +1154,6 @@ export function AgentProgressDisplay({
           )}
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }

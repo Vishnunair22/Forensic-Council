@@ -11,8 +11,6 @@
  */
 "use client";
 
-import { motion } from "framer-motion";
-
 interface PageTransitionProps {
   children: React.ReactNode;
   className?: string;
@@ -20,22 +18,19 @@ interface PageTransitionProps {
 
 export function PageTransition({ children, className = "" }: PageTransitionProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{
-        duration: 0.38,
-        ease: [0.22, 1, 0.36, 1],
-      }}
+    <div
+      
+      
+      
+      
       className={className}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }
 
-/** Stagger wrapper — children animate in sequence */
+/** Stagger wrapper — children  in sequence */
 export function StaggerIn({
   children,
   className = "",
@@ -46,17 +41,14 @@ export function StaggerIn({
   staggerDelay?: number;
 }) {
   return (
-    <motion.div
-      initial="hidden"
-      animate="visible"
-      variants={{
-        hidden:  {},
-        visible: { transition: { staggerChildren: staggerDelay } },
-      }}
+    <div
+      
+      
+      
       className={className}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }
 
@@ -69,15 +61,11 @@ export function StaggerChild({
   className?: string;
 }) {
   return (
-    <motion.div
-      variants={{
-        hidden:  { opacity: 0, y: 16, scale: 0.97 },
-        visible: { opacity: 1, y: 0,  scale: 1,
-          transition: { duration: 0.38, ease: [0.22, 1, 0.36, 1] } },
-      }}
+    <div
+      
       className={className}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }
