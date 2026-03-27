@@ -13,13 +13,20 @@ const nextConfig: NextConfig = {
 
   // ── TypeScript ────────────────────────────────────────────────────────
   typescript: { ignoreBuildErrors: false },
+  transpilePackages: ["three", "simplex-noise"],
 
   // ── Turbopack (Next.js 15 default build engine) ───────────────────────────
   // Turbopack is the default bundler in Next.js 15. Declaring an explicit
   // turbopack config suppresses the "webpack config + no turbopack config"
   // warning. The webpack config below is retained for `next dev --webpack`
   // on Windows Docker bind mounts; it has no effect on Turbopack builds.
-  turbopack: {},
+  turbopack: {
+    resolveExtensions: ['.tsx', '.ts', '.jsx', '.js', '.json'],
+    resolveAlias: {
+      three: process.cwd() + '/node_modules/three',
+      'simplex-noise': process.cwd() + '/node_modules/simplex-noise',
+    },
+  },
 
   // ── Bundle optimisation ───────────────────────────────────────────────────
   experimental: {
@@ -29,6 +36,8 @@ const nextConfig: NextConfig = {
       "lucide-react",
       "framer-motion",
       "@radix-ui/react-dialog",
+      // "three",
+      // "simplex-noise",
     ],
     // Inline small CSS into JS bundle (saves one HTTP round-trip on first load).
     // Disabled in dev mode to improve stability.
@@ -39,7 +48,15 @@ const nextConfig: NextConfig = {
   // Used only when running `next dev --webpack`. On Windows bind mounts,
   // inotify events are not forwarded into the container so switching to
   // polling restores reliable HMR. No effect on Turbopack builds.
-  webpack: (config, { dev }) => {
+  webpack: (config, { dev, isServer }) => {
+    // Force 'three' to resolve to the local node_modules path
+    const path = require('path');
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'three': path.resolve(__dirname, 'node_modules/three'),
+      'simplex-noise': path.resolve(__dirname, 'node_modules/simplex-noise'),
+    };
+
     if (dev) {
       config.watchOptions = {
         poll: 800,

@@ -633,6 +633,7 @@ async def _wrap_pipeline_with_broadcasts(
             "frequency domain analysis":    "📡 Running frequency-domain analysis on contested regions…",
             "frequency-domain gan":         "📡 Scanning frequency domain for GAN generation artifacts…",
             "file hash":                    "🔑 Verifying file hash against ingestion record…",
+            "perceptual hash":              "🔑 Computing perceptual hash for similarity detection…",
             "roi":                          "🎯 Re-analysing flagged ROIs with noise footprint…",
             "copy-move":                    "🔍 Checking for copy-move cloning artifacts…",
             "semantic image":               "🧠 Identifying what this image actually depicts…",
@@ -733,6 +734,19 @@ async def _wrap_pipeline_with_broadcasts(
             """Stream live working-memory progress to the WebSocket client."""
             last_thinking = ""
             last_done = -1
+            last_broadcast_time = 0.0
+            task_start_time = 0.0
+            _CYCLING_SUBTEXTS = [
+                "analysing evidence",
+                "cross-referencing patterns",
+                "evaluating signals",
+                "processing data",
+                "running forensic checks",
+                "validating results",
+                "scanning for anomalies",
+                "building analysis",
+            ]
+            _cycle_index = 0
             # Deep pass uses an isolated namespace; use it when provided
             wm_agent_id = deep_namespace if deep_namespace else agent_id
             while not done_event.is_set():
@@ -780,7 +794,18 @@ async def _wrap_pipeline_with_broadcasts(
                         current_task = in_progress_t[0].description
                         friendly = _humanise_task(current_task)
                         progress_frac = f" ({done + 1}/{total})" if total > 0 else ""
-                        thinking = friendly.rstrip("…") + progress_frac + "…"
+                        # Track elapsed time on current task
+                        now = time.monotonic()
+                        if task_start_time == 0 or friendly != last_thinking:
+                            task_start_time = now
+                        elapsed_s = int(now - task_start_time)
+                        if elapsed_s >= 6:
+                            # After 6s, add elapsed time and rotate subtext to show activity
+                            subtext = _CYCLING_SUBTEXTS[_cycle_index % len(_CYCLING_SUBTEXTS)]
+                            _cycle_index += 1
+                            thinking = f"{friendly.rstrip('…')}{progress_frac} — {subtext} ({elapsed_s}s)…"
+                        else:
+                            thinking = friendly.rstrip("…") + progress_frac + "…"
                     elif done > 0 and done >= total and total > 0:
                         thinking = "✅ Finalising findings…"
                     elif done > 0:
@@ -791,9 +816,17 @@ async def _wrap_pipeline_with_broadcasts(
                         # WM state exists but no tasks yet — agent still loading.
                         # Don't overwrite the pre-broadcast phrase; skip this tick.
                         thinking = ""
-                    if thinking and (thinking != last_thinking or done != last_done):
+                    # Send update when: text changed, done count changed, OR every 4s for long-running tasks
+                    now = time.monotonic()
+                    should_send = (
+                        (thinking and thinking != last_thinking)
+                        or (done != last_done)
+                        or (thinking and (now - last_broadcast_time) >= 4.0)
+                    )
+                    if thinking and should_send:
                         last_thinking = thinking
                         last_done = done
+                        last_broadcast_time = now
                         await broadcast_update(
                             ws_session_id,
                             BriefUpdate(

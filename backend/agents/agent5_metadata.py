@@ -95,8 +95,11 @@ class Agent5Metadata(ForensicAgent):
     @property
     def task_decomposition(self) -> list[str]:
         """
-        Fast initial tasks -- hash, EXIF, GPS, file structure, hex scan (~10-15s total).
-        Steganography, C2PA, thumbnail check, and all ML/network tasks are in deep_task_decomposition.
+        Fast initial tasks -- hash, EXIF, GPS, file structure, hex scan, C2PA, steganography (~15-20s total).
+        C2PA and steganography are moderate-cost tools (no ML model loading) that add meaningful depth
+        to the initial pass without slowing it down significantly.
+        Deep tasks (thumbnail check, ML anomaly scoring, astronomical API, reverse search, Gemini)
+        remain in deep_task_decomposition.
         """
         return [
             "Verify file hash against ingestion hash",
@@ -104,6 +107,8 @@ class Agent5Metadata(ForensicAgent):
             "Cross-validate GPS coordinates against timestamp timezone",
             "Run file structure forensic analysis",
             "Run hexadecimal software signature scan on raw bytes",
+            "Verify C2PA Content Credentials and provenance chain in file",
+            "Run steganography scan",
             "Synthesize cross-field consistency verdict",
             "Self-reflection pass",
         ]
@@ -112,13 +117,11 @@ class Agent5Metadata(ForensicAgent):
     def deep_task_decomposition(self) -> list[str]:
         """
         Heavy tasks -- ML models, network APIs, adversarial checks, Gemini deep forensic analysis.
-        Also includes steganography, C2PA, and thumbnail check (moderate cost, deep-pass only).
+        C2PA and steganography now run in the initial pass.
         Runs in background after initial findings are returned.
         """
         return [
-            "Verify C2PA Content Credentials and provenance chain in file",
             "Check embedded thumbnail against main image for post-capture editing evidence",
-            "Run steganography scan",
             "Run Gemini deep forensic analysis: identify content type, extract all text, detect objects and weapons, identify interfaces, describe what is happening, cross-validate metadata",
             "Run ML metadata anomaly scoring to detect field inconsistency",
             "Run astronomical API check for GPS location and claimed date",
@@ -332,7 +335,10 @@ class Agent5Metadata(ForensicAgent):
 
             try:
                 artifact = input_data.get("artifact") or self.evidence_artifact
-                exif_result = await real_exif_extract(artifact=artifact)
+                # Use cached EXIF from initial pass if available, otherwise re-extract
+                exif_result = self._tool_context.get("exif_extract") if self._tool_context else None
+                if not exif_result:
+                    exif_result = await real_exif_extract(artifact=artifact)
                 gps = exif_result.get("gps_coordinates")
 
                 if not gps:

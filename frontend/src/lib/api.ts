@@ -47,9 +47,9 @@ const WS_BASE =
         return base.replace(/^https?/, (m) => (m === "https" ? "wss" : "ws"));
       })();
 
-// Token storage key
-const TOKEN_KEY = "forensic_auth_token";
-const TOKEN_EXPIRY_KEY = "forensic_auth_token_expiry";
+// Token storage key — reserved for future token-based auth (currently using HttpOnly cookies)
+const _TOKEN_KEY = "forensic_auth_token";
+const _TOKEN_EXPIRY_KEY = "forensic_auth_token_expiry";
 
 /**
  * Types matching backend DTOs
@@ -289,7 +289,7 @@ async function handleAuthError<T>(
   }
 }
 
-async function getAuthHeaders(): Promise<HeadersInit> {
+async function _getAuthHeaders(): Promise<HeadersInit> {
   return {}; // Auth now handled via HttpOnly cookies automatically
 }
 
@@ -318,22 +318,38 @@ export async function startInvestigation(
     formData.append("case_id", caseId);
     formData.append("investigator_id", investigatorId);
 
-    const response = await fetch(`${API_BASE}/api/v1/investigate`, {
-      method: "POST",
-      body: formData,
-      credentials: "include", // Send HttpOnly cookie
-    });
+    // Retry on network errors (backend may still be booting)
+    const maxRetries = 3;
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch(`${API_BASE}/api/v1/investigate`, {
+          method: "POST",
+          body: formData,
+          credentials: "include",
+        });
 
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({ detail: "Unknown error" }));
-      // In dev mode the backend also sets `message` with the real Python exception.
-      // Surface it so stack traces are visible in the browser console.
-      const detail = errorBody.detail || `HTTP ${response.status}`;
-      const devHint = errorBody.message ? ` — ${errorBody.message}` : "";
-      throw new Error(`${detail}${devHint}`);
+        if (!response.ok) {
+          const errorBody = await response.json().catch(() => ({ detail: "Unknown error" }));
+          const detail = errorBody.detail || `HTTP ${response.status}`;
+          const devHint = errorBody.message ? ` — ${errorBody.message}` : "";
+          throw new Error(`${detail}${devHint}`);
+        }
+
+        return response.json();
+      } catch (err) {
+        lastError = err;
+        // Only retry on network errors (TypeError: Failed to fetch)
+        if (err instanceof TypeError && attempt < maxRetries) {
+          const delay = Math.min(1000 * 2 ** attempt, 4000);
+          dbg.warn(`Investigation fetch failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms...`);
+          await new Promise((r) => setTimeout(r, delay));
+          continue;
+        }
+        throw err;
+      }
     }
-
-    return response.json();
+    throw lastError;
   });
 }
 

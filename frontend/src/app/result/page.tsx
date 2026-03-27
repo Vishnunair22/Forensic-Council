@@ -17,6 +17,7 @@ import {
 } from "@/lib/api";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { AgentIcon } from "@/components/ui/AgentIcon";
+import { Badge } from "@/components/lightswind/badge";
 
 const isDev = process.env.NODE_ENV !== "production";
 const dbg = { error: isDev ? console.error.bind(console) : () => {} };
@@ -148,16 +149,14 @@ function SeverityBar({ counts, total }: { counts: Record<SeverityKey, number>; t
       </div>
       <div className="flex flex-wrap gap-2">
         {SEVERITY_TIERS.map((t) => counts[t] > 0 && (
-          <span
+          <Badge
             key={t}
-            className={clsx(
-              "inline-flex items-center gap-2 px-3 py-1 rounded-lg text-[9px] font-bold font-mono border border-border-subtle bg-surface-mid shadow-sm uppercase tracking-wider",
-              SEVERITY[t].color
-            )}
+            variant={SEVERITY[t].label.toLowerCase() === "low" ? "secondary" : SEVERITY[t].label.toLowerCase() === "info" ? "outline" : SEVERITY[t].label.toLowerCase() === "medium" ? "warning" : "destructive"}
+            withDot
+            className="font-bold font-mono tracking-wider px-3 py-1 uppercase"
           >
-            <span className={clsx("w-2 h-2 rounded-full flex-shrink-0 shadow-sm", SEVERITY[t].dot)} />
             {counts[t]} {SEVERITY[t].label}
-          </span>
+          </Badge>
         ))}
       </div>
     </div>
@@ -208,11 +207,11 @@ function AgentCard({
   const toolsOk    = agentSummary?.tools_ok    ?? metrics?.tools_succeeded    ?? 0;
   const toolsTotal = agentSummary?.tools_total  ?? metrics?.total_tools_called ?? 0;
 
-  const verdLabel =
-    isSkipped              ? { text: "NOT APPLICABLE", dot: "bg-slate-500",   textColor: "text-slate-500"   } :
-    summaryVerdict === "AUTHENTIC"  ? { text: "NO ANOMALIES",    dot: "bg-emerald-500", textColor: "text-emerald-500" } :
-    summaryVerdict === "SUSPICIOUS" ? { text: "ANOMALIES FOUND", dot: "bg-red-500",     textColor: "text-red-500"     } :
-                                      { text: "INCONCLUSIVE",    dot: "bg-amber-500",   textColor: "text-amber-500"   };
+  const verdConfig =
+    isSkipped              ? { text: "NOT APPLICABLE", variant: "outline" as const, withDot: false } :
+    summaryVerdict === "AUTHENTIC"  ? { text: "NO ANOMALIES",    variant: "success" as const, withDot: true } :
+    summaryVerdict === "SUSPICIOUS" ? { text: "ANOMALIES FOUND", variant: "destructive" as const, withDot: true } :
+                                      { text: "INCONCLUSIVE",    variant: "warning" as const, withDot: true };
 
   const c = COLOR_MAP[meta.color];
 
@@ -256,9 +255,9 @@ function AgentCard({
             <h3 className={clsx("font-black text-sm mb-0.5 transition-colors font-heading uppercase tracking-tight", !isSkipped ? "text-white group-hover/btn:text-amber-400" : "text-white/40")}>
               {meta.name}
             </h3>
-            <p className={clsx("text-[9px] font-black font-mono uppercase tracking-[0.2em]", verdLabel.textColor)}>
-              {verdLabel.text}
-            </p>
+            <Badge variant={verdConfig.variant} withDot={verdConfig.withDot} className="font-black font-mono uppercase tracking-[0.2em] text-[9px] px-2">
+              {verdConfig.text}
+            </Badge>
           </div>
         </div>
 
@@ -434,13 +433,13 @@ function AgentDeploymentTable({
             {/* Status badge */}
             <div className="flex justify-end">
               {isActive ? (
-                <span className="inline-flex items-center gap-1.5 text-[9px] px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-mono font-bold uppercase tracking-wider">
-                  <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" /> ONLINE
-                </span>
+                <Badge variant="success" withDot className="font-mono font-bold uppercase tracking-wider px-2.5 py-1">
+                  ONLINE
+                </Badge>
               ) : (
-                <span className="inline-flex items-center text-[9px] px-2.5 py-1 rounded-lg bg-surface-high text-foreground/20 border border-border-subtle font-mono font-bold uppercase tracking-wider">
+                <Badge variant="outline" className="text-foreground/20 font-mono font-bold uppercase tracking-wider px-2.5 py-1 border-border-subtle">
                   OFFLINE
-                </span>
+                </Badge>
               )}
             </div>
 
@@ -796,19 +795,13 @@ export default function ResultPage() {
 
           <div className="flex items-center gap-5">
             <HistoryDrawer />
-            <div
-              role="status"
-              aria-live="polite"
-              className="hidden md:flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-surface-low border border-border-subtle"
+            <Badge 
+              variant={state === "arbiter" ? "warning" : state === "ready" ? "success" : "destructive"} 
+              withDot 
+              className="hidden md:inline-flex font-mono font-bold uppercase tracking-widest px-3 py-1 bg-surface-low border-border-subtle"
             >
-              <div className={clsx(
-                "w-2 h-2 rounded-full",
-                state === "arbiter" ? "bg-indigo-400" : state === "ready" ? "bg-emerald-400" : "bg-red-400"
-              )} />
-              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-foreground/40">
-                {state === "arbiter" ? "Deliberating" : state === "ready" ? "Verified" : "Error"}
-              </span>
-            </div>
+              {state === "arbiter" ? "Deliberating" : state === "ready" ? "Verified" : "Error"}
+            </Badge>
             {state === "ready" && report && (
               <button
                 onClick={handleExport}

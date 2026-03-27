@@ -25,6 +25,12 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "three": [
+        "./node_modules/three"
+      ],
+      "simplex-noise": [
+        "./node_modules/simplex-noise"
       ]
     }
   },

@@ -80,10 +80,11 @@ class Agent1Image(ForensicAgent):
             "Verify file hash against ingestion hash",
             "Perform semantic image understanding to identify image type and context",
             "Run frequency-domain GAN artifact detection",
+            "Compute perceptual hash for similarity detection",
         ]
         if self._is_lossless:
-            # Lossless images: ELA and JPEG ghost are not applicable.
-            # Use noise fingerprint and frequency domain as primary integrity checks.
+            # Lossless images: Run noise fingerprint (regional texture consistency)
+            # and frequency domain analysis as primary integrity checks.
             return base + [
                 "Run noise footprint analysis for region source inconsistency",
                 "Self-reflection pass",
@@ -351,27 +352,46 @@ class Agent1Image(ForensicAgent):
 
         async def noise_fingerprint_handler(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact
-            # PRNU noise fingerprint is only meaningful for camera-captured images.
-            # Lossless formats (PNG/BMP/TIFF/GIF/WEBP) are typically screenshots or
-            # digitally-created files with no camera sensor noise pattern.
-            # Running PRNU on them produces spurious INCONSISTENT results (pure digital
-            # images have algorithmically-uniform pixels that violate camera-noise assumptions).
+            # For lossless images (screenshots, digitally-created), PRNU camera sensor
+            # noise fingerprint is NOT meaningful (no camera sensor pattern). However, we
+            # still run a regional noise consistency analysis to detect compositing artifacts
+            # where regions from different sources were combined.
             if self._is_lossless:
-                return {
-                    "noise_fingerprint_not_applicable": True,
-                    "verdict": "NOT_APPLICABLE",
-                    "file_format_note": (
-                        "PRNU noise fingerprint analysis requires a camera-captured image. "
-                        "This file is a lossless format (PNG/BMP/TIFF/GIF/WEBP), indicating a "
-                        "screenshot or digitally-created image — camera sensor noise patterns "
-                        "are absent by design. PRNU results would be forensically unreliable."
-                    ),
-                    "court_defensible": True,
-                    "available": True,
-                }
+                # Run regional noise consistency analysis instead of PRNU
+                try:
+                    import cv2, numpy as np
+                    from PIL import Image
+                    img = np.array(Image.open(artifact.file_path).convert("L"), dtype=np.float32)
+                    h, w = img.shape
+                    # Use Laplacian to detect edge/texture differences across regions
+                    laplacian = cv2.Laplacian(img, cv2.CV_32F)
+                    rh, rw = h // 3, w // 3
+                    region_variances = []
+                    for r in range(3):
+                        for c in range(3):
+                            region = laplacian[r*rh:(r+1)*rh, c*rw:(c+1)*rw]
+                            region_variances.append(float(np.var(region)))
+                    mean_var = float(np.mean(region_variances))
+                    std_var = float(np.std(region_variances))
+                    cv_coefficient = std_var / (mean_var + 1e-6)
+                    # High CV indicates inconsistent texture across regions (possible compositing)
+                    inconsistent = cv_coefficient > 0.6
+                    return {
+                        "verdict": "INCONSISTENT" if inconsistent else "CONSISTENT",
+                        "noise_consistency_score": round(1.0 - min(cv_coefficient, 1.0), 3),
+                        "outlier_region_count": int(sum(1 for v in region_variances if abs(v - mean_var) > std_var)),
+                        "total_regions": len(region_variances),
+                        "region_variances": [round(v, 2) for v in region_variances],
+                        "analysis_type": "regional_texture_consistency",
+                        "backend": "laplacian-regional-inline",
+                        "court_defensible": True, "available": True,
+                        "file_format_note": "Lossless format: running regional texture consistency instead of PRNU camera fingerprint.",
+                    }
+                except Exception as e:
+                    return {"verdict": "INCONCLUSIVE", "error": str(e), "backend": "tool-exception", "court_defensible": False}
             regions = input_data.get("regions", 6)
             result = await run_ml_tool("noise_fingerprint.py", artifact.file_path,
-                                      extra_args=["--regions", str(regions)], timeout=25.0)
+                                      extra_args=["--regions", str(regions)], timeout=10.0)
             if result.get("available") and not result.get("error"):
                 return result
             # Inline noise fingerprint fallback
@@ -405,28 +425,62 @@ class Agent1Image(ForensicAgent):
 
         async def deepfake_frequency_check_handler(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact
-            # Lossless images (PNG, BMP, TIFF, screenshots) have naturally low
-            # high-frequency energy — this is a property of clean digital
-            # content, NOT a GAN suppression signal.  Returning a false positive
-            # here would corrupt the verdict for every screenshot submitted.
+            # Lossless images (PNG, BMP, TIFF, screenshots) have naturally different
+            # frequency profiles than camera photos. We still run FFT analysis but
+            # with adjusted thresholds to detect anomalous patterns (e.g., pasted
+            # regions, gradient banding from JPEG-then-PNG conversion, synthetic content).
             if self._is_lossless:
-                return {
-                    "gan_artifact_detected": False,
-                    "gan_not_applicable": True,
-                    "high_freq_ratio": None,
-                    "anomaly_score": 0.0,
-                    "backend": "skipped-lossless",
-                    "court_defensible": True,
-                    "available": True,
-                    "evidentiary_weight": "not_applicable",
-                    "limitation_note": (
-                        f"GAN/deepfake frequency analysis not applicable to "
-                        f"lossless format ({getattr(artifact, 'mime_type', '') or 'lossless'}). "
-                        "Low high-frequency energy is normal for screenshots and "
-                        "lossless images; FFT suppression is not a GAN signal here."
-                    ),
-                }
-            result = await run_ml_tool("deepfake_frequency.py", artifact.file_path, timeout=25.0)
+                try:
+                    import cv2, numpy as np
+                    from PIL import Image
+                    img = np.array(Image.open(artifact.file_path).convert("L"), dtype=np.float32)
+                    fft = np.fft.fft2(img)
+                    fft_shift = np.fft.fftshift(fft)
+                    magnitude = np.abs(fft_shift)
+                    h, w = magnitude.shape
+                    # Analyse frequency distribution: natural screenshots have smooth
+                    # roll-off; synthetic/composited content has sharp cutoffs or periodic peaks.
+                    cy, cx = h // 2, w // 2
+                    # Split into 4 frequency bands
+                    r1, r2, r3 = h // 8, h // 4, 3 * h // 8
+                    c1, c2, c3 = w // 8, w // 4, 3 * w // 8
+                    total_energy = magnitude.sum() + 1e-6
+                    bands = {}
+                    for i, (r_inner, r_outer, c_inner, c_outer) in enumerate([
+                        (0, r1, 0, c1),       # very low freq
+                        (r1, r2, c1, c2),     # low freq
+                        (r2, r3, c2, c3),     # mid freq
+                        (r3, h // 2, c3, w // 2),  # high freq
+                    ]):
+                        mask = np.zeros((h, w), dtype=bool)
+                        mask[cy-r_outer:cy+r_outer, cx-c_outer:cx+c_outer] = True
+                        if i > 0:
+                            mask[cy-r_inner:cy+r_inner, cx-c_inner:cx+c_inner] = False
+                        bands[f"band_{i}"] = float(magnitude[mask].sum() / total_energy)
+                    # Detect anomalies: sharp frequency cliff or periodic peaks
+                    high_freq_ratio = bands["band_3"]
+                    mid_freq_ratio = bands["band_2"]
+                    # Natural screenshots have gradual roll-off (mid > high * 1.5)
+                    # Composited/synthetic content often has unusually flat or peaked distribution
+                    band_ratios = list(bands.values())
+                    ratio_variance = float(np.var(band_ratios))
+                    is_anomalous = ratio_variance > 0.02 or high_freq_ratio < 0.05
+                    anomaly_score = round(min(ratio_variance * 10, 1.0), 3)
+                    return {
+                        "anomaly_score": anomaly_score,
+                        "high_freq_ratio": round(high_freq_ratio, 4),
+                        "mid_freq_ratio": round(mid_freq_ratio, 4),
+                        "frequency_bands": {k: round(v, 4) for k, v in bands.items()},
+                        "ratio_variance": round(ratio_variance, 6),
+                        "gan_artifact_detected": is_anomalous,
+                        "backend": "fft-band-analysis-inline",
+                        "court_defensible": True, "available": True,
+                        "evidentiary_weight": "supporting_only",
+                        "limitation_note": "Lossless format: running frequency band distribution analysis to detect synthetic/composited content.",
+                    }
+                except Exception as e:
+                    return {"anomaly_score": 0, "error": str(e), "backend": "tool-exception", "court_defensible": False}
+            result = await run_ml_tool("deepfake_frequency.py", artifact.file_path, timeout=10.0)
             if result.get("available") and not result.get("error"):
                 return result
             # Inline frequency analysis fallback using FFT
@@ -920,23 +974,21 @@ class Agent1Image(ForensicAgent):
             # Gather EXIF summary to pass to Gemini for metadata cross-validation
             exif_summary: dict = {}
             try:
-                if self._tool_registry:
-                    exif_handler = self._tool_registry._handlers.get("file_hash_verify")
-                    # Use piexif to get quick EXIF context
-                    import piexif
-                    if artifact.file_path.lower().endswith((".jpg", ".jpeg", ".tiff", ".tif")):
-                        exif_raw = piexif.load(artifact.file_path)
-                        zeroth = exif_raw.get("0th", {})
-                        exif_ifd = exif_raw.get("Exif", {})
-                        make = zeroth.get(piexif.ImageIFD.Make, b"")
-                        model = zeroth.get(piexif.ImageIFD.Model, b"")
-                        dt = exif_ifd.get(piexif.ExifIFD.DateTimeOriginal, b"")
-                        exif_summary = {
-                            "camera_make": make.decode(errors="replace").strip("\x00") if isinstance(make, bytes) else str(make),
-                            "camera_model": model.decode(errors="replace").strip("\x00") if isinstance(model, bytes) else str(model),
-                            "datetime_original": dt.decode(errors="replace").strip("\x00") if isinstance(dt, bytes) else str(dt),
-                            "has_gps": bool(exif_raw.get("GPS")),
-                        }
+                # Use piexif to get quick EXIF context
+                import piexif
+                if artifact.file_path.lower().endswith((".jpg", ".jpeg", ".tiff", ".tif")):
+                    exif_raw = piexif.load(artifact.file_path)
+                    zeroth = exif_raw.get("0th", {})
+                    exif_ifd = exif_raw.get("Exif", {})
+                    make = zeroth.get(piexif.ImageIFD.Make, b"")
+                    model = zeroth.get(piexif.ImageIFD.Model, b"")
+                    dt = exif_ifd.get(piexif.ExifIFD.DateTimeOriginal, b"")
+                    exif_summary = {
+                        "camera_make": make.decode(errors="replace").strip("\x00") if isinstance(make, bytes) else str(make),
+                        "camera_model": model.decode(errors="replace").strip("\x00") if isinstance(model, bytes) else str(model),
+                        "datetime_original": dt.decode(errors="replace").strip("\x00") if isinstance(dt, bytes) else str(dt),
+                        "has_gps": bool(exif_raw.get("GPS")),
+                    }
             except Exception:
                 pass
 

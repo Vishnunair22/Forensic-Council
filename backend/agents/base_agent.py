@@ -821,7 +821,7 @@ class ForensicAgent(ABC):
                 {
                     "id": "prosody",
                     "label": "Prosodic Analysis",
-                    "tools": ["prosody_analyze", "prosody_analysis"],
+                    "tools": ["prosody_analyze"],
                     "desc": "Fundamental frequency, jitter, shimmer, and HNR acoustic profile.",
                 },
                 {
@@ -888,28 +888,28 @@ class ForensicAgent(ABC):
                 {
                     "id": "temporal_integrity",
                     "label": "Temporal Integrity",
-                    "tools": ["optical_flow_analysis", "optical_flow_analyze",
-                              "frame_consistency_analysis", "frame_consistency",
+                    "tools": ["optical_flow_analysis",
+                              "frame_consistency_analysis",
                               "anomaly_classification"],
                     "desc": "Optical-flow anomaly windows, SSIM frame consistency, EXPLAINABLE/SUSPICIOUS classification.",
                 },
                 {
                     "id": "identity_manipulation",
                     "label": "Identity Manipulation",
-                    "tools": ["face_swap_detection", "face_swap_detect"],
+                    "tools": ["face_swap_detection"],
                     "desc": "DeepFace embedding face-swap detection — high-priority standalone check.",
                 },
                 {
                     "id": "ai_generation",
                     "label": "AI Generation Detection",
-                    "tools": ["deepfake_frequency_check", "deepfake_frequency"],
+                    "tools": ["deepfake_frequency_check"],
                     "desc": "GAN artifact detection via frequency domain — distinct from face-swap, targets fully synthetic frames.",
                 },
                 {
                     "id": "container_forensics",
                     "label": "Container & Technical Provenance",
                     "tools": ["av_file_identity", "mediainfo_profile",
-                              "rolling_shutter_validation", "rolling_shutter"],
+                              "rolling_shutter_validation"],
                     "desc": "Codec chain, VFR flag, encoding tool, creation timestamps, and rolling-shutter consistency.",
                 },
                 {

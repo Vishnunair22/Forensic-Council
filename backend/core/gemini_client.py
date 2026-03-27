@@ -11,15 +11,15 @@ Agent 5 (Metadata/Context) during their deep analysis pass to:
   - Detect objects, weapons, documents, and contextual anomalies
 
 Provider routing (cascade — first available wins):
-  1. gemini-2.5-pro    → default primary, highest accuracy + thinking support
-  2. gemini-2.5-flash  → fast fallback with thinking support
-  3. gemini-2.0-flash  → last-resort fallback (no thinkingConfig)
+  1. gemini-3-pro-preview → default primary, highest accuracy + thinking support
+  2. gemini-2.5-pro       → first fallback, high accuracy + thinking
+  3. gemini-2.5-flash     → fast fallback with thinking support
 
 Auto-cascade: 404 / "model not found" responses skip immediately to
 the next model; other errors retry with backoff then cascade forward.
 The chain is fully configurable via GEMINI_MODEL + GEMINI_FALLBACK_MODELS.
 
-NOTE: gemini-1.5-* models are deprecated and must not be used.
+NOTE: gemini-1.5-* and gemini-2.0-* models are deprecated and must not be used.
 
 Vision input:
   - Images: base64-encoded inline (JPEG, PNG, WEBP, GIF, BMP)
@@ -47,15 +47,16 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 _GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
-_DEFAULT_MODEL = "gemini-2.5-pro"
+_DEFAULT_MODEL = "gemini-3-pro-preview"
 # Ordered fallback chain: tried in sequence if the primary model fails/is unavailable.
-_DEFAULT_FALLBACK_CHAIN = "gemini-2.5-flash,gemini-2.0-flash"
+_DEFAULT_FALLBACK_CHAIN = "gemini-2.5-pro,gemini-2.5-flash"
 _MAX_RETRIES = 2
 _BASE_BACKOFF = 1.5
 
 # Models that support thinkingConfig (budget-based chain-of-thought).
 # gemini-2.0-* and earlier must NOT receive thinkingConfig (returns 400).
-_THINKING_MODEL_PREFIXES = ("gemini-2.5",)
+# gemini-2.5-* and gemini-3-* support thinkingConfig.
+_THINKING_MODEL_PREFIXES = ("gemini-2.5", "gemini-3")
 
 
 class _ModelUnavailableError(Exception):
@@ -510,7 +511,7 @@ class GeminiVisionClient:
 
         # Thinking models (2.5+, 3+) support thinkingConfig.
         # Setting thinkingBudget=0 disables chain-of-thought for fast structured
-        # forensic extraction. gemini-2.0-* must NOT receive it (returns 400).
+        # forensic extraction. gemini-2.0-* and earlier must NOT receive it (returns 400).
         if any(p in self.model for p in _THINKING_MODEL_PREFIXES):
             generation_config["thinkingConfig"] = {"thinkingBudget": 0}
 

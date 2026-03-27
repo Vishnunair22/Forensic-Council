@@ -18,7 +18,6 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, Circle, ShieldCheck } from "lucide-react";
 import { useSimulation } from "@/hooks/useSimulation";
 import { PageTransition } from "@/components/ui/PageTransition";
-import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { useSound } from "@/hooks/useSound";
 import { startInvestigation, submitHITLDecision, autoLoginAsInvestigator, type InvestigationResponse } from "@/lib/api";
 import { AGENTS_DATA, ALLOWED_MIME_TYPES } from "@/lib/constants";
@@ -66,6 +65,13 @@ export default function EvidencePage() {
   // Prevent upload-form flash on auto-start navigation from landing page
   const isAutoStartPending = useRef(
     typeof window !== "undefined" && sessionStorage.getItem("forensic_auto_start") === "true"
+  );
+
+  // Shared auth promise — auto-login fires once on mount; triggerAnalysis awaits it
+  const authReadyRef = useRef<Promise<void>>(
+    autoLoginAsInvestigator()
+      .then(() => { /* auth cookie set */ })
+      .catch(() => { /* handled by handleAuthError on first API call */ })
   );
 
   // Phase tracking:  analysis vs deep analysis
@@ -124,12 +130,7 @@ export default function EvidencePage() {
     };
   }, [filePreviewUrl]);
 
-  // Auto-login on mount so auth cookie is set before any investigation call.
-  // Silently succeeds if already authenticated; retries on first API 401 otherwise.
-  useEffect(() => {
-    autoLoginAsInvestigator().catch(() => {/* handled by handleAuthError on first API call */});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Auto-login is handled by authReadyRef above (fires once on mount)
 
   // Evidence page load sound — plays once on mount (AudioContext unlocked by CTA click on landing)
   useEffect(() => {
@@ -189,9 +190,12 @@ export default function EvidencePage() {
       const inflightPromise = win.__forensic_investigation_promise;
       if (inflightPromise) delete win.__forensic_investigation_promise;
 
-      // ── Phase 1: HTTP upload ─────────────────────────────────────────────
+      // ── Phase 1: Ensure auth is ready, then HTTP upload ───────────────
       // Yield one tick so React can paint the analysis grid before the async work.
       await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+      // Wait for the auto-login to complete before hitting the backend.
+      await authReadyRef.current;
 
       let res: InvestigationResponse;
       try {
@@ -451,9 +455,9 @@ export default function EvidencePage() {
     progressText = "Deep analysis complete. All findings collected.";
   } else if (phase === "deep") {
     if (runningAgentNames.length === 1) {
-      progressText = `${runningAgentNames[0]} running deep ML scan…`;
+      progressText = `${runningAgentNames[0]} running deep analysis…`;
     } else if (runningAgentNames.length > 1) {
-      progressText = `${runningAgentNames.length} agents running deep ML scan…`;
+      progressText = `${runningAgentNames.length} agents running deep analysis…`;
     } else {
       progressText = "Running deep forensic analysis with heavy ML models…";
     }
@@ -544,7 +548,7 @@ export default function EvidencePage() {
         {hasStartedAnalysis && (
           <div
             aria-live="polite"
-            aria-label={`Current phase: ${phase === "initial" ? "Forensic Scan" : "Deep ML Probe"}`}
+            aria-label={`Current phase: ${phase === "initial" ? "Initial Analysis" : "Deep Analysis"}`}
             className="mb-8 flex items-center justify-center"
           >
             <div className="flex items-center gap-2 p-1 rounded-full bg-surface-low border border-border-subtle shadow-lg">
@@ -560,7 +564,7 @@ export default function EvidencePage() {
                 ) : (
                   <CheckCircle2 aria-hidden="true" className={`w-3.5 h-3.5 ${phase === "deep" || awaitingDecision || status === "complete" ? "text-black" : ""}`} />
                 )}
-                <span>Forensic Scan</span>
+                <span>Initial Analysis</span>
               </div>
 
               <div className="w-4 h-px bg-border-bold" aria-hidden="true" />
@@ -579,7 +583,7 @@ export default function EvidencePage() {
                 ) : (
                   <Circle className="w-3.5 h-3.5" aria-hidden="true" />
                 )}
-                <span>Deep ML Probe</span>
+                <span>Deep Analysis</span>
               </div>
             </div>
           </div>

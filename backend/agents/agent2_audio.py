@@ -564,7 +564,7 @@ class Agent2Audio(ForensicAgent):
         is_image = any(file_path.endswith(ext) for ext in image_exts) or mime.startswith("image/")
         is_audio_video = mime.startswith("audio/") or mime.startswith("video/")
 
-        if is_image or (not is_audio_video and not mime == ""):
+        if is_image or not is_audio_video:
             # Mark all tasks complete so heartbeat shows full progress
             try:
                 state = await self.working_memory.get_state(

@@ -11,6 +11,8 @@ import {
   RotateCcw, Microscope, FileText, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { AgentIcon } from "@/components/ui/AgentIcon";
+import { Badge } from "@/components/lightswind/badge";
+import AnimatedWave from "@/components/lightswind/animated-wave";
 import { AGENTS_DATA } from "@/lib/constants";
 import { useState, useEffect, useRef } from "react";
 import { SoundType } from "@/hooks/useSound";
@@ -138,7 +140,7 @@ function FindingsAccordion({
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   return (
-    <div className="rounded border border-white/5 bg-surface-low overflow-hidden shadow-sm mt-2">
+    <div className="rounded-xl border border-white/5 glass-panel overflow-hidden shadow-sm mt-2">
       {/* ── Accordion header ── */}
       <button
         onClick={() => setOpen((v) => !v)}
@@ -262,12 +264,12 @@ const SEV_BORDER: Record<string, string> = {
   INFO:     "border-l-slate-700",
 };
 
-const SEV_LABEL: Record<string, { text: string; cls: string }> = {
-  CRITICAL: { text: "CRITICAL", cls: "text-red-400 bg-red-500/20 border-red-500/30" },
-  HIGH:     { text: "HIGH",     cls: "text-red-200 bg-red-500/20 border-red-500/30" },
-  MEDIUM:   { text: "MEDIUM",   cls: "text-amber-200 bg-amber-500/20 border-amber-500/30" },
-  LOW:      { text: "LOW",      cls: "text-slate-200 bg-white/[0.1] border-white/[0.15]" },
-  INFO:     { text: "INFO",     cls: "text-slate-300 bg-white/[0.08] border-white/[0.12]" },
+const SEV_LABEL: Record<string, { text: string; variant: "destructive" | "warning" | "default" | "secondary" | "success" | "info" | "outline" }> = {
+  CRITICAL: { text: "CRITICAL", variant: "destructive" },
+  HIGH:     { text: "HIGH",     variant: "destructive" },
+  MEDIUM:   { text: "MEDIUM",   variant: "warning" },
+  LOW:      { text: "LOW",      variant: "secondary" },
+  INFO:     { text: "INFO",     variant: "outline" },
 };
 
 const CLAMP_CHARS = 150;
@@ -283,11 +285,7 @@ function FindingRow({ f }: { f: FindingPreview }) {
 
   return (
     <div 
-      
-      
-      
-      
-      className={`rounded-xl bg-surface-mid overflow-hidden border border-border-subtle border-l-2 ${borderCls} px-4 py-3 space-y-2 shadow-sm group/finding`}
+      className={`rounded-xl glass-panel overflow-hidden border border-border-subtle border-l-2 ${borderCls} px-4 py-3 space-y-2 shadow-sm group/finding`}
     >
       {/* Header: tool name + severity + confidence */}
       <div className="flex items-start gap-3">
@@ -296,9 +294,9 @@ function FindingRow({ f }: { f: FindingPreview }) {
         </span>
         <div className="flex items-center gap-2 flex-shrink-0">
           {f.severity !== "LOW" && f.severity !== "INFO" && (
-            <span className={`inline-flex text-[9px] font-black px-2 py-0.5 rounded-md shadow-sm tracking-[0.2em] uppercase font-mono ${sev.cls}`}>
+            <Badge variant={sev.variant} size="sm" shape="rounded" className="font-black tracking-widest px-1.5">
               {sev.text}
-            </span>
+            </Badge>
           )}
           {f.confidence > 0.01 && (
             <span className="text-[9px] font-mono font-bold text-slate-300 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded shadow-inner uppercase tracking-tighter">
@@ -341,7 +339,7 @@ function FindingsPreviewList({ findings }: { findings: FindingPreview[] }) {
           
           onClick={() => setShowAll(v => !v)}
           className="w-full text-[9px] font-black tracking-[0.2em] uppercase text-white/30 hover:text-cyan-400 transition-all py-2 text-center
-            border border-white/5 border-dashed rounded bg-surface-low hover:bg-surface-high my-1"
+            border border-white/5 border-dashed rounded glass-panel hover:bg-white/5 my-1"
         >
           {showAll
             ? "Hide Suppressed Findings"
@@ -370,6 +368,8 @@ function LiveThinkingText({ text, active }: { text: string; active: boolean }) {
   const [key, setKey] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const trailTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Animated dots for long-running tasks
+  const [dotCount, setDotCount] = useState(1);
 
   useEffect(() => {
     if (text === displayText) return;
@@ -391,6 +391,15 @@ function LiveThinkingText({ text, active }: { text: string; active: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text]);
 
+  // Animate dots while active
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => setDotCount(c => (c % 3) + 1), 600);
+    return () => clearInterval(id);
+  }, [active]);
+
+  const dots = active ? ".".repeat(dotCount) : "";
+
   return (
     <div className="relative space-y-1 min-h-[2.5rem]" aria-live="polite" aria-atomic="true">
       {/* Trail — previous thought fades out dimly */}
@@ -398,10 +407,6 @@ function LiveThinkingText({ text, active }: { text: string; active: boolean }) {
         {prevText && prevText !== displayText && (
           <p
             key={`trail-${prevText.slice(0, 20)}`}
-            
-            
-            
-            
             className="text-[10px] leading-relaxed text-slate-500/70 line-clamp-1 italic pointer-events-none select-none"
           >
             {prevText}
@@ -412,20 +417,21 @@ function LiveThinkingText({ text, active }: { text: string; active: boolean }) {
       <>
         <p
           key={key}
-          
-          
-          
-          
           className="text-[12px] leading-relaxed text-foreground/70 whitespace-pre-wrap break-words font-medium font-mono tracking-tight"
         >
           <span className="mr-2 font-black" style={{ color: "#22D3EE" }}>/</span>
           {displayText}
-          {/* Subtle cursor while actively running */}
+          {/* Animated dots while actively running */}
+          {active && (
+            <span className="inline-block ml-0.5 font-bold" style={{ color: "rgba(34,211,238,0.6)" }}>
+              {dots}
+            </span>
+          )}
+          {/* Subtle pulsing cursor while actively running */}
           {active && (
             <span
-              
-              
-              className="inline-block ml-1 w-[4px] h-[12px] align-middle -translate-y-px" style={{ background: "rgba(34,211,238,0.5)" }}
+              className="inline-block ml-1 w-[4px] h-[12px] align-middle -translate-y-px animate-pulse"
+              style={{ background: "rgba(34,211,238,0.4)" }}
             />
           )}
         </p>
@@ -464,8 +470,12 @@ function humaniseThinking(raw: string, _agentId: string): string {
   if (r.includes("jpeg ghost")) return "👻 Running JPEG ghost detection on suspicious regions…";
   if (r.includes("frequency domain") && r.includes("gan")) return "📡 Scanning frequency domain for GAN artifacts…";
   if (r.includes("frequency domain")) return "📡 Running frequency-domain analysis on contested regions…";
-  if (r.includes("file hash") || r.includes("hash")) return "🔑 Verifying file hash against ingestion record…";
+  if (r.includes("file hash") || (r.includes("hash") && r.includes("verify"))) return "🔑 Verifying file hash against ingestion record…";
+  if (r.includes("perceptual hash")) return "🔑 Computing perceptual hash for similarity detection…";
   if (r.includes("roi") || r.includes("region of interest")) return "🎯 Isolating and re-analysing flagged ROIs…";
+  if (r.includes("noise footprint") || (r.includes("noise") && r.includes("fingerprint"))) return "📷 Analysing regional noise consistency…";
+  if (r.includes("prnu") || r.includes("camera sensor")) return "📷 Running PRNU sensor fingerprint analysis…";
+  if (r.includes("cfa") || r.includes("demosaicing")) return "🌈 Checking CFA Bayer pattern consistency…";
 
   // Agent-2 audio
   if (r.includes("speaker diarization") || r.includes("diarization")) return "🎙️ Establishing voice-count baseline with diarization…";
@@ -482,6 +492,10 @@ function humaniseThinking(raw: string, _agentId: string): string {
   if (r.includes("scale") && r.includes("proportion")) return "📐 Validating object scale and proportion geometry…";
   if (r.includes("lighting") && r.includes("shadow")) return "💡 Checking lighting and shadow consistency per object…";
   if (r.includes("contraband") || r.includes("weapons database")) return "⚠️ Cross-referencing detected objects against contraband database…";
+  if (r.includes("scene") && r.includes("contextual")) return "🧠 Analysing scene for contextual incongruences…";
+  if (r.includes("image splicing") || r.includes("splice detection")) return "✂️ Running ML-based image splicing detection…";
+  if (r.includes("inter-agent") || r.includes("inter_agent")) return "🤝 Issuing inter-agent call to Agent 1 for corroboration…";
+  if (r.includes("document authenticity") || r.includes("font consistency")) return "📑 Checking document font consistency and forgery artifacts…";
 
   // Agent-4 video
   if (r.includes("optical flow") || r.includes("temporal anomaly")) return "🎬 Running optical flow analysis — building anomaly heatmap…";
@@ -494,8 +508,13 @@ function humaniseThinking(raw: string, _agentId: string): string {
   if (r.includes("exif")) return "📋 Extracting all EXIF fields and logging absent mandatory fields…";
   if (r.includes("gps") || r.includes("timezone")) return "🌍 Cross-validating GPS coordinates against timestamp timezone…";
   if (r.includes("steganography") || r.includes("steg")) return "🕵️ Scanning for hidden steganographic payload…";
-  if (r.includes("file structure") || r.includes("hex") || r.includes("hexadecimal")) return "🗂️ Running hex scan for software signature anomalies…";
+  if (r.includes("file structure") || (r.includes("hex") && r.includes("scan")) || r.includes("hexadecimal")) return "🗂️ Running hex scan for software signature anomalies…";
   if (r.includes("cross-field") || r.includes("consistency verdict")) return "📊 Synthesising cross-field metadata consistency verdict…";
+  if (r.includes("c2pa") || r.includes("content credentials") || r.includes("provenance")) return "🔏 Verifying C2PA Content Credentials and provenance chain…";
+  if (r.includes("thumbnail") && r.includes("mismatch")) return "🖼️ Comparing embedded thumbnail to main image — edit check…";
+  if (r.includes("astronomical") || r.includes("sun position")) return "🔭 Running astronomical API check for GPS/timestamp validation…";
+  if (r.includes("reverse image")) return "🌐 Running reverse image search for prior online appearances…";
+  if (r.includes("device fingerprint")) return "🔐 Querying device fingerprint database for claimed device…";
 
   // Generic states
   if (r.includes("self-reflection") || r.includes("reflection pass")) return "🪞 Running self-reflection quality check on findings…";
@@ -678,32 +697,44 @@ export function AgentProgressDisplay({
   return (
     <div
       key="progress"
-      
-      
-      
-      className="flex flex-col items-center pt-8"
+      className="flex flex-col items-center pt-8 relative min-h-[60vh] w-full"
     >
+      {/* Background Neural Wave */}
+      <div className="absolute inset-0 -z-10 pointer-events-none opacity-40">
+        <AnimatedWave 
+          speed={0.008} 
+          amplitude={40} 
+          waveColor="#22d3ee" 
+          opacity={0.6}
+          wireframe={true}
+          quality="medium"
+          waveOffsetY={-200}
+        />
+      </div>
+
+      <div className="flex flex-col items-center w-full max-w-6xl px-4 relative z-10">
       {/* Header */}
       <div className="text-center mb-7" aria-live="polite" aria-atomic="true">
-        <div
-           
-          className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-3 font-mono font-black uppercase text-[10px] tracking-widest shadow-sm"
-          style={{ background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.14)", color: "#22D3EE" }}>
-          <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+        <Badge 
+          variant="secondary" 
+          withDot 
+          dotColor="#22D3EE" 
+          className="mb-3 font-mono font-black uppercase text-[10px] tracking-widest px-4 py-1.5 border-cyan-500/20 bg-cyan-500/5 text-cyan-300"
+        >
           {activeCompletedCount} / {visibleAgentsCount} Analysed
-        </div>
+        </Badge>
 
         <h2
           key={phase + String(showInitialDecision) + String(showDeepComplete)}
            
           className="text-2xl md:text-3xl font-black text-white mb-2 tracking-tighter font-heading uppercase">
           {showInitialDecision
-            ? "Phase I Complete"
+            ? "Initial Analysis Complete"
             : showDeepComplete
-              ? "Phase II Verified"
+              ? "Deep Analysis Complete"
               : phase === "deep"
-                ? "Active Deep Forensic Stream"
-                : "Active Forensic Stream"}
+                ? "Deep Analysis"
+                : "Initial Analysis"}
         </h2>
         <div className="w-12 h-[2px] mx-auto rounded-full opacity-50" style={{ background: "#22D3EE", boxShadow: "0 0 10px rgba(34,211,238,0.4)" }} />
       </div>
@@ -722,10 +753,12 @@ export function AgentProgressDisplay({
               {isRevealed && (
                 <div
                   className={clsx(
-                    "glass-ethereal rounded-2xl p-6 transition-all duration-500 relative group overflow-hidden",
+                    "glass-t2 rounded-2xl p-6 transition-all duration-500 relative group overflow-hidden border-white/10",
                     (status === "waiting" || status === "checking") && "opacity-40"
                   )}
                 >
+                  {/* Glass highlight glare */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/[0.03] to-transparent pointer-events-none" />
                   {/* Status indicator bar (Top hairline) */}
                   <div
                     className="absolute top-0 left-0 right-0 h-[2px] transition-all duration-500 rounded-full"
@@ -761,34 +794,34 @@ export function AgentProgressDisplay({
                     </div>
                     <div className="shrink-0">
                       {status === "waiting" && (
-                        <span className="inline-flex items-center gap-1.5 text-[9px] text-foreground/40 font-bold px-2 py-0.5 rounded-full bg-surface-low border border-border-subtle uppercase tracking-widest font-mono">
+                        <Badge variant="outline" className="text-foreground/40 font-bold border-border-subtle uppercase tracking-widest font-mono">
                           Queued
-                        </span>
+                        </Badge>
                       )}
                       {status === "checking" && (
-                        <span className="inline-flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest font-mono" style={{ color: "rgba(34,211,238,0.6)", background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.12)" }}>
+                        <Badge variant="secondary" withDot dotColor="#22D3EE" className="font-black uppercase tracking-widest font-mono text-cyan-400">
                           Linking
-                        </span>
+                        </Badge>
                       )}
                       {status === "running" && (
-                        <span className="inline-flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest font-mono" style={{ color: "#22D3EE", background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.22)", boxShadow: "0 0 8px rgba(34,211,238,0.1)" }}>
-                          <Loader2 className="w-2.5 h-2.5 animate-spin" />Scan
-                        </span>
+                        <Badge variant="secondary" withDot dotColor="#22D3EE" className="font-black uppercase tracking-widest font-mono text-cyan-400 border-cyan-500/30">
+                          <Loader2 className="w-2.5 h-2.5 animate-spin mr-1.5" />Scan
+                        </Badge>
                       )}
                       {status === "complete" && (
-                        <span className="inline-flex items-center gap-1.5 text-[9px] text-emerald-500 font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 uppercase tracking-widest font-mono">
-                          <CheckCircle2 className="w-3 h-3" />Finished
-                        </span>
+                        <Badge variant="success" withDot dotColor="#10B981" className="font-bold border-emerald-500/20 uppercase tracking-widest font-mono">
+                          Finished
+                        </Badge>
                       )}
                       {status === "unsupported" && (
-                        <span className="inline-flex items-center gap-1.5 text-[9px] text-slate-500 font-bold px-2 py-0.5 rounded-full bg-slate-500/10 border border-slate-500/20 uppercase tracking-widest font-mono">
+                        <Badge variant="outline" className="text-slate-500 font-bold border-slate-500/20 uppercase tracking-widest font-mono">
                           N/A
-                        </span>
+                        </Badge>
                       )}
                       {status === "error" && (
-                        <span className="inline-flex items-center gap-1.5 text-[9px] text-rose-500 font-bold px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/20 uppercase tracking-widest font-mono">
+                        <Badge variant="destructive" withDot dotColor="#F87171" className="font-bold border-rose-500/20 uppercase tracking-widest font-mono">
                           Error
-                        </span>
+                        </Badge>
                       )}
                     </div>
                   </div>
@@ -927,21 +960,18 @@ export function AgentProgressDisplay({
                             {completed.agent_verdict === "AUTHENTIC" ? "✓" : completed.agent_verdict === "LIKELY_MANIPULATED" ? "!" : "?"}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className={[
-                              "text-[10px] font-bold uppercase tracking-[0.2em] leading-none mb-1 opacity-60",
-                              completed.agent_verdict === "AUTHENTIC" ? "text-emerald-400" :
-                              completed.agent_verdict === "LIKELY_MANIPULATED" ? "text-red-400" : "text-cyan-400"
-                            ].join(" ")}>Verdict</p>
-                            <p className={[
-                              "text-xs font-black uppercase tracking-widest leading-none font-heading italic",
-                              completed.agent_verdict === "AUTHENTIC"
-                                ? "text-emerald-300"
-                                : completed.agent_verdict === "LIKELY_MANIPULATED"
-                                  ? "text-red-300"
-                                  : "text-cyan-300",
-                            ].join(" ")}>
-                              {completed.agent_verdict.replace(/_/g, " ")}
-                            </p>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.2em] leading-none mb-2 opacity-60 text-white/40">Verdict</p>
+                            <Badge 
+                                variant={
+                                    completed.agent_verdict === "AUTHENTIC" ? "success" : 
+                                    completed.agent_verdict === "LIKELY_MANIPULATED" ? "destructive" : "warning"
+                                } 
+                                size="lg"
+                                withDot
+                                className="font-black uppercase tracking-widest font-heading italic px-4 py-1"
+                            >
+                                {completed.agent_verdict.replace(/_/g, " ")}
+                            </Badge>
                           </div>
                           {/* Confidence inline */}
                           {completed.confidence !== undefined && (
@@ -1145,12 +1175,13 @@ export function AgentProgressDisplay({
             <p className="text-sm font-medium text-foreground/50">{progressText}</p>
           </div>
           {!!pipelineMessage && (
-            <div className="mt-3 max-w-xl mx-auto px-4 py-3 rounded-xl bg-surface-low border border-border-subtle">
+            <div className="mt-3 max-w-xl mx-auto px-4 py-3 rounded-xl glass-panel border border-border-subtle">
               <LiveThinkingText text={humaniseThinking(pipelineMessage, "")} active={!allAgentsDone} />
             </div>
           )}
         </div>
       )}
     </div>
-  );
+  </div>
+);
 }

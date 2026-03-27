@@ -6,7 +6,6 @@
  */
 
 const isDev = process.env.NODE_ENV !== "production";
-const isClient = typeof window !== "undefined";
 
 export const logger = {
   log: isDev ? console.log.bind(console) : () => {},
