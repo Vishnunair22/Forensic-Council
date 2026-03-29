@@ -161,6 +161,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "true"]
+      interval: 10s
+      timeout: 5s
+      retries: 1
     networks:
       - infra_net
     deploy:
@@ -392,9 +397,9 @@ volumes:
   evidence_data:
   hf_cache:
   torch_cache:
+  easyocr_cache:
   numba_cache:
   yolo_cache:
-  easyocr_cache:
   calibration_models_cache:
   caddy_data:
   caddy_config:

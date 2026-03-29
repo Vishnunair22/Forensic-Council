@@ -5,9 +5,7 @@ API Schemas for Forensic Council
 Pydantic models for API request/response handling.
 """
 
-from datetime import datetime
 from typing import Any, Literal, Optional
-from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -65,24 +63,24 @@ class ReportDTO(BaseModel):
     session_id: str
     case_id: str
     executive_summary: str
-    per_agent_findings: dict[str, list[AgentFindingDTO]] = {}
-    per_agent_metrics: dict[str, Any] = {}
-    per_agent_analysis: dict[str, str] = {}
+    per_agent_findings: dict[str, list[AgentFindingDTO]] = Field(default_factory=dict)
+    per_agent_metrics: dict[str, Any] = Field(default_factory=dict)
+    per_agent_analysis: dict[str, str] = Field(default_factory=dict)
     overall_confidence: float = 0.0
     overall_error_rate: float = 0.0
     overall_verdict: str = "REVIEW REQUIRED"
-    cross_modal_confirmed: list[AgentFindingDTO] = []
+    cross_modal_confirmed: list[AgentFindingDTO] = Field(default_factory=list)
     # contested_findings and tribunal_resolved are serialized FindingComparison/TribunalCase objects
-    contested_findings: list[dict] = []
-    tribunal_resolved: list[dict] = []
-    incomplete_findings: list[AgentFindingDTO] = []
+    contested_findings: list[dict] = Field(default_factory=list)
+    tribunal_resolved: list[dict] = Field(default_factory=list)
+    incomplete_findings: list[AgentFindingDTO] = Field(default_factory=list)
     uncertainty_statement: str
     cryptographic_signature: str
     report_hash: str
     signed_utc: Optional[str] = None
     # Structured summary
     verdict_sentence: str = ""
-    key_findings: list[str] = []
+    key_findings: list[str] = Field(default_factory=list)
     reliability_note: str = ""
     # Verdict enrichment
     manipulation_probability: float = 0.0
@@ -92,10 +90,10 @@ class ReportDTO(BaseModel):
     confidence_std_dev: float = 0.0
     # Agent coverage
     applicable_agent_count: int = 0
-    skipped_agents: dict[str, str] = {}
+    skipped_agents: dict[str, str] = Field(default_factory=dict)
     analysis_coverage_note: str = ""
     # Flat per-agent summary (D)
-    per_agent_summary: dict[str, Any] = {}
+    per_agent_summary: dict[str, Any] = Field(default_factory=dict)
 
 
 class HITLDecisionRequest(BaseModel):

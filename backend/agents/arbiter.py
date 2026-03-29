@@ -13,14 +13,14 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Literal, Optional
+from typing import Any, Optional
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
 from core.config import Settings, get_settings
 from core.llm_client import LLMClient
-from core.logging import get_logger
+from core.structured_logging import get_logger
 from core.signing import KeyStore, sign_content
 
 logger = get_logger(__name__)
@@ -576,7 +576,19 @@ class CouncilArbiter:
             )
 
         # ── Contested / incomplete / stub ─────────────────────────────────
-        contested_findings_count = len(contested_findings)
+        # Also count findings with INCONSISTENT status as contested, since they
+        # signal conflicting forensic evidence that warrants human review.
+        inconsistent_as_contested = [
+            _f for _f in all_findings
+            if str(_f.get("status", "")).upper() == "CONTESTED"
+            or (str(_f.get("status", "")).upper() == "CONFIRMED"
+                and any(
+                    "INCONSISTENT" in str(_f.get("metadata", {}).get(k, "")).upper()
+                    for k in ("verdict", "prnu_verdict")
+                    if _f.get("metadata", {}).get(k) is not None
+                ))
+        ]
+        contested_findings_count = len(contested_findings) + len(inconsistent_as_contested)
 
         # ── applicable_agent_count and skipped_agents ─────────────────────
         applicable_agent_count = len(active_agent_results)
@@ -652,8 +664,14 @@ class CouncilArbiter:
                 or _meta.get("splicing_detected") is True
                 or _meta.get("copy_move_detected") is True
                 or _meta.get("mismatch_detected") is True
+                or _meta.get("stego_suspected") is True
+                or _meta.get("scale_consistent") is False
                 or ("INCONSISTENT" in str(_meta.get("prnu_verdict", "")).upper()
                     and _meta.get("prnu_verdict") is not None)
+                or ("INCONSISTENT" in str(_meta.get("verdict", "")).upper()
+                    and _meta.get("verdict") is not None)
+                or ("TAMPERED" in str(_meta.get("verdict", "")).upper()
+                    and _meta.get("verdict") is not None)
             )
             if _is_direct_manip:
                 _c = float(_f.get("calibrated_probability") or _f.get("confidence_raw") or 0.5)
@@ -932,7 +950,7 @@ class CouncilArbiter:
             ChallengeResult with the outcome of the challenge
         """
         from core.custody_logger import EntryType
-        from core.logging import get_logger
+        from core.structured_logging import get_logger
         
         logger = get_logger(__name__)
         challenge_id = uuid4()
@@ -1055,6 +1073,8 @@ class CouncilArbiter:
             return ""
 
         client = LLMClient(self.config)
+        if not client.is_available:
+            return ""
         agent_full_name = self._AGENT_FULL_NAMES.get(agent_id, agent_id)
         confidence_pct  = round(metrics.get("confidence_score", 0) * 100)
         error_rate_pct  = round(metrics.get("error_rate", 0) * 100)

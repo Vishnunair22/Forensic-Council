@@ -113,7 +113,7 @@ export function HistoryDrawer() {
                            <div className="flex items-center gap-2">
                               <UIcon className={clsx("w-3.5 h-3.5 shrink-0", ui.color)} />
                               <span className={clsx("text-[11px] font-bold uppercase tracking-wide", ui.color)}>
-                                {item.verdict.replace(/_/g, " ")}
+                                {(item.verdict ?? "UNKNOWN").replace(/_/g, " ")}
                               </span>
                            </div>
                            <div className="flex justify-between items-center text-[10px] text-foreground/40 font-mono font-bold">

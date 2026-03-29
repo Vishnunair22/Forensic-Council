@@ -6,14 +6,14 @@ Provides tamper-evident logging for all forensic operations.
 Every entry is cryptographically signed and linked to prior entries.
 """
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from core.logging import get_logger
-from core.signing import SignedEntry, sign_content, verify_entry, get_keystore
+from core.structured_logging import get_logger
+from core.signing import SignedEntry, sign_content, verify_entry
 from infra.postgres_client import PostgresClient, get_postgres_client
 
 logger = get_logger(__name__)
@@ -264,6 +264,7 @@ class CustodyLogger:
         Returns:
             List of ChainEntry objects in chronological order
         """
+        assert self._postgres is not None, "CustodyLogger must be used as async context manager"
         query = """
             SELECT entry_id, entry_type, agent_id, session_id,
                    timestamp_utc, content, content_hash, signature, prior_entry_ref
@@ -366,6 +367,7 @@ class CustodyLogger:
         Returns:
             ChainEntry if found, None otherwise
         """
+        assert self._postgres is not None, "CustodyLogger must be used as async context manager"
         query = """
             SELECT entry_id, entry_type, agent_id, session_id,
                    timestamp_utc, content, content_hash, signature, prior_entry_ref
@@ -391,6 +393,7 @@ class CustodyLogger:
             entry_id: Entry to tamper with
             new_content: New content to inject
         """
+        assert self._postgres is not None, "CustodyLogger must be used as async context manager"
         query = """
             UPDATE chain_of_custody
             SET content = $1

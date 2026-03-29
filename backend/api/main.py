@@ -24,8 +24,8 @@ from api.routes.metrics import (
     set_active_sessions,
 )
 from core.config import get_settings
-from core.migrations import run_migrations
-from core.logging import get_logger, request_id_ctx
+from core.observability import setup_observability
+from core.structured_logging import get_logger, request_id_ctx
 import uuid
 
 logger = get_logger(__name__)
@@ -84,8 +84,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Configure CORS — restricted methods and headers
-from core.observability import setup_observability
+# Configure observability (OpenTelemetry)
 setup_observability(app, settings)
 
 # Configure CORS — restricted methods and headers

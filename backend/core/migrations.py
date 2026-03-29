@@ -8,11 +8,10 @@ Tracks applied migrations and ensures idempotent schema updates.
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Callable, List, Optional
+from typing import List, Optional
 
 from infra.postgres_client import PostgresClient, get_postgres_client
-from core.logging import get_logger
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 

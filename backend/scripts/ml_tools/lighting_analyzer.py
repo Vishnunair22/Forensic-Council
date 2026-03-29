@@ -76,7 +76,16 @@ def analyze_lighting(image_path: str, num_peaks: int = 10) -> dict:
     
     # If shadows go in multiple directions > 30° apart = compositing signal
     lighting_consistent = angle_std < 25.0
-    
+
+    # Confidence: when consistent, confidence should be high (the tool did its job
+    # and found no issue).  Only reduce confidence when there IS an inconsistency.
+    # The old formula 1.0 - angle_std/90.0 produced ~9% confidence for screenshots
+    # with naturally scattered Hough lines even when lighting IS consistent.
+    if lighting_consistent:
+        confidence = round(max(0.70, 1.0 - angle_std / 120.0), 3)
+    else:
+        confidence = round(max(0.15, 0.50 - angle_std / 180.0), 3)
+
     # Specular highlight direction — find brightest regions
     _, thresh = cv2.threshold(gray, 230, 255, cv2.THRESH_BINARY)
     moments = cv2.moments(thresh)
@@ -96,10 +105,10 @@ def analyze_lighting(image_path: str, num_peaks: int = 10) -> dict:
     return {
         "lighting_consistent": lighting_consistent,
         "shadow_angle_std_deg": round(angle_std, 2),
-        "dominant_shadow_angles_deg": [round(float(np.degrees(a)), 1) 
+        "dominant_shadow_angles_deg": [round(float(np.degrees(a)), 1)
                                        for a in peak_angles[:3]],
         "highlight_direction": highlight_direction,
-        "confidence": round(1.0 - min(1.0, angle_std / 90.0), 3),
+        "confidence": confidence,
         "available": True,
     }
 

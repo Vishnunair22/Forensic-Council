@@ -7,6 +7,7 @@ Provides common investigation workflow, self-reflection, and memory integration.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from abc import ABC, abstractmethod
 from typing import Any
@@ -17,19 +18,17 @@ from core.config import Settings
 from core.custody_logger import CustodyLogger, EntryType
 from core.episodic_memory import EpisodicMemory, EpisodicEntry, ForensicSignatureType
 from core.evidence import EvidenceArtifact
-from core.inter_agent_bus import InterAgentCall, InterAgentCallType
+from core.inter_agent_bus import InterAgentCall
 from core.llm_client import LLMClient
-from core.logging import get_logger
+from core.structured_logging import get_logger
 from core.react_loop import (
     AgentFinding,
     HITLCheckpointReason,
-    HumanDecision,
     ReActLoopEngine,
-    ReActLoopResult,
     create_llm_step_generator,
 )
 from core.tool_registry import ToolRegistry
-from core.working_memory import WorkingMemory, WorkingMemoryState, Task, TaskStatus
+from core.working_memory import WorkingMemory, WorkingMemoryState, TaskStatus
 from infra.evidence_store import EvidenceStore
 
 logger = get_logger(__name__)
@@ -455,7 +454,10 @@ class ForensicAgent(ABC):
         llm_generator = None
         if self.config.llm_enable_react_reasoning and self.config.llm_api_key:
             llm_client = LLMClient(self.config)
-            evidence_context = {
+            if not llm_client.is_available:
+                llm_client = None  # Placeholder key — skip LLM reasoning
+            else:
+                evidence_context = {
                 "mime_type": getattr(self.evidence_artifact, "mime_type", "unknown"),
                 "file_name": getattr(self.evidence_artifact, "file_path", "unknown"),
                 "file_size_bytes": getattr(self.evidence_artifact, "file_size", ""),
@@ -493,7 +495,12 @@ class ForensicAgent(ABC):
                 and self.config.llm_provider != "none"
                 and self._findings):
             try:
-                await self._synthesize_findings_with_llm()
+                await asyncio.wait_for(self._synthesize_findings_with_llm(), timeout=30.0)
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Post-analysis LLM synthesis timed out after 30s, raw findings preserved",
+                    agent_id=self.agent_id,
+                )
             except Exception as synth_err:
                 logger.warning(
                     "Post-analysis LLM synthesis failed, raw findings preserved",

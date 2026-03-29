@@ -9,12 +9,11 @@ Supports async context managers and logs connection events.
 import asyncio
 import json
 from typing import Any, Optional
-import redis.asyncio as redis
 from redis.asyncio import Redis
 from redis.asyncio.connection import ConnectionPool
 
 from core.config import get_settings
-from core.logging import get_logger
+from core.structured_logging import get_logger
 from core.exceptions import RedisConnectionError
 
 logger = get_logger(__name__)
@@ -148,14 +147,13 @@ class RedisClient:
         Returns:
             True if successful
         """
-        import json
         
         if not isinstance(value, str):
             value = json.dumps(value)
         
         result = await self.client.set(key, value, ex=ex, px=px, nx=nx, xx=xx)
-        # redis-py returns True on success for basic SET, but some versions/responses might be "OK"
-        return result is True or result == "OK" or result is not None
+        # redis-py returns True on success for basic SET, or None if nx=True and key exists
+        return result is True or result == "OK"
     
     async def get(self, key: str) -> Optional[Any]:
         """
@@ -167,7 +165,6 @@ class RedisClient:
         Returns:
             Value if exists, None otherwise
         """
-        import json
         
         value = await self.client.get(key)
         if value is None:
@@ -252,14 +249,12 @@ class RedisClient:
     # Hash operations
     async def hset(self, name: str, key: str, value: Any) -> int:
         """Set a field in a hash."""
-        import json
         if not isinstance(value, str):
             value = json.dumps(value)
         return await self.client.hset(name, key, value)
     
     async def hget(self, name: str, key: str) -> Optional[Any]:
         """Get a field from a hash."""
-        import json
         value = await self.client.hget(name, key)
         if value is None:
             return None
@@ -270,7 +265,6 @@ class RedisClient:
     
     async def hgetall(self, name: str) -> dict[str, Any]:
         """Get all fields from a hash."""
-        import json
         result = await self.client.hgetall(name)
         parsed = {}
         for k, v in result.items():

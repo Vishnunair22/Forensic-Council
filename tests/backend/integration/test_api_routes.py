@@ -10,6 +10,10 @@ import io
 import json
 import uuid
 import pytest
+try:
+    import grpc  # type: ignore
+except Exception:
+    pytest.skip("grpc not installed; skipping integration tests", allow_module_level=True)
 from unittest.mock import AsyncMock, MagicMock, patch
 
 # ── Import guard ──────────────────────────────────────────────────────────────

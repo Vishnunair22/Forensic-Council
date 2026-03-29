@@ -2,7 +2,7 @@
 
 Upload digital evidence. Five specialized AI agents analyze it. Get a cryptographically signed forensic report.
 
-[![Version](https://img.shields.io/badge/version-v1.0.4-blue.svg)](#) [![Status](https://img.shields.io/badge/status-stable-green.svg)](#) [![License](https://img.shields.io/badge/license-MIT-green.svg)](#) [![Python](https://img.shields.io/badge/python-3.12-blue.svg)](#) [![Next.js](https://img.shields.io/badge/next.js-15-black.svg)](#) [![Postgres](https://img.shields.io/badge/postgres-17-blue.svg)](#)
+[![Version](https://img.shields.io/badge/version-v1.1.1-blue.svg)](#) [![Status](https://img.shields.io/badge/status-stable-green.svg)](#) [![License](https://img.shields.io/badge/license-MIT-green.svg)](#) [![Python](https://img.shields.io/badge/python-3.12-blue.svg)](#) [![Next.js](https://img.shields.io/badge/next.js-15-black.svg)](#) [![Postgres](https://img.shields.io/badge/postgres-17-blue.svg)](#)
 
 *A Multi-Agent Forensic Evidence Analysis System with cryptographic chain of custody*
 
@@ -159,6 +159,16 @@ Full caching guide → [`docs/docker/README.md`](docs/docker/README.md)
 ---
 
 ## Changelog
+
+**v1.1.1 (2026-03-29)** — UI Refinements, Bug Fixes & Project Cleanup:
+- **UI**: Agent card grid changed to 3×2 layout on large screens for better visual balance.
+- **UI**: Status badges (Queued, Scan, Finished, N/A, Error) now use transparent/opaque backgrounds instead of solid fills.
+- **File preview fix**: Upload success modal now renders image previews correctly using native `<img>` for data URLs (Next.js `Image` doesn't support base64 sources).
+- **Auth delay fix**: Evidence page no longer fires a redundant `autoLoginAsInvestigator()` on mount if the landing page already authenticated. Cuts the post-upload delay by one full network round-trip.
+- **Progress text fix**: Backend thinking text no longer resets to "Analyzing..." when an empty string is received. Uses nullish coalescing to preserve the last known thinking. Pipeline message/thinking state is also cleared on deep-phase transition.
+- **Naming**: Package renamed from `agent-council-front-end` to `forensic-council-front-end`.
+- **Security**: Removed `Locks and Keys.txt` containing exposed API keys. Rotate any keys that were previously committed.
+- **Cleanup**: Removed stale `test-three.js`, Python `__pycache__` directories, and `.mypy_cache`/`.pytest_cache`/`.ruff_cache` from root.
 
 **v1.1.0 (2026-03-24)** — Comprehensive Minimalist Redesign & Robustness Audit:
 - **UI Redesign**: Transitioned from "CyberNoir" neon aesthetic to a premium Indigo/Slate minimalist design system.

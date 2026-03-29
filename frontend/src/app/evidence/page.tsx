@@ -15,7 +15,7 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Circle, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { useSimulation } from "@/hooks/useSimulation";
 import { PageTransition } from "@/components/ui/PageTransition";
 import { useSound } from "@/hooks/useSound";
@@ -67,11 +67,16 @@ export default function EvidencePage() {
     typeof window !== "undefined" && sessionStorage.getItem("forensic_auto_start") === "true"
   );
 
-  // Shared auth promise — auto-login fires once on mount; triggerAnalysis awaits it
+  // Shared auth promise — reuse existing session if available, otherwise auto-login.
+  // The landing page already calls autoLoginAsInvestigator() on mount, so the cookie
+  // is usually already set by the time the evidence page loads.  Firing a second
+  // redundant login round-trip here was the primary cause of the post-upload delay.
   const authReadyRef = useRef<Promise<void>>(
-    autoLoginAsInvestigator()
-      .then(() => { /* auth cookie set */ })
-      .catch(() => { /* handled by handleAuthError on first API call */ })
+    typeof document !== "undefined" && document.cookie.includes("access_token")
+      ? Promise.resolve() // Already authenticated from landing page — skip re-login
+      : autoLoginAsInvestigator()
+          .then(() => { /* auth cookie set */ })
+          .catch(() => { /* handled by handleAuthError on first API call */ })
   );
 
   // Phase tracking:  analysis vs deep analysis
@@ -380,19 +385,13 @@ export default function EvidencePage() {
     validAgentsData.some(v => v.id === c.agent_id)
   );
 
-  // In deep phase, unsupported agents never run — only count supported ones
+  // In deep phase, unsupported agents never run — only count supported ones.
+  // Only mark as unsupported if backend explicitly skipped or error says not applicable.
   const unsupportedAgentIds = new Set(
     validCompletedAgents
       .filter(c =>
-        c.error?.includes("Not applicable") ||
-        c.error?.includes("not applicable") ||
-        c.error?.includes("not supported") ||
-        c.error?.includes("Format not supported") ||
-        c.message?.includes("not applicable") ||
-        c.message?.includes("not supported") ||
-        c.message?.includes("Skipping") ||
-        c.message?.includes("Skipped") ||
-        (c.findings_count === 0 && c.confidence === 0 && !!c.error)
+        c.status === "skipped" ||
+        (c.error && /not applicable|not supported|format not supported|skipping/i.test(c.error))
       )
       .map(c => c.agent_id)
   );
@@ -544,51 +543,6 @@ export default function EvidencePage() {
 
       {/* Main content */}
       <main className="max-w-6xl mx-auto relative z-10">
-        {/* Phase Indicator */}
-        {hasStartedAnalysis && (
-          <div
-            aria-live="polite"
-            aria-label={`Current phase: ${phase === "initial" ? "Initial Analysis" : "Deep Analysis"}`}
-            className="mb-8 flex items-center justify-center"
-          >
-            <div className="flex items-center gap-2 p-1 rounded-full bg-surface-low border border-border-subtle shadow-lg">
-              <div className={`flex items-center gap-2 px-5 py-2 rounded-full transition-all duration-300 text-[10px] font-bold uppercase tracking-widest ${
-                phase === "initial"
-                  ? "text-black shadow-md"
-                  : "text-foreground/40"
-              }`}
-                style={phase === "initial" ? { background: "#22D3EE", boxShadow: "0 4px 16px rgba(34,211,238,0.25)" } : {}}
-              >
-                {phase === "initial" && status !== "complete" && !awaitingDecision ? (
-                  <div className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" aria-hidden="true" />
-                ) : (
-                  <CheckCircle2 aria-hidden="true" className={`w-3.5 h-3.5 ${phase === "deep" || awaitingDecision || status === "complete" ? "text-black" : ""}`} />
-                )}
-                <span>Initial Analysis</span>
-              </div>
-
-              <div className="w-4 h-px bg-border-bold" aria-hidden="true" />
-
-              <div className={`flex items-center gap-2 px-5 py-2 rounded-full transition-all duration-300 text-[10px] font-bold uppercase tracking-widest ${
-                phase === "deep"
-                  ? "text-black shadow-md"
-                  : "text-foreground/40"
-              }`}
-                style={phase === "deep" ? { background: "#22D3EE", boxShadow: "0 4px 16px rgba(34,211,238,0.25)" } : {}}
-              >
-                {phase === "deep" && status !== "complete" ? (
-                  <div className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" aria-hidden="true" />
-                ) : phase === "deep" && status === "complete" ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-black" aria-hidden="true" />
-                ) : (
-                  <Circle className="w-3.5 h-3.5" aria-hidden="true" />
-                )}
-                <span>Deep Analysis</span>
-              </div>
-            </div>
-          </div>
-        )}
-
         <PageTransition>
         <>
           {/* Upload Form */}

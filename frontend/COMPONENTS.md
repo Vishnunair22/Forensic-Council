@@ -2,14 +2,18 @@
 
 ## Overview
 
-This guide provides quick reference for all frontend components, their purposes, and usage examples.
+Quick reference for all frontend components, their purposes, and usage examples.
+
+**Version:** v1.1.1
 
 ## Table of Contents
 
 - [Page Components](#page-components)
 - [Evidence Components](#evidence-components)
 - [UI Components](#ui-components)
-- [Component Usage Examples](#component-usage-examples)
+- [Lightswind Components](#lightswind-components)
+- [Dev Components](#dev-components)
+- [Import Patterns](#import-patterns)
 
 ---
 
@@ -17,263 +21,107 @@ This guide provides quick reference for all frontend components, their purposes,
 
 ### Landing Page
 **File:** `app/page.tsx`
-**Purpose:** Main entry point for the application
-**Key Features:**
-- Project introduction
-- Feature highlights
-- File upload modal
-- Navigation to evidence page
+**Purpose:** Main entry point — hero, how-it-works, agent showcase, example report, file upload modals.
 
 ### Evidence Page
 **File:** `app/evidence/page.tsx`
-**Purpose:** Main investigation workflow orchestrator
-**Key Features:**
-- File upload and validation
-- Real-time agent analysis display
-- WebSocket integration
-- HITL decision handling
-- Navigation to results
+**Purpose:** Investigation workflow orchestrator. Handles file upload, WebSocket agent stream, HITL decisions, deep analysis, and arbiter overlay.
 
-### Results Page
+### Result Page
 **File:** `app/result/page.tsx`
-**Purpose:** Display final forensic analysis report
-**Key Features:**
-- Report summary
-- Agent findings
-- Confidence scores
-- Evidence export options
+**Purpose:** Signed forensic report display — per-agent findings, confidence scores, verdict, cryptographic proof, chain of custody, export.
 
 ### Session Expired Page
 **File:** `app/session-expired/page.tsx`
-**Purpose:** Handle authentication timeout
-**Key Features:**
-- Timeout notification
-- Re-authentication link
-- Session recovery
+**Purpose:** Session timeout recovery with re-authentication.
+
+### 404 Page
+**File:** `app/not-found.tsx`
+**Purpose:** Global not-found handler.
 
 ---
 
 ## Evidence Components
 
-These components are located in `components/evidence/` and are used on the evidence investigation page.
+Located in `components/evidence/`.
 
 ### HeaderSection
-
 **File:** `components/evidence/HeaderSection.tsx`
-
-**Purpose:** Displays page header with app branding and navigation
-
 **Props:**
 ```typescript
 interface HeaderSectionProps {
-  status: string;                    // Current investigation status
-  showBrowse: boolean;               // Show browse button
-  onBrowseClick: () => void;        // Browse click handler
+  status: string;
+  showBrowse: boolean;
+  onBrowseClick: () => void;
 }
 ```
-
-**Usage:**
-```typescript
-<HeaderSection
-  status={status}
-  showBrowse={showUploadForm}
-  onBrowseClick={() => fileInputRef.current?.click()}
-/>
-```
-
-**Features:**
-- Logo that links to home (when not analyzing)
-- Browse System button for file selection
-- Status-aware interactions
-
----
+Logo nav (keyboard-accessible), Browse System button, status-aware interactions.
 
 ### FileUploadSection
-
 **File:** `components/evidence/FileUploadSection.tsx`
-
-**Purpose:** Handles evidence file selection with drag-and-drop and preview
-
 **Props:**
 ```typescript
 interface FileUploadSectionProps {
-  file: File | null;                           // Selected file
-  isDragging: boolean;                         // Drag-over state
-  isUploading: boolean;                        // Upload in progress
-  validationError: string | null;              // Validation error
-  onFileSelect: (file: File) => void;         // File selected
-  onFileDrop: (file: File) => void;           // File dropped
-  onDragEnter: () => void;                    // Drag enter
-  onDragLeave: () => void;                    // Drag leave
-  onUpload: (file: File) => void;             // Start upload
-  onClear: () => void;                        // Clear selection
+  file: File | null;
+  isDragging: boolean;
+  isUploading: boolean;
+  validationError: string | null;
+  onFileSelect: (file: File) => void;
+  onFileDrop: (file: File) => void;
+  onDragEnter: () => void;
+  onDragLeave: () => void;
+  onUpload: (file: File) => void;
+  onClear: () => void;
 }
 ```
-
-**Usage:**
-```typescript
-<FileUploadSection
-  file={file}
-  isDragging={isDragging}
-  isUploading={isUploading}
-  validationError={validationError}
-  onFileSelect={handleFile}
-  onFileDrop={handleFile}
-  onDragEnter={() => setIsDragging(true)}
-  onDragLeave={() => setIsDragging(false)}
-  onUpload={triggerAnalysis}
-  onClear={() => setFile(null)}
-/>
-```
-
-**Features:**
-- Drag-and-drop upload area
-- File preview for images/videos
-- Audio waveform animation
-- File size validation
-- Upload progress
-- Clear and upload buttons
-
----
+Drag-and-drop upload area with file preview for images/videos/audio. MIME validation, size check (50 MB max).
 
 ### AgentProgressDisplay
-
 **File:** `components/evidence/AgentProgressDisplay.tsx`
 
-**Purpose:** Shows real-time progress of forensic agents
+The main analysis view. Renders a 3×2 grid of glass agent cards with live thinking text, tool progress bars, staggered reveal animation, decision buttons (Compile Ledger / Deep Scan Protocol), skipped-agent accordion, and animated Three.js wave background.
+
+**Key internals:**
+- `LiveThinkingText` — debounced text display with animated dots and trailing previous-thought
+- `humaniseThinking()` — translates raw backend task strings into user-friendly action sentences with emoji prefixes
+- Agent status determination: `waiting` → `checking` → `running` → `complete`/`unsupported`/`error`
 
 **Props:**
 ```typescript
 interface AgentProgressDisplayProps {
-  completedAgents: AgentUpdate[];        // Completed agents
-  activeAgent: AgentUpdate | null;       // Currently active agent
-  progressText: string;                  // Progress description
-  allAgentsDone: boolean;                // All agents done flag
-}
-
-interface AgentUpdate {
-  agent_id: string;
-  agent_name: string;
-  message: string;
-  status: "running" | "complete" | "error";
-  confidence?: number;
-  findings_count?: number;
-  thinking?: string;
-  error?: string | null;
-}
-```
-
-**Usage:**
-```typescript
-<AgentProgressDisplay
-  completedAgents={validCompletedAgents}
-  activeAgent={activeAgent}
-  progressText={progressText}
-  allAgentsDone={allAgentsDone}
-/>
-```
-
-**Features:**
-- Active agent card with thinking
-- Progress bar animation
-- Completed agents list
-- Findings count
-- Overall progress text
-- Loading indicator dots
-
----
-
-### CompletionBanner
-
-**File:** `components/evidence/CompletionBanner.tsx`
-
-**Purpose:** Displays success message when analysis completes
-
-**Props:**
-```typescript
-interface CompletionBannerProps {
-  agentCount: number;                    // Total agents
-  completedCount: number;                // Completed agents
-  onViewResults: () => void;            // View report callback
-  onAnalyzeNew: () => void;             // Analyze new callback
+  agentUpdates: Record<string, { status: string; thinking: string; tools_done?: number; tools_total?: number }>;
+  completedAgents: AgentUpdate[];
+  progressText: string;
+  allAgentsDone: boolean;
+  phase: "initial" | "deep";
+  awaitingDecision: boolean;
+  pipelineStatus: string;
+  pipelineMessage?: string;
+  onAcceptAnalysis: () => void;
+  onDeepAnalysis: () => void;
+  onNewUpload: () => void;
+  onViewResults: () => void;
+  playSound?: (type: SoundType) => void;
+  isNavigating?: boolean;
 }
 ```
-
-**Usage:**
-```typescript
-<CompletionBanner
-  agentCount={validAgentsData.length}
-  completedCount={validCompletedAgents.length}
-  onViewResults={handleViewResults}
-  onAnalyzeNew={handleAnalyzeNew}
-/>
-```
-
-**Features:**
-- Success icon animation
-- Analysis summary
-- Agent status grid
-- View Report button
-- Analyze New Evidence button
-- Security disclaimer
-
----
 
 ### ErrorDisplay
-
 **File:** `components/evidence/ErrorDisplay.tsx`
-
-**Purpose:** Shows error messages with recovery options
-
 **Props:**
 ```typescript
 interface ErrorDisplayProps {
-  message: string;                       // Error message
-  onDismiss?: () => void;               // Dismiss callback
-  onRetry?: () => void;                 // Retry callback
-  showRetry?: boolean;                  // Show retry button
+  message: string;
+  onRetry?: () => void;
+  showRetry?: boolean;
 }
 ```
-
-**Usage:**
-```typescript
-<ErrorDisplay
-  message={errorMessage}
-  onDismiss={() => resetSimulation()}
-  onRetry={() => triggerAnalysis(file)}
-  showRetry={!!file}
-/>
-```
-
-**Features:**
-- Error icon
-- Detailed error message
-- Try Again button (conditional)
-- Dismiss button
-- Motion animations
-
----
+Error state with retry button.
 
 ### HITLCheckpointModal
-
 **File:** `components/evidence/HITLCheckpointModal.tsx`
-
-**Purpose:** Handles human-in-the-loop decision points
-
 **Props:**
 ```typescript
-interface HITLCheckpoint {
-  checkpoint_id: string;
-  session_id: string;
-  agent_id: string;
-  agent_name: string;
-  brief_text: string;
-  decision_needed: string;
-  created_at: string;
-}
-
-type HITLDecision = "APPROVE" | "REDIRECT" | "OVERRIDE" | "TERMINATE" | "ESCALATE";
-
 interface HITLCheckpointModalProps {
   checkpoint: HITLCheckpoint | null;
   isOpen: boolean;
@@ -282,324 +130,89 @@ interface HITLCheckpointModalProps {
   onDismiss: () => void;
 }
 ```
-
-**Usage:**
-```typescript
-<HITLCheckpointModal
-  checkpoint={hitlCheckpoint}
-  isOpen={!!hitlCheckpoint}
-  isSubmitting={isSubmittingHITL}
-  onDecision={handleHITLDecision}
-  onDismiss={dismissCheckpoint}
-/>
-```
-
-**Features:**
-- Finding summary
-- Decision options (APPROVE, REDIRECT, OVERRIDE, ESCALATE)
-- Notes field
-- Error handling
-- Async decision submission
+Accessible modal for human review decisions: APPROVE, REDIRECT, OVERRIDE, TERMINATE, ESCALATE.
 
 ---
 
 ## UI Components
 
+Located in `components/ui/`.
+
+### AgentIcon
+**File:** `components/ui/AgentIcon.tsx`
+Resolves per-agent Lucide icon by role string (e.g. "Image Integrity" → Shield, "Audio" → Mic2).
+
+### AgentResponseText
+**File:** `components/ui/AgentResponseText.tsx`
+Expandable text display with markdown stripping and character limit truncation.
+
+### GlobalFooter
+**File:** `components/ui/GlobalFooter.tsx`
+Academic disclaimer footer rendered on all pages via layout.
+
+### HistoryDrawer
+**File:** `components/ui/HistoryDrawer.tsx`
+Sidebar drawer showing session history from localStorage. Per-item delete, clear-all, verdict badges.
+
+### PageTransition
+**File:** `components/ui/PageTransition.tsx`
+Wraps page content in smooth fade-up entrance animation. Exports `PageTransition`, `StaggerIn`, `StaggerChild`.
+
+### SurfaceCard
+**File:** `components/ui/SurfaceCard.tsx`
+Simple wrapper component applying `surface-panel` glass styling.
+
 ### dialog.tsx
-
-**Purpose:** Dialog/modal component wrapper
-
-**Usage:**
-```typescript
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-
-<Dialog open={isOpen} onOpenChange={setIsOpen}>
-  <DialogContent>
-    <DialogHeader>
-      <DialogTitle>Title</DialogTitle>
-      <DialogDescription>Description</DialogDescription>
-    </DialogHeader>
-    {/* Content */}
-    <DialogFooter>
-      {/* Buttons */}
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
-```
-
-### AgentIcon.tsx
-
-**Purpose:** Displays agent-specific icon
-
-**Usage:**
-```typescript
-import { AgentIcon } from "@/components/ui/AgentIcon";
-
-<AgentIcon agentId="Agent1" />
-```
-
-### AgentResponseText.tsx
-
-**Purpose:** Formats and displays agent responses
-
-**Usage:**
-```typescript
-import { AgentResponseText } from "@/components/ui/AgentResponseText";
-
-<AgentResponseText
-  text={agentMessage}
-  agentId="Agent1"
-/>
-```
+**File:** `components/ui/dialog.tsx`
+Radix UI dialog primitive re-exported: `Dialog`, `DialogContent`, `DialogHeader`, `DialogFooter`, `DialogTitle`, `DialogDescription`, `DialogClose`.
 
 ---
 
-### DevErrorOverlay.tsx
+## Lightswind Components
 
-**Purpose:** Development-only error boundary and overlay. Classifies React crashes, network errors, WebSocket errors, API errors, null-reference errors, and module errors into readable categories with stack traces. Wraps the app in `layout.tsx` and is stripped in production builds.
+Located in `components/lightswind/`.
 
-**Error categories:** `REACT_CRASH`, `NETWORK_ERROR`, `WEBSOCKET_ERROR`, `API_ERROR`, `NULL_REFERENCE`, `MODULE_ERROR`, `RUNTIME_ERROR`
+### Badge
+**File:** `components/lightswind/badge.tsx`
+Status badge with variants (`default`, `secondary`, `destructive`, `outline`, `success`, `warning`, `info`), sizes, shapes, optional colored dot.
 
-> Only active when `NODE_ENV=development`. Has no effect in production.
-
----
-
-### GlobalFooter.tsx
-
-**Purpose:** Academic disclaimer footer shown on all pages (landing, evidence, result, error)
-
-**Usage:**
-```typescript
-import { GlobalFooter } from "@/components/ui/GlobalFooter";
-
-// Added automatically in layout.tsx or per-page footer
-<GlobalFooter />
-```
+### AnimatedWave
+**File:** `components/lightswind/animated-wave.tsx`
+Three.js animated wireframe wave background. Accepts speed, amplitude, opacity, wave color, mouse interaction, quality settings.
 
 ---
 
-### PageTransition.tsx
+## Dev Components
 
-**Purpose:** Smooth fade-up page transition wrapper with optional stagger children
-
-**Usage:**
-```typescript
-import { PageTransition } from "@/components/ui/PageTransition";
-
-<PageTransition>
-  <YourPageContent />
-</PageTransition>
-```
-
----
-
-## Component Usage Examples
-
-### Complete Evidence Page Setup
-
-```typescript
-"use client";
-
-import { useState, useCallback } from "react";
-import { AnimatePresence } from "framer-motion";
-import {
-  HeaderSection,
-  FileUploadSection,
-  AgentProgressDisplay,
-  CompletionBanner,
-  ErrorDisplay,
-  HITLCheckpointModal,
-} from "@/components/evidence";
-import { useSimulation } from "@/hooks/useSimulation";
-
-export default function EvidencePage() {
-  const [file, setFile] = useState<File | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  
-  const {
-    status,
-    agentUpdates,
-    completedAgents,
-    hitlCheckpoint,
-    errorMessage,
-    // ... other hooks
-  } = useSimulation({
-    playSound: () => {},
-    onComplete: () => {},
-  });
-
-  return (
-    <div className="min-h-screen bg-black text-white">
-      <HeaderSection
-        status={status}
-        showBrowse={status === "idle"}
-        onBrowseClick={() => {}}
-      />
-      
-      <main>
-        <AnimatePresence mode="wait">
-          {status === "idle" && (
-            <FileUploadSection
-              file={file}
-              isDragging={isDragging}
-              isUploading={false}
-              validationError={null}
-              onFileSelect={setFile}
-              onFileDrop={setFile}
-              onDragEnter={() => setIsDragging(true)}
-              onDragLeave={() => setIsDragging(false)}
-              onUpload={() => {}}
-              onClear={() => setFile(null)}
-            />
-          )}
-          
-          {status === "analyzing" && (
-            <AgentProgressDisplay
-              completedAgents={completedAgents}
-              activeAgent={null}
-              progressText="Analyzing..."
-              allAgentsDone={false}
-            />
-          )}
-          
-          {status === "complete" && (
-            <CompletionBanner
-              agentCount={5}
-              completedCount={5}
-              onViewResults={() => {}}
-              onAnalyzeNew={() => {}}
-            />
-          )}
-          
-          {errorMessage && (
-            <ErrorDisplay
-              message={errorMessage}
-              onDismiss={() => {}}
-              onRetry={() => {}}
-            />
-          )}
-        </AnimatePresence>
-      </main>
-
-      <HITLCheckpointModal
-        checkpoint={hitlCheckpoint}
-        isOpen={!!hitlCheckpoint}
-        isSubmitting={false}
-        onDecision={async () => {}}
-        onDismiss={() => {}}
-      />
-    </div>
-  );
-}
-```
+### DevErrorOverlay
+**File:** `components/DevErrorOverlay.tsx`
+Development-only error boundary. Classifies errors into categories (REACT_CRASH, NETWORK_ERROR, WEBSOCKET_ERROR, API_ERROR, NULL_REFERENCE, MODULE_ERROR) with fix guides, smart stack traces, and component tree. Stripped in production builds.
 
 ---
 
 ## Import Patterns
 
-### From Evidence Components
+### Evidence Components (barrel export)
 ```typescript
-// Import individual components
-import { HeaderSection } from "@/components/evidence/HeaderSection";
-import { FileUploadSection } from "@/components/evidence/FileUploadSection";
-
-// OR use index export
 import {
   HeaderSection,
   FileUploadSection,
   AgentProgressDisplay,
-  CompletionBanner,
   ErrorDisplay,
   HITLCheckpointModal,
 } from "@/components/evidence";
 ```
 
-### From UI Components
+### UI Components (barrel export)
 ```typescript
-import { AgentIcon } from "@/components/ui/AgentIcon";
-import { AgentResponseText } from "@/components/ui/AgentResponseText";
 import {
+  AgentIcon,
+  AgentResponseText,
+  GlobalFooter,
+  HistoryDrawer,
+  PageTransition,
+  SurfaceCard,
   Dialog,
   DialogContent,
-  DialogHeader,
-} from "@/components/ui/dialog";
+} from "@/components/ui";
 ```
-
----
-
-## Component Best Practices
-
-### Props Design
-- Keep props specific and meaningful
-- Use TypeScript interfaces for type safety
-- Provide sensible defaults where possible
-- Document all props with JSDoc
-
-### Accessibility
-- Add ARIA labels to interactive elements
-- Use semantic HTML
-- Ensure keyboard navigation
-- Test color contrast
-
-### Performance
-- Memoize expensive computations with `useMemo`
-- Use `useCallback` for event handlers
-- Implement proper cleanup in `useEffect`
-- Avoid unnecessary re-renders
-
-### Styling
-- Use Tailwind core utilities only
-- Follow consistent spacing and sizing
-- Use theme colors consistently
-- Test responsive layouts
-
-### Animation
-- Use Framer Motion for smooth transitions
-- Keep animations under 400ms for UI feedback
-- Provide motion-safe alternatives
-- Test on lower-end devices
-
----
-
-## Troubleshooting
-
-### Component Not Rendering
-1. Check component is exported from index file
-2. Verify import path is correct
-3. Ensure props match interface
-4. Check for console errors
-
-### Styling Not Applied
-1. Clear Next.js cache: `npm run build`
-2. Check Tailwind class names
-3. Verify CSS is loaded
-4. Check CSS specificity
-
-### Animation Not Working
-1. Ensure Framer Motion is installed
-2. Check AnimatePresence wraps target components
-3. Verify animation properties are defined
-4. Check for conflicting CSS transitions
-
----
-
-## Contributing
-
-When adding new components:
-
-1. Create component in appropriate directory
-2. Write clear JSDoc comments
-3. Define prop interfaces
-4. Add error handling
-5. Include accessibility features
-6. Write tests
-7. Update this guide
-
-For more details, see `ARCHITECTURE.md`

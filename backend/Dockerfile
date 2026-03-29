@@ -73,7 +73,6 @@ ENV NUMBA_CACHE_DIR="/app/cache/numba_cache" \
     HF_HOME="/app/cache/huggingface" \
     TRANSFORMERS_CACHE="/app/cache/huggingface/transformers" \
     EASYOCR_MODEL_DIR="/app/cache/easyocr"
-# Note: DEEPFACE_HOME intentionally omitted — deepface is not installed.
 
 RUN mkdir -p \
     /app/storage/evidence \

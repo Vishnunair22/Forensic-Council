@@ -27,22 +27,21 @@ Design principles:
 from __future__ import annotations
 
 import asyncio
-import io
 import os
-import re
-import tempfile
 from concurrent.futures import ThreadPoolExecutor
-from functools import lru_cache
 from typing import Any, Optional
 
 from core.evidence import EvidenceArtifact
 from core.exceptions import ToolUnavailableError
-from core.logging import get_logger
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
 # Thread pool for blocking OCR calls — keeps event loop free
 _OCR_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ocr_worker")
+
+import atexit
+atexit.register(_OCR_EXECUTOR.shutdown, wait=False)
 
 # ---------------------------------------------------------------------------
 # Lazy model loader — EasyOCR reader (cached at module level)

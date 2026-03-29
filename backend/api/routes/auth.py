@@ -17,14 +17,13 @@ from pydantic import BaseModel
 
 from core.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
-    TokenData,
     User,
     UserRole,
     create_access_token,
     get_current_user,
 )
 from core.config import get_settings
-from core.logging import get_logger
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 settings = get_settings()

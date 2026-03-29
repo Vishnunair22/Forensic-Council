@@ -12,13 +12,13 @@ module degrades gracefully to in-process counters (single-replica accuracy).
 import time
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from core.auth import require_admin, User
 from core.config import get_settings
-from core.logging import get_logger
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -300,8 +300,9 @@ async def get_raw_metrics(request: Request):
             status_code=503,
         )
 
+    import hmac as _hmac
     auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer ") or auth_header[7:] != scrape_token:
+    if not auth_header.startswith("Bearer ") or not _hmac.compare_digest(auth_header[7:], scrape_token):
         from fastapi.responses import JSONResponse as _JR
         return _JR({"detail": "Unauthorized"}, status_code=401)
 

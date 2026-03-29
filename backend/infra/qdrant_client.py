@@ -21,7 +21,7 @@ from qdrant_client.models import (
 )
 
 from core.config import get_settings
-from core.logging import get_logger
+from core.structured_logging import get_logger
 from core.exceptions import QdrantConnectionError
 
 logger = get_logger(__name__)

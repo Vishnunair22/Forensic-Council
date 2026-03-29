@@ -9,8 +9,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections.abc import Callable, Coroutine
-from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -189,11 +188,21 @@ class ToolRegistry:
         # Tool is available - execute it
         handler = self._handlers[tool_name]
         try:
-            output = await handler(input_data)
+            # Per-tool timeout: prevents a single hanging tool from blocking
+            # the entire agent and timing out the full investigation.
+            # 60s is generous for in-process tools; ML subprocesses have
+            # their own tighter timeouts inside run_ml_tool.
+            output = await asyncio.wait_for(handler(input_data), timeout=60.0)
             result = ToolResult(
                 tool_name=tool_name,
                 success=True,
                 output=output
+            )
+        except asyncio.TimeoutError:
+            result = ToolResult(
+                tool_name=tool_name,
+                success=False,
+                error=f"Tool '{tool_name}' timed out after 60s"
             )
         except Exception as e:
             result = ToolResult(

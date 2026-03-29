@@ -256,7 +256,6 @@ export async function getCurrentUser(): Promise<UserInfo> {
 async function handleAuthError<T>(
   operation: () => Promise<T>
 ): Promise<T> {
-  let retried = false;
   try {
     return await operation();
   } catch (error) {
@@ -267,22 +266,15 @@ async function handleAuthError<T>(
         error.message.includes("Unauthorized") ||
         error.message.includes("Not authenticated"))
     ) {
-      if (!retried) {
-        retried = true;
-        dbg.warn("Token invalid, re-authenticating...");
-        try {
-          await autoLoginAsInvestigator();
-          return await operation();
-        } catch {
-          if (typeof window !== "undefined") {
-            window.location.href = "/session-expired";
-          }
-          throw error;
-        }
-      } else {
+      dbg.warn("Token invalid, re-authenticating...");
+      try {
+        await autoLoginAsInvestigator();
+        return await operation();
+      } catch {
         if (typeof window !== "undefined") {
           window.location.href = "/session-expired";
         }
+        throw error;
       }
     }
     throw error;

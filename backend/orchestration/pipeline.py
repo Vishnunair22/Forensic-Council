@@ -8,8 +8,6 @@ End-to-end orchestration pipeline for forensic evidence analysis.
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -20,7 +18,7 @@ from core.custody_logger import CustodyLogger, EntryType
 from core.episodic_memory import EpisodicMemory
 from core.evidence import EvidenceArtifact
 from core.inter_agent_bus import InterAgentBus
-from core.logging import get_logger
+from core.structured_logging import get_logger
 from core.react_loop import HumanDecision
 from core.working_memory import WorkingMemory
 from infra.evidence_store import EvidenceStore

@@ -101,7 +101,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                     ...prev,
                                     [incomingId]: {
                                         status: agentData.status || "running",
-                                        thinking: agentData.thinking || "Analyzing...",
+                                        thinking: agentData.thinking ?? prev[incomingId]?.thinking ?? "",
                                         tools_done: typeof agentData.tools_done === "number" ? agentData.tools_done : prev[incomingId]?.tools_done,
                                         tools_total: typeof agentData.tools_total === "number" ? agentData.tools_total : prev[incomingId]?.tools_total,
                                     }
@@ -130,7 +130,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                             if (update.agent_id) {
                                 const agent = AGENTS_DATA.find(a => a.id === update.agent_id);
                                 if (agent) {
-                                    const { confidence, findings_count, error, deep_analysis_pending, status: agentStatus, agent_verdict, tool_error_rate, section_flags, findings_preview } = update.data as Record<string, unknown>;
+                                    const { confidence, findings_count, error, deep_analysis_pending, status: agentStatus, agent_verdict, tool_error_rate, section_flags, findings_preview, tools_ran, tools_skipped, tools_failed } = update.data as Record<string, unknown>;
                                     const parsedConfidence = (typeof confidence === "number" ? confidence : null) ?? agent.simulation.confidence / 100;
 
                                     const newUpdate: AgentUpdate = {
@@ -146,6 +146,9 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                         tool_error_rate: typeof tool_error_rate === "number" ? tool_error_rate : undefined,
                                         section_flags: Array.isArray(section_flags) ? section_flags as AgentUpdate["section_flags"] : undefined,
                                         findings_preview: Array.isArray(findings_preview) ? findings_preview as AgentUpdate["findings_preview"] : undefined,
+                                        tools_ran: typeof tools_ran === "number" ? tools_ran : undefined,
+                                        tools_skipped: typeof tools_skipped === "number" ? tools_skipped : undefined,
+                                        tools_failed: typeof tools_failed === "number" ? tools_failed : undefined,
                                     };
 
                                     // Upsert: later AGENT_COMPLETE for the same agent_id always wins
@@ -172,8 +175,11 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                             break;
 
                         case "PIPELINE_COMPLETE":
-                            // Force "complete" even if we were in "awaiting_decision"
+                            // Don't overwrite "awaiting_decision" — let the user choose first.
+                            // If user chose Accept, we're in "processing" and this completes.
+                            // If user chose Deep, we're in "analyzing" and this completes deep.
                             setStatus((prev: SimulationStatus) => {
+                                if (prev === "awaiting_decision") return prev;
                                 if (prev !== "complete") {
                                     playSoundRef.current?.("complete");
                                     onCompleteRef.current?.();
@@ -341,6 +347,8 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
         setCompletedAgents([]);
         completedAgentsRef.current = [];
         setAgentUpdates({});
+        setPipelineMessage("");
+        setPipelineThinking("");
     }, []);
 
     const restoreSimulationState = useCallback((savedAgents: AgentUpdate[], restoredStatus: SimulationStatus = "awaiting_decision") => {

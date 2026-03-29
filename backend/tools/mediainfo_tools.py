@@ -31,12 +31,15 @@ from typing import Any, Optional
 
 from core.evidence import EvidenceArtifact
 from core.exceptions import ToolUnavailableError
-from core.logging import get_logger
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
 # Thread pool for blocking pymediainfo calls
 _MI_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="mediainfo_worker")
+
+import atexit
+atexit.register(_MI_EXECUTOR.shutdown, wait=False)
 
 # MediaInfo availability flag (checked once at runtime)
 _mediainfo_available: Optional[bool] = None

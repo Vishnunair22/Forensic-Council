@@ -10,13 +10,10 @@ import asyncio
 import functools
 import random
 import time
-from typing import Any, Callable, Optional, Tuple, Type, Union
+from typing import Any, Callable, Optional, Tuple, Type
 
-from core.logging import get_logger
+from core.structured_logging import get_logger
 from core.exceptions import (
-    ForensicCouncilBaseException,
-    CircularCallError,
-    ArbiterRechallengeError,
     CircuitBreakerOpen,
 )
 
@@ -354,7 +351,7 @@ class CircuitBreaker:
                 result = func(*args, **kwargs)
             self.record_success()
             return result
-        except Exception as e:
+        except Exception:
             self.record_failure()
             raise
 
@@ -368,7 +365,7 @@ RETRY_CONFIGS = {
         max_retries=5,
         base_delay=0.5,
         max_delay=30.0,
-        retry_exceptions=(ConnectionError, TimeoutError, Exception),
+        retry_exceptions=(ConnectionError, TimeoutError, OSError),
     ),
     "external_api": RetryConfig(
         max_retries=3,

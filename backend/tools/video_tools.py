@@ -11,11 +11,8 @@ from __future__ import annotations
 
 import hashlib
 import os
-import tempfile
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Optional
-from uuid import uuid4
+from typing import Any
 
 import cv2
 import numpy as np

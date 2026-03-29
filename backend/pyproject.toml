@@ -4,7 +4,7 @@ version = "1.0.4"
 description = "Multi-Agent Forensic Evidence Analysis System"
 # Upper bound: qdrant-client 1.14.1–1.16.1 force numpy>=2.1 on py3.13+, conflicting
 # with moviepy 1.x which requires numpy<2.0. Docker image uses Python 3.12.
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.11,<3.15"
 license = { text = "MIT" }
 authors = [
     { name = "Forensic Council Team" }
@@ -35,7 +35,7 @@ dependencies = [
     "bcrypt>=4.0.1,<5.0",
     # Image processing tools
     "Pillow>=11.2",
-    "numpy>=1.26,<2.0",  # moviepy 1.x uses numpy.float removed in numpy 2.0
+    "numpy>=1.26,<3.0",  # relaxed upper bound — scipy 1.17+ requires numpy>=2.0
     "scipy>=1.15",
     "piexif>=1.1",
     "imagehash>=4.3",
@@ -56,8 +56,9 @@ dependencies = [
     "moviepy>=1.0,<2.0",             # AV sync via video+audio correlation
     # ML tools (lightweight)
     "scikit-learn>=1.7",
-    # File type detection
-    "python-magic>=0.4.27",
+    # File type detection — python-magic-bin bundles libmagic for Windows
+    "python-magic>=0.4.27;sys_platform!='win32'",
+    "python-magic-bin>=0.4.14;sys_platform=='win32'",
     # OCR & document extraction (three-tier pipeline: PyMuPDF -> EasyOCR -> Tesseract)
     "PyMuPDF>=1.25",                  # Lossless PDF text/image/metadata extraction (fitz)
     "easyocr>=1.7.2",                   # Neural OCR: handles curved text, low-res, 80+ langs
@@ -119,11 +120,19 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+pythonpath = ["..", "."]
 addopts = "-v --tb=short"
 markers = [
     "regression: marks tests as regression tests (deselect with -m 'not regression')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
+    "requires_docker: requires a running Docker stack",
+    "requires_network: requires internet access",
+    "slow: slow tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
 ]
 
 [tool.coverage.run]

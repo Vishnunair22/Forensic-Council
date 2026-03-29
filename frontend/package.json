@@ -1,5 +1,5 @@
 {
-  "name": "agent-council-front-end",
+  "name": "forensic-council-front-end",
   "version": "1.0.4",
   "private": true,
   "scripts": {
@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
+    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "12.38.0",
     "lightswind": "^3.1.21",
@@ -25,8 +26,7 @@
     "simplex-noise": "^4.0.3",
     "tailwind-merge": "^3.5.0",
     "three": "^0.183.2",
-    "zod": "^3.24.0",
-    "class-variance-authority": "^0.7.1"
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",

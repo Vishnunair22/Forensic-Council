@@ -23,13 +23,10 @@ Output JSON:
 
 import argparse
 import json
-import sys
 import numpy as np
 import cv2
 from PIL import Image
 import io
-import tempfile
-import os
 
 
 def extract_dct_features(block: np.ndarray) -> np.ndarray:

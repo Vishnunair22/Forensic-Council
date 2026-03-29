@@ -135,11 +135,23 @@ def soft_warmup() -> None:
         ("qdrant_client", "Qdrant client"),
         ("cryptography","Cryptography"),
         ("httpx",       "HTTPX"),
-        ("magic",       "python-magic (libmagic)"),
         ("PIL",         "Pillow"),
         ("cv2",         "OpenCV"),
         ("numpy",       "NumPy"),
+        ("scipy",       "SciPy"),
+        ("imagehash",   "ImageHash"),
+        ("piexif",      "piexif"),
+        ("ultralytics", "YOLO (ultralytics)"),
+        ("open_clip",   "OpenCLIP"),
     ]
+
+    # python-magic has different import names per platform
+    try:
+        import magic as _magic_test
+        print(f"  {GREEN}✓{RESET}  python-magic (libmagic)")
+    except ImportError as e:
+        print(f"  {RED}✗{RESET}  python-magic (libmagic)  →  {e}")
+        failed.append("python-magic")
 
     failed: list[str] = []
     for module, label in modules_to_check:

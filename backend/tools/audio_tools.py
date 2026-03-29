@@ -9,18 +9,15 @@ background noise consistency, and codec fingerprinting.
 
 from __future__ import annotations
 
-import hashlib
 import os
-import tempfile
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Any, Optional
 
 import numpy as np
 import librosa
 import soundfile as sf
 
-from core.evidence import ArtifactType, EvidenceArtifact
+from core.evidence import EvidenceArtifact
 from core.exceptions import ToolUnavailableError
 
 

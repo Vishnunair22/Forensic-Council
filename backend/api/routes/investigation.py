@@ -11,16 +11,14 @@ import os
 import re
 import tempfile
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple, List
-from uuid import UUID, uuid4
+from typing import Optional, Any
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Form, Request, status
-from pydantic import BaseModel
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Form, status
 
-from core.auth import get_current_user, require_investigator, User
+from core.auth import get_current_user, User
 
 from api.routes.metrics import (
     increment_investigations_started,
@@ -28,16 +26,12 @@ from api.routes.metrics import (
     increment_investigations_failed,
 )
 from api.schemas import (
-    AgentFindingDTO,
     BriefUpdate,
-    InvestigationRequest,
     InvestigationResponse,
-    ReportDTO,
 )
 from core.config import get_settings
-from core.logging import get_logger
+from core.structured_logging import get_logger
 from orchestration.pipeline import ForensicCouncilPipeline, AgentLoopResult
-from orchestration.session_manager import SessionManager
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -238,7 +232,6 @@ async def start_investigation(
     session_id = str(uuid4())
 
     # ── Stage file to /tmp (non-blocking) ────────────────────────────────────
-    import tempfile
     tmp_path = Path(tempfile.gettempdir()) / f"{session_id}{file_extension}"
     try:
         content = await file.read()
@@ -280,7 +273,7 @@ async def start_investigation(
         elif mime.startswith("video/"):
             is_valid_mime = claimed_ext in [".mp4", ".mov", ".avi", ".mkv"]
         else:
-            is_valid_mime = True # Fallback
+            is_valid_mime = False # Reject unrecognized MIME types
             
         if not is_valid_mime:
             raise HTTPException(
@@ -946,11 +939,15 @@ async def _wrap_pipeline_with_broadcasts(
                 #
                 # Agent1 (Image Integrity) can legitimately take longer on first run
                 # (ELA + ML subprocess warm-up). Give it a higher ceiling.
+                # Agent3 (Object Detection) includes OCR which can be slow on complex images.
                 base_budget = float(pipeline.config.investigation_timeout)
                 if agent_id == "Agent1":
                     agent_timeout = min(360, max(240, base_budget * 0.55))
+                elif agent_id == "Agent3":
+                    # YOLO warm-up + OCR (Tesseract/EasyOCR) can take 2-3 minutes
+                    agent_timeout = min(300, max(180, base_budget * 0.45))
                 else:
-                    # YOLO/ELA first-run can take 60-120s; subsequent runs are ~10-30s.
+                    # Metadata/exif tools are fast; audio/video ML tools are moderate
                     agent_timeout = min(240, max(120, base_budget * 0.35))
                 logger.info(
                     f"{agent_id} starting with timeout={agent_timeout:.0f}s",
@@ -1034,9 +1031,25 @@ async def _wrap_pipeline_with_broadcasts(
             confidence = 0.0
             finding_summary = f"{agent_name} analysis complete."
             if result.findings:
+                # Exclude NOT_APPLICABLE findings from confidence median —
+                # they carry a default ~0.75 confidence that dilutes real signal.
+                _NA_FLAGS = ("ela_not_applicable", "ghost_not_applicable",
+                             "noise_fingerprint_not_applicable", "prnu_not_applicable")
+                def _is_na(f):
+                    if not isinstance(f, dict):
+                        return False
+                    m = f.get("metadata") or {}
+                    if any(m.get(k) for k in _NA_FLAGS):
+                        return True
+                    if str(m.get("verdict", "")).upper() == "NOT_APPLICABLE":
+                        return True
+                    if str(m.get("prnu_verdict", "")).upper() == "NOT_APPLICABLE":
+                        return True
+                    return False
                 confidences = [
                     f.get("confidence_raw", 0.5) if isinstance(f, dict) else 0.5
                     for f in result.findings
+                    if not _is_na(f)
                 ]
                 # Use median to avoid tools that return 0.0 (e.g. CLIP no-match)
                 # dragging down the agent-level confidence unfairly.
@@ -1116,7 +1129,7 @@ async def _wrap_pipeline_with_broadcasts(
             if result.findings:
                 seen_sections: set[str] = set()
                 for f in result.findings:
-                    meta = f.metadata if hasattr(f, "metadata") else (f.get("metadata", {}) if isinstance(f, dict) else {})
+                    meta = f.get("metadata", {}) if isinstance(f, dict) else (f.metadata if hasattr(f, "metadata") else {})
                     if agent_verdict is None:
                         agent_verdict = meta.get("agent_verdict")
                     sid = meta.get("section_id", "")
@@ -1168,13 +1181,57 @@ async def _wrap_pipeline_with_broadcasts(
                 # Strip "Tool Name: " prefix if reasoning_summary already contains it
                 if tool and summary.lower().startswith(tool.lower() + ":"):
                     summary = summary[len(tool) + 1:].strip()
+
+                # Per-tool verdict derived from existing metadata
+                na_flags = ("ela_not_applicable", "ghost_not_applicable",
+                            "noise_fingerprint_not_applicable", "prnu_not_applicable",
+                            "gan_not_applicable")
+                is_na = any(meta.get(flag) for flag in na_flags)
+                is_error = meta.get("court_defensible") is False
+                severity = _assign_severity_tier(f)
+                is_flagged = severity in ("CRITICAL", "HIGH", "MEDIUM")
+                tool_verdict = (
+                    "NOT_APPLICABLE" if is_na
+                    else "ERROR" if is_error
+                    else "FLAGGED" if is_flagged
+                    else "CLEAN"
+                )
+
+                # Surface Groq synthesis key_signal if available
+                key_signal = meta.get("section_key_signal", "")
+                section_label = meta.get("section_label", "")
+
                 findings_preview.append({
                     "tool": tool,
                     "summary": summary[:320],
                     "confidence": f.get("confidence_raw", 0.5),
                     "flag": meta.get("section_flag", "info"),
-                    "severity": _assign_severity_tier(f),
+                    "severity": severity,
+                    "verdict": tool_verdict,
+                    "key_signal": key_signal,
+                    "section": section_label,
                 })
+
+            # ── Tools ran vs skipped summary ────────────────────────────────────
+            _na_flags = ("ela_not_applicable", "ghost_not_applicable",
+                         "noise_fingerprint_not_applicable", "prnu_not_applicable",
+                         "gan_not_applicable")
+            tools_ran = sum(
+                1 for f in result.findings
+                if isinstance(f, dict)
+                and not any((f.get("metadata") or {}).get(k) for k in _na_flags)
+                and (f.get("metadata") or {}).get("court_defensible") is not False
+            )
+            tools_skipped = sum(
+                1 for f in result.findings
+                if isinstance(f, dict)
+                and any((f.get("metadata") or {}).get(k) for k in _na_flags)
+            )
+            tools_failed = sum(
+                1 for f in result.findings
+                if isinstance(f, dict)
+                and (f.get("metadata") or {}).get("court_defensible") is False
+            )
 
             # Broadcast per-agent completion
             await broadcast_update(
@@ -1194,6 +1251,9 @@ async def _wrap_pipeline_with_broadcasts(
                         "agent_verdict": agent_verdict,
                         "section_flags": section_flags,
                         "findings_preview": findings_preview,
+                        "tools_ran": tools_ran,
+                        "tools_skipped": tools_skipped,
+                        "tools_failed": tools_failed,
                     },
                 )
             )
@@ -1536,7 +1596,7 @@ async def _wrap_pipeline_with_broadcasts(
                 deep_agent_verdict = None
                 deep_section_flags: list[dict] = []
                 for f in deep_findings_serial:
-                    meta = f.metadata if hasattr(f, "metadata") else (f.get("metadata", {}) if isinstance(f, dict) else {})
+                    meta = f.get("metadata", {}) if isinstance(f, dict) else {}
                     if deep_agent_verdict is None:
                         deep_agent_verdict = meta.get("agent_verdict")
                     sid = meta.get("section_id", "")

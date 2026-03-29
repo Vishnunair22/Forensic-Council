@@ -9,21 +9,13 @@ and detecting provenance fabrication.
 from __future__ import annotations
 
 import asyncio
-import uuid
-from typing import Any
 
 from agents.base_agent import ForensicAgent
-from core.logging import get_logger
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
-from core.config import Settings
-from core.custody_logger import CustodyLogger
-from core.episodic_memory import EpisodicMemory
-from core.evidence import EvidenceArtifact
 from core.tool_registry import ToolRegistry
-from core.working_memory import WorkingMemory
 from core.ml_subprocess import run_ml_tool
-from infra.evidence_store import EvidenceStore
 # Import real tool implementations
 from tools.metadata_tools import (
     exif_extract_enhanced as real_exif_extract,  # pyexiftool + hachoir
@@ -50,7 +42,6 @@ import shutil
 import tempfile
 import mimetypes
 from datetime import datetime
-from uuid import UUID
 
 import numpy as np
 import piexif
@@ -272,17 +263,31 @@ class Agent5Metadata(ForensicAgent):
             except Exception:
                 result["lsb_hidden_text_found"] = False
             
+            if result.get("error"):
+                await self._record_tool_error("steganography_scan", result["error"])
+            else:
+                await self._record_tool_result("steganography_scan", result)
             return result
         
         async def file_structure_analysis_handler(input_data: dict) -> dict:
             """Handle file structure analysis with input_data dict."""
             artifact = input_data.get("artifact") or self.evidence_artifact
-            return await real_file_structure_analysis(artifact=artifact)
+            result = await real_file_structure_analysis(artifact=artifact)
+            if result.get("error"):
+                await self._record_tool_error("file_structure_analysis", result["error"])
+            else:
+                await self._record_tool_result("file_structure_analysis", result)
+            return result
             
         async def hex_signature_scan_handler(input_data: dict) -> dict:
             """Handle hexadecimal signature scan with input_data dict."""
             artifact = input_data.get("artifact") or self.evidence_artifact
-            return await real_hex_signature_scan(artifact=artifact)
+            result = await real_hex_signature_scan(artifact=artifact)
+            if result.get("error"):
+                await self._record_tool_error("hex_signature_scan", result["error"])
+            else:
+                await self._record_tool_result("hex_signature_scan", result)
+            return result
         
         async def timestamp_analysis_handler(input_data: dict) -> dict:
             """Handle timestamp analysis with input_data dict."""
@@ -582,7 +587,6 @@ class Agent5Metadata(ForensicAgent):
             try:
                 # Load original anomaly score as baseline
                 try:
-                    from scripts.ml_tools.metadata_anomaly_scorer import score_metadata  # type: ignore
                     baseline_score = await run_ml_tool(
                         "metadata_anomaly_scorer.py", artifact.file_path, timeout=15.0
                     )
@@ -685,6 +689,7 @@ class Agent5Metadata(ForensicAgent):
             artifact = input_data.get("artifact") or self.evidence_artifact
             result = await run_ml_tool("c2pa_verify.py", artifact.file_path, timeout=15.0)
             if result.get("available") and not result.get("error"):
+                await self._record_tool_result("c2pa_verify", result)
                 return result
             try:
                 from PIL import Image as PILImage
@@ -723,7 +728,7 @@ class Agent5Metadata(ForensicAgent):
                 except Exception:
                     pass
 
-                return {
+                out = {
                     "c2pa_present": c2pa_present,
                     "xmp_c2pa_found": xmp_c2pa,
                     "jumbf_present": jumbf_present,
@@ -739,6 +744,8 @@ class Agent5Metadata(ForensicAgent):
                     "court_defensible": True,
                     "backend": "binary-scan-inline",
                 }
+                await self._record_tool_result("c2pa_verify", out)
+                return out
             except Exception as e:
                 return {"c2pa_present": False, "verdict": "ERROR", "error": str(e),
                         "available": False, "court_defensible": False}

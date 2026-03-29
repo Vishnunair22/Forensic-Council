@@ -9,7 +9,6 @@ Implements ELA, ROI extraction, JPEG ghost detection, and hash verification.
 from __future__ import annotations
 
 import hashlib
-import io
 import os
 import tempfile
 from dataclasses import dataclass
@@ -25,7 +24,6 @@ from core.exceptions import ToolUnavailableError
 from infra.evidence_store import EvidenceStore
 
 # OCR imports
-import cv2
 
 
 @dataclass
@@ -583,6 +581,8 @@ async def compute_perceptual_hash(
             "ahash": ahash,
             "dhash": dhash,
             "whash": whash,
+            "confidence": None,
+            "note": "Hash computed successfully. No reference hash available for comparison — similarity analysis requires a second image.",
         }
     
     except Exception as e:
@@ -685,21 +685,11 @@ async def extract_text_from_image(
 
     Uses OpenCV for preprocessing to improve OCR accuracy on forensic images,
     including adaptive thresholding for handling varied lighting conditions.
-
-    Args:
-        artifact: The evidence artifact to analyze
-
-    Returns:
-        Dictionary containing:
-        - extracted_text: List of non-empty text lines found in the image
-        - raw_text: Complete raw text output from OCR
-        - success: Boolean indicating if extraction was successful
-        - error: Error message if extraction failed (only on failure)
-        - word_count: Number of words detected
-        - has_text: Boolean indicating if any text was found
-        - court_defensible: Boolean indicating if the extraction method is court-defensible
+    Runs blocking OCR in a thread executor with a timeout to prevent hangs.
     """
-    try:
+    import asyncio as _asyncio
+
+    def _run_ocr():
         import pytesseract
         import cv2
         import numpy as np
@@ -717,45 +707,27 @@ async def extract_text_from_image(
         img = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
         
         # Preprocess for better OCR
-        # Convert to grayscale
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         
-        # Apply adaptive thresholding to handle varying lighting
-        # This is particularly useful for forensic images which may have
-        # uneven lighting or be screenshots with different backgrounds
         thresh = cv2.adaptiveThreshold(
             gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
         )
         
-        # Also try with Otsu's thresholding as fallback
         _, otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         
-        # Run OCR on both preprocessed versions and combine results
         custom_config = r'--oem 3 --psm 6 -l eng'
         
-        # OCR on adaptive threshold
         text_adaptive = pytesseract.image_to_string(thresh, config=custom_config)
-        
-        # OCR on Otsu threshold
         text_otsu = pytesseract.image_to_string(otsu, config=custom_config)
-        
-        # OCR on original grayscale (for natural images)
         text_original = pytesseract.image_to_string(gray, config=custom_config)
         
-        # Use the version with most content, or combine unique lines
         texts = [text_adaptive, text_otsu, text_original]
-        
-        # Select the best result (longest non-empty text)
         best_text = max(texts, key=lambda t: len(t.strip()))
-        
-        # Split into lines and filter empty ones
         lines = [line.strip() for line in best_text.split('\n') if line.strip()]
         
-        # Get word boxes for additional metadata
         data = pytesseract.image_to_data(gray, output_type=pytesseract.Output.DICT)
         word_count = sum(1 for text in data['text'] if text.strip())
         
-        # Calculate confidence score
         confidences = [conf for conf in data['conf'] if conf > 0]
         avg_confidence = sum(confidences) / len(confidences) if confidences else 0
         
@@ -770,7 +742,24 @@ async def extract_text_from_image(
             "success": True,
             "confidence": round(avg_confidence / 100, 4) if avg_confidence > 0 else None,
         }
-        
+
+    try:
+        loop = _asyncio.get_running_loop()
+        return await _asyncio.wait_for(
+            loop.run_in_executor(None, _run_ocr),
+            timeout=45.0,
+        )
+    except _asyncio.TimeoutError:
+        return {
+            "status": "timeout",
+            "court_defensible": False,
+            "error": "OCR timed out after 45s",
+            "extracted_text": [],
+            "raw_text": "",
+            "word_count": 0,
+            "has_text": False,
+            "success": False,
+        }
     except ImportError:
         return {
             "status": "unavailable",
@@ -836,10 +825,14 @@ async def analyze_image_content(
         categories = custom_categories if custom_categories else None
         # Run blocking CLIP inference in a thread executor so it doesn't stall
         # the asyncio event loop (first call loads ~300 MB model from disk).
+        # Wrap with a timeout to prevent indefinite hangs.
         import asyncio as _asyncio
         loop = _asyncio.get_running_loop()
-        result = await loop.run_in_executor(
-            None, lambda: analyzer.analyze_image(original_path, categories=categories)
+        result = await _asyncio.wait_for(
+            loop.run_in_executor(
+                None, lambda: analyzer.analyze_image(original_path, categories=categories)
+            ),
+            timeout=60.0,
         )
         
         if not result.available:

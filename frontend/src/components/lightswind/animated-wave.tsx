@@ -714,7 +714,7 @@ const AnimatedWave: React.FC<AnimatedWaveProps> = ({
 
     // Update the color of the point light as well
     const pointLight = current.scene.children.find(
-      (child) => child instanceof THREE.PointLight
+      (child: THREE.Object3D) => child instanceof THREE.PointLight
     ) as THREE.PointLight;
     if (pointLight) {
       pointLight.color.copy(newWaveColor);
@@ -728,7 +728,7 @@ const AnimatedWave: React.FC<AnimatedWaveProps> = ({
       <div
         ref={containerRef}
         className={cn( // `cn` for combining TailwindCSS classes if you have it set up
-          "relative inset-0 w-full h-screen z-10 overflow-hidden",
+          "relative w-full h-screen z-10 overflow-hidden",
           className
         )}
         style={{

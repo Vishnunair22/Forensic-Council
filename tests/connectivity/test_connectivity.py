@@ -214,7 +214,7 @@ class TestPostgresConnectivity:
         async def check():
             conn = await asyncpg.connect(POSTGRES_DSN, timeout=10)
             await conn.close()
-        asyncio.get_event_loop().run_until_complete(check())
+        asyncio.run(check())
 
     def test_postgres_has_investigation_sessions_table(self):
         async def check():
@@ -224,7 +224,7 @@ class TestPostgresConnectivity:
             )
             await conn.close()
             return result
-        count = asyncio.get_event_loop().run_until_complete(check())
+        count = asyncio.run(check())
         assert count >= 1, "investigation_sessions table not found — migrations may not have run"
 
     def test_postgres_has_users_table(self):
@@ -235,7 +235,7 @@ class TestPostgresConnectivity:
             )
             await conn.close()
             return result
-        count = asyncio.get_event_loop().run_until_complete(check())
+        count = asyncio.run(check())
         assert count >= 1, "users table not found — migrations may not have run"
 
     def test_postgres_has_reports_table(self):
@@ -247,7 +247,7 @@ class TestPostgresConnectivity:
             )
             await conn.close()
             return result
-        count = asyncio.get_event_loop().run_until_complete(check())
+        count = asyncio.run(check())
         assert count >= 1, "No reports table found"
 
 
@@ -272,7 +272,7 @@ class TestRedisConnectivity:
             result = await client.ping()
             await client.aclose()
             return result
-        assert asyncio.get_event_loop().run_until_complete(check()) is True
+        assert asyncio.run(check()) is True
 
     def test_redis_set_and_get(self):
         async def check():
@@ -285,7 +285,7 @@ class TestRedisConnectivity:
             await client.delete("test:connectivity")
             await client.aclose()
             return val
-        assert asyncio.get_event_loop().run_until_complete(check()) == "ok"
+        assert asyncio.run(check()) == "ok"
 
     def test_redis_requires_password(self):
         async def check():
@@ -300,7 +300,7 @@ class TestRedisConnectivity:
             except Exception:
                 return True  # Expected — auth required
         # If Redis has no password, this is a configuration issue but not a test failure
-        result = asyncio.get_event_loop().run_until_complete(check())
+        result = asyncio.run(check())
         # Just check it doesn't crash our test
         assert isinstance(result, bool)
 
@@ -374,7 +374,7 @@ class TestWebSocketConnectivity:
                 if "refused" in str(e).lower():
                     pytest.skip("WebSocket port not open")
 
-        asyncio.get_event_loop().run_until_complete(check())
+        asyncio.run(check())
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -11,7 +11,7 @@ This module contains the core components of the Forensic Council system:
 """
 
 from core.config import Settings, get_settings
-from core.logging import get_logger, StructuredLogger
+from core.structured_logging import get_logger, StructuredLogger
 from core.exceptions import (
     ForensicCouncilBaseException,
     ConfigurationError,

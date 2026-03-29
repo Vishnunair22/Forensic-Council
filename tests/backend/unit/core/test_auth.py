@@ -153,7 +153,7 @@ class TestJWTDecoding:
                 td = await decode_token(token)
             assert td.user_id == "user-valid"
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
 
     def test_expired_token_raises(self):
         token = self._make_token(expires_delta=timedelta(seconds=-1))
@@ -163,7 +163,7 @@ class TestJWTDecoding:
                 with pytest.raises(Exception):
                     await decode_token(token)
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
 
     def test_garbage_string_raises(self):
         async def _run():
@@ -171,7 +171,7 @@ class TestJWTDecoding:
                 with pytest.raises(Exception):
                     await decode_token("not.a.jwt")
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
 
     def test_blacklisted_token_raises(self):
         token = self._make_token()
@@ -182,7 +182,7 @@ class TestJWTDecoding:
                     await decode_token(token)
             assert "revoked" in str(exc.value).lower() or "401" in str(exc.value)
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

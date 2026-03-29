@@ -50,7 +50,7 @@ def render_html(report: ForensicReport) -> str:
         "  </style>",
         "</head>",
         "<body>",
-        f"  <h1>Forensic Analysis Report</h1>",
+        "  <h1>Forensic Analysis Report</h1>",
         f"  <p><strong>Report ID:</strong> {_esc(str(report.report_id))}</p>",
         f"  <p><strong>Case ID:</strong> {_esc(str(report.case_id))}</p>",
         f"  <p><strong>Session ID:</strong> {_esc(str(report.session_id))}</p>",
@@ -58,7 +58,7 @@ def render_html(report: ForensicReport) -> str:
         "",
         "  <div class='section'>",
         "    <h2>Executive Summary</h2>",
-        f"    <p>{_esc(report.executive_summary)}</p>",
+        f"    <p>{_esc(report.executive_summary or 'N/A')}</p>",
         "  </div>",
     ]
     
@@ -82,14 +82,14 @@ def render_html(report: ForensicReport) -> str:
     # Uncertainty statement
     html_parts.append("  <div class='section'>")
     html_parts.append("    <h2>Uncertainty Statement</h2>")
-    html_parts.append(f"    <p>{_esc(report.uncertainty_statement)}</p>")
+    html_parts.append(f"    <p>{_esc(report.uncertainty_statement or 'N/A')}</p>")
     html_parts.append("  </div>")
     
     # Cryptographic signature
     html_parts.append("  <div class='section'>")
     html_parts.append("    <h2>Cryptographic Signature</h2>")
     html_parts.append(f"    <p><strong>Report Hash:</strong> {_esc(report.report_hash)}</p>")
-    html_parts.append(f"    <p class='signature'><strong>Signature:</strong> {_esc(report.cryptographic_signature[:64])}...</p>")
+    html_parts.append(f"    <p class='signature'><strong>Signature:</strong> {_esc((report.cryptographic_signature or '')[:64])}...</p>")
     html_parts.append("  </div>")
     
     html_parts.extend([

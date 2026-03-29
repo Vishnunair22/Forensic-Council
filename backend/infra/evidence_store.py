@@ -6,16 +6,12 @@ Manages immutable evidence artifact storage with versioning.
 """
 
 import hashlib
-import os
-import shutil
-from pathlib import Path
 from typing import Any, Optional
 from uuid import UUID
 
-from core.config import get_settings
 from core.evidence import EvidenceArtifact, ArtifactType, VersionTree
 from core.custody_logger import CustodyLogger, EntryType
-from core.logging import get_logger
+from core.structured_logging import get_logger
 from core.exceptions import ForensicCouncilBaseException
 from infra.postgres_client import PostgresClient, get_postgres_client
 from infra.storage import StorageBackend, LocalStorageBackend
@@ -205,8 +201,6 @@ class EvidenceStore:
             return artifact
             
         except Exception as e:
-            import traceback
-            traceback.print_exc()
             logger.error("Failed to ingest evidence", error=str(e), file_path=file_path)
             raise EvidenceStoreError(
                 f"Failed to ingest evidence: {file_path}. Cause: {repr(e)}",
@@ -520,7 +514,7 @@ _evidence_store: Optional[EvidenceStore] = None
 async def get_evidence_store() -> EvidenceStore:
     """
     Get or create the evidence store singleton.
-    
+
     Returns:
         EvidenceStore instance
     """
@@ -528,6 +522,8 @@ async def get_evidence_store() -> EvidenceStore:
     if _evidence_store is None:
         postgres = await get_postgres_client()
         _evidence_store = EvidenceStore(postgres_client=postgres)
+        # Ensure the context manager setup runs so _storage and _custody_logger are initialized
+        await _evidence_store.__aenter__()
     return _evidence_store
 
 

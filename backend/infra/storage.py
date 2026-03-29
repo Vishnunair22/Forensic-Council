@@ -10,14 +10,13 @@ import asyncio
 import hashlib
 import shutil
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from core.config import get_settings
-from core.logging import get_logger
-from core.exceptions import EvidenceIntegrityError, EvidenceNotFoundError
+from core.structured_logging import get_logger
+from core.exceptions import EvidenceNotFoundError
 
 logger = get_logger(__name__)
 

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence, useScroll, useTransform, useMotionValue, useSpring } from "framer-motion";
+import { motion, AnimatePresence, useScroll, useTransform, useMotionValue, useSpring, MotionValue } from "framer-motion";
 import {
   ArrowRight, UploadCloud, X, RefreshCw,
   FileImage, FileAudio, FileVideo, FileText,
@@ -10,7 +10,6 @@ import {
   ShieldCheck, Cpu, FileSignature, CheckCircle, AlertTriangle,
 } from "lucide-react";
 import { autoLoginAsInvestigator } from "@/lib/api";
-import { GlobalFooter } from "@/components/ui/GlobalFooter";
 
 // ── Agent data ────────────────────────────────────────────────────────────────
 const AGENTS = [
@@ -271,9 +270,9 @@ function UploadModal({ onClose, onFileSelected }: { onClose: () => void; onFileS
               className="hidden"
               accept="image/*,audio/*,video/*"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
-            />
-          </div>
+      />
 
+          </div>
           <div className="mt-8 flex flex-col gap-2">
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-cyan-500" />
@@ -349,6 +348,7 @@ function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: {
             isVideo ? (
               <video key={previewUrl} src={previewUrl} className="w-full h-full object-cover" muted loop autoPlay playsInline onError={() => setHasError(true)} />
             ) : (
+              /* eslint-disable-next-line @next/next/no-img-element -- data URL preview requires native img */
               <img key={previewUrl} src={previewUrl} alt="File preview" className="w-full h-full object-cover" onError={() => setHasError(true)} />
             )
           ) : (
@@ -546,7 +546,7 @@ function Card3D({
   children: React.ReactNode;
   className?: string;
   delay?: number;
-  style?: React.CSSProperties;
+  style?: CSSProperties;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const springConfig = { damping: 20, stiffness: 150 };
@@ -610,7 +610,8 @@ function Card3D({
 }
 
 // ── Microscope Background ───────────────────────────────────────────────────
-function MicroscopeBackground({ scrollY }: { scrollY: import("framer-motion").MotionValue<number> }) {
+function MicroscopeBackground({ scrollY }: { scrollY: MotionValue<number> }) {
+
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
 
@@ -664,11 +665,12 @@ function MicroscopeBackground({ scrollY }: { scrollY: import("framer-motion").Mo
       <div className="microscope-evidence-grid" />
 
       {/* Horizontal scan lines */}
-      <div className="microscope-scanline" style={{ top: "15%", "--scan-duration": "7s", "--scan-delay": "0s" } as React.CSSProperties} />
-      <div className="microscope-scanline" style={{ top: "45%", "--scan-duration": "10s", "--scan-delay": "3s" } as React.CSSProperties} />
-      <div className="microscope-scanline" style={{ top: "75%", "--scan-duration": "12s", "--scan-delay": "6s" } as React.CSSProperties} />
+      <div className="microscope-scanline" style={{ top: "15%", "--scan-duration": "7s", "--scan-delay": "0s" } as CSSProperties} />
+      <div className="microscope-scanline" style={{ top: "45%", "--scan-duration": "10s", "--scan-delay": "3s" } as CSSProperties} />
+      <div className="microscope-scanline" style={{ top: "75%", "--scan-duration": "12s", "--scan-delay": "6s" } as CSSProperties} />
 
       {/* Crosshair markers — now reactive to mouse */}
+      {/* eslint-disable @typescript-eslint/no-explicit-any */}
       <motion.div 
         className="microscope-crosshair" 
         style={{ top: "20%", left: "15%", "--crosshair-size": "100px", "--pulse-duration": "5s", "--pulse-delay": "0s", x: crosshairX, y: crosshairY } as any} 
@@ -700,6 +702,7 @@ const sectionBorder = { borderTop: "1px solid rgba(255,255,255,0.04)" } as const
 // ── Landing Page ──────────────────────────────────────────────────────────────
 export default function LandingPage() {
   const router = useRouter();
+
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -781,7 +784,9 @@ export default function LandingPage() {
             y: useTransform(scrollY, [0, 800], [0, -150]),
             scale: useTransform(scrollY, [0, 800], [1, 0.8]),
           }}
-        />
+      />
+      {/* eslint-enable @typescript-eslint/no-explicit-any */}
+
 
         {/* Title */}
         <motion.h1
@@ -999,8 +1004,6 @@ export default function LandingPage() {
           <UploadSuccessModal key="success" file={uploadedFile} onNewUpload={handleNewUpload} onStartAnalysis={handleStartAnalysis} />
         )}
       </AnimatePresence>
-
-      <GlobalFooter />
     </div>
   );
 }

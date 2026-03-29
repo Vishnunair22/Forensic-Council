@@ -7,7 +7,6 @@ Provides adversarial robustness checking for all five agent domains.
 
 from __future__ import annotations
 
-from enum import Enum
 from typing import Any, Literal, Optional
 from uuid import UUID, uuid4
 

@@ -9,13 +9,12 @@ Replaces in-memory storage for production scalability.
 import asyncio
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Optional
 from uuid import UUID
 
 from core.config import get_settings
-from core.logging import get_logger
+from core.structured_logging import get_logger
 from infra.postgres_client import PostgresClient, get_postgres_client
-from core.retry import with_retry, get_retry_config, retry_async
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -62,6 +61,7 @@ class SessionPersistence:
             True if saved successfully
         """
         await self._ensure_client()
+        assert self.client is not None
         
         try:
             expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
@@ -103,6 +103,7 @@ class SessionPersistence:
             Session state dict or None
         """
         await self._ensure_client()
+        assert self.client is not None
         
         try:
             result = await self.client.fetch_one(
@@ -153,6 +154,7 @@ class SessionPersistence:
             True if saved successfully
         """
         await self._ensure_client()
+        assert self.client is not None
         
         try:
             await self.client.execute(
@@ -190,6 +192,7 @@ class SessionPersistence:
             Report data dict or None
         """
         await self._ensure_client()
+        assert self.client is not None
         
         try:
             result = await self.client.fetch_one(
@@ -236,6 +239,7 @@ class SessionPersistence:
             True if updated successfully
         """
         await self._ensure_client()
+        assert self.client is not None
         
         try:
             if error_message:

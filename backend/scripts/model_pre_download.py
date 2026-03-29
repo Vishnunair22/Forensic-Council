@@ -33,7 +33,6 @@ CACHE_DIRS = {
     "TORCH":   os.getenv("TORCH_HOME",         "/app/cache/torch"),
     "HF":      os.getenv("HF_HOME",            "/app/cache/huggingface"),
     "EASYOCR": os.getenv("EASYOCR_MODEL_DIR",  "/app/cache/easyocr"),
-    # DEEPFACE removed — deepface package not installed (avoids 1.8 GB TensorFlow)
 }
 
 GREEN  = "\033[0;32m"

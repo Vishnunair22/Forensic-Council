@@ -19,9 +19,9 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 
-# Use npm install with legacy-peer-deps to handle React 19 peer conflicts
+# Use npm ci with legacy-peer-deps for reproducible builds and to handle React 19 peer conflicts
 RUN --mount=type=cache,target=/root/.npm \
-    npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund
+    npm ci --legacy-peer-deps --prefer-offline --no-audit --no-fund
 
 # ── Stage 1: Development — hot-reload server ─────────────────────────────────
 FROM base AS development

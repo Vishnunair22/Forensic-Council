@@ -14,11 +14,10 @@ Usage:
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from typing import Optional
 
-from core.logging import get_logger
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -193,8 +192,10 @@ class CLIPImageAnalyzer:
                 ]
                 if concern_scores:
                     top_concern, concern_score = max(concern_scores, key=lambda x: x[1])
-                    # Flag if top concern is not "safe everyday object" and score is high enough
-                    if top_concern != "a safe everyday object" and concern_score > 0.4:
+                    # Flag if top concern is not "safe everyday object" and score is significantly
+                    # above the mean concern score (relative threshold instead of absolute 0.4)
+                    concern_mean = sum(s for _, s in concern_scores) / len(concern_scores)
+                    if top_concern != "a safe everyday object" and concern_score > concern_mean * 1.15:
                         concern_flag = True
             
             return CLIPAnalysisResult(

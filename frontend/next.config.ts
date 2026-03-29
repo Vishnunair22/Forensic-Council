@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
   // ── Output ────────────────────────────────────────────────────────────────
@@ -13,7 +14,7 @@ const nextConfig: NextConfig = {
 
   // ── TypeScript ────────────────────────────────────────────────────────
   typescript: { ignoreBuildErrors: false },
-  transpilePackages: ["three", "simplex-noise"],
+  transpilePackages: ["three", "simplex-noise", "class-variance-authority"],
 
   // ── Turbopack (Next.js 15 default build engine) ───────────────────────────
   // Turbopack is the default bundler in Next.js 15. Declaring an explicit
@@ -23,8 +24,9 @@ const nextConfig: NextConfig = {
   turbopack: {
     resolveExtensions: ['.tsx', '.ts', '.jsx', '.js', '.json'],
     resolveAlias: {
-      three: process.cwd() + '/node_modules/three',
-      'simplex-noise': process.cwd() + '/node_modules/simplex-noise',
+      three: path.resolve(process.cwd(), 'node_modules/three'),
+      'simplex-noise': path.resolve(process.cwd(), 'node_modules/simplex-noise'),
+      'class-variance-authority': path.resolve(process.cwd(), 'node_modules/class-variance-authority'),
     },
   },
 
@@ -36,6 +38,7 @@ const nextConfig: NextConfig = {
       "lucide-react",
       "framer-motion",
       "@radix-ui/react-dialog",
+      "class-variance-authority",
       // "three",
       // "simplex-noise",
     ],
@@ -50,11 +53,11 @@ const nextConfig: NextConfig = {
   // polling restores reliable HMR. No effect on Turbopack builds.
   webpack: (config, { dev, isServer }) => {
     // Force 'three' to resolve to the local node_modules path
-    const path = require('path');
     config.resolve.alias = {
       ...config.resolve.alias,
-      'three': path.resolve(__dirname, 'node_modules/three'),
-      'simplex-noise': path.resolve(__dirname, 'node_modules/simplex-noise'),
+      'three': path.resolve(process.cwd(), 'node_modules/three'),
+      'simplex-noise': path.resolve(process.cwd(), 'node_modules/simplex-noise'),
+      'class-variance-authority': path.resolve(process.cwd(), 'node_modules/class-variance-authority/dist/index.js'),
     };
 
     if (dev) {

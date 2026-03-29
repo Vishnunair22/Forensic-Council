@@ -2,7 +2,7 @@
 
 Next.js 15 frontend for the Forensic Council multi-agent forensic evidence analysis system.
 
-**Version:** v1.0.4 | **Framework:** Next.js 15 / React 19 | **Styling:** Tailwind CSS v4
+**Version:** v1.1.1 | **Framework:** Next.js 15 / React 19 | **Styling:** Tailwind CSS v4
 
 ---
 
@@ -29,38 +29,51 @@ Real-time investigation UI: upload evidence, watch five AI agents analyze it via
 frontend/
 ├── src/
 │   ├── app/
-│   │   ├── page.tsx                    ← Landing + file upload (MicroscopeScanner, EnvelopeCTA)
-│   │   ├── evidence/page.tsx           ← Live analysis orchestrator (WebSocket consumer)
-│   │   ├── result/page.tsx             ← Signed report display with per-agent analysis
-│   │   ├── session-expired/page.tsx    ← Session timeout recovery
-│   │   ├── error.tsx                   ← Global Next.js error boundary
-│   │   ├── layout.tsx                  ← Root layout (Syne + JetBrains Mono fonts)
-│   │   ├── globals.css                 ← Tailwind v4 theme, btn utility classes, cursor:pointer
-│   │   └── api/auth/demo/route.ts      ← Next.js server route for demo auto-login
+│   │   ├── page.tsx                       ← Landing + file upload, hero, example report
+│   │   ├── evidence/page.tsx              ← Live analysis orchestrator (WebSocket consumer)
+│   │   ├── result/page.tsx                ← Signed report display with per-agent findings
+│   │   ├── session-expired/page.tsx       ← Session timeout recovery
+│   │   ├── test/page.tsx                  ← Three.js version diagnostic
+│   │   ├── error.tsx                      ← Global Next.js error boundary
+│   │   ├── not-found.tsx                  ← 404 page
+│   │   ├── layout.tsx                     ← Root layout (Syne + JetBrains Mono, DevErrorProvider)
+│   │   ├── globals.css                    ← Tailwind v4 theme, glass panels, button utilities
+│   │   └── api/auth/demo/route.ts         ← Next.js server route for demo auto-login
 │   ├── components/
 │   │   ├── evidence/
-│   │   │   ├── FileUploadSection.tsx   ← Drag-and-drop file upload with MIME validation
-│   │   │   ├── AgentProgressDisplay.tsx ← Glass agent cards, decision buttons, deep phase
-│   │   │   ├── CompletionBanner.tsx    ← Analysis complete banner
-│   │   │   ├── ErrorDisplay.tsx        ← Error state display
-│   │   │   ├── HITLCheckpointModal.tsx ← Accessible human-review modal
-│   │   │   ├── HeaderSection.tsx       ← Keyboard-accessible logo nav header
-│   │   │   └── index.ts                ← Re-exports
-│   │   └── ui/
-│   │       ├── AgentIcon.tsx           ← Per-agent animated Lucide icon
-│   │       ├── AgentResponseText.tsx   ← Streaming thinking text display
-│   │       ├── GlobalFooter.tsx        ← Academic disclaimer footer (all pages)
-│   │       ├── PageTransition.tsx      ← Framer-style fade/slide page transitions
-│   │       └── dialog.tsx              ← Radix UI accessible dialog primitive
+│   │   │   ├── HeaderSection.tsx          ← Keyboard-accessible logo nav header
+│   │   │   ├── FileUploadSection.tsx      ← Drag-and-drop file upload with MIME validation
+│   │   │   ├── AgentProgressDisplay.tsx   ← 3×2 agent card grid, live thinking, decision buttons
+│   │   │   ├── ErrorDisplay.tsx           ← Error state display with retry
+│   │   │   ├── HITLCheckpointModal.tsx    ← Accessible human-review decision modal
+│   │   │   └── index.ts                   ← Re-exports
+│   │   ├── ui/
+│   │   │   ├── AgentIcon.tsx              ← Per-agent Lucide icon resolver
+│   │   │   ├── AgentResponseText.tsx      ← Expandable streaming text display
+│   │   │   ├── GlobalFooter.tsx           ← Academic disclaimer footer
+│   │   │   ├── HistoryDrawer.tsx          ← Sidebar session history
+│   │   │   ├── PageTransition.tsx         ← Fade/slide page transition wrapper
+│   │   │   ├── SurfaceCard.tsx            ← Reusable glass-panel card
+│   │   │   ├── dialog.tsx                 ← Radix UI accessible dialog primitive
+│   │   │   └── index.ts                   ← Re-exports
+│   │   ├── lightswind/
+│   │   │   ├── badge.tsx                  ← Status badge with dot/color variants
+│   │   │   └── animated-wave.tsx          ← Three.js animated wave background
+│   │   └── DevErrorOverlay.tsx            ← Dev-only error boundary overlay
 │   ├── hooks/
-│   │   ├── useForensicData.ts          ← Core hook: session history, file validation, mapping
-│   │   ├── useSimulation.ts            ← WebSocket consumer: auth, reconnect, resume
-│   │   └── useSound.ts                 ← Web Audio API subtle feedback sounds
-│   └── lib/
-│       ├── api.ts                      ← Backend API client (fetch + WebSocket)
-│       ├── schemas.ts                  ← Zod validation schemas
-│       ├── constants.ts                ← Agent definitions, MIME allowlist
-│       └── utils.ts                    ← cn() Tailwind class merger (clsx + tailwind-merge)
+│   │   ├── useSimulation.ts               ← WebSocket consumer: auth, message queue, resume
+│   │   ├── useForensicData.ts             ← Session history, report mapping, sessionStorage
+│   │   ├── useSound.ts                    ← Web Audio API subtle feedback sounds
+│   │   ├── use-mobile.ts                  ← Mobile viewport detection
+│   │   └── use-toast.ts                   ← Toast notification hook
+│   ├── lib/
+│   │   ├── api.ts                         ← Backend API client (fetch + WebSocket, retry logic)
+│   │   ├── constants.ts                   ← Agent definitions, MIME allowlist
+│   │   ├── schemas.ts                     ← Zod validation schemas
+│   │   ├── utils.ts                       ← cn() Tailwind class merger (clsx + tailwind-merge)
+│   │   └── logger.ts                      ← Dev-only structured logger
+│   └── types/
+│       └── index.ts                       ← AgentResult, Report types
 ```
 
 ---
@@ -138,7 +151,7 @@ npm test -- --testPathPattern="accessibility" --watchAll=false
 
 **File validation** — Client-side before upload: max 50 MB, allowed MIME types match backend allowlist (`image/jpeg`, `image/png`, `image/tiff`, `image/webp`, `image/gif`, `image/bmp`, `video/mp4`, `video/quicktime`, `video/x-msvideo`, `audio/wav`, `audio/x-wav`, `audio/mpeg`, `audio/mp4`, `audio/flac`).
 
-**WebSocket auth** — On WS open, immediately sends `{"type":"AUTH","token":"<jwt>"}`. The `connected` promise resolves on either `CONNECTED` or the first `AGENT_UPDATE` message (race condition tolerance for slow connections).
+**WebSocket auth** — Cookie-based (HttpOnly `access_token`). The `connected` promise resolves on either `CONNECTED` or the first `AGENT_UPDATE` message (race condition tolerance for slow connections). The WS upgrade goes through the same origin as the page (Next.js rewrite proxy), so the browser sends cookies automatically.
 
 **Two-phase investigation** — After initial analysis, the pipeline sends `PIPELINE_PAUSED`. The frontend shows Accept / Deep Analysis / New Upload buttons. The chosen action calls `POST /api/v1/sessions/{id}/resume` with `{"deep_analysis": true/false}`.
 

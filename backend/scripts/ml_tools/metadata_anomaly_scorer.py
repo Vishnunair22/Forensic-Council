@@ -25,8 +25,6 @@ Output JSON:
 
 import argparse
 import json
-import struct
-import re
 
 
 EDITING_SOFTWARE_SIGNATURES = [
@@ -44,7 +42,7 @@ def read_exif_simple(image_path: str) -> dict:
     """Read EXIF data using PIL without piexif dependency."""
     try:
         from PIL import Image
-        from PIL.ExifTags import TAGS, GPSTAGS
+        from PIL.ExifTags import TAGS
         img = Image.open(image_path)
         raw_exif = img._getexif()
         if not raw_exif:

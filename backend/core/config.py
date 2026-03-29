@@ -324,7 +324,7 @@ class Settings(BaseSettings):
             )
         
         if v and provider != "none" and len(v) < 20:
-            raise ValueError(f"LLM_API_KEY appears invalid (too short)")
+            raise ValueError("LLM_API_KEY appears invalid (too short)")
         
         return v
     

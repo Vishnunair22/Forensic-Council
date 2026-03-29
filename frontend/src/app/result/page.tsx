@@ -4,7 +4,8 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import {
   CheckCircle, AlertTriangle, ShieldCheck, RotateCcw,
   Home, ChevronDown, Lock, FileText,
-  Shield, Cpu, AlertCircle, XCircle, Download, Activity, LinkIcon, ArrowLeft
+  Shield, Cpu, AlertCircle, XCircle, Download, Activity, LinkIcon, ArrowLeft,
+  Hash, Copy, Fingerprint, Clock, Layers, Eye, Image, Film, Mic, Box, Database
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
@@ -137,6 +138,15 @@ function verdictConfig(v: string) {
   return { label: "Review Required", color: "amber" as const, Icon: AlertTriangle, desc: "Manual expert review is recommended." };
 }
 
+// File type icon
+function fileTypeIcon(mime: string | undefined) {
+  if (!mime) return FileText;
+  if (mime.startsWith("image/")) return Image;
+  if (mime.startsWith("video/")) return Film;
+  if (mime.startsWith("audio/")) return Mic;
+  return FileText;
+}
+
 function confColor(c: number) {
   return c >= 0.75 ? "text-emerald-400" : c >= 0.5 ? "text-amber-400" : "text-red-400";
 }
@@ -180,14 +190,16 @@ function AgentCard({
   metrics,
   narrative,
   agentSummary,
+  defaultOpen = false,
 }: {
   agentId: string;
   findings: AgentFindingDTO[];
   metrics?: AgentMetricsDTO;
   narrative?: string;
   agentSummary?: AgentSummary;
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const meta = AGENT_META[agentId];
   if (!meta) return null;
 
@@ -206,6 +218,7 @@ function AgentCard({
     : (metrics?.confidence_score ?? 0);
   const toolsOk    = agentSummary?.tools_ok    ?? metrics?.tools_succeeded    ?? 0;
   const toolsTotal = agentSummary?.tools_total  ?? metrics?.total_tools_called ?? 0;
+  const errorPct   = agentSummary?.error_rate_pct ?? Math.round((metrics?.error_rate ?? 0) * 100);
 
   const verdConfig =
     isSkipped              ? { text: "NOT APPLICABLE", variant: "outline" as const, withDot: false } :
@@ -284,13 +297,7 @@ function AgentCard({
       {/* Expandable body */}
       <>
         {open && !isSkipped && (
-          <div
-            
-            
-            
-            
-            className="overflow-hidden"
-          >
+          <div className="overflow-hidden">
             <div className="px-6 pb-6 pt-2 space-y-6 border-t border-border-subtle">
               {/* Stats row */}
               <div className="flex flex-wrap gap-2 text-[9px] font-black font-mono tracking-[0.2em]">
@@ -305,6 +312,11 @@ function AgentCard({
                 {toolsTotal > 0 && (
                   <span className="px-3 py-1 rounded bg-white/2 text-white/20 border border-white/5 uppercase">
                     {toolsOk}/{toolsTotal} UNIT PROBES
+                  </span>
+                )}
+                {errorPct > 0 && (
+                  <span className="px-3 py-1 rounded bg-amber-500/5 border-amber-500/20 text-amber-500 uppercase">
+                    {errorPct}% ERROR RATE
                   </span>
                 )}
               </div>
@@ -582,7 +594,6 @@ export default function ResultPage() {
   const [arbiterMsg, setArbiterMsg] = useState("");
   const [errorMsg, setErrorMsg]     = useState("");
   const [chainOpen, setChainOpen]           = useState(false);
-  const [agentFindingsOpen, setAgentFindingsOpen] = useState(false);
 
   const [isDeepPhase, setIsDeepPhase] = useState(false);
   const historySavedRef = useRef(false);
@@ -821,17 +832,56 @@ export default function ResultPage() {
           {state === "ready" && report && (
             <div
               key="ready"
-              
-              
-              className="grid grid-cols-12 gap-8 auto-rows-auto pb-20"
+              className="pb-20 space-y-8"
             >
-              {/* ── Verdict Hero ── */}
+
+              {/* ══════════════════════════════════════════════════════════ */}
+              {/* ── 1. EVIDENCE IDENTITY BANNER ─────────────────────────── */}
+              {/* ══════════════════════════════════════════════════════════ */}
+              <SurfaceCard className="rounded-[2rem] p-0 overflow-hidden border-border-subtle">
+                <div className="flex items-center gap-6 px-8 py-6">
+                  {/* Thumbnail / File type icon */}
+                  <div className="w-20 h-20 rounded-2xl bg-surface-high border border-border-subtle flex items-center justify-center shrink-0 shadow-inner">
+                    {(() => {
+                      const FtIcon = fileTypeIcon(sessionStorage.getItem("forensic_mime_type") || undefined);
+                      return <FtIcon className="w-10 h-10 text-amber-500/60" />;
+                    })()}
+                  </div>
+                  {/* File info */}
+                  <div className="min-w-0 flex-1">
+                    <h2 className="text-lg font-bold text-foreground truncate">{fileName}</h2>
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      <Badge variant="outline" className="font-mono text-[9px] font-bold uppercase tracking-widest px-2 py-0.5">
+                        {report.case_id}
+                      </Badge>
+                      <Badge variant="outline" className="font-mono text-[9px] font-bold uppercase tracking-widest px-2 py-0.5">
+                        <span className="opacity-50 mr-1">RPT</span>{report.report_id?.slice(0, 8)}
+                      </Badge>
+                      <Badge variant="outline" className="font-mono text-[9px] font-bold uppercase tracking-widest px-2 py-0.5">
+                        <span className="opacity-50 mr-1">SID</span>{report.session_id?.slice(0, 8)}
+                      </Badge>
+                      {report.signed_utc && (
+                        <Badge variant="outline" className="font-mono text-[9px] font-bold uppercase tracking-widest px-2 py-0.5">
+                          <Clock className="w-3 h-3 mr-1 opacity-50" />
+                          {new Date(report.signed_utc).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </Badge>
+                      )}
+                    </div>
+                    {report.report_hash && (
+                      <p className="mt-2 text-[9px] font-mono text-foreground/30 truncate max-w-lg">
+                        <Hash className="w-3 h-3 inline mr-1 opacity-50" />{report.report_hash}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </SurfaceCard>
+
+              {/* ══════════════════════════════════════════════════════════ */}
+              {/* ── 2. VERDICT BANNER ───────────────────────────────────── */}
+              {/* ══════════════════════════════════════════════════════════ */}
               {vc && (
-                <SurfaceCard
-                  className="col-span-12 rounded-[2rem] p-8 sm:p-10 relative overflow-hidden shadow-xl border-border-bold"
-                >
-                  {/* Two-col header: verdict info left, confidence % right */}
-                  <div className="flex flex-col md:flex-row items-start justify-between gap-8 mb-8">
+                <SurfaceCard className="rounded-[2rem] p-8 sm:p-10 relative overflow-hidden shadow-xl border-border-bold">
+                  <div className="flex flex-col md:flex-row items-start justify-between gap-8">
                     {/* Left: icon + verdict label + description */}
                     <div className="flex items-start gap-5 min-w-0">
                       <div className={clsx(
@@ -853,6 +903,25 @@ export default function ResultPage() {
                           {vc.label}
                         </h1>
                         <p className="text-foreground/60 text-sm font-medium leading-relaxed max-w-md">{vc.desc}</p>
+                        {/* Agent consensus line */}
+                        {report.per_agent_summary && Object.keys(report.per_agent_summary).length > 0 && (
+                          <p className="mt-3 text-[10px] font-mono text-foreground/30 leading-relaxed">
+                            {Object.entries(report.per_agent_summary).map(([id, s]) => {
+                              if (s.skipped) return null;
+                              const sName = s.agent_name?.split(" ")[0] ?? id;
+                              const sVerd = s.verdict === "AUTHENTIC" ? "AUTHENTIC" :
+                                           s.verdict === "SUSPICIOUS" ? "SUSPICIOUS" : "INCONCLUSIVE";
+                              const sColor = s.verdict === "AUTHENTIC" ? "text-emerald-400" :
+                                            s.verdict === "SUSPICIOUS" ? "text-red-400" : "text-amber-400";
+                              return (
+                                <span key={id}>
+                                  <span className={sColor}>{sName}: {sVerd} ({s.confidence_pct}%)</span>
+                                  {" · "}
+                                </span>
+                              );
+                            })}
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -870,40 +939,15 @@ export default function ResultPage() {
                     </div>
                   </div>
 
-                  {/* Manipulation probability bar — full width below */}
-                  {manipPct > 0 && (
-                    <div className="mb-8 p-6 bg-surface-mid rounded-2xl border border-border-subtle">
-                      <div className="flex items-center justify-between mb-3">
-                        <p className="text-[10px] text-foreground/40 font-mono font-bold uppercase tracking-widest">
-                          Tampering Signal Strength
-                        </p>
-                        <span className={clsx(
-                          "text-sm font-bold font-mono tracking-widest",
-                          manipPct >= 70 ? "text-red-500" :
-                          manipPct >= 40 ? "text-amber-500" :
-                                         "text-emerald-500"
-                        )}>
-                          {manipPct}% PROBABILITY
-                        </span>
-                      </div>
-                      <div className="h-1.5 bg-surface-low rounded-full overflow-hidden border border-border-subtle">
-                        <div
-                          
-                          
-                          
-                          className={clsx(
-                            "h-full rounded-full shadow-sm",
-                            manipPct >= 70 ? "bg-red-500" :
-                            manipPct >= 40 ? "bg-amber-500" :
-                                            "bg-emerald-500"
-                          )}
-                        />
-                      </div>
-                    </div>
-                  )}
+                  {/* Verdict sentence */}
+                  <div className="mt-6 p-5 bg-surface-mid rounded-2xl border border-border-subtle">
+                    <p className="text-foreground/70 text-sm leading-relaxed font-medium italic">
+                      &ldquo;{effectiveVerdictSentence}&rdquo;
+                    </p>
+                  </div>
 
                   {/* Quick stats row */}
-                  <div className="flex flex-wrap items-center gap-x-8 gap-y-3 text-[10px] font-bold font-mono uppercase tracking-widest text-foreground/30 px-2">
+                  <div className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-3 text-[10px] font-bold font-mono uppercase tracking-widest text-foreground/30 px-2">
                     <span className="flex items-center gap-2">
                       <span className="text-foreground bg-surface-high px-2 py-0.5 rounded border border-border-subtle">{report.applicable_agent_count ?? activeAgentIds.length}</span>
                       ACTIVE NODES
@@ -912,49 +956,133 @@ export default function ResultPage() {
                       <span className="text-foreground bg-surface-high px-2 py-0.5 rounded border border-border-subtle">{totalFindings}</span>
                       RAW SIGNALS
                     </span>
-                    <span className="text-[9px] truncate max-w-[250px] flex items-center gap-2 opacity-40">
-                      <FileText className="w-3 h-3" /> {fileName}
-                    </span>
+                    {report.analysis_coverage_note && (
+                      <span className="text-foreground/40 normal-case tracking-normal font-medium">
+                        {report.analysis_coverage_note}
+                      </span>
+                    )}
                   </div>
                 </SurfaceCard>
               )}
 
-              {/* Finding Severity Breakdown — Bento Card */}
-              {totalFindings > 0 && (
-                <div className="col-span-12 lg:col-span-4 p-8 rounded-3xl flex flex-col justify-center surface-panel border-border-subtle shadow-xl">
-                  <SeverityBar counts={severityCounts} total={totalFindings} />
-                </div>
-              )}
-
-              {/* ── 2a. Executive Summary ── */}
-              <SurfaceCard
-                className="col-span-12 lg:col-span-8 rounded-[2rem] overflow-hidden flex flex-col p-0 border-border-subtle"
-              >
-                <div className="px-8 py-5 border-b border-border-subtle flex items-center justify-between bg-surface-mid">
-                  <div className="flex items-center gap-3">
-                    <FileText className="w-4 h-4 text-amber-400 shrink-0" />
-                    <h2 className="text-[11px] font-bold uppercase tracking-widest text-foreground">Executive Synthesis</h2>
-                  </div>
-                </div>
-                <div className="p-8 space-y-6 flex-1 bg-surface-low">
-                  <p className="text-foreground/80 text-lg font-medium leading-relaxed border-l-2 border-amber-500/30 pl-5 py-1">
-                    &ldquo;{effectiveVerdictSentence}&rdquo;
+              {/* ══════════════════════════════════════════════════════════ */}
+              {/* ── 3. METRICS DASHBOARD — 3-column bento grid ─────────── */}
+              {/* ══════════════════════════════════════════════════════════ */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* Confidence card */}
+                <SurfaceCard className="rounded-2xl border-border-subtle p-6 text-center">
+                  <p className="text-[9px] text-foreground/40 font-mono font-bold uppercase tracking-widest mb-3">Aggregate Confidence</p>
+                  <p className={clsx("text-5xl font-bold tabular-nums leading-none", confColor(report.overall_confidence ?? 0))}>
+                    {confPct}<span className="text-2xl text-foreground/20">%</span>
                   </p>
-                  {report.key_findings && report.key_findings.length > 0 && (
+                  {/* Confidence range */}
+                  {report.confidence_min !== undefined && report.confidence_max !== undefined && (
+                    <div className="mt-4">
+                      <div className="relative h-1.5 bg-surface-high rounded-full overflow-hidden">
+                        <div
+                          className="absolute h-full bg-amber-500/30 rounded-full"
+                          style={{ left: `${Math.round((report.confidence_min ?? 0) * 100)}%`, right: `${100 - Math.round((report.confidence_max ?? 0) * 100)}%` }}
+                        />
+                        <div
+                          className="absolute top-[-3px] w-1.5 h-[9px] bg-amber-400 rounded-full"
+                          style={{ left: `${confPct}%`, transform: "translateX(-50%)" }}
+                        />
+                      </div>
+                      <div className="flex justify-between mt-1.5">
+                        <span className="text-[8px] font-mono text-foreground/30">{Math.round((report.confidence_min ?? 0) * 100)}%</span>
+                        <span className="text-[8px] font-mono text-foreground/30">{Math.round((report.confidence_max ?? 0) * 100)}%</span>
+                      </div>
+                    </div>
+                  )}
+                </SurfaceCard>
+
+                {/* Error Rate card */}
+                <SurfaceCard className="rounded-2xl border-border-subtle p-6 text-center">
+                  <p className="text-[9px] text-foreground/40 font-mono font-bold uppercase tracking-widest mb-3">Tool Error Rate</p>
+                  <p className={clsx(
+                    "text-5xl font-bold tabular-nums leading-none",
+                    (report.overall_error_rate ?? 0) <= 0.15 ? "text-emerald-400" :
+                    (report.overall_error_rate ?? 0) <= 0.30 ? "text-amber-400" : "text-red-400"
+                  )}>
+                    {Math.round((report.overall_error_rate ?? 0) * 100)}<span className="text-2xl text-foreground/20">%</span>
+                  </p>
+                  {/* Tool coverage mini donut */}
+                  {(() => {
+                    const totalTools = activeAgentIds.reduce((s, id) => {
+                      const m = report.per_agent_metrics?.[id];
+                      return s + (m?.total_tools_called ?? 0);
+                    }, 0);
+                    const naTools = activeAgentIds.reduce((s, id) => {
+                      const m = report.per_agent_metrics?.[id];
+                      return s + (m?.tools_not_applicable ?? 0);
+                    }, 0);
+                    const failedTools = activeAgentIds.reduce((s, id) => {
+                      const m = report.per_agent_metrics?.[id];
+                      return s + (m?.tools_failed ?? 0);
+                    }, 0);
+                    const ranTools = totalTools - naTools - failedTools;
+                    return (
+                      <div className="mt-3 flex items-center justify-center gap-3 text-[8px] font-mono uppercase tracking-widest text-foreground/30">
+                        <span className="text-emerald-400/70">{ranTools} ran</span>
+                        {naTools > 0 && <span className="text-slate-600">{naTools} n/a</span>}
+                        {failedTools > 0 && <span className="text-amber-400/70">{failedTools} failed</span>}
+                      </div>
+                    );
+                  })()}
+                </SurfaceCard>
+
+                {/* Manipulation Probability card */}
+                <SurfaceCard className="rounded-2xl border-border-subtle p-6 text-center">
+                  <p className="text-[9px] text-foreground/40 font-mono font-bold uppercase tracking-widest mb-3">Tampering Signal</p>
+                  <p className={clsx(
+                    "text-5xl font-bold tabular-nums leading-none",
+                    manipPct >= 70 ? "text-red-400" :
+                    manipPct >= 40 ? "text-amber-400" : "text-emerald-400"
+                  )}>
+                    {manipPct}<span className="text-2xl text-foreground/20">%</span>
+                  </p>
+                  <div className="mt-4 h-1.5 bg-surface-high rounded-full overflow-hidden">
+                    <div
+                      className={clsx(
+                        "h-full rounded-full transition-all",
+                        manipPct >= 70 ? "bg-red-500" :
+                        manipPct >= 40 ? "bg-amber-500" : "bg-emerald-500"
+                      )}
+                      style={{ width: `${manipPct}%` }}
+                    />
+                  </div>
+                </SurfaceCard>
+              </div>
+
+              {/* ══════════════════════════════════════════════════════════ */}
+              {/* ── 4. KEY FINDINGS ─────────────────────────────────────── */}
+              {/* ══════════════════════════════════════════════════════════ */}
+              {report.key_findings && report.key_findings.length > 0 && (
+                <SurfaceCard className="rounded-[2rem] overflow-hidden p-0 border-border-subtle">
+                  <div className="px-8 py-5 border-b border-border-subtle flex items-center gap-3 bg-surface-mid">
+                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <h2 className="text-[11px] font-bold uppercase tracking-widest text-foreground">Key Findings</h2>
+                    <span className="text-[9px] font-mono text-foreground/30 ml-auto">{report.key_findings.length} items</span>
+                  </div>
+                  <div className="p-6 bg-surface-low">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {report.key_findings.map((f, i) => (
-                        <div key={i} className="flex items-start gap-3 text-[11px] text-foreground/60 bg-surface-high p-4 rounded-xl border border-border-subtle shadow-sm">
-                          <CheckCircle className="mt-0.5 w-3.5 h-3.5 text-emerald-500/50 shrink-0" />
+                        <div key={i} className="flex items-start gap-3 text-[11px] text-foreground/70 bg-surface-high p-4 rounded-xl border border-border-subtle shadow-sm">
+                          <span className="mt-0.5 w-5 h-5 rounded-md bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0 text-[9px] font-bold font-mono text-emerald-400">
+                            {i + 1}
+                          </span>
                           <span className="leading-relaxed font-medium">{f}</span>
                         </div>
                       ))}
                     </div>
-                  )}
-                </div>
-              </SurfaceCard>
+                  </div>
+                </SurfaceCard>
+              )}
 
-              {/* ── 2b. Agent Deployment — Bento Card ── */}
-              <div className="col-span-12 rounded-[2rem] overflow-hidden flex flex-col surface-panel border-border-subtle shadow-xl">
+              {/* ══════════════════════════════════════════════════════════ */}
+              {/* ── 5. AGENT DEPLOYMENT TABLE ───────────────────────────── */}
+              {/* ══════════════════════════════════════════════════════════ */}
+              <SurfaceCard className="rounded-[2rem] overflow-hidden p-0 border-border-subtle">
                 <div className="px-8 py-5 border-b border-border-subtle flex items-center justify-between bg-surface-mid">
                   <div className="flex items-center gap-3">
                     <Cpu className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
@@ -962,7 +1090,7 @@ export default function ResultPage() {
                   </div>
                   <span className="text-[9px] font-mono font-bold text-foreground/20 uppercase tracking-widest">All nodes synchronized</span>
                 </div>
-                <div className="p-6 flex-1 bg-surface-low">
+                <div className="p-6 bg-surface-low">
                   <AgentDeploymentTable
                     activeIds={activeAgentIds}
                     metrics={report.per_agent_metrics as Record<string, AgentMetricsDTO> | undefined}
@@ -970,81 +1098,53 @@ export default function ResultPage() {
                     skippedAgents={report.skipped_agents}
                   />
                 </div>
-              </div>
-
+              </SurfaceCard>
 
               {/* ══════════════════════════════════════════════════════════ */}
-              {/* ── 3. AGENT FINDINGS ──────────────────────────────────── */}
+              {/* ── 6. AGENT DETAIL CARDS ───────────────────────────────── */}
               {/* ══════════════════════════════════════════════════════════ */}
-              {/* Agent Findings — Collapsible Section */}
               {activeAgentIds.length > 0 && (
-                <div className="col-span-12 pt-6">
-                  <SurfaceCard className="p-0 overflow-hidden border-white/5">
-                    {/* Collapsible header */}
-                    <button
-                      onClick={() => setAgentFindingsOpen(v => !v)}
-                      aria-expanded={agentFindingsOpen}
-                      className="w-full flex items-center justify-between px-6 py-5 hover:bg-white/2 transition-colors cursor-pointer group"
-                    >
-                      <span className="flex items-center gap-3 text-sm font-bold uppercase tracking-widest text-foreground/70 group-hover:text-amber-400 transition-colors">
-                        <Activity className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
-                        See Agent Findings
-                        <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-surface-mid border border-border-subtle text-foreground/30 normal-case tracking-wider">
-                          {activeAgentIds.length} active agent{activeAgentIds.length !== 1 ? "s" : ""}
-                        </span>
-                      </span>
-                      <div className={clsx(
-                        "p-1.5 rounded-lg bg-surface-low border border-border-subtle transition-all duration-300",
-                        agentFindingsOpen && "rotate-180 bg-amber-500/10 border-amber-500/30 text-amber-400"
-                      )}>
-                        <ChevronDown className="w-4 h-4" aria-hidden="true" />
-                      </div>
-                    </button>
-
-                    {/* Collapsible body */}
-                    {agentFindingsOpen && (
-                      <div className="overflow-hidden border-t border-border-subtle">
-                        <div className="p-6 space-y-5 bg-surface-low/50">
-                          {activeAgentIds.map(id => (
-                            <AgentCard
-                              key={id}
-                              agentId={id}
-                              findings={report.per_agent_findings[id] ?? []}
-                              metrics={report.per_agent_metrics?.[id] as AgentMetricsDTO | undefined}
-                              narrative={report.per_agent_analysis?.[id]}
-                              agentSummary={report.per_agent_summary?.[id] as AgentSummary | undefined}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </SurfaceCard>
+                <div className="space-y-5">
+                  <h2 className="text-xs font-bold text-foreground/40 uppercase tracking-[0.15em] flex items-center gap-2 px-1">
+                    <Layers className="w-3.5 h-3.5 text-amber-400" /> Agent Findings
+                  </h2>
+                  {activeAgentIds.map((id, idx) => (
+                    <AgentCard
+                      key={id}
+                      agentId={id}
+                      findings={report.per_agent_findings[id] ?? []}
+                      metrics={report.per_agent_metrics?.[id] as AgentMetricsDTO | undefined}
+                      narrative={report.per_agent_analysis?.[id]}
+                      agentSummary={report.per_agent_summary?.[id] as AgentSummary | undefined}
+                      defaultOpen={idx < 2}
+                    />
+                  ))}
                 </div>
               )}
 
               {/* ══════════════════════════════════════════════════════════ */}
-              {/* ── 4. CORROBORATING EVIDENCE ──────────────────────────── */}
+              {/* ── 7. CORROBORATING EVIDENCE ───────────────────────────── */}
               {/* ══════════════════════════════════════════════════════════ */}
-              {/* Corroborating Evidence — Bento Span */}
               {(crossCount > 0 || contestedCount > 0) && (
-                <div className="col-span-12 space-y-4 pt-6">
+                <div className="space-y-4">
                   <h2 className="text-xs font-bold text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2 px-1">
                     <LinkIcon className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" /> Corroborating Evidence
                   </h2>
-                  {crossCount > 0 && (
-                    <CrossModalSection findings={report.cross_modal_confirmed as AgentFindingDTO[]} />
-                  )}
-                  {contestedCount > 0 && (
-                    <ContestedSection findings={report.contested_findings} />
-                  )}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {crossCount > 0 && (
+                      <CrossModalSection findings={report.cross_modal_confirmed as AgentFindingDTO[]} />
+                    )}
+                    {contestedCount > 0 && (
+                      <ContestedSection findings={report.contested_findings} />
+                    )}
+                  </div>
                 </div>
               )}
 
               {/* ══════════════════════════════════════════════════════════ */}
-              {/* ── 5. CHAIN OF CUSTODY ────────────────────────────────── */}
+              {/* ── 8. CHAIN OF CUSTODY (collapsed) ─────────────────────── */}
               {/* ══════════════════════════════════════════════════════════ */}
-              {/* Chain of Custody — Bento Full Width */}
-              <SurfaceCard className="col-span-12 rounded-[2rem] overflow-hidden p-0 border border-border-subtle bg-surface-low shadow-sm">
+              <SurfaceCard className="rounded-[2rem] overflow-hidden p-0 border border-border-subtle bg-surface-low shadow-sm">
                 <button
                   onClick={() => setChainOpen(v => !v)}
                   className="w-full flex items-center justify-between px-8 py-5 hover:bg-surface-mid transition-all cursor-pointer group/chain"
@@ -1061,36 +1161,25 @@ export default function ResultPage() {
                 </button>
                 <>
                   {chainOpen && (
-                    <div
-                      
-                      
-                      
-                      
-                      className="overflow-hidden"
-                    >
+                    <div className="overflow-hidden">
                       <div className="px-8 pb-8 space-y-6 border-t border-border-subtle bg-surface-mid/50">
-                        <div className="pt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {[
-                            { label: "Report ID",  value: report.report_id,  mono: true },
-                            { label: "Session ID", value: report.session_id, mono: true },
-                            { label: "Case ID",    value: report.case_id,    mono: true },
-                            ...(report.signed_utc ? [{ label: "Timestamp", value: report.signed_utc, mono: true }] : []),
-                          ].map(({ label, value, mono }) => (
-                            <div key={label} className="bg-surface-high p-4 rounded-xl border border-border-subtle">
-                                <p className="text-[9px] font-bold font-mono text-foreground/40 uppercase tracking-widest mb-1">{label}</p>
-                                <p className={clsx("text-foreground/80 break-all leading-tight", mono && "font-mono text-[10px] font-bold tracking-tight")}>
-                                    {value}
-                                </p>
-                            </div>
-                          ))}
-                        </div>
                         {report.report_hash && (
-                          <div className="bg-surface-low rounded-2xl p-6 border border-border-subtle shadow-inner">
+                          <div className="pt-6 bg-surface-low rounded-2xl p-6 border border-border-subtle shadow-inner">
                             <p className="text-[10px] text-amber-400/60 font-bold font-mono uppercase tracking-widest mb-3 flex items-center gap-2">
                               <ShieldCheck className="w-4 h-4" /> Integrity Hash [SHA-256]
                             </p>
                             <p className="text-[11px] font-mono text-foreground/40 break-all leading-relaxed bg-surface-mid p-4 rounded-xl border border-border-subtle">
                               {report.report_hash}
+                            </p>
+                          </div>
+                        )}
+                        {report.cryptographic_signature && (
+                          <div className="bg-surface-low rounded-2xl p-6 border border-border-subtle shadow-inner">
+                            <p className="text-[10px] text-amber-400/60 font-bold font-mono uppercase tracking-widest mb-3 flex items-center gap-2">
+                              <Fingerprint className="w-4 h-4" /> Cryptographic Signature [ECDSA P-256]
+                            </p>
+                            <p className="text-[11px] font-mono text-foreground/40 break-all leading-relaxed bg-surface-mid p-4 rounded-xl border border-border-subtle">
+                              {report.cryptographic_signature}
                             </p>
                           </div>
                         )}
@@ -1113,7 +1202,7 @@ export default function ResultPage() {
               </SurfaceCard>
 
               {/* ── Back to Home ── */}
-              <div className="col-span-12 flex flex-col items-center py-12 gap-5">
+              <div className="flex flex-col items-center py-12 gap-5">
                 <div
                   className="w-16 h-16 rounded-2xl flex items-center justify-center"
                   style={{

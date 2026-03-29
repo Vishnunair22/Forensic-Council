@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field, field_validator
 from core.config import Settings
 from core.custody_logger import CustodyLogger, EntryType
 from core.llm_client import LLMClient, LLMResponse, parse_llm_step
-from core.logging import get_logger
+from core.structured_logging import get_logger
 from core.tool_registry import ToolRegistry, ToolResult
 from core.working_memory import WorkingMemory, WorkingMemoryState
 
@@ -244,7 +244,7 @@ def create_llm_step_generator(
         """Generate next ReAct step using LLM reasoning."""
         
         # Skip if LLM is not enabled
-        if not config.llm_enable_react_reasoning or not config.llm_api_key:
+        if not config.llm_enable_react_reasoning or not config.llm_api_key or not llm_client.is_available:
             return None
         
         # Build system prompt with forensic context
@@ -541,7 +541,6 @@ class ReActLoopEngine:
         "reverse image search": "reverse_image_search",
         "device fingerprint database": "device_fingerprint_db",
         "inter-agent call": "inter_agent_call",
-        "adversarial robustness": "adversarial_robustness_check",
         "ml-based image splicing": "image_splice_check",
         "camera noise fingerprint analysis": "noise_fingerprint",
         # OCR
@@ -579,7 +578,6 @@ class ReActLoopEngine:
         "gemini vision analysis: deep object": "gemini_object_scene_analysis",
         "gemini vision analysis: cross-validate visual content": "gemini_metadata_visual_consistency",
         # Gemini catch-alls
-        "gemini deep": "gemini_deep_forensic",
         "deep forensic analysis": "gemini_deep_forensic",
         "identify content type, extract all text": "gemini_deep_forensic",
         "identify interfaces": "gemini_deep_forensic",
@@ -604,9 +602,6 @@ class ReActLoopEngine:
         "ocr on detected object": "object_text_ocr",
         "license plates": "object_text_ocr",
         "object regions": "object_text_ocr",
-        "document authenticity": "document_authenticity",
-        "font inconsistency": "document_authenticity",
-        "document forgery": "document_authenticity",
         "c2pa": "c2pa_verify",
         "content credentials": "c2pa_verify",
         "provenance chain": "c2pa_verify",
@@ -783,8 +778,80 @@ class ReActLoopEngine:
                 # --- Generate AgentFinding from Tool Result ---
                 if tool_result.success:
                     output = tool_result.output or {}
-                    # Parse confidence from tool result (fall back to 0.75 if missing or null)
+                    # Parse confidence: try "confidence" first, then domain-specific keys,
+                    # then derive from anomaly/consistency scores, finally fall back to 0.75.
                     raw_conf = output.get("confidence") if isinstance(output, dict) else None
+                    # Explicit None means "no confidence available" — use 0.50 (uncertain)
+                    if raw_conf is None and isinstance(output, dict) and "confidence" in output:
+                        raw_conf = 0.50
+                    if raw_conf is None and isinstance(output, dict):
+                        # Map domain-specific keys to a 0-1 confidence score
+                        for key in ("anomaly_score", "tampering_score", "synthetic_probability", "forgery_score"):
+                            val = output.get(key)
+                            if isinstance(val, (int, float)):
+                                raw_conf = 1.0 - max(0.0, min(1.0, float(val)))
+                                break
+                        if raw_conf is None:
+                            for key in ("noise_consistency_score", "consistency_score", "overall_consistency", "avg_confidence", "confidence_score"):
+                                val = output.get(key)
+                                if isinstance(val, (int, float)):
+                                    raw_conf = max(0.0, min(1.0, float(val)))
+                                    break
+                        if raw_conf is None:
+                            # Derive from object detection results (YOLO and OpenCV fallback)
+                            if "detections" in output:
+                                det_count = len(output.get("detections") or [])
+                                # YOLO detections: 0 objects = no meaningful signal, >0 = high confidence in detection
+                                raw_conf = 0.60 if det_count > 0 else 0.40
+                            elif "objects_detected" in output:
+                                det_count = len(output.get("objects_detected") or [])
+                                # OpenCV contour fallback: contours ≠ objects, low confidence either way
+                                raw_conf = 0.55 if det_count > 0 else 0.40
+                            # Derive from hash match
+                            elif output.get("hash_matches") is True:
+                                raw_conf = 1.0
+                            elif output.get("hash_matches") is False:
+                                raw_conf = 0.30
+                            # Derive from scale_consistent
+                            elif output.get("scale_consistent") is True:
+                                raw_conf = 0.85
+                            elif output.get("scale_consistent") is False:
+                                raw_conf = 0.40
+                            # Derive from verdict field
+                            elif "verdict" in output:
+                                v = str(output.get("verdict", "")).upper()
+                                if v in ("CONSISTENT", "AUTHENTIC", "CLEAN", "CONTENT_CREDENTIALS_PRESENT", "NO_CONTENT_CREDENTIALS"):
+                                    raw_conf = 0.85
+                                elif v in ("INCONSISTENT", "SUSPICIOUS", "TAMPERED"):
+                                    raw_conf = 0.40
+                                elif v in ("INCONCLUSIVE", "ERROR"):
+                                    raw_conf = 0.50
+                                elif v == "NOT_APPLICABLE":
+                                    raw_conf = 0.0  # excluded from confidence calculations
+                            # Derive from anomaly_detected OR inconsistency_detected
+                            elif output.get("anomaly_detected") is True or output.get("inconsistency_detected") is True:
+                                raw_conf = 0.40
+                            elif output.get("anomaly_detected") is False or output.get("inconsistency_detected") is False:
+                                raw_conf = 0.85
+                            # Derive from file structure analysis
+                            elif output.get("header_valid") is not None:
+                                anomalies = output.get("anomalies", [])
+                                raw_conf = 0.85 if (isinstance(anomalies, list) and len(anomalies) == 0) else 0.40
+                            # Derive from editing software detection
+                            elif output.get("editing_software_detected") is True:
+                                raw_conf = 0.30
+                            elif output.get("editing_software_detected") is False:
+                                raw_conf = 0.90
+                            # Derive from EXIF field presence (more fields = higher confidence)
+                            elif "present_fields" in output and "absent_fields" in output:
+                                present = len(output.get("present_fields") or [])
+                                absent = len(output.get("absent_fields") or [])
+                                total = present + absent
+                                raw_conf = max(0.40, min(0.90, present / total)) if total > 0 else 0.50
+                            # Derive from GPS plausibility
+                            elif "plausible" in output:
+                                p = output.get("plausible")
+                                raw_conf = 0.80 if p is True else (0.40 if p is False else 0.50)
                     try:
                         confidence = float(raw_conf) if raw_conf is not None else 0.75
                     except (TypeError, ValueError):
@@ -941,33 +1008,67 @@ class ReActLoopEngine:
                 await self._log_step(observation)
 
                 # Mark the IN_PROGRESS task as COMPLETE now that the tool has run.
-                # Re-read WM here: `state` is a snapshot from the top of this
-                # loop iteration, captured *before* _default_step_generator set
-                # the task to IN_PROGRESS, so scanning `state.tasks` would
-                # never find an IN_PROGRESS entry.  A fresh read reflects the
-                # actual WM state after the update.
-                try:
-                    from core.working_memory import TaskStatus as _TS
-                    fresh_state = await self.working_memory.get_state(
-                        session_id=self.session_id,
-                        agent_id=self.agent_id,
-                    )
-                    if fresh_state:
-                        for task in fresh_state.tasks:
-                            if task.status == _TS.IN_PROGRESS:
-                                await self.working_memory.update_task(
-                                    session_id=self.session_id,
-                                    agent_id=self.agent_id,
-                                    task_id=task.task_id,
-                                    status=_TS.COMPLETE,
-                                    result_ref=next_step.tool_name,
-                                )
-                                break
-                except Exception as _wm_err:
-                    logger.warning(
-                        f"Task COMPLETE marking failed after tool {next_step.tool_name}: {_wm_err}",
-                        agent_id=self.agent_id,
-                    )
+                # Use the task_id stored in tool_input by _default_step_generator
+                # instead of scanning WM for IN_PROGRESS tasks.
+                from core.working_memory import TaskStatus as _TS
+                _task_id_str = (next_step.tool_input or {}).get("_task_id")
+                _wm_updated = False
+                if _task_id_str:
+                    try:
+                        from uuid import UUID as _UUID
+                        await self.working_memory.update_task(
+                            session_id=self.session_id,
+                            agent_id=self.agent_id,
+                            task_id=_UUID(_task_id_str),
+                            status=_TS.COMPLETE,
+                            result_ref=next_step.tool_name,
+                        )
+                        _wm_updated = True
+                    except Exception as _wm_direct_err:
+                        logger.warning(
+                            f"Direct task COMPLETE failed for {_task_id_str}: {_wm_direct_err}",
+                            agent_id=self.agent_id,
+                        )
+                # Fallback: scan WM for IN_PROGRESS tasks
+                if not _wm_updated:
+                    try:
+                        fresh_state = await self.working_memory.get_state(
+                            session_id=self.session_id,
+                            agent_id=self.agent_id,
+                        )
+                        if fresh_state:
+                            for task in fresh_state.tasks:
+                                if task.status == _TS.IN_PROGRESS:
+                                    await self.working_memory.update_task(
+                                        session_id=self.session_id,
+                                        agent_id=self.agent_id,
+                                        task_id=task.task_id,
+                                        status=_TS.COMPLETE,
+                                        result_ref=next_step.tool_name,
+                                    )
+                                    _wm_updated = True
+                                    break
+                    except Exception as _wm_scan_err:
+                        logger.warning(
+                            f"WM scan task COMPLETE failed: {_wm_scan_err}",
+                            agent_id=self.agent_id,
+                        )
+                # Last resort: force-write to local cache
+                if not _wm_updated:
+                    try:
+                        cache_state = await self.working_memory.get_state(
+                            session_id=self.session_id,
+                            agent_id=self.agent_id,
+                        )
+                        if cache_state:
+                            for task in cache_state.tasks:
+                                if task.status == _TS.IN_PROGRESS:
+                                    task.status = _TS.COMPLETE
+                                    task.result_ref = next_step.tool_name
+                            key = self.working_memory._get_key(self.session_id, self.agent_id)
+                            self.working_memory._local_cache[key] = cache_state.model_dump_json()
+                    except Exception:
+                        pass
 
                 # Check for tool unavailability HITL trigger
                 if tool_result.unavailable:
@@ -1334,7 +1435,7 @@ class ReActLoopEngine:
             step_type="ACTION",
             content=f"Executing: {pending_task.description} → {best_tool.name}",
             tool_name=best_tool.name,
-            tool_input={"artifact": None},
+            tool_input={"artifact": None, "_task_id": str(pending_task.task_id)},
             iteration=self._current_iteration,
         )
 
@@ -1442,7 +1543,7 @@ class ReActLoopEngine:
                 dep_name = err.split("'")[1] if "'" in err else "required dependency"
                 err_msg = f"ML dependency '{dep_name}' not installed — tool skipped."
             elif "Timeout" in err or "timeout" in err:
-                err_msg = f"Tool timed out — likely model cold-start. Result skipped."
+                err_msg = "Tool timed out — likely model cold-start. Result skipped."
             elif "FileNotFoundError" in err:
                 err_msg = "Evidence file not accessible — skipped."
             else:
@@ -1470,7 +1571,7 @@ class ReActLoopEngine:
                 # Make the region count more human and avoid implying that
                 # every connected component is a large "region".
                 (lambda count, max_a: (
-                    f"ELA detected "
+                    "ELA detected "
                     + (
                         "no anomaly regions "
                         if count == 0 else
@@ -1530,7 +1631,7 @@ class ReActLoopEngine:
             ),
             # FIXED: correct keys; also added for both tool name aliases
             "file_hash_verify": lambda o: (
-                f"Hash verification: SHA-256 = "
+                "Hash verification: SHA-256 = "
                 + str(o.get('current_hash', o.get('original_hash', '')))[:20] + "... "
                 + ("Hash matches chain-of-custody record — file integrity confirmed."
                    if o.get('hash_matches') else "WARNING: hash mismatch — file may have been modified after ingestion.")
@@ -1721,7 +1822,7 @@ class ReActLoopEngine:
                     meta_consistency=str(o.get('gemini_metadata_consistency', '')),
                     iface=o.get('gemini_interface', ''),
                     signals=list(o.get('gemini_manipulation_signals') or o.get('manipulation_signals') or []):
-                    f"Gemini deep forensic complete. "
+                    "Gemini deep forensic complete. "
                     + f"Content: {ctype}. "
                     + (f"Interface/UI: {iface}. " if iface else "")
                     + (f"Scene: {narrative[:400]}. " if narrative else "")

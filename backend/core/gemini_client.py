@@ -42,7 +42,7 @@ from typing import Any, Optional
 import httpx
 
 from core.config import Settings
-from core.logging import get_logger
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -937,7 +937,6 @@ class GeminiVisionClient:
             if not ocr_text_lines:
                 try:
                     import easyocr
-                    import numpy as _np
                     _reader = easyocr.Reader(["en"], gpu=False, verbose=False)
                     _results = _reader.readtext(file_path, detail=0)
                     ocr_text_lines = [str(t).strip() for t in _results if len(str(t).strip()) > 2][:10]

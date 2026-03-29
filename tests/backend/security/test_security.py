@@ -30,7 +30,7 @@ class TestAuthSecurity:
                 with patch("core.auth.is_token_blacklisted", new=AsyncMock(return_value=False)):
                     with pytest.raises(Exception):
                         await decode_token("")
-            asyncio.get_event_loop().run_until_complete(_run())
+            asyncio.run(_run())
         except ImportError:
             pytest.skip()
 
@@ -41,7 +41,7 @@ class TestAuthSecurity:
                 with patch("core.auth.is_token_blacklisted", new=AsyncMock(return_value=False)):
                     with pytest.raises(Exception):
                         await decode_token("eyJhbGciOiJIUzI1NiJ9.garbage.signature")
-            asyncio.get_event_loop().run_until_complete(_run())
+            asyncio.run(_run())
         except ImportError:
             pytest.skip()
 
@@ -63,7 +63,7 @@ class TestAuthSecurity:
                 with patch("core.auth.is_token_blacklisted", new=AsyncMock(return_value=False)):
                     with pytest.raises(Exception):
                         await decode_token(bad_token)
-            asyncio.get_event_loop().run_until_complete(_run())
+            asyncio.run(_run())
         except ImportError:
             pytest.skip()
 
@@ -83,7 +83,7 @@ class TestAuthSecurity:
                 with patch("core.auth.is_token_blacklisted", new=AsyncMock(return_value=False)):
                     with pytest.raises(Exception):
                         await decode_token(malicious)
-            asyncio.get_event_loop().run_until_complete(_run())
+            asyncio.run(_run())
         except ImportError:
             pytest.skip()
 
@@ -110,7 +110,7 @@ class TestAuthSecurity:
                 with patch("core.auth.is_token_blacklisted", new=AsyncMock(return_value=False)):
                     with pytest.raises(Exception):
                         await decode_token(forged_token)
-            asyncio.get_event_loop().run_until_complete(_run())
+            asyncio.run(_run())
         except ImportError:
             pytest.skip()
 
@@ -126,7 +126,7 @@ class TestAuthSecurity:
                 with patch("core.auth.is_token_blacklisted", new=AsyncMock(return_value=False)):
                     with pytest.raises(Exception):
                         await decode_token(token)
-            asyncio.get_event_loop().run_until_complete(_run())
+            asyncio.run(_run())
         except ImportError:
             pytest.skip()
 

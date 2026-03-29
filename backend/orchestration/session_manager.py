@@ -16,7 +16,7 @@ from uuid import UUID, uuid4
 
 import json
 
-from core.logging import get_logger
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 

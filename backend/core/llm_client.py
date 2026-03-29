@@ -16,12 +16,12 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Optional
 
 import httpx
 from core.config import Settings
-from core.logging import get_logger
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -60,6 +60,15 @@ class LLMClient:
         self.max_tokens = config.llm_max_tokens
         self.timeout = config.llm_timeout
 
+    @property
+    def is_available(self) -> bool:
+        """True if the LLM client has a real (non-placeholder) API key configured."""
+        if not self.api_key or self.provider == "none":
+            return False
+        _placeholder_signals = ("your_", "_here", "placeholder", "changeme", "sk-xxx")
+        key_lower = self.api_key.lower()
+        return not any(sig in key_lower for sig in _placeholder_signals)
+
     async def generate_reasoning_step(
         self,
         system_prompt: str,
@@ -68,7 +77,7 @@ class LLMClient:
         current_task: str | None = None,
     ) -> LLMResponse:
         """Generate the next reasoning step in a ReAct loop."""
-        if self.provider == "none" or not self.api_key:
+        if self.provider == "none" or not self.api_key or not self.is_available:
             logger.debug("LLM not configured - skipping reasoning step")
             return LLMResponse(content="", provider="none")
 
@@ -134,6 +143,8 @@ class LLMClient:
 
     async def _with_retry(self, coro_factory) -> httpx.Response:
         """Execute an HTTP coroutine factory with exponential-backoff retry."""
+        if not self.is_available:
+            raise RuntimeError(f"LLM API key is placeholder or missing — skipping {self.provider} calls")
         last_response = None
         for attempt in range(_MAX_RETRIES):
             try:
@@ -170,6 +181,8 @@ class LLMClient:
         Groq uses the OpenAI-compatible endpoint.
         llama-3.3-70b-versatile supports full parallel tool calling.
         """
+        if not self.is_available:
+            raise RuntimeError(f"Groq API key is placeholder or missing — cannot call LLM")
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -199,6 +212,8 @@ class LLMClient:
         available_tools: list[dict[str, Any]],
     ) -> LLMResponse:
         """Call OpenAI API."""
+        if not self.is_available:
+            raise RuntimeError(f"OpenAI API key is placeholder or missing — cannot call LLM")
         url = "https://api.openai.com/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -228,6 +243,8 @@ class LLMClient:
         available_tools: list[dict[str, Any]],
     ) -> LLMResponse:
         """Call Anthropic Claude API."""
+        if not self.is_available:
+            raise RuntimeError(f"Anthropic API key is placeholder or missing — cannot call LLM")
         url = "https://api.anthropic.com/v1/messages"
         headers = {
             "x-api-key": self.api_key,
@@ -335,7 +352,7 @@ class LLMClient:
         statement from structured forensic findings. Low temperature (0.2)
         for factual, consistent prose.
         """
-        if self.provider == "none" or not self.api_key:
+        if self.provider == "none" or not self.api_key or not self.is_available:
             return ""
 
         tokens = max_tokens or min(self.max_tokens, 1500)

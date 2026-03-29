@@ -9,7 +9,7 @@ and audio-visual sync breaks.
 from __future__ import annotations
 
 import uuid
-from typing import Any, Optional
+from typing import Optional
 
 from agents.base_agent import ForensicAgent
 from core.config import Settings
@@ -183,40 +183,64 @@ class Agent2Audio(ForensicAgent):
         async def prosody_analysis_handler(input_data: dict) -> dict:
             """Handle prosody analysis with input_data dict."""
             artifact = input_data.get("artifact") or self.evidence_artifact
-            return await real_prosody_analyze(artifact=artifact)
+            result = await real_prosody_analyze(artifact=artifact)
+            if result.get("error"):
+                await self._record_tool_error("prosody_analyze", result["error"])
+            else:
+                await self._record_tool_result("prosody_analyze", result)
+            return result
         
         async def background_noise_analysis_handler(input_data: dict) -> dict:
             """Handle background noise analysis with input_data dict."""
             artifact = input_data.get("artifact") or self.evidence_artifact
             segment_duration = input_data.get("segment_duration", 1.0)
-            return await real_background_noise_consistency(
+            result = await real_background_noise_consistency(
                 artifact=artifact,
                 segment_duration=segment_duration,
             )
+            if result.get("error"):
+                await self._record_tool_error("background_noise_analysis", result["error"])
+            else:
+                await self._record_tool_result("background_noise_analysis", result)
+            return result
         
         async def codec_fingerprinting_handler(input_data: dict) -> dict:
             """Handle codec fingerprinting with input_data dict."""
             artifact = input_data.get("artifact") or self.evidence_artifact
-            return await real_codec_fingerprint(artifact=artifact)
+            result = await real_codec_fingerprint(artifact=artifact)
+            if result.get("error"):
+                await self._record_tool_error("codec_fingerprinting", result["error"])
+            else:
+                await self._record_tool_result("codec_fingerprinting", result)
+            return result
         
         async def audio_splice_detect_handler(input_data: dict) -> dict:
             """Run ML-based audio splice point detection on segments."""
             artifact = input_data.get("artifact") or self.evidence_artifact
             window = input_data.get("window", 1.0)
-            return await run_ml_tool("audio_splice_detector.py", artifact.file_path,
-                                      extra_args=["--window", str(window)], timeout=25.0)
+            result = await run_ml_tool("audio_splice_detector.py", artifact.file_path,
+                                       extra_args=["--window", str(window)], timeout=25.0)
+            if result.get("error"):
+                await self._record_tool_error("audio_splice_detect", result["error"])
+            elif result.get("available") and not result.get("error"):
+                await self._record_tool_result("audio_splice_detect", result)
+            return result
         
         async def audio_visual_sync_handler(input_data: dict) -> dict:
             """Real AV sync using moviepy+librosa onset correlation."""
             artifact = input_data.get("artifact") or self.evidence_artifact
-            return await real_av_sync_verify(artifact=artifact)
+            result = await real_av_sync_verify(artifact=artifact)
+            if result.get("error"):
+                await self._record_tool_error("audio_visual_sync", result["error"])
+            else:
+                await self._record_tool_result("audio_visual_sync", result)
+            return result
 
         async def inter_agent_call_handler(input_data: dict) -> dict:
             """Real inter-agent call via InterAgentBus."""
             if self._inter_agent_bus is None:
                 return {"status": "error", "message": "No inter_agent_bus injected"}
 
-            from core.inter_agent_bus import InterAgentCall, InterAgentCallType
             call = InterAgentCall(
                 caller_agent_id=self.agent_id,
                 callee_agent_id=input_data.get("target_agent", "Agent4"),
@@ -241,8 +265,6 @@ class Agent2Audio(ForensicAgent):
             """
             import numpy as np
             import librosa
-            import soundfile as sf
-            import tempfile, os
 
             artifact = input_data.get("artifact") or self.evidence_artifact
 
@@ -523,12 +545,12 @@ class Agent2Audio(ForensicAgent):
                     sample_rate = result.get("sample_rate", "")
                     duration = result.get("duration_seconds", result.get("duration", ""))
                     channels = result.get("channels", "")
-                    if codec:
-                        context_lines.append(
-                            f"Codec: {codec}, sample rate: {sample_rate}Hz, "
-                            f"duration: {duration}s, channels: {channels}"
-                        )
                     bit_depth = result.get("bit_depth", "")
+                    if codec:
+                        parts = [f"Codec: {codec}", f"sample rate: {sample_rate}Hz", f"duration: {duration}s", f"channels: {channels}"]
+                        if bit_depth:
+                            parts.append(f"bit depth: {bit_depth}")
+                        context_lines.append(", ".join(parts))
                     encoding_chain = result.get("encoding_chain", result.get("encoding_history", ""))
                     if encoding_chain:
                         context_lines.append(f"Encoding chain: {encoding_chain}")

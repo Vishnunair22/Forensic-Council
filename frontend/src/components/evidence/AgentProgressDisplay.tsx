@@ -30,6 +30,9 @@ export interface FindingPreview {
   confidence: number;
   flag: "ok" | "warn" | "bad" | "info";
   severity: string;
+  verdict: "CLEAN" | "FLAGGED" | "NOT_APPLICABLE" | "ERROR";
+  key_signal: string;
+  section: string;
 }
 
 export interface AgentUpdate {
@@ -50,6 +53,12 @@ export interface AgentUpdate {
   section_flags?: SectionFlag[];
   /** Per-finding preview list (always available, no Groq required) */
   findings_preview?: FindingPreview[];
+  /** Count of tools that ran successfully */
+  tools_ran?: number;
+  /** Count of tools that returned NOT_APPLICABLE (wrong file type) */
+  tools_skipped?: number;
+  /** Count of tools that failed (court_defensible=false) */
+  tools_failed?: number;
 }
 
 interface AgentProgressDisplayProps {
@@ -283,16 +292,25 @@ function FindingRow({ f }: { f: FindingPreview }) {
   const borderCls = SEV_BORDER[f.severity] ?? SEV_BORDER.LOW;
   const sev = SEV_LABEL[f.severity] ?? SEV_LABEL.LOW;
 
+  const verdictCls = f.verdict === "CLEAN" ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+    : f.verdict === "FLAGGED" ? "text-red-400 bg-red-500/10 border-red-500/20"
+    : f.verdict === "NOT_APPLICABLE" ? "text-slate-500 bg-slate-500/10 border-slate-500/20"
+    : "text-amber-400 bg-amber-500/10 border-amber-500/20";
+  const verdictLabel = f.verdict === "NOT_APPLICABLE" ? "N/A" : f.verdict;
+
   return (
     <div 
       className={`rounded-xl glass-panel overflow-hidden border border-border-subtle border-l-2 ${borderCls} px-4 py-3 space-y-2 shadow-sm group/finding`}
     >
-      {/* Header: tool name + severity + confidence */}
+      {/* Header: tool name + severity + confidence + per-tool verdict */}
       <div className="flex items-start gap-3">
         <span className="text-[10px] font-black tracking-[0.2em] uppercase flex-1 leading-tight font-mono" style={{ color: "rgba(34,211,238,0.8)" }}>
           {fmtTool(f.tool)}
         </span>
         <div className="flex items-center gap-2 flex-shrink-0">
+          <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border ${verdictCls} uppercase tracking-wider`}>
+            {verdictLabel}
+          </span>
           {f.severity !== "LOW" && f.severity !== "INFO" && (
             <Badge variant={sev.variant} size="sm" shape="rounded" className="font-black tracking-widest px-1.5">
               {sev.text}
@@ -306,7 +324,7 @@ function FindingRow({ f }: { f: FindingPreview }) {
         </div>
       </div>
       {/* Summary */}
-      <p  className="text-[11px] text-slate-300 leading-relaxed max-w-prose font-medium">
+      <p className="text-[11px] text-slate-300 leading-relaxed max-w-prose font-medium">
         {displayText}
         {needsExpand && (
           <button
@@ -317,6 +335,12 @@ function FindingRow({ f }: { f: FindingPreview }) {
           </button>
         )}
       </p>
+      {/* Groq key signal (if available) */}
+      {f.key_signal && (
+        <p className="text-[10px] text-cyan-400/50 font-mono leading-relaxed pl-2 border-l border-cyan-500/20">
+          {f.key_signal}
+        </p>
+      )}
     </div>
   );
 }
@@ -643,14 +667,15 @@ export function AgentProgressDisplay({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, visibleAgents.length, firstVisibleId]);
 
-  // Detect unsupported agents — use the backend status field as the primary
-  // signal. Message-text heuristics caused false positives (e.g. ELA limitation
-  // notes contain "not applicable" but the agent itself completed fine).
+  // Detect unsupported agents — only mark as unsupported if the backend
+  // explicitly set status to "skipped" or the error message clearly indicates
+  // the media format is not applicable.  Do NOT rely on findings_count/ confidence
+  // being zero since an agent can legitimately report zero findings on clean media.
   useEffect(() => {
     completedAgents.forEach(agent => {
       const isUnsupported =
         agent.status === "skipped" ||
-        (agent.findings_count === 0 && agent.confidence === 0 && !!agent.error);
+        (agent.error && /not applicable|not supported|format not supported|skipping/i.test(agent.error));
       if (isUnsupported && !unsupportedAgents.has(agent.agent_id)) {
         setUnsupportedAgents(prev => new Set([...prev, agent.agent_id]));
       }
@@ -739,8 +764,8 @@ export function AgentProgressDisplay({
         <div className="w-12 h-[2px] mx-auto rounded-full opacity-50" style={{ background: "#22D3EE", boxShadow: "0 0 10px rgba(34,211,238,0.4)" }} />
       </div>
 
-      {/* Agent Cards Grid — uniform 2-col */}
-      <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 gap-5">
+      {/* Agent Cards Grid — 3-col on large screens for a clean 3×2 layout */}
+      <div className="w-full max-w-6xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {visibleAgents.map((agent) => {
           const status = getAgentStatus(agent.id);
           const rawThinking = getAgentThinking(agent.id);
@@ -753,8 +778,11 @@ export function AgentProgressDisplay({
               {isRevealed && (
                 <div
                   className={clsx(
-                    "glass-t2 rounded-2xl p-6 transition-all duration-500 relative group overflow-hidden border-white/10",
-                    (status === "waiting" || status === "checking") && "opacity-40"
+                    "glass-t2 rounded-2xl p-5 transition-all duration-500 relative group overflow-hidden",
+                    (status === "waiting" || status === "checking") && "opacity-40",
+                    status === "running" && "border-cyan-500/20 shadow-[0_0_20px_rgba(34,211,238,0.06)]",
+                    status === "complete" && "border-emerald-500/15",
+                    status === "error" && "border-rose-500/15"
                   )}
                 >
                   {/* Glass highlight glare */}
@@ -794,32 +822,32 @@ export function AgentProgressDisplay({
                     </div>
                     <div className="shrink-0">
                       {status === "waiting" && (
-                        <Badge variant="outline" className="text-foreground/40 font-bold border-border-subtle uppercase tracking-widest font-mono">
+                        <Badge variant="outline" className="text-foreground/40 font-bold border-white/10 bg-white/[0.03] uppercase tracking-widest font-mono">
                           Queued
                         </Badge>
                       )}
                       {status === "checking" && (
-                        <Badge variant="secondary" withDot dotColor="#22D3EE" className="font-black uppercase tracking-widest font-mono text-cyan-400">
+                        <Badge variant="outline" withDot dotColor="#22D3EE" className="font-black uppercase tracking-widest font-mono text-cyan-400 border-cyan-500/20 bg-cyan-500/[0.04]">
                           Linking
                         </Badge>
                       )}
                       {status === "running" && (
-                        <Badge variant="secondary" withDot dotColor="#22D3EE" className="font-black uppercase tracking-widest font-mono text-cyan-400 border-cyan-500/30">
+                        <Badge variant="outline" withDot dotColor="#22D3EE" className="font-black uppercase tracking-widest font-mono text-cyan-400 border-cyan-500/20 bg-cyan-500/[0.04]">
                           <Loader2 className="w-2.5 h-2.5 animate-spin mr-1.5" />Scan
                         </Badge>
                       )}
                       {status === "complete" && (
-                        <Badge variant="success" withDot dotColor="#10B981" className="font-bold border-emerald-500/20 uppercase tracking-widest font-mono">
+                        <Badge variant="outline" withDot dotColor="#10B981" className="font-bold border-emerald-500/20 bg-emerald-500/[0.04] text-emerald-400 uppercase tracking-widest font-mono">
                           Finished
                         </Badge>
                       )}
                       {status === "unsupported" && (
-                        <Badge variant="outline" className="text-slate-500 font-bold border-slate-500/20 uppercase tracking-widest font-mono">
+                        <Badge variant="outline" className="text-slate-500 font-bold border-white/10 bg-white/[0.03] uppercase tracking-widest font-mono">
                           N/A
                         </Badge>
                       )}
                       {status === "error" && (
-                        <Badge variant="destructive" withDot dotColor="#F87171" className="font-bold border-rose-500/20 uppercase tracking-widest font-mono">
+                        <Badge variant="outline" withDot dotColor="#F87171" className="font-bold border-rose-500/20 bg-rose-500/[0.04] text-rose-400 uppercase tracking-widest font-mono">
                           Error
                         </Badge>
                       )}
@@ -985,6 +1013,21 @@ export function AgentProgressDisplay({
                                  {Math.round(completed.confidence * 100)}%
                                </span>
                             </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Tools summary line */}
+                      {(completed.tools_ran !== undefined || completed.tools_skipped !== undefined) && (
+                        <div className="flex items-center gap-3 text-[9px] font-mono uppercase tracking-widest text-slate-500">
+                          {completed.tools_ran !== undefined && (
+                            <span className="text-emerald-400/70">{completed.tools_ran} ran</span>
+                          )}
+                          {completed.tools_skipped !== undefined && completed.tools_skipped > 0 && (
+                            <span className="text-slate-600">{completed.tools_skipped} n/a</span>
+                          )}
+                          {completed.tools_failed !== undefined && completed.tools_failed > 0 && (
+                            <span className="text-amber-400/70">{completed.tools_failed} failed</span>
                           )}
                         </div>
                       )}

@@ -7,15 +7,13 @@ Part of the dual-layer memory architecture.
 """
 
 import json
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
-from core.logging import get_logger
+from core.structured_logging import get_logger
 from core.custody_logger import CustodyLogger, EntryType
 from infra.redis_client import RedisClient, get_redis_client
 

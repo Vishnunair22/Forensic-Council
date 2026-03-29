@@ -16,7 +16,7 @@ from core.config import Settings
 from core.custody_logger import CustodyLogger
 from core.episodic_memory import EpisodicMemory
 from core.evidence import EvidenceArtifact
-from core.inter_agent_bus import InterAgentBus, InterAgentCall, InterAgentCallType
+from core.inter_agent_bus import InterAgentCall, InterAgentCallType
 from core.tool_registry import ToolRegistry
 from core.working_memory import WorkingMemory
 from core.ml_subprocess import run_ml_tool
@@ -151,21 +151,31 @@ class Agent4Video(ForensicAgent):
             """Handle optical flow analysis with input_data dict."""
             artifact = input_data.get("artifact") or self.evidence_artifact
             flow_threshold = input_data.get("flow_threshold", 5.0)
-            return await real_optical_flow_analyze(
+            result = await real_optical_flow_analyze(
                 artifact=artifact,
                 flow_threshold=flow_threshold,
             )
+            if result.get("error"):
+                await self._record_tool_error("optical_flow_analysis", result["error"])
+            else:
+                await self._record_tool_result("optical_flow_analysis", result)
+            return result
         
         async def frame_extraction_handler(input_data: dict) -> dict:
             """Handle frame extraction with input_data dict."""
             artifact = input_data.get("artifact") or self.evidence_artifact
             start_frame = input_data.get("start_frame", 0)
             end_frame = input_data.get("end_frame", 100)
-            return await real_frame_window_extract(
+            result = await real_frame_window_extract(
                 artifact=artifact,
                 start_frame=start_frame,
                 end_frame=end_frame,
             )
+            if result.get("error"):
+                await self._record_tool_error("frame_extraction", result["error"])
+            else:
+                await self._record_tool_result("frame_extraction", result)
+            return result
         
         async def frame_consistency_analysis_handler(input_data: dict) -> dict:
             """Handle frame consistency analysis with input_data dict."""
@@ -174,7 +184,7 @@ class Agent4Video(ForensicAgent):
                 # Fallback: extract frames from video artifact directly
                 artifact = input_data.get("artifact") or self.evidence_artifact
                 try:
-                    import cv2, tempfile, os
+                    import cv2
                     cap = cv2.VideoCapture(artifact.file_path)
                     if not cap.isOpened():
                         return {"error": "Cannot open video file", "available": False}
@@ -218,11 +228,16 @@ class Agent4Video(ForensicAgent):
                     return {"error": str(e), "available": False}
             histogram_threshold = input_data.get("histogram_threshold", 0.5)
             edge_threshold = input_data.get("edge_threshold", 0.3)
-            return await real_frame_consistency_analyze(
+            result = await real_frame_consistency_analyze(
                 frames_artifact=frames_artifact,
                 histogram_threshold=histogram_threshold,
                 edge_threshold=edge_threshold,
             )
+            if result.get("error"):
+                await self._record_tool_error("frame_consistency_analysis", result["error"])
+            else:
+                await self._record_tool_result("frame_consistency_analysis", result)
+            return result
         
         async def face_swap_detection_handler(input_data: dict) -> dict:
             """Handle face swap detection with input_data dict."""
@@ -231,19 +246,34 @@ class Agent4Video(ForensicAgent):
             if artifact is None:
                 return {"error": "artifact is required"}
             confidence_threshold = input_data.get("confidence_threshold", 0.5)
-            return await real_face_swap_detect(
+            result = await real_face_swap_detect(
                 artifact=artifact,
                 confidence_threshold=confidence_threshold,
             )
+            if result.get("error"):
+                await self._record_tool_error("face_swap_detection", result["error"])
+            else:
+                await self._record_tool_result("face_swap_detection", result)
+            return result
         
         async def video_metadata_handler(input_data: dict) -> dict:
             """Handle video metadata extraction with input_data dict."""
             artifact = input_data.get("artifact") or self.evidence_artifact
-            return await real_video_metadata_extract(artifact=artifact)
+            result = await real_video_metadata_extract(artifact=artifact)
+            if result.get("error"):
+                await self._record_tool_error("video_metadata", result["error"])
+            else:
+                await self._record_tool_result("video_metadata", result)
+            return result
             
         async def deepfake_frequency_check_handler(input_data: dict) -> dict:
             artifact = input_data.get("frames_artifact") or input_data.get("artifact") or self.evidence_artifact
-            return await run_ml_tool("deepfake_frequency.py", artifact.file_path, timeout=25.0)
+            result = await run_ml_tool("deepfake_frequency.py", artifact.file_path, timeout=25.0)
+            if result.get("available") and not result.get("error"):
+                await self._record_tool_result("deepfake_frequency_check", result)
+            elif result.get("error"):
+                await self._record_tool_error("deepfake_frequency_check", result["error"])
+            return result
         
         async def anomaly_classification(input_data: dict) -> dict:
             """Classify anomaly via SSIM + motion vector analysis."""
@@ -264,19 +294,23 @@ class Agent4Video(ForensicAgent):
             """Validate rolling shutter via optical flow scanline skew analysis."""
             artifact = input_data.get("artifact") or self.evidence_artifact
             sample = input_data.get("sample_seconds", 5.0)
-            return await run_ml_tool(
+            result = await run_ml_tool(
                 "rolling_shutter_validator.py",
                 artifact.file_path,
                 extra_args=["--sample", str(sample)],
                 timeout=30.0
             )
+            if result.get("available") and not result.get("error"):
+                await self._record_tool_result("rolling_shutter_validation", result)
+            elif result.get("error"):
+                await self._record_tool_error("rolling_shutter_validation", result["error"])
+            return result
         
         async def inter_agent_call_handler(input_data: dict) -> dict:
             """Real inter-agent call via InterAgentBus."""
             if self._inter_agent_bus is None:
                 return {"status": "error", "message": "No inter_agent_bus injected"}
 
-            from core.inter_agent_bus import InterAgentCall, InterAgentCallType
             call = InterAgentCall(
                 caller_agent_id=self.agent_id,
                 callee_agent_id=input_data.get("target_agent", "Agent2"),
@@ -401,13 +435,23 @@ class Agent4Video(ForensicAgent):
             creation date, VFR flag, container/codec mismatch, and editing software signals.
             Fast (<20ms) — should be called first on every video/audio file."""
             artifact = input_data.get("artifact") or self.evidence_artifact
-            return await real_profile_av_container(artifact=artifact)
+            result = await real_profile_av_container(artifact=artifact)
+            if result.get("error"):
+                await self._record_tool_error("mediainfo_profile", result["error"])
+            else:
+                await self._record_tool_result("mediainfo_profile", result)
+            return result
 
         async def av_file_identity_handler(input_data: dict) -> dict:
             """Lightweight pre-screening: format, primary codec, duration, resolution,
             and any HIGH severity forensic flags only. Call before heavier ML tools."""
             artifact = input_data.get("artifact") or self.evidence_artifact
-            return await real_get_av_file_identity(artifact=artifact)
+            result = await real_get_av_file_identity(artifact=artifact)
+            if result.get("error"):
+                await self._record_tool_error("av_file_identity", result["error"])
+            else:
+                await self._record_tool_result("av_file_identity", result)
+            return result
 
         # CRITICAL: optical_flow_analysis must be registered FIRST - it's the primary tool for this agent
         registry.register("optical_flow_analysis", optical_flow_analysis_handler, "Full-timeline optical flow analysis")

@@ -118,8 +118,13 @@
 
 @keyframes text-scan-reveal {
   0% { opacity: 0.85; text-shadow: 0 0 0px transparent; }
-  50% { opacity: 1; text-shadow: 0 0 15px rgba(34, 211, 238, 0.2); }
+  50% { opacity: 1; text-shadow: 0 0 15px rgba(34, 211, 211, 0.2); }
   100% { opacity: 0.85; text-shadow: 0 0 0px transparent; }
+}
+
+@keyframes evidence-grid-scan {
+  0% { background-position: 0 0; }
+  100% { background-position: 64px 64px; }
 }
 
 /* Respect user's motion preference */
@@ -129,6 +134,11 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+  .glass-t1,
+  .glass-t2,
+  .glass-t3 {
+    transition: none !important;
   }
 }
 
@@ -145,13 +155,17 @@
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 4px 24px rgba(0, 0, 0, 0.3);
   }
 
-  /* Tier 2: Agent/step cards — lighter floating feel */
+  /* Tier 2: Agent/step cards — premium glass with depth */
   .glass-t2 {
-    background: rgba(255, 255, 255, 0.035);
-    backdrop-filter: blur(16px) saturate(140%);
-    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    background: rgba(255, 255, 255, 0.025);
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
     border: 1px solid rgba(255, 255, 255, 0.06);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 2px 12px rgba(0, 0, 0, 0.2);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.02),
+      0 4px 24px rgba(0, 0, 0, 0.25),
+      0 0 0 1px rgba(0, 0, 0, 0.1);
   }
 
   /* Tier 3: Navbar / modals — dense blur, high contrast */
@@ -510,23 +524,5 @@
   :focus-visible {
     outline: 2px solid #22d3ee;
     outline-offset: 2px;
-  }
-}
-
-/* ─── Accessibility: Reduced Motion ─────────────────────────────────── */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-
-  .glass-t1,
-  .glass-t2,
-  .glass-t3 {
-    transition: none !important;
   }
 }

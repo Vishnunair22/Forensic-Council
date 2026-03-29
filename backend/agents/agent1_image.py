@@ -7,18 +7,10 @@ compositing, and anti-forensics evasion.
 
 from __future__ import annotations
 
-import uuid
-from typing import Any
 
 from agents.base_agent import ForensicAgent
-from core.config import Settings
-from core.custody_logger import CustodyLogger
-from core.episodic_memory import EpisodicMemory
-from core.evidence import EvidenceArtifact
 from core.tool_registry import ToolRegistry
-from core.working_memory import WorkingMemory
 from core.ml_subprocess import run_ml_tool
-from infra.evidence_store import EvidenceStore
 # Import real tool implementations
 from tools.image_tools import (
     ela_full_image as real_ela_full_image,
@@ -77,7 +69,6 @@ class Agent1Image(ForensicAgent):
         uses frequency domain, noise fingerprint, and semantic analysis instead.
         """
         base = [
-            "Verify file hash against ingestion hash",
             "Perform semantic image understanding to identify image type and context",
             "Run frequency-domain GAN artifact detection",
             "Compute perceptual hash for similarity detection",
@@ -196,16 +187,26 @@ class Agent1Image(ForensicAgent):
             artifact = input_data.get("artifact") or self.evidence_artifact
             quality_levels = input_data.get("quality_levels")
             ghost_threshold = input_data.get("ghost_threshold", 5.0)
-            return await real_jpeg_ghost_detect(
+            result = await real_jpeg_ghost_detect(
                 artifact=artifact,
                 quality_levels=quality_levels,
                 ghost_threshold=ghost_threshold,
             )
+            if result.get("error"):
+                await self._record_tool_error("jpeg_ghost_detect", result["error"])
+            else:
+                await self._record_tool_result("jpeg_ghost_detect", result)
+            return result
         
         async def frequency_domain_analysis_handler(input_data: dict) -> dict:
             """Handle frequency domain analysis with input_data dict."""
             artifact = input_data.get("artifact") or self.evidence_artifact
-            return await real_frequency_domain_analysis(artifact=artifact)
+            result = await real_frequency_domain_analysis(artifact=artifact)
+            if result.get("error"):
+                await self._record_tool_error("frequency_domain_analysis", result["error"])
+            else:
+                await self._record_tool_result("frequency_domain_analysis", result)
+            return result
         
         async def file_hash_verify_handler(input_data: dict) -> dict:
             """Handle file hash verification with input_data dict."""
@@ -229,10 +230,15 @@ class Agent1Image(ForensicAgent):
             """Handle perceptual hash computation with input_data dict."""
             artifact = input_data.get("artifact") or self.evidence_artifact
             hash_size = input_data.get("hash_size", 8)
-            return await real_compute_perceptual_hash(
+            result = await real_compute_perceptual_hash(
                 artifact=artifact,
                 hash_size=hash_size,
             )
+            if result.get("error"):
+                await self._record_tool_error("perceptual_hash", result["error"])
+            else:
+                await self._record_tool_result("perceptual_hash", result)
+            return result
             
         async def ela_anomaly_classify_handler(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact
@@ -277,7 +283,8 @@ class Agent1Image(ForensicAgent):
                 return result
             # Inline ELA fallback using PIL re-save at different quality
             try:
-                import io, numpy as np
+                import io
+                import numpy as np
                 from PIL import Image
                 img = Image.open(artifact.file_path).convert("RGB")
                 buf = io.BytesIO()
@@ -321,7 +328,8 @@ class Agent1Image(ForensicAgent):
                 return result
             # Inline DCT splicing fallback (same as agent3)
             try:
-                import cv2, numpy as np
+                import cv2
+                import numpy as np
                 from PIL import Image
                 img = np.array(Image.open(artifact.file_path).convert("L"))
                 h, w = img.shape
@@ -353,42 +361,25 @@ class Agent1Image(ForensicAgent):
         async def noise_fingerprint_handler(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact
             # For lossless images (screenshots, digitally-created), PRNU camera sensor
-            # noise fingerprint is NOT meaningful (no camera sensor pattern). However, we
-            # still run a regional noise consistency analysis to detect compositing artifacts
-            # where regions from different sources were combined.
+            # noise fingerprint is NOT meaningful — no camera sensor pattern exists.
+            # Regional texture consistency also produces false INCONSISTENT on screenshots
+            # because text/UI/whitespace naturally creates uneven Laplacian variance.
+            # Mark as NOT_APPLICABLE like Agent3 does for the same reason.
             if self._is_lossless:
-                # Run regional noise consistency analysis instead of PRNU
-                try:
-                    import cv2, numpy as np
-                    from PIL import Image
-                    img = np.array(Image.open(artifact.file_path).convert("L"), dtype=np.float32)
-                    h, w = img.shape
-                    # Use Laplacian to detect edge/texture differences across regions
-                    laplacian = cv2.Laplacian(img, cv2.CV_32F)
-                    rh, rw = h // 3, w // 3
-                    region_variances = []
-                    for r in range(3):
-                        for c in range(3):
-                            region = laplacian[r*rh:(r+1)*rh, c*rw:(c+1)*rw]
-                            region_variances.append(float(np.var(region)))
-                    mean_var = float(np.mean(region_variances))
-                    std_var = float(np.std(region_variances))
-                    cv_coefficient = std_var / (mean_var + 1e-6)
-                    # High CV indicates inconsistent texture across regions (possible compositing)
-                    inconsistent = cv_coefficient > 0.6
-                    return {
-                        "verdict": "INCONSISTENT" if inconsistent else "CONSISTENT",
-                        "noise_consistency_score": round(1.0 - min(cv_coefficient, 1.0), 3),
-                        "outlier_region_count": int(sum(1 for v in region_variances if abs(v - mean_var) > std_var)),
-                        "total_regions": len(region_variances),
-                        "region_variances": [round(v, 2) for v in region_variances],
-                        "analysis_type": "regional_texture_consistency",
-                        "backend": "laplacian-regional-inline",
-                        "court_defensible": True, "available": True,
-                        "file_format_note": "Lossless format: running regional texture consistency instead of PRNU camera fingerprint.",
-                    }
-                except Exception as e:
-                    return {"verdict": "INCONCLUSIVE", "error": str(e), "backend": "tool-exception", "court_defensible": False}
+                return {
+                    "noise_fingerprint_not_applicable": True,
+                    "verdict": "NOT_APPLICABLE",
+                    "prnu_verdict": "NOT_APPLICABLE",
+                    "file_format_note": (
+                        "PRNU noise fingerprint analysis is only valid for camera-captured images. "
+                        "Lossless format (PNG/BMP/TIFF/GIF/WEBP) indicates a screenshot or "
+                        "digitally-created file with no camera sensor noise pattern. "
+                        "Texture-based regional analysis on such files produces false INCONSISTENT "
+                        "results due to natural content variation (text, UI, whitespace)."
+                    ),
+                    "court_defensible": True,
+                    "available": True,
+                }
             regions = input_data.get("regions", 6)
             result = await run_ml_tool("noise_fingerprint.py", artifact.file_path,
                                       extra_args=["--regions", str(regions)], timeout=10.0)
@@ -396,7 +387,8 @@ class Agent1Image(ForensicAgent):
                 return result
             # Inline noise fingerprint fallback
             try:
-                import cv2, numpy as np
+                import cv2
+                import numpy as np
                 from PIL import Image
                 img = np.array(Image.open(artifact.file_path).convert("L"), dtype=np.float32)
                 h, w = img.shape
@@ -431,7 +423,7 @@ class Agent1Image(ForensicAgent):
             # regions, gradient banding from JPEG-then-PNG conversion, synthetic content).
             if self._is_lossless:
                 try:
-                    import cv2, numpy as np
+                    import numpy as np
                     from PIL import Image
                     img = np.array(Image.open(artifact.file_path).convert("L"), dtype=np.float32)
                     fft = np.fft.fft2(img)
@@ -485,7 +477,7 @@ class Agent1Image(ForensicAgent):
                 return result
             # Inline frequency analysis fallback using FFT
             try:
-                import cv2, numpy as np
+                import numpy as np
                 from PIL import Image
                 img = np.array(Image.open(artifact.file_path).convert("L"), dtype=np.float32)
                 fft = np.fft.fft2(img)
@@ -526,7 +518,8 @@ class Agent1Image(ForensicAgent):
                 return result
             # Inline SIFT fallback
             try:
-                import cv2, numpy as np
+                import cv2
+                import numpy as np
                 from PIL import Image
                 img = np.array(Image.open(artifact.file_path).convert("L"))
                 sift = cv2.SIFT_create(nfeatures=500)
@@ -803,7 +796,8 @@ class Agent1Image(ForensicAgent):
             if result.get("available") and not result.get("error"):
                 return result
             try:
-                import cv2, numpy as np
+                import cv2
+                import numpy as np
                 from PIL import Image
                 img = np.array(Image.open(artifact.file_path).convert("RGB"), dtype=np.float32)
                 h, w = img.shape[:2]
@@ -867,8 +861,21 @@ class Agent1Image(ForensicAgent):
             cross-channel correlations that are specific to the sensor pipeline. Regions pasted
             from another source or AI-generated areas break this pattern — the R/G and G/B
             channel correlation will be statistically inconsistent across blocks.
+
+            NOT APPLICABLE for lossless/digitally-created images — no Bayer CFA pattern exists.
             """
             artifact = input_data.get("artifact") or self.evidence_artifact
+            if self._is_lossless:
+                return {
+                    "cfa_verdict": "NOT_APPLICABLE",
+                    "file_format_note": (
+                        "CFA demosaicing pattern analysis requires a camera-captured image with "
+                        "Bayer filter array. Lossless format (PNG/BMP/TIFF/GIF/WEBP) indicates "
+                        "a screenshot or digitally-created file with no CFA pattern."
+                    ),
+                    "court_defensible": True,
+                    "available": True,
+                }
             result = await run_ml_tool("cfa_demosaicing.py", artifact.file_path, timeout=45.0)
             if result.get("available") and not result.get("error"):
                 return result

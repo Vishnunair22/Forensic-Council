@@ -38,7 +38,7 @@ const TOAST_REMOVE_DELAY = 1000;
 let count = 0;
 
 function genId() {
-  count = (count + 1) % Number.MAX_VALUE;
+  count = (count + 1) % 1_000_000;
   return count.toString();
 }
 

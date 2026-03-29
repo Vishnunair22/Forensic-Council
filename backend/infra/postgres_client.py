@@ -8,12 +8,12 @@ Supports async context managers and logs connection events.
 
 import asyncio
 import json
-from typing import Any, Optional, AsyncGenerator
+from typing import Any, Optional
 import asyncpg
 from asyncpg import Pool, Connection
 
 from core.config import get_settings
-from core.logging import get_logger
+from core.structured_logging import get_logger
 from core.exceptions import DatabaseConnectionError
 
 logger = get_logger(__name__)

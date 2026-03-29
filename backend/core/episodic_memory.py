@@ -6,7 +6,6 @@ Qdrant-backed episodic memory for forensic signature storage.
 Part of the dual-layer memory architecture.
 """
 
-import json
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
@@ -14,7 +13,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
-from core.logging import get_logger
+from core.structured_logging import get_logger
 from core.custody_logger import CustodyLogger, EntryType
 from infra.qdrant_client import QdrantClient, get_qdrant_client, EPISODIC_MEMORY_COLLECTION
 
@@ -162,6 +161,7 @@ class EpisodicMemory:
             return
 
         # Upsert to Qdrant
+        assert self._qdrant is not None
         try:
             await self._qdrant.upsert(
                 collection_name=EPISODIC_MEMORY_COLLECTION,
@@ -224,6 +224,7 @@ class EpisodicMemory:
             filter_conditions = {"signature_type": signature_type.value}
 
         # Query Qdrant
+        assert self._qdrant is not None
         try:
             results = await self._qdrant.query(
                 collection_name=EPISODIC_MEMORY_COLLECTION,
@@ -282,6 +283,7 @@ class EpisodicMemory:
             return []
 
         # Query with case_id filter using scroll (filter-only query)
+        assert self._qdrant is not None
         try:
             results = await self._qdrant.scroll(
                 collection_name=EPISODIC_MEMORY_COLLECTION,
@@ -325,6 +327,7 @@ class EpisodicMemory:
             return []
 
         # Query with session_id filter using scroll (filter-only query)
+        assert self._qdrant is not None
         try:
             results = await self._qdrant.scroll(
                 collection_name=EPISODIC_MEMORY_COLLECTION,

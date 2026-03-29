@@ -7,11 +7,11 @@ Routes for managing investigation sessions.
 
 from typing import List, Optional
 import asyncio
-import json
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
 from core.auth import get_current_user, User, decode_token
+from core.structured_logging import get_logger
 from api.routes.investigation import (
     get_all_active_pipelines,
     get_active_pipeline,
@@ -29,6 +29,7 @@ from fastapi.responses import JSONResponse
 from datetime import datetime, timezone
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
+logger = get_logger(__name__)
 
 
 def _forensic_report_to_dto(report) -> ReportDTO:
@@ -223,8 +224,8 @@ async def live_updates(websocket: WebSocket, session_id: str):
             pipeline_found = True
             break
         if i % 20 == 0 and i > 0:
-            import logging
-            logging.getLogger(__name__).info(f"WS for {session_id} still waiting for pipeline registration...")
+            from core.structured_logging import get_logger as _gl
+            _gl(__name__).info(f"WS for {session_id} still waiting for pipeline registration...")
         await asyncio.sleep(0.1)
 
     # ── 2. Accept the WebSocket BEFORE checking — required by the WS protocol.
@@ -419,7 +420,6 @@ async def get_session_report(
     # ── 3. PostgreSQL — restart-resilient fallback ────────────────────────────
     try:
         from core.session_persistence import get_session_persistence
-        from api.schemas import ReportDTO as _ReportDTO
         persistence = await get_session_persistence()
         db_row = await persistence.get_report(session_id)
         if db_row:
@@ -548,7 +548,7 @@ async def get_agent_brief(
                     # Extract the most recent in-progress task description as brief
                     tasks = getattr(state, "tasks", [])
                     in_progress = [t for t in tasks if getattr(t, "status", None) and
-                                   str(t.status).endswith("IN_PROGRESS")]
+                                   str(getattr(t, "status", "")) == "IN_PROGRESS"]
                     if in_progress:
                         brief_text = getattr(in_progress[-1], "description", "")
         except Exception:
@@ -600,8 +600,8 @@ async def get_session_checkpoints(
             })
     except Exception as e:
         # Non-fatal — return empty list if DB unavailable
-        import logging
-        logging.getLogger(__name__).warning(f"Failed to fetch checkpoints: {e}")
+        from core.structured_logging import get_logger as _gl
+        _gl(__name__).warning(f"Failed to fetch checkpoints: {e}")
 
     return checkpoints
 
@@ -638,7 +638,7 @@ async def resume_investigation(
     Returns 200 with idempotency: if the event was already set, returns
     {"status": "already_resumed"} rather than 409.
     """
-    from core.logging import get_logger as _get_logger
+    from core.structured_logging import get_logger as _get_logger
     _log = _get_logger(__name__)
 
     _log.info(

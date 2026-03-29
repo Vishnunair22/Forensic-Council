@@ -1,7 +1,6 @@
 import asyncio
 import os
 import sys
-import json
 import logging
 from pathlib import Path
 from uuid import uuid4
@@ -11,7 +10,6 @@ os.environ["APP_ENV"] = "testing"
 sys.path.insert(0, "/app")
 
 from orchestration.pipeline import ForensicCouncilPipeline
-from core.config import get_settings
 
 # Configure logging to be less noisy during the sweep
 logging.basicConfig(level=logging.ERROR)
@@ -66,7 +64,6 @@ async def run_stress_test():
             # 3. Deep Analysis Phase
             print("  [PHASE] Deep Analysis...")
             # We must simulate the deep analysis trigger
-            from orchestration.pipeline import AgentLoopResult
             
             deep_results = []
             # We run Agents 1, 3, 5 for deep pass on images

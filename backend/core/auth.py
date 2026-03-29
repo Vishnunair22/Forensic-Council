@@ -21,7 +21,7 @@ from pydantic import BaseModel
 warnings.filterwarnings("ignore", ".*error reading bcrypt version.*", UserWarning)
 
 from core.config import get_settings
-from core.logging import get_logger
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -172,18 +172,25 @@ async def decode_token(token: str) -> TokenData:
 # This provides a safety net when Redis is unavailable
 _recently_blacklisted: dict[str, float] = {}  # token_hash -> expiry_timestamp
 _LOCAL_BLACKLIST_MAX_AGE = 3600  # 1 hour max age for local blacklist entries
+_LOCAL_BLACKLIST_MAX_SIZE = 10000  # prevent unbounded memory growth
 
 
 def _cleanup_local_blacklist() -> None:
     """Remove expired entries from local blacklist cache."""
     import time
     current_time = time.time()
+    # Build list of expired keys first, then delete (safe iteration)
     expired_keys = [
         k for k, v in _recently_blacklisted.items()
         if current_time > v
     ]
     for k in expired_keys:
         _recently_blacklisted.pop(k, None)
+    # Enforce max size by dropping oldest entries if needed
+    if len(_recently_blacklisted) > _LOCAL_BLACKLIST_MAX_SIZE:
+        sorted_items = sorted(_recently_blacklisted.items(), key=lambda item: item[1])
+        for k, _ in sorted_items[:len(_recently_blacklisted) - _LOCAL_BLACKLIST_MAX_SIZE]:
+            _recently_blacklisted.pop(k, None)
 
 
 async def is_token_blacklisted(token: str) -> bool:

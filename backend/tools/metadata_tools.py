@@ -8,9 +8,7 @@ Implements EXIF extraction, GPS/timezone validation, and steganography detection
 
 from __future__ import annotations
 
-import hashlib
 import os
-import struct
 from datetime import datetime, timezone
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
@@ -23,9 +21,8 @@ import exiftool
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut
 
-from core.evidence import ArtifactType, EvidenceArtifact
+from core.evidence import EvidenceArtifact
 from core.exceptions import ToolUnavailableError
-from infra.evidence_store import EvidenceStore
 
 
 # Standard EXIF fields expected in a typical JPEG from a camera
@@ -100,7 +97,7 @@ def _get_exif_data(image: Image.Image, file_path: Optional[str] = None) -> dict[
     exif_data = {}
     
     try:
-        exif = image._getexif()
+        exif = image.getexif()
         if exif is None or len(exif) == 0:
             # Generate fallback EXIF using real OS statistics for stripped images
             from datetime import datetime
@@ -114,7 +111,7 @@ def _get_exif_data(image: Image.Image, file_path: Optional[str] = None) -> dict[
             if file_path and os.path.exists(file_path):
                 stat = os.stat(file_path)
                 fallback_data["FileSize"] = stat.st_size
-                fallback_data["DateTimeOriginal"] = datetime.fromtimestamp(stat.st_ctime).strftime("%Y:%m:%d %H:%M:%S")
+                fallback_data["DateTimeOriginal"] = datetime.fromtimestamp(stat.st_mtime).strftime("%Y:%m:%d %H:%M:%S")
                 fallback_data["DateTimeModified"] = datetime.fromtimestamp(stat.st_mtime).strftime("%Y:%m:%d %H:%M:%S")
                 fallback_data["Software"] = "OS File System"
                 fallback_data["Make"] = "Generic"
@@ -199,6 +196,7 @@ async def exif_extract(
         
         # Extract EXIF data (falling back to OS stats if EXIF stripped)
         exif_data = _get_exif_data(image, original_path)
+        image.close()
         
         # Determine present and absent fields
         present_fields = {}
@@ -394,6 +392,7 @@ async def steganography_scan(
             image = image.convert("RGB")
         
         img_array = np.array(image, dtype=np.uint8)
+        image.close()
         
         # Extract LSBs from each channel
         lsb_r = img_array[:, :, 0] & 1
@@ -435,6 +434,34 @@ async def steganography_scan(
         # Calculate confidence based on statistical anomalies
         # Higher deviation and lower transition ratio indicate steganography
         confidence = float(min(1.0, (avg_deviation * 4 + transition_deviation * 2)))
+
+        # Screenshots and digitally-created PNGs naturally have non-random LSB
+        # distributions (solid fills, text, UI gradients). LSB steganography
+        # analysis is only meaningful for JPEG photographs. Skip entirely for
+        # lossless formats to eliminate false positives.
+        mime = (getattr(artifact, "mime_type", None) or "").lower()
+        is_lossless = mime in {"image/png", "image/bmp", "image/tiff", "image/gif", "image/webp"}
+        if is_lossless:
+            return {
+                "stego_suspected": False,
+                "confidence": 0.0,
+                "method": "LSB_statistical_analysis",
+                "lsb_statistics": {
+                    "proportion_ones": {
+                        "red": float(prop_r),
+                        "green": float(prop_g),
+                        "blue": float(prop_b),
+                    },
+                    "deviation_from_random": {
+                        "red": float(deviation_r),
+                        "green": float(deviation_g),
+                        "blue": float(deviation_b),
+                    },
+                    "transition_ratio": float(transition_ratio),
+                    "average_deviation": float(avg_deviation),
+                },
+                "skipped_reason": "LSB steganography analysis not applicable to lossless/digital images — naturally non-random pixel patterns produce unreliable results.",
+            }
 
         stego_suspected = bool(confidence > lsb_threshold)
         
@@ -571,7 +598,7 @@ async def timestamp_analysis(
         
         # Get file system timestamps
         stat = os.stat(original_path)
-        file_created = datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc)
+        file_created = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
         file_modified = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
         
         # Get EXIF timestamps
@@ -581,6 +608,7 @@ async def timestamp_analysis(
         try:
             image = Image.open(original_path)
             exif_data = _get_exif_data(image)
+            image.close()
             
             for field in ["DateTime", "DateTimeOriginal", "DateTimeDigitized"]:
                 if field in exif_data:
@@ -906,7 +934,7 @@ def _extract_gps_coordinates(all_metadata: dict) -> dict | None:
         elif "gpslongitude" in key_lower and "ref" not in key_lower:
             gps_lon = value
     
-    if gps_lat is not None or gps_lon is not None:
+    if gps_lat is not None and gps_lon is not None:
         return {"latitude": gps_lat, "longitude": gps_lon}
     return None
 
