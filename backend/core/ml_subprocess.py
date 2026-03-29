@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-ML_TOOLS_DIR = Path(__file__).parent.parent / "scripts" / "ml_tools"
+ML_TOOLS_DIR = Path(__file__).parent.parent / "tools" / "ml_tools"
 
 
 async def run_ml_tool(

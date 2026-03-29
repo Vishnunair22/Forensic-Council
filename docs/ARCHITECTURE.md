@@ -128,7 +128,7 @@ All 5 specialist agents extend `ForensicAgent` (abstract base class) and share:
 
 ## ML Subprocess Architecture
 
-Heavy ML inference runs in isolated subprocesses (`backend/scripts/ml_tools/`) via `asyncio.create_subprocess_exec`. This prevents the Python GIL and long-running CPU operations from blocking the async event loop and dropping WebSocket connections.
+Heavy ML inference runs in isolated subprocesses (`backend/tools/ml_tools/`) via `asyncio.create_subprocess_exec`. This prevents the Python GIL and long-running CPU operations from blocking the async event loop and dropping WebSocket connections.
 
 | Script | Tool | Agent |
 |--------|------|-------|
@@ -158,4 +158,4 @@ Sequential execution trades total wall-clock time for predictable memory usage, 
 
 ## Frontend Implementation Details
 
-For extremely detailed breakdowns of the Next.js component hierarchy, props, and custom hooks, refer to the **[Component Guide](file:///d:/Forensic%20Council/frontend/COMPONENTS.md)**. The frontend follows a strict separation of concerns between the API layer (`lib/api.ts`), custom hooks (`hooks/useSimulation.ts`), and the accessible component library (`components/evidence/`).
+For extremely detailed breakdowns of the Next.js component hierarchy, props, and custom hooks, refer to the **[Component Guide](COMPONENTS.md)**. The frontend follows a strict separation of concerns between the API layer (`lib/api.ts`), custom hooks (`hooks/useSimulation.ts`), and the accessible component library (`components/evidence/`).

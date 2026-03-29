@@ -64,14 +64,14 @@ def flag(severity, location, msg):
 
 
 # ── Test fixtures ─────────────────────────────────────────────────────────
-TEST_IMAGE_PATH = str(Path(__file__).parent / "test image.webp")
+TEST_IMAGE_PATH = str(Path(__file__).parent / "fixtures" / "test_image.webp")
 
 async def create_evidence_artifact(config):
     """Create evidence artifact from test image."""
     file_path = Path(TEST_IMAGE_PATH)
     if not file_path.exists():
         # Try alternate locations
-        for alt in ["test image.webp", "test-images/test1.jpg"]:
+        for alt in ["fixtures/test_image.webp", "tests/fixtures/test_image.webp"]:
             if Path(alt).exists():
                 file_path = Path(alt)
                 break

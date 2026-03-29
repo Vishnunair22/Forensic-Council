@@ -139,10 +139,10 @@ All production bugs and their resolutions, ordered chronologically.
 **Symptom:** Running `pytest tests/backend/` from project root fails immediately. `test_auth.py` crashes with `ImportError: No module named 'core'`. `test_config_signing_schemas.py` crashes with `ModuleNotFoundError: No module named 'backend'`.
 
 **Root Cause:** Two issues:
-1. Root `pytest.ini` lacked `pythonpath` — Python couldn't find `core`, `infra`, etc.
+1. Root `setup.cfg` lacked `pythonpath` — Python couldn't find `core`, `infra`, etc.
 2. `backend/` had no `__init__.py` — `from backend.core.config import ...` always failed.
 
-**Fix:** Added `pythonpath = . backend` to `pytest.ini` and created `backend/__init__.py`.
+**Fix:** Added `pythonpath = . backend` to root `setup.cfg` and created `backend/__init__.py`.
 
 ---
 

@@ -60,12 +60,12 @@ Thumbs.db
 desktop.ini
 nul
 
-# ── Test images (binary, not for version control) ────────────────────────────
-test-images/
-test*.webp
-test*.png
-test*.jpg
-test*.jpeg
+# ── Test fixtures (binary, not for version control) ──────────────────────────
+tests/fixtures/*.webp
+tests/fixtures/*.png
+tests/fixtures/*.jpg
+tests/fixtures/*.jpeg
+!tests/fixtures/.gitkeep
 
 # ── IDE / Editor ─────────────────────────────────────────────────────────────
 .idea/

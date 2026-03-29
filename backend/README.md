@@ -54,10 +54,23 @@ orchestration/
   session_manager.py     ← Session lifecycle, HITL checkpoint state management
 
 scripts/
-  ml_tools/              ← Heavy ML subprocesses (run out-of-process via asyncio.create_subprocess_exec)
   docker_entrypoint.sh   ← Cache status check + server start
   model_cache_check.py   ← Startup ML volume status reporter
+  model_pre_download.py  ← First-run ML model pre-download
   init_db.py             ← Bootstrap admin/investigator users from env vars
+  run_api.py             ← Uvicorn API server runner
+  run_stress_test.py     ← Load testing script
+  smoke_test.sh          ← End-to-end smoke test
+
+tools/
+  ml_tools/              ← Heavy ML subprocesses (run out-of-process via asyncio.create_subprocess_exec)
+  image_tools.py         ← Image analysis tool implementations
+  audio_tools.py         ← Audio analysis tool implementations
+  video_tools.py         ← Video analysis tool implementations
+  metadata_tools.py      ← Metadata extraction tool implementations
+  ocr_tools.py           ← OCR tool implementations
+  clip_utils.py          ← CLIP model utilities
+  mediainfo_tools.py     ← Media container analysis
 ```
 
 ---
@@ -146,7 +159,7 @@ pytest tests/backend/security/   -v  # Auth bypass, injection, CORS
 pytest tests/backend/ --cov=backend --cov-report=html
 ```
 
-> **Note:** Tests must be run from the **project root** (not from `backend/`). The root `pytest.ini` sets `pythonpath = . backend` so both `from core.auth` and `from backend.core.config` import styles work correctly.
+> **Note:** Tests must be run from the **project root** (not from `backend/`). The root `setup.cfg` sets `pythonpath = . backend` so both `from core.auth` and `from backend.core.config` import styles work correctly.
 
 ---
 
@@ -170,13 +183,13 @@ Heavy ML inference runs out-of-process via `asyncio.create_subprocess_exec` to p
 
 | Script | Tool | Agent |
 |--------|------|-------|
-| `ela_anomaly_classifier.py` | IsolationForest ELA blocks | Agent 1 |
-| `noise_fingerprint.py` | PRNU camera noise fingerprint | Agent 1 |
-| `copy_move_detector.py` | SIFT copy-move forgery | Agent 1 |
-| `splicing_detector.py` | SRM noise residual splicing | Agent 1, 3 |
-| `audio_splice_detector.py` | Spectral splice detection | Agent 2 |
-| `deepfake_frequency.py` | DCT frequency deepfake | Agent 2, 4 |
-| `anomaly_classifier.py` | IsolationForest scene anomaly | Agent 3 |
-| `lighting_analyzer.py` | Shadow/highlight consistency | Agent 3 |
-| `rolling_shutter_validator.py` | Temporal rolling shutter | Agent 4 |
-| `metadata_anomaly_scorer.py` | EXIF entropy scoring | Agent 5 |
+| `tools/ml_tools/ela_anomaly_classifier.py` | IsolationForest ELA blocks | Agent 1 |
+| `tools/ml_tools/noise_fingerprint.py` | PRNU camera noise fingerprint | Agent 1 |
+| `tools/ml_tools/copy_move_detector.py` | SIFT copy-move forgery | Agent 1 |
+| `tools/ml_tools/splicing_detector.py` | SRM noise residual splicing | Agent 1, 3 |
+| `tools/ml_tools/audio_splice_detector.py` | Spectral splice detection | Agent 2 |
+| `tools/ml_tools/deepfake_frequency.py` | DCT frequency deepfake | Agent 2, 4 |
+| `tools/ml_tools/anomaly_classifier.py` | IsolationForest scene anomaly | Agent 3 |
+| `tools/ml_tools/lighting_analyzer.py` | Shadow/highlight consistency | Agent 3 |
+| `tools/ml_tools/rolling_shutter_validator.py` | Temporal rolling shutter | Agent 4 |
+| `tools/ml_tools/metadata_anomaly_scorer.py` | EXIF entropy scoring | Agent 5 |

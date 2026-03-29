@@ -40,7 +40,7 @@ Upload → [✅] → Evidence Store → [✅] → Agent Dispatch → [✅] → C
 | S4-4 | `infra/qdrant_client.py` | Singleton `get_qdrant_client()` had no `asyncio.Lock` — race condition under concurrent startup creates multiple QdrantClient instances (connection leak) | Added `asyncio.Lock` with double-checked locking; added missing `import asyncio` |
 | S4-5 | `reports/report_renderer.py` | `render_html()` inserted raw user-controlled fields (`case_id`, `executive_summary`, etc.) into HTML without escaping — XSS vector | Added `from html import escape as _esc`; wrapped all user fields |
 | S4-6 | `infra/postgres_client.py` | `TransactionContext.fetch()` and `fetch_one()` passed raw args without `json.dumps(dict)` conversion — inconsistency with all other methods | Added dict→JSON processing to both methods |
-| S4-7 | `pytest.ini` (root) | Missing `pythonpath` setting — `from core.auth` raises `ImportError`; `from backend.core.config` raises `ModuleNotFoundError` | Added `pythonpath = . backend` |
+| S4-7 | `setup.cfg` (root) | Missing `pythonpath` setting — `from core.auth` raises `ImportError`; `from backend.core.config` raises `ModuleNotFoundError` | Added `pythonpath = . backend` |
 | S4-8 | `backend/__init__.py` | Missing — `from backend.core.config` always raised `ModuleNotFoundError: No module named 'backend'` | Created empty `backend/__init__.py` |
 | S4-9 | `.github/workflows/ci.yml` | `pytest tests/unit/` ran from `backend/` directory where only empty `__init__.py` stubs exist — tests never executed | Fixed to `pytest tests/backend/ tests/infrastructure/ tests/docker/` from project root |
 

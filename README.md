@@ -62,7 +62,7 @@ cp .env.example .env
 # Edit .env: set LLM_API_KEY (Groq, required) and GEMINI_API_KEY (recommended)
 
 # 2. Start
-docker compose up --build
+docker compose -f docs/docker/docker-compose.yml --env-file .env up --build
 ```
 
 **Access:**
@@ -81,9 +81,9 @@ Login: username `investigator`, password = `NEXT_PUBLIC_DEMO_PASSWORD` from `.en
 | Command | Action |
 |---------|--------|
 | `docker compose up` | Standard start |
-| `docker compose -f docs/docker/docker-compose.dev.yml up` | Development start (hot-reload) |
-| `docker compose -f docs/docker/docker-compose.prod.yml up` | Production build |
-| `docker compose -f docs/docker/docker-compose.infra.yml up` | Postgres + Redis + Qdrant only |
+| `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml up` | Development start (hot-reload) |
+| `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.prod.yml up` | Production build |
+| `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.infra.yml up` | Postgres + Redis + Qdrant only |
 | `docker compose logs -f` | Tail all logs |
 | `docker compose down` | Stop (keep volumes) |
 | `docker compose down -v` | Stop + delete all volumes |
@@ -173,7 +173,7 @@ Full caching guide → [`docs/docker/README.md`](docs/docker/README.md)
 **v1.1.0 (2026-03-24)** — Comprehensive Minimalist Redesign & Robustness Audit:
 - **UI Redesign**: Transitioned from "CyberNoir" neon aesthetic to a premium Indigo/Slate minimalist design system.
 - **Component Standardisation**: Replaced all custom neon panels with `SurfaceCard` and `surface-panel` classes; added index barrels for cleaner imports.
-- **Orchestration**: Simplifed Docker entry point with a root-level `docker-compose.yml` and updated build documentation.
+- **Orchestration**: Simplifed Docker entry point with `docs/docker/docker-compose.yml` and updated build documentation.
 - **Audit**: Phase 1 of the 5-phase comprehensive codebase audit completed (Cleanup, missing files, and structure).
 - **Security**: Reinforced CSP headers and correlation tracking in FastAPI middleware.
 
@@ -187,7 +187,7 @@ Full caching guide → [`docs/docker/README.md`](docs/docker/README.md)
 - **UI**: Syne + JetBrains Mono fonts · `MicroscopeScanner` + `EnvelopeCTA` + `GlassCard` · Glass agent cards with skeleton loading · `GlobalFooter` on all pages · `PageTransition` · `cursor: pointer` globally
 - **Audit fixes (v1.0.2–v1.0.4)**: JWT 60-min expiry · Rate limiting · Bootstrap credentials from env vars · Redis/PostgreSQL production hardening · ECDSA signing · numpy<2.0 bound · Test file correct imports
 
-Full changelog → [`docs/status/Development-Status.md`](docs/status/Development-Status.md)
+Full changelog → [`docs/Development-Status.md`](docs/Development-Status.md)
 
 ---
 

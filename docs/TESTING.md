@@ -8,6 +8,14 @@
 
 ```
 tests/
+├── fixtures/                           ← Test media files (gitignored)
+│   ├── test_image.webp
+│   ├── ai_persona_test.png
+│   ├── alley_object_test.png
+│   ├── beach_gps_test.png
+│   ├── invoice_ela_test.png
+│   ├── sample_evidence.png
+│   └── whatsapp_context_test.png
 ├── frontend/
 │   ├── unit/
 │   │   ├── lib/api.test.ts              ← API client: tokens, auth, investigation, WS, polling
@@ -33,8 +41,9 @@ tests/
 │   └── test_infrastructure.py           ← docker-compose structure, Dockerfiles, env vars, CI
 ├── docker/
 │   └── test_docker.py                   ← Service config, ports, volumes, healthchecks
-└── connectivity/
-    └── test_connectivity.py             ← Live service pings (requires running stack)
+├── connectivity/
+│   └── test_connectivity.py             ← Live service pings (requires running stack)
+└── test_forensic_system.py              ← Full system pipeline test (Agent 1-5 + Arbiter)
 ```
 
 ---
@@ -77,15 +86,14 @@ pytest tests/ --ignore=tests/frontend --ignore=tests/connectivity -v
 pytest tests/backend/unit/      -v        # Unit tests (no infra needed)
 pytest tests/backend/integration/ -v     # API routes (mocked infra)
 pytest tests/backend/security/    -v     # Security checks
-pytest tests/infrastructure/      -v     # Static config analysis
-pytest tests/docker/               -v    # Docker Compose validation
+pytest tests/infra/               -v     # Static config analysis
 
 # With coverage
 pip install pytest-cov
 pytest tests/backend/ --cov=backend --cov-report=html
 ```
 
-> **Critical:** Run from the **project root** directory. The root `pytest.ini` sets `pythonpath = . backend`. This is required for both `from core.auth` (direct) and `from backend.core.config` (prefixed) imports to work.
+> **Critical:** Run from the **project root** directory. The root `setup.cfg` sets `pythonpath = . backend`. This is required for both `from core.auth` (direct) and `from backend.core.config` (prefixed) imports to work.
 
 ### Connectivity Tests (requires running stack)
 

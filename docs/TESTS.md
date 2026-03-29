@@ -47,13 +47,13 @@ pytest tests/backend/integration/ -v # Routes: all HTTP endpoints (mocked infra)
 pytest tests/backend/security/   -v  # Security: auth bypass, injection, CORS
 
 # Infrastructure static analysis
-pytest tests/infrastructure/ tests/docker/ -v
+pytest tests/infra/ -v
 
 # With coverage
 pytest tests/backend/ --cov=backend --cov-report=html
 ```
 
-> **Important:** Run pytest from the **project root** directory, not from `backend/`. The root `pytest.ini` sets `pythonpath = . backend` so both `from core.auth` (direct) and `from backend.core.config` (prefixed) import styles resolve correctly.
+> **Important:** Run pytest from the **project root** directory, not from `backend/`. The root `setup.cfg` sets `pythonpath = . backend` so both `from core.auth` (direct) and `from backend.core.config` (prefixed) import styles resolve correctly.
 
 ### Connectivity Tests (requires running Docker stack)
 

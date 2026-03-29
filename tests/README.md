@@ -8,6 +8,7 @@
 
 ```
 tests/
+├── fixtures/       ← Test media files (gitignored)
 ├── frontend/
 │   ├── unit/
 │   │   ├── lib/        api.test.ts, schemas_utils.test.ts
@@ -21,9 +22,9 @@ tests/
 │   ├── unit/core/      test_auth.py, test_config_signing_schemas.py
 │   ├── integration/    test_api_routes.py
 │   └── security/       test_security.py
-├── infrastructure/     test_infrastructure.py
-├── docker/             test_docker.py
-└── connectivity/       test_connectivity.py  (requires running stack)
+├── infra/              test_infra_standards.py
+├── connectivity/       test_connectivity.py  (requires running stack)
+└── test_forensic_system.py  ← Full pipeline test
 ```
 
 ---
@@ -96,4 +97,4 @@ pytest tests/connectivity/ -v
 | ECDSA tamper detection | `backend/unit/core/test_config_signing_schemas.py` |
 | Resume endpoint correct URL | `backend/integration/test_api_routes.py` |
 
-Full documentation → [`../docs/test/TESTING.md`](../docs/test/TESTING.md)
+Full documentation → [`../docs/TESTING.md`](../docs/TESTING.md)
