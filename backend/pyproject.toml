@@ -1,6 +1,6 @@
 [project]
 name = "forensic_council"
-version = "1.0.4"
+version = "1.1.1"
 description = "Multi-Agent Forensic Evidence Analysis System"
 # Upper bound: qdrant-client 1.14.1–1.16.1 force numpy>=2.1 on py3.13+, conflicting
 # with moviepy 1.x which requires numpy<2.0. Docker image uses Python 3.12.

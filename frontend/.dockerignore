@@ -10,10 +10,17 @@ npm-debug.log*
 .next/
 out/
 
-# Env files
+# Env files and secrets
 .env
 .env.*
 !.env.example
+.env.production
+.env.staging
+
+# Cache that may contain sensitive build data
+.next/cache
+.npm
+.cache
 
 # Dev artifacts
 *.log

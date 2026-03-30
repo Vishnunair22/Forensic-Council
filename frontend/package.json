@@ -1,12 +1,12 @@
 {
   "name": "forensic-council-front-end",
-  "version": "1.0.4",
+  "version": "1.1.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint src --max-warnings 50",
+    "lint": "eslint src --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -47,6 +47,6 @@
     "tailwindcss": "^4.2.2",
     "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
-    "typescript": "~5.8.3"
+    "typescript": "5.8.3"
   }
 }

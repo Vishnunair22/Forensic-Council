@@ -390,5 +390,29 @@ def get_settings() -> Settings:
     return Settings()
 
 
+def validate_production_settings() -> None:
+    """Validate that production deployments are hardened. Call at startup."""
+    import os
+    s = get_settings()
+    if s.app_env != "production":
+        return
+    errors: list[str] = []
+    for var in ("BOOTSTRAP_ADMIN_PASSWORD", "BOOTSTRAP_INVESTIGATOR_PASSWORD"):
+        val = os.environ.get(var, "")
+        if not val or val in (
+            "change-me-in-production",
+            "SET_A_STRONG_PASSWORD_BEFORE_DEPLOYMENT",
+            "change-me",
+        ):
+            errors.append(f"{var} must be set to a strong password for production")
+    if s.signing_key == "dev-placeholder-change-me-in-production-generate-with-secrets-token-hex-32":
+        errors.append("SIGNING_KEY is still the dev placeholder; generate a new one")
+    if errors:
+        raise ValueError(
+            "Production deployment validation failed:\n"
+            + "\n".join(f"  - {e}" for e in errors)
+        )
+
+
 # Convenience alias
 settings = get_settings()

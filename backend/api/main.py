@@ -23,7 +23,7 @@ from api.routes.metrics import (
     record_request_duration,
     set_active_sessions,
 )
-from core.config import get_settings
+from core.config import get_settings, validate_production_settings
 from core.observability import setup_observability
 from core.structured_logging import get_logger, request_id_ctx
 import uuid
@@ -45,6 +45,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         env=settings.app_env,
         debug=settings.debug,
     )
+
+    # Harden production deployments — abort if demo credentials are still set
+    try:
+        validate_production_settings()
+    except ValueError as e:
+        logger.error("Production validation failed", error=str(e))
+        raise
 
     if settings.signing_key.startswith("dev-"):
         logger.warning(

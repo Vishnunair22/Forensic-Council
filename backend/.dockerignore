@@ -17,12 +17,19 @@ htmlcov/
 venv/
 env/
 
-# Dev / test files
-tests/
-*.test.*
+# Env files and secrets
 .env
 .env.*
 !.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+.credentials
+.aws
+.ssh
 
 # Storage and model caches (mounted via Docker volumes at runtime)
 storage/evidence/

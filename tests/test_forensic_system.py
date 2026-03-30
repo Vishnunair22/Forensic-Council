@@ -96,32 +96,6 @@ async def create_evidence_artifact(config):
 
 
 async def create_test_infrastructure():
-    """Create test infrastructure without external dependencies."""
-    config = get_settings()
-    session_id = uuid4()
-    
-    # Use in-memory working memory (no Redis required)
-    working_memory = WorkingMemory(redis_client=None, custody_logger=None)
-    
-    # Use in-memory episodic memory (no Qdrant required)
-    episodic_memory = EpisodicMemory(qdrant_client=None, custody_logger=None)
-    
-    # Use in-memory custody logger (no Postgres required)
-    custody_logger = CustodyLogger(postgres_client=None)
-    
-    # Create evidence store
-    from infra.storage import LocalStorageBackend
-    evidence_store = EvidenceStore(
-        postgres_client=None,
-        storage_backend=LocalStorageStorageBackend(storage_path="./storage/evidence"),
-        custody_logger=custody_logger,
-    )
-    
-    return config, session_id, working_memory, episodic_memory, custody_logger, evidence_store
-
-
-# Fix the typo in the above
-async def create_test_infrastructure():
     config = get_settings()
     session_id = uuid4()
     working_memory = WorkingMemory(redis_client=None, custody_logger=None)
