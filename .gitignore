@@ -3,11 +3,19 @@
 .env.local
 .env.production
 .env.staging
+.env.*.local
 *.key
 *.pem
 *.p12
 *.pfx
+*.jks
+*.keystore
 *Keys*.txt
+*keys*.txt
+*secrets*
+*credentials*
+*token*.txt
+*api_key*
 
 # ── Python ──────────────────────────────────────────────────────────────────
 __pycache__/
@@ -41,6 +49,7 @@ frontend/.cache
 !/backend/storage/evidence/.gitkeep
 /backend/storage/keys/*
 !/backend/storage/keys/.gitkeep
+/backend/storage/calibration_models/
 
 # ── ML model caches (large binary files) ─────────────────────────────────────
 /backend/cache/
