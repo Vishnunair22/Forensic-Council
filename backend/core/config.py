@@ -397,16 +397,13 @@ def validate_production_settings() -> None:
     if s.app_env != "production":
         return
     errors: list[str] = []
+    _insecure_patterns = ("change", "set_a_strong", "default", "123", "admin", "investigator", "password")
     for var in ("BOOTSTRAP_ADMIN_PASSWORD", "BOOTSTRAP_INVESTIGATOR_PASSWORD"):
-        val = os.environ.get(var, "")
-        if not val or val in (
-            "change-me-in-production",
-            "SET_A_STRONG_PASSWORD_BEFORE_DEPLOYMENT",
-            "change-me",
-        ):
-            errors.append(f"{var} must be set to a strong password for production")
-    if s.signing_key == "dev-placeholder-change-me-in-production-generate-with-secrets-token-hex-32":
-        errors.append("SIGNING_KEY is still the dev placeholder; generate a new one")
+        val = os.environ.get(var, "").strip()
+        if not val or any(p in val.lower() for p in _insecure_patterns):
+            errors.append(f"{var} must be set to a strong, unique password for production")
+    if s.signing_key.lower().startswith(("dev-", "change", "default")):
+        errors.append("SIGNING_KEY must be changed from the default; generate with: python -c \"import secrets; print(secrets.token_hex(32))\"")
     if errors:
         raise ValueError(
             "Production deployment validation failed:\n"

@@ -1,7 +1,14 @@
 {
-  "name": "forensic-council-front-end",
+  "name": "forensic-council-frontend",
   "version": "1.1.1",
   "private": true,
+  "description": "Multi-Agent Forensic Evidence Analysis System — Frontend UI",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Vishnunair22/Forensic-Council.git",
+    "directory": "frontend"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

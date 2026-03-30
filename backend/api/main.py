@@ -76,9 +76,42 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     yield
 
-    # Shutdown
-    logger.info("Shutting down Forensic Council API server...")
-    investigation.cleanup_connections()
+    # ── Graceful shutdown ──────────────────────────────────────────────────
+    logger.info("Initiating graceful shutdown...")
+
+    # 1. Stop accepting new investigations
+    app.state.accepting_requests = False
+
+    # 2. Close in-flight pipeline connections
+    try:
+        investigation.cleanup_connections()
+        logger.info("Pipeline connections cleaned up")
+    except Exception as e:
+        logger.warning("Pipeline cleanup failed", error=str(e))
+
+    # 3. Close database and cache connections
+    try:
+        from infra.postgres_client import close_postgres_client
+        await close_postgres_client()
+        logger.info("PostgreSQL connection closed")
+    except Exception as e:
+        logger.warning("PostgreSQL shutdown error", error=str(e))
+
+    try:
+        from infra.redis_client import close_redis_client
+        await close_redis_client()
+        logger.info("Redis connection closed")
+    except Exception as e:
+        logger.warning("Redis shutdown error", error=str(e))
+
+    try:
+        from infra.qdrant_client import close_qdrant_client
+        await close_qdrant_client()
+        logger.info("Qdrant connection closed")
+    except Exception as e:
+        logger.warning("Qdrant shutdown error", error=str(e))
+
+    logger.info("Forensic Council API server stopped")
 
 
 # Create FastAPI app — disable docs in production

@@ -207,8 +207,8 @@ services:
       - BOOTSTRAP_ADMIN_PASSWORD=${BOOTSTRAP_ADMIN_PASSWORD:-admin123!}
       - SIGNING_KEY=${SIGNING_KEY:-change-me-in-development}
       - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
-      # Allow requests from both the browser and frontend container
-      - CORS_ALLOWED_ORIGINS=["http://localhost","http://localhost:80","http://localhost:3000","http://localhost:3001","http://127.0.0.1","http://127.0.0.1:3000","http://frontend:3000","https://localhost","https://127.0.0.1"]
+      # When DOMAIN is set, CORS allows only that origin; otherwise dev defaults
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-["http://localhost:3000","http://127.0.0.1:3000"]}
       - HF_TOKEN=${HF_TOKEN:-}
       - LLM_PROVIDER=${LLM_PROVIDER:-none}
       - LLM_API_KEY=${LLM_API_KEY:-}
