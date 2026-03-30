@@ -48,6 +48,7 @@ class CalibratedConfidence(BaseModel):
     calibration_version: str
     benchmark_dataset: str
     court_statement: str
+    calibrated: bool = True
 
 
 class CalibrationLayer:
@@ -186,11 +187,13 @@ class CalibrationLayer:
             CalibratedConfidence with court statement
         """
         # Load the model
+        is_stub = False
         try:
             model = self.load_model(agent_id, version)
         except FileNotFoundError:
-            # Create stub model if none exists
+            # No real calibration model exists — create a stub but mark it clearly
             model = self.fit_stub_model(agent_id)
+            is_stub = True
         
         # Apply sigmoid calibration
         params = model.params
@@ -212,13 +215,23 @@ class CalibrationLayer:
         tpr = baseline_tpr + (1.0 - baseline_tpr) * calibrated_prob
         fpr = baseline_fpr + (1.0 - baseline_fpr) * calibrated_prob
         
-        # Generate court statement
-        court_statement = (
-            f"Based on benchmark performance against {model.benchmark_dataset}, "
-            f"a model confidence of {raw_score:.2f} in class '{finding_class}' "
-            f"corresponds to a true positive rate of {tpr:.1%} "
-            f"with a false positive rate of {fpr:.1%}."
-        )
+        if is_stub:
+            # Stub calibration: do NOT generate court-admissible TPR/FPR claims
+            court_statement = (
+                f"WARNING: No calibrated benchmark data available for agent '{agent_id}'. "
+                f"Raw confidence of {raw_score:.2f} for '{finding_class}' was transformed to "
+                f"{calibrated_prob:.2f} using a default sigmoid (k={k}, x0={x0}). "
+                f"This score has NOT been validated against real forensic outcomes and "
+                f"should NOT be presented as court-admissible evidence."
+            )
+        else:
+            # Real calibration: generate court-admissible statement with verified TPR/FPR
+            court_statement = (
+                f"Based on benchmark performance against {model.benchmark_dataset}, "
+                f"a model confidence of {raw_score:.2f} in class '{finding_class}' "
+                f"corresponds to a true positive rate of {tpr:.1%} "
+                f"with a false positive rate of {fpr:.1%}."
+            )
         
         return CalibratedConfidence(
             raw_score=raw_score,
@@ -229,6 +242,7 @@ class CalibrationLayer:
             calibration_version=model.version,
             benchmark_dataset=model.benchmark_dataset,
             court_statement=court_statement,
+            calibrated=not is_stub,
         )
     
     def list_versions(self, agent_id: str) -> list[str]:

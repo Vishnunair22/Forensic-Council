@@ -19,10 +19,6 @@ interface PageTransitionProps {
 export function PageTransition({ children, className = "" }: PageTransitionProps) {
   return (
     <div
-      
-      
-      
-      
       className={className}
     >
       {children}
@@ -40,9 +36,6 @@ export function StaggerIn({
 }) {
   return (
     <div
-      
-      
-      
       className={className}
     >
       {children}
@@ -60,7 +53,6 @@ export function StaggerChild({
 }) {
   return (
     <div
-      
       className={className}
     >
       {children}

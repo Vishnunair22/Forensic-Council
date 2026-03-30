@@ -75,11 +75,11 @@ class InfrastructureError(ForensicCouncilBaseException):
 class CircuitBreakerOpen(InfrastructureError):
     """Raised when the circuit breaker is open and refusing calls."""
 
-    def __init__(self, message: str = "Circuit breaker is open", retry_after: float = 30.0):
-        self.service_name = message
+    def __init__(self, message: str = "Circuit breaker is open", retry_after: float = 30.0, service_name: str = "unknown"):
+        self.service_name = service_name
         self.retry_after = retry_after
         super().__init__(
-            f"Circuit breaker open: {message}. Refusing calls for {retry_after:.1f}s"
+            f"Circuit breaker open for {service_name}: {message}. Refusing calls for {retry_after:.1f}s"
         )
 
 

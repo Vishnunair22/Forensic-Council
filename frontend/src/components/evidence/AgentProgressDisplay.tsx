@@ -5,6 +5,7 @@
  * and decision buttons after each analysis phase.
  */
 
+import React from "react";
 import { clsx } from "clsx";
 import {
   CheckCircle2, Loader2, ArrowRight,
@@ -16,6 +17,7 @@ import AnimatedWave from "@/components/lightswind/animated-wave";
 import { AGENTS_DATA } from "@/lib/constants";
 import { useState, useEffect, useRef } from "react";
 import { SoundType } from "@/hooks/useSound";
+import { fmtTool } from "@/lib/fmtTool";
 
 export interface SectionFlag {
   id: string;
@@ -178,8 +180,7 @@ function FindingsAccordion({
       </button>
 
       {/* ── Expandable section list ── */}
-      <>
-        {open && (
+      {open && (
           <div
             key="findings-body"
             
@@ -230,14 +231,9 @@ function FindingsAccordion({
                     </button>
 
                     {/* ── Section key signal detail ── */}
-                    <>
-                      {isExp && sf.key_signal && (
+                    {isExp && sf.key_signal && (
                         <div
                           key={`detail-${sf.id}`}
-                          
-                          
-                          
-                          
                           className="overflow-hidden bg-black/40"
                         >
                           <p className="px-10 pb-3 pt-1 text-[11px] text-foreground/60 font-mono leading-relaxed border-l border-border-bold ml-4">
@@ -245,25 +241,17 @@ function FindingsAccordion({
                           </p>
                         </div>
                       )}
-                    </>
-                  </div>
+                    </div>
                 );
               })}
             </div>
           </div>
         )}
-      </>
     </div>
   );
 }
 
 // ── Per-finding preview list ─────────────────────────────────────────────────
-function fmtTool(raw: string): string {
-  return raw
-    .replace(/_/g, " ")
-    .toLowerCase()
-    .replace(/\b\w/g, c => c.toUpperCase());
-}
 
 const SEV_BORDER: Record<string, string> = {
   CRITICAL: "border-l-red-500",
@@ -354,9 +342,7 @@ function FindingsPreviewList({ findings }: { findings: FindingPreview[] }) {
 
   return (
     <div  className="space-y-2">
-      <>
-        {firstBatch.map((f, i) => <FindingRow key={`${f.tool}-first-${i}`} f={f} />)}
-      </>
+      {firstBatch.map((f, i) => <FindingRow key={`${f.tool}-first-${i}`} f={f} />)}
       
       {findings.length > INITIAL_SHOW && (
         <button
@@ -371,9 +357,7 @@ function FindingsPreviewList({ findings }: { findings: FindingPreview[] }) {
         </button>
       )}
 
-      <>
-        {showAll && remainingBatch.map((f, i) => <FindingRow key={`${f.tool}-rem-${i}`} f={f} />)}
-      </>
+      {showAll && remainingBatch.map((f, i) => <FindingRow key={`${f.tool}-rem-${i}`} f={f} />)}
     </div>
   );
 }
@@ -427,8 +411,7 @@ function LiveThinkingText({ text, active }: { text: string; active: boolean }) {
   return (
     <div className="relative space-y-1 min-h-[2.5rem]" aria-live="polite" aria-atomic="true">
       {/* Trail — previous thought fades out dimly */}
-      <>
-        {prevText && prevText !== displayText && (
+      {prevText && prevText !== displayText && (
           <p
             key={`trail-${prevText.slice(0, 20)}`}
             className="text-[10px] leading-relaxed text-slate-500/70 line-clamp-1 italic pointer-events-none select-none"
@@ -436,9 +419,7 @@ function LiveThinkingText({ text, active }: { text: string; active: boolean }) {
             {prevText}
           </p>
         )}
-      </>
 
-      <>
         <p
           key={key}
           className="text-[12px] leading-relaxed text-foreground/70 whitespace-pre-wrap break-words font-medium font-mono tracking-tight"
@@ -459,7 +440,6 @@ function LiveThinkingText({ text, active }: { text: string; active: boolean }) {
             />
           )}
         </p>
-      </>
     </div>
   );
 }
@@ -774,7 +754,7 @@ export function AgentProgressDisplay({
           const isRevealed = revealedAgents.has(agent.id);
 
           return (
-            <>
+            <React.Fragment key={agent.id}>
               {isRevealed && (
                 <div
                   className={clsx(
@@ -1078,7 +1058,7 @@ export function AgentProgressDisplay({
                   )}
                 </div>
               )}
-            </>
+            </React.Fragment>
           );
         })}
       </div>
@@ -1093,7 +1073,6 @@ export function AgentProgressDisplay({
             <span>{hiddenUnsupportedAgents.size} Skipped Units (Not Applicable)</span>
             <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showSkipped ? "rotate-180" : ""}`} />
           </button>
-          <>
             {showSkipped && (
               <div
                 
@@ -1119,7 +1098,6 @@ export function AgentProgressDisplay({
                 </div>
               </div>
             )}
-          </>
         </div>
       )}
 

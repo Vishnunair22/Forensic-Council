@@ -23,9 +23,6 @@ export default function GlobalError({
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff04_1px,transparent_1px),linear-gradient(to_bottom,#ffffff04_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none" />
 
             <div
-                
-                
-                
                 className="relative max-w-md w-full p-8 rounded-3xl
                   bg-white/[0.03] border border-red-500/25
                   shadow-[0_0_60px_rgba(239,68,68,0.08),inset_0_1px_0_rgba(255,255,255,0.06)]
@@ -50,8 +47,6 @@ export default function GlobalError({
                 <div className="w-full space-y-3">
                     <button
                         onClick={() => reset()}
-                        
-                        
                         className="btn-premium-amber w-full py-3.5 rounded-xl"
                     >
                         <RefreshCcw className="w-4 h-4" />

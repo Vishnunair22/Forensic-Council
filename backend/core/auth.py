@@ -6,6 +6,7 @@ JWT-based authentication using FastAPI security utilities.
 Provides token generation, validation, and dependency injection for protected routes.
 """
 
+import hashlib
 import warnings
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -24,12 +25,6 @@ from core.config import get_settings
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
-
-# JWT Configuration - Loaded from settings for persistence across rebuilds
-settings = get_settings()
-SECRET_KEY = settings.effective_jwt_secret
-ALGORITHM = settings.jwt_algorithm
-ACCESS_TOKEN_EXPIRE_MINUTES = settings.jwt_access_token_expire_minutes  # Default: 60 minutes
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -103,7 +98,8 @@ def create_access_token(
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        _settings = get_settings()
+        expire = datetime.now(timezone.utc) + timedelta(minutes=_settings.jwt_access_token_expire_minutes)
     
     to_encode = {
         "sub": user_id,
@@ -114,7 +110,8 @@ def create_access_token(
         "type": "access",
     }
     
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    _settings = get_settings()
+    encoded_jwt = jwt.encode(to_encode, _settings.effective_jwt_secret, algorithm=_settings.jwt_algorithm)
     logger.info("Created access token", user_id=user_id, role=role.value, expires=expire.isoformat())
     return encoded_jwt
 
@@ -141,7 +138,8 @@ async def decode_token(token: str) -> TokenData:
         )
     
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        _settings = get_settings()
+        payload = jwt.decode(token, _settings.effective_jwt_secret, algorithms=[_settings.jwt_algorithm])
         user_id: str = payload.get("sub")
         username: str = payload.get("username", user_id)
         role_str: str = payload.get("role")
@@ -231,13 +229,11 @@ async def is_token_blacklisted(token: str) -> bool:
     
     try:
         from infra.redis_client import get_redis_client
-        from core.config import get_settings
         
         redis = await get_redis_client()
-        settings = get_settings()
         
         if redis:
-            result = await redis.get(f"blacklist:{token}")
+            result = await redis.get(f"blacklist:{token_hash}")
             if result is not None:
                 # Also cache locally for future lookups during Redis outages
                 # Default to 1 hour if we don't know the exact expiry
@@ -252,7 +248,7 @@ async def is_token_blacklisted(token: str) -> bool:
             # Fail-secure in production: if Redis is down and we don't have a local record,
             # we can't verify the token isn't blacklisted. In production, reject.
             # In development, allow for convenience.
-            if settings.app_env == "production":
+            if get_settings().app_env == "production":
                 logger.error(
                     "Redis unavailable in production — token blacklist check FAILING SECURE. "
                     "Token rejected because blacklist cannot be verified."
@@ -271,9 +267,6 @@ async def is_token_blacklisted(token: str) -> bool:
     except HTTPException:
         raise
     except Exception as e:
-        from core.config import get_settings
-        settings = get_settings()
-        
         logger.warning("Redis error during blacklist check", error=str(e))
         
         # Check local cache as fallback
@@ -281,7 +274,7 @@ async def is_token_blacklisted(token: str) -> bool:
             return True
         
         # Fail-secure in production
-        if settings.app_env == "production":
+        if get_settings().app_env == "production":
             logger.error(
                 "Redis error in production — token blacklist check FAILING SECURE. "
                 "Token rejected because blacklist cannot be verified."
@@ -310,7 +303,8 @@ async def blacklist_token(token: str, expires_in_seconds: int) -> None:
         from infra.redis_client import get_redis_client
         redis = await get_redis_client()
         if redis:
-            await redis.set(f"blacklist:{token}", "1", ex=expires_in_seconds)
+            token_hash = hashlib.sha256(token.encode()).hexdigest()
+            await redis.set(f"blacklist:{token_hash}", "1", ex=expires_in_seconds)
             logger.info("Token blacklisted", expires_in=expires_in_seconds)
     except Exception as e:
         logger.warning("Failed to blacklist token", error=str(e))

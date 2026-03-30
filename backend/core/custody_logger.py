@@ -181,7 +181,7 @@ class CustodyLogger:
         session_id: UUID,
         entry_type: EntryType,
         content: dict[str, Any],
-    ) -> UUID:
+    ) -> Optional[UUID]:
         """
         Log a signed entry to the chain of custody.
         
@@ -194,11 +194,17 @@ class CustodyLogger:
             content: Content to log and sign
         
         Returns:
-            UUID of the created entry
+            UUID of the created entry, or None if the entry could not be persisted.
+            Callers MUST check for None to detect custody gaps.
         """
         if self._postgres is None:
-            logger.warning("CustodyLogger: no postgres client, skipping entry")
-            return uuid4()
+            logger.error(
+                "CustodyLogger: no postgres client, cannot persist entry — CUSTODY GAP",
+                entry_type=entry_type.value,
+                agent_id=agent_id,
+                session_id=str(session_id),
+            )
+            return None
             
         # Sign the content
         signed = sign_content(agent_id, content)
@@ -231,17 +237,15 @@ class CustodyLogger:
                 prior_entry_ref,
             )
         except Exception as db_err:
-            # Custody logging must NEVER crash the investigation pipeline.
-            # Log the failure but return the entry_id so callers don't break.
             logger.error(
-                "CustodyLogger: failed to persist chain entry",
+                "CustodyLogger: failed to persist chain entry — CUSTODY GAP",
                 entry_id=str(entry_id),
                 entry_type=entry_type.value,
                 agent_id=agent_id,
                 session_id=str(session_id),
                 error=str(db_err),
             )
-            return entry_id
+            return None
         
         logger.info(
             "Logged chain entry",

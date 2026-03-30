@@ -19,6 +19,8 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage
 
+from core.image_utils import is_lossless_image
+
 from core.evidence import ArtifactType, EvidenceArtifact
 from core.exceptions import ToolUnavailableError
 from infra.evidence_store import EvidenceStore
@@ -93,24 +95,13 @@ async def ela_full_image(
         # extension, so extension-based checks alone are insufficient.  We open
         # the file first so PIL reads the magic bytes, then check the reported
         # format.  The extension check is kept as a fast-path for named files.
-        ext = os.path.splitext(original_path)[1].lower()
-        _lossless_exts = (".png", ".bmp", ".tiff", ".tif", ".gif", ".webp")
-        _lossless_pil_formats = {"PNG", "BMP", "TIFF", "GIF", "WEBP"}
-        _lossless_mimes = {
-            "image/png", "image/bmp", "image/tiff", "image/gif", "image/webp",
-        }
-
         # Open image now so we can inspect the PIL-detected format
         with Image.open(original_path) as _probe:
             pil_format = (_probe.format or "").upper()
 
-        # Derive the display label: prefer MIME type → PIL format → extension
         mime_type = getattr(artifact, "mime_type", None) or ""
-        is_lossless = (
-            ext in _lossless_exts
-            or pil_format in _lossless_pil_formats
-            or mime_type.lower() in _lossless_mimes
-        )
+        is_lossless = is_lossless_image(original_path, mime_type)
+        ext = os.path.splitext(original_path)[1].lower()
         lossless_label = pil_format or ext.lstrip(".").upper() or "LOSSLESS"
 
         if is_lossless:
@@ -382,19 +373,11 @@ async def jpeg_ghost_detect(
         # and cannot distinguish authentic files from manipulated ones.
         #
         # NOTE: Evidence files use UUID .bin paths — check PIL magic bytes too.
-        ext = os.path.splitext(original_path)[1].lower()
-        _lossless_exts = (".png", ".bmp", ".tiff", ".tif", ".gif", ".webp")
-        _lossless_pil_formats = {"PNG", "BMP", "TIFF", "GIF", "WEBP"}
-        _lossless_mimes = {"image/png", "image/bmp", "image/tiff", "image/gif", "image/webp"}
-
         with Image.open(original_path) as _probe:
             pil_format = (_probe.format or "").upper()
         mime_type = getattr(artifact, "mime_type", None) or ""
-        is_lossless = (
-            ext in _lossless_exts
-            or pil_format in _lossless_pil_formats
-            or mime_type.lower() in _lossless_mimes
-        )
+        is_lossless = is_lossless_image(original_path, mime_type)
+        ext = os.path.splitext(original_path)[1].lower()
         lossless_label = pil_format or ext.lstrip(".").upper() or "LOSSLESS"
 
         if is_lossless:

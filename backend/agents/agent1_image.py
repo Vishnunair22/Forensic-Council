@@ -24,6 +24,7 @@ from tools.image_tools import (
 )
 from tools.ocr_tools import extract_evidence_text as real_extract_evidence_text
 from core.gemini_client import GeminiVisionClient
+from core.image_utils import is_lossless_image
 
 class Agent1Image(ForensicAgent):
     """
@@ -53,9 +54,9 @@ class Agent1Image(ForensicAgent):
     @property
     def _is_lossless(self) -> bool:
         """True if the evidence file is a lossless image (PNG, BMP, TIFF, GIF, WEBP)."""
+        file_path = getattr(self.evidence_artifact, "file_path", "") or ""
         mime = getattr(self.evidence_artifact, "mime_type", "") or ""
-        lossless_mimes = {"image/png", "image/bmp", "image/tiff", "image/gif", "image/webp"}
-        return mime.lower() in lossless_mimes
+        return is_lossless_image(file_path, mime or None)
 
     @property
     def task_decomposition(self) -> list[str]:
@@ -248,18 +249,8 @@ class Agent1Image(ForensicAgent):
             # regardless of whether the ML tool is available.
             # Evidence files may be stored as UUID .bin paths, so check PIL magic bytes
             # and MIME type in addition to the file extension.
-            import os as _os
-            from PIL import Image as _PILImage
-            _lossless_exts = {".png", ".bmp", ".tiff", ".tif", ".gif", ".webp"}
-            _lossless_pil = {"PNG", "BMP", "TIFF", "GIF", "WEBP"}
-            _lossless_mimes = {"image/png", "image/bmp", "image/tiff", "image/gif", "image/webp"}
-            _ext = _os.path.splitext(artifact.file_path)[1].lower()
             _mime = getattr(artifact, "mime_type", None) or ""
-            try:
-                _pil_fmt = (_PILImage.open(artifact.file_path).format or "").upper()
-            except Exception:
-                _pil_fmt = ""
-            if _ext in _lossless_exts or _pil_fmt in _lossless_pil or _mime.lower() in _lossless_mimes:
+            if is_lossless_image(artifact.file_path, _mime or None):
                 not_applicable = {
                     "ela_not_applicable": True,
                     "ela_limitation_note": (

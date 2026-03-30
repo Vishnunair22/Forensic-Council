@@ -189,8 +189,8 @@ export function HITLCheckpointModal({
               {/* Error Message */}
               {decisionError && (
                 <div
-                  
-                  
+                  role="alert"
+                  aria-live="assertive"
                   className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-sm"
                 >
                   {decisionError}

@@ -4,8 +4,8 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import {
   CheckCircle, AlertTriangle, ShieldCheck, RotateCcw,
   Home, ChevronDown, Lock, FileText,
-  Shield, Cpu, AlertCircle, XCircle, Download, Activity, LinkIcon, ArrowLeft,
-  Hash, Copy, Fingerprint, Clock, Layers, Eye, Image, Film, Mic, Box, Database
+  Shield, Cpu, XCircle, Download, Activity, LinkIcon, ArrowLeft,
+  Hash, Fingerprint, Clock, Layers, Image, Film, Mic
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
@@ -19,16 +19,11 @@ import {
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { AgentIcon } from "@/components/ui/AgentIcon";
 import { Badge } from "@/components/lightswind/badge";
+import { fmtTool } from "@/lib/fmtTool";
+import { getVerdictConfig } from "@/lib/verdict";
 
 const isDev = process.env.NODE_ENV !== "production";
 const dbg = { error: isDev ? console.error.bind(console) : () => {} };
-
-function fmtTool(raw: string): string {
-  return raw
-    .replace(/_/g, " ")
-    .toLowerCase()
-    .replace(/\b\w/g, c => c.toUpperCase());
-}
 
 // ─── Agent meta config ────────────────────────────────────────────────────────
 const AGENT_META: Record<string, { name: string; color: "amber" | "white" | "rose" | "emerald" }> = {
@@ -112,6 +107,8 @@ function ArbiterOverlay({ liveMsg }: { liveMsg: string }) {
         </div>
         <div className="relative w-full h-1 bg-white/5 rounded-full overflow-hidden">
           <div
+            role="progressbar"
+            aria-label="Council deliberation progress"
             className="absolute h-full w-[40%] bg-amber-500 shadow-[0_0_15px_rgba(217,119,6,0.6)]"
             
             
@@ -124,18 +121,7 @@ function ArbiterOverlay({ liveMsg }: { liveMsg: string }) {
 
 // ─── Verdict config ───────────────────────────────────────────────────────────
 function verdictConfig(v: string) {
-  const u = v?.toUpperCase() ?? "";
-  if (u === "AUTHENTIC")
-    return { label: "Authentic", color: "emerald" as const, Icon: CheckCircle, desc: "No forensic evidence of manipulation found." };
-  if (u === "LIKELY_AUTHENTIC")
-    return { label: "Likely Authentic", color: "emerald" as const, Icon: CheckCircle, desc: "Evidence is consistent with authenticity." };
-  if (u === "MANIPULATED")
-    return { label: "Manipulation Detected", color: "red" as const, Icon: AlertTriangle, desc: "Forensic signals confirm tampering." };
-  if (u === "LIKELY_MANIPULATED")
-    return { label: "Likely Manipulated", color: "red" as const, Icon: AlertTriangle, desc: "Significant manipulation signals detected." };
-  if (u === "INCONCLUSIVE")
-    return { label: "Inconclusive", color: "amber" as const, Icon: AlertCircle, desc: "Insufficient signal strength for a verdict." };
-  return { label: "Review Required", color: "amber" as const, Icon: AlertTriangle, desc: "Manual expert review is recommended." };
+  return getVerdictConfig(v);
 }
 
 // File type icon
@@ -149,28 +135,6 @@ function fileTypeIcon(mime: string | undefined) {
 
 function confColor(c: number) {
   return c >= 0.75 ? "text-emerald-400" : c >= 0.5 ? "text-amber-400" : "text-red-400";
-}
-function SeverityBar({ counts, total }: { counts: Record<SeverityKey, number>; total: number }) {
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-[11px] font-bold uppercase tracking-widest text-foreground/40">Signal Severity Breakdown</h3>
-        <span className="text-[10px] font-mono font-bold text-foreground/20 uppercase tracking-widest">{total} Signals</span>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {SEVERITY_TIERS.map((t) => counts[t] > 0 && (
-          <Badge
-            key={t}
-            variant={SEVERITY[t].label.toLowerCase() === "low" ? "secondary" : SEVERITY[t].label.toLowerCase() === "info" ? "outline" : SEVERITY[t].label.toLowerCase() === "medium" ? "warning" : "destructive"}
-            withDot
-            className="font-bold font-mono tracking-wider px-3 py-1 uppercase"
-          >
-            {counts[t]} {SEVERITY[t].label}
-          </Badge>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 // ─── Agent card ───────────────────────────────────────────────────────────────
@@ -295,8 +259,7 @@ function AgentCard({
       </button>
 
       {/* Expandable body */}
-      <>
-        {open && !isSkipped && (
+      {open && !isSkipped && (
           <div className="overflow-hidden">
             <div className="px-6 pb-6 pt-2 space-y-6 border-t border-border-subtle">
               {/* Stats row */}
@@ -375,7 +338,6 @@ function AgentCard({
             </div>
           </div>
         )}
-      </>
     </SurfaceCard>
   );
 }
@@ -510,8 +472,7 @@ function CrossModalSection({ findings }: { findings: AgentFindingDTO[] }) {
             <ChevronDown className="w-4 h-4" />
         </div>
       </button>
-      <>
-        {open && (
+      {open && (
           <div
               
             
@@ -532,7 +493,6 @@ function CrossModalSection({ findings }: { findings: AgentFindingDTO[] }) {
             </div>
           </div>
         )}
-      </>
     </SurfaceCard>
   );
 }
@@ -559,8 +519,7 @@ function ContestedSection({ findings }: { findings: Record<string, unknown>[] })
             <ChevronDown className="w-4 h-4" />
         </div>
       </button>
-      <>
-        {open && (
+      {open && (
           <div
               
             
@@ -578,7 +537,6 @@ function ContestedSection({ findings }: { findings: Record<string, unknown>[] })
             </div>
           </div>
         )}
-      </>
     </SurfaceCard>
   );
 }
@@ -675,7 +633,7 @@ export default function ResultPage() {
   // ── Derived data ──────────────────────────────────────────────────────────────
 
   // Severity counts across all findings from active agents
-  const { severityCounts, totalFindings } = useMemo(() => {
+  const { totalFindings } = useMemo(() => {
     const counts: Record<SeverityKey, number> = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0 };
     const SKIP_TYPES = new Set(["file type not applicable", "format not supported"]);
     Object.values(report?.per_agent_findings ?? {}).flat().forEach(f => {
@@ -1147,6 +1105,7 @@ export default function ResultPage() {
               <SurfaceCard className="rounded-[2rem] overflow-hidden p-0 border border-border-subtle bg-surface-low shadow-sm">
                 <button
                   onClick={() => setChainOpen(v => !v)}
+                  aria-expanded={chainOpen}
                   className="w-full flex items-center justify-between px-8 py-5 hover:bg-surface-mid transition-all cursor-pointer group/chain"
                 >
                   <span className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-widest text-foreground/60 group-hover/chain:text-amber-400 transition-colors">
@@ -1157,10 +1116,9 @@ export default function ResultPage() {
                       chainOpen && "rotate-180 bg-amber-500/10 border-amber-500/30 text-amber-400"
                   )}>
                     <ChevronDown className="w-4 h-4" aria-hidden="true" />
-                  </div>
-                </button>
-                <>
-                  {chainOpen && (
+                </div>
+              </button>
+                {chainOpen && (
                     <div className="overflow-hidden">
                       <div className="px-8 pb-8 space-y-6 border-t border-border-subtle bg-surface-mid/50">
                         {report.report_hash && (
@@ -1196,10 +1154,9 @@ export default function ResultPage() {
                           </button>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </>
-              </SurfaceCard>
+          </div>
+        )}
+      </SurfaceCard>
 
               {/* ── Back to Home ── */}
               <div className="flex flex-col items-center py-12 gap-5">

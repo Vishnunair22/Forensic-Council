@@ -936,10 +936,11 @@ class GeminiVisionClient:
             # EasyOCR fallback
             if not ocr_text_lines:
                 try:
-                    import easyocr
-                    _reader = easyocr.Reader(["en"], gpu=False, verbose=False)
-                    _results = _reader.readtext(file_path, detail=0)
-                    ocr_text_lines = [str(t).strip() for t in _results if len(str(t).strip()) > 2][:10]
+                    from tools.ocr_tools import _get_easyocr_reader
+                    _reader = _get_easyocr_reader()
+                    if _reader is not None:
+                        _results = _reader.readtext(file_path, detail=0)
+                        ocr_text_lines = [str(t).strip() for t in _results if len(str(t).strip()) > 2][:10]
                 except Exception:
                     pass
 

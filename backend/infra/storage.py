@@ -301,8 +301,7 @@ class LocalStorageBackend(StorageBackend):
         def _hash_sync() -> str:
             path = Path(storage_path)
             if not path.exists():
-                from core.exceptions import EvidenceNotFoundError as _E
-                raise _E(
+                raise EvidenceNotFoundError(
                     f"Evidence file not found: {storage_path}",
                     details={"storage_path": storage_path},
                 )

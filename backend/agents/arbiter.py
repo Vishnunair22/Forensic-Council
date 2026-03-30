@@ -1498,8 +1498,7 @@ Rules:
                 raw = raw.split("```", 2)[-1].lstrip("json").strip()
                 if raw.endswith("```"):
                     raw = raw[:-3].strip()
-            import json as _j
-            data = _j.loads(raw[raw.find("{"):raw.rfind("}")+1])
+            data = json.loads(raw[raw.find("{"):raw.rfind("}")+1])
             vs = str(data.get("verdict_sentence", ""))
             kf = [str(x) for x in data.get("key_findings", []) if x][:5]
             rn = str(data.get("reliability_note", ""))

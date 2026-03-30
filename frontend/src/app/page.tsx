@@ -422,12 +422,16 @@ function ExampleReportSection() {
   return (
     <div className="w-full max-w-4xl mx-auto">
       {/* Tabs */}
-      <div className="flex gap-2 mb-6 flex-wrap">
+      <div className="flex gap-2 mb-6 flex-wrap" role="tablist" aria-label="Example report types">
         {REPORT_TABS.map((tab, i) => {
           const TabIcon = TAB_ICONS[tab];
           return (
             <button
               key={tab}
+              role="tab"
+              id={`tab-${tab}`}
+              aria-selected={activeTab === i}
+              aria-controls={`panel-${tab}`}
               onClick={() => setActiveTab(i)}
               className="px-5 py-2 rounded-xl text-sm font-medium cursor-pointer transition-all flex items-center gap-2"
               style={activeTab === i ? {
@@ -450,6 +454,9 @@ function ExampleReportSection() {
       {/* Report card */}
       <motion.div
         key={activeTab}
+        role="tabpanel"
+        id={`panel-${tabKey}`}
+        aria-labelledby={`tab-${tabKey}`}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
@@ -683,6 +690,7 @@ function MicroscopeBackground({ scrollY }: { scrollY: MotionValue<number> }) {
         className="microscope-crosshair" 
         style={{ bottom: "25%", left: "50%", "--crosshair-size": "140px", "--pulse-duration": "7s", "--pulse-delay": "4s", x: useTransform(crosshairX, (v) => v * 0.5), y: useTransform(crosshairY, (v) => v * 0.5) } as any} 
       />
+      {/* eslint-enable @typescript-eslint/no-explicit-any */}
 
       {/* Subtle dot grid overlay */}
       <div
@@ -785,8 +793,6 @@ export default function LandingPage() {
             scale: useTransform(scrollY, [0, 800], [1, 0.8]),
           }}
       />
-      {/* eslint-enable @typescript-eslint/no-explicit-any */}
-
 
         {/* Title */}
         <motion.h1

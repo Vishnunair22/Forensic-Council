@@ -14,9 +14,6 @@ export function HeaderSection({ status, showBrowse, onBrowseClick }: HeaderSecti
 
   return (
     <header
-      
-      
-      
       className="sticky top-3 max-w-6xl mx-auto flex items-center justify-between mb-6 z-50 px-5 py-3 rounded-2xl shadow-xl"
       style={{
         background: "rgba(3,11,26,0.80)",
@@ -55,8 +52,6 @@ export function HeaderSection({ status, showBrowse, onBrowseClick }: HeaderSecti
         <HistoryDrawer />
         {showBrowse && (
           <button
-            
-            
             onClick={onBrowseClick}
             className="btn-premium-glass px-5 py-2"
             aria-label="Browse system for new evidence file"

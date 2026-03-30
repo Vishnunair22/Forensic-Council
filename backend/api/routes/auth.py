@@ -16,7 +16,6 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 
 from core.auth import (
-    ACCESS_TOKEN_EXPIRE_MINUTES,
     User,
     UserRole,
     create_access_token,
@@ -149,12 +148,20 @@ class UserResponse(BaseModel):
 # scripts/init_db.py to bootstrap the users table.
 import os as _os
 
-_DEV_ADMIN_PASSWORD    = _os.environ.get("BOOTSTRAP_ADMIN_PASSWORD", "")
-_DEV_INV_PASSWORD      = _os.environ.get("BOOTSTRAP_INVESTIGATOR_PASSWORD", "")
+# Only load demo credentials in non-production environments
+_settings = get_settings()
+if _settings.app_env != "production":
+    _DEV_ADMIN_PASSWORD    = _os.environ.get("BOOTSTRAP_ADMIN_PASSWORD", "")
+    _DEV_INV_PASSWORD      = _os.environ.get("BOOTSTRAP_INVESTIGATOR_PASSWORD", "")
+else:
+    _DEV_ADMIN_PASSWORD    = ""
+    _DEV_INV_PASSWORD      = ""
 
 
 def _build_dev_fallback() -> dict:
-    """Build dev fallback dict from env vars. Returns empty dict if passwords not set."""
+    """Build dev fallback dict from env vars. Returns empty dict in production or if passwords not set."""
+    if not _DEV_ADMIN_PASSWORD and not _DEV_INV_PASSWORD:
+        return {}
     from passlib.context import CryptContext as _CC
     _ctx = _CC(schemes=["bcrypt"], deprecated="auto")
     users: dict = {}
@@ -250,7 +257,7 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
             detail="User account is disabled",
         )
     
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(minutes=get_settings().jwt_access_token_expire_minutes)
     access_token = create_access_token(
         user_id=user["user_id"],
         role=user["role"],
@@ -265,7 +272,7 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
         content=TokenResponse(
             access_token=access_token,
             token_type="bearer",
-            expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            expires_in=get_settings().jwt_access_token_expire_minutes * 60,
             user_id=user["user_id"],
             role=user["role"].value,
         ).model_dump()
@@ -276,8 +283,8 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
         key="access_token",
         value=access_token,
         httponly=True,
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        expires=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        max_age=get_settings().jwt_access_token_expire_minutes * 60,
+        expires=get_settings().jwt_access_token_expire_minutes * 60,
         samesite="strict",
         secure=True if settings.app_env == "production" else False,
     )
@@ -310,7 +317,7 @@ async def refresh_token(current_user: User = Depends(get_current_user)):
     Returns:
         TokenResponse with new access token
     """
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(minutes=get_settings().jwt_access_token_expire_minutes)
     access_token = create_access_token(
         user_id=current_user.user_id,
         role=current_user.role,
@@ -323,7 +330,7 @@ async def refresh_token(current_user: User = Depends(get_current_user)):
     return TokenResponse(
         access_token=access_token,
         token_type="bearer",
-        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        expires_in=get_settings().jwt_access_token_expire_minutes * 60,
         user_id=current_user.user_id,
         role=current_user.role.value,
     )

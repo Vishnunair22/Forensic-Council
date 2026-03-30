@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { X, History, Trash2, FileText, AlertTriangle, AlertCircle, CheckCircle } from "lucide-react";
+import { X, History, Trash2, FileText } from "lucide-react";
 import clsx from "clsx";
+import { getVerdictConfig } from "@/lib/verdict";
 export interface HistoryItem {
   sessionId: string;
   fileName: string;
@@ -46,11 +47,8 @@ export function HistoryDrawer() {
 
   // Verdict config to match result page icons
   const getVerdictUi = (v: string) => {
-    const u = (v || "").toUpperCase();
-    if (u === "AUTHENTIC" || u === "CERTAIN") return { color: "text-emerald-400", dot: "bg-emerald-400", Icon: CheckCircle };
-    if (u === "MANIPULATED" || u === "MANIPULATION DETECTED" || u === "LIKELY_MANIPULATED") return { color: "text-red-400", dot: "bg-red-400", Icon: AlertTriangle };
-    if (u === "INCONCLUSIVE") return { color: "text-amber-400", dot: "bg-amber-400", Icon: AlertCircle };
-    return { color: "text-amber-400", dot: "bg-amber-400", Icon: AlertTriangle };
+    const cfg = getVerdictConfig(v);
+    return { color: cfg.textColor, dot: cfg.dotColor, Icon: cfg.Icon };
   };
 
   return (
@@ -66,8 +64,7 @@ export function HistoryDrawer() {
         </span>
       </button>
 
-      <>
-        {isOpen && (
+      {isOpen && (
           <>
             <button
               type="button"
@@ -148,8 +145,7 @@ export function HistoryDrawer() {
               )}
             </div>
           </>
-        )}
-      </>
+      )}
     </>
   );
 }

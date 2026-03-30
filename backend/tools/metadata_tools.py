@@ -598,7 +598,7 @@ async def timestamp_analysis(
         
         # Get file system timestamps
         stat = os.stat(original_path)
-        file_created = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
+        file_created = datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc)
         file_modified = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
         
         # Get EXIF timestamps

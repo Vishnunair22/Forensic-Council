@@ -95,17 +95,11 @@ export function FileUploadSection({
   return (
     <div
       key="upload"
-      
-      
-      
       className="flex flex-col items-center justify-center min-h-[50vh] max-w-xl mx-auto"
     >
       {/* Title Section */}
       <div className="text-center mb-7">
         <div
-          
-          
-          
           className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-5 shadow-sm relative overflow-hidden group"
             style={{ background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.14)" }}>
           <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
@@ -116,18 +110,12 @@ export function FileUploadSection({
         </div>
 
         <h1
-          
-          
-          
           className="text-2xl md:text-3xl font-bold mb-2.5 tracking-tight font-heading
             text-foreground leading-[1.1]">
           Initiate Investigation
         </h1>
 
         <p
-          
-          
-          
           className="text-white/40 text-[10px] font-bold uppercase tracking-[0.2em] max-w-sm mx-auto leading-relaxed italic">
           High-Precision Multi-Agent Forensic Auditing
         </p>
@@ -137,8 +125,6 @@ export function FileUploadSection({
       {file ? (
         /* File selected – preview + action buttons */
         <div
-          
-          
           className="w-full glass-ethereal rounded-[2rem] overflow-hidden relative"
         >
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
@@ -254,8 +240,6 @@ export function FileUploadSection({
         >
           <div className="flex flex-col items-center justify-center py-10 px-6 gap-4 relative z-10">
             <div
-              
-              
               className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300
                 border
                 ${isDragging

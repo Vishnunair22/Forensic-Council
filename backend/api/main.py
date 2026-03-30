@@ -169,9 +169,10 @@ async def limit_upload_size(request: Request, call_next):
             detail=f"Request body too large (max {MAX_BODY_SIZE // (1024 * 1024)}MB)"
         )
 
-    # 2. Resilient path: wrap the request stream to count bytes as they arrive
+    # 2. Resilient path: wrap the ASGI receive callable at the protocol level
+    #    instead of patching the private request._receive attribute.
     _count = 0
-    _original_receive = request.receive
+    _original_receive = request.scope.get("receive")
 
     async def _receive_with_limit():
         nonlocal _count
@@ -180,14 +181,10 @@ async def limit_upload_size(request: Request, call_next):
             body = message.get("body", b"")
             _count += len(body)
             if _count > MAX_BODY_SIZE:
-                # We can't easily raise HTTPException inside the receive loop 
-                # for all ASGI servers without potential hang, but we can 
-                # trigger a 413 by returning a custom error or raising.
-                # In FastAPI/Starlette, raising here is generally safe.
                 raise HTTPException(status_code=413, detail="Request body too large (stream exceeded limit)")
         return message
 
-    request._receive = _receive_with_limit
+    request.scope["receive"] = _receive_with_limit
     return await call_next(request)
 
 
@@ -253,7 +250,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     4xx errors are not silently promoted to 5xx.
     """
     from fastapi import HTTPException as _HTTPException
-    logger.error(f"Global Exception Caught: {exc}", exc_info=True)
+    logger.error("Global exception caught", error=str(exc), exc_info=True)
 
     # If an HTTPException somehow leaked here, preserve its status code and detail.
     if isinstance(exc, _HTTPException):

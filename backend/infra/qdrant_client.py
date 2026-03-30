@@ -69,6 +69,7 @@ class QdrantClient:
         self._port = port or settings.qdrant_port
         self._grpc_port = grpc_port or settings.qdrant_grpc_port
         self._api_key = api_key or settings.qdrant_api_key
+        self._https = getattr(settings, "qdrant_https", settings.app_env == "production")
         
         self._client: Optional[QdrantAsyncClient] = None
     
@@ -89,7 +90,7 @@ class QdrantClient:
                 port=self._port,
                 grpc_port=self._grpc_port,
                 api_key=self._api_key,
-                https=False,  # Use HTTP for local development
+                https=self._https,
                 check_compatibility=False,  # Disable version check for compatibility
                 timeout=2.0,
             )
@@ -127,7 +128,7 @@ class QdrantClient:
     async def health_check(self) -> bool:
         """Test Qdrant connection."""
         try:
-            result = await self.client.get_collections()
+            await self.client.get_collections()
             return True
         except Exception as e:
             logger.error("Qdrant health check failed", error=str(e))

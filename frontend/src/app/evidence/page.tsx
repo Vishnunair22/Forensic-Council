@@ -524,10 +524,10 @@ export default function EvidencePage() {
             </div>
             <div className="relative w-full h-[2px] rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.05)" }}>
               <div
+                role="progressbar"
+                aria-label="Arbiter deliberation progress"
                 className="absolute h-full w-[40%] rounded-full"
                 style={{ background: "#22D3EE", boxShadow: "0 0 12px rgba(34,211,238,0.7)" }}
-                
-                
               />
             </div>
           </div>
