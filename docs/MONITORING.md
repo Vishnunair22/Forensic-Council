@@ -128,3 +128,25 @@ For centralized logging, use one of:
 - **ELK Stack**: `docker.elastic.co/beats/filebeat` sidecar
 - **Datadog**: `DD_LOGS_ENABLED=true` in agent container
 - **Loki**: Promtail agent scraping Docker logs
+
+---
+
+## Grafana Dashboard Template
+
+### Critical Metrics Pane
+| Panel | Query | Thresholds |
+|-------|-------|------------|
+| Backend Uptime | `up{job="forensic-council-backend"}` | 0 = down |
+| Investigation Success Rate | `rate(forensic_investigations_total{status="success"}) / rate(forensic_investigations_total)` | < 95% = warning, < 90% = critical |
+| Avg Investigation Duration | `rate(forensic_investigation_duration_seconds_sum[5m]) / rate(forensic_investigation_duration_seconds_count[5m])` | > 300s = warning, > 600s = critical |
+| Chain-of-Custody Errors | `increase(forensic_custody_errors_total[1h])` | > 0 = critical |
+| Agent Failure Rate | `rate(forensic_agent_errors_total[5m]) by (agent_id)` | > 5/min = warning |
+| JWT Validation Failures | `rate(forensic_jwt_failures_total[5m])` | > 10/min = critical (brute force) |
+| Active Sessions | `forensic_active_sessions` | > 50 = capacity warning |
+
+### Recommended Dashboard Layout
+```
+Row 1: [Uptime] [Success Rate] [Avg Duration] [Active Sessions]
+Row 2: [Custody Errors] [Agent Failures (per agent)] [JWT Failures]
+Row 3: [Investigation Duration Histogram] [Request Rate by Endpoint]
+```

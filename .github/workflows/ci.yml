@@ -105,3 +105,18 @@ jobs:
           scan-ref: "."
           format: "table"
           severity: "CRITICAL,HIGH"
+
+  docker-build:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [backend-lint, frontend-lint, frontend-build, security-scan]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker build -t forensic-council-backend:test backend/
+      - name: Build frontend image
+        run: docker build -t forensic-council-frontend:test frontend/
+      - name: Verify images exist
+        run: |
+          docker image inspect forensic-council-backend:test
+          docker image inspect forensic-council-frontend:test

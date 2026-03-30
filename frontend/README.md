@@ -185,3 +185,22 @@ All interactive elements are keyboard accessible. Key compliance points:
 - Decision buttons: native `disabled` attribute during `isNavigating`
 - Error states: text announcements (not color alone)
 - Loading states: `aria-busy` and text feedback
+
+---
+
+## Error Handling
+
+### Rate Limiting (HTTP 429)
+If `POST /api/v1/investigate` returns 429, the UI displays "Too many requests. Please try again in X seconds" with a countdown timer.
+
+### Network Errors
+WebSocket disconnections trigger automatic reconnection with exponential backoff (1s, 2s, 4s, max 30s). The UI shows a connection status indicator during reconnection.
+
+### Session Loss
+If the session is deleted server-side (TTL expiry or manual cleanup), the frontend redirects to `/session-expired` with options to start a new investigation.
+
+### Upload Failures
+File uploads that exceed 50MB are rejected client-side before the request is sent. Server-side validation returns 413 for oversized payloads.
+
+### Agent Failures
+If an individual agent fails, its card shows an error state with a retry button. Other agents continue unaffected. The arbiter marks failed agent findings as contested in the final report.

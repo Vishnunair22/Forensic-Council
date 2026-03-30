@@ -46,6 +46,20 @@ All PRs and pushes to `main`/`develop` run `.github/workflows/ci.yml` automatica
 
 PRs that fail any non-advisory job are blocked from merge.
 
+## 5. Pull Request Checklist
+
+Before submitting a PR, verify every item:
+
+- [ ] Code follows project style (`ruff check .`, `npm run lint`)
+- [ ] All tests pass (`pytest tests/`, `npm test -- --watchAll=false`)
+- [ ] TypeScript compiles cleanly (`npm run type-check`)
+- [ ] No secrets in code (`SIGNING_KEY`, API keys, `.env` values)
+- [ ] `CHANGELOG.md` updated with your changes
+- [ ] New `.env` vars documented in `.env.example`
+- [ ] Database schema changes include migration scripts
+- [ ] Screenshots/video attached for UI changes
+- [ ] Security-sensitive changes reviewed by 2 senior maintainers
+
 ## 5. Setting up the Development Environment
 
 Please consult the root [`README.md`](../README.md) and [`docs/docker/DOCKER_BUILD.md`](docker/DOCKER_BUILD.md) to spin up the local Docker environment.

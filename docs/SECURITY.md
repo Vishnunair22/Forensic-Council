@@ -124,3 +124,24 @@ Response time: 48 hours for acknowledgement, 7 days for triage.
 - Rate-limiter bypass allowing resource exhaustion
 - WebSocket authentication bypass
 - Chain-of-custody log tampering
+
+---
+
+## Dependency Vulnerability Management
+
+### Python Backend
+- Run `pip-audit --desc` weekly to check for known vulnerabilities
+- Pin exact versions in `pyproject.toml` (managed via `uv.lock`)
+- Security updates applied via `uv lock --upgrade` then tested in CI
+- Critical CVEs block merges via the `security-scan` CI job
+
+### Frontend
+- Run `npm audit` weekly to check for known vulnerabilities
+- `package-lock.json` ensures reproducible builds
+- The `security-scan` CI job (Trivy) scans the entire filesystem for CRITICAL/HIGH CVEs
+- High-severity npm audit findings block merges
+
+### Automated Scanning
+- GitHub Dependabot is recommended for automated dependency update PRs
+- Trivy runs on every push/PR via `.github/workflows/ci.yml` `security-scan` job
+- Docker images should be re-scanned before each production deployment
