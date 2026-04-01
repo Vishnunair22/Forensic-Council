@@ -268,7 +268,7 @@ class Agent1Image(ForensicAgent):
                 await self._record_tool_result("ela_anomaly_classify", not_applicable)
                 return not_applicable
             result = await run_ml_tool("ela_anomaly_classifier.py", artifact.file_path,
-                                      extra_args=["--quality", str(quality)], timeout=25.0)
+                                      extra_args=["--quality", str(quality)], timeout=10.0)
             if result.get("available") and not result.get("error"):
                 await self._record_tool_result("ela_anomaly_classify", result)
                 return result
@@ -314,7 +314,7 @@ class Agent1Image(ForensicAgent):
 
         async def splicing_detect_handler(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact
-            result = await run_ml_tool("splicing_detector.py", artifact.file_path, timeout=25.0)
+            result = await run_ml_tool("splicing_detector.py", artifact.file_path, timeout=10.0)
             if result.get("available") and not result.get("error"):
                 return result
             # Inline DCT splicing fallback (same as agent3)
@@ -504,7 +504,7 @@ class Agent1Image(ForensicAgent):
         async def copy_move_detect_handler(input_data: dict) -> dict:
             """Detect copy-move forgery using SIFT feature matching."""
             artifact = input_data.get("artifact") or self.evidence_artifact
-            result = await run_ml_tool("copy_move_detector.py", artifact.file_path, timeout=30.0)
+            result = await run_ml_tool("copy_move_detector.py", artifact.file_path, timeout=15.0)
             if result.get("available") and not result.get("error"):
                 return result
             # Inline SIFT fallback
@@ -783,7 +783,7 @@ class Agent1Image(ForensicAgent):
                     "court_defensible": True,
                     "available": True,
                 }
-            result = await run_ml_tool("prnu_analysis.py", artifact.file_path, timeout=45.0)
+            result = await run_ml_tool("prnu_analysis.py", artifact.file_path, timeout=20.0)
             if result.get("available") and not result.get("error"):
                 return result
             try:
@@ -867,7 +867,7 @@ class Agent1Image(ForensicAgent):
                     "court_defensible": True,
                     "available": True,
                 }
-            result = await run_ml_tool("cfa_demosaicing.py", artifact.file_path, timeout=45.0)
+            result = await run_ml_tool("cfa_demosaicing.py", artifact.file_path, timeout=20.0)
             if result.get("available") and not result.get("error"):
                 return result
             try:

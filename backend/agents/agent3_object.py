@@ -581,8 +581,8 @@ class Agent3Object(ForensicAgent):
             import numpy as np
             from PIL import Image
             artifact = input_data.get("artifact") or self.evidence_artifact
-            # Try ML subprocess first
-            ml_result = await run_ml_tool("lighting_analyzer.py", artifact.file_path, timeout=20.0)
+            # Try ML subprocess first (reduced timeout — inline fallback is fast)
+            ml_result = await run_ml_tool("lighting_analyzer.py", artifact.file_path, timeout=8.0)
             if ml_result.get("available") and not ml_result.get("error"):
                 await self._record_tool_result("lighting_consistency", ml_result)
                 return ml_result
@@ -751,7 +751,7 @@ class Agent3Object(ForensicAgent):
                     "available": True,
                     "backend": "not-applicable-lossless",
                 }
-            ml_result = await run_ml_tool("splicing_detector.py", artifact.file_path, timeout=25.0)
+            ml_result = await run_ml_tool("splicing_detector.py", artifact.file_path, timeout=10.0)
             if ml_result.get("available") and not ml_result.get("error"):
                 return ml_result
             # Inline DCT-based splicing fallback
@@ -812,7 +812,7 @@ class Agent3Object(ForensicAgent):
                 }
             regions = input_data.get("regions", 6)
             ml_result = await run_ml_tool("noise_fingerprint.py", artifact.file_path,
-                                          extra_args=["--regions", str(regions)], timeout=25.0)
+                                          extra_args=["--regions", str(regions)], timeout=10.0)
             if ml_result.get("available") and not ml_result.get("error"):
                 return ml_result
             # Inline PRNU-lite fallback using wavelet high-frequency residual
@@ -908,10 +908,8 @@ class Agent3Object(ForensicAgent):
                         tmp_path = tmp.name
                     try:
                         try:
-                            from ultralytics import YOLO, settings
-                            settings.update({'weights_dir': yolo_cache, 'cache_dir': yolo_cache})
-                            model_path = os.path.join(yolo_cache, "yolov8n.pt")
-                            model = YOLO(model_path)
+                            # Reuse the cached YOLO singleton instead of reloading
+                            model = _get_yolo_model()
                             results = model(tmp_path, conf=0.25, verbose=False)
                             classes = set()
                             for r in results:
@@ -1010,7 +1008,7 @@ class Agent3Object(ForensicAgent):
             ctx_detections = self._tool_context.get("object_detection", {}).get("detections", [])
             detections = input_data.get("detections") or ctx_detections
             result = await run_ml_tool("object_text_ocr.py", artifact.file_path,
-                                       extra_args=["--detections", _json.dumps(detections)], timeout=25.0)
+                                       extra_args=["--detections", _json.dumps(detections)], timeout=15.0)
             if result.get("available") and not result.get("error"):
                 await self._record_tool_result("object_text_ocr", result)
                 return result
@@ -1131,7 +1129,7 @@ class Agent3Object(ForensicAgent):
             and edge sharpness variance from digital text overlaid on scanned backgrounds.
             """
             artifact = input_data.get("artifact") or self.evidence_artifact
-            result = await run_ml_tool("document_authenticity.py", artifact.file_path, timeout=35.0)
+            result = await run_ml_tool("document_authenticity.py", artifact.file_path, timeout=15.0)
             if result.get("available") and not result.get("error"):
                 return result
             try:
