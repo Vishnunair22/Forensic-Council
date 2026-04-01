@@ -407,7 +407,20 @@ def compute_content_hash(content: dict[str, Any]) -> str:
         Hex-encoded SHA-256 hash
     """
     # Sort keys for deterministic serialization
-    content_json = json.dumps(content, sort_keys=True, separators=(",", ":"))
+    # Use default=str to handle datetime and other non-JSON types,
+    # and round floats to 10 decimal places to avoid PostgreSQL JSONB
+    # float precision changes breaking hash verification.
+    def _normalize(obj: Any) -> Any:
+        if isinstance(obj, float):
+            return round(obj, 10)
+        if isinstance(obj, dict):
+            return {k: _normalize(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [_normalize(v) for v in obj]
+        return obj
+    
+    normalized = _normalize(content)
+    content_json = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(content_json.encode("utf-8")).hexdigest()
 
 

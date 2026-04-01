@@ -7,6 +7,7 @@ import {
   Shield, XCircle, Download, LinkIcon,
   Hash, Fingerprint, Image as ImageIcon, Film, Mic,
   AlertCircle, Activity, Info, History, X,
+  Zap, Layers,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
@@ -36,7 +37,7 @@ const AGENT_META: Record<string, { name: string; role: string; accentColor: stri
   Agent5: { name: "Agent 5", role: "Metadata & Context", accentColor: "text-violet-400", accentBg: "bg-violet-500/10", accentBorder: "border-violet-500/30"  },
 };
 
-type Tab = "analysis" | "findings" | "history";
+type Tab = "analysis" | "findings" | "history" | "comparison";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function confColor(c: number) {
@@ -398,6 +399,19 @@ export default function ResultPage() {
           >
             History
           </button>
+          {isDeepPhase && (
+            <button
+              onClick={() => setActiveTab("comparison")}
+              className={clsx(
+                "px-5 py-2 text-[10px] font-bold uppercase tracking-[0.15em] transition-all duration-300 rounded-full cursor-pointer",
+                activeTab === "comparison"
+                  ? "bg-violet-500/15 text-violet-400 border border-violet-500/30 shadow-[0_0_12px_rgba(139,92,246,0.15)]"
+                  : "text-foreground/30 border border-transparent hover:text-foreground/50 hover:bg-white/[0.03]"
+              )}
+            >
+              Comparison
+            </button>
+          )}
         </div>
       </div>
 
@@ -405,6 +419,13 @@ export default function ResultPage() {
       {activeTab === "history" && (
         <main className="max-w-6xl mx-auto px-6 pt-8 pb-24">
           <HistoryPanel />
+        </main>
+      )}
+
+      {/* ── Comparison Tab (Deep vs Initial) ──────────────────────────────── */}
+      {activeTab === "comparison" && state === "ready" && report && (
+        <main className="max-w-6xl mx-auto px-6 pt-8 pb-24 space-y-6">
+          <ComparisonPanel report={report} activeAgentIds={activeAgentIds} />
         </main>
       )}
 
@@ -924,6 +945,11 @@ export default function ResultPage() {
               </div>
             </CollapsibleSection>
 
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* SECTION 9: Investigator Notes                                 */}
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            <InvestigatorAnnotation reportId={report.report_id} />
+
           </div>
         )}
 
@@ -980,6 +1006,197 @@ export default function ResultPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Comparison Panel (Initial vs Deep) ────────────────────────────────────
+function ComparisonPanel({ report, activeAgentIds }: { report: ReportDTO; activeAgentIds: string[] }) {
+  const allFindings = Object.values(report.per_agent_findings ?? {}).flat();
+
+  const initialFindings = allFindings.filter(
+    f => ((f.metadata as Record<string, unknown>)?.analysis_phase as string ?? "initial") === "initial"
+  );
+  const deepFindings = allFindings.filter(
+    f => (f.metadata as Record<string, unknown>)?.analysis_phase === "deep"
+  );
+
+  const initialConf = initialFindings.length > 0
+    ? initialFindings.reduce((s, f) => s + (f.raw_confidence_score ?? f.calibrated_probability ?? f.confidence_raw ?? 0), 0) / initialFindings.length
+    : 0;
+  const deepConf = deepFindings.length > 0
+    ? deepFindings.reduce((s, f) => s + (f.raw_confidence_score ?? f.calibrated_probability ?? f.confidence_raw ?? 0), 0) / deepFindings.length
+    : 0;
+
+  const newFindings = deepFindings.filter(df => {
+    const dfTool = (df.metadata as Record<string, unknown>)?.tool_name as string ?? df.finding_type;
+    return !initialFindings.some(ifo => {
+      const ifoTool = (ifo.metadata as Record<string, unknown>)?.tool_name as string ?? ifo.finding_type;
+      return ifoTool === dfTool && ifo.finding_type === df.finding_type;
+    });
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3 mb-2">
+        <History className="w-4 h-4 text-violet-400 shrink-0" />
+        <h2 className="text-[11px] font-bold uppercase tracking-widest text-foreground">Initial vs Deep Comparison</h2>
+      </div>
+
+      {/* Verdict Progression */}
+      <div className="glass-t1 rounded-2xl overflow-hidden">
+        <div className="px-6 py-4 flex items-center gap-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>
+          <Activity className="w-4 h-4 text-violet-400 shrink-0" />
+          <h2 className="text-[11px] font-bold uppercase tracking-widest text-foreground">Verdict Progression</h2>
+        </div>
+        <div className="p-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="text-center space-y-2 p-4 rounded-xl" style={{ background: "rgba(52,211,153,0.03)", border: "1px solid rgba(52,211,153,0.08)" }}>
+              <p className="text-[8px] font-mono font-bold uppercase tracking-[0.2em] text-foreground/30">Initial Analysis</p>
+              <p className="text-2xl font-black font-mono text-emerald-400">{Math.round(initialConf * 100)}%</p>
+              <p className="text-[9px] font-mono text-foreground/25">{initialFindings.length} findings</p>
+            </div>
+            <div className="flex items-center justify-center">
+              <div className="flex items-center gap-2 text-violet-400/50">
+                <div className="w-8 h-[1px] bg-violet-400/20" />
+                <span className="text-[10px] font-mono font-bold">→</span>
+                <div className="w-8 h-[1px] bg-violet-400/20" />
+              </div>
+            </div>
+            <div className="text-center space-y-2 p-4 rounded-xl" style={{ background: "rgba(139,92,246,0.03)", border: "1px solid rgba(139,92,246,0.08)" }}>
+              <p className="text-[8px] font-mono font-bold uppercase tracking-[0.2em] text-foreground/30">Deep Analysis</p>
+              <p className="text-2xl font-black font-mono text-violet-400">{Math.round(deepConf * 100)}%</p>
+              <p className="text-[9px] font-mono text-foreground/25">{deepFindings.length} findings</p>
+            </div>
+          </div>
+          <div className="mt-4 flex items-center justify-center gap-4 text-[9px] font-mono text-foreground/30">
+            <span>New findings: <span className="text-violet-400 font-bold">+{newFindings.length}</span></span>
+            <span className="text-foreground/10">|</span>
+            <span>Total combined: <span className="text-foreground/50 font-bold">{allFindings.length}</span></span>
+          </div>
+        </div>
+      </div>
+
+      {/* New Findings from Deep Analysis */}
+      {newFindings.length > 0 && (
+        <div className="glass-t1 rounded-2xl overflow-hidden">
+          <div className="px-6 py-4 flex items-center gap-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(139,92,246,0.03)" }}>
+            <Zap className="w-4 h-4 text-violet-400 shrink-0" />
+            <h2 className="text-[11px] font-bold uppercase tracking-widest text-foreground">New Findings from Deep Analysis</h2>
+            <Badge variant="info" className="font-mono text-[8px] px-1.5 py-0">{newFindings.length}</Badge>
+          </div>
+          <div className="p-5 space-y-3">
+            {newFindings.slice(0, 10).map((f, i) => (
+              <div key={i} className="flex items-start gap-3 p-3 rounded-xl" style={{ background: "rgba(139,92,246,0.03)", border: "1px solid rgba(139,92,246,0.08)" }}>
+                <span className="mt-0.5 w-5 h-5 rounded-md bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0 text-[9px] font-bold font-mono text-violet-400">
+                  {i + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-mono font-bold text-violet-400/70 uppercase tracking-wider mb-0.5">
+                    {f.finding_type}
+                  </p>
+                  <p className="text-[11px] text-foreground/60 leading-relaxed font-medium">
+                    {stripToolPrefix(f.reasoning_summary || f.court_statement || "No summary available.")}
+                  </p>
+                </div>
+                <span className={clsx(
+                  "text-[9px] font-mono font-bold shrink-0",
+                  confColor(f.raw_confidence_score ?? f.calibrated_probability ?? f.confidence_raw ?? 0)
+                )}>
+                  {Math.round((f.raw_confidence_score ?? f.calibrated_probability ?? f.confidence_raw ?? 0) * 100)}%
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Per-Agent Comparison */}
+      <div className="glass-t1 rounded-2xl overflow-hidden">
+        <div className="px-6 py-4 flex items-center gap-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>
+          <Layers className="w-4 h-4 text-foreground/40 shrink-0" />
+          <h2 className="text-[11px] font-bold uppercase tracking-widest text-foreground">Per-Agent Phase Breakdown</h2>
+        </div>
+        <div className="divide-y divide-border-subtle">
+          {activeAgentIds.map(agentId => {
+            const meta = AGENT_META[agentId];
+            if (!meta) return null;
+            const agentInitial = initialFindings.filter(f => f.agent_id === agentId);
+            const agentDeep = deepFindings.filter(f => f.agent_id === agentId);
+            const iConf = agentInitial.length > 0
+              ? agentInitial.reduce((s, f) => s + (f.raw_confidence_score ?? f.calibrated_probability ?? f.confidence_raw ?? 0), 0) / agentInitial.length
+              : 0;
+            const dConf = agentDeep.length > 0
+              ? agentDeep.reduce((s, f) => s + (f.raw_confidence_score ?? f.calibrated_probability ?? f.confidence_raw ?? 0), 0) / agentDeep.length
+              : 0;
+            return (
+              <div key={agentId} className="flex items-center gap-4 px-5 py-4">
+                <div className={clsx("w-2 h-2 rounded-full shrink-0", meta.accentBg.replace("/10", ""))} />
+                <span className={clsx("text-[11px] font-bold shrink-0 w-24", meta.accentColor)}>{meta.name}</span>
+                <div className="flex-1 flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-mono text-foreground/25 uppercase">Initial</span>
+                    <span className={clsx("text-[11px] font-mono font-bold", confColor(iConf))}>{Math.round(iConf * 100)}%</span>
+                    <span className="text-[8px] font-mono text-foreground/20">({agentInitial.length})</span>
+                  </div>
+                  <span className="text-foreground/15">→</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-mono text-foreground/25 uppercase">Deep</span>
+                    <span className={clsx("text-[11px] font-mono font-bold", confColor(dConf))}>{Math.round(dConf * 100)}%</span>
+                    <span className="text-[8px] font-mono text-foreground/20">({agentDeep.length})</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Investigator Annotation Field ──────────────────────────────────────────
+function InvestigatorAnnotation({ reportId }: { reportId: string }) {
+  const [note, setNote] = useState("");
+  const [saved, setSaved] = useState(false);
+  const storageKey = `fc_annotation_${reportId}`;
+
+  useEffect(() => {
+    try {
+      const existing = localStorage.getItem(storageKey);
+      if (existing) setNote(existing);
+    } catch { /* ignore */ }
+  }, [storageKey]);
+
+  const handleSave = () => {
+    try {
+      localStorage.setItem(storageKey, note);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <div className="glass-t2 rounded-2xl p-5 space-y-3">
+      <div className="flex items-center gap-2">
+        <FileText className="w-4 h-4 text-foreground/30 shrink-0" />
+        <p className="text-[9px] font-mono font-bold uppercase tracking-widest text-foreground/30">Investigator Notes</p>
+      </div>
+      <textarea
+        value={note}
+        onChange={e => setNote(e.target.value)}
+        placeholder="Add post-analysis observations, recommendations, or annotations..."
+        className="w-full h-24 bg-black/20 border border-border-subtle rounded-xl p-3 text-[11px] text-foreground/70 font-mono leading-relaxed resize-none placeholder:text-foreground/20 focus:outline-none focus:border-amber-500/30 transition-colors"
+      />
+      <div className="flex items-center justify-between">
+        <p className="text-[8px] font-mono text-foreground/20">Saved locally — not included in signed report</p>
+        <button
+          onClick={handleSave}
+          className="text-[9px] font-mono font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition-colors cursor-pointer"
+        >
+          {saved ? "Saved" : "Save Note"}
+        </button>
+      </div>
     </div>
   );
 }

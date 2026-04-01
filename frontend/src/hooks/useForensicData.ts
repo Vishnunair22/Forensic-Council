@@ -19,9 +19,18 @@ const CURRENT_REPORT_KEY = "fc_current_report";
 export function mapReportDtoToReport(dto: ReportDTO): Report {
     const agentResults: AgentResult[] = [];
 
-    // Flatten per-agent findings
+    // Flatten per-agent findings with deduplication transparency
+    const seenKeys = new Set<string>();
+
     for (const [agentId, findings] of Object.entries(dto.per_agent_findings)) {
         for (const finding of findings) {
+            const phase = ((finding.metadata as Record<string, unknown>)?.analysis_phase as string) ?? "initial";
+            const toolName = ((finding.metadata as Record<string, unknown>)?.tool_name as string) ?? finding.finding_type;
+            const dedupKey = `${agentId}:${finding.finding_type}:${toolName}`;
+
+            const isDuplicate = seenKeys.has(dedupKey) && phase === "deep";
+            seenKeys.add(dedupKey);
+
             agentResults.push({
                 id: agentId,
                 name: finding.agent_name,
@@ -29,6 +38,10 @@ export function mapReportDtoToReport(dto: ReportDTO): Report {
                 result: finding.court_statement || finding.reasoning_summary,
                 confidence: finding.raw_confidence_score ?? finding.calibrated_probability ?? (finding.confidence_raw || 1.0),
                 thinking: finding.reasoning_summary,
+                metadata: {
+                    ...finding.metadata,
+                    _deduplication: isDuplicate ? "confirmed_in_deep" : phase === "deep" ? "new_in_deep" : "initial",
+                },
             });
         }
     }

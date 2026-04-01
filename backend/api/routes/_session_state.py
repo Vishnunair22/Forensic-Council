@@ -141,3 +141,44 @@ async def broadcast_update(session_id: str, update: BriefUpdate) -> None:
                 await ws.send_json(update.model_dump())
             except Exception as e:
                 logger.warning(f"Failed to send WebSocket message: {e}")
+
+
+# ── Batched WebSocket broadcasting ─────────────────────────────────────────────
+# Accumulates updates per session and flushes them in a single batch at a
+# configurable interval (default 1s) to reduce Redis I/O at scale.
+_batch_buffers: dict[str, list[dict]] = {}
+_batch_timers: dict[str, Any] = {}
+BATCH_FLUSH_INTERVAL = 1.0  # seconds
+
+
+async def _flush_batch(session_id: str) -> None:
+    """Flush accumulated updates for a session in a single WebSocket frame."""
+    updates = _batch_buffers.pop(session_id, [])
+    _batch_timers.pop(session_id, None)
+    if not updates:
+        return
+    if session_id not in _websocket_connections:
+        return
+    # Send as a single batch frame instead of N individual frames
+    payload = {"type": "BATCH", "session_id": session_id, "updates": updates}
+    for ws in _websocket_connections[session_id]:
+        try:
+            await ws.send_json(payload)
+        except Exception as e:
+            logger.warning(f"Failed to send batched WebSocket message: {e}")
+
+
+async def broadcast_update_batched(session_id: str, update: BriefUpdate) -> None:
+    """
+    Queue a WebSocket update for batched delivery.
+    
+    Updates are accumulated and flushed every BATCH_FLUSH_INTERVAL seconds.
+    This reduces per-connection I/O from O(updates) to O(flushes) — critical
+    at scale with 100+ concurrent users.
+    """
+    _batch_buffers.setdefault(session_id, []).append(update.model_dump())
+    if session_id not in _batch_timers:
+        async def _delayed_flush():
+            await asyncio.sleep(BATCH_FLUSH_INTERVAL)
+            await _flush_batch(session_id)
+        _batch_timers[session_id] = asyncio.create_task(_delayed_flush())

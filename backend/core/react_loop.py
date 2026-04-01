@@ -860,7 +860,7 @@ class ReActLoopEngine:
                         finding_type=task_desc,
                         confidence_raw=confidence,
                         raw_confidence_score=calibrated_prob,
-                        calibrated=calibrated_prob is not None,
+                        calibrated=cal_status_str == "TRAINED",
                         calibration_status=cal_status_str,
                         status=status_val,
                         evidence_refs=[],

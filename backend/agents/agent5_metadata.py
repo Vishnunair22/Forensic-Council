@@ -1044,6 +1044,7 @@ class Agent5Metadata(ForensicAgent):
                     "error": f"Gemini vision failed: {gemini_exc}",
                     "gemini_content_type": "unknown",
                     "court_defensible": False,
+                    "analysis_source": "gemini_vision",
                 }
 
             if finding.error:
@@ -1052,6 +1053,7 @@ class Agent5Metadata(ForensicAgent):
                     "error": f"Gemini vision failed: {finding.error}",
                     "gemini_content_type": "unknown",
                     "court_defensible": False,
+                    "analysis_source": "gemini_vision",
                 }
 
             result = finding.to_finding_dict(self.agent_id)

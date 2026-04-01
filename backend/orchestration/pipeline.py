@@ -421,7 +421,7 @@ class ForensicCouncilPipeline:
                     "react_chain": result.react_chain,
                 }
         
-        # Run deliberation with a hard 150-second ceiling so the pipeline never
+        # Run deliberation with a hard 90-second ceiling so the pipeline never
         # hangs indefinitely if Groq is down. If it times out, regenerate the
         # report without LLM synthesis (template fallback path in the arbiter).
         with _tracer.start_as_current_span("pipeline.arbiter_deliberation") as span:
@@ -431,23 +431,23 @@ class ForensicCouncilPipeline:
             try:
                 report = await asyncio.wait_for(
                     self.arbiter.deliberate(arbiter_results, case_id=case_id),
-                    timeout=150.0,
+                    timeout=90.0,
                 )
                 span.set_attribute("verdict", str(report.overall_verdict))
             except asyncio.TimeoutError:
                 logger.warning(
-                    "arbiter.deliberate() exceeded 150 s — regenerating with LLM disabled",
+                    "arbiter.deliberate() exceeded 90 s — regenerating with LLM disabled",
                     session_id=str(session_id),
                 )
                 self._degradation_flags.append(
-                    "Arbiter LLM synthesis timed out after 150 s — report narrative generated "
+                    "Arbiter LLM synthesis timed out after 90 s — report narrative generated "
                     "from templates, not AI synthesis. Verdict and findings are unaffected."
                 )
                 report = await asyncio.wait_for(
                     self.arbiter.deliberate(
                         arbiter_results, case_id=case_id, use_llm=False
                     ),
-                    timeout=60.0,
+                    timeout=30.0,
                 )
                 span.set_attribute("verdict", str(report.overall_verdict))
                 span.set_attribute("timeout", True)
@@ -468,16 +468,38 @@ class ForensicCouncilPipeline:
             )
         
         # ── Detect Gemini degradation ────────────────────────────────────────
-        # If Gemini is configured but no gemini_vision findings appear in the report,
-        # the deep-pass agents fell back to local heuristics silently.
+        # If Gemini is configured but all gemini_vision findings are errors,
+        # or no gemini_vision findings appear at all, flag degradation.
         gemini_key = self.config.gemini_api_key
         is_gemini_configured = bool(gemini_key) and "your_gemini_key" not in (gemini_key or "")
-        if is_gemini_configured and not report.gemini_vision_findings:
-            self._degradation_flags.append(
-                "Gemini vision API was configured but produced no findings — "
-                "deep-pass agents (1, 3, 5) fell back to local OpenCV analysis. "
-                "Possible causes: invalid API key, model quota exceeded, network error."
-            )
+        if is_gemini_configured:
+            gemini_findings = report.gemini_vision_findings
+            if not gemini_findings:
+                self._degradation_flags.append(
+                    "Gemini vision API was configured but produced no findings — "
+                    "deep-pass agents (1, 3, 5) fell back to local OpenCV analysis. "
+                    "Possible causes: invalid API key, model quota exceeded, network error."
+                )
+            else:
+                # Check if ALL Gemini findings are errors (none succeeded)
+                all_gemini_errored = all(
+                    isinstance(gf, dict) and (
+                        gf.get("error")
+                        or gf.get("metadata", {}).get("error")
+                        or gf.get("status") == "INCOMPLETE"
+                    )
+                    for gf in gemini_findings
+                )
+                if all_gemini_errored:
+                    error_msgs = [
+                        gf.get("error") or gf.get("metadata", {}).get("error", "unknown")
+                        for gf in gemini_findings if isinstance(gf, dict)
+                    ]
+                    first_err = str(error_msgs[0])[:200] if error_msgs else "unknown"
+                    self._degradation_flags.append(
+                        f"Gemini vision API returned errors for all {len(gemini_findings)} analysis(es): "
+                        f"{first_err}. Deep-pass agents used local OpenCV fallback."
+                    )
 
         # Add additional fields to report (each capped at 15 s to prevent hangs
         # when external infra is slow or unreachable after the arbiter finishes).

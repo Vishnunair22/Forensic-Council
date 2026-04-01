@@ -837,10 +837,30 @@ export function AgentProgressDisplay({
                       <AgentIcon agentId={agent.id} className="w-6 h-6" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-base font-bold text-white leading-tight font-heading tracking-tight uppercase group-hover:text-cyan-300 transition-colors">{agent.name}</h3>
-                      <span className="text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono font-bold">{agent.role}</span>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-bold text-white leading-tight font-heading tracking-tight uppercase group-hover:text-cyan-300 transition-colors">{agent.name}</h3>
+                        {/* Confidence summary in header for completed agents */}
+                        {status === "complete" && completed?.confidence !== undefined && (
+                          <span className={[
+                            "text-[10px] font-mono font-black px-1.5 py-0.5 rounded",
+                            completed.confidence >= 0.75 ? "text-emerald-400 bg-emerald-500/10" :
+                            completed.confidence >= 0.5 ? "text-amber-400 bg-amber-500/10" : "text-red-400 bg-red-500/10",
+                          ].join(" ")}>
+                            {Math.round(completed.confidence * 100)}%
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono font-bold">{agent.role}</span>
+                        {/* Phase badge */}
+                        {status === "complete" && (
+                          <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded bg-white/5 text-white/25 uppercase tracking-wider">
+                            {phase === "deep" ? "Deep" : "Initial"}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="shrink-0">
+                    <div className="shrink-0 flex flex-col items-end gap-1.5">
                       {status === "waiting" && (
                         <Badge variant="outline" className="text-foreground/40 font-bold border-white/10 bg-white/[0.03] uppercase tracking-widest font-mono">
                           Queued
@@ -871,8 +891,38 @@ export function AgentProgressDisplay({
                           Error
                         </Badge>
                       )}
+                      {/* Verdict badge in header */}
+                      {status === "complete" && completed?.agent_verdict && (
+                        <span className={[
+                          "text-[8px] font-mono font-black px-1.5 py-0.5 rounded uppercase tracking-wider",
+                          completed.agent_verdict === "AUTHENTIC" ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20" :
+                          completed.agent_verdict === "LIKELY_MANIPULATED" ? "text-red-400 bg-red-500/10 border border-red-500/20" :
+                          "text-amber-400 bg-amber-500/10 border border-amber-500/20",
+                        ].join(" ")}>
+                          {completed.agent_verdict.replace(/_/g, " ")}
+                        </span>
+                      )}
                     </div>
                   </div>
+
+                  {/* Tool success rate bar for completed agents */}
+                  {status === "complete" && completed && (completed.tools_ran !== undefined || completed.tool_error_rate !== undefined) && (
+                    <div className="flex items-center gap-3 mb-3 px-1">
+                      <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${Math.round(((completed.tools_ran ?? 0) / Math.max(1, (completed.tools_ran ?? 0) + (completed.tools_failed ?? 0) + (completed.tools_skipped ?? 0))) * 100)}%`,
+                            background: (completed.tool_error_rate ?? 0) <= 0.15 ? "rgba(52,211,153,0.6)" :
+                              (completed.tool_error_rate ?? 0) <= 0.30 ? "rgba(245,158,11,0.6)" : "rgba(248,113,113,0.6)",
+                          }}
+                        />
+                      </div>
+                      <span className="text-[9px] font-mono font-bold text-white/30 uppercase tracking-wider shrink-0">
+                        {completed.tools_ran ?? 0}/{(completed.tools_ran ?? 0) + (completed.tools_failed ?? 0) + (completed.tools_skipped ?? 0)} tools
+                      </span>
+                    </div>
+                  )}
 
                   {/* Body */}
                   {status === "checking" && (
@@ -1063,6 +1113,11 @@ export function AgentProgressDisplay({
                           )}
                           {completed.tools_failed !== undefined && completed.tools_failed > 0 && (
                             <span className="text-amber-400/70">{completed.tools_failed} failed</span>
+                          )}
+                          {completed.tool_error_rate !== undefined && (
+                            <span className={completed.tool_error_rate <= 0.15 ? "text-emerald-400/50" : completed.tool_error_rate <= 0.30 ? "text-amber-400/50" : "text-red-400/50"}>
+                              {Math.round(completed.tool_error_rate * 100)}% err
+                            </span>
                           )}
                         </div>
                       )}

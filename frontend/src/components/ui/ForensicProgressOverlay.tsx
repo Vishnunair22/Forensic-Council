@@ -179,7 +179,7 @@ export function ForensicProgressOverlay({
                 aria-atomic="true"
               >
                 <span className="font-mono text-[11px] font-bold mr-2 opacity-40" style={{ color: accent.primary }}>
-                  //
+                  {"/"}/
                 </span>
                 {displayLine}
               </motion.p>

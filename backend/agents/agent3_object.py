@@ -1316,6 +1316,7 @@ class Agent3Object(ForensicAgent):
                     "error": f"Gemini vision failed: {gemini_exc}",
                     "gemini_content_type": "unknown",
                     "court_defensible": False,
+                    "analysis_source": "gemini_vision",
                     "agent1_context_used": bool(agent1_context),
                     "yolo_context_used": bool(yolo_context),
                 }
@@ -1326,6 +1327,7 @@ class Agent3Object(ForensicAgent):
                     "error": f"Gemini vision failed: {finding.error}",
                     "gemini_content_type": "unknown",
                     "court_defensible": False,
+                    "analysis_source": "gemini_vision",
                     "agent1_context_used": bool(agent1_context),
                     "yolo_context_used": bool(yolo_context),
                 }
