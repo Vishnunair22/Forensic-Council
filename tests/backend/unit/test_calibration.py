@@ -71,8 +71,8 @@ def test_calibrate_returns_float_in_range(
     )
 
     assert isinstance(result, CalibratedConfidence)
-    assert isinstance(result.calibrated_probability, float)
-    assert 0.0 <= result.calibrated_probability <= 1.0
+    assert isinstance(result.raw_confidence_score, float)
+    assert 0.0 <= result.raw_confidence_score <= 1.0
 
 
 def test_default_calibration_court_statement_warns_uncalibrated(
@@ -150,6 +150,7 @@ def test_trained_model_produces_calibrated_true(
             "baseline_tpr": 0.82,
             "baseline_fpr": 0.08,
         },
+        "calibration_status": "TRAINED",
     }
 
     agent_dir = tmp_path / agent_id
@@ -182,8 +183,8 @@ def test_platt_math_correct(layer: CalibrationLayer) -> None:
         finding_class="audio_test",
     )
     expected = 1.0 / (1.0 + math.exp(2.0 * 0.5 + (-1.0)))
-    assert abs(result.calibrated_probability - expected) < 1e-9, (
-        f"Expected {expected}, got {result.calibrated_probability}"
+    assert abs(result.raw_confidence_score - expected) < 1e-9, (
+        f"Expected {expected}, got {result.raw_confidence_score}"
     )
 
 
@@ -212,19 +213,22 @@ def test_none_raw_score_defaults_to_neutral(layer: CalibrationLayer) -> None:
         raw_score=None,  # type: ignore[arg-type]
         finding_class="test",
     )
-    assert isinstance(result.calibrated_probability, float)
-    assert 0.0 <= result.calibrated_probability <= 1.0
+    assert isinstance(result.raw_confidence_score, float)
+    assert 0.0 <= result.raw_confidence_score <= 1.0
 
 
 def test_calibrated_confidence_has_required_fields(layer: CalibrationLayer) -> None:
     """CalibratedConfidence must expose all fields needed for court reporting."""
     result = layer.calibrate("agent5_metadata", 0.8, "exif_anomaly")
-    assert hasattr(result, "calibrated_probability")
+    assert hasattr(result, "raw_confidence_score")
     assert hasattr(result, "true_positive_rate")
     assert hasattr(result, "false_positive_rate")
     assert hasattr(result, "court_statement")
     assert hasattr(result, "calibration_model_id")
     assert hasattr(result, "calibration_version")
     assert hasattr(result, "benchmark_dataset")
+    assert hasattr(result, "calibration_status")
+    assert hasattr(result, "confidence_interval")
+    assert hasattr(result, "uncertainty")
     assert isinstance(result.court_statement, str)
     assert len(result.court_statement) > 0
