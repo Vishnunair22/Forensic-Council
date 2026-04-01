@@ -182,6 +182,9 @@ class CouncilArbiter:
         self._key_store = KeyStore()
         # Ensure arbiter has a key
         self._key_store.get_or_create("Arbiter")
+        # Shared LLM client reused across all synthesis calls to avoid
+        # repeated TCP/TLS handshakes during parallel deliberation.
+        self._synthesis_client: Optional[LLMClient] = None
     
     # ── Shared agent name map ────────────────────────────────────────────
     _AGENT_NAMES: dict[str, str] = {
@@ -751,7 +754,10 @@ class CouncilArbiter:
         )
 
         if llm_enabled:
-            # Quick health probe — avoids 4× timeout when Groq is down
+            # Quick health probe — avoids 4× timeout when Groq is down.
+            # The same client is stored as self._synthesis_client so all parallel
+            # synthesis coroutines share one httpx connection pool (avoids
+            # repeated TLS handshakes per-call during the gather phase).
             _client = LLMClient(self.config)
             if not _client.is_available:
                 llm_enabled = False
@@ -761,6 +767,8 @@ class CouncilArbiter:
                     if not _healthy:
                         logger.warning("LLM health check failed — using template fallbacks")
                         llm_enabled = False
+                    else:
+                        self._synthesis_client = _client
                 except asyncio.TimeoutError:
                     logger.warning("LLM health check timed out — using template fallbacks")
                     llm_enabled = False
@@ -800,21 +808,26 @@ class CouncilArbiter:
             # ── Task 2: Per-agent narratives (40s, parallel gather) ─────
             async def _task_narratives():
                 _NARRATIVE_TIMEOUT = 40.0
+                # Semaphore: cap at 3 concurrent Groq narrative calls to avoid
+                # hitting the TPM rate limit when 5 agents fire simultaneously.
+                _narr_sem = asyncio.Semaphore(3)
+
                 async def _one(aid, res):
                     findings = res.get("findings", [])
                     if not findings:
                         return aid, ""
-                    try:
-                        narr = await asyncio.wait_for(
-                            self._generate_agent_narrative(
-                                aid, findings, per_agent_metrics.get(aid, {}),
-                            ),
-                            timeout=_NARRATIVE_TIMEOUT,
-                        )
-                        return aid, narr or ""
-                    except (asyncio.TimeoutError, Exception) as e:
-                        logger.warning(f"Narrative for {aid}: {e}")
-                        return aid, ""
+                    async with _narr_sem:
+                        try:
+                            narr = await asyncio.wait_for(
+                                self._generate_agent_narrative(
+                                    aid, findings, per_agent_metrics.get(aid, {}),
+                                ),
+                                timeout=_NARRATIVE_TIMEOUT,
+                            )
+                            return aid, narr or ""
+                        except (asyncio.TimeoutError, Exception) as e:
+                            logger.warning(f"Narrative for {aid}: {e}")
+                            return aid, ""
 
                 pairs = await asyncio.gather(
                     *[_one(aid, res) for aid, res in active_agent_results.items()],
@@ -922,8 +935,11 @@ class CouncilArbiter:
             },
         )
 
+        # Release shared synthesis client so the connection pool is freed.
+        self._synthesis_client = None
+
         return report
-    
+
     def _get_category(self, finding_type: str) -> str | None:
         """Map a finding_type to its semantic category, or None."""
         ft = finding_type.lower().replace(" ", "_")
@@ -1129,7 +1145,7 @@ class CouncilArbiter:
         if not (self.config.llm_api_key and self.config.llm_provider != "none"):
             return ""
 
-        client = LLMClient(self.config)
+        client = self._synthesis_client or LLMClient(self.config)
         if not client.is_available:
             return ""
         agent_full_name = self._AGENT_FULL_NAMES.get(agent_id, agent_id)
@@ -1153,7 +1169,7 @@ class CouncilArbiter:
 
         def _fmt(findings_list: list[dict]) -> str:
             out = []
-            for f in findings_list[:12]:
+            for f in findings_list[:5]:
                 meta = f.get("metadata") or {}
                 tool_name = meta.get("tool_name", f.get("finding_type", ""))
                 is_na = any(meta.get(flag) for flag in _NOT_APPLICABLE_FLAGS)
@@ -1228,7 +1244,7 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
             return await client.generate_synthesis(
                 system_prompt=system_prompt,
                 user_content=user_content,
-                max_tokens=600,
+                max_tokens=380,
                 json_mode=False,
             )
         except Exception as e:
@@ -1286,7 +1302,7 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
         Uses ONLY active agents (those that ran real tools).  Incorporates
         per-agent metrics and the computed verdict for a grounded summary.
         """
-        client = LLMClient(self.config)
+        client = self._synthesis_client or LLMClient(self.config)
 
         # Build structured findings digest for the model
         top_findings = sorted(
@@ -1373,7 +1389,7 @@ Write the Executive Summary for this forensic report. Justify the {overall_verdi
         return await client.generate_synthesis(
             system_prompt=system_prompt,
             user_content=user_content,
-            max_tokens=800,
+            max_tokens=500,
             json_mode=False,
         )
 
@@ -1435,7 +1451,7 @@ Write the Executive Summary for this forensic report. Justify the {overall_verdi
         self, incomplete: int, contested: int, overall_error_rate: float = 0.0
     ) -> str:
         """Generate uncertainty statement using LLM."""
-        client = LLMClient(self.config)
+        client = self._synthesis_client or LLMClient(self.config)
 
         system_prompt = """You are the Council Arbiter writing the Limitations and Uncertainty section of a forensic report.
 
@@ -1506,7 +1522,7 @@ Write 2-3 sentences only. Do not use bullet points."""
         contested_count: int,
         analysis_coverage_note: str,
     ) -> tuple[str, list[str], str] | None:
-        client = LLMClient(self.config)
+        client = self._synthesis_client or LLMClient(self.config)
 
         def _strip_rs_prefix(s: str) -> str:
             idx = s.find(":")

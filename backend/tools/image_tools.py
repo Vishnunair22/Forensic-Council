@@ -126,122 +126,120 @@ async def ela_full_image(
                 "available": True,
             }
 
-        # Open, convert to RGB, extract array, then close immediately
-        with Image.open(original_path) as _img:
-            original = _img.convert("RGB") if _img.mode != "RGB" else _img.copy()
-        original_array = np.array(original, dtype=np.float64)
+        # ── offload blocking PIL/numpy multi-quality sweep to a thread ──────────
+        import asyncio as _asyncio
 
-        # Determine quality levels to use
-        if multi_quality:
-            quality_levels = [70, 80, 90, 95]
-        else:
-            quality_levels = [quality]
+        # Capture parameters for the closure
+        _quality = quality
+        _multi_quality = multi_quality
+        _anomaly_threshold = anomaly_threshold
+        _evidence_store = evidence_store
+        _artifact = artifact
 
-        # Multi-quality sweep: compute ELA at each quality level
-        ela_maps = []
-        temp_files = []
+        def _blocking_ela_compute() -> dict:
+            quality_levels_used = [70, 80, 90, 95] if _multi_quality else [_quality]
 
-        try:
-            for q in quality_levels:
-                # Save at quality level
-                with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-                    tmp_path = tmp.name
-                    temp_files.append(tmp_path)
+            with Image.open(original_path) as _img:
+                original = _img.convert("RGB") if _img.mode != "RGB" else _img.copy()
+            original_array = np.array(original, dtype=np.float64)
 
-                original.save(tmp_path, "JPEG", quality=q)
-                with Image.open(tmp_path) as _resaved:
-                    resaved_array = np.array(_resaved, dtype=np.float64)
+            ela_maps: list = []
+            temp_files_ela: list[str] = []
 
-                # Compute ELA map (absolute difference)
-                ela_map = np.abs(original_array - resaved_array)
-                # Convert to grayscale intensity (average across RGB channels)
-                ela_gray = np.mean(ela_map, axis=2)
-                ela_maps.append(ela_gray)
-            
-            # Fuse: take max across quality levels — maximises sensitivity
-            if len(ela_maps) > 1:
-                combined_ela = np.max(np.stack(ela_maps, axis=0), axis=0)
-            else:
-                combined_ela = ela_maps[0]
-            
-            # Calculate statistics
-            max_anomaly = float(np.max(combined_ela))
-            mean_ela = float(np.mean(combined_ela))
-            std_ela = float(np.std(combined_ela))
-            
-            # Find anomaly regions using threshold
-            anomaly_mask = combined_ela > anomaly_threshold
-            
-            # Label connected regions
-            labeled_array, num_features = ndimage.label(anomaly_mask)
-            
-            anomaly_regions = []
-            for i in range(1, num_features + 1):
-                # Find bounding box of this region
-                region_mask = labeled_array == i
-                rows = np.any(region_mask, axis=1)
-                cols = np.any(region_mask, axis=0)
-                
-                if np.any(rows) and np.any(cols):
-                    y_min, y_max = np.where(rows)[0][[0, -1]]
-                    x_min, x_max = np.where(cols)[0][[0, -1]]
-                    
-                    anomaly_regions.append(BoundingBox(
-                        x=int(x_min),
-                        y=int(y_min),
-                        w=int(x_max - x_min + 1),
-                        h=int(y_max - y_min + 1),
-                    ))
-            
-            # Create derivative artifact if evidence store provided
-            derivative_artifact = None
-            if evidence_store:
-                # Save ELA map as image
-                ela_image = Image.fromarray(
-                    (combined_ela / max(max_anomaly, 1) * 255).astype(np.uint8)
+            try:
+                for q in quality_levels_used:
+                    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                        tmp_path_ela = tmp.name
+                        temp_files_ela.append(tmp_path_ela)
+
+                    original.save(tmp_path_ela, "JPEG", quality=q)
+                    with Image.open(tmp_path_ela) as _resaved:
+                        resaved_array = np.array(_resaved, dtype=np.float64)
+
+                    ela_map = np.abs(original_array - resaved_array)
+                    ela_gray = np.mean(ela_map, axis=2)
+                    ela_maps.append(ela_gray)
+
+                # Fuse: take max across quality levels — maximises sensitivity
+                combined_ela = (
+                    np.max(np.stack(ela_maps, axis=0), axis=0)
+                    if len(ela_maps) > 1
+                    else ela_maps[0]
                 )
-                ela_path = os.path.join(
-                    os.path.dirname(original_path),
-                    f"ela_{artifact.artifact_id}.jpg"
-                )
-                ela_image.save(ela_path, "JPEG", quality=95)
-                
-                # Compute hash of ELA output
-                with open(ela_path, "rb") as f:
-                    ela_hash = hashlib.sha256(f.read()).hexdigest()
-                
-                derivative_artifact = EvidenceArtifact.create_derivative(
-                    parent=artifact,
-                    artifact_type=ArtifactType.ELA_OUTPUT,
-                    file_path=ela_path,
-                    content_hash=ela_hash,
-                    action="ela_analysis",
-                    agent_id="image_tools",
-                    metadata={
-                        "quality": quality,
-                        "quality_levels": quality_levels,
-                        "multi_quality_fusion": multi_quality,
-                        "max_anomaly": max_anomaly,
-                        "anomaly_threshold": anomaly_threshold,
-                    }
-                )
-            
-            return {
-                "max_anomaly": max_anomaly,
-                "anomaly_regions": [r.to_dict() for r in anomaly_regions],
-                "num_anomaly_regions": len(anomaly_regions),
-                "mean_ela": mean_ela,
-                "std_ela": std_ela,
-                "quality_levels": quality_levels,
-                "multi_quality_fusion": multi_quality,
-                "derivative_artifact": derivative_artifact.to_dict() if derivative_artifact else None,
-            }
-        
-        finally:
-            # Clean up all temp files
-            for tmp_path in temp_files:
-                if os.path.exists(tmp_path):
-                    os.unlink(tmp_path)
+
+                max_anomaly = float(np.max(combined_ela))
+                mean_ela = float(np.mean(combined_ela))
+                std_ela = float(np.std(combined_ela))
+
+                anomaly_mask = combined_ela > _anomaly_threshold
+                labeled_array, num_features = ndimage.label(anomaly_mask)
+
+                anomaly_regions: list[BoundingBox] = []
+                for i in range(1, num_features + 1):
+                    region_mask = labeled_array == i
+                    rows = np.any(region_mask, axis=1)
+                    cols = np.any(region_mask, axis=0)
+                    if np.any(rows) and np.any(cols):
+                        y_min, y_max = np.where(rows)[0][[0, -1]]
+                        x_min, x_max = np.where(cols)[0][[0, -1]]
+                        anomaly_regions.append(BoundingBox(
+                            x=int(x_min), y=int(y_min),
+                            w=int(x_max - x_min + 1), h=int(y_max - y_min + 1),
+                        ))
+
+                # Optional derivative artifact (sync-safe: just file write + object construction)
+                derivative_artifact = None
+                if _evidence_store:
+                    ela_image = Image.fromarray(
+                        (combined_ela / max(max_anomaly, 1) * 255).astype(np.uint8)
+                    )
+                    ela_path = os.path.join(
+                        os.path.dirname(original_path),
+                        f"ela_{_artifact.artifact_id}.jpg",
+                    )
+                    ela_image.save(ela_path, "JPEG", quality=95)
+                    with open(ela_path, "rb") as f:
+                        ela_hash = hashlib.sha256(f.read()).hexdigest()
+                    derivative_artifact = EvidenceArtifact.create_derivative(
+                        parent=_artifact,
+                        artifact_type=ArtifactType.ELA_OUTPUT,
+                        file_path=ela_path,
+                        content_hash=ela_hash,
+                        action="ela_analysis",
+                        agent_id="image_tools",
+                        metadata={
+                            "quality": _quality,
+                            "quality_levels": quality_levels_used,
+                            "multi_quality_fusion": _multi_quality,
+                            "max_anomaly": max_anomaly,
+                            "anomaly_threshold": _anomaly_threshold,
+                        },
+                    )
+
+                return {
+                    "max_anomaly": max_anomaly,
+                    "anomaly_regions": [r.to_dict() for r in anomaly_regions],
+                    "num_anomaly_regions": len(anomaly_regions),
+                    "mean_ela": mean_ela,
+                    "std_ela": std_ela,
+                    "ela_mean": mean_ela,
+                    "quality_levels": quality_levels_used,
+                    "multi_quality_fusion": _multi_quality,
+                    "derivative_artifact": derivative_artifact.to_dict() if derivative_artifact else None,
+                    "court_defensible": True,
+                    "available": True,
+                }
+
+            finally:
+                for _tp in temp_files_ela:
+                    try:
+                        if os.path.exists(_tp):
+                            os.unlink(_tp)
+                    except OSError:
+                        pass
+
+        loop = _asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _blocking_ela_compute)
     
     except Exception as e:
         if isinstance(e, ToolUnavailableError):
@@ -358,8 +356,12 @@ async def jpeg_ghost_detect(
         - ghost_regions: List of BoundingBox regions with ghost artifacts
         - variance_map: Variance map across quality levels
     """
+    # Three quality levels cover the forensically important range (low/mid/high)
+    # while saving two full-image re-saves versus the previous five-level default.
     if quality_levels is None:
-        quality_levels = [50, 60, 70, 80, 90]
+        quality_levels = [60, 80, 95]
+
+    import asyncio as _asyncio
 
     try:
         original_path = artifact.file_path
@@ -397,88 +399,95 @@ async def jpeg_ghost_detect(
                 "available": True,
             }
 
-        # Open, convert to RGB, extract array, then close immediately
-        with Image.open(original_path) as _img:
-            original = _img.convert("RGB") if _img.mode != "RGB" else _img.copy()
-        original_array = np.array(original, dtype=np.float64)
+        # ── offload all blocking PIL/numpy work to a thread so the event loop
+        # stays responsive during compression sweeps.
+        def _blocking_ghost_compute() -> dict:
+            # Open, convert to RGB, extract array, then close immediately
+            with Image.open(original_path) as _img:
+                original = _img.convert("RGB") if _img.mode != "RGB" else _img.copy()
+            original_array = np.array(original, dtype=np.float64)
 
-        # Create compressed versions at different quality levels
-        compressed_arrays = []
-        temp_files = []
+            # Create compressed versions at different quality levels
+            compressed_arrays = []
+            temp_files_inner: list[str] = []
 
-        try:
-            for quality in quality_levels:
-                with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-                    tmp_path = tmp.name
-                    temp_files.append(tmp_path)
+            try:
+                for quality in quality_levels:
+                    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                        tmp_path_inner = tmp.name
+                        temp_files_inner.append(tmp_path_inner)
 
-                original.save(tmp_path, "JPEG", quality=quality)
-                with Image.open(tmp_path) as _compressed:
-                    compressed_arrays.append(np.array(_compressed, dtype=np.float64))
-            
-            # Stack all compressed versions
-            stacked = np.stack(compressed_arrays, axis=0)
-            
-            # Compute variance across quality levels for each pixel
-            variance_map = np.var(stacked, axis=0)
-            
-            # Convert to grayscale
-            variance_gray = np.mean(variance_map, axis=2)
-            
-            # Calculate statistics
-            max_variance = float(np.max(variance_gray))
-            mean_variance = float(np.mean(variance_gray))
-            
-            # Detect ghost regions (high variance indicates double compression)
-            ghost_mask = variance_gray > ghost_threshold
-            
-            # Label connected regions
-            labeled_array, num_features = ndimage.label(ghost_mask)
-            
-            ghost_regions = []
-            for i in range(1, num_features + 1):
-                region_mask = labeled_array == i
-                rows = np.any(region_mask, axis=1)
-                cols = np.any(region_mask, axis=0)
-                
-                if np.any(rows) and np.any(cols):
-                    y_min, y_max = np.where(rows)[0][[0, -1]]
-                    x_min, x_max = np.where(cols)[0][[0, -1]]
-                    
-                    ghost_regions.append(BoundingBox(
-                        x=int(x_min),
-                        y=int(y_min),
-                        w=int(x_max - x_min + 1),
-                        h=int(y_max - y_min + 1),
-                    ))
-            
-            # Calculate confidence based on variance distribution
-            # Higher variance in specific regions indicates likely manipulation
-            if max_variance > 0:
-                confidence = min(1.0, max_variance / 50.0)  # Normalize to 0-1
-            else:
-                confidence = 0.0
-            
-            ghost_detected = len(ghost_regions) > 0 and confidence > 0.3
-            
-            return {
-                "ghost_detected": ghost_detected,
-                "confidence": confidence,
-                "ghost_regions": [r.to_dict() for r in ghost_regions],
-                "variance_map": variance_gray.tolist(),
-                "max_variance": max_variance,
-                "mean_variance": mean_variance,
-            }
-        
-        finally:
-            # Clean up temp files
-            for tmp_path in temp_files:
-                if os.path.exists(tmp_path):
-                    os.unlink(tmp_path)
-    
+                    original.save(tmp_path_inner, "JPEG", quality=quality)
+                    with Image.open(tmp_path_inner) as _compressed:
+                        compressed_arrays.append(np.array(_compressed, dtype=np.float64))
+
+                # Stack all compressed versions
+                stacked = np.stack(compressed_arrays, axis=0)
+
+                # Compute variance across quality levels for each pixel
+                variance_map_arr = np.var(stacked, axis=0)
+
+                # Convert to grayscale — summary statistics only (no full-array serialisation)
+                variance_gray = np.mean(variance_map_arr, axis=2)
+
+                max_variance = float(np.max(variance_gray))
+                mean_variance = float(np.mean(variance_gray))
+
+                # Detect ghost regions (high variance indicates double compression)
+                ghost_mask = variance_gray > ghost_threshold
+
+                # Label connected regions
+                labeled_array, num_features = ndimage.label(ghost_mask)
+
+                ghost_regions: list[BoundingBox] = []
+                for i in range(1, num_features + 1):
+                    region_mask = labeled_array == i
+                    rows = np.any(region_mask, axis=1)
+                    cols = np.any(region_mask, axis=0)
+
+                    if np.any(rows) and np.any(cols):
+                        y_min, y_max = np.where(rows)[0][[0, -1]]
+                        x_min, x_max = np.where(cols)[0][[0, -1]]
+
+                        ghost_regions.append(BoundingBox(
+                            x=int(x_min),
+                            y=int(y_min),
+                            w=int(x_max - x_min + 1),
+                            h=int(y_max - y_min + 1),
+                        ))
+
+                # Confidence: normalise max variance to 0-1
+                confidence = min(1.0, max_variance / 50.0) if max_variance > 0 else 0.0
+                ghost_detected = len(ghost_regions) > 0 and confidence > 0.3
+
+                # Return summary statistics only — omit the full variance_map array
+                # (W×H floats ≈ 16 MB for 1080p) to prevent event-loop and memory pressure.
+                return {
+                    "ghost_detected": ghost_detected,
+                    "confidence": confidence,
+                    "ghost_regions": [r.to_dict() for r in ghost_regions],
+                    "num_ghost_regions": len(ghost_regions),
+                    "max_variance": max_variance,
+                    "mean_variance": mean_variance,
+                    "quality_levels_tested": quality_levels,
+                    "court_defensible": True,
+                    "available": True,
+                }
+
+            finally:
+                for _tp in temp_files_inner:
+                    try:
+                        if os.path.exists(_tp):
+                            os.unlink(_tp)
+                    except OSError:
+                        pass
+
+        loop = _asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _blocking_ghost_compute)
+
+    except ToolUnavailableError:
+        raise
     except Exception as e:
-        if isinstance(e, ToolUnavailableError):
-            raise
         raise ToolUnavailableError(f"JPEG ghost detection failed: {str(e)}")
 
 
@@ -576,7 +585,7 @@ async def compute_perceptual_hash(
 
 async def frequency_domain_analysis(
     artifact: EvidenceArtifact,
-) -> dict[str, Any]:
+) -> dict[str, Any]:  # noqa: C901
     """
     Perform frequency domain analysis using DFT.
     
@@ -597,66 +606,60 @@ async def frequency_domain_analysis(
         if not os.path.exists(original_path):
             raise ToolUnavailableError(f"File not found: {original_path}")
         
-        with Image.open(original_path) as _img:
-            original = _img.convert("L") if _img.mode != "L" else _img.copy()
-        img_array = np.array(original, dtype=np.float64)
-        
-        # Apply 2D DFT
-        dft = np.fft.fft2(img_array)
-        dft_shift = np.fft.fftshift(dft)
-        magnitude_spectrum = np.abs(dft_shift)
-        
-        # Log scale for visualization
-        magnitude_log = np.log1p(magnitude_spectrum)
-        
-        # Normalize
-        magnitude_normalized = (magnitude_log - np.min(magnitude_log)) / (
-            np.max(magnitude_log) - np.min(magnitude_log) + 1e-10
-        )
-        
-        # Find dominant frequencies (top 10 peaks)
-        flat_magnitude = magnitude_spectrum.flatten()
-        top_indices = np.argsort(flat_magnitude)[-10:][::-1]
-        
-        # Calculate anomaly score based on frequency distribution
-        # Natural images typically have more energy in low frequencies
-        center = np.array(magnitude_spectrum.shape) // 2
-        y, x = np.ogrid[:magnitude_spectrum.shape[0], :magnitude_spectrum.shape[1]]
-        distances = np.sqrt((x - center[1])**2 + (y - center[0])**2)
-        
-        # Energy in low vs high frequencies
-        low_freq_mask = distances < min(center)
-        high_freq_mask = ~low_freq_mask
-        
-        low_freq_energy = np.sum(magnitude_spectrum[low_freq_mask]**2)
-        high_freq_energy = np.sum(magnitude_spectrum[high_freq_mask]**2)
-        total_energy = low_freq_energy + high_freq_energy + 1e-10
-        
-        # Anomaly score: deviation of high-frequency energy ratio from natural image baseline.
-        # Natural images follow a 1/f^2 power spectrum — most squared energy concentrates
-        # in the inscribed-circle low-frequency region. Empirically, the corners (high_freq)
-        # contain ~5–15% of total squared energy for real photos (high_freq_ratio ≈ 0.05–0.15).
-        # The old formula `min(1.0, high_freq_ratio * 5)` scored every image near 1.0.
-        # Fixed: score proportional to excess above natural ceiling (0.20).
-        high_freq_ratio = high_freq_energy / total_energy
-        _NATURAL_CEIL = 0.20   # above this the spectrum is unusually rich in high frequencies
-        anomaly_score = round(min(1.0, max(0.0, (high_freq_ratio - _NATURAL_CEIL) / _NATURAL_CEIL)), 3)
+        # ── offload blocking FFT computation to a thread ──────────────────────
+        import asyncio as _asyncio
 
-        return {
-            "frequency_spectrum": magnitude_normalized.tolist(),
-            "dominant_frequencies": top_indices.tolist(),
-            "anomaly_score": anomaly_score,
-            "low_freq_ratio": round(low_freq_energy / total_energy, 4),
-            "high_freq_ratio": round(high_freq_ratio, 4),
-            # DFT analysis is a supporting signal, not a standalone court-grade test.
-            # Excluded from confidence weighting; context only.
-            "court_defensible": False,
-            "limitation_note": "Basic DFT high-frequency ratio — supporting signal only, not a standalone manipulation indicator.",
-        }
-    
+        def _blocking_fft_compute() -> dict:
+            with Image.open(original_path) as _img:
+                original = _img.convert("L") if _img.mode != "L" else _img.copy()
+            img_array = np.array(original, dtype=np.float64)
+
+            # Apply 2D DFT
+            dft = np.fft.fft2(img_array)
+            dft_shift = np.fft.fftshift(dft)
+            magnitude_spectrum = np.abs(dft_shift)
+
+            # Calculate anomaly score based on frequency distribution.
+            # Natural images follow a 1/f^2 power spectrum — most squared energy
+            # concentrates in the inscribed-circle low-frequency region.
+            # Empirically the corners contain ~5–15% for real photos.
+            center = np.array(magnitude_spectrum.shape) // 2
+            y, x = np.ogrid[:magnitude_spectrum.shape[0], :magnitude_spectrum.shape[1]]
+            distances = np.sqrt((x - center[1]) ** 2 + (y - center[0]) ** 2)
+
+            low_freq_mask = distances < min(center)
+            high_freq_mask = ~low_freq_mask
+
+            low_freq_energy = float(np.sum(magnitude_spectrum[low_freq_mask] ** 2))
+            high_freq_energy = float(np.sum(magnitude_spectrum[high_freq_mask] ** 2))
+            total_energy = low_freq_energy + high_freq_energy + 1e-10
+
+            high_freq_ratio = high_freq_energy / total_energy
+            _NATURAL_CEIL = 0.20
+            anomaly_score = round(
+                min(1.0, max(0.0, (high_freq_ratio - _NATURAL_CEIL) / _NATURAL_CEIL)), 3
+            )
+
+            # Return summary statistics only — omit frequency_spectrum / dominant_frequencies
+            # arrays (W×H floats ≈ 16 MB for 1080p) to prevent memory and serialisation pressure.
+            return {
+                "anomaly_score": anomaly_score,
+                "low_freq_ratio": round(low_freq_energy / total_energy, 4),
+                "high_freq_ratio": round(high_freq_ratio, 4),
+                "court_defensible": False,
+                "available": True,
+                "limitation_note": (
+                    "Basic DFT high-frequency ratio — supporting signal only, "
+                    "not a standalone manipulation indicator."
+                ),
+            }
+
+        loop = _asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _blocking_fft_compute)
+
+    except ToolUnavailableError:
+        raise
     except Exception as e:
-        if isinstance(e, ToolUnavailableError):
-            raise
         raise ToolUnavailableError(f"Frequency domain analysis failed: {str(e)}")
 
 

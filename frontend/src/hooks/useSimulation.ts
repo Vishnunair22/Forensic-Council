@@ -151,6 +151,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                                         tools_ran: typeof tools_ran === "number" ? tools_ran : undefined,
                                         tools_skipped: typeof tools_skipped === "number" ? tools_skipped : undefined,
                                         tools_failed: typeof tools_failed === "number" ? tools_failed : undefined,
+                                        completed_at: new Date().toISOString(),
                                     };
 
                                     // Upsert: later AGENT_COMPLETE for the same agent_id always wins

@@ -295,41 +295,62 @@ class Agent3Object(ForensicAgent):
                         from PIL import Image as _PILImage
                         analyzer = get_clip_analyzer()
                         img_full = _PILImage.open(target_path).convert("RGB")
-                        clip_weapon_finds = []
+
+                        # Build per-person temp files up front so the coroutines below
+                        # can each reference their own path without sharing mutable state.
+                        _WEAPON_CATS = [
+                            "a person holding a firearm or gun",
+                            "a person holding a knife",
+                            "a person holding a weapon",
+                            "a person holding a harmless object",
+                            "a person not holding anything dangerous",
+                        ]
+                        person_tmp_paths: list[tuple[dict, str]] = []
                         for pd in person_dets[:3]:
                             x1, y1, x2, y2 = [int(v) for v in pd["bbox_xyxy"]]
                             iw, ih = img_full.size
                             pad = 20
-                            region = img_full.crop((max(0,x1-pad), max(0,y1-pad), min(iw,x2+pad), min(ih,y2+pad)))
+                            region = img_full.crop((
+                                max(0, x1 - pad), max(0, y1 - pad),
+                                min(iw, x2 + pad), min(ih, y2 + pad),
+                            ))
                             with _tf.NamedTemporaryFile(suffix=".jpg", delete=False) as _t:
                                 region.save(_t.name, format="JPEG", quality=95)
-                                _tp = _t.name
+                                person_tmp_paths.append((pd, _t.name))
+
+                        _loop = asyncio.get_running_loop()
+
+                        async def _clip_one(pd_inner: dict, tmp_p: str) -> dict | None:
                             try:
-                                _loop = asyncio.get_running_loop()
-                                clip_res = await _loop.run_in_executor(
+                                res = await _loop.run_in_executor(
                                     None,
-                                    lambda p=_tp: analyzer.analyze_image(
+                                    lambda p=tmp_p: analyzer.analyze_image(
                                         p,
-                                        categories=[
-                                            "a person holding a firearm or gun",
-                                            "a person holding a knife",
-                                            "a person holding a weapon",
-                                            "a person holding a harmless object",
-                                            "a person not holding anything dangerous",
-                                        ],
+                                        categories=_WEAPON_CATS,
                                         check_concerns=True,
                                     ),
                                 )
-                                if clip_res.available and clip_res.concern_flag:
-                                    clip_weapon_finds.append({
-                                        "class_name": clip_res.top_match,
-                                        "confidence": round(clip_res.top_confidence, 3),
-                                        "bbox_xyxy": pd["bbox_xyxy"],
+                                if res.available and res.concern_flag:
+                                    return {
+                                        "class_name": res.top_match,
+                                        "confidence": round(res.top_confidence, 3),
+                                        "bbox_xyxy": pd_inner["bbox_xyxy"],
                                         "source": "clip_weapon_check",
-                                    })
+                                    }
                             finally:
-                                try: os.unlink(_tp)
-                                except: pass
+                                try:
+                                    os.unlink(tmp_p)
+                                except OSError:
+                                    pass
+                            return None
+
+                        # Run all person-crop CLIP inferences concurrently
+                        clip_results = await asyncio.gather(
+                            *[_clip_one(pd, tp) for pd, tp in person_tmp_paths],
+                            return_exceptions=False,
+                        )
+                        clip_weapon_finds = [r for r in clip_results if r is not None]
+
                         if clip_weapon_finds:
                             detection_result["weapon_detections"] = weapon_detections + clip_weapon_finds
                             detection_result["clip_weapon_finds"] = clip_weapon_finds

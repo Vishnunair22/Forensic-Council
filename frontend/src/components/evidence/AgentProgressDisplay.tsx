@@ -61,6 +61,8 @@ export interface AgentUpdate {
   tools_skipped?: number;
   /** Count of tools that failed (court_defensible=false) */
   tools_failed?: number;
+  /** ISO timestamp when AGENT_COMPLETE fired — used for result page timeline */
+  completed_at?: string;
 }
 
 interface AgentProgressDisplayProps {
@@ -1231,29 +1233,23 @@ export function AgentProgressDisplay({
               <h3 className="text-lg font-black text-white font-heading uppercase tracking-tighter">Initial Scan Concluded</h3>
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
-               <button
+              <button
                 onClick={onAcceptAnalysis}
                 disabled={isNavigating}
-                className="group flex-1 py-3.5 rounded-full text-xs font-semibold cursor-pointer flex items-center justify-center gap-2 text-white/70 hover:text-white transition-all duration-300"
-                style={{ background: "transparent", border: "1px solid rgba(34,211,238,0.2)", boxShadow: "none" }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "linear-gradient(135deg, rgba(6,182,212,0.15) 0%, rgba(34,211,238,0.15) 100%)"; e.currentTarget.style.borderColor = "rgba(34,211,238,0.4)"; e.currentTarget.style.boxShadow = "0 0 20px rgba(34,211,238,0.1)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "rgba(34,211,238,0.2)"; e.currentTarget.style.boxShadow = "none"; }}
+                className="btn-premium-glass flex-1 py-3.5 justify-center text-[11px] font-black uppercase tracking-[0.2em] shadow-[0_0_24px_rgba(34,211,238,0.18)]"
               >
                 {isNavigating ? (
                   <><Loader2 className="w-4 h-4 animate-spin" />Compiling...</>
                 ) : (
-                  <><FileText className="w-4 h-4 text-cyan-400/50" />Accept Analysis</>
+                  <><FileText className="w-4 h-4" />Accept Analysis<ArrowRight className="w-3.5 h-3.5 ml-1 opacity-70" /></>
                 )}
               </button>
-               <button
+              <button
                 onClick={onDeepAnalysis}
                 disabled={isNavigating}
-                className="group flex-1 py-3.5 rounded-full text-xs font-semibold cursor-pointer flex items-center justify-center gap-2 text-amber-400/70 hover:text-amber-300 transition-all duration-300"
-                style={{ background: "transparent", border: "1px solid rgba(245,158,11,0.2)", boxShadow: "none" }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "linear-gradient(135deg, rgba(217,119,6,0.15) 0%, rgba(245,158,11,0.15) 100%)"; e.currentTarget.style.borderColor = "rgba(245,158,11,0.4)"; e.currentTarget.style.boxShadow = "0 0 20px rgba(245,158,11,0.1)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "rgba(245,158,11,0.2)"; e.currentTarget.style.boxShadow = "none"; }}
+                className="btn-premium-amber flex-1 py-3.5 justify-center text-[11px] font-black uppercase tracking-[0.2em] relative overflow-hidden shadow-[0_0_28px_rgba(217,119,6,0.25)]"
               >
-                <Microscope className="w-4 h-4 text-amber-400/50" />Deep Analysis
+                <Microscope className="w-4 h-4" />Deep Analysis<ArrowRight className="w-3.5 h-3.5 ml-1 opacity-70" />
               </button>
             </div>
           </div>
