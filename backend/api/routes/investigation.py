@@ -4,6 +4,11 @@ Investigation Routes
 
 Routes for starting and managing forensic investigations with
 real-time WebSocket updates and two-phase HITL pipeline support.
+
+Modules extracted:
+  - _rate_limiting: Per-user rate limiting and daily cost quota
+  - Rate limiting, cost quota, and WebSocket management are imported
+    from their respective modules to keep this file focused on route handlers.
 """
 
 import asyncio
@@ -30,109 +35,49 @@ from api.schemas import (
     InvestigationResponse,
 )
 from core.config import get_settings
+from core.severity import assign_severity_tier
 from core.structured_logging import get_logger
 from orchestration.pipeline import ForensicCouncilPipeline, AgentLoopResult
+
+# Import extracted modules
+from api.routes._rate_limiting import (
+    check_investigation_rate_limit,
+    check_daily_cost_quota,
+)
+from api.routes._session_state import (
+    _active_pipelines,
+    _websocket_connections,
+    _active_tasks,
+    _final_reports,
+    AGENT_IDS,
+    AGENT_NAMES,
+    cleanup_connections,
+    evict_stale_sessions,
+    get_active_pipelines_count,
+    get_active_pipeline,
+    get_all_active_pipelines,
+    set_active_pipeline,
+    remove_active_pipeline,
+    clear_active_pipelines,
+    set_active_task,
+    pop_active_task,
+    set_final_report,
+    get_final_report,
+    get_session_websockets,
+    clear_session_websockets,
+    register_websocket,
+    unregister_websocket,
+    broadcast_update,
+)
 
 logger = get_logger(__name__)
 settings = get_settings()
 
 def _assign_severity_tier(f: Any) -> str:
-    """Assign INFO/LOW/MEDIUM/HIGH/CRITICAL to a finding based on metadata."""
-    if hasattr(f, "metadata"):
-        meta = f.metadata or {}
-        conf = getattr(f, "confidence_raw", 0.0)
-        status_str = str(getattr(f, "status", "")).upper()
-    elif isinstance(f, dict):
-        meta = f.get("metadata") or {}
-        conf = float(f.get("confidence_raw") or 0.0)
-        status_str = str(f.get("status", "")).upper()
-    else:
-        return "INFO"
-
-    na_flags = ("ela_not_applicable", "ghost_not_applicable", "noise_fingerprint_not_applicable", "prnu_not_applicable", "gan_not_applicable")
-    is_na = any(meta.get(flag) for flag in na_flags) or str(meta.get("verdict", "")).upper() == "NOT_APPLICABLE" or str(meta.get("prnu_verdict", "")).upper() == "NOT_APPLICABLE"
-    is_failed = not is_na and meta.get("court_defensible") is False
-    if is_na or meta.get("hash_matches") is True: return "INFO"
-    if is_failed or status_str == "INCOMPLETE": return "LOW"
-    has_manip = meta.get("manipulation_detected") is True or meta.get("deepfake_detected") is True or meta.get("splicing_detected") is True or meta.get("copy_move_detected") is True or meta.get("mismatch_detected") is True or meta.get("gan_artifact_detected") is True or "INCONSISTENT" in str(meta.get("prnu_verdict", "")).upper()
-    has_anomaly = meta.get("anomaly_detected") is True or meta.get("inconsistency_detected") is True or str(meta.get("verdict", "")).upper() in ("TAMPERED", "SUSPICIOUS", "MANIPULATED")
-    if has_manip: return "CRITICAL" if conf >= 0.75 else "HIGH"
-    if has_anomaly: return "MEDIUM"
-    return "LOW"
+    """Assign INFO/LOW/MEDIUM/HIGH/CRITICAL to a finding. Uses shared logic."""
+    return assign_severity_tier(f)
 
 router = APIRouter(prefix="/api/v1", tags=["investigation"])
-
-# ── Per-user upload rate limiter ──────────────────────────────────────────────
-# Limits how many investigations a single authenticated user can start within
-# a rolling window. Prevents a single account from exhausting pipeline capacity.
-_MAX_INVESTIGATIONS_PER_USER = 50      # max investigations per window
-_USER_RATE_WINDOW_SECS = 300           # 5-minute rolling window
-_USER_RATE_LOCKOUT_SECS = 30           # 30-second lockout after limit hit
-
-# In-memory fallback: {user_id: [timestamp, ...]}
-# Capped at _MEM_RATE_MAX_USERS entries to prevent unbounded growth when Redis
-# is unavailable for an extended period.
-_user_investigation_times: dict[str, list[float]] = {}
-_MEM_RATE_MAX_USERS = 10_000
-
-
-async def _check_investigation_rate_limit(user_id: str) -> None:
-    """
-    Raise HTTP 429 if the user has exceeded the investigation rate limit.
-
-    Prefers Redis when available (replica-safe); falls back to an in-process
-    dict when Redis is unavailable (single-replica safe).
-    """
-    key = f"inv_rate:{user_id}"
-    now = time.time()
-
-    # ── Redis path ────────────────────────────────────────────────────────────
-    try:
-        from infra.redis_client import get_redis_client
-        redis = await get_redis_client()
-        if redis:
-            count_raw = await redis.get(key)
-            count = int(count_raw) if count_raw else 0
-            if count >= _MAX_INVESTIGATIONS_PER_USER:
-                ttl = await redis.ttl(key)
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=(
-                        f"Too many investigations started. "
-                        f"Try again in {max(ttl, 1)} seconds."
-                    ),
-                    headers={"Retry-After": str(max(ttl, 1))},
-                )
-            new_count = await redis.incr(key)
-            if new_count == 1:  # first request in this window — fix expiry for the whole window
-                await redis.expire(key, _USER_RATE_WINDOW_SECS)
-            return
-    except HTTPException:
-        raise
-    except Exception:
-        pass  # fall through to in-memory fallback
-
-    # ── In-memory fallback ────────────────────────────────────────────────────
-    cutoff = now - _USER_RATE_WINDOW_SECS
-
-    # Evict oldest user entry if dict is at capacity to prevent unbounded growth
-    if user_id not in _user_investigation_times and len(_user_investigation_times) >= _MEM_RATE_MAX_USERS:
-        oldest_uid = next(iter(_user_investigation_times))
-        _user_investigation_times.pop(oldest_uid, None)
-
-    times = _user_investigation_times.setdefault(user_id, [])
-    times[:] = [t for t in times if t > cutoff]
-    if len(times) >= _MAX_INVESTIGATIONS_PER_USER:
-        retry_after = int(_USER_RATE_WINDOW_SECS - (now - times[0])) + 1
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=(
-                f"Too many investigations started. "
-                f"Try again in {max(retry_after, 1)} seconds."
-            ),
-            headers={"Retry-After": str(max(retry_after, 1))},
-        )
-    times.append(now)
 
 # Allowed MIME types (declared early — used in start_investigation)
 ALLOWED_MIME_TYPES = {
@@ -194,7 +139,10 @@ async def start_investigation(
     _validate_safe_id(investigator_id, "investigator_id")
 
     # ── Per-user rate limit ───────────────────────────────────────────────────
-    await _check_investigation_rate_limit(current_user.user_id)
+    await check_investigation_rate_limit(current_user.user_id)
+
+    # ── Per-user daily cost quota ─────────────────────────────────────────────
+    await check_daily_cost_quota(current_user.user_id, current_user.role.value)
 
     # ── MIME type check ───────────────────────────────────────────────────────
     # Strip parameters (e.g. "image/jpeg; charset=utf-8" → "image/jpeg") before
@@ -242,6 +190,37 @@ async def start_investigation(
                 status_code=400,
                 detail=f"File size exceeds the {MAX_FILE_SIZE // (1024 * 1024)} MB limit.",
             )
+
+        # ── Request deduplication: hash content + case_id ─────────────────
+        import hashlib as _hl
+        content_hash = _hl.sha256(content).hexdigest()
+        dedup_key = f"dedup:{case_id}:{content_hash}"
+        try:
+            from infra.redis_client import get_redis_client
+            _redis = await get_redis_client()
+            if _redis:
+                existing_session = await _redis.get(dedup_key)
+                if existing_session:
+                    logger.info(
+                        "Duplicate investigation detected — returning existing session",
+                        content_hash=content_hash[:16],
+                        existing_session=existing_session,
+                    )
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            f"Duplicate evidence detected. An investigation for this "
+                            f"file already exists: session {existing_session}"
+                        ),
+                        headers={"X-Existing-Session": existing_session},
+                    )
+                # Mark this content as being processed (TTL = investigation timeout + 60s)
+                await _redis.set(dedup_key, session_id, ex=settings.investigation_timeout + 60)
+        except HTTPException:
+            raise
+        except Exception:
+            pass  # Dedup is best-effort — continue if Redis unavailable
+
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, tmp_path.write_bytes, content)
     except HTTPException:
@@ -288,6 +267,35 @@ async def start_investigation(
     except Exception as e:
         logger.warning("MIME validation skipped", error=str(e))
 
+    # ── 3b. File structure validation (adversarial input guard) ────────────
+    # Verify the file is structurally valid before passing to ML tools.
+    # Catches malformed images, truncated files, and basic zip-bombs-in-image-headers.
+    if mime.startswith("image/") and mime != "image/gif":
+        try:
+            from PIL import Image
+            import io
+            img = Image.open(io.BytesIO(content))
+            img.verify()  # structural integrity check — does not decode pixels
+            # Re-open after verify() (verify() closes the image)
+            img2 = Image.open(io.BytesIO(content))
+            w, h = img2.size
+            img2.close()
+            # Reject absurdly large dimensions (potential OOM during ELA/FFT)
+            max_pixels = 100_000_000  # 100 megapixels
+            if w * h > max_pixels:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Image dimensions {w}x{h} exceed maximum {max_pixels} pixels. "
+                           f"Possible adversarial input.",
+                )
+            logger.debug("Image structure validation passed", width=w, height=h)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning("Image structure validation failed", error=str(e))
+            # Log but don't reject — some valid images fail PIL.verify()
+            # The pipeline tools will report failures per-agent if the image is corrupt.
+
     # ── 4. Register pipeline ──────────────────────────────────────────────────
     try:
         from orchestration.pipeline import ForensicCouncilPipeline
@@ -297,7 +305,7 @@ async def start_investigation(
         try: tmp_path.unlink()
         except Exception as _e: logger.debug("Temp file cleanup failed", error=str(_e))
         raise HTTPException(status_code=500, detail="Pipeline initialisation failed — please retry.")
-    _active_pipelines[session_id] = pipeline
+    set_active_pipeline(session_id, pipeline)
 
     # ── Start background investigation task ───────────────────────────────────
     task = asyncio.create_task(
@@ -327,7 +335,7 @@ async def start_investigation(
             )
 
     task.add_done_callback(_task_done_callback)
-    _active_tasks[session_id] = task
+    set_active_task(session_id, task)
 
     increment_investigations_started()
     logger.info(
@@ -357,7 +365,7 @@ async def start_investigation(
 
     asyncio.create_task(_register_session_async())
 
-    _evict_stale_sessions()
+    evict_stale_sessions()
 
     return InvestigationResponse(
         session_id=session_id,
@@ -367,114 +375,7 @@ async def start_investigation(
     )
 
 
-# Store active pipelines, WebSocket connections, background tasks, and cached reports
-_active_pipelines: dict[str, ForensicCouncilPipeline] = {}
-_websocket_connections: dict[str, list] = {}
-_active_tasks: dict[str, asyncio.Task] = {}
-_final_reports: dict[str, tuple[Any, datetime]] = {}
 
-# Agent IDs in execution order
-_AGENT_IDS = ["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"]
-_AGENT_NAMES = {
-    "Agent1": "Image Forensics",
-    "Agent2": "Audio Forensics",
-    "Agent3": "Object Detection",
-    "Agent4": "Video Forensics",
-    "Agent5": "Metadata Forensics",
-}
-
-
-def cleanup_connections():
-    """Clean up all WebSocket connections, tasks, and active pipelines on shutdown."""
-    for task in _active_tasks.values():
-        if not task.done():
-            task.cancel()
-    _active_tasks.clear()
-    _websocket_connections.clear()
-    _active_pipelines.clear()
-    _final_reports.clear()
-
-# Session TTL: configurable via SESSION_TTL_HOURS env var (default 24h)
-_SESSION_TTL_SECONDS = settings.session_ttl_hours * 3600
-
-
-def _evict_stale_sessions() -> None:
-    """
-    Remove completed sessions that have exceeded SESSION_TTL.
-    Called periodically to prevent unbounded memory growth in long-running deployments.
-    """
-    now = datetime.now(timezone.utc)
-    stale = [
-        sid for sid, (_, cached_at) in list(_final_reports.items())
-        if (now - cached_at).total_seconds() > _SESSION_TTL_SECONDS
-    ]
-    for sid in stale:
-        _final_reports.pop(sid, None)
-        # Only remove the pipeline if there's no live task still running
-        task = _active_tasks.get(sid)
-        if task is None or task.done():
-            _active_pipelines.pop(sid, None)
-            _active_tasks.pop(sid, None)
-            _websocket_connections.pop(sid, None)
-    if stale:
-        logger.info(f"Evicted {len(stale)} stale session(s) from memory")
-
-def get_active_pipelines_count() -> int:
-    return len(_active_pipelines)
-
-def get_active_pipeline(session_id: str) -> Optional[ForensicCouncilPipeline]:
-    return _active_pipelines.get(session_id)
-
-def get_all_active_pipelines() -> dict:
-    return _active_pipelines.copy()
-
-def remove_active_pipeline(session_id: str):
-    _active_pipelines.pop(session_id, None)
-
-def clear_active_pipelines():
-    _active_pipelines.clear()
-    _final_reports.clear()
-
-
-def pop_active_task(session_id: str):
-    """Remove and return the active task for a session."""
-    return _active_tasks.pop(session_id, None)
-
-
-def get_session_websockets(session_id: str) -> list:
-    """Get WebSocket connections for a session."""
-    return _websocket_connections.get(session_id, [])
-
-
-def clear_session_websockets(session_id: str):
-    """Remove all WebSocket connections for a session."""
-    _websocket_connections.pop(session_id, None)
-
-
-def register_websocket(session_id: str, websocket):
-    """Register a WebSocket connection for a session."""
-    if session_id not in _websocket_connections:
-        _websocket_connections[session_id] = []
-    _websocket_connections[session_id].append(websocket)
-
-
-def unregister_websocket(session_id: str, websocket):
-    """Unregister a WebSocket connection from a session."""
-    if session_id in _websocket_connections:
-        try:
-            _websocket_connections[session_id].remove(websocket)
-        except ValueError:
-            pass
-
-
-async def broadcast_update(session_id: str, update: BriefUpdate):
-    """Broadcast a WebSocket update to all connected clients."""
-    if session_id in _websocket_connections:
-        for ws in _websocket_connections[session_id]:
-            try:
-                await ws.send_json(update.model_dump())
-            except Exception as e:
-                logger.warning(f"Failed to send WebSocket message: {e}")
 
 
 async def _wrap_pipeline_with_broadcasts(
@@ -510,7 +411,7 @@ async def _wrap_pipeline_with_broadcasts(
             type_val = getattr(entry_type, "value", str(entry_type))
             
             if type_val == "HITL_CHECKPOINT" and isinstance(content, dict):
-                agent_name = _AGENT_NAMES.get(agent_id, agent_id)
+                agent_name = AGENT_NAMES.get(agent_id, agent_id)
                 await broadcast_update(
                     ws_session_id,
                     BriefUpdate(
@@ -534,7 +435,7 @@ async def _wrap_pipeline_with_broadcasts(
                 if content.get("action") == "session_start":
                     return result
                 
-                agent_name = _AGENT_NAMES.get(agent_id, agent_id)
+                agent_name = AGENT_NAMES.get(agent_id, agent_id)
                 
                 if type_val == "ACTION" and content.get("tool_name"):
                     tool_label = content["tool_name"].replace("_", " ").title()
@@ -616,6 +517,22 @@ async def _wrap_pipeline_with_broadcasts(
             ("Agent4", "Video Forensics", Agent4Video, "🎬 Starting optical flow analysis — building temporal heatmap…"),
             ("Agent5", "Metadata Forensics", Agent5Metadata, "📋 Extracting EXIF fields — checking for mandatory field gaps…"),
         ]
+
+        # Broadcast a "queued" status for ALL agents immediately so the frontend
+        # sees every agent card (allForensicAgentsLive becomes true) without
+        # waiting for sequential execution to reach each one.
+        for _aid, _aname, _, _ in agent_configs:
+            await broadcast_update(
+                ws_session_id,
+                BriefUpdate(
+                    type="AGENT_UPDATE",
+                    session_id=ws_session_id,
+                    agent_id=_aid,
+                    agent_name=_aname,
+                    message=f"{_aname} queued — waiting for turn…",
+                    data={"status": "queued", "thinking": f"{_aname} queued — waiting for turn…"},
+                )
+            )
 
         # ── Per-agent tool-action humaniser (initial AND deep pass) ──────────
         _TASK_PHRASES: dict[str, str] = {
@@ -942,10 +859,12 @@ async def _wrap_pipeline_with_broadcasts(
                 # Agent3 (Object Detection) includes OCR which can be slow on complex images.
                 base_budget = float(pipeline.config.investigation_timeout)
                 if agent_id == "Agent1":
-                    agent_timeout = min(360, max(240, base_budget * 0.55))
+                    agent_timeout = min(240, max(150, base_budget * 0.40))
                 elif agent_id == "Agent3":
-                    # YOLO warm-up + OCR (Tesseract/EasyOCR) can take 2-3 minutes
-                    agent_timeout = min(300, max(180, base_budget * 0.45))
+                    # YOLO model load (via run_in_executor) + object detection + OCR
+                    # (Tesseract) + scale validation + lighting check + contraband DB.
+                    # First-run model download can add 10-15s even in a thread pool.
+                    agent_timeout = min(240, max(150, base_budget * 0.40))
                 else:
                     # Metadata/exif tools are fast; audio/video ML tools are moderate
                     agent_timeout = min(240, max(120, base_budget * 0.35))
@@ -1479,43 +1398,10 @@ async def _wrap_pipeline_with_broadcasts(
                     except Exception:
                         heartbeat_task.cancel()
 
-                # Step 4: If Agent1, extract Gemini result and share with Agent3 + Agent5
-                if agent_id == "Agent1":
-                    try:
-                        gemini_result = getattr(agent, "_gemini_vision_result", {})
-                        if not gemini_result and deep_findings_raw:
-                            for f in deep_findings_raw:
-                                tool = ((f.metadata or {}).get("tool_name", "") if hasattr(f, "metadata") else "")
-                                if "gemini" in tool.lower():
-                                    gemini_result = f.metadata or {} if hasattr(f, "metadata") else {}
-                                    break
-                        if gemini_result:
-                            _agent1_gemini_result = gemini_result
-                        else:
-                            # Inject a stub so Agent3/5 know Gemini is unavailable
-                            # rather than waiting for data that never arrives
-                            gemini_result = {"gemini_unavailable": True}
-                        # Inject into all applicable agents in the deep pass batch
-                        for aid, aname, ainst, ares in deep_pass_coroutines:
-                            if aid in ("Agent3", "Agent5") and hasattr(ainst, "inject_agent1_context"):
-                                ainst.inject_agent1_context(gemini_result)
-                        
-                        logger.info(
-                            "Agent1 Gemini context injected into Agent3 + Agent5 instances",
-                            has_content_type=bool(gemini_result.get("gemini_content_type")),
-                            has_objects=bool(gemini_result.get("gemini_detected_objects")),
-                            has_text=bool(gemini_result.get("gemini_extracted_text")),
-                            gemini_unavailable=bool(gemini_result.get("gemini_unavailable")),
-                        )
-                    except Exception as ctx_err:
-                        logger.warning(f"Could not inject Agent1 Gemini context: {ctx_err}")
-                        # Still inject a stub so Agent3/5 don't hang
-                        for aid, aname, ainst, ares in deep_pass_coroutines:
-                            if aid in ("Agent3", "Agent5") and hasattr(ainst, "inject_agent1_context"):
-                                try:
-                                    ainst.inject_agent1_context({"gemini_unavailable": True})
-                                except Exception:
-                                    pass
+                # Step 4: Gemini context injection for Agent3/5 is handled by the
+                # outer block after run_agent_deep_pass returns (line ~1700).
+                # Injecting here is redundant and risks overwriting valid context
+                # with {"gemini_unavailable": True} if the second injection raises.
 
                 # Step 5: Prepare deep-only findings list for the broadcast
                 deep_findings_serial: list[dict] = []
@@ -1771,8 +1657,12 @@ async def _wrap_pipeline_with_broadcasts(
             )
         )
         
+        # Signal outer loop that we are paused for user decision — this lets
+        # run_investigation_task move the wait outside the computation budget.
+        pipeline._awaiting_user_decision = True
         await getattr(pipeline, "deep_analysis_decision_event").wait()
-        
+        pipeline._awaiting_user_decision = False
+
         if getattr(pipeline, "run_deep_analysis_flag") and deep_pass_coroutines:
             logger.info(f"Running deep analysis for {len(deep_pass_coroutines)} agents…")
             await broadcast_update(
@@ -1939,7 +1829,7 @@ async def run_investigation_task(
         logger.info(f"Background task for {session_id} waiting for WebSocket client...")
         ws_connected = False
         for _ws_wait in range(50):
-            if session_id in _websocket_connections and _websocket_connections[session_id]:
+            if get_session_websockets(session_id):
                 ws_connected = True
                 break
             await asyncio.sleep(0.1)
@@ -1960,19 +1850,45 @@ async def run_investigation_task(
             )
         )
         
-        # Run with shorter timeout
+        # Run computational phases with timeout, but exclude user decision wait.
+        # The pipeline signals pipeline._awaiting_user_decision = True when it
+        # pauses after initial analysis.  We poll for that sentinel so the 600 s
+        # budget only covers actual computation — not human think time.
         timeout = min(settings.investigation_timeout, 600)  # Max 10 minutes
-        report = await asyncio.wait_for(
-            _wrap_pipeline_with_broadcasts(
-                pipeline=pipeline,
-                session_id=session_id,
-                evidence_file_path=evidence_file_path,
-                case_id=case_id,
-                investigator_id=investigator_id,
-                original_filename=original_filename,
-            ),
-            timeout=float(timeout),
+        pipeline_coro = _wrap_pipeline_with_broadcasts(
+            pipeline=pipeline,
+            session_id=session_id,
+            evidence_file_path=evidence_file_path,
+            case_id=case_id,
+            investigator_id=investigator_id,
+            original_filename=original_filename,
         )
+
+        pipeline_task = asyncio.create_task(pipeline_coro)
+
+        # Wait for either completion or the user-decision sentinel
+        while True:
+            done, _ = await asyncio.wait(
+                [pipeline_task],
+                timeout=5.0,
+            )
+            if pipeline_task in done:
+                break  # pipeline finished (no user decision needed, or already handled)
+            # Check if pipeline is paused waiting for user
+            if getattr(pipeline, "_awaiting_user_decision", False):
+                # Give the user up to 1 hour to decide, outside the computation budget
+                logger.info(f"Pipeline paused for user decision — waiting up to 3600 s")
+                user_wait_event = getattr(pipeline, "deep_analysis_decision_event")
+                try:
+                    await asyncio.wait_for(user_wait_event.wait(), timeout=3600.0)
+                except asyncio.TimeoutError:
+                    logger.warning("User decision timed out after 3600 s — treating as Accept (skip deep)")
+                    pipeline.run_deep_analysis_flag = False
+                    user_wait_event.set()
+                # Reset sentinel and continue waiting for pipeline to finish
+                pipeline._awaiting_user_decision = False
+
+        report = pipeline_task.result()
         
         # Pipeline complete
         await broadcast_update(
@@ -1990,7 +1906,7 @@ async def run_investigation_task(
         # Cache in _final_reports BEFORE the finally block removes the pipeline
         # from _active_pipelines. This prevents a race where the client polls
         # /report after the task finishes but before the DB write completes.
-        _final_reports[session_id] = (report, datetime.now(timezone.utc))
+        set_final_report(session_id, report)
 
         increment_investigations_completed()
 
@@ -2065,7 +1981,7 @@ async def run_investigation_task(
         _active_pipelines.pop(session_id, None)
 
         # D2: clean up WebSocket connections for this session now that it's done.
-        _websocket_connections.pop(session_id, None)
+        clear_session_websockets(session_id)
 
         # D1: evict stale entries from _final_reports (older than 24 hours).
         # This prevents unbounded growth when many investigations complete without

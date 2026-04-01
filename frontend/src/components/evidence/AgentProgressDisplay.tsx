@@ -189,7 +189,7 @@ function FindingsAccordion({
             
             className="overflow-hidden"
           >
-            <div className="border-t border-white/[0.04] divide-y divide-white/[0.03] bg-black/20">
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.03)", background: "rgba(0,0,0,0.1)" }}>
               {sectionFlags.map((sf) => {
                 const style  = FLAG_STYLES[sf.flag] ?? FLAG_STYLES.info;
                 const isExp  = expandedId === sf.id;
@@ -234,7 +234,8 @@ function FindingsAccordion({
                     {isExp && sf.key_signal && (
                         <div
                           key={`detail-${sf.id}`}
-                          className="overflow-hidden bg-black/40"
+                          className="overflow-hidden"
+                          style={{ background: "rgba(0,0,0,0.15)" }}
                         >
                           <p className="px-10 pb-3 pt-1 text-[11px] text-foreground/60 font-mono leading-relaxed border-l border-border-bold ml-4">
                             {sf.key_signal}
@@ -273,10 +274,24 @@ const CLAMP_CHARS = 150;
 
 function FindingRow({ f }: { f: FindingPreview }) {
   const [open, setOpen] = useState(false);
-  const needsExpand = f.summary.length > CLAMP_CHARS;
+  // Strip "Tool Name: " prefix — _build_readable_summary prefixes with the tool
+  // label (e.g. "File Hash Verify: ...") but the heading already shows the tool name.
+  const cleanSummary = (() => {
+    const heading = f.tool.replace(/_/g, " ").trim().toLowerCase();
+    const s = f.summary.trimStart();
+    const colonIdx = s.indexOf(":");
+    if (colonIdx > 0 && colonIdx < 60) {
+      const prefix = s.slice(0, colonIdx).toLowerCase().replace(/\s+/g, " ").trim();
+      if (prefix === heading || heading.includes(prefix) || prefix.includes(heading)) {
+        return s.slice(colonIdx + 1).trimStart();
+      }
+    }
+    return s;
+  })();
+  const needsExpand = cleanSummary.length > CLAMP_CHARS;
   const displayText = needsExpand && !open
-    ? f.summary.slice(0, CLAMP_CHARS).trimEnd() + "…"
-    : f.summary;
+    ? cleanSummary.slice(0, CLAMP_CHARS).trimEnd() + "…"
+    : cleanSummary;
   const borderCls = SEV_BORDER[f.severity] ?? SEV_BORDER.LOW;
   const sev = SEV_LABEL[f.severity] ?? SEV_LABEL.LOW;
 
@@ -304,9 +319,9 @@ function FindingRow({ f }: { f: FindingPreview }) {
               {sev.text}
             </Badge>
           )}
-          {f.confidence > 0.01 && (
+          {f.confidence > 0.15 && f.verdict !== "NOT_APPLICABLE" && (
             <span className="text-[9px] font-mono font-bold text-slate-300 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded shadow-inner uppercase tracking-tighter">
-              {Math.round(f.confidence * 100)}% Match
+              {Math.round(f.confidence * 100)}% conf
             </span>
           )}
         </div>
@@ -323,8 +338,8 @@ function FindingRow({ f }: { f: FindingPreview }) {
           </button>
         )}
       </p>
-      {/* Groq key signal (if available) */}
-      {f.key_signal && (
+      {/* Groq key signal (if available and different from summary) */}
+      {f.key_signal && f.key_signal !== cleanSummary && (
         <p className="text-[10px] text-cyan-400/50 font-mono leading-relaxed pl-2 border-l border-cyan-500/20">
           {f.key_signal}
         </p>
@@ -713,7 +728,6 @@ export function AgentProgressDisplay({
           opacity={0.6}
           wireframe={true}
           quality="medium"
-          waveOffsetY={-200}
         />
       </div>
 
@@ -758,15 +772,41 @@ export function AgentProgressDisplay({
               {isRevealed && (
                 <div
                   className={clsx(
-                    "glass-t2 rounded-2xl p-5 transition-all duration-500 relative group overflow-hidden",
+                    "rounded-2xl p-5 transition-all duration-500 relative group overflow-hidden",
                     (status === "waiting" || status === "checking") && "opacity-40",
-                    status === "running" && "border-cyan-500/20 shadow-[0_0_20px_rgba(34,211,238,0.06)]",
-                    status === "complete" && "border-emerald-500/15",
-                    status === "error" && "border-rose-500/15"
+                    status === "running" && "shadow-[0_0_30px_rgba(34,211,238,0.08)]",
+                    status === "complete" && "shadow-[0_0_20px_rgba(52,211,153,0.05)]",
+                    status === "error" && "shadow-[0_0_20px_rgba(248,113,113,0.05)]"
                   )}
+                  style={{
+                    background: status === "running"
+                      ? "rgba(34,211,238,0.03)"
+                      : status === "complete"
+                        ? "rgba(52,211,153,0.02)"
+                        : status === "error"
+                          ? "rgba(248,113,113,0.02)"
+                          : "rgba(255,255,255,0.02)",
+                    backdropFilter: "blur(20px) saturate(150%)",
+                    WebkitBackdropFilter: "blur(20px) saturate(150%)",
+                    border: status === "running"
+                      ? "1px solid rgba(34,211,238,0.12)"
+                      : status === "complete"
+                        ? "1px solid rgba(52,211,153,0.1)"
+                        : status === "error"
+                          ? "1px solid rgba(248,113,113,0.1)"
+                          : "1px solid rgba(255,255,255,0.05)",
+                    boxShadow: `inset 0 1px 0 rgba(255,255,255,${status === "running" ? "0.06" : "0.03"}), inset 0 -1px 0 rgba(255,255,255,0.01)`,
+                  }}
                 >
                   {/* Glass highlight glare */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/[0.03] to-transparent pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/[0.04] via-transparent to-transparent pointer-events-none" />
+                  {/* Ambient glow orb for running state */}
+                  {status === "running" && (
+                    <div className="absolute -top-20 -right-20 w-40 h-40 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(34,211,238,0.06) 0%, transparent 70%)" }} />
+                  )}
+                  {status === "complete" && (
+                    <div className="absolute -top-16 -right-16 w-32 h-32 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(52,211,153,0.04) 0%, transparent 70%)" }} />
+                  )}
                   {/* Status indicator bar (Top hairline) */}
                   <div
                     className="absolute top-0 left-0 right-0 h-[2px] transition-all duration-500 rounded-full"
@@ -952,13 +992,28 @@ export function AgentProgressDisplay({
                       {/* Verdict row */}
                       {completed.agent_verdict && (
                         <div className={[
-                          "flex items-center gap-4 px-5 py-4 rounded border backdrop-blur-md",
+                          "flex items-center gap-4 px-5 py-4 rounded-xl overflow-hidden relative",
                           completed.agent_verdict === "AUTHENTIC"
-                            ? "bg-emerald-500/5 border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.05)]"
+                            ? ""
                             : completed.agent_verdict === "LIKELY_MANIPULATED"
-                              ? "bg-rose-500/5 border-rose-500/20 shadow-[0_0_20px_rgba(244,63,94,0.05)]"
-                              : "bg-cyan-500/5 border-cyan-500/20 shadow-[0_0_20px_rgba(34,211,238,0.05)]",
-                        ].join(" ")}>
+                              ? ""
+                              : "",
+                        ].join(" ")}
+                        style={{
+                          background: completed.agent_verdict === "AUTHENTIC"
+                            ? "rgba(52,211,153,0.04)"
+                            : completed.agent_verdict === "LIKELY_MANIPULATED"
+                              ? "rgba(244,63,94,0.04)"
+                              : "rgba(34,211,238,0.04)",
+                          backdropFilter: "blur(12px)",
+                          WebkitBackdropFilter: "blur(12px)",
+                          border: completed.agent_verdict === "AUTHENTIC"
+                            ? "1px solid rgba(52,211,153,0.12)"
+                            : completed.agent_verdict === "LIKELY_MANIPULATED"
+                              ? "1px solid rgba(244,63,94,0.12)"
+                              : "1px solid rgba(34,211,238,0.12)",
+                          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
+                        }}>
                           <div className={[
                              "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border",
                              completed.agent_verdict === "AUTHENTIC" ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400" :
@@ -976,7 +1031,7 @@ export function AgentProgressDisplay({
                                 } 
                                 size="lg"
                                 withDot
-                                className="font-black uppercase tracking-widest font-heading italic px-4 py-1"
+                                className="font-black uppercase tracking-widest font-heading px-4 py-1"
                             >
                                 {completed.agent_verdict.replace(/_/g, " ")}
                             </Badge>
@@ -1022,7 +1077,16 @@ export function AgentProgressDisplay({
                             findingsCount={completed.findings_count}
                           />
                         ) : (
-                          <div className="flex flex-col items-center justify-center p-6 border border-white/[0.06] bg-black/20 rounded-2xl gap-2 shadow-inner">
+                          <div className="flex flex-col items-center justify-center p-6 rounded-2xl gap-2 relative overflow-hidden"
+                            style={{
+                              background: "rgba(255,255,255,0.02)",
+                              backdropFilter: "blur(16px)",
+                              WebkitBackdropFilter: "blur(16px)",
+                              border: "1px solid rgba(255,255,255,0.05)",
+                              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
+                            }}
+                          >
+                            <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none" />
                              <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center mb-1 border border-emerald-500/20">
                                 <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                              </div>
@@ -1104,11 +1168,7 @@ export function AgentProgressDisplay({
       {/* ── Decision Buttons ─────────────────────────────────────────── */}
 
       {showInitialDecision && (
-        <div
-           
-          
-          className="mt-8 w-full max-w-xl"
-        >
+        <div className="mt-8 w-full max-w-xl">
           {/* Decision card */}
           <div className="surface-panel rounded-2xl p-5 space-y-4 shadow-lg border-border-bold">
             <div className="text-center space-y-1">
@@ -1119,24 +1179,26 @@ export function AgentProgressDisplay({
                <button
                 onClick={onAcceptAnalysis}
                 disabled={isNavigating}
-                
-                
-                className="btn-premium-glass flex-1 py-3 justify-center text-[11px] font-black uppercase tracking-[0.2em]"
+                className="group flex-1 py-3.5 rounded-full text-xs font-semibold cursor-pointer flex items-center justify-center gap-2 text-white/70 hover:text-white transition-all duration-300"
+                style={{ background: "transparent", border: "1px solid rgba(34,211,238,0.2)", boxShadow: "none" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "linear-gradient(135deg, rgba(6,182,212,0.15) 0%, rgba(34,211,238,0.15) 100%)"; e.currentTarget.style.borderColor = "rgba(34,211,238,0.4)"; e.currentTarget.style.boxShadow = "0 0 20px rgba(34,211,238,0.1)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "rgba(34,211,238,0.2)"; e.currentTarget.style.boxShadow = "none"; }}
               >
                 {isNavigating ? (
-                  <><Loader2 className="w-4 h-4 animate-spin text-cyan-400" />SEALING...</>
+                  <><Loader2 className="w-4 h-4 animate-spin" />Compiling...</>
                 ) : (
-                  <><FileText className="w-4 h-4 text-white/40" />COMPILE LEDGER</>
+                  <><FileText className="w-4 h-4 text-cyan-400/50" />Accept Analysis</>
                 )}
               </button>
                <button
                 onClick={onDeepAnalysis}
                 disabled={isNavigating}
-                
-                
-                className="btn-premium-amber flex-1 py-3 justify-center text-[11px] font-black uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(217,119,6,0.2)]"
+                className="group flex-1 py-3.5 rounded-full text-xs font-semibold cursor-pointer flex items-center justify-center gap-2 text-amber-400/70 hover:text-amber-300 transition-all duration-300"
+                style={{ background: "transparent", border: "1px solid rgba(245,158,11,0.2)", boxShadow: "none" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "linear-gradient(135deg, rgba(217,119,6,0.15) 0%, rgba(245,158,11,0.15) 100%)"; e.currentTarget.style.borderColor = "rgba(245,158,11,0.4)"; e.currentTarget.style.boxShadow = "0 0 20px rgba(245,158,11,0.1)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "rgba(245,158,11,0.2)"; e.currentTarget.style.boxShadow = "none"; }}
               >
-                <Microscope className="w-4 h-4" />DEEP SCAN PROTOCOL
+                <Microscope className="w-4 h-4 text-amber-400/50" />Deep Analysis
               </button>
             </div>
           </div>

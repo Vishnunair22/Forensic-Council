@@ -7,7 +7,9 @@ Part of the dual-layer memory architecture.
 """
 
 import json
+import tempfile
 from enum import Enum
+from pathlib import Path
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
@@ -142,6 +144,9 @@ class WorkingMemory:
         # In-memory fallback: stores state when Redis is unavailable.
         # Keyed by the same "wm:{session_id}:{agent_id}" string.
         self._local_cache: dict[str, str] = {}
+        # File-based WAL for crash recovery when Redis is unavailable
+        self._wal_dir = Path(tempfile.gettempdir()) / "forensic_council_wal"
+        self._wal_dir.mkdir(parents=True, exist_ok=True)
         
         # Lua script for atomic state updates
         self._lua_update_state = """
@@ -221,6 +226,24 @@ class WorkingMemory:
     def _get_key(self, session_id: UUID, agent_id: str) -> str:
         """Get Redis key for session/agent."""
         return f"wm:{session_id}:{agent_id}"
+
+    def _wal_write(self, key: str, state_json: str) -> None:
+        """Write state to file-based WAL for crash recovery."""
+        try:
+            wal_path = self._wal_dir / f"{key.replace(':', '_')}.json"
+            wal_path.write_text(state_json, encoding="utf-8")
+        except Exception:
+            pass  # WAL is best-effort
+
+    def _wal_read(self, key: str) -> Optional[str]:
+        """Read state from WAL file if it exists."""
+        try:
+            wal_path = self._wal_dir / f"{key.replace(':', '_')}.json"
+            if wal_path.exists():
+                return wal_path.read_text(encoding="utf-8")
+        except Exception:
+            pass
+        return None
     
     async def initialize(
         self,
@@ -258,6 +281,8 @@ class WorkingMemory:
         state_json = state.model_dump_json()
         # Always store in local cache (authoritative fallback)
         self._local_cache[key] = state_json
+        # Write to WAL for crash recovery
+        self._wal_write(key, state_json)
         if self._redis is not None:
             try:
                 await self._redis.set(key, state_json, ex=86400)

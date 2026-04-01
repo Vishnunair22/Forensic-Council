@@ -21,9 +21,12 @@ from typing import Any, Optional
 
 import httpx
 from core.config import Settings
+from core.observability import get_tracer
+from core.retry import CircuitBreaker
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
+_tracer = get_tracer("forensic-council.llm")
 
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 _MAX_RETRIES = 5
@@ -59,6 +62,38 @@ class LLMClient:
         self.temperature = config.llm_temperature
         self.max_tokens = config.llm_max_tokens
         self.timeout = config.llm_timeout
+        self._client: Optional[httpx.AsyncClient] = None
+
+        # Circuit breaker: opens after 5 consecutive failures, recovers after 60s
+        self._circuit_breaker = CircuitBreaker(
+            failure_threshold=5,
+            recovery_timeout=60.0,
+            half_open_max_calls=2,
+        )
+
+    async def _get_client(self, timeout_override: Optional[float] = None) -> httpx.AsyncClient:
+        """Return a shared httpx.AsyncClient, creating it on first use.
+
+        Connection pool is sized for concurrent agent + arbiter LLM calls:
+        5 agents × 1 synthesis + 4 arbiter narratives = ~10 concurrent connections.
+        Pool allows 50 max with 20 keepalive for burst tolerance.
+        """
+        timeout = timeout_override or self.timeout
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                timeout=timeout,
+                limits=httpx.Limits(
+                    max_connections=50,
+                    max_keepalive_connections=20,
+                ),
+            )
+        return self._client
+
+    async def close(self) -> None:
+        """Close the shared HTTP client."""
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
 
     @property
     def is_available(self) -> bool:
@@ -77,35 +112,52 @@ class LLMClient:
         current_task: str | None = None,
     ) -> LLMResponse:
         """Generate the next reasoning step in a ReAct loop."""
-        if self.provider == "none" or not self.api_key or not self.is_available:
-            logger.debug("LLM not configured - skipping reasoning step")
-            return LLMResponse(content="", provider="none")
+        with _tracer.start_as_current_span("llm.generate_reasoning_step") as span:
+            span.set_attribute("provider", self.provider)
+            span.set_attribute("model", self.model)
+            span.set_attribute("chain_length", len(react_chain))
+            if self.provider == "none" or not self.api_key or not self.is_available:
+                logger.debug("LLM not configured - skipping reasoning step")
+                return LLMResponse(content="", provider="none")
 
-        messages = self._build_messages(system_prompt, react_chain, current_task)
-
-        t0 = time.monotonic()
-        try:
-            if self.provider == "groq":
-                resp = await self._call_groq(messages, available_tools)
-            elif self.provider == "openai":
-                resp = await self._call_openai(messages, available_tools)
-            elif self.provider == "anthropic":
-                resp = await self._call_anthropic(messages, available_tools)
-            else:
-                logger.error(f"Unknown LLM provider: {self.provider}")
+            # Check circuit breaker
+            try:
+                state = self._circuit_breaker.state
+            except Exception:
+                state = "CLOSED"
+            if state == "OPEN":
+                logger.warning("LLM circuit breaker is OPEN — skipping reasoning step")
                 return LLMResponse(content="", provider=self.provider)
 
-            resp.latency_ms = (time.monotonic() - t0) * 1000
-            resp.provider = self.provider
-            tool_name = resp.tool_call.get("name") if resp.tool_call else None
-            logger.debug(
-                f"LLM call complete provider={self.provider} model={self.model} latency_ms={resp.latency_ms:.0f} tool={tool_name}"
-            )
-            return resp
+            messages = self._build_messages(system_prompt, react_chain, current_task)
 
-        except Exception as exc:
-            logger.error(f"LLM call failed: {exc}")
-            return LLMResponse(content="", provider=self.provider)
+            t0 = time.monotonic()
+            try:
+                if self.provider == "groq":
+                    resp = await self._call_groq(messages, available_tools)
+                elif self.provider == "openai":
+                    resp = await self._call_openai(messages, available_tools)
+                elif self.provider == "anthropic":
+                    resp = await self._call_anthropic(messages, available_tools)
+                else:
+                    logger.error(f"Unknown LLM provider: {self.provider}")
+                    return LLMResponse(content="", provider=self.provider)
+
+                resp.latency_ms = (time.monotonic() - t0) * 1000
+                resp.provider = self.provider
+                tool_name = resp.tool_call.get("name") if resp.tool_call else None
+                self._circuit_breaker.record_success()
+                span.set_attribute("latency_ms", resp.latency_ms)
+                span.set_attribute("tool_name", tool_name or "")
+                logger.debug(
+                    f"LLM call complete provider={self.provider} model={self.model} latency_ms={resp.latency_ms:.0f} tool={tool_name}"
+                )
+                return resp
+
+            except Exception as exc:
+                self._circuit_breaker.record_failure()
+                logger.error(f"LLM call failed: {exc}")
+                return LLMResponse(content="", provider=self.provider)
 
     def _build_messages(
         self,
@@ -199,12 +251,12 @@ class LLMClient:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await self._with_retry(
-                lambda: client.post(url, headers=headers, json=payload)
-            )
-            response.raise_for_status()
-            return self._parse_openai_response(response.json())
+        client = await self._get_client()
+        response = await self._with_retry(
+            lambda: client.post(url, headers=headers, json=payload)
+        )
+        response.raise_for_status()
+        return self._parse_openai_response(response.json())
 
     async def _call_openai(
         self,
@@ -230,12 +282,12 @@ class LLMClient:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await self._with_retry(
-                lambda: client.post(url, headers=headers, json=payload)
-            )
-            response.raise_for_status()
-            return self._parse_openai_response(response.json())
+        client = await self._get_client()
+        response = await self._with_retry(
+            lambda: client.post(url, headers=headers, json=payload)
+        )
+        response.raise_for_status()
+        return self._parse_openai_response(response.json())
 
     async def _call_anthropic(
         self,
@@ -278,12 +330,12 @@ class LLMClient:
                 for t in available_tools
             ]
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await self._with_retry(
-                lambda: client.post(url, headers=headers, json=payload)
-            )
-            response.raise_for_status()
-            data = response.json()
+        client = await self._get_client()
+        response = await self._with_retry(
+            lambda: client.post(url, headers=headers, json=payload)
+        )
+        response.raise_for_status()
+        data = response.json()
 
         content = ""
         tool_call = None
@@ -352,74 +404,75 @@ class LLMClient:
         statement from structured forensic findings. Low temperature (0.2)
         for factual, consistent prose.
         """
-        if self.provider == "none" or not self.api_key or not self.is_available:
-            return ""
+        with _tracer.start_as_current_span("llm.generate_synthesis") as span:
+            span.set_attribute("provider", self.provider)
+            span.set_attribute("model", self.model)
+            span.set_attribute("json_mode", json_mode)
+            if self.provider == "none" or not self.api_key or not self.is_available:
+                return ""
 
-        tokens = max_tokens or min(self.max_tokens, 1500)
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_content},
-        ]
+            tokens = max_tokens or min(self.max_tokens, 1500)
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ]
 
-        try:
-            if self.provider in ("groq", "openai"):
-                url = (
-                    "https://api.groq.com/openai/v1/chat/completions"
-                    if self.provider == "groq"
-                    else "https://api.openai.com/v1/chat/completions"
-                )
-                headers = {
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                }
-                payload: dict[str, Any] = {
-                    "model": self.model,
-                    "messages": messages,
-                    "temperature": 0.2,
-                    "max_tokens": tokens,
-                }
-                if json_mode:
-                    payload["response_format"] = {"type": "json_object"}
-                # Use a shorter timeout for arbiter synthesis (12 s) so retries
-                # finish within the 40 s per-narrative cap set in arbiter.py.
-                # Agent synthesis (4000 tok grouped Groq) needs up to 25 s.
-                _synth_timeout = timeout_override if timeout_override is not None else min(self.timeout, 12.0)
-                async with httpx.AsyncClient(timeout=_synth_timeout) as client:
+            try:
+                if self.provider in ("groq", "openai"):
+                    url = (
+                        "https://api.groq.com/openai/v1/chat/completions"
+                        if self.provider == "groq"
+                        else "https://api.openai.com/v1/chat/completions"
+                    )
+                    headers = {
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                    }
+                    payload: dict[str, Any] = {
+                        "model": self.model,
+                        "messages": messages,
+                        "temperature": 0.2,
+                        "max_tokens": tokens,
+                    }
+                    if json_mode:
+                        payload["response_format"] = {"type": "json_object"}
+                    _synth_timeout = timeout_override if timeout_override is not None else min(self.timeout, 12.0)
+                    client = await self._get_client(timeout_override=_synth_timeout)
                     resp = await self._with_retry(
                         lambda: client.post(url, headers=headers, json=payload)
                     )
                     resp.raise_for_status()
                     return resp.json()["choices"][0]["message"].get("content", "").strip()
 
-            elif self.provider == "anthropic":
-                url = "https://api.anthropic.com/v1/messages"
-                headers = {
-                    "x-api-key": self.api_key,
-                    "Content-Type": "application/json",
-                    "anthropic-version": "2023-06-01",
-                }
-                payload = {
-                    "model": self.model,
-                    "max_tokens": tokens,
-                    "system": system_prompt,
-                    "messages": [{"role": "user", "content": user_content}],
-                    "temperature": 0.2,
-                }
-                _synth_timeout = timeout_override if timeout_override is not None else min(self.timeout, 12.0)
-                async with httpx.AsyncClient(timeout=_synth_timeout) as client:
+                elif self.provider == "anthropic":
+                    url = "https://api.anthropic.com/v1/messages"
+                    headers = {
+                        "x-api-key": self.api_key,
+                        "Content-Type": "application/json",
+                        "anthropic-version": "2023-06-01",
+                    }
+                    payload = {
+                        "model": self.model,
+                        "max_tokens": tokens,
+                        "system": system_prompt,
+                        "messages": [{"role": "user", "content": user_content}],
+                        "temperature": 0.2,
+                    }
+                    _synth_timeout = timeout_override if timeout_override is not None else min(self.timeout, 12.0)
+                    client = await self._get_client(timeout_override=_synth_timeout)
                     resp = await self._with_retry(
                         lambda: client.post(url, headers=headers, json=payload)
                     )
                     resp.raise_for_status()
                     data = resp.json()
-                return "".join(
-                    b["text"] for b in data.get("content", []) if b["type"] == "text"
-                ).strip()
+                    return "".join(
+                        b["text"] for b in data.get("content", []) if b["type"] == "text"
+                    ).strip()
 
-        except Exception as exc:
-            logger.error(f"LLM synthesis failed: {exc}")
+            except Exception as exc:
+                logger.error(f"LLM synthesis failed: {exc}")
 
-        return ""
+            return ""
 
 
 def parse_llm_step(content: str, tool_call: dict[str, Any] | None) -> dict[str, Any]:

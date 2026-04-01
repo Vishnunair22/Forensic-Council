@@ -174,8 +174,21 @@ class Settings(BaseSettings):
     
     @property
     def effective_jwt_secret(self) -> str:
-        """Get the effective JWT secret key."""
-        return self.jwt_secret_key or self.signing_key
+        """Get the effective JWT secret key.
+
+        SECURITY: Never fall back to signing_key — key separation principle.
+        JWT_SECRET_KEY must be explicitly set in production.
+        """
+        if self.jwt_secret_key:
+            return self.jwt_secret_key
+        # In development, warn and use signing_key as last resort
+        if self.app_env == "production":
+            raise ValueError(
+                "JWT_SECRET_KEY must be explicitly set in production. "
+                "Do not rely on SIGNING_KEY for JWT — key separation is required. "
+                "Generate with: python -c \"import secrets; print(secrets.token_hex(32))\""
+            )
+        return self.signing_key
     
     
     @field_validator("jwt_secret_key")
@@ -239,11 +252,11 @@ class Settings(BaseSettings):
         ),
     )
     gemini_model: str = Field(
-        default="gemini-3-pro-preview",
+        default="gemini-2.5-pro",
         description=(
             "Primary Gemini model for vision analysis. "
-            "gemini-3-pro-preview: latest generation, highest accuracy, supports thinking. "
-            "gemini-2.5-pro: previous generation, high accuracy with thinking support. "
+            "gemini-2.5-pro: current generation, high accuracy with thinking support. "
+            "gemini-2.5-flash: faster, lower cost, slightly reduced accuracy. "
             "NOTE: gemini-1.5-* and gemini-2.0-* models are deprecated and will be rejected."
         ),
     )

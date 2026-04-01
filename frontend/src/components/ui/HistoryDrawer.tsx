@@ -55,7 +55,8 @@ export function HistoryDrawer() {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed top-1/2 right-0 -translate-y-1/2 translate-x-[2px] transition-transform hover:translate-x-0 z-40 bg-surface-high border border-border-bold border-r-0 rounded-l-2xl p-3 shadow-xl group"
+        className="fixed top-1/2 right-0 -translate-y-1/2 translate-x-[2px] transition-transform hover:translate-x-0 z-40 rounded-l-2xl p-3 shadow-xl group"
+        style={{ background: "rgba(255,255,255,0.04)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.08)", borderRight: "none" }}
         aria-label="Open History"
       >
         <span className="flex flex-col items-center gap-2">
@@ -70,19 +71,21 @@ export function HistoryDrawer() {
               type="button"
               aria-label="Close history drawer"
               onClick={() => setIsOpen(false)}
-              className="fixed inset-0 bg-background/60 backdrop-blur-sm z-50 cursor-default border-none"
+              className="fixed inset-0 z-50 cursor-default border-none"
+              style={{ background: "rgba(8,12,20,0.5)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
             />
             <div
               role="dialog"
               aria-modal="true"
               aria-label="Analysis History"
-              className="fixed inset-y-0 right-0 w-80 max-w-[85vw] bg-surface-low border-l border-border-subtle z-50 flex flex-col shadow-2xl"
+              className="fixed inset-y-0 right-0 w-80 max-w-[85vw] z-50 flex flex-col shadow-2xl"
+              style={{ background: "rgba(8,12,20,0.85)", backdropFilter: "blur(32px)", WebkitBackdropFilter: "blur(32px)", borderLeft: "1px solid rgba(255,255,255,0.06)" }}
             >
-              <div className="flex items-center justify-between p-5 border-b border-border-subtle bg-surface-mid">
+              <div className="flex items-center justify-between p-5" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>
                 <h2 className="text-[11px] font-bold tracking-widest uppercase text-foreground/60 flex items-center gap-2">
                   <History className="w-4 h-4 text-indigo-400" aria-hidden="true" /> Analysis History
                 </h2>
-                <button onClick={() => setIsOpen(false)} aria-label="Close history drawer" className="p-1 rounded-md hover:bg-surface-high text-foreground/40 transition-colors">
+                <button onClick={() => setIsOpen(false)} aria-label="Close history drawer" className="p-1 rounded-md text-foreground/40 transition-colors hover:bg-white/5">
                   <X className="w-5 h-5" aria-hidden="true" />
                 </button>
               </div>
@@ -98,7 +101,7 @@ export function HistoryDrawer() {
                     const ui = getVerdictUi(item.verdict);
                     const UIcon = ui.Icon;
                     return (
-                      <div key={item.sessionId} className="relative group bg-surface-mid border border-border-subtle rounded-xl p-4 hover:border-indigo-500/30 transition-colors overflow-hidden shadow-sm">
+                      <div key={item.sessionId} className="relative group rounded-xl p-4 transition-colors overflow-hidden" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
                         <div className="flex justify-between items-start mb-3 pr-6">
                            <div className="flex items-center gap-2 overflow-hidden">
                               <FileText className="w-3.5 h-3.5 text-foreground/20 shrink-0" />
@@ -114,7 +117,7 @@ export function HistoryDrawer() {
                               </span>
                            </div>
                            <div className="flex justify-between items-center text-[10px] text-foreground/40 font-mono font-bold">
-                              <span className="px-1.5 py-0.5 rounded border border-border-subtle bg-surface-high uppercase text-[9px]">{item.type}</span>
+                              <span className="px-1.5 py-0.5 rounded uppercase text-[9px]" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>{item.type}</span>
                               <span className="font-medium">{new Date(item.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
                            </div>
                         </div>
@@ -134,7 +137,7 @@ export function HistoryDrawer() {
               </div>
 
               {history.length > 0 && (
-                <div className="p-4 border-t border-border-subtle bg-surface-mid">
+                <div className="p-4" style={{ borderTop: "1px solid rgba(255,255,255,0.05)", background: "rgba(255,255,255,0.02)" }}>
                   <button
                     onClick={clearAllHistory}
                     className="w-full py-2.5 rounded-lg border border-rose-500/20 bg-rose-500/5 text-rose-500 hover:bg-rose-500/10 text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center justify-center gap-2"

@@ -2,21 +2,17 @@
 
 /* ── Theme Variables ──────────────────────────────────────────────────────── */
 @theme {
-  /* Color system — deep void forensic theme */
   --color-background:    #080C14;
   --color-foreground:    #f8fafc;
   --color-primary:       #22d3ee;
 
-  /* Surface hierarchy — dark layered panels */
   --color-surface-low:   #0a0f1a;
   --color-surface-mid:   #0d1420;
   --color-surface-high:  #111927;
 
-  /* Borders */
   --color-border-subtle: #1a2438;
   --color-border-bold:   #243553;
 
-  /* Typography — Poppins for all UI, Fira Code for mono */
   --font-sans:    var(--font-poppins), system-ui, -apple-system, sans-serif;
   --font-mono:    var(--font-fira-code), 'Fira Code', 'Courier New', monospace;
   --font-heading: var(--font-poppins), system-ui, -apple-system, sans-serif;
@@ -67,67 +63,7 @@
   }
 }
 
-/* ── Keyframe Animations ──────────────────────────────────────────────────── */
-@keyframes spin-slow {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
-}
-
-@keyframes scan-line-h {
-  0%   { transform: translateX(-100%); opacity: 0; }
-  5%   { opacity: 1; }
-  95%  { opacity: 1; }
-  100% { transform: translateX(200vw); opacity: 0; }
-}
-
-@keyframes scan-line-v {
-  0%   { transform: translateY(-100%); opacity: 0; }
-  5%   { opacity: 1; }
-  95%  { opacity: 1; }
-  100% { transform: translateY(200vh); opacity: 0; }
-}
-
-@keyframes pulse-ring {
-  0%   { transform: scale(0.8); opacity: 0.6; }
-  50%  { transform: scale(1.1); opacity: 0.2; }
-  100% { transform: scale(0.8); opacity: 0.6; }
-}
-
-@keyframes float-drift {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  33%      { transform: translateY(-12px) rotate(1deg); }
-  66%      { transform: translateY(6px) rotate(-0.5deg); }
-}
-
-@keyframes gradient-shift {
-  0%   { background-position: 0% 50%; }
-  50%  { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-
-@keyframes crosshair-pulse {
-  0%, 100% { opacity: 0.15; transform: translate(-50%, -50%) scale(1); }
-  50%      { opacity: 0.35; transform: translate(-50%, -50%) scale(1.08); }
-}
-
-@keyframes glass-border-glow {
-  0%   { border-color: rgba(34, 211, 238, 0.1); box-shadow: 0 0 0px rgba(34, 211, 238, 0); }
-  50%  { border-color: rgba(34, 211, 238, 0.3); box-shadow: 0 0 20px rgba(34, 211, 238, 0.1); }
-  100% { border-color: rgba(34, 211, 238, 0.1); box-shadow: 0 0 0px rgba(34, 211, 238, 0); }
-}
-
-@keyframes text-scan-reveal {
-  0% { opacity: 0.85; text-shadow: 0 0 0px transparent; }
-  50% { opacity: 1; text-shadow: 0 0 15px rgba(34, 211, 211, 0.2); }
-  100% { opacity: 0.85; text-shadow: 0 0 0px transparent; }
-}
-
-@keyframes evidence-grid-scan {
-  0% { background-position: 0 0; }
-  100% { background-position: 64px 64px; }
-}
-
-/* Respect user's motion preference */
+/* ── Accessibility ────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -135,355 +71,8 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-  .glass-t1,
-  .glass-t2,
-  .glass-t3 {
-    transition: none !important;
-  }
 }
 
-/* ── Component Classes ────────────────────────────────────────────────────── */
-@layer components {
-
-  /* ── Glass Tier System ──────────────────────────────────────────────────── */
-  /* Tier 1: Large sections / major cards — subtle depth */
-  .glass-t1 {
-    background: rgba(255, 255, 255, 0.04);
-    backdrop-filter: blur(24px) saturate(160%);
-    -webkit-backdrop-filter: blur(24px) saturate(160%);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 4px 24px rgba(0, 0, 0, 0.3);
-  }
-
-  /* Tier 2: Agent/step cards — premium glass with depth */
-  .glass-t2 {
-    background: rgba(255, 255, 255, 0.025);
-    backdrop-filter: blur(20px) saturate(150%);
-    -webkit-backdrop-filter: blur(20px) saturate(150%);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.05),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.02),
-      0 4px 24px rgba(0, 0, 0, 0.25),
-      0 0 0 1px rgba(0, 0, 0, 0.1);
-  }
-
-  /* Tier 3: Navbar / modals — dense blur, high contrast */
-  .glass-t3 {
-    background: rgba(12, 16, 28, 0.88);
-    backdrop-filter: blur(40px) saturate(200%);
-    -webkit-backdrop-filter: blur(40px) saturate(200%);
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  }
-
-  /* Glassmorphism card (legacy) */
-  .glass-ethereal {
-    background: rgba(34, 211, 238, 0.02);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(34, 211, 238, 0.12);
-    box-shadow: 0 0 30px rgba(34, 211, 238, 0.04), inset 0 0 20px rgba(34, 211, 238, 0.01);
-  }
-
-  /* Glass modal — full overlay modal/dialog background */
-  .glass-modal {
-    background: rgba(2, 6, 23, 0.92);
-    backdrop-filter: blur(32px);
-    -webkit-backdrop-filter: blur(32px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  }
-
-  /* Glass panel — lighter inset panel */
-  .glass-panel {
-    background: rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  /* ── 3D Glass Card ─────────────────────────────────────────────────────── */
-  .glass-card-3d {
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.05) 0%,
-      rgba(255, 255, 255, 0.02) 50%,
-      rgba(255, 255, 255, 0.04) 100%
-    );
-    backdrop-filter: blur(20px) saturate(150%);
-    -webkit-backdrop-filter: blur(20px) saturate(150%);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.1),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.02),
-      0 8px 32px rgba(0, 0, 0, 0.3);
-    transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1),
-                box-shadow 0.6s cubic-bezier(0.2, 0.8, 0.2, 1),
-                border-color 0.6s ease;
-    transform-style: preserve-3d;
-  }
-
-  .glass-card-3d:hover {
-    border-color: rgba(34, 211, 238, 0.25);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.14),
-      0 20px 50px rgba(0, 0, 0, 0.5),
-      0 0 20px rgba(34, 211, 238, 0.1);
-    animation: glass-border-glow 3s linear infinite;
-  }
-
-  /* ── Microscope Background Layers ───────────────────────────────────────── */
-  .microscope-scanline {
-    position: absolute;
-    left: 0;
-    width: 100%;
-    height: 1px;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(34, 211, 238, 0.08) 20%,
-      rgba(34, 211, 238, 0.15) 50%,
-      rgba(34, 211, 238, 0.08) 80%,
-      transparent 100%
-    );
-    animation: scan-line-v var(--scan-duration, 8s) linear infinite;
-    animation-delay: var(--scan-delay, 0s);
-  }
-
-  .microscope-crosshair {
-    position: absolute;
-    width: var(--crosshair-size, 120px);
-    height: var(--crosshair-size, 120px);
-    border: 1px solid rgba(34, 211, 238, 0.08);
-    border-radius: 50%;
-    animation: crosshair-pulse var(--pulse-duration, 4s) ease-in-out infinite;
-    animation-delay: var(--pulse-delay, 0s);
-  }
-
-  .microscope-crosshair::before,
-  .microscope-crosshair::after {
-    content: "";
-    position: absolute;
-    background: rgba(34, 211, 238, 0.06);
-  }
-
-  .microscope-crosshair::before {
-    width: 1px;
-    height: 140%;
-    left: 50%;
-    top: -20%;
-  }
-
-  .microscope-crosshair::after {
-    height: 1px;
-    width: 140%;
-    top: 50%;
-    left: -20%;
-  }
-
-  .microscope-evidence-grid {
-    position: absolute;
-    inset: 0;
-    background-image:
-      linear-gradient(to right, rgba(34, 211, 238, 0.02) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(34, 211, 238, 0.02) 1px, transparent 1px);
-    background-size: 64px 64px;
-    animation: evidence-grid-scan 12s linear infinite;
-    mask-image: radial-gradient(ellipse 70% 50% at 50% 50%, black 20%, transparent 100%);
-    -webkit-mask-image: radial-gradient(ellipse 70% 50% at 50% 50%, black 20%, transparent 100%);
-  }
-
-  /* ── 3D Section Gradient ────────────────────────────────────────────────── */
-  .section-gradient-3d {
-    position: relative;
-  }
-
-  .section-gradient-3d::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(
-      ellipse 80% 60% at 50% var(--gradient-y, 50%),
-      rgba(79, 70, 229, 0.06) 0%,
-      rgba(34, 211, 238, 0.03) 40%,
-      transparent 70%
-    );
-    pointer-events: none;
-    transition: background 0.8s ease;
-  }
-
-  /* Surface panel — dark card base */
-  .surface-panel {
-    background: rgba(6, 15, 30, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-  }
-
-  .surface-panel-high {
-    background: rgba(10, 22, 40, 0.95);
-    border: 1px solid rgba(34, 211, 238, 0.1);
-  }
-
-  /* Hero gradient text — enhanced visibility */
-  .text-gradient-hero {
-    background: linear-gradient(135deg, #ffffff 0%, #22d3ee 50%, #ffffff 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 20px rgba(34, 211, 238, 0.3));
-  }
-
-  /* Primary CTA — solid cyan/teal */
-  .btn-premium-amber {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.875rem 2rem;
-    border-radius: 0.75rem;
-    font-size: 0.8125rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.15em;
-    cursor: pointer;
-    transition: background 0.3s, box-shadow 0.3s, color 0.3s, border-color 0.3s;
-    background: linear-gradient(135deg, #0891b2 0%, #06b6d4 60%, #22d3ee 100%);
-    border: 1px solid rgba(34, 211, 238, 0.4);
-    box-shadow: 0 0 24px rgba(34, 211, 238, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-    color: #ffffff;
-    text-decoration: none;
-  }
-
-  .btn-premium-amber:hover:not(:disabled) {
-    background: rgba(34, 211, 238, 0.08);
-    border-color: rgba(34, 211, 238, 0.5);
-    box-shadow: 0 0 40px rgba(34, 211, 238, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-    color: #22d3ee;
-  }
-
-  .btn-premium-amber:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-    pointer-events: none;
-  }
-
-  /* Glass button — secondary action */
-  .btn-premium-glass {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.625rem 1.25rem;
-    border-radius: 0.625rem;
-    font-size: 0.8rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    cursor: pointer;
-    transition: background 0.25s, border-color 0.25s, color 0.25s;
-    background: rgba(255, 255, 255, 0.04);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    color: rgba(255, 255, 255, 0.80); /* was 0.65 — bumped to pass WCAG AA 4.5:1 */
-    text-decoration: none;
-  }
-
-  .btn-premium-glass:hover:not(:disabled) {
-    background: rgba(34, 211, 238, 0.07);
-    border-color: rgba(34, 211, 238, 0.28);
-    color: #22d3ee;
-  }
-
-  .btn-premium-glass:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-
-  /* Visible focus rings for custom buttons (keyboard navigation) */
-  .btn-premium-amber:focus-visible,
-  .btn-premium-glass:focus-visible {
-    outline: 2px solid #22d3ee;
-    outline-offset: 3px;
-  }
-
-  /* ── Accessibility Utility Classes ───────────────────────────────────────── */
-  
-  /* Minimum readable text - WCAG AA compliant (4.5:1 contrast minimum) */
-  .text-readable {
-    color: rgba(255, 255, 255, 0.75); /* Minimum for readable body text on dark bg */
-  }
-  
-  .text-readable-secondary {
-    color: rgba(255, 255, 255, 0.60); /* Secondary text - still above 4.5:1 */
-  }
-  
-  .text-readable-muted {
-    color: rgba(255, 255, 255, 0.50); /* Muted text - use only for non-critical info */
-  }
-  
-  /* Touch target minimum 44x44px */
-  .touch-target {
-    min-width: 44px;
-    min-height: 44px;
-  }
-  
-  /* Focus visible indicator */
-  .focus-ring {
-    outline: 2px solid #22d3ee;
-    outline-offset: 2px;
-  }
-  
-  .focus-ring:focus-visible {
-    outline: 2px solid #22d3ee;
-    outline-offset: 2px;
-  }
-  
-  /* Skip link styling */
-  .skip-link {
-    position: absolute;
-    top: -100px;
-    left: 0;
-    background: #22d3ee;
-    color: #080C14;
-    padding: 0.75rem 1.5rem;
-    font-weight: 700;
-    z-index: 9999;
-    border-radius: 0 0 0.5rem 0;
-  }
-  
-  .skip-link:focus {
-    top: 0;
-  }
-  
-  /* Screen reader only (visually hidden but accessible) */
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-  
-  .sr-only:focus,
-  .sr-only:active {
-    position: static;
-    width: auto;
-    height: auto;
-    padding: inherit;
-    margin: inherit;
-    overflow: visible;
-    clip: auto;
-    white-space: normal;
-  }
-
-}
-
-/* ── Global Accessibility Improvements ──────────────────────────────────────── */
-
-/* Ensure all interactive elements have visible focus */
 @layer base {
   a:focus-visible,
   button:focus-visible,
@@ -494,8 +83,7 @@
     outline: 2px solid #22d3ee;
     outline-offset: 2px;
   }
-  
-  /* Ensure disabled elements are visually distinct */
+
   button:disabled,
   input:disabled,
   select:disabled,
@@ -505,8 +93,7 @@
     cursor: not-allowed;
     filter: grayscale(30%);
   }
-  
-  /* Minimum touch target size for buttons */
+
   button,
   [role="button"],
   input[type="button"],
@@ -515,12 +102,11 @@
     min-height: 44px;
     min-width: 44px;
   }
-  
-  /* Remove default focus outline and replace with custom */
+
   :focus {
     outline: none;
   }
-  
+
   :focus-visible {
     outline: 2px solid #22d3ee;
     outline-offset: 2px;

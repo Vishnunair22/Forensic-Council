@@ -1,0 +1,181 @@
+# Task-to-Tool Mapping Overrides
+# ================================
+#
+# Maps task description phrases (lowercased) to tool names.
+# The ReAct loop engine uses this to match tasks from agent
+# task_decomposition to the correct registered tool handler.
+#
+# Rules:
+#   - Keys MUST be lowercase
+#   - Longer/more-specific phrases are matched first
+#   - Values MUST match a tool name registered in the agent's ToolRegistry
+#   - Keep entries grouped by agent for readability
+#
+# Adding a new tool:
+#   1. Register the handler in the agent's build_tool_registry()
+#   2. Add the task phrase to the agent's task_decomposition
+#   3. Add a mapping entry here
+
+# --- Specific / Long Phrases First ---
+specific:
+  "run gemini deep forensic analysis": "gemini_deep_forensic"
+  "gemini deep forensic analysis": "gemini_deep_forensic"
+  "run adversarial robustness check": "adversarial_robustness_check"
+  "adversarial robustness check": "adversarial_robustness_check"
+  "run document authenticity analysis": "document_authenticity"
+  "document authenticity analysis": "document_authenticity"
+  "run image splicing detection": "image_splice_check"
+  "image splicing detection": "image_splice_check"
+  "run camera noise fingerprint": "noise_fingerprint"
+  "camera noise fingerprint": "noise_fingerprint"
+  "noise fingerprint analysis": "noise_fingerprint"
+  "run scene-level contextual incongruence": "scene_incongruence"
+  "scene-level contextual incongruence": "scene_incongruence"
+  "contextual incongruence": "scene_incongruence"
+  "ocr on detected object": "object_text_ocr"
+  "extract text from objects": "object_text_ocr"
+  "extract license plates": "object_text_ocr"
+  "scale and proportion": "scale_validation"
+  "lighting and shadow consistency": "lighting_consistency"
+  "shadow consistency": "lighting_consistency"
+  "secondary classification pass": "secondary_classification"
+  "refine classification": "secondary_classification"
+  "deepfake frequency check": "deepfake_frequency_check"
+  "frequency-domain gan": "deepfake_frequency_check"
+  "frequency domain analysis": "frequency_domain_analysis"
+  "run full-image ela": "ela_full_image"
+  "ela anomaly block classification": "ela_anomaly_classify"
+  "jpeg ghost detection": "jpeg_ghost_detect"
+  "verify file hash": "file_hash_verify"
+  "speaker diarization": "speaker_diarize"
+  "anti-spoofing detection": "anti_spoofing_detect"
+  "prosody analysis": "prosody_analyze"
+  "splice point detection": "audio_splice_detect"
+  "background noise consistency": "background_noise_analysis"
+  "codec fingerprinting": "codec_fingerprinting"
+  "optical flow": "optical_flow_analysis"
+  "frame-to-frame consistency": "frame_consistency_analysis"
+  "face-swap detection": "face_swap_detection"
+  "extract all exif": "exif_extract"
+  "gps coordinates against timestamp": "gps_timezone_validate"
+  "steganography scan": "steganography_scan"
+  "file structure forensic": "file_structure_analysis"
+  "hexadecimal software signature": "hex_signature_scan"
+  "full-scene primary object detection": "object_detection"
+  "primary object detection": "object_detection"
+  "full-scene object detection": "object_detection"
+
+# --- General Keywords (Catch-alls) ---
+general:
+  "adversarial robustness": "adversarial_robustness_check"
+  "adversarial check": "adversarial_robustness_check"
+  "document authenticity": "document_authenticity"
+  "document forgery": "document_authenticity"
+  "font inconsistency": "document_authenticity"
+  "image splice check": "image_splice_check"
+  "splicing detection": "image_splice_check"
+  "prnu analysis": "noise_fingerprint"
+  "scene incongruence": "scene_incongruence"
+  "lighting consistency": "lighting_consistency"
+  "scale validation": "scale_validation"
+  "proportion validation": "scale_validation"
+  "secondary classification": "secondary_classification"
+  "object detection": "object_detection"
+  "detect objects": "object_detection"
+  "contraband database": "contraband_database"
+  "weapons database": "contraband_database"
+  "contraband": "contraband_database"
+  "gemini deep": "gemini_deep_forensic"
+  "deep forensic": "gemini_deep_forensic"
+  "gemini forensic": "gemini_deep_forensic"
+  "semantic image understanding": "analyze_image_content"
+  "copy-move forgery": "copy_move_detect"
+  "extract visible text": "extract_text_from_image"
+  "audio-visual sync": "audio_visual_sync"
+  "splicing detection on objects": "image_splice_check"
+  "noise fingerprint analysis for region": "noise_fingerprint"
+  "noise footprint analysis": "noise_fingerprint"
+  "perceptual hash": "perceptual_hash"
+  "ml metadata anomaly": "metadata_anomaly_score"
+  "astronomical api": "astronomical_api"
+  "reverse image search": "reverse_image_search"
+  "device fingerprint database": "device_fingerprint_db"
+  "inter-agent call": "inter_agent_call"
+  "ml-based image splicing": "image_splice_check"
+  "camera noise fingerprint analysis": "noise_fingerprint"
+
+# --- OCR ---
+ocr:
+  "extract evidence text": "extract_evidence_text"
+  "ocr text extraction": "extract_evidence_text"
+  "text from pdf": "extract_evidence_text"
+  "extract text from pdf": "extract_evidence_text"
+  "extract text from image": "extract_text_from_image"
+
+# --- AV Container ---
+av_container:
+  "mediainfo": "mediainfo_profile"
+  "av container profiling": "mediainfo_profile"
+  "container profile": "mediainfo_profile"
+  "av file identity": "av_file_identity"
+  "av pre-screen": "av_file_identity"
+  "variable frame rate": "mediainfo_profile"
+
+# --- Agent 5: Timestamp & Metadata ---
+metadata:
+  "timestamp analysis": "timestamp_analysis"
+  "timestamp consistency": "timestamp_analysis"
+  "deep metadata": "extract_deep_metadata"
+  "physical address": "get_physical_address"
+
+# --- Agent 4: Video Analysis ---
+video:
+  "optical flow analysis": "optical_flow_analysis"
+  "temporal anomaly": "optical_flow_analysis"
+  "frame extraction": "frame_extraction"
+  "frame window": "frame_extraction"
+  "anomaly as explainable": "anomaly_classification"
+  "anomaly classification": "anomaly_classification"
+  "rolling shutter": "rolling_shutter_validation"
+  "face swap": "face_swap_detection"
+  "gan artifact detection": "deepfake_frequency_check"
+
+# --- Gemini Vision Tools (Agents 1, 3, 5 deep pass) ---
+gemini:
+  "gemini vision analysis: identify file content": "gemini_identify_content"
+  "gemini vision cross-validation": "gemini_cross_validate_manipulation"
+  "gemini vision analysis: deep object": "gemini_object_scene_analysis"
+  "gemini vision analysis: cross-validate visual content": "gemini_metadata_visual_consistency"
+  "deep forensic analysis": "gemini_deep_forensic"
+  "identify content type, extract all text": "gemini_deep_forensic"
+  "identify interfaces": "gemini_deep_forensic"
+  "gemini vision": "gemini_deep_forensic"
+
+# --- Audio Splice (Agent 2) ---
+audio:
+  "audio splice": "audio_splice_detect"
+  "splice point": "audio_splice_detect"
+
+# --- New Tools ---
+new_tools:
+  "prnu camera sensor fingerprint": "prnu_analysis"
+  "prnu analysis": "prnu_analysis"
+  "cross-region source inconsistency": "prnu_analysis"
+  "cfa demosaicing": "cfa_demosaicing"
+  "cfa pattern consistency": "cfa_demosaicing"
+  "color filter array": "cfa_demosaicing"
+  "voice clone": "voice_clone_detect"
+  "ai speech synthesis detection": "voice_clone_detect"
+  "synthetic speech": "voice_clone_detect"
+  "enf analysis": "enf_analysis"
+  "electrical network frequency": "enf_analysis"
+  "enf splice": "enf_analysis"
+  "recording timestamp": "enf_analysis"
+  "license plates": "object_text_ocr"
+  "object regions": "object_text_ocr"
+  "c2pa": "c2pa_verify"
+  "content credentials": "c2pa_verify"
+  "provenance chain": "c2pa_verify"
+  "thumbnail mismatch": "thumbnail_mismatch"
+  "embedded thumbnail": "thumbnail_mismatch"
+  "post-capture editing evidence": "thumbnail_mismatch"

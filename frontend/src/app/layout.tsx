@@ -1,5 +1,7 @@
 import { Poppins, Fira_Code } from "next/font/google";
+import { GlobalNavbar } from "@/components/ui/GlobalNavbar";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
+import { GlassBackground } from "@/components/ui/GlassBackground";
 import { DevErrorProvider } from "@/components/DevErrorOverlay";
 import "./globals.css";
 
@@ -29,7 +31,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" dir="ltr" className="dark">
-      <body className={`${poppins.variable} ${firaCode.variable} font-sans bg-slate-950 text-slate-50 antialiased min-h-screen flex flex-col`}>
+      <body className={`${poppins.variable} ${firaCode.variable} font-sans text-slate-50 antialiased min-h-screen flex flex-col`} style={{ background: "transparent" }}>
+        {/* Shared glass background — visible on all pages */}
+        <GlassBackground />
+        <GlobalNavbar />
+
         {/* Skip navigation — visible on focus for keyboard users */}
         <a
           href="#main-content"
@@ -38,7 +44,7 @@ export default function RootLayout({
           Skip to main content
         </a>
         {/* Main content takes up available space */}
-        <div className="flex-1" id="main-content">
+        <div className="flex-1 relative z-10" id="main-content">
           <DevErrorProvider>
             {children}
           </DevErrorProvider>

@@ -12,6 +12,8 @@ function sleep(ms: number) {
 
 export async function POST() {
     const demoUsername = process.env.DEMO_USERNAME || "investigator";
+    // Prefer server-side-only DEMO_PASSWORD. NEXT_PUBLIC_ vars are baked into
+    // the client JS bundle at build time and should never hold secrets.
     const demoPassword = process.env.DEMO_PASSWORD || process.env.NEXT_PUBLIC_DEMO_PASSWORD;
 
     // CRITICAL: Server-side Next.js API routes run inside the frontend Docker container.

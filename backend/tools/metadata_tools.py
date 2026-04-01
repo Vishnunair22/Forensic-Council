@@ -9,6 +9,7 @@ Implements EXIF extraction, GPS/timezone validation, and steganography detection
 from __future__ import annotations
 
 import os
+import asyncio
 from datetime import datetime, timezone
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
@@ -111,7 +112,7 @@ def _get_exif_data(image: Image.Image, file_path: Optional[str] = None) -> dict[
             if file_path and os.path.exists(file_path):
                 stat = os.stat(file_path)
                 fallback_data["FileSize"] = stat.st_size
-                fallback_data["DateTimeOriginal"] = datetime.fromtimestamp(stat.st_mtime).strftime("%Y:%m:%d %H:%M:%S")
+                fallback_data["DateTimeOriginal"] = datetime.fromtimestamp(stat.st_ctime).strftime("%Y:%m:%d %H:%M:%S")
                 fallback_data["DateTimeModified"] = datetime.fromtimestamp(stat.st_mtime).strftime("%Y:%m:%d %H:%M:%S")
                 fallback_data["Software"] = "OS File System"
                 fallback_data["Make"] = "Generic"
@@ -769,12 +770,19 @@ async def extract_deep_metadata(artifact: EvidenceArtifact) -> dict[str, Any]:
         }
 
 
+_nominatim_lock = asyncio.Lock()
+_last_nominatim_call: float = 0.0
+_NOMINATIM_MIN_INTERVAL = 1.1  # seconds — Nominatim policy: max 1 req/sec
+
+
 async def get_physical_address(lat: float, lon: float) -> dict[str, Any]:
     """
     Converts raw GPS coordinates into a human-readable street address.
     
     Uses Nominatim geocoding service to reverse-geocode GPS coordinates
     into exact street addresses for forensic location analysis.
+    
+    Respects Nominatim's 1 req/sec usage policy via asyncio lock.
     
     Args:
         lat: Latitude coordinate
@@ -787,8 +795,16 @@ async def get_physical_address(lat: float, lon: float) -> dict[str, Any]:
         - error: Error message if geocoding failed (only on failure)
     """
     try:
-        # Nominatim requires a user_agent string
-        geolocator = Nominatim(user_agent="ForensicCouncilAgent/1.0")
+        global _last_nominatim_call
+        async with _nominatim_lock:
+            now = asyncio.get_event_loop().time()
+            elapsed = now - _last_nominatim_call
+            if elapsed < _NOMINATIM_MIN_INTERVAL:
+                await asyncio.sleep(_NOMINATIM_MIN_INTERVAL - elapsed)
+            _last_nominatim_call = asyncio.get_event_loop().time()
+
+            # Nominatim requires a user_agent string
+            geolocator = Nominatim(user_agent="ForensicCouncilAgent/1.0")
         location = geolocator.reverse(f"{lat}, {lon}", timeout=10)
         
         if location:

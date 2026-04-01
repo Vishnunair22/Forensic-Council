@@ -19,7 +19,9 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field
 
 from core.config import Settings, get_settings
+from core.cross_modal_fusion import fuse as cross_modal_fuse
 from core.llm_client import LLMClient
+from core.severity import assign_severity_tier
 from core.structured_logging import get_logger
 from core.signing import KeyStore, sign_content
 
@@ -138,6 +140,22 @@ class ForensicReport(BaseModel):
     cryptographic_signature: str = ""
     report_hash: str = ""
     signed_utc: Optional[datetime] = None
+    cross_modal_fusion: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Cross-modal fusion analysis result: verdict, fused_confidence, "
+            "corroborations, contradictions, independent_modalities, rationale."
+        ),
+    )
+    degradation_flags: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Populated whenever an analysis subsystem fell back to a reduced-capability "
+            "mode (e.g. Gemini unavailable, LLM synthesis disabled, Redis offline). "
+            "A non-empty list means this report does NOT reflect full AI analysis "
+            "and MUST display a DEGRADED ANALYSIS warning in any UI or printout."
+        ),
+    )
 
 
 class CouncilArbiter:
@@ -232,10 +250,22 @@ class CouncilArbiter:
     }
     _DEFAULT_TOOL_RELIABILITY = 0.65  # fallback for unrecognised tool names
 
+    # ── Manipulation probability calculation constants ────────────────────
+    # These are empirically-derived weights for combining manipulation signals
+    # into a single probability score.  The formula:
+    #   - Single signal: P = confidence × reliability_weight × _SINGLE_SIGNAL_DECAY
+    #     (decay factor accounts for single-source uncertainty)
+    #   - Multiple signals: P = weighted_mean(top 5 signals)
+    #     (top-k prevents low-confidence signals from diluting high-confidence ones)
+    _SINGLE_SIGNAL_DECAY: float = 0.55
+    _MANIP_TOP_K: int = 5
+    _MANIP_PROBABILITY_CAP: float = 0.95
+
     async def deliberate(
         self,
         agent_results: dict[str, dict[str, Any]],
         case_id: str = "",
+        use_llm: bool = True,
     ) -> ForensicReport:
         """Deliberate on agent results and generate a forensic report.
 
@@ -259,14 +289,20 @@ class CouncilArbiter:
             )
 
         def _deduplicate_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
-            """Remove duplicate findings with same finding_type produced by same tool."""
-            seen: set[str] = set()
+            """Remove duplicate findings with same finding_type produced by same tool.
+            
+            Includes analysis_phase in the dedup key so initial-pass and deep-pass
+            findings for the same tool are kept as separate entries.
+            """
+            seen: set[tuple[str, str, str, str]] = set()
             out: list[dict[str, Any]] = []
             for f in findings:
+                meta = f.get("metadata", {}) if isinstance(f.get("metadata"), dict) else {}
                 key = (
                     str(f.get("agent_id", "")),
                     str(f.get("finding_type", "")),
-                    str(f.get("metadata", {}).get("tool_name", "") if isinstance(f.get("metadata"), dict) else ""),
+                    str(meta.get("tool_name", "")),
+                    str(meta.get("analysis_phase", "initial")),
                 )
                 if key not in seen:
                     seen.add(key)
@@ -317,7 +353,7 @@ class CouncilArbiter:
             error_rate = round(failed / applicable, 3) if applicable > 0 else 0.0
             # Confidence only over findings that actually ran (not not-applicable, not failed)
             conf_scores = [
-                f.get("calibrated_probability") or f.get("confidence_raw") or 0.0
+                f.get("raw_confidence_score") or f.get("calibrated_probability") or f.get("confidence_raw") or 0.0
                 for f in real
                 if not _is_not_applicable(f) and not _is_failed(f)
             ]
@@ -331,53 +367,8 @@ class CouncilArbiter:
             )
 
         def _assign_severity_tier(f: Any) -> str:
-            """Assign INFO/LOW/MEDIUM/HIGH/CRITICAL to a finding."""
-            if hasattr(f, "metadata"):
-                meta = f.metadata or {}
-                conf = getattr(f, "confidence_raw", 0.0)
-                status_str = str(getattr(f, "status", "")).upper()
-            elif isinstance(f, dict):
-                meta = f.get("metadata") or {}
-                conf = float(f.get("confidence_raw") or 0.0)
-                status_str = str(f.get("status", "")).upper()
-            else:
-                return "INFO"
-
-            _na_flags = ("ela_not_applicable", "ghost_not_applicable",
-                         "noise_fingerprint_not_applicable", "prnu_not_applicable")
-            is_na = (
-                any(meta.get(flag) for flag in _na_flags)
-                or str(meta.get("verdict", "")).upper() == "NOT_APPLICABLE"
-                or str(meta.get("prnu_verdict", "")).upper() == "NOT_APPLICABLE"
-            )
-            is_failed = not is_na and meta.get("court_defensible") is False
-
-            if is_na:
-                return "INFO"
-            if meta.get("hash_matches") is True:
-                return "INFO"
-            if is_failed or status_str == "INCOMPLETE":
-                return "LOW"
-
-            _has_manip = (
-                meta.get("manipulation_detected") is True
-                or meta.get("deepfake_detected") is True
-                or meta.get("splicing_detected") is True
-                or meta.get("copy_move_detected") is True
-                or meta.get("mismatch_detected") is True
-                or meta.get("stego_suspected") is True
-                or "INCONSISTENT" in str(meta.get("prnu_verdict", "")).upper()
-            )
-            _has_anomaly = (
-                meta.get("anomaly_detected") is True
-                or meta.get("inconsistency_detected") is True
-                or str(meta.get("verdict", "")).upper() in ("TAMPERED", "SUSPICIOUS", "MANIPULATED")
-            )
-            if _has_manip:
-                return "CRITICAL" if conf >= 0.75 else "HIGH"
-            if _has_anomaly:
-                return "MEDIUM"
-            return "LOW"
+            """Assign INFO/LOW/MEDIUM/HIGH/CRITICAL to a finding. Uses shared logic."""
+            return assign_severity_tier(f)
 
         # Helper: call optional step-progress hook if set externally
         async def _step(msg: str) -> None:
@@ -642,9 +633,11 @@ class CouncilArbiter:
         if _failed_tools > 0:
             _cov_parts.append(f"{_failed_tools} of {_total_tools} applicable tools failed — findings carry reduced evidential weight")
         if _fallback_count > 0:
-            _cov_parts.append(f"{_fallback_count} tool(s) used simplified fallback implementations (full ML model unavailable)")
+            _t = "tool" if _fallback_count == 1 else "tools"
+            _cov_parts.append(f"{_fallback_count} {_t} used simplified fallback implementations (full ML model unavailable)")
         if _na_tools > 0:
-            _cov_parts.append(f"{_na_tools} tool(s) not applicable to this file type (excluded from verdict)")
+            _t = "tool" if _na_tools == 1 else "tools"
+            _cov_parts.append(f"{_na_tools} {_t} not applicable to this file type (excluded from verdict)")
         analysis_coverage_note = (
             "; ".join(_cov_parts) if _cov_parts
             else f"All {_total_tools} applicable tools ran successfully across {applicable_agent_count} active agent(s)"
@@ -674,7 +667,7 @@ class CouncilArbiter:
                     and _meta.get("verdict") is not None)
             )
             if _is_direct_manip:
-                _c = float(_f.get("calibrated_probability") or _f.get("confidence_raw") or 0.5)
+                _c = float(_f.get("raw_confidence_score") or _f.get("calibrated_probability") or _f.get("confidence_raw") or 0.5)
                 if _c >= 0.50:
                     # Look up the reliability weight for this tool (B)
                     _tool = str(_meta.get("tool_name", _f.get("finding_type", ""))).lower().replace(" ", "_")
@@ -685,12 +678,12 @@ class CouncilArbiter:
             manipulation_probability = 0.0
         elif len(_manip_weighted) == 1:
             _c0, _w0 = _manip_weighted[0]
-            manipulation_probability = round(_c0 * _w0 * 0.55, 3)
+            manipulation_probability = round(_c0 * _w0 * self._SINGLE_SIGNAL_DECAY, 3)
         else:
-            _top = sorted(_manip_weighted, key=lambda x: x[0] * x[1], reverse=True)[:5]
+            _top = sorted(_manip_weighted, key=lambda x: x[0] * x[1], reverse=True)[:self._MANIP_TOP_K]
             _tw = sum(_w for _, _w in _top)
             manipulation_probability = round(
-                min(0.95, sum(_c * _w for _c, _w in _top) / _tw) if _tw > 0 else 0.0, 3
+                min(self._MANIP_PROBABILITY_CAP, sum(_c * _w for _c, _w in _top) / _tw) if _tw > 0 else 0.0, 3
             )
 
         # ── F: Verdict (tightened thresholds) ────────────────────────────
@@ -732,108 +725,141 @@ class CouncilArbiter:
         # This ensures key_findings/verdict_sentence are always available even if
         # later calls time out under Groq rate pressure.
 
-        # 1. Structured summary (fastest — JSON mode, short prompt)
-        await _step("Generating structured summary fields…")
-        try:
-            verdict_sentence, key_findings_list, reliability_note = \
-                await self._generate_structured_summary(
-                    overall_verdict=overall_verdict,
-                    overall_confidence=overall_confidence,
-                    overall_error_rate=overall_error_rate,
-                    manipulation_probability=manipulation_probability,
-                    applicable_agent_count=applicable_agent_count,
-                    all_findings=all_findings,
-                    cross_modal_confirmed_count=len(cross_modal_confirmed),
-                    contested_count=contested_findings_count,
-                    analysis_coverage_note=analysis_coverage_note,
-                )
-        except Exception as _struct_err:
-            logger.warning(f"Structured summary failed: {_struct_err}")
-            # Use template-based fallback directly
+        # Fast-path: when use_llm=False, skip all LLM calls immediately and use
+        # template fallbacks.  This is triggered either by the caller explicitly
+        # disabling LLM (e.g. arbiter deliberation timeout in the pipeline) or when
+        # no API key is configured.  The caller is responsible for appending a
+        # degradation flag to the report after deliberate() returns.
+        _llm_synthesis_done = False
+        if not use_llm:
             verdict_sentence, key_findings_list, reliability_note = \
                 self._template_structured_summary(
                     overall_verdict, overall_confidence, overall_error_rate,
                     manipulation_probability, applicable_agent_count, all_findings,
-                    len(cross_modal_confirmed), contested_findings_count, analysis_coverage_note
+                    len(cross_modal_confirmed), contested_findings_count,
+                    analysis_coverage_note,
                 )
-
-        # 2. Per-agent narratives (parallel — each capped at 40 s)
-        await _step("Generating per-agent analysis via Groq…")
-        per_agent_analysis: dict[str, str] = {}
-
-        _NARRATIVE_TIMEOUT = 40.0
-
-        async def _one_narrative(aid: str, res: dict) -> tuple[str, str]:
-            findings = res.get("findings", [])
-            if not findings:
-                return aid, ""
-            try:
-                narr = await asyncio.wait_for(
-                    self._generate_agent_narrative(
-                        agent_id=aid,
-                        findings=findings,
-                        metrics=per_agent_metrics.get(aid, {}),
-                    ),
-                    timeout=_NARRATIVE_TIMEOUT,
-                )
-                return aid, narr or ""
-            except asyncio.TimeoutError:
-                logger.warning(f"Per-agent narrative timed out after {_NARRATIVE_TIMEOUT}s for {aid}")
-                return aid, ""
-            except Exception as _narr_err:
-                logger.warning(f"Per-agent narrative failed for {aid}: {_narr_err}")
-                return aid, ""
-
-        narrative_pairs = await asyncio.gather(
-            *[_one_narrative(aid, res) for aid, res in active_agent_results.items()],
-            return_exceptions=True,
-        )
-        narrative_pairs = [p for p in narrative_pairs if not isinstance(p, BaseException)]
-        for _aid, _narr in narrative_pairs:
-            if _narr:
-                per_agent_analysis[_aid] = _narr
-
-        # 3. Executive summary (heaviest — 45 s cap)
-        await _step("Generating executive summary via Groq…")
-        try:
-            executive_summary = await asyncio.wait_for(
-                self._generate_executive_summary(
-                    len(active_agent_results),
-                    len(all_findings),
-                    len(cross_modal_confirmed),
-                    len(contested_findings),
-                    all_findings=all_findings,
-                    gemini_findings=gemini_vision_findings,
-                    active_agent_metrics=active_metrics,
-                    overall_verdict=overall_verdict,
-                ),
-                timeout=45.0,
-            )
-        except asyncio.TimeoutError:
-            logger.warning("Executive summary Groq call timed out — using template fallback")
+            per_agent_analysis = {}
             executive_summary = self._template_executive_summary(
                 len(active_agent_results), len(all_findings),
                 len(cross_modal_confirmed), len(contested_findings), all_findings,
             )
-
-        # 4. Uncertainty statement (30 s cap)
-        await _step("Computing uncertainty bounds…")
-        try:
-            uncertainty_statement = await asyncio.wait_for(
-                self._generate_uncertainty_statement(
-                    len(incomplete_findings),
-                    len(contested_findings),
-                    overall_error_rate=overall_error_rate,
-                ),
-                timeout=30.0,
-            )
-        except asyncio.TimeoutError:
-            logger.warning("Uncertainty statement timed out — using fallback")
             uncertainty_statement = (
                 f"Analysis based on {len(all_findings)} findings from "
                 f"{len(active_agent_results)} active agent(s). "
-                f"Overall error rate: {overall_error_rate:.0%}."
+                f"Overall error rate: {overall_error_rate:.0%}. "
+                "LLM narrative synthesis was disabled for this report."
             )
+            _llm_synthesis_done = True
+
+        # 1. Structured summary (fastest — JSON mode, short prompt)
+        if not _llm_synthesis_done:
+            await _step("Generating structured summary fields…")
+            try:
+                verdict_sentence, key_findings_list, reliability_note = \
+                    await self._generate_structured_summary(
+                        overall_verdict=overall_verdict,
+                        overall_confidence=overall_confidence,
+                        overall_error_rate=overall_error_rate,
+                        manipulation_probability=manipulation_probability,
+                        applicable_agent_count=applicable_agent_count,
+                        all_findings=all_findings,
+                        cross_modal_confirmed_count=len(cross_modal_confirmed),
+                        contested_count=contested_findings_count,
+                        analysis_coverage_note=analysis_coverage_note,
+                    )
+            except Exception as _struct_err:
+                logger.warning(f"Structured summary failed: {_struct_err}")
+                verdict_sentence, key_findings_list, reliability_note = \
+                    self._template_structured_summary(
+                        overall_verdict, overall_confidence, overall_error_rate,
+                        manipulation_probability, applicable_agent_count, all_findings,
+                        len(cross_modal_confirmed), contested_findings_count, analysis_coverage_note
+                    )
+
+        # 2. Per-agent narratives (parallel — each capped at 40 s)
+        if not _llm_synthesis_done:
+            await _step("Generating per-agent analysis via Groq…")
+            per_agent_analysis: dict[str, str] = {}
+
+            _NARRATIVE_TIMEOUT = 40.0
+
+            async def _one_narrative(aid: str, res: dict) -> tuple[str, str]:
+                findings = res.get("findings", [])
+                if not findings:
+                    return aid, ""
+                try:
+                    narr = await asyncio.wait_for(
+                        self._generate_agent_narrative(
+                            agent_id=aid,
+                            findings=findings,
+                            metrics=per_agent_metrics.get(aid, {}),
+                        ),
+                        timeout=_NARRATIVE_TIMEOUT,
+                    )
+                    return aid, narr or ""
+                except asyncio.TimeoutError:
+                    logger.warning(f"Per-agent narrative timed out after {_NARRATIVE_TIMEOUT}s for {aid}")
+                    return aid, ""
+                except Exception as _narr_err:
+                    logger.warning(f"Per-agent narrative failed for {aid}: {_narr_err}")
+                    return aid, ""
+
+            narrative_pairs = await asyncio.gather(
+                *[_one_narrative(aid, res) for aid, res in active_agent_results.items()],
+                return_exceptions=True,
+            )
+            narrative_pairs = [p for p in narrative_pairs if not isinstance(p, BaseException)]
+            for _aid, _narr in narrative_pairs:
+                if _narr:
+                    per_agent_analysis[_aid] = _narr
+
+        # 3. Executive summary (heaviest — 45 s cap)
+        if not _llm_synthesis_done:
+            await _step("Generating executive summary via Groq…")
+            try:
+                executive_summary = await asyncio.wait_for(
+                    self._generate_executive_summary(
+                        len(active_agent_results),
+                        len(all_findings),
+                        len(cross_modal_confirmed),
+                        len(contested_findings),
+                        all_findings=all_findings,
+                        gemini_findings=gemini_vision_findings,
+                        active_agent_metrics=active_metrics,
+                        overall_verdict=overall_verdict,
+                    ),
+                    timeout=45.0,
+                )
+            except asyncio.TimeoutError:
+                logger.warning("Executive summary Groq call timed out — using template fallback")
+                executive_summary = self._template_executive_summary(
+                    len(active_agent_results), len(all_findings),
+                    len(cross_modal_confirmed), len(contested_findings), all_findings,
+                )
+
+        # 4. Uncertainty statement (30 s cap)
+        if not _llm_synthesis_done:
+            await _step("Computing uncertainty bounds…")
+            try:
+                uncertainty_statement = await asyncio.wait_for(
+                    self._generate_uncertainty_statement(
+                        len(incomplete_findings),
+                        len(contested_findings),
+                        overall_error_rate=overall_error_rate,
+                    ),
+                    timeout=30.0,
+                )
+            except asyncio.TimeoutError:
+                logger.warning("Uncertainty statement timed out — using fallback")
+                uncertainty_statement = (
+                    f"Analysis based on {len(all_findings)} findings from "
+                    f"{len(active_agent_results)} active agent(s). "
+                    f"Overall error rate: {overall_error_rate:.0%}."
+                )
+
+        # ── Cross-modal fusion analysis ────────────────────────────────────
+        fusion_result = cross_modal_fuse(active_agent_results)
 
         # ── Build report ──────────────────────────────────────────────────
         await _step("Finalising court-ready report…")
@@ -864,68 +890,110 @@ class CouncilArbiter:
             applicable_agent_count=applicable_agent_count,
             skipped_agents=skipped_agents,
             analysis_coverage_note=analysis_coverage_note,
+            cross_modal_fusion={
+                "verdict": fusion_result.verdict.value,
+                "fused_confidence": fusion_result.fused_confidence,
+                "corroborations": fusion_result.corroborations,
+                "contradictions": fusion_result.contradictions,
+                "independent_modalities": fusion_result.independent_modalities,
+                "rationale": fusion_result.fusion_rationale,
+            },
         )
 
         return report
     
+    def _get_category(self, finding_type: str) -> str | None:
+        """Map a finding_type to its semantic category, or None."""
+        ft = finding_type.lower().replace(" ", "_")
+        for keyword, category in self._FINDING_CATEGORY_MAP.items():
+            if keyword in ft:
+                return category
+        return None
+
     async def cross_agent_comparison(
         self,
         all_findings: list[dict[str, Any]]
     ) -> list[FindingComparison]:
-        """Compare findings across agents."""
-        comparisons = []
-        
-        for i, finding_a in enumerate(all_findings):
-            for finding_b in all_findings[i + 1:]:
-                agent_a = finding_a.get("agent_id", "")
-                agent_b = finding_b.get("agent_id", "")
-                if agent_a == agent_b:
-                    continue  # Only cross-agent
-                
-                def _get_category(finding_type: str) -> str | None:
-                    """Map a finding_type to its semantic category, or None."""
-                    ft = finding_type.lower().replace(" ", "_")
-                    for keyword, category in self._FINDING_CATEGORY_MAP.items():
-                        if keyword in ft:
-                            return category
-                    return None
+        """Compare findings across agents using category-indexed comparison.
 
-                cat_a = _get_category(finding_a.get("finding_type", ""))
-                cat_b = _get_category(finding_b.get("finding_type", ""))
+        Instead of O(n²) pairwise iteration, findings are first indexed by
+        semantic category. Only findings within the same category are compared
+        pairwise.  Findings with no recognised category are recorded as
+        INDEPENDENT without any pairwise iteration.
+        """
+        comparisons: list[FindingComparison] = []
 
-                # Only compare findings that share the same semantic category.
-                # If either has no recognised category, treat as INDEPENDENT.
-                if not cat_a or not cat_b or cat_a != cat_b:
-                    comparisons.append(FindingComparison(
-                        finding_a=finding_a,
-                        finding_b=finding_b,
-                        verdict=FindingVerdict.INDEPENDENT,
-                        cross_modal_confirmed=False,
-                    ))
-                    continue
-                
-                status_a = finding_a.get("status", "")
-                status_b = finding_b.get("status", "")
-                
-                if status_a == status_b:
-                    agent_a = finding_a.get("agent_id", "")
-                    agent_b = finding_b.get("agent_id", "")
-                    cross_modal = agent_a != agent_b
-                    
-                    comparisons.append(FindingComparison(
-                        finding_a=finding_a,
-                        finding_b=finding_b,
-                        verdict=FindingVerdict.AGREEMENT,
-                        cross_modal_confirmed=cross_modal,
-                    ))
-                else:
-                    comparisons.append(FindingComparison(
-                        finding_a=finding_a,
-                        finding_b=finding_b,
-                        verdict=FindingVerdict.CONTRADICTION,
-                        cross_modal_confirmed=False,
-                    ))
-        
+        # ── 1. Index findings by (category, agent_id) ─────────────────────
+        # category_buckets: {category: {agent_id: [findings]}}
+        category_buckets: dict[str, dict[str, list[dict]]] = {}
+        uncategorised: list[dict] = []
+
+        for f in all_findings:
+            cat = self._get_category(f.get("finding_type", ""))
+            if cat is None:
+                uncategorised.append(f)
+            else:
+                agent_id = f.get("agent_id", "")
+                category_buckets.setdefault(cat, {}).setdefault(agent_id, []).append(f)
+
+        # ── 2. Compare within each category bucket ────────────────────────
+        for cat, agent_map in category_buckets.items():
+            agent_ids = list(agent_map.keys())
+            for i, agent_a in enumerate(agent_ids):
+                for agent_b in agent_ids[i + 1:]:
+                    # Cross-product of findings from agent_a × agent_b
+                    for fa in agent_map[agent_a]:
+                        for fb in agent_map[agent_b]:
+                            status_a = fa.get("status", "")
+                            status_b = fb.get("status", "")
+                            if status_a == status_b:
+                                comparisons.append(FindingComparison(
+                                    finding_a=fa,
+                                    finding_b=fb,
+                                    verdict=FindingVerdict.AGREEMENT,
+                                    cross_modal_confirmed=True,
+                                ))
+                            else:
+                                comparisons.append(FindingComparison(
+                                    finding_a=fa,
+                                    finding_b=fb,
+                                    verdict=FindingVerdict.CONTRADICTION,
+                                    cross_modal_confirmed=False,
+                                ))
+
+            # Also handle same-agent findings within a category (no cross-modal)
+            for agent_id, findings_list in agent_map.items():
+                for i in range(len(findings_list)):
+                    for j in range(i + 1, len(findings_list)):
+                        fa, fb = findings_list[i], findings_list[j]
+                        status_a = fa.get("status", "")
+                        status_b = fb.get("status", "")
+                        if status_a == status_b:
+                            comparisons.append(FindingComparison(
+                                finding_a=fa,
+                                finding_b=fb,
+                                verdict=FindingVerdict.AGREEMENT,
+                                cross_modal_confirmed=False,
+                            ))
+                        else:
+                            comparisons.append(FindingComparison(
+                                finding_a=fa,
+                                finding_b=fb,
+                                verdict=FindingVerdict.CONTRADICTION,
+                                cross_modal_confirmed=False,
+                            ))
+
+        # ── 3. Uncategorised findings → INDEPENDENT (no pairwise needed) ──
+        # Each uncategorised finding is independent; emit one INDEPENDENT
+        # comparison per finding (paired with itself as a placeholder).
+        for f in uncategorised:
+            comparisons.append(FindingComparison(
+                finding_a=f,
+                finding_b=f,
+                verdict=FindingVerdict.INDEPENDENT,
+                cross_modal_confirmed=False,
+            ))
+
         return comparisons
     
     async def challenge_loop(
@@ -1451,13 +1519,19 @@ Write 2-3 sentences only. Do not use bullet points."""
     ) -> tuple[str, list[str], str] | None:
         client = LLMClient(self.config)
 
+        def _strip_rs_prefix(s: str) -> str:
+            idx = s.find(":")
+            if 0 < idx < 55 and s[:idx].replace(" ", "").replace("/", "").replace("-", "").replace("_", "").isalpha():
+                return s[idx + 1:].lstrip()
+            return s
+
         top_findings = sorted(
             [f for f in all_findings if not f.get("stub_result")],
             key=lambda f: f.get("confidence_raw", 0), reverse=True,
         )[:6]
         findings_brief = [
             f"{f.get('finding_type','?')} ({f.get('agent_id','?')}) — "
-            f"{(f.get('confidence_raw') or 0):.0%} — {(f.get('reasoning_summary') or '')[:120]}"
+            f"{(f.get('confidence_raw') or 0):.0%} — {_strip_rs_prefix((f.get('reasoning_summary') or '')[:200].rsplit(' ', 1)[0])}"
             for f in top_findings
         ]
 
@@ -1472,7 +1546,7 @@ Respond ONLY with valid JSON (no markdown):
 
 Rules:
 - verdict_sentence: state the verdict and primary reason in ≤25 words.
-- key_findings: exactly 3-5 plain English bullet items, each ≤20 words, citing the most important findings. No jargon.
+- key_findings: exactly 3-5 plain English bullet items, each ≤25 words. Never start a finding with a tool name or technical prefix like "GAN/deepfake", "Hash verification:", etc. State the result directly: "No GAN artifacts found" not "GAN/deepfake check: no artifacts".
 - reliability_note: ≤20 words. Cite confidence %, error rate, and note if any tools used fallbacks."""
 
         user_content = (
@@ -1529,21 +1603,35 @@ Rules:
         }
         verdict_sentence = _VERDICT_PHRASES.get(overall_verdict, f"Verdict: {overall_verdict}.")
 
+        def _strip_rs_prefix(s: str) -> str:
+            """Strip tool-name prefixes like 'GAN/deepfake frequency check: ' from reasoning summaries."""
+            idx = s.find(":")
+            if 0 < idx < 55 and s[:idx].replace(" ", "").replace("/", "").replace("-", "").replace("_", "").isalpha():
+                return s[idx + 1:].lstrip()
+            return s
+
+        def _truncate(s: str, max_len: int = 200) -> str:
+            """Truncate at last word boundary before max_len."""
+            if len(s) <= max_len:
+                return s
+            return s[:max_len].rsplit(" ", 1)[0] + ("…" if len(s) > max_len else "")
+
         top = sorted(
             [f for f in all_findings if not f.get("stub_result") and f.get("reasoning_summary")],
             key=lambda f: f.get("confidence_raw", 0), reverse=True,
         )[:5]
         key_findings_list = [
-            (f.get("reasoning_summary") or "")[:120]
+            _strip_rs_prefix(_truncate(f.get("reasoning_summary") or ""))
             for f in top
         ]
         if not key_findings_list:
             key_findings_list = ["No significant findings were identified."]
 
         err_note = f"; {overall_error_rate*100:.0f}% tool error rate" if overall_error_rate > 0.05 else ""
+        _a = "agent" if applicable_agent_count == 1 else "agents"
         reliability_note = (
             f"{overall_confidence*100:.0f}% overall confidence across "
-            f"{applicable_agent_count} active agent(s){err_note}."
+            f"{applicable_agent_count} active {_a}{err_note}."
         )
         return verdict_sentence, key_findings_list, reliability_note
 

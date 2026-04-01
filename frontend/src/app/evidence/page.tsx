@@ -13,17 +13,26 @@
 
 "use client";
 
-import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import React, { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { ShieldCheck } from "lucide-react";
 import { useSimulation } from "@/hooks/useSimulation";
 import { PageTransition } from "@/components/ui/PageTransition";
 import { useSound } from "@/hooks/useSound";
-import { startInvestigation, submitHITLDecision, autoLoginAsInvestigator, type InvestigationResponse } from "@/lib/api";
+import {
+  startInvestigation,
+  submitHITLDecision,
+  autoLoginAsInvestigator,
+  DuplicateInvestigationError,
+  getArbiterStatus,
+  getReport,
+  type InvestigationResponse,
+} from "@/lib/api";
 import { AGENTS_DATA, ALLOWED_MIME_TYPES } from "@/lib/constants";
+import { __pendingFileStore } from "@/lib/pendingFileStore";
+import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
+import { ForensicProgressOverlay } from "@/components/ui/ForensicProgressOverlay";
 
 import {
-  HeaderSection,
   FileUploadSection,
   AgentProgressDisplay,
   ErrorDisplay,
@@ -36,6 +45,59 @@ const isDev = process.env.NODE_ENV !== "production";
 const dbg = {
   error: isDev ? console.error.bind(console) : () => {},
 };
+
+const POLL_REQUEST_MS = 12_000;
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error("request timed out")), ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      }
+    );
+  });
+}
+
+/** Poll until the signed report is available (HTTP — survives WS teardown on navigation). */
+async function waitForFinalReport(
+  sessionId: string,
+  onLiveMessage: (message: string) => void,
+  maxMs: number,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  const deadline = Date.now() + maxMs;
+  while (Date.now() < deadline) {
+    if (signal?.aborted) return false;
+    try {
+      const st = await withTimeout(getArbiterStatus(sessionId), POLL_REQUEST_MS);
+      if (st.message) onLiveMessage(st.message);
+      if (st.status === "error") {
+        throw new Error(st.message || "Council synthesis failed.");
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message.includes("Council synthesis")) throw e;
+      /* timeout / network — keep polling */
+    }
+    try {
+      const res = await withTimeout(getReport(sessionId), POLL_REQUEST_MS);
+      if (res.status === "complete" && res.report) return true;
+    } catch {
+      /* in progress, 404, timeout, or not yet persisted */
+    }
+    await new Promise<void>((r) => {
+      const timer = setTimeout(r, 550);
+      signal?.addEventListener("abort", () => clearTimeout(timer), { once: true });
+    });
+    if (signal?.aborted) return false;
+  }
+  return false;
+}
 
 export default function EvidencePage() {
   const router = useRouter();
@@ -61,11 +123,29 @@ export default function EvidencePage() {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadPhaseText, setUploadPhaseText] = useState<string>("");
-
-  // Prevent upload-form flash on auto-start navigation from landing page
-  const isAutoStartPending = useRef(
-    typeof window !== "undefined" && sessionStorage.getItem("forensic_auto_start") === "true"
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(
+    typeof window !== "undefined" && sessionStorage.getItem("fc_show_loading") === "true"
   );
+  /** True once the live analysis WebSocket has opened (not just HTTP session created). */
+  const [analysisStreamReady, setAnalysisStreamReady] = useState(false);
+  /** Arbiter phase — latest line from GET /arbiter-status (and WS fallback). */
+  const [arbiterLiveText, setArbiterLiveText] = useState("");
+
+  /**
+   * Landing → evidence with `forensic_auto_start` suppresses the upload form until the
+   * file + triggerAnalysis path runs. Must be React state (not a ref) so updates re-render
+   * — refs do not trigger paint; combined with SSR/hydration this left a blank shell.
+   */
+  const [autoStartBlocking, setAutoStartBlocking] = useState(false);
+  useLayoutEffect(() => {
+    try {
+      setAutoStartBlocking(
+        sessionStorage.getItem("forensic_auto_start") === "true"
+      );
+    } catch {
+      setAutoStartBlocking(false);
+    }
+  }, []);
 
   // Shared auth promise — reuse existing session if available, otherwise auto-login.
   // The landing page already calls autoLoginAsInvestigator() on mount, so the cookie
@@ -116,6 +196,14 @@ export default function EvidencePage() {
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pollAbortRef = useRef<AbortController | null>(null);
+
+  // Abort any in-flight polling when component unmounts
+  useEffect(() => {
+    return () => {
+      pollAbortRef.current?.abort();
+    };
+  }, []);
 
   // Memoize file preview URL to avoid memory leaks
   const filePreviewUrl = useMemo(() => {
@@ -170,6 +258,7 @@ export default function EvidencePage() {
   const resetSimulation = useCallback(() => {
     setIsUploading(false);
     setPhase("initial");
+    setAnalysisStreamReady(false);
     resetSimulationHook();
   }, [resetSimulationHook]);
 
@@ -181,8 +270,8 @@ export default function EvidencePage() {
       setIsUploading(true);
       setValidationError(null);
       setPhase("initial");
-      startSimulation();
-      isAutoStartPending.current = false;
+      setAnalysisStreamReady(false);
+      setAutoStartBlocking(false);
       setUploadPhaseText("Uploading evidence to secure pipeline…");
 
       const investigatorId = investigatorIdRef.current;
@@ -202,68 +291,168 @@ export default function EvidencePage() {
       // Wait for the auto-login to complete before hitting the backend.
       await authReadyRef.current;
 
-      let res: InvestigationResponse;
+      let sessionIdToUse: string | undefined;
       try {
-        res = await (inflightPromise ?? startInvestigation(targetFile, caseId, investigatorId));
+        const investigationRes = await (inflightPromise ??
+          startInvestigation(targetFile, caseId, investigatorId));
+        sessionIdToUse = investigationRes.session_id;
       } catch (err: unknown) {
-        dbg.error("Investigation start failed", err);
-        let errorMsg = err instanceof Error ? err.message : "Failed to start investigation";
-        if (errorMsg.includes("422") || errorMsg.toLowerCase().includes("unprocessable")) {
-          errorMsg = "Upload rejected by server — check file type and try again.";
-        } else if (errorMsg.includes("429")) {
-          errorMsg = "Too many investigations started. Please wait a moment and try again.";
-        } else if (errorMsg.includes("413")) {
-          errorMsg = "File is too large. Maximum size is 50 MB.";
-        } else if (errorMsg.includes("401") || errorMsg.includes("Unauthorized")) {
-          errorMsg = "Session expired — please refresh the page and try again.";
+        if (err instanceof DuplicateInvestigationError) {
+          const sid = err.existingSessionId;
+          sessionStorage.setItem("forensic_session_id", sid);
+          sessionStorage.setItem("forensic_file_name", targetFile.name);
+          sessionStorage.setItem("forensic_case_id", caseId);
+          sessionStorage.setItem("forensic_investigator_id", investigatorId);
+          sessionStorage.setItem("forensic_mime_type", targetFile.type);
+
+          let goResults = false;
+          try {
+            const st = await withTimeout(getArbiterStatus(sid), POLL_REQUEST_MS);
+            if (st.status === "complete") goResults = true;
+          } catch {
+            /* keep reconnecting */
+          }
+          if (!goResults) {
+            try {
+              const rep = await withTimeout(getReport(sid), POLL_REQUEST_MS);
+              if (rep.status === "complete" && rep.report) goResults = true;
+            } catch {
+              /* in flight or unavailable */
+            }
+          }
+          if (goResults) {
+            setIsUploading(false);
+            setUploadPhaseText("");
+            playSound("success");
+            setShowLoadingOverlay(false);
+            sessionStorage.removeItem("fc_show_loading");
+            router.push("/result");
+            return;
+          }
+
+          sessionIdToUse = sid;
+          setUploadPhaseText(
+            "This file was already submitted — reconnecting to that investigation…"
+          );
+        } else {
+          dbg.error("Investigation start failed", err);
+          let errorMsg =
+            err instanceof Error ? err.message : "Failed to start investigation";
+          if (
+            errorMsg.includes("422") ||
+            errorMsg.toLowerCase().includes("unprocessable")
+          ) {
+            errorMsg =
+              "Upload rejected by server — check file type and try again.";
+          } else if (errorMsg.includes("429")) {
+            errorMsg =
+              "Too many investigations started. Please wait a moment and try again.";
+          } else if (errorMsg.includes("413")) {
+            errorMsg = "File is too large. Maximum size is 50 MB.";
+          } else if (
+            errorMsg.includes("401") ||
+            errorMsg.includes("Unauthorized")
+          ) {
+            errorMsg =
+              "Session expired — please refresh the page and try again.";
+          }
+          setValidationError(errorMsg);
+          setIsUploading(false);
+          setUploadPhaseText("");
+          setShowLoadingOverlay(false);
+          sessionStorage.removeItem("fc_show_loading");
+          resetSimulation();
+          playSound("error");
+          return;
         }
-        setValidationError(errorMsg);
+      }
+
+      if (!sessionIdToUse) {
         setIsUploading(false);
         setUploadPhaseText("");
         resetSimulation();
-        playSound("error");
         return;
       }
 
-      sessionStorage.setItem("forensic_session_id", res.session_id);
+      sessionStorage.setItem("forensic_session_id", sessionIdToUse);
       sessionStorage.setItem("forensic_file_name", targetFile.name);
       sessionStorage.setItem("forensic_case_id", caseId);
       sessionStorage.setItem("forensic_investigator_id", investigatorId);
+      sessionStorage.setItem("forensic_mime_type", targetFile.type);
+
+      // Store a small thumbnail for images so the result page can show a preview
+      if (targetFile.type.startsWith("image/")) {
+        try {
+          const bmp = await createImageBitmap(targetFile);
+          const MAX = 240;
+          const scale = Math.min(MAX / bmp.width, MAX / bmp.height, 1);
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(bmp.width * scale);
+          canvas.height = Math.round(bmp.height * scale);
+          canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+          bmp.close();
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
+          if (dataUrl.length < 60_000) {
+            sessionStorage.setItem("forensic_thumbnail", dataUrl);
+          }
+        } catch {
+          /* non-critical — thumbnail generation failing is fine */
+        }
+      } else {
+        sessionStorage.removeItem("forensic_thumbnail");
+      }
+
+      startSimulation();
 
       // ── Phase 2: Show analysis grid immediately, connect WS in background ─
-      // Don't await WS — as soon as we have session_id the agents grid is visible.
       setIsUploading(false);
       setUploadPhaseText("Connecting to analysis stream…");
 
-      connectWebSocket(res.session_id)
+      connectWebSocket(sessionIdToUse)
         .then(() => {
+          setAnalysisStreamReady(true);
           setUploadPhaseText("Agents dispatching…");
         })
         .catch((wsErr: unknown) => {
           dbg.error("WebSocket connection failed", wsErr);
-          const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to analysis stream";
+          const wsErrMsg =
+            wsErr instanceof Error
+              ? wsErr.message
+              : "Failed to connect to analysis stream";
           setValidationError(wsErrMsg);
+          setShowLoadingOverlay(false);
+          sessionStorage.removeItem("fc_show_loading");
           resetSimulation();
         });
     },
-    [playSound, startSimulation, connectWebSocket, resetSimulation]
+    [
+      playSound,
+      startSimulation,
+      connectWebSocket,
+      resetSimulation,
+      router,
+    ]
   );
 
-  // Pick up file injected from landing page
+  // Pick up file injected from landing page via module-scoped store
   useEffect(() => {
-    const pending = (window as { __forensic_pending_file?: File }).__forensic_pending_file;
+    const pending = __pendingFileStore.file;
     if (pending) {
-      delete (window as { __forensic_pending_file?: File }).__forensic_pending_file;
+      __pendingFileStore.file = null;
       setFile(pending);
 
       const autoStart = sessionStorage.getItem("forensic_auto_start");
       if (autoStart === "true") {
         sessionStorage.removeItem("forensic_auto_start");
+        setAutoStartBlocking(false);
         triggerAnalysis(pending);
       }
     } else if (sessionStorage.getItem("forensic_auto_start") === "true") {
       setValidationError("File was not received. Please re-select.");
       sessionStorage.removeItem("forensic_auto_start");
+      setAutoStartBlocking(false);
+      setShowLoadingOverlay(false);
+      sessionStorage.removeItem("fc_show_loading");
     }
   }, [triggerAnalysis]);
   
@@ -328,18 +517,59 @@ export default function EvidencePage() {
     sessionStorage.setItem("forensic_is_deep", "false");
     sessionStorage.setItem("forensic_initial_agents", JSON.stringify(completedAgents));
     setIsNavigating(true);
-    setShowArbiterOverlay(true); // Show arbiter progress overlay
+    setShowArbiterOverlay(true);
+    setArbiterLiveText("Submitting investigator decision…");
     try {
-      // Tell the backend to skip deep analysis and compile the report via the arbiter.
       await resumeInvestigation(false);
-      // Small pause so the backend registers the resume before result page polls
-      await new Promise(r => setTimeout(r, 400));
-      router.push("/result");
     } catch (err) {
       dbg.error("Accept analysis failed", err);
       playSound("error");
+      setValidationError(
+        err instanceof Error ? err.message : "Could not resume the investigation on the server."
+      );
       setIsNavigating(false);
       setShowArbiterOverlay(false);
+      return;
+    }
+
+    const sid = sessionStorage.getItem("forensic_session_id");
+    if (!sid) {
+      setValidationError("Session missing — start a new investigation.");
+      setIsNavigating(false);
+      setShowArbiterOverlay(false);
+      return;
+    }
+
+    let navigated = false;
+    const navigateOnce = () => {
+      if (navigated) return;
+      navigated = true;
+      setShowArbiterOverlay(false);
+      setIsNavigating(false);
+      router.push("/result");
+    };
+    // Guaranteed exit if polling hangs (unlikely with per-request timeouts, but safe).
+    const safetyNav = window.setTimeout(navigateOnce, 120_000);
+
+    const abortController = new AbortController();
+    pollAbortRef.current = abortController;
+
+    try {
+      const ok = await waitForFinalReport(sid, setArbiterLiveText, 110_000, abortController.signal);
+      if (!ok) {
+        playSound("error");
+        setValidationError(
+          "The report is taking longer than expected. Opening the results view — it will keep checking."
+        );
+      }
+    } catch (err) {
+      dbg.error("Council synthesis wait failed", err);
+      playSound("error");
+      setValidationError(err instanceof Error ? err.message : "Council synthesis failed.");
+    } finally {
+      window.clearTimeout(safetyNav);
+      pollAbortRef.current = null;
+      navigateOnce();
     }
   }, [playSound, resumeInvestigation, router, isNavigating, completedAgents]);
 
@@ -352,7 +582,15 @@ export default function EvidencePage() {
     // Clear initial-phase completed agents so allAgentsDone starts fresh in deep phase
     clearCompletedAgents();
     setPhase("deep");
-    await resumeInvestigation(true);
+    try {
+      await resumeInvestigation(true);
+    } catch (err) {
+      dbg.error("Deep analysis resume failed", err);
+      playSound("error");
+      setValidationError(
+        err instanceof Error ? err.message : "Could not start deep analysis on the server."
+      );
+    }
   }, [playSound, resumeInvestigation, clearCompletedAgents]);
 
   // New Analysis → clear everything, go to upload form
@@ -367,16 +605,27 @@ export default function EvidencePage() {
     sessionStorage.removeItem('forensic_case_id');
   }, [resetSimulation, playSound]);
 
-  // View Results → after deep analysis the arbiter already compiled — just navigate
+  // View Results → after deep analysis confirm report is addressable, then navigate
   const handleViewResults = useCallback(async () => {
     if (isNavigating) return;
     playSound("arbiter_start");
     sessionStorage.setItem("forensic_deep_agents", JSON.stringify(completedAgents));
     setIsNavigating(true);
-    setShowArbiterOverlay(true); // Show arbiter progress overlay
-    // Small pause to let the user see the overlay before navigating
-    await new Promise(r => setTimeout(r, 500));
-    router.push("/result");
+    setShowArbiterOverlay(true);
+    setArbiterLiveText("Preparing council ledger…");
+    const sid = sessionStorage.getItem("forensic_session_id");
+    try {
+      if (sid) {
+        await waitForFinalReport(sid, setArbiterLiveText, 120_000);
+      }
+    } catch (err) {
+      dbg.error("View results prefetch failed", err);
+      setValidationError(err instanceof Error ? err.message : "Could not confirm report status.");
+    } finally {
+      setShowArbiterOverlay(false);
+      setIsNavigating(false);
+      router.push("/result");
+    }
   }, [playSound, router, isNavigating, completedAgents]);
 
   // Determine what to show
@@ -384,6 +633,15 @@ export default function EvidencePage() {
   const validCompletedAgents = completedAgents.filter((c: AgentUpdate) =>
     validAgentsData.some(v => v.id === c.agent_id)
   );
+
+  /** Each specialist agent has received WS activity (running updates or terminal completion). */
+  const allForensicAgentsLive =
+    validAgentsData.length > 0 &&
+    validAgentsData.every(
+      (a) =>
+        Boolean(agentUpdates[a.id]) ||
+        validCompletedAgents.some((c: AgentUpdate) => c.agent_id === a.id)
+    );
 
   // In deep phase, unsupported agents never run — only count supported ones.
   // Only mark as unsupported if backend explicitly skipped or error says not applicable.
@@ -430,11 +688,54 @@ export default function EvidencePage() {
     Object.keys(agentUpdates).length > 0;
 
   const showUploadForm =
-    !isAutoStartPending.current &&
+    !autoStartBlocking &&
     (status === "idle" ||
       (status === "error" && !hasStartedAnalysis)) &&
     !isUploading &&
     !isRestoringRef.current;
+
+  // Dismiss landing-page loading overlay only when the stream is up and busy agents are live — or safety timeouts / errors.
+  useEffect(() => {
+    if (!showLoadingOverlay) return;
+
+    const fallbackMs = 45000;
+    const fallback = setTimeout(() => {
+      setShowLoadingOverlay(false);
+      sessionStorage.removeItem("fc_show_loading");
+    }, fallbackMs);
+
+    let successTimer: ReturnType<typeof setTimeout> | undefined;
+
+    if (analysisStreamReady && allForensicAgentsLive) {
+      successTimer = setTimeout(() => {
+        setShowLoadingOverlay(false);
+        sessionStorage.removeItem("fc_show_loading");
+      }, 400);
+    }
+
+    return () => {
+      clearTimeout(fallback);
+      if (successTimer) clearTimeout(successTimer);
+    };
+  }, [showLoadingOverlay, analysisStreamReady, allForensicAgentsLive]);
+
+  /** If upload/investigate failed while landing overlay is up, never trap the UI under a spinner. */
+  useEffect(() => {
+    if (showLoadingOverlay && validationError) {
+      setShowLoadingOverlay(false);
+      sessionStorage.removeItem("fc_show_loading");
+    }
+  }, [showLoadingOverlay, validationError]);
+
+  /** Stream is up but agent heartbeats are slow (e.g. stale duplicate session) — still reveal the workspace. */
+  useEffect(() => {
+    if (!showLoadingOverlay || !analysisStreamReady) return;
+    const t = setTimeout(() => {
+      setShowLoadingOverlay(false);
+      sessionStorage.removeItem("fc_show_loading");
+    }, 25000);
+    return () => clearTimeout(t);
+  }, [showLoadingOverlay, analysisStreamReady]);
 
   // Show agent progress for both phases
   const showAgentProgress = hasStartedAnalysis && !showUploadForm;
@@ -485,61 +786,36 @@ export default function EvidencePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-6 pb-20 overflow-x-hidden relative font-sans">
-      {/* Background gradient */}
-      <div className="fixed inset-0 bg-[radial-gradient(circle_at_50%_-20%,rgba(217,119,6,0.05),transparent_70%)] -z-50" />
+    <div className="min-h-screen text-foreground p-6 pb-20 overflow-x-hidden relative font-sans">
 
-      {/* Arbiter compiling overlay — shown when user accepts or views results */}
-      {showArbiterOverlay && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Council Arbiter deliberating"
-        >
-          <div
-            className="surface-panel-high flex flex-col items-center gap-5 px-8 py-9 shadow-[0_32px_80px_rgba(0,0,0,0.8),_0_0_0_1px_rgba(34,211,238,0.04)] max-w-sm w-full mx-4 rounded-2xl"
-          >
-            <div className="relative w-20 h-20 flex items-center justify-center">
-              <div
-                className="absolute inset-0 rounded-full blur-xl"
-                style={{ background: "rgba(34,211,238,0.3)" }}
-              />
-              <div
-                className="relative z-10 w-12 h-12 rounded-xl flex items-center justify-center shadow-lg"
-                style={{
-                  background: "rgba(34,211,238,0.08)",
-                  border: "1px solid rgba(34,211,238,0.22)",
-                  boxShadow: "0 0 20px rgba(34,211,238,0.15)"
-                }}
-              >
-                <ShieldCheck className="w-6 h-6 text-cyan-400" />
-              </div>
-            </div>
-            <div className="text-center space-y-1.5">
-              <h3 className="text-white font-bold text-lg tracking-tight">Arbiter Deliberation</h3>
-              <p className="text-[9px] font-mono uppercase tracking-widest font-bold" style={{ color: "rgba(34,211,238,0.45)" }}>
-                Synthesizing findings
-              </p>
-            </div>
-            <div className="relative w-full h-[2px] rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.05)" }}>
-              <div
-                role="progressbar"
-                aria-label="Arbiter deliberation progress"
-                className="absolute h-full w-[40%] rounded-full"
-                style={{ background: "#22D3EE", boxShadow: "0 0 12px rgba(34,211,238,0.7)" }}
-              />
-            </div>
-          </div>
-        </div>
+      {/* Loading overlay from landing page transition */}
+      {showLoadingOverlay && (
+        <LoadingOverlay
+          liveText={
+            uploadPhaseText ||
+            pipelineMessage ||
+            pipelineThinking ||
+            progressText ||
+            ""
+          }
+        />
       )}
 
-      {/* Header */}
-      <HeaderSection
-        status={status}
-        showBrowse={showUploadForm}
-        onBrowseClick={() => fileInputRef.current?.click()}
-      />
+      {/* Arbiter / ledger — live text from HTTP poll + WS until navigation */}
+      {showArbiterOverlay && (
+        <ForensicProgressOverlay
+          variant="council"
+          title="Council deliberation"
+          liveText={
+            arbiterLiveText ||
+            pipelineMessage ||
+            pipelineThinking ||
+            ""
+          }
+          telemetryLabel="Arbiter telemetry"
+          showElapsed
+        />
+      )}
 
       {/* Main content */}
       <main className="max-w-6xl mx-auto relative z-10">
@@ -604,6 +880,31 @@ export default function EvidencePage() {
               />
             </div>
           )}
+
+          {/* Never render a completely empty main — avoids “page not loading” when gates desync */}
+          {!showUploadForm &&
+            !showAgentProgress &&
+            !isRestoringRef.current &&
+            !(validationError || errorMessage) && (
+              <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 text-center px-6">
+                <p className="text-sm text-foreground/55 max-w-md">
+                  Initialising the evidence workspace. If this lingers, you can clear the landing
+                  loader and try again.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAutoStartBlocking(false);
+                    setShowLoadingOverlay(false);
+                    sessionStorage.removeItem("fc_show_loading");
+                    sessionStorage.removeItem("forensic_auto_start");
+                  }}
+                  className="text-[11px] font-mono font-bold uppercase tracking-widest text-cyan-400/90 hover:text-cyan-300 border border-cyan-500/30 rounded-full px-5 py-2.5 transition-colors"
+                >
+                  Reset loading &amp; continue
+                </button>
+              </div>
+            )}
         </>
       </PageTransition>
       </main>

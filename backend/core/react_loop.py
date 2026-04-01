@@ -19,11 +19,14 @@ from pydantic import BaseModel, Field, field_validator
 from core.config import Settings
 from core.custody_logger import CustodyLogger, EntryType
 from core.llm_client import LLMClient, LLMResponse, parse_llm_step
+from core.observability import get_tracer
 from core.structured_logging import get_logger
+from core.task_tool_config import get_task_tool_overrides
 from core.tool_registry import ToolRegistry, ToolResult
 from core.working_memory import WorkingMemory, WorkingMemoryState
 
 logger = get_logger(__name__)
+_tracer = get_tracer("forensic-council.react_loop")
 
 
 class ReActStepType(str, Enum):
@@ -149,12 +152,16 @@ class AgentFinding(BaseModel):
         ..., ge=0.0, le=1.0,
         description="Raw confidence score (0-1)"
     )
-    calibrated_probability: float | None = Field(
+    raw_confidence_score: float | None = Field(
         default=None, ge=0.0, le=1.0,
-        description="Calibrated confidence probability (0-1), None if not calibrated"
+        description="Rescaled confidence score (Platt sigmoid), None if not rescaled"
     )
     calibrated: bool = Field(
         default=False, description="Whether confidence has been calibrated"
+    )
+    calibration_status: str = Field(
+        default="UNCALIBRATED",
+        description="TRAINED if parameters were fitted to data, UNCALIBRATED if engineering defaults"
     )
     status: Literal["CONFIRMED", "CONTESTED", "INCONCLUSIVE", "INCOMPLETE"] = Field(
         default="CONFIRMED", description="Finding status"
@@ -455,160 +462,16 @@ class ReActLoopEngine:
     - Full audit logging to chain of custody
     """
 
-    # Explicit task→tool mapping for reliable matching
-    _TASK_TOOL_OVERRIDES: dict[str, str] = {
-        # --- Specific/Long Phrases First ---
-        "run gemini deep forensic analysis": "gemini_deep_forensic",
-        "gemini deep forensic analysis": "gemini_deep_forensic",
-        "run adversarial robustness check": "adversarial_robustness_check",
-        "adversarial robustness check": "adversarial_robustness_check",
-        "run document authenticity analysis": "document_authenticity",
-        "document authenticity analysis": "document_authenticity",
-        "run image splicing detection": "image_splice_check",
-        "image splicing detection": "image_splice_check",
-        "run camera noise fingerprint": "noise_fingerprint",
-        "camera noise fingerprint": "noise_fingerprint",
-        "noise fingerprint analysis": "noise_fingerprint",
-        "run scene-level contextual incongruence": "scene_incongruence",
-        "scene-level contextual incongruence": "scene_incongruence",
-        "contextual incongruence": "scene_incongruence",
-        "ocr on detected object": "object_text_ocr",
-        "extract text from objects": "object_text_ocr",
-        "extract license plates": "object_text_ocr",
-        "scale and proportion": "scale_validation",
-        "lighting and shadow consistency": "lighting_consistency",
-        "shadow consistency": "lighting_consistency",
-        "secondary classification pass": "secondary_classification",
-        "refine classification": "secondary_classification",
-        "deepfake frequency check": "deepfake_frequency_check",
-        "frequency-domain gan": "deepfake_frequency_check",
-        "frequency domain analysis": "frequency_domain_analysis",
-        "run full-image ela": "ela_full_image",
-        "ela anomaly block classification": "ela_anomaly_classify",
-        "jpeg ghost detection": "jpeg_ghost_detect",
-        "verify file hash": "file_hash_verify",
-        "speaker diarization": "speaker_diarize",
-        "anti-spoofing detection": "anti_spoofing_detect",
-        "prosody analysis": "prosody_analyze",
-        "splice point detection": "audio_splice_detect",
-        "background noise consistency": "background_noise_analysis",
-        "codec fingerprinting": "codec_fingerprinting",
-        "optical flow": "optical_flow_analysis",
-        "frame-to-frame consistency": "frame_consistency_analysis",
-        "face-swap detection": "face_swap_detection",
-        "extract all exif": "exif_extract",
-        "gps coordinates against timestamp": "gps_timezone_validate",
-        "steganography scan": "steganography_scan",
-        "file structure forensic": "file_structure_analysis",
-        "hexadecimal software signature": "hex_signature_scan",
-        "full-scene primary object detection": "object_detection",
-        "primary object detection": "object_detection",
-        "full-scene object detection": "object_detection",
+    # Task→tool mapping loaded from config/task_tool_overrides.yaml.
+    # Accessed via property so the YAML is loaded lazily on first use.
+    _TASK_TOOL_OVERRIDES_CACHE: dict[str, str] | None = None
 
-        # --- General Keywords (Catch-alls) ---
-        "adversarial robustness": "adversarial_robustness_check",
-        "adversarial check": "adversarial_robustness_check",
-        "document authenticity": "document_authenticity",
-        "document forgery": "document_authenticity",
-        "font inconsistency": "document_authenticity",
-        "image splice check": "image_splice_check",
-        "splicing detection": "image_splice_check",
-        "prnu analysis": "noise_fingerprint",
-        "scene incongruence": "scene_incongruence",
-        "lighting consistency": "lighting_consistency",
-        "scale validation": "scale_validation",
-        "proportion validation": "scale_validation",
-        "secondary classification": "secondary_classification",
-        "object detection": "object_detection",
-        "detect objects": "object_detection",
-        "contraband database": "contraband_database",
-        "weapons database": "contraband_database",
-        "contraband": "contraband_database",
-        "gemini deep": "gemini_deep_forensic",
-        "deep forensic": "gemini_deep_forensic",
-        "gemini forensic": "gemini_deep_forensic",
-        # Missing entries from bug report
-        "semantic image understanding": "analyze_image_content",
-        "copy-move forgery": "copy_move_detect",
-        "extract visible text": "extract_text_from_image",
-        "audio-visual sync": "audio_visual_sync",
-        "splicing detection on objects": "image_splice_check",
-        "noise fingerprint analysis for region": "noise_fingerprint",
-        "noise footprint analysis": "noise_fingerprint",
-        "perceptual hash": "perceptual_hash",
-        "ml metadata anomaly": "metadata_anomaly_score",
-        "astronomical api": "astronomical_api",
-        "reverse image search": "reverse_image_search",
-        "device fingerprint database": "device_fingerprint_db",
-        "inter-agent call": "inter_agent_call",
-        "ml-based image splicing": "image_splice_check",
-        "camera noise fingerprint analysis": "noise_fingerprint",
-        # OCR
-        "extract evidence text": "extract_evidence_text",
-        "ocr text extraction": "extract_evidence_text",
-        "text from pdf": "extract_evidence_text",
-        "extract text from pdf": "extract_evidence_text",
-        "extract text from image": "extract_text_from_image",
-        # AV container
-        "mediainfo": "mediainfo_profile",
-        "av container profiling": "mediainfo_profile",
-        "container profile": "mediainfo_profile",
-        "av file identity": "av_file_identity",
-        "av pre-screen": "av_file_identity",
-        "variable frame rate": "mediainfo_profile",
-        # Agent 5 - Timestamp Analysis
-        "timestamp analysis": "timestamp_analysis",
-        "timestamp consistency": "timestamp_analysis",
-        # Agent 5 - Deep metadata
-        "deep metadata": "extract_deep_metadata",
-        "physical address": "get_physical_address",
-        # Agent 4 - Video Analysis
-        "optical flow analysis": "optical_flow_analysis",
-        "temporal anomaly": "optical_flow_analysis",
-        "frame extraction": "frame_extraction",
-        "frame window": "frame_extraction",
-        "anomaly as explainable": "anomaly_classification",
-        "anomaly classification": "anomaly_classification",
-        "rolling shutter": "rolling_shutter_validation",
-        "face swap": "face_swap_detection",
-        "gan artifact detection": "deepfake_frequency_check",
-        # Gemini vision tools (Agents 1, 3, 5 deep pass)
-        "gemini vision analysis: identify file content": "gemini_identify_content",
-        "gemini vision cross-validation": "gemini_cross_validate_manipulation",
-        "gemini vision analysis: deep object": "gemini_object_scene_analysis",
-        "gemini vision analysis: cross-validate visual content": "gemini_metadata_visual_consistency",
-        # Gemini catch-alls
-        "deep forensic analysis": "gemini_deep_forensic",
-        "identify content type, extract all text": "gemini_deep_forensic",
-        "identify interfaces": "gemini_deep_forensic",
-        "gemini vision": "gemini_deep_forensic",  # fallback for any gemini task
-        # Audio splice (Agent 2)
-        "audio splice": "audio_splice_detect",
-        "splice point": "audio_splice_detect",
-        # New tools added
-        "prnu camera sensor fingerprint": "prnu_analysis",
-        "prnu analysis": "prnu_analysis",
-        "cross-region source inconsistency": "prnu_analysis",
-        "cfa demosaicing": "cfa_demosaicing",
-        "cfa pattern consistency": "cfa_demosaicing",
-        "color filter array": "cfa_demosaicing",
-        "voice clone": "voice_clone_detect",
-        "ai speech synthesis detection": "voice_clone_detect",
-        "synthetic speech": "voice_clone_detect",
-        "enf analysis": "enf_analysis",
-        "electrical network frequency": "enf_analysis",
-        "enf splice": "enf_analysis",
-        "recording timestamp": "enf_analysis",
-        "ocr on detected object": "object_text_ocr",
-        "license plates": "object_text_ocr",
-        "object regions": "object_text_ocr",
-        "c2pa": "c2pa_verify",
-        "content credentials": "c2pa_verify",
-        "provenance chain": "c2pa_verify",
-        "thumbnail mismatch": "thumbnail_mismatch",
-        "embedded thumbnail": "thumbnail_mismatch",
-        "post-capture editing evidence": "thumbnail_mismatch",
-    }
+    @classmethod
+    def _get_task_tool_overrides(cls) -> dict[str, str]:
+        """Load task→tool overrides from YAML config (cached)."""
+        if cls._TASK_TOOL_OVERRIDES_CACHE is None:
+            cls._TASK_TOOL_OVERRIDES_CACHE = get_task_tool_overrides()
+        return cls._TASK_TOOL_OVERRIDES_CACHE
 
     def __init__(
         self,
@@ -677,14 +540,19 @@ class ReActLoopEngine:
         except Exception:
             state = None
 
+        with _tracer.start_as_current_span("react_loop.run") as _loop_span:
+            _loop_span.set_attribute("agent_id", self.agent_id)
+            _loop_span.set_attribute("session_id", str(self.session_id))
+            _loop_span.set_attribute("iteration_ceiling", self.iteration_ceiling)
+
         # Create initial THOUGHT step
-        initial_step = ReActStep(
-            step_type="THOUGHT",
-            content=initial_thought,
-            iteration=0
-        )
-        self._react_chain.append(initial_step)
-        await self._log_step(initial_step)
+            initial_step = ReActStep(
+                step_type="THOUGHT",
+                content=initial_thought,
+                iteration=0
+            )
+            self._react_chain.append(initial_step)
+            await self._log_step(initial_step)
         
         self._current_iteration = 0
 
@@ -767,13 +635,19 @@ class ReActLoopEngine:
 
             # Handle ACTION steps
             if next_step.step_type == "ACTION" and next_step.tool_name:
-                tool_result = await tool_registry.call(
-                    tool_name=next_step.tool_name,
-                    input_data=next_step.tool_input or {},
-                    agent_id=self.agent_id,
-                    session_id=self.session_id,
-                    custody_logger=self.custody_logger
-                )
+                with _tracer.start_as_current_span("react_loop.tool_call") as _tool_span:
+                    _tool_span.set_attribute("tool_name", next_step.tool_name)
+                    _tool_span.set_attribute("agent_id", self.agent_id)
+                    _tool_span.set_attribute("iteration", self._current_iteration)
+                    tool_result = await tool_registry.call(
+                        tool_name=next_step.tool_name,
+                        input_data=next_step.tool_input or {},
+                        agent_id=self.agent_id,
+                        session_id=self.session_id,
+                        custody_logger=self.custody_logger
+                    )
+                    _tool_span.set_attribute("tool_success", tool_result.success)
+                    _tool_span.set_attribute("tool_unavailable", tool_result.unavailable)
 
                 # --- Generate AgentFinding from Tool Result ---
                 if tool_result.success:
@@ -863,6 +737,9 @@ class ReActLoopEngine:
                     is_stub = isinstance(output, dict) and (output.get("status") == "stub" or output.get("court_defensible") is False)
                     calibrated_prob = None
                     
+                    cal_status_str = "UNCALIBRATED"
+                    _ci_dict = None
+                    _uncertainty = None
                     try:
                         from core.calibration import get_calibration_layer
                         calibration_layer = get_calibration_layer()
@@ -872,7 +749,10 @@ class ReActLoopEngine:
                                 raw_score=confidence,
                                 finding_class=next_step.tool_name
                             )
-                            calibrated_prob = cal_result.calibrated_probability
+                            calibrated_prob = cal_result.raw_confidence_score
+                            cal_status_str = cal_result.calibration_status.value
+                            _ci_dict = cal_result.confidence_interval
+                            _uncertainty = cal_result.uncertainty
                     except Exception:
                         pass
     
@@ -979,8 +859,9 @@ class ReActLoopEngine:
                         agent_name=_AGENT_ID_TO_NAME.get(self.agent_id, self.agent_id),
                         finding_type=task_desc,
                         confidence_raw=confidence,
-                        calibrated_probability=calibrated_prob,
+                        raw_confidence_score=calibrated_prob,
                         calibrated=calibrated_prob is not None,
+                        calibration_status=cal_status_str,
                         status=status_val,
                         evidence_refs=[],
                         reasoning_summary=self._build_readable_summary(
@@ -990,10 +871,34 @@ class ReActLoopEngine:
                             "tool_name": next_step.tool_name,
                             "court_defensible": not is_stub,
                             "stub_warning": output.get("warning") if isinstance(output, dict) and is_stub else None,
+                            "confidence_interval": _ci_dict,
+                            "uncertainty": _uncertainty.model_dump() if _uncertainty else None,
                             **(output if isinstance(output, dict) else {"raw_output": str(output)}),
                         },
                     )
                     self._findings.append(finding)
+
+                    # Check for epistemic uncertainty escalation (arXiv:2512.16614)
+                    if _uncertainty and _uncertainty.should_escalate:
+                        logger.warning(
+                            "Epistemic uncertainty escalation triggered",
+                            agent_id=self.agent_id,
+                            tool_name=next_step.tool_name,
+                            epistemic=_uncertainty.epistemic_uncertainty,
+                            reason=_uncertainty.escalation_reason,
+                        )
+                        # Write escalation flag to working memory
+                        try:
+                            await self.working_memory.update_state(
+                                session_id=self.session_id,
+                                agent_id=self.agent_id,
+                                updates={
+                                    "tribunal_escalation": True,
+                                    "escalation_reason": _uncertainty.escalation_reason,
+                                },
+                            )
+                        except Exception:
+                            pass
                 # ----------------------------------------------
 
                 # Create OBSERVATION step
@@ -1154,6 +1059,10 @@ class ReActLoopEngine:
         for task in state.tasks:
             if hasattr(task, 'severity_threshold') and task.severity_threshold:
                 return HITLCheckpointReason.SEVERITY_THRESHOLD_BREACH
+
+        # Check for tribunal escalation flag (set by epistemic uncertainty check)
+        if getattr(state, 'tribunal_escalation', False):
+            return HITLCheckpointReason.TRIBUNAL_ESCALATION
 
         return None
 
@@ -1455,8 +1364,8 @@ class ReActLoopEngine:
         """
         task_lower = task_description.lower().strip()
 
-        # First check explicit overrides
-        for keyword, tool_name in ReActLoopEngine._TASK_TOOL_OVERRIDES.items():
+        # First check explicit overrides (loaded from YAML config)
+        for keyword, tool_name in ReActLoopEngine._get_task_tool_overrides().items():
             if keyword in task_lower:
                 matched = next((t for t in tools if t.name == tool_name), None)
                 if matched:
@@ -2009,52 +1918,34 @@ class ReActLoopEngine:
             
             if isinstance(value, list):
                 if len(value) > 5:
-                    highlights.append(f"a total of {len(value)} {clean_key}")
+                    highlights.append(f"{len(value)} {clean_key}")
                 else:
                     items = ", ".join(str(v) for v in value)
                     if items:
-                        highlights.append(f"the following {clean_key}: {items}")
+                        highlights.append(f"{clean_key}: {items}")
                 continue
                 
             if isinstance(value, dict):
                 continue
                 
             if isinstance(value, bool):
-                highlights.append(f"a {clean_key} status of {'Positive' if value else 'Negative'}")
+                highlights.append(f"{clean_key}: {'yes' if value else 'no'}")
             elif isinstance(value, float):
-                highlights.append(f"a {clean_key} metric of {value:.4f}")
+                highlights.append(f"{clean_key} {value:.3f}")
             elif isinstance(value, int):
-                highlights.append(f"a {clean_key} count of {value}")
+                highlights.append(f"{clean_key} {value}")
             elif isinstance(value, str) and len(value) < 200:
-                highlights.append(f"a {clean_key} value of '{value}'")
+                highlights.append(f"{clean_key}: {value}")
 
         if highlights:
-            # Join with commas and "and" for the last item
-            detail = ""
-            if len(highlights) == 1:
-                detail = highlights[0]
-            elif len(highlights) == 2:
-                detail = f"{highlights[0]} and {highlights[1]}"
-            else:
-                top_highlights = highlights[:5]
-                detail = ", ".join(top_highlights)
-                if len(highlights) > 5:
-                    detail += ", among other data points"
-                else:
-                    last_comma = detail.rfind(",")
-                    if last_comma != -1:
-                        detail = detail[:last_comma] + ", and" + detail[last_comma + 1:]
-
-            return (
-                f"{tool_label}: The agent executed a specialized scan and successfully extracted the following metrics: "
-                f"It identified {detail}. "
-                f"This data evaluates to a {status} finding with a diagnostic certainty of {confidence:.0%}."
-            )
+            # Show top 4 metrics concisely
+            top = highlights[:4]
+            detail = "; ".join(top)
+            if len(highlights) > 4:
+                detail += f" (+{len(highlights) - 4} more)"
+            return f"{tool_label}: {detail}."
         else:
-            return (
-                f"{tool_label}: The agent executed a specialized scan and completely analyzed the evidence, finding no notable specific metrics to highlight. "
-                f"This yields a {status} status, maintaining a diagnostic certainty of {confidence:.0%}."
-            )
+            return f"{tool_label}: analysis complete — no anomalies detected."
 
     def _format_tool_result(self, result: ToolResult) -> str:
         """Format a tool result for observation content."""

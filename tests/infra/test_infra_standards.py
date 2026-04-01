@@ -154,7 +154,7 @@ class TestManifestsAndEnv:
             assert var in text, f"Env var {var} not documented in .env.example"
 
     def test_project_versions_sync(self):
-        """Ensure v1.0.4 is reflected across all manifests."""
+        """Ensure versions are consistent across all manifests."""
         backend_toml = read_text(BACKEND_DIR / "pyproject.toml")
         frontend_pkg = json.loads(read_text(FRONTEND_DIR / "package.json"))
         
@@ -162,8 +162,10 @@ class TestManifestsAndEnv:
         version_match = re.search(r'version\s*=\s*"(.*?)"', backend_toml)
         backend_version = version_match.group(1) if version_match else None
         
-        assert backend_version == "1.0.4"
-        assert frontend_pkg.get("version") == "1.0.4"
+        assert backend_version is not None, "Could not extract version from pyproject.toml"
+        assert frontend_pkg.get("version") == backend_version, (
+            f"Version mismatch: backend={backend_version}, frontend={frontend_pkg.get('version')}"
+        )
 
     def test_frontend_jest_config_exists(self):
         assert (FRONTEND_DIR / "jest.config.ts").exists() or (FRONTEND_DIR / "jest.config.mjs").exists()

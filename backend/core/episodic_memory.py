@@ -346,6 +346,74 @@ class EpisodicMemory:
         
         return entries
 
+    async def retrieve_similar_cases(
+        self,
+        signature_type: Optional[ForensicSignatureType] = None,
+        finding_type: Optional[str] = None,
+        exclude_session_id: Optional[UUID] = None,
+        top_k: int = 5,
+    ) -> list[EpisodicEntry]:
+        """
+        Retrieve similar past forensic entries for context injection.
+
+        Uses filter-based scroll (no vector query needed) to find entries
+        matching the given signature_type and/or finding_type from previous
+        investigations. Excludes entries from the current session.
+
+        Args:
+            signature_type: Filter by forensic signature type
+            finding_type: Filter by finding type substring match
+            exclude_session_id: Exclude entries from this session (current investigation)
+            top_k: Maximum number of results
+
+        Returns:
+            List of matching EpisodicEntry objects from past investigations
+        """
+        if not await self.ensure_collection():
+            return []
+
+        assert self._qdrant is not None
+
+        # Build filter conditions
+        conditions: dict[str, Any] = {}
+        if signature_type:
+            conditions["signature_type"] = signature_type.value
+
+        try:
+            results = await self._qdrant.scroll(
+                collection_name=EPISODIC_MEMORY_COLLECTION,
+                filter_conditions=conditions if conditions else None,
+                limit=top_k * 3,  # Over-fetch to account for filtering
+            )
+        except Exception as e:
+            logger.debug("EpisodicMemory.retrieve_similar_cases: scroll failed", error=str(e))
+            return []
+
+        entries = []
+        for result in results:
+            payload = result.get("payload", {})
+            # Skip entries from current session
+            if exclude_session_id and payload.get("session_id") == str(exclude_session_id):
+                continue
+            # Optional finding_type substring match
+            if finding_type and finding_type.lower() not in payload.get("finding_type", "").lower():
+                continue
+            try:
+                entries.append(EpisodicEntry.from_dict(payload))
+            except Exception:
+                continue
+            if len(entries) >= top_k:
+                break
+
+        if entries:
+            logger.info(
+                "Retrieved similar cases from episodic memory",
+                result_count=len(entries),
+                signature_type=signature_type.value if signature_type else None,
+            )
+
+        return entries
+
 
 # Singleton instance
 _episodic_memory: Optional[EpisodicMemory] = None

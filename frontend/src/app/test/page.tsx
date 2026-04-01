@@ -1,18 +1,17 @@
 "use client";
-import * as THREE from 'three';
 import { useEffect, useState } from 'react';
 
 export default function TestPage() {
-  const [version, setVersion] = useState<string>('loading...');
+  const [status, setStatus] = useState<string>('loading...');
 
   useEffect(() => {
-    setVersion(THREE.REVISION);
+    setStatus('OK — no three.js dependency');
   }, []);
 
   return (
     <div className="p-10 font-mono">
-      <h1>Three.js Resolution Test</h1>
-      <p>Version: {version}</p>
+      <h1>System Test</h1>
+      <p>Status: {status}</p>
     </div>
   );
 }

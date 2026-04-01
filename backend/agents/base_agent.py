@@ -431,8 +431,15 @@ class ForensicAgent(ABC):
         # Step 4: Check tool availability
         await self._check_tool_availability()
         
+        # Step 4b: Retrieve episodic memory context for injection into initial thought
+        self._episodic_context = await self._retrieve_episodic_context()
+        
         # Step 5: Build initial thought
         initial_thought = await self.build_initial_thought()
+
+        # Inject episodic memory context if available
+        if getattr(self, "_episodic_context", ""):
+            initial_thought = f"{initial_thought}\n\n{self._episodic_context}"
         
         # Step 6: Run ReAct loop engine
         loop_engine = ReActLoopEngine(
@@ -696,6 +703,60 @@ class ForensicAgent(ABC):
                 agent_id=self.agent_id,
                 unavailable=[t.name for t in unavailable_tools],
             )
+
+    async def _retrieve_episodic_context(self) -> str:
+        """
+        Retrieve relevant context from episodic memory for injection into the
+        initial thought. Queries for similar forensic findings from past
+        investigations to provide retrieval-augmented context.
+
+        Returns:
+            A formatted string of relevant past findings, or empty string if none.
+        """
+        try:
+            # Map agent_id to relevant signature types
+            _AGENT_SIGNATURE_MAP = {
+                "Agent1": [ForensicSignatureType.MANIPULATION_SIGNATURE],
+                "Agent2": [ForensicSignatureType.AUDIO_ARTIFACT],
+                "Agent3": [ForensicSignatureType.OBJECT_DETECTION],
+                "Agent4": [ForensicSignatureType.VIDEO_ARTIFACT],
+                "Agent5": [ForensicSignatureType.DEVICE_FINGERPRINT, ForensicSignatureType.METADATA_PATTERN],
+            }
+            sig_types = _AGENT_SIGNATURE_MAP.get(self.agent_id, [])
+
+            all_entries: list = []
+            for sig_type in sig_types:
+                entries = await self.episodic_memory.retrieve_similar_cases(
+                    signature_type=sig_type,
+                    exclude_session_id=self.session_id,
+                    top_k=3,
+                )
+                all_entries.extend(entries)
+
+            if not all_entries:
+                return ""
+
+            # Format for prompt injection
+            lines = ["== RELEVANT PAST INVESTIGATIONS (from episodic memory) =="]
+            for i, entry in enumerate(all_entries[:5], 1):
+                lines.append(
+                    f"  {i}. [{entry.signature_type.value}] {entry.finding_type} "
+                    f"(confidence: {entry.confidence:.2f}, case: {entry.case_id}): "
+                    f"{entry.summary[:200]}"
+                )
+            lines.append(
+                "These findings are from prior cases. Use them as contextual reference "
+                "but do NOT assume the same conclusions apply to the current evidence."
+            )
+            return "\n".join(lines)
+
+        except Exception as e:
+            logger.debug(
+                "Episodic context retrieval failed (non-blocking)",
+                agent_id=self.agent_id,
+                error=str(e),
+            )
+            return ""
     
     async def _record_tool_result(self, tool_name: str, result: dict) -> None:
         """
@@ -997,7 +1058,7 @@ class ForensicAgent(ABC):
         deep_findings    = [f for f in self._findings
                             if f.metadata.get("analysis_phase", "initial") == "deep"]
         target_findings  = deep_findings if phase == "deep" and deep_findings else self._findings
-        digest_findings  = target_findings[:18]   # raised ceiling to cover all tools
+        digest_findings  = target_findings  # no ceiling — include all tools so nothing is lost
 
         # ── Build tool→finding index ──────────────────────────────────────────
         tool_to_findings: dict[str, list] = {}
@@ -1197,8 +1258,8 @@ Be CONCISE — target ≤1400 tokens total. Respond ONLY with valid JSON (no mar
             raw_response = await llm_client.generate_synthesis(
                 system_prompt=system_prompt,
                 user_content=user_content,
-                max_tokens=1500,  # 3 agents × 1500 = 4500 TPM, within Groq free tier
-                timeout_override=25.0,
+                max_tokens=2500,  # increased to cover all tool groups without truncation
+                timeout_override=30.0,
             )
         except Exception as groq_err:
             logger.warning(f"Groq synthesis API call failed: {groq_err}",
@@ -1248,8 +1309,16 @@ Be CONCISE — target ≤1400 tokens total. Respond ONLY with valid JSON (no mar
                     sections_out[sid] = sec
 
             # ── Apply section analyses back to findings ────────────────────────
+            # Preserve the original per-tool summary before overwriting with
+            # group-level synthesis text.  This ensures we always have the
+            # granular tool-specific summary available even if LLM synthesis
+            # returns weak or missing prose.
             synthesized = 0
             for f in digest_findings:
+                # Save the raw tool-level summary before synthesis overwrites it
+                if "raw_tool_summary" not in f.metadata:
+                    f.metadata["raw_tool_summary"] = f.reasoning_summary
+
                 tname = f.metadata.get("tool_name", "")
                 gid   = tool_to_group_id.get(tname, "other")
                 sec   = sections_out.get(gid) or sections_out.get("other")
@@ -1261,7 +1330,10 @@ Be CONCISE — target ≤1400 tokens total. Respond ONLY with valid JSON (no mar
                 sec_flag    = sec.get("flag", "info")
                 sec_label   = sec.get("label", "")
 
-                if analysis:
+                # Only overwrite the reasoning_summary if the LLM produced
+                # substantive analysis text (>= 20 chars).  Short/empty responses
+                # keep the original per-tool summary which is always informative.
+                if analysis and len(analysis) >= 20:
                     f.reasoning_summary = analysis
                     synthesized += 1
 

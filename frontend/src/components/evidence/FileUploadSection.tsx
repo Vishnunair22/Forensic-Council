@@ -126,11 +126,18 @@ export function FileUploadSection({
         /* File selected – preview + action buttons */
         <div
           className="w-full glass-ethereal rounded-[2rem] overflow-hidden relative"
+          style={{
+            background: "rgba(255,255,255,0.02)",
+            backdropFilter: "blur(24px)",
+            WebkitBackdropFilter: "blur(24px)",
+            border: "1px solid rgba(255,255,255,0.06)",
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 40px rgba(0,0,0,0.2)",
+          }}
         >
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
 
           {/* Preview */}
-          <div className="relative w-full bg-black/40" style={{ minHeight: "200px" }}>
+          <div className="relative w-full" style={{ minHeight: "200px", background: "rgba(0,0,0,0.2)" }}>
             {file.type.startsWith("image/") && (
               /* eslint-disable-next-line @next/next/no-img-element -- Dynamic blob URL preview */
               <img
@@ -183,7 +190,7 @@ export function FileUploadSection({
             </div>
           </div>
 
-          <div className="flex gap-3 p-4 bg-black/40 border-t border-white/[0.08] relative">
+          <div className="flex gap-3 p-4 relative" style={{ background: "rgba(0,0,0,0.15)", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
             <button
               onClick={() => { playSound("click"); onClear(); }}
               disabled={isUploading}
@@ -220,12 +227,18 @@ export function FileUploadSection({
           tabIndex={0}
           aria-label="Upload evidence file. Click or drag and drop an image, video, or audio file here."
           className={clsx(
-            "surface-panel-high w-full group overflow-hidden border-2 border-dashed rounded transition-all duration-700 relative cursor-pointer",
+            "w-full group overflow-hidden border-2 border-dashed rounded transition-all duration-700 relative cursor-pointer",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50 focus-visible:ring-offset-8 focus-visible:ring-offset-background",
             isDragging
-              ? "border-cyan-400 bg-cyan-500/5 scale-[1.01]"
+              ? "border-cyan-400 scale-[1.01]"
               : "border-white/5 hover:border-cyan-500/35"
           )}
+          style={{
+            background: isDragging ? "rgba(34,211,238,0.04)" : "rgba(255,255,255,0.02)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03), 0 4px 24px rgba(0,0,0,0.15)",
+          }}
           onClick={() => { playSound("click"); fileInputRef.current?.click(); }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
@@ -261,8 +274,8 @@ export function FileUploadSection({
 
             <div className="flex gap-2 flex-wrap justify-center">
               {["IMAGE", "VIDEO", "AUDIO"].map(t => (
-                <span key={t} className="px-2.5 py-0.5 bg-surface-mid border border-border-subtle
-                  rounded text-[9px] font-mono text-foreground/30 tracking-widest uppercase transition-colors group-hover:border-border-bold group-hover:text-foreground/60 font-bold">
+                <span key={t} className="px-2.5 py-0.5 rounded text-[9px] font-mono text-foreground/30 tracking-widest uppercase transition-colors group-hover:text-foreground/60 font-bold"
+                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
                   {t}
                 </span>
               ))}

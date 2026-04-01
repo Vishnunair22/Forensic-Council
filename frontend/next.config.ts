@@ -1,6 +1,23 @@
 import type { NextConfig } from "next";
 import path from "path";
 
+/**
+ * Chrome DevTools maps stack frames using source-map `sources` paths. Unescaped
+ * spaces (e.g. `D:/Forensic Council/...`) are rejected as "illegal path"; encode
+ * each segment except the Windows drive prefix.
+ */
+function devtoolModulePathForChrome(absoluteResourcePath: string): string {
+  const forward = absoluteResourcePath.replace(/\\/g, "/");
+  return forward
+    .split("/")
+    .map((segment) => {
+      if (segment === "") return segment;
+      if (/^[a-zA-Z]:$/.test(segment)) return segment;
+      return encodeURIComponent(segment);
+    })
+    .join("/");
+}
+
 const nextConfig: NextConfig = {
   // ── Output ────────────────────────────────────────────────────────────────
   // Standalone mode: copies only required files into .next/standalone,
@@ -65,14 +82,14 @@ const nextConfig: NextConfig = {
         poll: 800,
         aggregateTimeout: 300,
       };
-      // Normalise Windows backslash paths to forward slashes in source maps.
-      // Without this, Chrome receives paths like "d:\Forensic Council\src\..."
-      // which it treats as invalid filesystem URIs and logs:
-      // "Unable to add filesystem: <illegal path>"
+      // Normalise Windows paths for Chrome source-map workspace: forward slashes
+      // plus URL-encoded segments (spaces in folders like "Forensic Council" break
+      // DevTools otherwise). Only applies to `next dev --webpack` (not Turbopack).
       config.output = {
         ...config.output,
-        devtoolModuleFilenameTemplate: (info: { absoluteResourcePath: string }) =>
-          info.absoluteResourcePath.replace(/\\/g, "/"),
+        devtoolModuleFilenameTemplate: (info: {
+          absoluteResourcePath: string;
+        }) => devtoolModulePathForChrome(info.absoluteResourcePath),
       };
     }
     return config;

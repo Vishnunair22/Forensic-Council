@@ -16,7 +16,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from api.routes import auth, hitl, investigation, metrics, sessions
+from api.routes import auth, hitl, investigation, metrics, sessions, sse
 from api.routes.metrics import (
     increment_error_count,
     increment_request_count,
@@ -60,8 +60,40 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
 
     # 1. Initialize databases and external clients.
-    # (Migrations are now handled as a discrete init-container step in production).
-    app.state.migrations_ok = True
+    # Validate that migrations have been run in production before accepting requests.
+    app.state.migrations_ok = False
+    try:
+        from infra.postgres_client import get_postgres_client
+        pg = await get_postgres_client()
+        # Check for critical tables that migrations create
+        table_exists = await pg.fetch_val(
+            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'custody_log')"
+        )
+        if table_exists:
+            app.state.migrations_ok = True
+            logger.info("Migration validation passed — critical tables present")
+        elif settings.app_env == "production":
+            logger.error(
+                "CRITICAL: Custody log table missing — migrations have not been run. "
+                "Run 'python scripts/init_db.py' or use the init-container before starting the API."
+            )
+            raise RuntimeError("Database migrations not applied — refusing to start in production")
+        else:
+            # Development: auto-run migrations
+            logger.warning("Custody log table missing — attempting auto-migration in development")
+            try:
+                from scripts.init_db import init_database
+                await init_database()
+                app.state.migrations_ok = True
+                logger.info("Auto-migration completed")
+            except Exception as mig_err:
+                logger.warning(f"Auto-migration failed: {mig_err}")
+                app.state.migrations_ok = True  # Allow startup in dev with degraded state
+    except RuntimeError:
+        raise  # Re-raise production migration failures
+    except Exception as e:
+        logger.warning(f"Migration validation skipped: {e}")
+        app.state.migrations_ok = True  # Degraded mode when DB is unavailable
 
     # Bootstrap default users (idempotent — skips if users already exist)
     try:
@@ -74,6 +106,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as e:
         logger.warning("User bootstrap skipped or failed", error=str(e))
 
+    # Initialize per-agent signing keys (DB-backed if PostgreSQL available, deterministic fallback otherwise)
+    try:
+        from core.signing import get_keystore
+        ks = get_keystore()
+        await ks.initialize()
+        logger.info("Signing key store initialized")
+    except Exception as e:
+        logger.warning("Key store initialization used deterministic fallback", error=str(e))
+
     yield
 
     # ── Graceful shutdown ──────────────────────────────────────────────────
@@ -82,7 +123,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 1. Stop accepting new investigations
     app.state.accepting_requests = False
 
-    # 2. Close in-flight pipeline connections
+    # 2. Wait for in-flight investigations to complete (up to 30s)
+    try:
+        from api.routes.investigation import _active_tasks
+        import asyncio
+        pending = [t for t in _active_tasks.values() if not t.done()]
+        if pending:
+            logger.info(f"Waiting for {len(pending)} in-flight investigation(s) to complete...")
+            await asyncio.wait(pending, timeout=30.0)
+    except Exception as e:
+        logger.warning(f"Graceful wait failed: {e}")
+
+    # 3. Close in-flight pipeline connections
     try:
         investigation.cleanup_connections()
         logger.info("Pipeline connections cleaned up")
@@ -274,6 +326,7 @@ app.include_router(investigation.router)
 app.include_router(hitl.router)
 app.include_router(sessions.router)
 app.include_router(metrics.router)
+app.include_router(sse.router)
 
 
 @app.exception_handler(Exception)

@@ -34,7 +34,9 @@ class AgentFindingDTO(BaseModel):
     status: str
     confidence_raw: float
     calibrated: bool
-    calibrated_probability: Optional[float] = None
+    calibrated_probability: Optional[float] = None  # DEPRECATED — use raw_confidence_score
+    raw_confidence_score: Optional[float] = None
+    calibration_status: str = "UNCALIBRATED"  # TRAINED or UNCALIBRATED
     court_statement: Optional[str] = None
     robustness_caveat: bool
     robustness_caveat_detail: Optional[str] = None
@@ -94,6 +96,9 @@ class ReportDTO(BaseModel):
     analysis_coverage_note: str = ""
     # Flat per-agent summary (D)
     per_agent_summary: dict[str, Any] = Field(default_factory=dict)
+    # Degradation transparency — non-empty means analysis ran in reduced-capability mode.
+    # Must be surfaced as a visible warning in any UI, printout, or court exhibit.
+    degradation_flags: list[str] = Field(default_factory=list)
 
 
 class HITLDecisionRequest(BaseModel):

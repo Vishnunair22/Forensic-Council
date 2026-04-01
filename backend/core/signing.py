@@ -4,6 +4,26 @@ Cryptographic Signing Module
 
 Provides ECDSA P-256 signing and verification for chain-of-custody entries.
 Ensures tamper-evident audit trail for all forensic operations.
+
+Key Management Strategy
+-----------------------
+Two modes of operation:
+
+1. DB-backed independent keys (preferred):
+   Each agent gets its own randomly-generated ECDSA P-256 key pair.
+   Private keys are stored in PostgreSQL (encrypted at rest via Fernet
+   using SIGNING_KEY as the Fernet key). This means compromising one
+   agent's key does NOT compromise the others.
+
+2. Deterministic derivation (fallback):
+   When PostgreSQL is unavailable, all agent keys are derived from a
+   single SIGNING_KEY via HMAC-SHA256. This preserves the ability to
+   sign entries but carries the single-key risk documented below.
+
+Key Rotation:
+   Call rotate_agent_key(agent_id) to generate a new key pair and log
+   a "KEY_ROTATION" custody entry signed by both old and new keys.
+   The old key is retired but kept for verifying historical entries.
 """
 
 import hashlib
@@ -17,6 +37,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.backends import default_backend
 from cryptography.exceptions import InvalidSignature
+from cryptography.fernet import Fernet
 
 from core.structured_logging import get_logger
 
@@ -114,54 +135,250 @@ class AgentKeyPair:
         )
         return pem.decode("utf-8")
 
+    def get_private_key_pem(self) -> str:
+        """Get private key in PEM format (for encrypted storage)."""
+        pem = self.private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        return pem.decode("utf-8")
+
+    @classmethod
+    def from_pem(cls, agent_id: str, private_key_pem: str) -> "AgentKeyPair":
+        """Reconstruct a key pair from a PEM-encoded private key."""
+        private_key = serialization.load_pem_private_key(
+            private_key_pem.encode("utf-8"),
+            password=None,
+            backend=default_backend(),
+        )
+        return cls(
+            agent_id=agent_id,
+            private_key=private_key,  # type: ignore[arg-type]
+            public_key=private_key.public_key(),
+        )
+
 
 class KeyStore:
     """
-    Store for agent key pairs, derived deterministically from SIGNING_KEY.
-    
-    Ensures that agent signatures remain valid across server restarts
-    as long as the master SIGNING_KEY remains unchanged.
+    Store for agent key pairs.
+
+    Prefers DB-backed independent keys (PostgreSQL + Fernet encryption).
+    Falls back to deterministic derivation from SIGNING_KEY when DB is
+    unavailable (single-key risk — see module docstring).
     """
-    
+
+    _AGENT_IDS = ("Arbiter", "Agent1", "Agent2", "Agent3", "Agent4", "Agent5")
+
     def __init__(self) -> None:
         """Initialize the key store."""
         from core.config import get_settings
         self._settings = get_settings()
         self._keys: dict[str, AgentKeyPair] = {}
-    
+        self._db_available: bool = False
+        self._fernet: Optional[Fernet] = None
+        self._init_fernet()
+
+    def _init_fernet(self) -> None:
+        """Initialise Fernet cipher from SIGNING_KEY for encrypting private keys at rest."""
+        try:
+            raw = self._settings.signing_key.encode("utf-8")
+            # Fernet requires a 32-byte base64-encoded key — derive one from SIGNING_KEY
+            derived = hashlib.sha256(raw).digest()
+            import base64
+            fernet_key = base64.urlsafe_b64encode(derived)
+            self._fernet = Fernet(fernet_key)
+        except Exception as e:
+            logger.warning("Failed to initialise Fernet cipher for key encryption", error=str(e))
+            self._fernet = None
+
     def _derive_seed(self, agent_id: str) -> bytes:
-        """Derive a deterministic seed for an agent's key."""
+        """Derive a deterministic seed for an agent's key (fallback mode)."""
         master_key = self._settings.signing_key.encode("utf-8")
         return hmac.new(master_key, agent_id.encode("utf-8"), hashlib.sha256).digest()
 
+    # ------------------------------------------------------------------
+    # DB-backed key storage
+    # ------------------------------------------------------------------
+
+    async def _load_keys_from_db(self) -> None:
+        """Load all agent keys from PostgreSQL (encrypted with Fernet)."""
+        try:
+            from infra.postgres_client import get_postgres_client
+            pg = await get_postgres_client()
+            if pg is None:
+                return
+
+            rows = await pg.fetch(
+                "SELECT agent_id, encrypted_private_key_pem, is_active "
+                "FROM agent_signing_keys WHERE is_active = true"
+            )
+            if not rows:
+                return
+
+            for row in rows:
+                agent_id = row["agent_id"]
+                encrypted_pem = row["encrypted_private_key_pem"]
+                try:
+                    if self._fernet:
+                        pem_bytes = self._fernet.decrypt(encrypted_pem.encode("utf-8"))
+                    else:
+                        # Fernet unavailable — cannot decrypt stored keys
+                        logger.warning("Fernet unavailable, skipping stored key for agent", agent_id=agent_id)
+                        continue
+                    key_pair = AgentKeyPair.from_pem(agent_id, pem_bytes.decode("utf-8"))
+                    self._keys[agent_id] = key_pair
+                except Exception as e:
+                    logger.warning("Failed to decrypt stored key for agent", agent_id=agent_id, error=str(e))
+
+            self._db_available = True
+            logger.info("Loaded agent keys from PostgreSQL", loaded=len(self._keys))
+        except Exception as e:
+            logger.debug("PostgreSQL unavailable for key storage, using deterministic fallback", error=str(e))
+            self._db_available = False
+
+    async def _save_key_to_db(self, agent_id: str, key_pair: AgentKeyPair) -> None:
+        """Save a single agent key to PostgreSQL (encrypted with Fernet)."""
+        try:
+            from infra.postgres_client import get_postgres_client
+            pg = await get_postgres_client()
+            if pg is None or self._fernet is None:
+                return
+
+            pem = key_pair.get_private_key_pem()
+            encrypted_pem = self._fernet.encrypt(pem.encode("utf-8")).decode("utf-8")
+
+            await pg.execute(
+                """
+                INSERT INTO agent_signing_keys (agent_id, encrypted_private_key_pem, public_key_pem, is_active, created_at)
+                VALUES ($1, $2, $3, true, NOW())
+                ON CONFLICT (agent_id) WHERE is_active = true
+                DO UPDATE SET
+                    encrypted_private_key_pem = EXCLUDED.encrypted_private_key_pem,
+                    public_key_pem = EXCLUDED.public_key_pem,
+                    created_at = NOW()
+                """,
+                agent_id,
+                encrypted_pem,
+                key_pair.get_public_key_pem(),
+            )
+            logger.info("Saved key to PostgreSQL", agent_id=agent_id)
+        except Exception as e:
+            logger.debug("Could not save key to PostgreSQL", agent_id=agent_id, error=str(e))
+
+    async def _retire_key_in_db(self, agent_id: str) -> None:
+        """Mark the current active key for an agent as retired (is_active=false)."""
+        try:
+            from infra.postgres_client import get_postgres_client
+            pg = await get_postgres_client()
+            if pg is None:
+                return
+            await pg.execute(
+                "UPDATE agent_signing_keys SET is_active = false WHERE agent_id = $1 AND is_active = true",
+                agent_id,
+            )
+        except Exception as e:
+            logger.debug("Could not retire key in DB", agent_id=agent_id, error=str(e))
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    async def initialize(self) -> None:
+        """
+        Initialise the key store — attempt DB load first, generate keys as needed.
+
+        Call this once at application startup.
+        """
+        await self._load_keys_from_db()
+
+        # Generate any missing keys
+        for agent_id in self._AGENT_IDS:
+            if agent_id not in self._keys:
+                if self._db_available:
+                    # Generate independent random key pair
+                    key_pair = AgentKeyPair.generate(agent_id)
+                    self._keys[agent_id] = key_pair
+                    await self._save_key_to_db(agent_id, key_pair)
+                    logger.info("Generated independent key pair for agent", agent_id=agent_id)
+                else:
+                    # Deterministic fallback
+                    seed = self._derive_seed(agent_id)
+                    self._keys[agent_id] = AgentKeyPair.generate(agent_id, seed=seed)
+                    logger.info(
+                        "Derived deterministic key pair (DB unavailable) — "
+                        "all agent keys share a single master SIGNING_KEY",
+                        agent_id=agent_id,
+                    )
+
     def get_or_create(self, agent_id: str) -> AgentKeyPair:
         """
-        Get existing key pair for agent, or derive it.
-        
+        Get existing key pair for agent, or derive it deterministically.
+
+        This synchronous fallback is used when initialize() has not been
+        called (e.g. in unit tests or stateless environments).
+
         Args:
             agent_id: Unique identifier for the agent
-        
+
         Returns:
             AgentKeyPair for the agent
         """
         if agent_id not in self._keys:
             seed = self._derive_seed(agent_id)
             self._keys[agent_id] = AgentKeyPair.generate(agent_id, seed=seed)
-            logger.info("Derived deterministic key pair for agent", agent_id=agent_id)
+            logger.info(
+                "Derived deterministic key pair for agent (sync fallback) — "
+                "DB-backed keys not loaded; all agents share one master SIGNING_KEY",
+                agent_id=agent_id,
+            )
         return self._keys[agent_id]
-    
+
     def get(self, agent_id: str) -> Optional[AgentKeyPair]:
         """
         Get existing key pair for agent without creating.
-        
+
         Args:
             agent_id: Unique identifier for the agent
-        
+
         Returns:
             AgentKeyPair if exists, None otherwise
         """
         return self._keys.get(agent_id)
-    
+
+    async def rotate_key(self, agent_id: str) -> AgentKeyPair:
+        """
+        Rotate the signing key for an agent.
+
+        Generates a new independent ECDSA P-256 key pair, retires the old key
+        in the DB, saves the new key, and returns the new key pair.
+
+        Args:
+            agent_id: Agent whose key to rotate
+
+        Returns:
+            The new AgentKeyPair
+        """
+        old_key = self._keys.get(agent_id)
+
+        # Retire old key in DB
+        await self._retire_key_in_db(agent_id)
+
+        # Generate new independent key
+        new_key = AgentKeyPair.generate(agent_id)
+        self._keys[agent_id] = new_key
+
+        if self._db_available:
+            await self._save_key_to_db(agent_id, new_key)
+
+        logger.info(
+            "Rotated signing key for agent",
+            agent_id=agent_id,
+            had_previous_key=old_key is not None,
+            db_backed=self._db_available,
+        )
+        return new_key
+
     def clear(self) -> None:
         """Clear all stored keys (for testing)."""
         self._keys.clear()

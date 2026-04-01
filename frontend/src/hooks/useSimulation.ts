@@ -35,6 +35,8 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
 
     const wsRef = useRef<WebSocket | null>(null);
     const completedAgentsRef = useRef<AgentUpdate[]>([]);
+    /** True after POST /resume succeeds — PIPELINE_COMPLETE must not be dropped while still `awaiting_decision` from React’s stale batch. */
+    const expectingPipelineCompleteRef = useRef(false);
 
     // Store callbacks in refs to avoid triggering effect on every render
     const onAgentCompleteRef = useRef(onAgentComplete);
@@ -175,11 +177,17 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
                             break;
 
                         case "PIPELINE_COMPLETE":
-                            // Don't overwrite "awaiting_decision" — let the user choose first.
-                            // If user chose Accept, we're in "processing" and this completes.
-                            // If user chose Deep, we're in "analyzing" and this completes deep.
+                            // Normally stay on awaiting_decision until the user chooses Accept / Deep.
+                            // After resumeInvestigation(), React may still report awaiting_decision for one
+                            // frame while the WS already carries PIPELINE_COMPLETE — honour the resume ref.
                             setStatus((prev: SimulationStatus) => {
-                                if (prev === "awaiting_decision") return prev;
+                                if (
+                                    prev === "awaiting_decision" &&
+                                    !expectingPipelineCompleteRef.current
+                                ) {
+                                    return prev;
+                                }
+                                expectingPipelineCompleteRef.current = false;
                                 if (prev !== "complete") {
                                     playSoundRef.current?.("complete");
                                     onCompleteRef.current?.();
@@ -190,6 +198,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
 
                         case "ERROR":
                             dbg.error("[WebSocket] Error:", update.message);
+                            expectingPipelineCompleteRef.current = false;
                             setErrorMessage(update.message || "Investigation failed");
                             setStatus("error");
                             break;
@@ -291,6 +300,7 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
     }, []);
 
     const resetSimulation = useCallback(() => {
+        expectingPipelineCompleteRef.current = false;
         setSessionId(null);
         setStatus("idle");
         setCompletedAgents([]);
@@ -313,32 +323,38 @@ export const useSimulation = ({ onAgentComplete, onComplete, playSound }: UseSim
     }, []);
 
     const resumeInvestigation = useCallback(async (deep: boolean) => {
-        // Prefer hook state; fall back to sessionStorage set by evidence page
         const targetId = sessionId || sessionStorage.getItem("forensic_session_id");
-        if (!targetId) return;
-        try {
-            // Ensure we have a valid session (auth is cookie-based, no token needed)
-            const { ensureAuthenticated } = await import("@/lib/api");
-            await ensureAuthenticated();
-
-            // Auth is now cookie-based (HttpOnly cookies sent automatically)
-            // No Authorization header needed - credentials: 'include' handles cookie sending
-            const response = await fetch(`/api/v1/sessions/${targetId}/resume`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                credentials: "include", // Ensure cookies are sent with the request
-                body: JSON.stringify({ deep_analysis: deep })
-            });
-            if (!response.ok) throw new Error("Failed to resume investigation");
-
-            setStatus(deep ? "analyzing" : "processing");
-            if (deep) playSoundRef.current?.("think");
-        } catch (error) {
-            dbg.error("Error resuming investigation:", error);
-            setErrorMessage("Failed to resume analysis");
+        if (!targetId) {
+            throw new Error("No active session — cannot resume investigation.");
         }
+        const { ensureAuthenticated } = await import("@/lib/api");
+        await ensureAuthenticated();
+
+        // Set BEFORE the fetch so PIPELINE_COMPLETE arriving during the
+        // network round-trip is not discarded by the guard.
+        expectingPipelineCompleteRef.current = true;
+
+        const response = await fetch(`/api/v1/sessions/${targetId}/resume`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ deep_analysis: deep }),
+        });
+
+        if (!response.ok) {
+            expectingPipelineCompleteRef.current = false;
+            let detail = `HTTP ${response.status}`;
+            try {
+                const body = (await response.json()) as { detail?: string };
+                if (body.detail) detail = String(body.detail);
+            } catch { /* ignore */ }
+            const err = new Error(detail);
+            setErrorMessage("Failed to resume analysis");
+            throw err;
+        }
+
+        setStatus(deep ? "analyzing" : "processing");
+        if (deep) playSoundRef.current?.("think");
     }, [sessionId]);
 
     const clearCompletedAgents = useCallback(() => {

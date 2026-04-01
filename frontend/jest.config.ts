@@ -15,6 +15,9 @@ const config: Config = {
     '<rootDir>/../tests/frontend/**/*.test.ts',
     '<rootDir>/../tests/frontend/**/*.test.tsx',
   ],
+  // Ignore the standalone Next.js bundle to avoid Jest haste map
+  // collisions on the app's package name.
+  modulePathIgnorePatterns: ['<rootDir>/.next/standalone'],
 };
 
 export default createJestConfig(config);

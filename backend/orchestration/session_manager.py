@@ -89,6 +89,8 @@ class SessionManager:
         self._sessions: dict[UUID, SessionState] = {}
         self._lock = asyncio.Lock()
 
+    _MAX_SESSIONS = 500  # Hard cap to prevent unbounded memory growth
+
     async def cleanup_old_sessions(self, max_age_hours: int = 24) -> int:
         """Evict completed/failed sessions older than max_age_hours to prevent unbounded memory growth."""
         cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
@@ -112,6 +114,10 @@ class SessionManager:
         agent_ids: list[str],
     ) -> SessionState:
         """Create a new investigation session."""
+        # Opportunistic cleanup on every creation
+        if len(self._sessions) > self._MAX_SESSIONS:
+            await self.cleanup_old_sessions(max_age_hours=6)
+
         async with self._lock:
             session = SessionState(
                 session_id=session_id,

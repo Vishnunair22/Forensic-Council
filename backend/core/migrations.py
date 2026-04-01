@@ -301,6 +301,28 @@ MIGRATIONS: List[Migration] = [
         DROP TABLE IF EXISTS chain_of_custody;
         """,
     ),
+    Migration(
+        version=6,
+        name="create_agent_signing_keys",
+        description="Create table for independent per-agent ECDSA key pairs (encrypted at rest)",
+        sql="""
+        CREATE TABLE IF NOT EXISTS agent_signing_keys (
+            key_id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            agent_id              VARCHAR(64) NOT NULL,
+            encrypted_private_key_pem TEXT NOT NULL,
+            public_key_pem        TEXT NOT NULL,
+            is_active             BOOLEAN NOT NULL DEFAULT true,
+            created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            retired_at            TIMESTAMPTZ
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_ask_agent_active
+            ON agent_signing_keys(agent_id) WHERE is_active = true;
+        CREATE INDEX IF NOT EXISTS idx_ask_agent ON agent_signing_keys(agent_id);
+        """,
+        rollback_sql="""
+        DROP TABLE IF EXISTS agent_signing_keys;
+        """,
+    ),
 ]
 
 

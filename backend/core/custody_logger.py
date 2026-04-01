@@ -12,6 +12,7 @@ from enum import Enum
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
+from core.exceptions import ForensicMemoryError
 from core.structured_logging import get_logger
 from core.signing import SignedEntry, sign_content, verify_entry
 from infra.postgres_client import PostgresClient, get_postgres_client
@@ -139,6 +140,9 @@ class CustodyLogger:
         """
         self._postgres = postgres_client
         self._owned_client = False  # Never own — always use singleton
+        # Retry queue: entries that failed to persist are stored here and
+        # flushed on the next successful log_entry call.
+        self._retry_queue: list[dict[str, Any]] = []
     
     async def __aenter__(self) -> "CustodyLogger":
         """Async context manager entry."""
@@ -238,13 +242,23 @@ class CustodyLogger:
             )
         except Exception as db_err:
             logger.error(
-                "CustodyLogger: failed to persist chain entry — CUSTODY GAP",
+                "CustodyLogger: failed to persist chain entry — QUEUED FOR RETRY",
                 entry_id=str(entry_id),
                 entry_type=entry_type.value,
                 agent_id=agent_id,
                 session_id=str(session_id),
                 error=str(db_err),
             )
+            # Queue for retry instead of raising — allows the investigation to continue
+            self._retry_queue.append({
+                "entry_id": entry_id,
+                "entry_type": entry_type.value,
+                "agent_id": agent_id,
+                "session_id": session_id,
+                "signed": signed,
+                "content": content,
+                "prior_entry_ref": prior_entry_ref,
+            })
             return None
         
         logger.info(
@@ -255,8 +269,44 @@ class CustodyLogger:
             session_id=str(session_id),
             has_prior=prior_entry_ref is not None,
         )
-        
+
+        # Flush retry queue if any entries were queued during a DB outage
+        await self._flush_retry_queue()
+
         return entry_id
+
+    async def _flush_retry_queue(self) -> None:
+        """Attempt to persist any queued entries that failed during a DB outage."""
+        if not self._retry_queue or self._postgres is None:
+            return
+        flushed = 0
+        still_queued: list[dict[str, Any]] = []
+        for item in self._retry_queue:
+            try:
+                query = """
+                    INSERT INTO chain_of_custody (
+                        entry_id, entry_type, agent_id, session_id,
+                        timestamp_utc, content, content_hash, signature, prior_entry_ref
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                """
+                await self._postgres.execute(
+                    query,
+                    item["entry_id"],
+                    item["entry_type"],
+                    item["agent_id"],
+                    item["session_id"],
+                    item["signed"].timestamp_utc,
+                    item["content"],
+                    item["signed"].content_hash,
+                    item["signed"].signature,
+                    item["prior_entry_ref"],
+                )
+                flushed += 1
+            except Exception:
+                still_queued.append(item)
+        self._retry_queue = still_queued
+        if flushed > 0:
+            logger.info(f"Flushed {flushed} queued custody entries, {len(still_queued)} remaining")
     
     async def get_session_chain(self, session_id: UUID) -> list[ChainEntry]:
         """

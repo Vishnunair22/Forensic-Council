@@ -1,0 +1,16 @@
+{
+  "model_id": "9d0ce02c-2c89-4a38-9ae8-b763a73b5798",
+  "agent_id": "Agent2_deep",
+  "method": "PLATT_SCALING",
+  "benchmark_dataset": "engineering_defaults_not_validated",
+  "version": "v1.0_default_20260331",
+  "created_utc": "2026-03-31 20:42:58.112697+00:00",
+  "params": {
+    "method": "platt",
+    "A": 2.0,
+    "B": -1.0,
+    "baseline_tpr": 0.75,
+    "baseline_fpr": 0.12
+  },
+  "calibration_status": "UNCALIBRATED"
+}

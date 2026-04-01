@@ -47,9 +47,47 @@ const WS_BASE =
         return base.replace(/^https?/, (m) => (m === "https" ? "wss" : "ws"));
       })();
 
-// Token storage key — reserved for future token-based auth (currently using HttpOnly cookies)
+// Token storage key — used for non-HttpOnly auth flows and test compatibility
 const _TOKEN_KEY = "forensic_auth_token";
 const _TOKEN_EXPIRY_KEY = "forensic_auth_token_expiry";
+
+/**
+ * Set an auth token in sessionStorage (compatibility wrapper).
+ * HttpOnly cookie flow is the primary auth mechanism, but this is
+ * retained for test suites and optional bearer-token flows.
+ */
+export function setAuthToken(token: string, expiresInSec?: number): void {
+  if (typeof window !== "undefined") {
+    sessionStorage.setItem(_TOKEN_KEY, token);
+    if (expiresInSec) {
+      sessionStorage.setItem(_TOKEN_EXPIRY_KEY, String(Date.now() + expiresInSec * 1000));
+    }
+  }
+}
+
+/**
+ * Retrieve the stored auth token, or null if absent/expired.
+ */
+export function getAuthToken(): string | null {
+  if (typeof window === "undefined") return null;
+  const expiry = sessionStorage.getItem(_TOKEN_EXPIRY_KEY);
+  if (expiry && Date.now() > Number(expiry)) {
+    sessionStorage.removeItem(_TOKEN_KEY);
+    sessionStorage.removeItem(_TOKEN_EXPIRY_KEY);
+    return null;
+  }
+  return sessionStorage.getItem(_TOKEN_KEY);
+}
+
+/**
+ * Clear the stored auth token.
+ */
+export function clearAuthToken(): void {
+  if (typeof window !== "undefined") {
+    sessionStorage.removeItem(_TOKEN_KEY);
+    sessionStorage.removeItem(_TOKEN_EXPIRY_KEY);
+  }
+}
 
 /**
  * Types matching backend DTOs
@@ -63,7 +101,8 @@ export interface AgentFindingDTO {
   status: string;
   confidence_raw: number;
   calibrated: boolean;
-  calibrated_probability: number | null;
+  calibrated_probability: number | null;  // DEPRECATED — use raw_confidence_score
+  raw_confidence_score: number | null;
   court_statement: string | null;
   robustness_caveat: boolean;
   robustness_caveat_detail: string | null;
@@ -127,6 +166,9 @@ export interface ReportDTO {
     error_rate_pct: number;
     skipped: boolean;
   }>;
+  // Degradation transparency — non-empty when analysis ran in reduced-capability mode.
+  // Always render a visible warning when this array is non-empty.
+  degradation_flags?: string[];
 }
 
 export interface BriefUpdate {
@@ -186,7 +228,9 @@ export interface UserInfo {
 }
 
 export function isAuthenticated(): boolean {
-  return true; // With HttpOnly cookies, we assume authed if server doesn't return 401
+  // If a session token is explicitly stored, use it as the auth signal.
+  // Otherwise assume HttpOnly cookie flow (always "authenticated" until 401).
+  return getAuthToken() !== null;
 }
 
 export async function login(username: string, password: string): Promise<TokenResponse> {
@@ -223,7 +267,19 @@ export async function autoLoginAsInvestigator(): Promise<TokenResponse> {
 }
 
 export async function ensureAuthenticated(): Promise<void> {
-  // We don't check for token locally anymore; assume authed or let 401 trigger logic
+  // Verify the session is active by hitting the /me endpoint.
+  // If the cookie is missing or expired, attempt a demo re-login.
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/auth/me`, {
+      credentials: "include",
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (res.ok) return;
+  } catch {
+    // network error — fall through to re-login attempt
+  }
+  // Session invalid or expired — attempt auto-login
+  await autoLoginAsInvestigator();
 }
 
 export async function logout(): Promise<void> {
@@ -285,6 +341,25 @@ async function _getAuthHeaders(): Promise<HeadersInit> {
   return {}; // Auth now handled via HttpOnly cookies automatically
 }
 
+/** Redis/content dedup: same file + case already has an active session (HTTP 409). */
+export class DuplicateInvestigationError extends Error {
+  readonly existingSessionId: string;
+
+  constructor(existingSessionId: string, message?: string) {
+    super(message ?? `Duplicate evidence — existing session ${existingSessionId}`);
+    this.name = "DuplicateInvestigationError";
+    this.existingSessionId = existingSessionId;
+  }
+}
+
+function _parseSessionIdFromDetail(detail: unknown): string | null {
+  const d = typeof detail === "string" ? detail : "";
+  const m = d.match(
+    /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i
+  );
+  return m?.[1] ?? null;
+}
+
 /**
  * Start a forensic investigation
  */
@@ -323,8 +398,26 @@ export async function startInvestigation(
 
         if (!response.ok) {
           const errorBody = await response.json().catch(() => ({ detail: "Unknown error" }));
-          const detail = errorBody.detail || `HTTP ${response.status}`;
+          const detailRaw = errorBody.detail;
+          const detail =
+            typeof detailRaw === "string"
+              ? detailRaw
+              : Array.isArray(detailRaw)
+                ? JSON.stringify(detailRaw)
+                : String(detailRaw ?? `HTTP ${response.status}`);
           const devHint = errorBody.message ? ` — ${errorBody.message}` : "";
+
+          if (response.status === 409) {
+            const fromHeader = response.headers.get("X-Existing-Session")?.trim();
+            const existing =
+              (fromHeader && /^[0-9a-f-]{36}$/i.test(fromHeader)
+                ? fromHeader
+                : null) ?? _parseSessionIdFromDetail(detail);
+            if (existing) {
+              throw new DuplicateInvestigationError(existing, `${detail}${devHint}`);
+            }
+          }
+
           throw new Error(`${detail}${devHint}`);
         }
 
@@ -539,11 +632,10 @@ export function createLiveSocket(
 export async function pollForReport(
   sessionId: string,
   onProgress: (status: string) => void,
-  intervalMs = 5000,
+  intervalMs = 3000,
   maxAttempts = 60
 ): Promise<ReportDTO> {
   return new Promise((resolve, reject) => {
-    // eslint-disable-next-line prefer-const -- intervalId must be declared before poll function that uses it
     let intervalId: ReturnType<typeof setInterval>;
     let finished = false;
     let attempts = 0;
@@ -566,6 +658,11 @@ export async function pollForReport(
           resolve(result.report);
         } else {
           onProgress("in_progress");
+          // Exponential backoff with jitter: base * 1.5^attempt, capped at 15s
+          const nextDelay = Math.min(intervalMs * Math.pow(1.5, attempts), 15000);
+          const jitter = nextDelay * 0.2 * (Math.random() - 0.5);
+          clearInterval(intervalId);
+          intervalId = setInterval(poll, nextDelay + jitter);
         }
       } catch (error) {
         finished = true;

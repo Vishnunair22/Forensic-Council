@@ -8,6 +8,7 @@ End-to-end orchestration pipeline for forensic evidence analysis.
 from __future__ import annotations
 
 import asyncio
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -18,10 +19,13 @@ from core.custody_logger import CustodyLogger, EntryType
 from core.episodic_memory import EpisodicMemory
 from core.evidence import EvidenceArtifact
 from core.inter_agent_bus import InterAgentBus
+from core.observability import get_tracer
 from core.structured_logging import get_logger
 from core.react_loop import HumanDecision
 from core.working_memory import WorkingMemory
 from infra.evidence_store import EvidenceStore
+
+_tracer = get_tracer("forensic-council.pipeline")
 
 from agents.agent1_image import Agent1Image
 from agents.agent2_audio import Agent2Audio
@@ -228,13 +232,20 @@ class ForensicCouncilPipeline:
             except Exception as e:
                 logger.warning("Failed to connect to Redis", error=str(e))
                 self._redis = None
-        
+                self._degradation_flags.append(
+                    "Redis unavailable — working memory fell back to in-process dict; "
+                    "rate limiting and token blacklisting may be degraded."
+                )
+
         if self._qdrant is None:
             try:
                 self._qdrant = await get_qdrant_client()
             except Exception as e:
                 logger.warning("Failed to connect to Qdrant", error=str(e))
                 self._qdrant = None
+                self._degradation_flags.append(
+                    "Qdrant unavailable — episodic memory and historical case-linking disabled."
+                )
 
         if self._postgres is None:
             try:
@@ -330,6 +341,11 @@ class ForensicCouncilPipeline:
             investigator_id=investigator_id,
             evidence_path=evidence_file_path,
         )
+
+        with _tracer.start_as_current_span("pipeline.run_investigation") as span:
+            span.set_attribute("case_id", case_id)
+            span.set_attribute("investigator_id", investigator_id)
+            span.set_attribute("evidence_path", evidence_file_path)
         
         # Step 1 & 2: Create session and ingest evidence
         # Use provided session_id if available, otherwise create new one
@@ -337,7 +353,10 @@ class ForensicCouncilPipeline:
             session_id = uuid4()
         self._case_id = case_id
         self._started_at = datetime.now(timezone.utc).isoformat()
-        
+        self._degradation_flags: list[str] = []
+        # Hierarchical timeout budget: investigation (600s) → agents share the budget
+        self._investigation_deadline = time.monotonic() + self.config.investigation_timeout
+
         await self._initialize_components(session_id)
         
         # Create evidence artifact
@@ -405,24 +424,45 @@ class ForensicCouncilPipeline:
         # Run deliberation with a hard 150-second ceiling so the pipeline never
         # hangs indefinitely if Groq is down. If it times out, regenerate the
         # report without LLM synthesis (template fallback path in the arbiter).
-        try:
-            report = await asyncio.wait_for(
-                self.arbiter.deliberate(arbiter_results, case_id=case_id),
-                timeout=150.0,
-            )
-        except asyncio.TimeoutError:
-            logger.warning(
-                "arbiter.deliberate() exceeded 150 s — regenerating with LLM disabled",
-                session_id=str(session_id),
-            )
-            # Temporarily disable LLM so deliberate() uses template fallback instantly
-            _saved_key = self.arbiter.config.llm_api_key
-            self.arbiter.config.llm_api_key = None
+        with _tracer.start_as_current_span("pipeline.arbiter_deliberation") as span:
+            span.set_attribute("case_id", case_id)
+            span.set_attribute("agent_count", len(arbiter_results))
             try:
-                report = await self.arbiter.deliberate(arbiter_results, case_id=case_id)
-            finally:
-                self.arbiter.config.llm_api_key = _saved_key
+                report = await asyncio.wait_for(
+                    self.arbiter.deliberate(arbiter_results, case_id=case_id),
+                    timeout=150.0,
+                )
+                span.set_attribute("verdict", str(report.overall_verdict))
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "arbiter.deliberate() exceeded 150 s — regenerating with LLM disabled",
+                    session_id=str(session_id),
+                )
+                self._degradation_flags.append(
+                    "Arbiter LLM synthesis timed out after 150 s — report narrative generated "
+                    "from templates, not AI synthesis. Verdict and findings are unaffected."
+                )
+                report = await asyncio.wait_for(
+                    self.arbiter.deliberate(
+                        arbiter_results, case_id=case_id, use_llm=False
+                    ),
+                    timeout=60.0,
+                )
+                span.set_attribute("verdict", str(report.overall_verdict))
+                span.set_attribute("timeout", True)
         
+        # ── Detect Gemini degradation ────────────────────────────────────────
+        # If Gemini is configured but no gemini_vision findings appear in the report,
+        # the deep-pass agents fell back to local heuristics silently.
+        gemini_key = self.config.gemini_api_key
+        is_gemini_configured = bool(gemini_key) and "your_gemini_key" not in (gemini_key or "")
+        if is_gemini_configured and not report.gemini_vision_findings:
+            self._degradation_flags.append(
+                "Gemini vision API was configured but produced no findings — "
+                "deep-pass agents (1, 3, 5) fell back to local OpenCV analysis. "
+                "Possible causes: invalid API key, model quota exceeded, network error."
+            )
+
         # Add additional fields to report
         report.case_linking_flags = await self._collect_case_linking_flags(
             session_id, evidence_artifact
@@ -438,6 +478,55 @@ class ForensicCouncilPipeline:
             r.agent_id: r.reflection_report for r in agent_results if r.error is None
         }
         
+        # Verify chain-of-custody integrity before signing the report.
+        # A broken chain means an entry was tampered with after being written —
+        # this is a critical integrity failure that must be disclosed.
+        if self.custody_logger and self.custody_logger._postgres is not None:
+            try:
+                chain_report = await self.custody_logger.verify_chain(session_id)
+                if not chain_report.valid:
+                    logger.error(
+                        "Chain-of-custody integrity check FAILED before report signing",
+                        session_id=str(session_id),
+                        broken_at=str(chain_report.broken_at),
+                        reason=chain_report.broken_reason,
+                    )
+                    self._degradation_flags.append(
+                        f"CRITICAL: Chain-of-custody integrity verification FAILED "
+                        f"(entry {chain_report.broken_at}: {chain_report.broken_reason}). "
+                        "This report's evidential chain may have been tampered with."
+                    )
+                else:
+                    logger.info(
+                        "Chain-of-custody integrity verified",
+                        session_id=str(session_id),
+                        total_entries=chain_report.total_entries,
+                    )
+            except Exception as _verify_err:
+                logger.warning(
+                    "Chain-of-custody verification raised an exception",
+                    error=str(_verify_err),
+                    session_id=str(session_id),
+                )
+                self._degradation_flags.append(
+                    f"Chain-of-custody verification could not complete: {_verify_err}"
+                )
+        else:
+            self._degradation_flags.append(
+                "Chain-of-custody verification skipped — PostgreSQL unavailable."
+            )
+
+        # Propagate all pipeline-level degradation flags into the report BEFORE signing
+        # so they are covered by the cryptographic signature.
+        if self._degradation_flags:
+            report.degradation_flags.extend(self._degradation_flags)
+            logger.warning(
+                "Report contains degradation flags",
+                session_id=str(session_id),
+                flag_count=len(self._degradation_flags),
+                flags=self._degradation_flags,
+            )
+
         # Resign report after adding all fields — broadcast final step if hook set
         _sign_step_hook = getattr(self.arbiter, "_step_hook", None)
         if _sign_step_hook is not None:
@@ -481,7 +570,10 @@ class ForensicCouncilPipeline:
         original_filename: str | None = None,
     ) -> EvidenceArtifact:
         """Ingest evidence file and create artifact."""
-        file_path_obj = Path(file_path)
+        with _tracer.start_as_current_span("pipeline.ingest_evidence") as span:
+            span.set_attribute("file_path", file_path)
+            span.set_attribute("session_id", str(session_id))
+            file_path_obj = Path(file_path)
 
         # Store in evidence store
         stored_artifact = await self.evidence_store.ingest(
@@ -508,6 +600,9 @@ class ForensicCouncilPipeline:
         After initial investigation, deep analysis is run for supported agents.
         """
         
+        with _tracer.start_as_current_span("pipeline.run_agents_concurrent") as span:
+            span.set_attribute("session_id", str(session_id))
+        
         # --- TWO-PHASE EXECUTION for cross-agent context sharing ---
         # Phase 1: Run all agents' INITIAL passes concurrently, then
         # Phase 2: Inject Agent 1's Gemini findings into Agent 3 and run all deep passes
@@ -518,31 +613,34 @@ class ForensicCouncilPipeline:
             extra_kwargs: dict = None,
         ) -> tuple:
             """Run only the initial investigation pass. Returns (agent_instance, initial_findings)."""
-            try:
-                kwargs = {
-                    "agent_id": agent_id,
-                    "session_id": session_id,
-                    "evidence_artifact": evidence_artifact,
-                    "config": self.config,
-                    "working_memory": self.working_memory,
-                    "episodic_memory": self.episodic_memory,
-                    "custody_logger": self.custody_logger,
-                    "evidence_store": self.evidence_store,
-                }
-                if extra_kwargs:
-                    kwargs.update(extra_kwargs)
-                agent = agent_class(**kwargs)
-                if not agent.supports_uploaded_file:
-                    return agent, [], False
-                logger.info(f"Running {agent_id} initial investigation")
-                initial_findings = await asyncio.wait_for(
-                    agent.run_investigation(),
-                    timeout=self.config.investigation_timeout,
-                )
-                return agent, initial_findings, True
-            except Exception as e:
-                logger.error(f"{agent_id} initial pass failed", error=str(e))
-                return None, [], False
+            with _tracer.start_as_current_span(f"agent.{agent_id}.initial_pass") as span:
+                span.set_attribute("agent_id", agent_id)
+                try:
+                    kwargs = {
+                        "agent_id": agent_id,
+                        "session_id": session_id,
+                        "evidence_artifact": evidence_artifact,
+                        "config": self.config,
+                        "working_memory": self.working_memory,
+                        "episodic_memory": self.episodic_memory,
+                        "custody_logger": self.custody_logger,
+                        "evidence_store": self.evidence_store,
+                    }
+                    if extra_kwargs:
+                        kwargs.update(extra_kwargs)
+                    agent = agent_class(**kwargs)
+                    if not agent.supports_uploaded_file:
+                        return agent, [], False
+                    logger.info(f"Running {agent_id} initial investigation")
+                    initial_findings = await asyncio.wait_for(
+                        agent.run_investigation(),
+                        timeout=self.config.investigation_timeout,
+                    )
+                    span.set_attribute("finding_count", len(initial_findings))
+                    return agent, initial_findings, True
+                except Exception as e:
+                    logger.error(f"{agent_id} initial pass failed", error=str(e))
+                    return None, [], False
 
         async def run_agent_deep_only(
             agent,
@@ -558,31 +656,34 @@ class ForensicCouncilPipeline:
             if not supports_file:
                 return AgentLoopResult(agent_id=agent_id, findings=[], reflection_report={},
                                        react_chain=[], agent_active=False, supports_file_type=False)
-            try:
-                initial_count = len(initial_findings)
-                logger.info(f"Running {agent_id} deep investigation")
-                await asyncio.wait_for(
-                    agent.run_deep_investigation(),
-                    timeout=self.config.investigation_timeout,
-                )
-                all_findings = getattr(agent, "_findings", initial_findings)
-                deep_count = max(0, len(all_findings) - initial_count)
-                return AgentLoopResult(
-                    agent_id=agent_id,
-                    findings=[f.model_dump() for f in all_findings],
-                    reflection_report=(
-                        getattr(agent, "_reflection_report", None).model_dump()
-                        if getattr(agent, "_reflection_report", None) else {}
-                    ),
-                    react_chain=getattr(agent, "_react_chain", []),
-                    agent_active=True,
-                    supports_file_type=True,
-                    deep_findings_count=max(0, deep_count),
-                )
-            except Exception as e:
-                logger.error(f"{agent_id} deep pass failed", error=str(e))
-                # Return whatever initial findings we already have
-                return AgentLoopResult(
+            with _tracer.start_as_current_span(f"agent.{agent_id}.deep_pass") as span:
+                span.set_attribute("agent_id", agent_id)
+                try:
+                    initial_count = len(initial_findings)
+                    logger.info(f"Running {agent_id} deep investigation")
+                    await asyncio.wait_for(
+                        agent.run_deep_investigation(),
+                        timeout=self.config.investigation_timeout,
+                    )
+                    all_findings = getattr(agent, "_findings", initial_findings)
+                    deep_count = max(0, len(all_findings) - initial_count)
+                    span.set_attribute("deep_finding_count", deep_count)
+                    span.set_attribute("total_finding_count", len(all_findings))
+                    return AgentLoopResult(
+                        agent_id=agent_id,
+                        findings=[f.model_dump() for f in all_findings],
+                        reflection_report=(
+                            getattr(agent, "_reflection_report", None).model_dump()
+                            if getattr(agent, "_reflection_report", None) else {}
+                        ),
+                        react_chain=getattr(agent, "_react_chain", []),
+                        agent_active=True,
+                        supports_file_type=True,
+                        deep_findings_count=max(0, deep_count),
+                    )
+                except Exception as e:
+                    logger.error(f"{agent_id} deep pass failed", error=str(e))
+                    return AgentLoopResult(
                     agent_id=agent_id,
                     findings=[f.model_dump() for f in initial_findings],
                     reflection_report={},

@@ -42,12 +42,13 @@ from typing import Any, Optional
 import httpx
 
 from core.config import Settings
+from core.retry import CircuitBreaker
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
 _GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
-_DEFAULT_MODEL = "gemini-3-pro-preview"
+_DEFAULT_MODEL = "gemini-2.5-pro"
 # Ordered fallback chain: tried in sequence if the primary model fails/is unavailable.
 _DEFAULT_FALLBACK_CHAIN = "gemini-2.5-pro,gemini-2.5-flash"
 _MAX_RETRIES = 2
@@ -99,6 +100,12 @@ class GeminiVisionFinding:
     raw_response: str = ""
     latency_ms: float = 0.0
     error: Optional[str] = None
+    # Deep forensic analysis extras (populated by deep_forensic_analysis)
+    _extracted_text: list[str] = field(default_factory=list)
+    _interface_identification: str = ""
+    _contextual_narrative: str = ""
+    _authenticity_verdict: str = ""
+    _metadata_visual_consistency: str = ""
 
     def to_finding_dict(self, agent_id: str) -> dict[str, Any]:
         """Convert to a dict compatible with AgentFinding / Arbiter schema."""
@@ -179,6 +186,13 @@ class GeminiVisionClient:
         # Check if key is missing or is the default placeholder from .env.example
         is_placeholder = self.api_key and "your_gemini_key" in self.api_key
         self._enabled = bool(self.api_key) and not is_placeholder
+
+        # Circuit breaker: opens after 3 consecutive failures, recovers after 120s
+        self._circuit_breaker = CircuitBreaker(
+            failure_threshold=3,
+            recovery_timeout=120.0,
+            half_open_max_calls=1,
+        )
 
     # ------------------------------------------------------------------ #
     #  Public high-level methods used by each agent                        #
@@ -474,6 +488,19 @@ class GeminiVisionClient:
         analysis_type: str,
     ) -> GeminiVisionFinding:
         """Encode file and call Gemini generateContent, parse structured result."""
+        # Check circuit breaker before attempting API call
+        try:
+            state = self._circuit_breaker.state
+        except Exception:
+            state = "CLOSED"
+        if state == "OPEN":
+            logger.warning(
+                f"Gemini circuit breaker is OPEN — falling back to local analysis for {analysis_type}"
+            )
+            finding = await self._local_forensic_fallback(file_path)
+            finding.analysis_type = analysis_type
+            return finding
+
         t0 = time.monotonic()
 
         try:
@@ -510,10 +537,12 @@ class GeminiVisionClient:
         }
 
         # Thinking models (2.5+, 3+) support thinkingConfig.
-        # Setting thinkingBudget=0 disables chain-of-thought for fast structured
-        # forensic extraction. gemini-2.0-* and earlier must NOT receive it (returns 400).
+        # Enable chain-of-thought with a modest budget for forensic analysis —
+        # visual reasoning improves accuracy for manipulation detection.
+        # thinkingBudget=0 disables CoT; 1024 gives enough for structured reasoning
+        # without excessive latency. Models that don't support it (2.0-) skip silently.
         if any(p in self.model for p in _THINKING_MODEL_PREFIXES):
-            generation_config["thinkingConfig"] = {"thinkingBudget": 0}
+            generation_config["thinkingConfig"] = {"thinkingBudget": 1024}
 
         payload = {
             "contents": [{"parts": parts}],
@@ -528,7 +557,7 @@ class GeminiVisionClient:
                 return (m, primary_payload, f"{_GEMINI_API_BASE}/models/{m}:generateContent?key={self.api_key}")
             gen_cfg: dict = {"temperature": 0.1, "maxOutputTokens": 8192}
             if any(p in m for p in _THINKING_MODEL_PREFIXES):
-                gen_cfg["thinkingConfig"] = {"thinkingBudget": 0}
+                gen_cfg["thinkingConfig"] = {"thinkingBudget": 1024}
             return (
                 m,
                 {"contents": [{"parts": parts}], "generationConfig": gen_cfg},
@@ -555,6 +584,8 @@ class GeminiVisionClient:
                         f"[Fallback: {attempt_model} — primary {self.model} unavailable] "
                         + finding.caveat
                     )
+                # Record success in circuit breaker
+                self._circuit_breaker.record_success()
                 return finding
             except _ModelUnavailableError as mue:
                 logger.warning(
@@ -572,6 +603,8 @@ class GeminiVisionClient:
             f"All Gemini models exhausted for {analysis_type}. "
             f"Chain: {[self.model] + self.fallback_chain}. Last error: {last_exc}"
         )
+        # Record failure in circuit breaker
+        self._circuit_breaker.record_failure()
         return GeminiVisionFinding(
             analysis_type=analysis_type,
             model_used=self.model,
@@ -765,13 +798,12 @@ class GeminiVisionClient:
             court_defensible=True,
             raw_response=raw_text,
             latency_ms=latency_ms,
+            _extracted_text=extracted_text_items,
+            _interface_identification=iface,
+            _contextual_narrative=data.get("contextual_narrative", ""),
+            _authenticity_verdict=verdict,
+            _metadata_visual_consistency=meta_consistency,
         )
-        # Attach deep_forensic_analysis extras as dynamic attributes for agents to use
-        finding._extracted_text = extracted_text_items
-        finding._interface_identification = iface
-        finding._contextual_narrative = data.get("contextual_narrative", "")
-        finding._authenticity_verdict = verdict
-        finding._metadata_visual_consistency = meta_consistency
         return finding
 
     @staticmethod
@@ -972,12 +1004,12 @@ class GeminiVisionClient:
                 ),
                 raw_response="",
                 latency_ms=latency_ms,
+                _extracted_text=ocr_text_lines,
+                _interface_identification="",
+                _contextual_narrative=narrative,
+                _authenticity_verdict="SUSPICIOUS" if manipulation_signals else "CANNOT_DETERMINE",
+                _metadata_visual_consistency="; ".join(meta_notes) if meta_notes else "No EXIF for cross-validation",
             )
-            finding._extracted_text = ocr_text_lines
-            finding._interface_identification = ""
-            finding._contextual_narrative = narrative
-            finding._authenticity_verdict = "SUSPICIOUS" if manipulation_signals else "CANNOT_DETERMINE"
-            finding._metadata_visual_consistency = "; ".join(meta_notes) if meta_notes else "No EXIF for cross-validation"
             return finding
 
         except Exception as exc:

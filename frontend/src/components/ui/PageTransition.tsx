@@ -1,15 +1,6 @@
-/**
- * PageTransition
- * ==============
- * Wraps page content in a smooth fade-up entrance animation.
- * Drop this around the main content of any page.
- *
- * Usage:
- *   <PageTransition>
- *     <YourPageContent />
- *   </PageTransition>
- */
 "use client";
+
+import { motion } from "framer-motion";
 
 interface PageTransitionProps {
   children: React.ReactNode;
@@ -18,44 +9,43 @@ interface PageTransitionProps {
 
 export function PageTransition({ children, className = "" }: PageTransitionProps) {
   return (
-    <div
+    <motion.div
       className={className}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
     >
       {children}
-    </div>
+    </motion.div>
   );
 }
 
-/** Stagger wrapper — children  in sequence */
-export function StaggerIn({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
+export function StaggerIn({ children, className = "", delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
   return (
-    <div
+    <motion.div
       className={className}
+      initial="hidden"
+      animate="visible"
+      variants={{
+        hidden: {},
+        visible: { transition: { staggerChildren: 0.08, delayChildren: delay } },
+      }}
     >
       {children}
-    </div>
+    </motion.div>
   );
 }
 
-/** Single stagger child */
-export function StaggerChild({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
+export function StaggerChild({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div
+    <motion.div
       className={className}
+      variants={{
+        hidden: { opacity: 0, y: 16 },
+        visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" } },
+      }}
     >
       {children}
-    </div>
+    </motion.div>
   );
 }

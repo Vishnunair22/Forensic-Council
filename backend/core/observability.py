@@ -65,3 +65,41 @@ def setup_observability(app, settings) -> None:
 
     # Automatically measure every HTTP request
     FastAPIInstrumentor.instrument_app(app)
+
+
+def get_tracer(name: str = "forensic-council"):
+    """
+    Return an OpenTelemetry tracer instance.
+
+    When OTel is not available or not in production, returns a no-op tracer
+    so call-sites can use ``tracer.start_as_current_span()`` without
+    guarding every invocation.
+    """
+    if OTEL_AVAILABLE:
+        return trace.get_tracer(name)
+    # No-op tracer — all spans are silently discarded
+    return trace.get_tracer(name) if OTEL_AVAILABLE else _NoOpTracer()
+
+
+class _NoOpSpan:
+    """Minimal no-op span for non-production / missing-OTel environments."""
+    def __enter__(self):
+        return self
+    def __exit__(self, *args):
+        pass
+    def set_attribute(self, key, value):
+        pass
+    def add_event(self, name, attributes=None):
+        pass
+    def set_status(self, status):
+        pass
+    def end(self):
+        pass
+
+
+class _NoOpTracer:
+    """Minimal no-op tracer that returns no-op spans."""
+    def start_span(self, name, **kwargs):
+        return _NoOpSpan()
+    def start_as_current_span(self, name, **kwargs):
+        return _NoOpSpan()

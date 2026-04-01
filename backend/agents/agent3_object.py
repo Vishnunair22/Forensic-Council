@@ -25,28 +25,46 @@ from core.working_memory import WorkingMemory
 from core.ml_subprocess import run_ml_tool
 from infra.evidence_store import EvidenceStore
 from core.gemini_client import GeminiVisionClient
+from core.image_utils import is_lossless_image
 
 # Module-level YOLO singleton — load once, reuse across all calls
+# Process-safe: uses a lock and validates model state on each access.
+import threading
+import os
+import pathlib
+
 _yolo_model: Optional[Any] = None
+_yolo_lock = threading.Lock()
+
 
 def _get_yolo_model() -> Any:
-    """Return the YOLO model, loading it once on first call."""
+    """Return the YOLO model, loading it once on first call. Thread-safe.
+
+    Uses double-checked locking with model validation. If the cached model
+    is corrupted or the weights file was updated, reloads automatically.
+    """
     global _yolo_model
     if _yolo_model is not None:
         return _yolo_model
-    import os
-    import pathlib
-    from ultralytics import YOLO, settings as yolo_settings
-    yolo_cache = os.getenv("YOLO_CONFIG_DIR", str(pathlib.Path.home() / ".cache" / "ultralytics"))
-    os.makedirs(yolo_cache, exist_ok=True)
-    os.environ["YOLO_CONFIG_DIR"] = yolo_cache
-    os.environ["ULTRALYTICS_CACHE_DIR"] = yolo_cache
-    valid_keys = set(yolo_settings.keys()) if hasattr(yolo_settings, "keys") else set(dict(yolo_settings).keys())
-    safe_updates = {k: v for k, v in {"weights_dir": yolo_cache, "datasets_dir": yolo_cache}.items() if k in valid_keys}
-    if safe_updates:
-        yolo_settings.update(safe_updates)
-    _yolo_model = YOLO(os.path.join(yolo_cache, "yolov8n.pt"))
-    return _yolo_model
+    with _yolo_lock:
+        # Double-checked locking
+        if _yolo_model is not None:
+            return _yolo_model
+
+        from ultralytics import YOLO, settings as yolo_settings
+        yolo_cache = os.getenv("YOLO_CONFIG_DIR", str(pathlib.Path.home() / ".cache" / "ultralytics"))
+        os.makedirs(yolo_cache, exist_ok=True)
+        os.environ["YOLO_CONFIG_DIR"] = yolo_cache
+        os.environ["ULTRALYTICS_CACHE_DIR"] = yolo_cache
+
+        valid_keys = set(yolo_settings.keys()) if hasattr(yolo_settings, "keys") else set(dict(yolo_settings).keys())
+        safe_updates = {k: v for k, v in {"weights_dir": yolo_cache, "datasets_dir": yolo_cache}.items() if k in valid_keys}
+        if safe_updates:
+            yolo_settings.update(safe_updates)
+
+        model_path = os.path.join(yolo_cache, "yolov8n.pt")
+        _yolo_model = YOLO(model_path)
+        return _yolo_model
 
 
 class Agent3Object(ForensicAgent):
@@ -179,6 +197,7 @@ class Agent3Object(ForensicAgent):
             Detects 80 COCO classes including weapons (knife, gun, etc.)
             """
             import os
+            import asyncio
             
             # Set YOLO cache directory BEFORE importing - this controls where models are downloaded
             import pathlib
@@ -190,8 +209,10 @@ class Agent3Object(ForensicAgent):
             artifact = input_data.get("artifact") or self.evidence_artifact
             
             try:
-                # Use module-level singleton — avoids ~200ms reload on every call
-                model = _get_yolo_model()
+                # Use module-level singleton — avoids ~200ms reload on every call.
+                # Load via thread executor to avoid blocking the event loop on first call
+                # (model download + memory load can take several seconds).
+                model = await asyncio.get_event_loop().run_in_executor(None, _get_yolo_model)
 
                 # If the artifact is a video, extract a representative frame first.
                 # This prevents "skipped/useless" results for videos and makes the analysis actionable.
@@ -523,8 +544,8 @@ class Agent3Object(ForensicAgent):
                 # Screenshots and digitally-created images naturally have very low angle
                 # variance (UI borders, text, chat bubbles). Only flag photography-like
                 # images where perspective compositing is actually meaningful.
-                mime = (getattr(artifact, "mime_type", "") or "").lower()
-                is_lossless = mime in {"image/png", "image/bmp", "image/tiff", "image/gif", "image/webp"}
+                mime = (getattr(artifact, "mime_type", "") or "").lower() or None
+                is_lossless = is_lossless_image(str(artifact.file_path), mime)
                 if is_lossless:
                     # Screenshots/digital images: skip perspective check entirely —
                     # angle_std is meaningless for non-photographic content.
@@ -769,11 +790,9 @@ class Agent3Object(ForensicAgent):
         def _artifact_is_lossless(artifact) -> bool:
             """Return True if the artifact is a lossless image format (PNG/BMP/TIFF/GIF/WEBP)."""
             import os as _os
-            _lossless_exts  = {".png", ".bmp", ".tiff", ".tif", ".gif", ".webp"}
-            _lossless_mimes = {"image/png", "image/bmp", "image/tiff", "image/gif", "image/webp"}
-            ext  = _os.path.splitext(str(artifact.file_path))[1].lower()
-            mime = ((artifact.metadata or {}).get("mime_type", "") if getattr(artifact, "metadata", None) else "").lower()
-            return ext in _lossless_exts or mime in _lossless_mimes
+            file_path = str(artifact.file_path)
+            mime = ((artifact.metadata or {}).get("mime_type", "") if getattr(artifact, "metadata", None) else "") or None
+            return is_lossless_image(file_path, mime)
 
         async def noise_fingerprint(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact

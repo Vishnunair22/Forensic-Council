@@ -72,7 +72,9 @@ def _forensic_report_to_dto(report) -> ReportDTO:
             status=str(d.get("status", "CONFIRMED")),
             confidence_raw=float(d.get("confidence_raw") or 0.0),
             calibrated=bool(d.get("calibrated", False)),
-            calibrated_probability=d.get("calibrated_probability"),
+            calibrated_probability=d.get("raw_confidence_score") or d.get("calibrated_probability"),
+            raw_confidence_score=d.get("raw_confidence_score") or d.get("calibrated_probability"),
+            calibration_status=str(d.get("calibration_status", "UNCALIBRATED")),
             court_statement=d.get("court_statement") or meta.get("court_statement"),
             robustness_caveat=bool(d.get("robustness_caveat", False)),
             robustness_caveat_detail=d.get("robustness_caveat_detail"),
@@ -338,15 +340,29 @@ async def get_arbiter_status(
         if error:
             return {"status": "error", "message": error[:200]}
 
+        evt = getattr(pipeline, "deep_analysis_decision_event", None)
         task = _active_tasks.get(session_id)
-        if task and not task.done():
-            evt = getattr(pipeline, "deep_analysis_decision_event", None)
-            if evt and evt.is_set():
-                # Return the live arbiter step if available, else a default message
-                live_step = getattr(pipeline, "_arbiter_step", "") or ""
-                msg = live_step if live_step else "Arbiter deliberating — synthesising findings…"
-                return {"status": "running", "message": msg}
+        task_running = task is not None and not task.done()
+
+        if evt and not evt.is_set():
             return {"status": "running", "message": "Agents analysing evidence…"}
+
+        # Post-decision: arbiter / final report (even if task handle missing or asyncio finished)
+        live_step = getattr(pipeline, "_arbiter_step", "") or ""
+        msg = (
+            live_step
+            if live_step
+            else "Arbiter deliberating — synthesising findings…"
+        )
+        if task_running:
+            return {"status": "running", "message": msg}
+        if task is not None and task.done():
+            # Task finished but _final_report and _error are both None —
+            # the pipeline crashed without setting either sentinel.
+            if not getattr(pipeline, "_final_report", None) and not getattr(pipeline, "_error", None):
+                return {"status": "error", "message": "Pipeline terminated unexpectedly — no report generated."}
+            return {"status": "running", "message": "Finalising report…"}
+        return {"status": "running", "message": msg}
 
     # Try DB
     try:
@@ -393,22 +409,22 @@ async def get_session_report(
             _final_reports[session_id] = (report, datetime.now(timezone.utc))
             return _forensic_report_to_dto(report)
 
-        # Still running?
-        task = _active_tasks.get(session_id)
-        if task and not task.done():
-            return JSONResponse(
-                status_code=202,
-                content={
-                    "status": "in_progress",
-                    "session_id": session_id,
-                    "message": "Investigation still in progress",
-                },
-            )
-
         # Failed (error set on pipeline)
         error = getattr(pipeline, "_error", None)
         if error:
             raise HTTPException(status_code=500, detail=f"Investigation failed: {error}")
+
+        # Pipeline exists but report not ready: agents, arbiter, or persistence in flight.
+        # Do not fall through to 404 just because _active_tasks lost the handle or the
+        # asyncio Task appears done for one scheduling slice (breaks Accept → results poll).
+        return JSONResponse(
+            status_code=202,
+            content={
+                "status": "in_progress",
+                "session_id": session_id,
+                "message": "Investigation still in progress",
+            },
+        )
 
     # ── 2. In-memory reports cache ────────────────────────────────────────────
     if session_id in _final_reports:
@@ -451,7 +467,8 @@ async def get_session_report(
                         status=str(f.get("status", "CONFIRMED")),
                         confidence_raw=float(f.get("confidence_raw", 0.0)),
                         calibrated=bool(f.get("calibrated", False)),
-                        calibrated_probability=f.get("calibrated_probability"),
+                        calibrated_probability=f.get("raw_confidence_score") or f.get("calibrated_probability"),
+                        raw_confidence_score=f.get("raw_confidence_score") or f.get("calibrated_probability"),
                         court_statement=f.get("court_statement"),
                         robustness_caveat=bool(f.get("robustness_caveat", False)),
                         robustness_caveat_detail=f.get("robustness_caveat_detail"),

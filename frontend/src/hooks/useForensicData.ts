@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { Report, AgentResult } from "@/types";
 import { HistorySchema, ReportSchema } from "@/lib/schemas";
-import { ReportDTO } from "@/lib/api";
+import { ReportDTO, startInvestigation as apiStartInvestigation, InvestigationResponse } from "@/lib/api";
+import { ALLOWED_MIME_TYPES } from "@/lib/constants";
 
 /** Dev-only logger — silenced in production builds */
 const isDev = process.env.NODE_ENV !== "production";
@@ -26,7 +27,7 @@ export function mapReportDtoToReport(dto: ReportDTO): Report {
                 name: finding.agent_name,
                 role: finding.agent_name,
                 result: finding.court_statement || finding.reasoning_summary,
-                confidence: finding.calibrated_probability ?? (finding.confidence_raw || 1.0),
+                confidence: finding.raw_confidence_score ?? finding.calibrated_probability ?? (finding.confidence_raw || 1.0),
                 thinking: finding.reasoning_summary,
             });
         }
@@ -45,6 +46,8 @@ export const useForensicData = () => {
     const [history, setHistory] = useState<Report[]>([]);
     const [currentReport, setCurrentReport] = useState<Report | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [pollError, setPollError] = useState<string | null>(null);
 
     // Load data on mount (from sessionStorage for sensitive data)
     useEffect(() => {
@@ -114,13 +117,47 @@ export const useForensicData = () => {
         }
     }, []);
 
+    const validateFile = useCallback((file: File): { valid: boolean; error?: string } => {
+        const MAX_SIZE = 50 * 1024 * 1024; // 50 MB
+        if (file.size > MAX_SIZE) {
+            return { valid: false, error: "File exceeds 50MB limit." };
+        }
+        if (!ALLOWED_MIME_TYPES.has(file.type)) {
+            return { valid: false, error: "Unsupported file type." };
+        }
+        return { valid: true };
+    }, []);
+
+    const startAnalysis = useCallback(async (
+        file: File,
+        caseId: string,
+        investigatorId: string,
+    ): Promise<string> => {
+        setIsAnalyzing(true);
+        setPollError(null);
+        try {
+            const resp: InvestigationResponse = await apiStartInvestigation(file, caseId, investigatorId);
+            return resp.session_id;
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : "Investigation failed";
+            setPollError(msg);
+            throw err;
+        } finally {
+            setIsAnalyzing(false);
+        }
+    }, []);
+
     return {
         history,
         currentReport,
         isLoading,
+        isAnalyzing,
+        pollError,
         saveCurrentReport,
         addToHistory,
         deleteFromHistory,
         clearHistory,
+        validateFile,
+        startAnalysis,
     };
 };
