@@ -158,6 +158,7 @@ def _forensic_report_to_dto(report) -> ReportDTO:
         skipped_agents=dict(getattr(report, "skipped_agents", {}) or {}),
         analysis_coverage_note=getattr(report, "analysis_coverage_note", "") or "",
         per_agent_summary=dict(getattr(report, "per_agent_summary", {}) or {}),
+        degradation_flags=list(getattr(report, "degradation_flags", []) or []),
     )
 
 

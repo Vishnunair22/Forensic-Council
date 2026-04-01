@@ -584,11 +584,34 @@ export default function ResultPage() {
               </div>
             </div>
 
+            {/* Verdict sentence */}
+            {report.verdict_sentence && (
+              <div className="glass-t2 rounded-2xl px-5 py-4 border-l-2 border-foreground/20">
+                <p className="text-[9px] font-mono font-bold uppercase tracking-[0.2em] text-foreground/25 mb-1.5">Arbiter Verdict</p>
+                <p className="text-sm font-semibold text-foreground/80 leading-relaxed">{report.verdict_sentence}</p>
+              </div>
+            )}
+
             {/* Reliability note */}
             {report.reliability_note && (
               <div className="glass-t2 rounded-2xl flex items-start gap-3 px-5 py-4">
                 <Info className="w-4 h-4 text-foreground/30 shrink-0 mt-0.5" />
                 <p className="text-[11px] font-mono text-foreground/45 leading-relaxed">{report.reliability_note}</p>
+              </div>
+            )}
+
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* SECTION 2b: Executive Summary                                  */}
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {report.executive_summary && (
+              <div className="glass-t1 rounded-2xl overflow-hidden">
+                <div className="px-6 py-4 flex items-center gap-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>
+                  <FileText className="w-4 h-4 text-foreground/40 shrink-0" />
+                  <h2 className="text-[11px] font-bold uppercase tracking-widest text-foreground">Executive Summary</h2>
+                </div>
+                <div className="p-5">
+                  <p className="text-[12px] text-foreground/70 leading-relaxed whitespace-pre-wrap">{report.executive_summary}</p>
+                </div>
               </div>
             )}
 
@@ -762,6 +785,7 @@ export default function ResultPage() {
                     })() },
                     { label: "Degradation Flags",     value: report.degradation_flags?.length ? `${report.degradation_flags.length} warning${report.degradation_flags.length > 1 ? "s" : ""}` : "None" },
                     { label: "Applicable Agents",     value: `${report.applicable_agent_count ?? activeAgentIds.length} / ${ALL_AGENT_IDS.length}` },
+                    ...(report.analysis_coverage_note ? [{ label: "Coverage Note", value: report.analysis_coverage_note }] : []),
                   ].map(({ label, value, mono, truncate }) => (
                     <div key={label} className="space-y-1">
                       <p className="text-[8px] font-mono font-bold uppercase tracking-[0.15em] text-foreground/25">{label}</p>

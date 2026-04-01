@@ -427,6 +427,7 @@ class ForensicCouncilPipeline:
         with _tracer.start_as_current_span("pipeline.arbiter_deliberation") as span:
             span.set_attribute("case_id", case_id)
             span.set_attribute("agent_count", len(arbiter_results))
+            _arbiter_start = time.perf_counter()
             try:
                 report = await asyncio.wait_for(
                     self.arbiter.deliberate(arbiter_results, case_id=case_id),
@@ -450,6 +451,21 @@ class ForensicCouncilPipeline:
                 )
                 span.set_attribute("verdict", str(report.overall_verdict))
                 span.set_attribute("timeout", True)
+
+        _arbiter_elapsed = time.perf_counter() - _arbiter_start
+        logger.info(
+            "Arbiter deliberation complete",
+            session_id=str(session_id),
+            elapsed_seconds=round(_arbiter_elapsed, 2),
+            verdict=report.overall_verdict,
+            findings_count=sum(len(f) for f in report.per_agent_findings.values()),
+        )
+        if _arbiter_elapsed > 120:
+            logger.warning(
+                "Arbiter deliberation took unusually long",
+                elapsed_seconds=round(_arbiter_elapsed, 2),
+                session_id=str(session_id),
+            )
         
         # ── Detect Gemini degradation ────────────────────────────────────────
         # If Gemini is configured but no gemini_vision findings appear in the report,
@@ -463,14 +479,35 @@ class ForensicCouncilPipeline:
                 "Possible causes: invalid API key, model quota exceeded, network error."
             )
 
-        # Add additional fields to report
-        report.case_linking_flags = await self._collect_case_linking_flags(
-            session_id, evidence_artifact
-        )
-        report.chain_of_custody_log = await self._get_custody_log(session_id)
-        report.evidence_version_trees = await self._get_version_trees(
-            evidence_artifact.artifact_id
-        )
+        # Add additional fields to report (each capped at 15 s to prevent hangs
+        # when external infra is slow or unreachable after the arbiter finishes).
+        try:
+            report.case_linking_flags = await asyncio.wait_for(
+                self._collect_case_linking_flags(session_id, evidence_artifact),
+                timeout=15.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Case linking flags collection timed out")
+            report.case_linking_flags = []
+
+        try:
+            report.chain_of_custody_log = await asyncio.wait_for(
+                self._get_custody_log(session_id),
+                timeout=15.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Custody log fetch timed out")
+            report.chain_of_custody_log = []
+
+        try:
+            report.evidence_version_trees = await asyncio.wait_for(
+                self._get_version_trees(evidence_artifact.artifact_id),
+                timeout=15.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Version trees fetch timed out")
+            report.evidence_version_trees = []
+
         report.react_chains = {
             r.agent_id: r.react_chain for r in agent_results if r.error is None
         }
@@ -483,7 +520,10 @@ class ForensicCouncilPipeline:
         # this is a critical integrity failure that must be disclosed.
         if self.custody_logger and self.custody_logger._postgres is not None:
             try:
-                chain_report = await self.custody_logger.verify_chain(session_id)
+                chain_report = await asyncio.wait_for(
+                    self.custody_logger.verify_chain(session_id),
+                    timeout=15.0,
+                )
                 if not chain_report.valid:
                     logger.error(
                         "Chain-of-custody integrity check FAILED before report signing",

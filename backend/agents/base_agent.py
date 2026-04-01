@@ -1219,7 +1219,7 @@ RULES:
     • "LIKELY_MANIPULATED": 2+ independent tools produced "bad" flags with confirmed manipulation evidence.
     • "INCONCLUSIVE": genuinely mixed evidence (some indicators present, some absent) OR critical applicable tools failed. Do NOT use INCONCLUSIVE when all applicable tools returned clean results.
 
-Be CONCISE — target ≤1400 tokens total. Respond ONLY with valid JSON (no markdown, no preamble):
+Target ≤2000 tokens total. Every analysis sentence MUST cite exact numeric values from tool output (e.g. ela_mean=0.043, anomaly_score=0.71). Respond ONLY with valid JSON (no markdown, no preamble):
 {{
   "verdict": "AUTHENTIC|LIKELY_MANIPULATED|INCONCLUSIVE",
   "confidence": <float 0-1>,
@@ -1258,7 +1258,7 @@ Be CONCISE — target ≤1400 tokens total. Respond ONLY with valid JSON (no mar
             raw_response = await llm_client.generate_synthesis(
                 system_prompt=system_prompt,
                 user_content=user_content,
-                max_tokens=2500,  # increased to cover all tool groups without truncation
+                max_tokens=3500,  # increased to avoid truncation across all tool groups
                 timeout_override=30.0,
             )
         except Exception as groq_err:

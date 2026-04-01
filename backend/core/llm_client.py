@@ -104,6 +104,28 @@ class LLMClient:
         key_lower = self.api_key.lower()
         return not any(sig in key_lower for sig in _placeholder_signals)
 
+    async def health_check(self) -> bool:
+        """Quick probe to verify LLM service is reachable (3s timeout)."""
+        if not self.is_available:
+            return False
+        try:
+            client = await self._get_client(timeout_override=3.0)
+            url_map = {
+                "groq": "https://api.groq.com/openai/v1/models",
+                "openai": "https://api.openai.com/v1/models",
+                "anthropic": "https://api.anthropic.com/v1/models",
+            }
+            url = url_map.get(self.provider)
+            if not url:
+                return True  # Unknown provider — assume healthy
+            headers = {"Authorization": f"Bearer {self.api_key}"} if self.provider != "anthropic" else {
+                "x-api-key": self.api_key, "anthropic-version": "2023-06-01"
+            }
+            resp = await asyncio.wait_for(client.get(url, headers=headers), timeout=3.0)
+            return resp.status_code < 500
+        except Exception:
+            return False
+
     async def generate_reasoning_step(
         self,
         system_prompt: str,

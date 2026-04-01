@@ -706,18 +706,18 @@ export default function EvidencePage() {
 
     let successTimer: ReturnType<typeof setTimeout> | undefined;
 
-    if (analysisStreamReady && allForensicAgentsLive) {
+    if (analysisStreamReady) {
       successTimer = setTimeout(() => {
         setShowLoadingOverlay(false);
         sessionStorage.removeItem("fc_show_loading");
-      }, 400);
+      }, 800);
     }
 
     return () => {
       clearTimeout(fallback);
       if (successTimer) clearTimeout(successTimer);
     };
-  }, [showLoadingOverlay, analysisStreamReady, allForensicAgentsLive]);
+  }, [showLoadingOverlay, analysisStreamReady]);
 
   /** If upload/investigate failed while landing overlay is up, never trap the UI under a spinner. */
   useEffect(() => {
@@ -733,7 +733,7 @@ export default function EvidencePage() {
     const t = setTimeout(() => {
       setShowLoadingOverlay(false);
       sessionStorage.removeItem("fc_show_loading");
-    }, 25000);
+    }, 4_000);
     return () => clearTimeout(t);
   }, [showLoadingOverlay, analysisStreamReady]);
 

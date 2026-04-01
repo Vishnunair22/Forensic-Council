@@ -289,11 +289,7 @@ class CouncilArbiter:
             )
 
         def _deduplicate_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
-            """Remove duplicate findings with same finding_type produced by same tool.
-            
-            Includes analysis_phase in the dedup key so initial-pass and deep-pass
-            findings for the same tool are kept as separate entries.
-            """
+            """Remove duplicate findings, assign severity tier in one pass."""
             seen: set[tuple[str, str, str, str]] = set()
             out: list[dict[str, Any]] = []
             for f in findings:
@@ -306,6 +302,8 @@ class CouncilArbiter:
                 )
                 if key not in seen:
                     seen.add(key)
+                    if isinstance(f, dict) and "severity_tier" not in f:
+                        f["severity_tier"] = _assign_severity_tier(f)
                     out.append(f)
             return out
 
@@ -406,12 +404,7 @@ class CouncilArbiter:
                 if agent_gemini:
                     gemini_findings_by_agent[agent_id] = agent_gemini
 
-        # Attach severity_tier to every finding now that deduplication is done.
-        for _aid, _flist in per_agent_findings.items():
-            for _f in _flist:
-                if isinstance(_f, dict) and "severity_tier" not in _f:
-                    _f["severity_tier"] = _assign_severity_tier(_f)
-        # Rebuild all_findings with updated dicts
+        # Severity tiers already assigned in _deduplicate_findings — rebuild all_findings
         all_findings = [f for findings_list in [
             per_agent_findings[aid] for aid in active_agent_results
         ] for f in findings_list]
@@ -518,7 +511,7 @@ class CouncilArbiter:
                 _entry["plain_description"] = _plain
                 contested_findings.append(_entry)
                 if len(challenge_results) >= _MAX_CHALLENGE_LOOPS:
-                    continue
+                    continue  # Still collect contested entries but skip challenge
                 conf_a = comparison.finding_a.get("confidence_raw", 0)
                 conf_b = comparison.finding_b.get("confidence_raw", 0)
                 challenged_agent = (
@@ -719,144 +712,173 @@ class CouncilArbiter:
         )
         await _step(f"Verdict: {overall_verdict} — synthesising report…")
 
-        # ── E: Tiered LLM synthesis — fastest/cheapest first ─────────────
-        # Order: structured_summary (JSON, 25s) → per-agent narratives (parallel, 40s)
-        # → executive summary (45s) → uncertainty (30s).
-        # This ensures key_findings/verdict_sentence are always available even if
-        # later calls time out under Groq rate pressure.
+        # ── E: PARALLEL LLM synthesis with health check + fast-path ─────
+        # All 4 LLM calls run concurrently (capped by individual timeouts).
+        # If Groq is unreachable, a 3s health check avoids four 25-45s timeouts.
 
-        # Fast-path: when use_llm=False, skip all LLM calls immediately and use
-        # template fallbacks.  This is triggered either by the caller explicitly
-        # disabling LLM (e.g. arbiter deliberation timeout in the pipeline) or when
-        # no API key is configured.  The caller is responsible for appending a
-        # degradation flag to the report after deliberate() returns.
-        _llm_synthesis_done = False
-        if not use_llm:
-            verdict_sentence, key_findings_list, reliability_note = \
-                self._template_structured_summary(
-                    overall_verdict, overall_confidence, overall_error_rate,
-                    manipulation_probability, applicable_agent_count, all_findings,
-                    len(cross_modal_confirmed), contested_findings_count,
-                    analysis_coverage_note,
-                )
-            per_agent_analysis = {}
-            executive_summary = self._template_executive_summary(
+        # Defaults — overwritten by either template or LLM path below
+        verdict_sentence: str = ""
+        key_findings_list: list[str] = []
+        reliability_note: str = ""
+        per_agent_analysis: dict[str, str] = {}
+        executive_summary: str = ""
+        uncertainty_statement: str = ""
+
+        _template_fallback = lambda: (
+            *self._template_structured_summary(
+                overall_verdict, overall_confidence, overall_error_rate,
+                manipulation_probability, applicable_agent_count, all_findings,
+                len(cross_modal_confirmed), contested_findings_count,
+                analysis_coverage_note,
+            ),
+            {},
+            self._template_executive_summary(
                 len(active_agent_results), len(all_findings),
                 len(cross_modal_confirmed), len(contested_findings), all_findings,
-            )
-            uncertainty_statement = (
+            ),
+            (
                 f"Analysis based on {len(all_findings)} findings from "
                 f"{len(active_agent_results)} active agent(s). "
-                f"Overall error rate: {overall_error_rate:.0%}. "
-                "LLM narrative synthesis was disabled for this report."
-            )
-            _llm_synthesis_done = True
+                f"Overall error rate: {overall_error_rate:.0%}."
+            ),
+        )
 
-        # 1. Structured summary (fastest — JSON mode, short prompt)
-        if not _llm_synthesis_done:
-            await _step("Generating structured summary fields…")
-            try:
-                verdict_sentence, key_findings_list, reliability_note = \
-                    await self._generate_structured_summary(
-                        overall_verdict=overall_verdict,
-                        overall_confidence=overall_confidence,
-                        overall_error_rate=overall_error_rate,
-                        manipulation_probability=manipulation_probability,
-                        applicable_agent_count=applicable_agent_count,
-                        all_findings=all_findings,
-                        cross_modal_confirmed_count=len(cross_modal_confirmed),
-                        contested_count=contested_findings_count,
-                        analysis_coverage_note=analysis_coverage_note,
+        llm_enabled = (
+            use_llm
+            and self.config.llm_api_key
+            and self.config.llm_provider != "none"
+            and bool(active_agent_results)
+        )
+
+        if llm_enabled:
+            # Quick health probe — avoids 4× timeout when Groq is down
+            _client = LLMClient(self.config)
+            if not _client.is_available:
+                llm_enabled = False
+            else:
+                try:
+                    _healthy = await asyncio.wait_for(_client.health_check(), timeout=5.0)
+                    if not _healthy:
+                        logger.warning("LLM health check failed — using template fallbacks")
+                        llm_enabled = False
+                except asyncio.TimeoutError:
+                    logger.warning("LLM health check timed out — using template fallbacks")
+                    llm_enabled = False
+
+        if not llm_enabled:
+            (verdict_sentence, key_findings_list, reliability_note,
+             per_agent_analysis, executive_summary, uncertainty_statement) = _template_fallback()
+        else:
+            await _step("Generating forensic summary via Groq (parallel synthesis)…")
+
+            # ── Task 1: Structured summary (25s, JSON mode — fastest) ──
+            async def _task_structured():
+                try:
+                    return await asyncio.wait_for(
+                        self._generate_structured_summary(
+                            overall_verdict=overall_verdict,
+                            overall_confidence=overall_confidence,
+                            overall_error_rate=overall_error_rate,
+                            manipulation_probability=manipulation_probability,
+                            applicable_agent_count=applicable_agent_count,
+                            all_findings=all_findings,
+                            cross_modal_confirmed_count=len(cross_modal_confirmed),
+                            contested_count=contested_findings_count,
+                            analysis_coverage_note=analysis_coverage_note,
+                        ),
+                        timeout=25.0,
                     )
-            except Exception as _struct_err:
-                logger.warning(f"Structured summary failed: {_struct_err}")
-                verdict_sentence, key_findings_list, reliability_note = \
-                    self._template_structured_summary(
+                except Exception as e:
+                    logger.warning(f"Structured summary failed: {e}")
+                    return self._template_structured_summary(
                         overall_verdict, overall_confidence, overall_error_rate,
                         manipulation_probability, applicable_agent_count, all_findings,
-                        len(cross_modal_confirmed), contested_findings_count, analysis_coverage_note
+                        len(cross_modal_confirmed), contested_findings_count,
+                        analysis_coverage_note,
                     )
 
-        # 2. Per-agent narratives (parallel — each capped at 40 s)
-        if not _llm_synthesis_done:
-            await _step("Generating per-agent analysis via Groq…")
-            per_agent_analysis: dict[str, str] = {}
+            # ── Task 2: Per-agent narratives (40s, parallel gather) ─────
+            async def _task_narratives():
+                _NARRATIVE_TIMEOUT = 40.0
+                async def _one(aid, res):
+                    findings = res.get("findings", [])
+                    if not findings:
+                        return aid, ""
+                    try:
+                        narr = await asyncio.wait_for(
+                            self._generate_agent_narrative(
+                                aid, findings, per_agent_metrics.get(aid, {}),
+                            ),
+                            timeout=_NARRATIVE_TIMEOUT,
+                        )
+                        return aid, narr or ""
+                    except (asyncio.TimeoutError, Exception) as e:
+                        logger.warning(f"Narrative for {aid}: {e}")
+                        return aid, ""
 
-            _NARRATIVE_TIMEOUT = 40.0
+                pairs = await asyncio.gather(
+                    *[_one(aid, res) for aid, res in active_agent_results.items()],
+                    return_exceptions=True,
+                )
+                result = {}
+                for p in pairs:
+                    if isinstance(p, tuple) and len(p) == 2 and p[1]:
+                        result[p[0]] = p[1]
+                return result
 
-            async def _one_narrative(aid: str, res: dict) -> tuple[str, str]:
-                findings = res.get("findings", [])
-                if not findings:
-                    return aid, ""
+            # ── Task 3: Executive summary (45s) ────────────────────────
+            async def _task_executive():
                 try:
-                    narr = await asyncio.wait_for(
-                        self._generate_agent_narrative(
-                            agent_id=aid,
-                            findings=findings,
-                            metrics=per_agent_metrics.get(aid, {}),
+                    return await asyncio.wait_for(
+                        self._generate_executive_summary(
+                            len(active_agent_results), len(all_findings),
+                            len(cross_modal_confirmed), len(contested_findings),
+                            all_findings=all_findings,
+                            gemini_findings=gemini_vision_findings,
+                            active_agent_metrics=active_metrics,
+                            overall_verdict=overall_verdict,
                         ),
-                        timeout=_NARRATIVE_TIMEOUT,
+                        timeout=45.0,
                     )
-                    return aid, narr or ""
-                except asyncio.TimeoutError:
-                    logger.warning(f"Per-agent narrative timed out after {_NARRATIVE_TIMEOUT}s for {aid}")
-                    return aid, ""
-                except Exception as _narr_err:
-                    logger.warning(f"Per-agent narrative failed for {aid}: {_narr_err}")
-                    return aid, ""
+                except (asyncio.TimeoutError, Exception) as e:
+                    logger.warning(f"Executive summary failed: {e}")
+                    return self._template_executive_summary(
+                        len(active_agent_results), len(all_findings),
+                        len(cross_modal_confirmed), len(contested_findings), all_findings,
+                    )
 
-            narrative_pairs = await asyncio.gather(
-                *[_one_narrative(aid, res) for aid, res in active_agent_results.items()],
-                return_exceptions=True,
+            # ── Task 4: Uncertainty statement (30s) ────────────────────
+            async def _task_uncertainty():
+                try:
+                    return await asyncio.wait_for(
+                        self._generate_uncertainty_statement(
+                            len(incomplete_findings), len(contested_findings),
+                            overall_error_rate=overall_error_rate,
+                        ),
+                        timeout=30.0,
+                    )
+                except (asyncio.TimeoutError, Exception) as e:
+                    logger.warning(f"Uncertainty statement failed: {e}")
+                    return (
+                        f"Analysis based on {len(all_findings)} findings from "
+                        f"{len(active_agent_results)} active agent(s). "
+                        f"Overall error rate: {overall_error_rate:.0%}."
+                    )
+
+            # Run all 4 LLM synthesis tasks fully in parallel to minimise
+            # total wall-clock time (critical path: max(t1,t2,t3,t4) instead
+            # of t1+t3 in series).
+            (
+                (verdict_sentence, key_findings_list, reliability_note),
+                per_agent_analysis,
+                executive_summary,
+                uncertainty_statement,
+            ) = await asyncio.gather(
+                _task_structured(),
+                _task_narratives(),
+                _task_executive(),
+                _task_uncertainty(),
             )
-            narrative_pairs = [p for p in narrative_pairs if not isinstance(p, BaseException)]
-            for _aid, _narr in narrative_pairs:
-                if _narr:
-                    per_agent_analysis[_aid] = _narr
-
-        # 3. Executive summary (heaviest — 45 s cap)
-        if not _llm_synthesis_done:
-            await _step("Generating executive summary via Groq…")
-            try:
-                executive_summary = await asyncio.wait_for(
-                    self._generate_executive_summary(
-                        len(active_agent_results),
-                        len(all_findings),
-                        len(cross_modal_confirmed),
-                        len(contested_findings),
-                        all_findings=all_findings,
-                        gemini_findings=gemini_vision_findings,
-                        active_agent_metrics=active_metrics,
-                        overall_verdict=overall_verdict,
-                    ),
-                    timeout=45.0,
-                )
-            except asyncio.TimeoutError:
-                logger.warning("Executive summary Groq call timed out — using template fallback")
-                executive_summary = self._template_executive_summary(
-                    len(active_agent_results), len(all_findings),
-                    len(cross_modal_confirmed), len(contested_findings), all_findings,
-                )
-
-        # 4. Uncertainty statement (30 s cap)
-        if not _llm_synthesis_done:
-            await _step("Computing uncertainty bounds…")
-            try:
-                uncertainty_statement = await asyncio.wait_for(
-                    self._generate_uncertainty_statement(
-                        len(incomplete_findings),
-                        len(contested_findings),
-                        overall_error_rate=overall_error_rate,
-                    ),
-                    timeout=30.0,
-                )
-            except asyncio.TimeoutError:
-                logger.warning("Uncertainty statement timed out — using fallback")
-                uncertainty_statement = (
-                    f"Analysis based on {len(all_findings)} findings from "
-                    f"{len(active_agent_results)} active agent(s). "
-                    f"Overall error rate: {overall_error_rate:.0%}."
-                )
 
         # ── Cross-modal fusion analysis ────────────────────────────────────
         fusion_result = cross_modal_fuse(active_agent_results)
@@ -916,76 +938,65 @@ class CouncilArbiter:
     ) -> list[FindingComparison]:
         """Compare findings across agents using category-indexed comparison.
 
-        Instead of O(n²) pairwise iteration, findings are first indexed by
-        semantic category. Only findings within the same category are compared
-        pairwise.  Findings with no recognised category are recorded as
-        INDEPENDENT without any pairwise iteration.
+        Pre-filters stub findings and memoises category lookups.
         """
         comparisons: list[FindingComparison] = []
 
+        # Pre-filter stubs to reduce O(n²) surface
+        real_findings = [f for f in all_findings if not f.get("stub_result")]
+
+        # Memoise category lookups
+        _cat_cache: dict[str, str | None] = {}
+        def _cat(ft: str) -> str | None:
+            if ft not in _cat_cache:
+                _cat_cache[ft] = self._get_category(ft)
+            return _cat_cache[ft]
+
         # ── 1. Index findings by (category, agent_id) ─────────────────────
-        # category_buckets: {category: {agent_id: [findings]}}
         category_buckets: dict[str, dict[str, list[dict]]] = {}
         uncategorised: list[dict] = []
 
-        for f in all_findings:
-            cat = self._get_category(f.get("finding_type", ""))
-            if cat is None:
+        for f in real_findings:
+            c = _cat(f.get("finding_type", ""))
+            if c is None:
                 uncategorised.append(f)
             else:
                 agent_id = f.get("agent_id", "")
-                category_buckets.setdefault(cat, {}).setdefault(agent_id, []).append(f)
+                category_buckets.setdefault(c, {}).setdefault(agent_id, []).append(f)
 
         # ── 2. Compare within each category bucket ────────────────────────
         for cat, agent_map in category_buckets.items():
             agent_ids = list(agent_map.keys())
             for i, agent_a in enumerate(agent_ids):
                 for agent_b in agent_ids[i + 1:]:
-                    # Cross-product of findings from agent_a × agent_b
                     for fa in agent_map[agent_a]:
                         for fb in agent_map[agent_b]:
-                            status_a = fa.get("status", "")
-                            status_b = fb.get("status", "")
-                            if status_a == status_b:
-                                comparisons.append(FindingComparison(
-                                    finding_a=fa,
-                                    finding_b=fb,
-                                    verdict=FindingVerdict.AGREEMENT,
-                                    cross_modal_confirmed=True,
-                                ))
-                            else:
-                                comparisons.append(FindingComparison(
-                                    finding_a=fa,
-                                    finding_b=fb,
-                                    verdict=FindingVerdict.CONTRADICTION,
-                                    cross_modal_confirmed=False,
-                                ))
-
-            # Also handle same-agent findings within a category (no cross-modal)
-            for agent_id, findings_list in agent_map.items():
-                for i in range(len(findings_list)):
-                    for j in range(i + 1, len(findings_list)):
-                        fa, fb = findings_list[i], findings_list[j]
-                        status_a = fa.get("status", "")
-                        status_b = fb.get("status", "")
-                        if status_a == status_b:
+                            same = fa.get("status", "") == fb.get("status", "")
                             comparisons.append(FindingComparison(
-                                finding_a=fa,
-                                finding_b=fb,
-                                verdict=FindingVerdict.AGREEMENT,
-                                cross_modal_confirmed=False,
-                            ))
-                        else:
-                            comparisons.append(FindingComparison(
-                                finding_a=fa,
-                                finding_b=fb,
-                                verdict=FindingVerdict.CONTRADICTION,
-                                cross_modal_confirmed=False,
+                                finding_a=fa, finding_b=fb,
+                                verdict=FindingVerdict.AGREEMENT if same else FindingVerdict.CONTRADICTION,
+                                cross_modal_confirmed=same,
                             ))
 
-        # ── 3. Uncategorised findings → INDEPENDENT (no pairwise needed) ──
-        # Each uncategorised finding is independent; emit one INDEPENDENT
-        # comparison per finding (paired with itself as a placeholder).
+            # Same-agent findings within category (no cross-modal confirmation)
+            for _aid, fl in agent_map.items():
+                for ii in range(len(fl)):
+                    for jj in range(ii + 1, len(fl)):
+                        fa, fb = fl[ii], fl[jj]
+                        same = fa.get("status", "") == fb.get("status", "")
+                        comparisons.append(FindingComparison(
+                            finding_a=fa, finding_b=fb,
+                            verdict=FindingVerdict.AGREEMENT if same else FindingVerdict.CONTRADICTION,
+                            cross_modal_confirmed=False,
+                        ))
+
+        # ── 3. Uncategorised findings → INDEPENDENT ───────────────────────
+        for f in uncategorised:
+            comparisons.append(FindingComparison(
+                finding_a=f, finding_b=f,
+                verdict=FindingVerdict.INDEPENDENT,
+                cross_modal_confirmed=False,
+            ))
         for f in uncategorised:
             comparisons.append(FindingComparison(
                 finding_a=f,
@@ -1024,47 +1035,25 @@ class CouncilArbiter:
         challenge_id = uuid4()
         
         logger.info(
-            "Starting challenge loop",
+            "Challenge loop: contradiction recorded for human review",
             challenge_id=str(challenge_id),
             challenged_agent=agent_id,
-            contradicting_agent=context_from_other.get("agent_id", "unknown"),
         )
         
-        # Log challenge initiation
+        # Single custody log entry (reduced from 2) for the contradiction
         if self.custody_logger:
             await self.custody_logger.log_entry(
-                entry_type=EntryType.INTER_AGENT_CALL,
+                entry_type=EntryType.HITL_CHECKPOINT,
                 agent_id="Arbiter",
                 session_id=self.session_id,
                 content={
-                    "action": "challenge_initiated",
+                    "reason": "CONTESTED_FINDING",
                     "challenge_id": str(challenge_id),
                     "challenged_agent": agent_id,
                     "contradiction_type": contradiction.verdict.value,
                     "original_finding_type": contradiction.finding_a.get("finding_type"),
                     "contradicting_finding_type": contradiction.finding_b.get("finding_type"),
-                },
-            )
-        
-        # Record the contradiction without re-running the agent.
-        # Full agent re-invocation was removed — it runs the complete ReAct loop
-        # (2–5 min per agent × up to 5 loops = 10–25 extra minutes) and stalls
-        # the result page.  Contested findings are flagged for human review
-        # instead, which is the correct legal disposition anyway.
-        revised_finding = None
-        resolved = False
-
-        if self.custody_logger:
-            await self.custody_logger.log_entry(
-                entry_type=EntryType.SELF_REFLECTION,
-                agent_id=agent_id,
-                session_id=self.session_id,
-                content={
-                    "action": "challenge_recorded",
-                    "challenge_id": str(challenge_id),
-                    "note": "Contested finding logged for human review",
-                    "challenged_finding_type": contradiction.finding_a.get("finding_type"),
-                    "contradicting_finding_type": contradiction.finding_b.get("finding_type"),
+                    "note": "Contested finding flagged for human review — no agent re-invocation",
                 },
             )
         
@@ -1072,8 +1061,8 @@ class CouncilArbiter:
             challenge_id=challenge_id,
             challenged_agent=agent_id,
             original_finding=contradiction.finding_a,
-            revised_finding=revised_finding,
-            resolved=resolved,
+            revised_finding=None,
+            resolved=False,
         )
     
     async def trigger_tribunal(self, case: TribunalCase) -> None:

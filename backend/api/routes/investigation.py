@@ -1866,11 +1866,28 @@ async def run_investigation_task(
 
         pipeline_task = asyncio.create_task(pipeline_coro)
 
+        # Track cumulative computation time (excludes user decision wait).
+        # This replaces the original asyncio.wait_for which counted wall-clock
+        # time including the user decision pause.
+        computation_deadline = time.monotonic() + float(timeout)
+        user_decision_elapsed = 0.0
+
         # Wait for either completion or the user-decision sentinel
         while True:
+            remaining = computation_deadline - time.monotonic()
+            if remaining <= 0:
+                logger.error(f"Computation budget of {timeout}s exhausted (excluding user decision time)")
+                pipeline_task.cancel()
+                try:
+                    await pipeline_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+                raise asyncio.TimeoutError(f"Pipeline computation exceeded {timeout}s budget")
+
+            poll_interval = min(5.0, remaining)
             done, _ = await asyncio.wait(
                 [pipeline_task],
-                timeout=5.0,
+                timeout=poll_interval,
             )
             if pipeline_task in done:
                 break  # pipeline finished (no user decision needed, or already handled)
@@ -1879,15 +1896,21 @@ async def run_investigation_task(
                 # Give the user up to 1 hour to decide, outside the computation budget
                 logger.info(f"Pipeline paused for user decision — waiting up to 3600 s")
                 user_wait_event = getattr(pipeline, "deep_analysis_decision_event")
+                decision_start = time.monotonic()
                 try:
                     await asyncio.wait_for(user_wait_event.wait(), timeout=3600.0)
                 except asyncio.TimeoutError:
                     logger.warning("User decision timed out after 3600 s — treating as Accept (skip deep)")
                     pipeline.run_deep_analysis_flag = False
                     user_wait_event.set()
+                # Exclude user decision time from computation budget
+                user_decision_elapsed += time.monotonic() - decision_start
+                computation_deadline += user_decision_elapsed
+                user_decision_elapsed = 0.0  # reset to avoid double-counting
                 # Reset sentinel and continue waiting for pipeline to finish
                 pipeline._awaiting_user_decision = False
 
+        # Re-raise any exception from the pipeline task
         report = pipeline_task.result()
         
         # Pipeline complete
