@@ -8,7 +8,7 @@ import {
   Fingerprint, Image as ImageIcon, Film, Mic,
   AlertCircle, Activity, Info, History, X,
   Zap, Layers, Clock, Target, ArrowRight,
-  BarChart2, TrendingUp, Award, Search, Cpu,
+  BarChart2, TrendingUp, Award, Search, Cpu, Hash
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
@@ -36,10 +36,10 @@ const AGENT_META: Record<string, {
   accentColor: string; accentBg: string; accentBorder: string; accentFill: string;
 }> = {
   Agent1: { name: "Agent 1", role: "Image Integrity",    accentColor: "text-cyan-400",   accentBg: "bg-cyan-500/10",   accentBorder: "border-cyan-500/30",   accentFill: "#22d3ee" },
-  Agent2: { name: "Agent 2", role: "Audio Forensics",    accentColor: "text-emerald-400",accentBg: "bg-emerald-500/10",accentBorder: "border-emerald-500/30", accentFill: "#34d399" },
-  Agent3: { name: "Agent 3", role: "Object & Weapons",   accentColor: "text-amber-400",  accentBg: "bg-amber-500/10",  accentBorder: "border-amber-500/30",  accentFill: "#fbbf24" },
-  Agent4: { name: "Agent 4", role: "Video Analysis",     accentColor: "text-rose-400",   accentBg: "bg-rose-500/10",   accentBorder: "border-rose-500/30",   accentFill: "#fb7185" },
-  Agent5: { name: "Agent 5", role: "Metadata & Context", accentColor: "text-violet-400", accentBg: "bg-violet-500/10", accentBorder: "border-violet-500/30", accentFill: "#a78bfa" },
+  Agent2: { name: "Agent 2", role: "Audio Forensics",    accentColor: "text-indigo-400", accentBg: "bg-indigo-500/10", accentBorder: "border-indigo-500/30", accentFill: "#818cf8" },
+  Agent3: { name: "Agent 3", role: "Object & Weapons",   accentColor: "text-sky-400",    accentBg: "bg-sky-500/10",    accentBorder: "border-sky-500/30",    accentFill: "#38bdf8" },
+  Agent4: { name: "Agent 4", role: "Video Analysis",     accentColor: "text-teal-400",   accentBg: "bg-teal-500/10",   accentBorder: "border-teal-500/30",   accentFill: "#2dd4bf" },
+  Agent5: { name: "Agent 5", role: "Metadata & Context", accentColor: "text-blue-400",   accentBg: "bg-blue-500/10",   accentBorder: "border-blue-500/30",   accentFill: "#60a5fa" },
 };
 
 type Tab = "analysis" | "history";
@@ -556,7 +556,7 @@ export default function ResultPage() {
               {/* ════════════════════════════════════════════════════════════ */}
               {/* SECTION 1 — Evidence Hero                                  */}
               {/* ════════════════════════════════════════════════════════════ */}
-              <div className="rounded-2xl overflow-hidden" style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}>
+              <div className="rounded-2xl overflow-hidden bg-white/[0.025] border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-colors hover:bg-white/[0.04] hover:border-white/[0.12]">
                 <div className="flex items-stretch">
                   {/* Thumbnail */}
                   <div className="w-24 sm:w-28 shrink-0 relative overflow-hidden" style={{ background: "rgba(0,0,0,0.3)", borderRight: "1px solid rgba(255,255,255,0.06)" }}>
@@ -625,8 +625,7 @@ export default function ResultPage() {
                 {(() => {
                   const clr = confPct >= 75 ? "#34d399" : confPct >= 50 ? "#fbbf24" : "#f87171";
                   return (
-                    <div className="rounded-2xl p-5 flex flex-col items-center gap-3 relative overflow-hidden"
-                      style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                    <div className="rounded-2xl p-5 flex flex-col items-center gap-3 relative overflow-hidden bg-white/[0.025] border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-colors hover:bg-white/[0.04] hover:border-white/[0.12]">
                       <div className="absolute inset-0 opacity-[0.03]" style={{ background: `radial-gradient(circle at 50% 0%, ${clr}, transparent 70%)` }} />
                       <p className="text-[8px] font-mono font-bold uppercase tracking-[0.22em] text-foreground/30 self-start">Confidence</p>
                       <div className="relative flex items-center justify-center">
@@ -664,8 +663,7 @@ export default function ResultPage() {
                   const naT     = activeAgentIds.reduce((s, id) => s + (report.per_agent_metrics?.[id]?.tools_not_applicable ?? 0), 0);
                   const ranT    = totalT - naT - failedT;
                   return (
-                    <div className="rounded-2xl p-5 flex flex-col items-center gap-3 relative overflow-hidden"
-                      style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                    <div className="rounded-2xl p-5 flex flex-col items-center gap-3 relative overflow-hidden bg-white/[0.025] border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-colors hover:bg-white/[0.04] hover:border-white/[0.12]">
                       <div className="absolute inset-0 opacity-[0.03]" style={{ background: `radial-gradient(circle at 50% 0%, ${clr}, transparent 70%)` }} />
                       <p className="text-[8px] font-mono font-bold uppercase tracking-[0.22em] text-foreground/30 self-start">Error Rate</p>
                       <div className="relative flex items-center justify-center">
@@ -689,8 +687,7 @@ export default function ResultPage() {
                   const clr = manipPct >= 70 ? "#f87171" : manipPct >= 40 ? "#fbbf24" : "#34d399";
                   const label = manipPct >= 70 ? "High" : manipPct >= 40 ? "Medium" : "Low";
                   return (
-                    <div className="rounded-2xl p-5 flex flex-col items-center gap-3 relative overflow-hidden"
-                      style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                    <div className="rounded-2xl p-5 flex flex-col items-center gap-3 relative overflow-hidden bg-white/[0.025] border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-colors hover:bg-white/[0.04] hover:border-white/[0.12]">
                       <div className="absolute inset-0 opacity-[0.03]" style={{ background: `radial-gradient(circle at 50% 0%, ${clr}, transparent 70%)` }} />
                       <p className="text-[8px] font-mono font-bold uppercase tracking-[0.22em] text-foreground/30 self-start">Tampering Signal</p>
                       <div className="relative flex items-center justify-center">
@@ -796,8 +793,7 @@ export default function ResultPage() {
                       { label: "Degradation",      value: report.degradation_flags?.length ? `${report.degradation_flags.length} warning(s)` : "None", icon: <AlertCircle className="w-3 h-3" /> },
                       ...(report.analysis_coverage_note ? [{ label: "Coverage", value: report.analysis_coverage_note, icon: <BarChart2 className="w-3 h-3" /> }] : []),
                     ] as { label: string; value: string | undefined; mono?: boolean; truncate?: boolean; icon: React.ReactNode }[]).map(({ label, value, mono, truncate, icon }) => (
-                      <div key={label} className="p-3.5 rounded-xl space-y-1.5"
-                        style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" }}>
+                      <div key={label} className="p-3.5 rounded-xl space-y-1.5 bg-white/[0.02] border border-white/[0.05] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-colors hover:bg-white/[0.04] hover:border-white/[0.10]">
                         <div className="flex items-center gap-1.5 text-[8px] font-mono font-bold uppercase tracking-[0.18em] text-foreground/25">
                           {icon}{label}
                         </div>

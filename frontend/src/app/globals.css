@@ -13,9 +13,9 @@
   --color-border-subtle: #1a2438;
   --color-border-bold:   #243553;
 
-  --font-sans:    var(--font-poppins), system-ui, -apple-system, sans-serif;
+  --font-sans:    var(--font-fira-sans), system-ui, -apple-system, sans-serif;
   --font-mono:    var(--font-fira-code), 'Fira Code', 'Courier New', monospace;
-  --font-heading: var(--font-poppins), system-ui, -apple-system, sans-serif;
+  --font-heading: var(--font-fira-sans), system-ui, -apple-system, sans-serif;
 }
 
 /* ── Base Reset ───────────────────────────────────────────────────────────── */

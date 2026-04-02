@@ -1,14 +1,14 @@
-import { Poppins, Fira_Code } from "next/font/google";
+import { Fira_Sans, Fira_Code } from "next/font/google";
 import { GlobalNavbar } from "@/components/ui/GlobalNavbar";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { GlassBackground } from "@/components/ui/GlassBackground";
 import { DevErrorProvider } from "@/components/DevErrorOverlay";
 import "./globals.css";
 
-const poppins = Poppins({
+const firaSans = Fira_Sans({
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700", "800", "900"],
-  variable: "--font-poppins",
+  variable: "--font-fira-sans",
   display: "swap",
 });
 
@@ -31,7 +31,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" dir="ltr" className="dark">
-      <body className={`${poppins.variable} ${firaCode.variable} font-sans text-slate-50 antialiased min-h-screen flex flex-col`} style={{ background: "transparent" }}>
+      <body className={`${firaSans.variable} ${firaCode.variable} font-sans text-slate-50 antialiased min-h-screen flex flex-col`} style={{ background: "transparent" }}>
         {/* Shared glass background — visible on all pages */}
         <GlassBackground />
         <GlobalNavbar />

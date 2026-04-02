@@ -151,7 +151,8 @@ export function ForensicProgressOverlay({
   const lastTextRef = useRef("");
 
   useEffect(() => {
-    const trimmed = liveText.trim();
+    const stripRegex = /[\u{1F300}-\u{1FFFF}]|[\u2600-\u27FF]/gu;
+    const trimmed = liveText.replace(stripRegex, '').trim();
     if (!trimmed || trimmed === lastTextRef.current) return;
     lastTextRef.current = trimmed;
     const id = ++idRef.current;

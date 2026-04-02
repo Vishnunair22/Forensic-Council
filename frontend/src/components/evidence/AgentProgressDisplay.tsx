@@ -8,7 +8,7 @@
 import React from "react";
 import { clsx } from "clsx";
 import {
-  CheckCircle2, Loader2, ArrowRight,
+  CheckCircle2, Loader2, ArrowRight, AlertTriangle,
   RotateCcw, Microscope, FileText, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { AgentIcon } from "@/components/ui/AgentIcon";
@@ -305,15 +305,15 @@ function FindingRow({ f }: { f: FindingPreview }) {
 
   return (
     <div 
-      className={`rounded-xl glass-panel overflow-hidden border border-border-subtle border-l-2 ${borderCls} px-4 py-3 space-y-2 shadow-sm group/finding`}
+      className={`rounded-xl glass-panel overflow-hidden border border-border-subtle border-l-2 ${borderCls} px-4 py-3 space-y-2 shadow-sm group/finding hover:bg-white/[0.03] transition-colors`}
     >
       {/* Header: tool name + severity + confidence + per-tool verdict */}
       <div className="flex items-start gap-3">
-        <span className="text-[10px] font-black tracking-[0.2em] uppercase flex-1 leading-tight font-mono" style={{ color: "rgba(34,211,238,0.8)" }}>
+        <span className="text-[11px] font-black tracking-[0.12em] uppercase flex-1 leading-tight font-mono" style={{ color: "rgba(34,211,238,0.8)" }}>
           {fmtTool(f.tool)}
         </span>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border ${verdictCls} uppercase tracking-wider`}>
+          <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${verdictCls} uppercase tracking-wider`}>
             {verdictLabel}
           </span>
           {f.severity !== "LOW" && f.severity !== "INFO" && (
@@ -322,19 +322,19 @@ function FindingRow({ f }: { f: FindingPreview }) {
             </Badge>
           )}
           {f.confidence > 0.15 && f.verdict !== "NOT_APPLICABLE" && (
-            <span className="text-[9px] font-mono font-bold text-slate-300 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded shadow-inner uppercase tracking-tighter">
-              {Math.round(f.confidence * 100)}% conf
+            <span className="text-[10px] font-mono font-bold text-slate-300 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded shadow-inner uppercase tracking-tighter">
+              {Math.round(f.confidence * 100)}%
             </span>
           )}
         </div>
       </div>
       {/* Summary */}
-      <p className="text-[11px] text-slate-300 leading-relaxed max-w-prose font-medium">
+      <p className="text-[12px] text-slate-300 leading-relaxed max-w-prose font-medium">
         {displayText}
         {needsExpand && (
           <button
             onClick={() => setOpen(v => !v)}
-            className="ml-2 text-[9px] font-black uppercase tracking-[0.2em] transition-colors" style={{ color: "rgba(34,211,238,0.55)" }}
+            className="ml-2 text-[10px] font-black uppercase tracking-[0.2em] transition-colors hover:text-cyan-300 cursor-pointer" style={{ color: "rgba(34,211,238,0.75)" }}
           >
             [{open ? "COLLAPSE" : "EXPAND"}]
           </button>
@@ -358,19 +358,19 @@ function FindingsPreviewList({ findings }: { findings: FindingPreview[] }) {
   const remaining = remainingBatch.length;
 
   return (
-    <div  className="space-y-2">
+    <div  className="space-y-3">
       {firstBatch.map((f, i) => <FindingRow key={`${f.tool}-first-${i}`} f={f} />)}
       
       {findings.length > INITIAL_SHOW && (
         <button
           
           onClick={() => setShowAll(v => !v)}
-          className="w-full text-[9px] font-black tracking-[0.2em] uppercase text-white/30 hover:text-cyan-400 transition-all py-2 text-center
-            border border-white/5 border-dashed rounded glass-panel hover:bg-white/5 my-1"
+          className="w-full text-[10px] font-black tracking-[0.2em] uppercase text-white/40 hover:text-cyan-400 transition-all py-2 text-center
+            border border-white/10 border-dashed rounded glass-panel hover:bg-white/5 my-1"
         >
           {showAll
-            ? "Hide Suppressed Findings"
-            : `Display ${remaining} Suppressed Finding${remaining !== 1 ? "s" : ""}`}
+            ? "Hide Additional Findings"
+            : `Show ${remaining} More Finding${remaining !== 1 ? "s" : ""}`}
         </button>
       )}
 
@@ -469,13 +469,16 @@ function LiveThinkingText({ text, active }: { text: string; active: boolean }) {
 function humaniseThinking(raw: string, _agentId: string): string {
   if (!raw) return "Analyzing evidence…";
 
-  // If the backend already humanised the text (contains emoji or progress counter
-  // like "(3/8)"), return it as-is to avoid double-processing.
-  const hasEmoji = /[\u{1F300}-\u{1FFFF}]|[\u2600-\u27FF]/u.test(raw);
-  const hasProgressCounter = /\(\d+\/\d+\)/.test(raw);
-  if (hasEmoji || hasProgressCounter) return raw;
+  // Strip emojis to enforce professional UI guidelines
+  const stripRegex = /[\u{1F300}-\u{1FFFF}]|[\u2600-\u27FF]/gu;
+  const noEmojiRaw = raw.replace(stripRegex, '').trim();
 
-  const r = raw.toLowerCase();
+  // If the backend already humanised the text with a progress counter
+  // like "(3/8)", return it as-is (stripped) to avoid double-processing.
+  const hasProgressCounter = /\(\d+\/\d+\)/.test(noEmojiRaw);
+  if (hasProgressCounter) return noEmojiRaw;
+
+  const r = noEmojiRaw.toLowerCase();
 
   // Deep pass phrases
   if (r.includes("gemini")) return "🔬 Asking Gemini AI to examine the image…";
@@ -559,7 +562,8 @@ function humaniseThinking(raw: string, _agentId: string): string {
   if (r.includes("warming") || r.includes("warm up")) return "🔥 Warming up ML inference engines…";
 
   // Fallback — capitalise raw and append ellipsis
-  return raw.charAt(0).toUpperCase() + raw.slice(1);
+  let finalStr = noEmojiRaw.charAt(0).toUpperCase() + noEmojiRaw.slice(1);
+  return finalStr.replace(stripRegex, '').trim();
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
@@ -761,7 +765,7 @@ export function AgentProgressDisplay({
       </div>
 
       {/* Agent Cards Grid — 3-col on large screens for a clean 3×2 layout */}
-      <div className="w-full max-w-6xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="w-full max-w-6xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         {visibleAgents.map((agent) => {
           const status = getAgentStatus(agent.id);
           const rawThinking = getAgentThinking(agent.id);
@@ -774,7 +778,7 @@ export function AgentProgressDisplay({
               {isRevealed && (
                 <div
                   className={clsx(
-                    "rounded-2xl p-5 transition-all duration-500 relative group overflow-hidden",
+                    "rounded-2xl p-5 transition-all duration-500 relative group overflow-hidden flex flex-col h-full",
                     (status === "waiting" || status === "checking") && "opacity-40",
                     status === "running" && "shadow-[0_0_30px_rgba(34,211,238,0.08)]",
                     status === "complete" && "shadow-[0_0_20px_rgba(52,211,153,0.05)]",
@@ -840,7 +844,7 @@ export function AgentProgressDisplay({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <h3 className="text-base font-bold text-white leading-tight font-heading tracking-tight uppercase group-hover:text-cyan-300 transition-colors">{agent.name}</h3>
+                        <h3 className="text-sm font-bold text-white leading-tight font-heading tracking-tight uppercase group-hover:text-cyan-300 transition-colors">{agent.name}</h3>
                         {/* Confidence summary in header for completed agents */}
                         {status === "complete" && completed?.confidence !== undefined && (
                           <span className={[
@@ -853,7 +857,7 @@ export function AgentProgressDisplay({
                         )}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono font-bold">{agent.role}</span>
+                        <span className="text-[10px] uppercase tracking-[0.2em] text-white/45 font-mono font-bold">{agent.role}</span>
                         {/* Phase badge */}
                         {status === "complete" && (
                           <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded bg-white/5 text-white/25 uppercase tracking-wider">
@@ -1040,7 +1044,7 @@ export function AgentProgressDisplay({
                   )}
 
                   {status === "complete" && completed && (
-                    <div className="space-y-4">
+                    <div className="space-y-4 flex flex-col flex-1">
                       {/* Verdict row */}
                       {completed.agent_verdict && (
                         <div className={[
@@ -1072,7 +1076,7 @@ export function AgentProgressDisplay({
                              completed.agent_verdict === "LIKELY_MANIPULATED" ? "bg-red-500/20 border-red-500/40 text-red-400" :
                              "bg-cyan-500/20 border-cyan-500/40 text-cyan-400"
                           ].join(" ")}>
-                            {completed.agent_verdict === "AUTHENTIC" ? "✓" : completed.agent_verdict === "LIKELY_MANIPULATED" ? "!" : "?"}
+                            {completed.agent_verdict === "AUTHENTIC" ? <CheckCircle2 className="w-4 h-4" /> : completed.agent_verdict === "LIKELY_MANIPULATED" ? <AlertTriangle className="w-4 h-4" /> : <div className="text-[12px] font-black leading-none">?</div>}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-[10px] font-bold uppercase tracking-[0.2em] leading-none mb-2 opacity-60 text-white/40">Verdict</p>
@@ -1118,7 +1122,7 @@ export function AgentProgressDisplay({
                           )}
                           {completed.tool_error_rate !== undefined && (
                             <span className={completed.tool_error_rate <= 0.15 ? "text-emerald-400/50" : completed.tool_error_rate <= 0.30 ? "text-amber-400/50" : "text-red-400/50"}>
-                              {Math.round(completed.tool_error_rate * 100)}% err
+                              {Math.round(completed.tool_error_rate * 100)}% error rate
                             </span>
                           )}
                         </div>
@@ -1225,18 +1229,18 @@ export function AgentProgressDisplay({
       {/* ── Decision Buttons ─────────────────────────────────────────── */}
 
       {showInitialDecision && (
-        <div className="mt-8 w-full max-w-xl">
+        <div className="mt-8 w-full max-w-3xl mx-auto">
           {/* Decision card */}
-          <div className="surface-panel rounded-2xl p-5 space-y-4 shadow-lg border-border-bold">
+          <div className="surface-panel rounded-2xl p-5 space-y-4 shadow-[0_0_15px_rgba(34,211,238,0.1)] ring-1 ring-cyan-500/20 border border-border-bold">
             <div className="text-center space-y-1">
-              <p className="text-[10px] font-black font-mono uppercase tracking-[0.3em]" style={{ color: "#22D3EE" }}>Investigator Protocol</p>
+              <p className="text-[10px] font-black font-mono uppercase tracking-[0.3em] text-cyan-400">Investigator Protocol</p>
               <h3 className="text-lg font-black text-white font-heading uppercase tracking-tighter">Initial Scan Concluded</h3>
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
               <button
                 onClick={onAcceptAnalysis}
                 disabled={isNavigating}
-                className="btn-premium-glass flex-1 py-3.5 justify-center text-[11px] font-black uppercase tracking-[0.2em] shadow-[0_0_24px_rgba(34,211,238,0.18)]"
+                className="btn-premium-glass flex-1 py-4 justify-center text-xs font-black uppercase tracking-[0.2em] shadow-[0_0_24px_rgba(34,211,238,0.18)]"
               >
                 {isNavigating ? (
                   <><Loader2 className="w-4 h-4 animate-spin" />Compiling...</>
@@ -1247,7 +1251,7 @@ export function AgentProgressDisplay({
               <button
                 onClick={onDeepAnalysis}
                 disabled={isNavigating}
-                className="btn-premium-amber flex-1 py-3.5 justify-center text-[11px] font-black uppercase tracking-[0.2em] relative overflow-hidden shadow-[0_0_28px_rgba(217,119,6,0.25)]"
+                className="btn-premium-amber flex-1 py-4 justify-center text-xs font-black uppercase tracking-[0.2em] relative overflow-hidden shadow-[0_0_28px_rgba(217,119,6,0.25)]"
               >
                 <Microscope className="w-4 h-4" />Deep Analysis<ArrowRight className="w-3.5 h-3.5 ml-1 opacity-70" />
               </button>
@@ -1260,9 +1264,9 @@ export function AgentProgressDisplay({
         <div
            
           
-          className="mt-8 w-full max-w-xl"
+          className="mt-8 w-full max-w-3xl mx-auto"
         >
-          <div className="surface-panel rounded-2xl p-5 space-y-4 shadow-lg border-border-bold">
+          <div className="surface-panel rounded-2xl p-5 space-y-4 shadow-[0_0_15px_rgba(34,211,238,0.1)] ring-1 ring-cyan-500/20 border border-border-bold">
             <div className="text-center space-y-1">
               <p className="text-[9px] font-mono text-emerald-500 uppercase tracking-widest font-bold">Verification Complete</p>
               <h3 className="text-base font-bold text-foreground font-heading uppercase">Council Arbiter Verification</h3>
@@ -1273,7 +1277,7 @@ export function AgentProgressDisplay({
                 disabled={isNavigating}
                 
                 
-                className="btn-premium-glass flex-1 py-3 justify-center text-[11px] font-black uppercase tracking-[0.2em]"
+                className="btn-premium-glass flex-1 py-4 justify-center text-xs font-black uppercase tracking-[0.2em]"
               >
                 <RotateCcw className="w-4 h-4 opacity-40" />RESET TERMINAL
               </button>
@@ -1282,7 +1286,7 @@ export function AgentProgressDisplay({
                 disabled={isNavigating}
                 
                 
-                className="btn-premium-amber flex-1 py-3 justify-center text-[11px] font-black uppercase tracking-[0.2em] relative overflow-hidden shadow-[0_0_30px_rgba(217,119,6,0.3)]"
+                className="btn-premium-amber flex-1 py-4 justify-center text-xs font-black uppercase tracking-[0.2em] relative overflow-hidden shadow-[0_0_30px_rgba(217,119,6,0.3)]"
               >
                 {isNavigating ? (
                   <><Loader2 className="w-4 h-4 animate-spin" />FINALIZING...</>
