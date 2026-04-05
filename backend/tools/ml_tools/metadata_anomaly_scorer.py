@@ -26,7 +26,6 @@ Output JSON:
 import argparse
 import json
 import sys
-import sys
 
 
 EDITING_SOFTWARE_SIGNATURES = [
@@ -148,16 +147,7 @@ def score_metadata(image_path: str) -> dict:
         except Exception:
             pass
 
-    # Feature vector for anomaly scoring
-    [
-        1.0 if exif else 0.0,
-        float(len(exif)),
-        1.0 if gps_info else 0.0,
-        1.0 if dt_orig else 0.0,
-        1.0 if software else 0.0,
-        float(len(hex_sigs)),
-        float(len(missing)) if exif else float(len(EXPECTED_CAMERA_FIELDS)),
-    ]
+
 
     score = min(1.0, score)
 

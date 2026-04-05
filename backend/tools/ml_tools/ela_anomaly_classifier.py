@@ -165,8 +165,6 @@ if __name__ == "__main__":
     
     # Worker mode - persistent process reading from stdin
     if args.worker:
-        import sys
-        logger.info("ELA anomaly classifier worker started")
         for line in sys.stdin:
             line = line.strip()
             if not line:
