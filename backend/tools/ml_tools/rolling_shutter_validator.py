@@ -24,6 +24,7 @@ Output JSON:
 
 import argparse
 import json
+import sys
 import numpy as np
 import cv2
 
@@ -226,31 +227,6 @@ if __name__ == "__main__":
                 
                 result = validate_rolling_shutter(input_path, sample_seconds=float(sample_secs))
                 print(json.dumps(result))
-                sys.stdout.flush()
-            except Exception as e:
-                print(json.dumps({"error": str(e), "available": False}))
-                sys.stdout.flush()
-        sys.exit(0)
-    
-    # Normal mode - single execution
-    if not args.input:
-        parser.print_help()
-        sys.exit(1)
-
-    try:
-        result = validate_rolling_shutter(args.input, sample_seconds=args.sample)
-
-        # Create visualization if requested
-        if args.output:
-            success = visualize_rolling_shutter(
-                args.input, args.output, sample_seconds=min(args.sample, 2.0)
-            )
-            result["visualization_created"] = success
-
-    except Exception as e:
-        result = {"error": str(e), "available": False}
-
-    print(json.dumps(result))
                 sys.stdout.flush()
             except Exception as e:
                 print(json.dumps({"error": str(e), "available": False}))

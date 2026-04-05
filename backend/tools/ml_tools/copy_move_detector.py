@@ -24,6 +24,7 @@ Output JSON:
 
 import argparse
 import json
+import sys
 import numpy as np
 import cv2
 
@@ -235,33 +236,6 @@ if __name__ == "__main__":
                 
                 result = detect_copy_move(input_path)
                 print(json.dumps(result))
-                sys.stdout.flush()
-            except Exception as e:
-                print(json.dumps({"error": str(e), "available": False}))
-                sys.stdout.flush()
-        sys.exit(0)
-    
-    # Normal mode - single execution
-    if not args.input:
-        parser.print_help()
-        sys.exit(1)
-
-    try:
-        result = detect_copy_move(
-            args.input,
-            descriptor_distance_threshold=args.descriptor_threshold,
-            spatial_distance_threshold=args.spatial_threshold,
-        )
-
-        # Create visualization if requested and copy-move detected
-        if args.output and result.get("copy_move_detected") and result.get("top_pairs"):
-            success = visualize_copy_move(args.input, args.output, result["top_pairs"])
-            result["visualization_created"] = success
-
-    except Exception as e:
-        result = {"error": str(e), "available": False}
-
-    print(json.dumps(result))
                 sys.stdout.flush()
             except Exception as e:
                 print(json.dumps({"error": str(e), "available": False}))

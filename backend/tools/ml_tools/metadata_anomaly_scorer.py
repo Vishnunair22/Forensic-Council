@@ -25,6 +25,8 @@ Output JSON:
 
 import argparse
 import json
+import sys
+import sys
 
 
 EDITING_SOFTWARE_SIGNATURES = [
@@ -220,23 +222,6 @@ if __name__ == "__main__":
                 
                 result = score_metadata(input_path)
                 print(json.dumps(result))
-                sys.stdout.flush()
-            except Exception as e:
-                print(json.dumps({"error": str(e), "available": False}))
-                sys.stdout.flush()
-        sys.exit(0)
-    
-    # Normal mode - single execution
-    if not args.input:
-        parser.print_help()
-        sys.exit(1)
-
-    try:
-        result = score_metadata(args.input)
-    except Exception as e:
-        result = {"error": str(e), "available": False}
-
-    print(json.dumps(result))
                 sys.stdout.flush()
             except Exception as e:
                 print(json.dumps({"error": str(e), "available": False}))

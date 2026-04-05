@@ -24,6 +24,7 @@ Output JSON:
 
 import argparse
 import json
+import sys
 import numpy as np
 import cv2
 from skimage.feature import canny
@@ -213,35 +214,6 @@ if __name__ == "__main__":
                 
                 result = analyze_lighting(input_path, num_peaks=int(peaks))
                 print(json.dumps(result))
-                sys.stdout.flush()
-            except Exception as e:
-                print(json.dumps({"error": str(e), "available": False}))
-                sys.stdout.flush()
-        sys.exit(0)
-    
-    # Normal mode - single execution
-    if not args.input:
-        parser.print_help()
-        sys.exit(1)
-
-    try:
-        result = analyze_lighting(args.input, num_peaks=args.peaks)
-
-        # Create visualization if requested
-        if (
-            args.output
-            and result.get("available")
-            and result.get("dominant_shadow_angles_deg")
-        ):
-            success = visualize_lighting(
-                args.input, args.output, result["dominant_shadow_angles_deg"]
-            )
-            result["visualization_created"] = success
-
-    except Exception as e:
-        result = {"error": str(e), "available": False}
-
-    print(json.dumps(result))
                 sys.stdout.flush()
             except Exception as e:
                 print(json.dumps({"error": str(e), "available": False}))
