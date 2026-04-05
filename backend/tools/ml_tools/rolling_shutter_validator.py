@@ -178,7 +178,7 @@ def visualize_rolling_shutter(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Validate rolling shutter consistency")
-    parser.add_argument("--input", required=True, help="Path to input video")
+    parser.add_argument("--input", type=str, help="Path to input video")
     parser.add_argument("--output", help="Path to save visualization")
     parser.add_argument(
         "--sample",
@@ -186,7 +186,81 @@ if __name__ == "__main__":
         default=5.0,
         help="Seconds of video to sample (default: 5.0)",
     )
+    parser.add_argument("--warmup", action="store_true", help="Warmup mode - preload dependencies")
+    parser.add_argument("--worker", action="store_true", help="Worker mode - persistent process")
     args = parser.parse_args()
+    
+    # Warmup mode - verify dependencies load
+    if args.warmup:
+        try:
+            import cv2
+            import numpy as np
+            print(json.dumps({
+                "status": "warmed_up",
+                "dependencies": ["cv2", "numpy"],
+                "message": "Rolling shutter validator ready"
+            }))
+            sys.exit(0)
+        except Exception as e:
+            print(json.dumps({
+                "status": "warmup_failed",
+                "error": str(e)
+            }))
+            sys.exit(1)
+    
+    # Worker mode - persistent process reading from stdin
+    if args.worker:
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                request = json.loads(line)
+                input_path = request.get("input")
+                sample_secs = request.get("extra_args", [5.0])[0] if request.get("extra_args") else 5.0
+                
+                if not input_path:
+                    print(json.dumps({"error": "Missing input path", "available": False}))
+                    sys.stdout.flush()
+                    continue
+                
+                result = validate_rolling_shutter(input_path, sample_seconds=float(sample_secs))
+                print(json.dumps(result))
+                sys.stdout.flush()
+            except Exception as e:
+                print(json.dumps({"error": str(e), "available": False}))
+                sys.stdout.flush()
+        sys.exit(0)
+    
+    # Normal mode - single execution
+    if not args.input:
+        parser.print_help()
+        sys.exit(1)
+
+    try:
+        result = validate_rolling_shutter(args.input, sample_seconds=args.sample)
+
+        # Create visualization if requested
+        if args.output:
+            success = visualize_rolling_shutter(
+                args.input, args.output, sample_seconds=min(args.sample, 2.0)
+            )
+            result["visualization_created"] = success
+
+    except Exception as e:
+        result = {"error": str(e), "available": False}
+
+    print(json.dumps(result))
+                sys.stdout.flush()
+            except Exception as e:
+                print(json.dumps({"error": str(e), "available": False}))
+                sys.stdout.flush()
+        sys.exit(0)
+    
+    # Normal mode - single execution
+    if not args.input:
+        parser.print_help()
+        sys.exit(1)
 
     try:
         result = validate_rolling_shutter(args.input, sample_seconds=args.sample)

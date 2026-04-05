@@ -161,10 +161,10 @@ if __name__ == "__main__":
         "--frameA",
         "--input",
         dest="frameA",
-        required=True,
+        type=str,
         help="Path to first frame (or input proxy)",
     )
-    parser.add_argument("--frameB", required=True, help="Path to second frame")
+    parser.add_argument("--frameB", type=str, help="Path to second frame")
     parser.add_argument(
         "--motion",
         type=float,
@@ -172,7 +172,82 @@ if __name__ == "__main__":
         help="Motion vector magnitude between frames",
     )
     parser.add_argument("--output", help="Path to save visualization")
+    parser.add_argument("--warmup", action="store_true", help="Warmup mode - preload dependencies")
+    parser.add_argument("--worker", action="store_true", help="Worker mode - persistent process")
     args = parser.parse_args()
+    
+    # Warmup mode - verify dependencies load
+    if args.warmup:
+        try:
+            from skimage.metrics import structural_similarity as ssim
+            import cv2
+            import numpy as np
+            print(json.dumps({
+                "status": "warmed_up",
+                "dependencies": ["skimage", "cv2", "numpy"],
+                "message": "Anomaly classifier ready"
+            }))
+            sys.exit(0)
+        except Exception as e:
+            print(json.dumps({
+                "status": "warmup_failed",
+                "error": str(e)
+            }))
+            sys.exit(1)
+    
+    # Worker mode - persistent process reading from stdin
+    if args.worker:
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                request = json.loads(line)
+                frameA = request.get("input")
+                extra_args = request.get("extra_args", [])
+                frameB = extra_args[0] if len(extra_args) > 0 else None
+                motion = float(extra_args[1]) if len(extra_args) > 1 else 0.0
+                
+                if not frameA or not frameB:
+                    print(json.dumps({"error": "Missing frameA or frameB", "available": False}))
+                    sys.stdout.flush()
+                    continue
+                
+                result = classify_anomaly(frameA, frameB, motion)
+                print(json.dumps(result))
+                sys.stdout.flush()
+            except Exception as e:
+                print(json.dumps({"error": str(e), "available": False}))
+                sys.stdout.flush()
+        sys.exit(0)
+    
+    # Normal mode - single execution
+    if not args.frameA or not args.frameB:
+        parser.print_help()
+        sys.exit(1)
+
+    try:
+        result = classify_anomaly(args.frameA, args.frameB, args.motion)
+
+        # Create visualization if requested
+        if args.output:
+            success = visualize_anomaly(args.frameA, args.frameB, args.output)
+            result["visualization_created"] = success
+
+    except Exception as e:
+        result = {"error": str(e), "available": False}
+
+    print(json.dumps(result))
+                sys.stdout.flush()
+            except Exception as e:
+                print(json.dumps({"error": str(e), "available": False}))
+                sys.stdout.flush()
+        sys.exit(0)
+    
+    # Normal mode - single execution
+    if not args.frameA or not args.frameB:
+        parser.print_help()
+        sys.exit(1)
 
     try:
         result = classify_anomaly(args.frameA, args.frameB, args.motion)

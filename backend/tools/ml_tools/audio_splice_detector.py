@@ -148,9 +148,76 @@ def detect_audio_splices(audio_path: str, window_s: float = 1.0) -> dict:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", required=True)
-    parser.add_argument("--window", type=float, default=1.0)
+    parser.add_argument("--input", type=str, help="Input audio path")
+    parser.add_argument("--window", type=float, default=1.0, help="Window size in seconds")
+    parser.add_argument("--warmup", action="store_true", help="Warmup mode - preload dependencies")
+    parser.add_argument("--worker", action="store_true", help="Worker mode - persistent process")
     args = parser.parse_args()
+    
+    # Warmup mode - verify dependencies load
+    if args.warmup:
+        try:
+            import librosa
+            import numpy as np
+            from sklearn.ensemble import IsolationForest
+            print(json.dumps({
+                "status": "warmed_up",
+                "dependencies": ["librosa", "numpy", "sklearn"],
+                "message": "Audio splice detector ready"
+            }))
+            sys.exit(0)
+        except Exception as e:
+            print(json.dumps({
+                "status": "warmup_failed",
+                "error": str(e)
+            }))
+            sys.exit(1)
+    
+    # Worker mode - persistent process reading from stdin
+    if args.worker:
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                request = json.loads(line)
+                input_path = request.get("input")
+                window_size = request.get("extra_args", [1.0])[0] if request.get("extra_args") else 1.0
+                
+                if not input_path:
+                    print(json.dumps({"error": "Missing input path", "available": False}))
+                    sys.stdout.flush()
+                    continue
+                
+                result = detect_audio_splices(input_path, float(window_size))
+                print(json.dumps(result))
+                sys.stdout.flush()
+            except Exception as e:
+                print(json.dumps({"error": str(e), "available": False}))
+                sys.stdout.flush()
+        sys.exit(0)
+    
+    # Normal mode - single execution
+    if not args.input:
+        parser.print_help()
+        sys.exit(1)
+
+    try:
+        result = detect_audio_splices(args.input, args.window)
+    except Exception as e:
+        result = {"error": str(e), "available": False}
+
+    print(json.dumps(result))
+                sys.stdout.flush()
+            except Exception as e:
+                print(json.dumps({"error": str(e), "available": False}))
+                sys.stdout.flush()
+        sys.exit(0)
+    
+    # Normal mode - single execution
+    if not args.input:
+        parser.print_help()
+        sys.exit(1)
 
     try:
         result = detect_audio_splices(args.input, args.window)

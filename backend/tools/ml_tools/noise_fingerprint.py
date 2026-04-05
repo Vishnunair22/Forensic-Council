@@ -135,9 +135,76 @@ def analyze_noise_fingerprint(image_path: str, num_regions: int = 6) -> dict:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", required=True)
-    parser.add_argument("--regions", type=int, default=6)
+    parser.add_argument("--input", type=str, help="Input image path")
+    parser.add_argument("--regions", type=int, default=6, help="Number of regions to analyze")
+    parser.add_argument("--warmup", action="store_true", help="Warmup mode - preload dependencies")
+    parser.add_argument("--worker", action="store_true", help="Worker mode - persistent process")
     args = parser.parse_args()
+    
+    # Warmup mode - verify dependencies load
+    if args.warmup:
+        try:
+            from scipy.signal import wiener
+            import numpy as np
+            import cv2
+            print(json.dumps({
+                "status": "warmed_up",
+                "dependencies": ["scipy", "numpy", "cv2"],
+                "message": "Noise fingerprint analyzer ready"
+            }))
+            sys.exit(0)
+        except Exception as e:
+            print(json.dumps({
+                "status": "warmup_failed",
+                "error": str(e)
+            }))
+            sys.exit(1)
+    
+    # Worker mode - persistent process reading from stdin
+    if args.worker:
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                request = json.loads(line)
+                input_path = request.get("input")
+                num_regions = request.get("extra_args", [6])[0] if request.get("extra_args") else 6
+                
+                if not input_path:
+                    print(json.dumps({"error": "Missing input path", "available": False}))
+                    sys.stdout.flush()
+                    continue
+                
+                result = analyze_noise_fingerprint(input_path, int(num_regions))
+                print(json.dumps(result))
+                sys.stdout.flush()
+            except Exception as e:
+                print(json.dumps({"error": str(e), "available": False}))
+                sys.stdout.flush()
+        sys.exit(0)
+    
+    # Normal mode - single execution
+    if not args.input:
+        parser.print_help()
+        sys.exit(1)
+
+    try:
+        result = analyze_noise_fingerprint(args.input, args.regions)
+    except Exception as e:
+        result = {"error": str(e), "available": False}
+
+    print(json.dumps(result))
+                sys.stdout.flush()
+            except Exception as e:
+                print(json.dumps({"error": str(e), "available": False}))
+                sys.stdout.flush()
+        sys.exit(0)
+    
+    # Normal mode - single execution
+    if not args.input:
+        parser.print_help()
+        sys.exit(1)
 
     try:
         result = analyze_noise_fingerprint(args.input, args.regions)

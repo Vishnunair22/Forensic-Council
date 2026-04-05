@@ -168,12 +168,90 @@ def visualize_lighting(image_path: str, output_path: str, angles: list) -> bool:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Analyze lighting consistency")
-    parser.add_argument("--input", required=True, help="Path to input image")
+    parser.add_argument("--input", type=str, help="Path to input image")
     parser.add_argument("--output", help="Path to save visualization")
     parser.add_argument(
         "--peaks", type=int, default=10, help="Number of dominant lines to detect"
     )
+    parser.add_argument("--warmup", action="store_true", help="Warmup mode - preload dependencies")
+    parser.add_argument("--worker", action="store_true", help="Worker mode - persistent process")
     args = parser.parse_args()
+    
+    # Warmup mode - verify dependencies load
+    if args.warmup:
+        try:
+            import cv2
+            import numpy as np
+            print(json.dumps({
+                "status": "warmed_up",
+                "dependencies": ["cv2", "numpy"],
+                "message": "Lighting analyzer ready"
+            }))
+            sys.exit(0)
+        except Exception as e:
+            print(json.dumps({
+                "status": "warmup_failed",
+                "error": str(e)
+            }))
+            sys.exit(1)
+    
+    # Worker mode - persistent process reading from stdin
+    if args.worker:
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                request = json.loads(line)
+                input_path = request.get("input")
+                peaks = request.get("extra_args", [10])[0] if request.get("extra_args") else 10
+                
+                if not input_path:
+                    print(json.dumps({"error": "Missing input path", "available": False}))
+                    sys.stdout.flush()
+                    continue
+                
+                result = analyze_lighting(input_path, num_peaks=int(peaks))
+                print(json.dumps(result))
+                sys.stdout.flush()
+            except Exception as e:
+                print(json.dumps({"error": str(e), "available": False}))
+                sys.stdout.flush()
+        sys.exit(0)
+    
+    # Normal mode - single execution
+    if not args.input:
+        parser.print_help()
+        sys.exit(1)
+
+    try:
+        result = analyze_lighting(args.input, num_peaks=args.peaks)
+
+        # Create visualization if requested
+        if (
+            args.output
+            and result.get("available")
+            and result.get("dominant_shadow_angles_deg")
+        ):
+            success = visualize_lighting(
+                args.input, args.output, result["dominant_shadow_angles_deg"]
+            )
+            result["visualization_created"] = success
+
+    except Exception as e:
+        result = {"error": str(e), "available": False}
+
+    print(json.dumps(result))
+                sys.stdout.flush()
+            except Exception as e:
+                print(json.dumps({"error": str(e), "available": False}))
+                sys.stdout.flush()
+        sys.exit(0)
+    
+    # Normal mode - single execution
+    if not args.input:
+        parser.print_help()
+        sys.exit(1)
 
     try:
         result = analyze_lighting(args.input, num_peaks=args.peaks)

@@ -72,7 +72,6 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
         echo "  Found: $HF_HUBS model hubs, $HF_BLOBS blob dirs, $YOLO_WEIGHTS YOLO weights"
     fi
 fi
-fi
 
 # ── 2. Cache status check + Python import verification ───────────────────────
 if [ "${SKIP_CACHE_CHECK:-0}" != "1" ]; then
