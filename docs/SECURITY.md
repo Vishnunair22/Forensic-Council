@@ -27,7 +27,7 @@ python -c "import secrets; print(secrets.token_hex(32))"
 If `SIGNING_KEY` must be rotated:
 1. Generate a new 32-byte hex: `python -c "import secrets; print(secrets.token_hex(32))"`
 2. Update `SIGNING_KEY` in `.env`
-3. Restart backend: `docker compose -f docs/docker/docker-compose.yml --env-file .env up -d --force-recreate backend`
+3. Restart backend: `docker compose -f infra/docker-compose.yml --env-file .env up -d --force-recreate backend`
 
 > **Note:** Reports signed with the old key will fail verification against the new key. This is expected and ensures temporal separation of evidence custody boundaries.
 
@@ -37,6 +37,8 @@ If `SIGNING_KEY` must be rotated:
 
 ### No credentials in source code
 Demo-user password hashes are never stored in the codebase. On startup, the backend reads `BOOTSTRAP_ADMIN_PASSWORD` and `BOOTSTRAP_INVESTIGATOR_PASSWORD` from the environment, hashes them with bcrypt (work factor 12), and inserts them into the `users` table. Changing a password requires only an env update and container restart.
+
+**⚠️ CRITICAL:** Never commit `.env` files to source control. The `.env.example` file uses `CHANGE_ME` placeholders — replace these with strong, unique values before deployment.
 
 ### JWT token lifetime
 Access tokens expire after **60 minutes**. The `expires_in` field in the login response reflects the real TTL in seconds. Longer-lived sessions are unsupported to limit blast radius if a token is stolen in an evidentiary context.

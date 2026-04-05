@@ -16,8 +16,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Suppresses the "(trapped) error reading bcrypt version" warning at startup.
 try:
     import bcrypt as _bcrypt
+
     if not hasattr(_bcrypt, "__about__"):
         import types as _types
+
         _bcrypt.__about__ = _types.SimpleNamespace(__version__=_bcrypt.__version__)
 except ImportError:
     pass

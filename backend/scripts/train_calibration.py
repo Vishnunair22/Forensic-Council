@@ -47,6 +47,7 @@ import numpy as np
 # Platt scaling fit (MLE on sigmoid)
 # ---------------------------------------------------------------------------
 
+
 def _sigmoid(a: float, b: float, x: float) -> float:
     """Platt sigmoid: 1 / (1 + exp(A*x + B))"""
     return 1.0 / (1.0 + math.exp(a * x + b))
@@ -94,6 +95,7 @@ def fit_platt(
 # ---------------------------------------------------------------------------
 # Calibration quality metrics
 # ---------------------------------------------------------------------------
+
 
 def expected_calibration_error(
     scores: np.ndarray,
@@ -143,21 +145,25 @@ def reliability_data(
 
         count = mask.sum()
         if count == 0:
-            bins.append({
-                "bin_low": float(bin_edges[i]),
-                "bin_high": float(bin_edges[i + 1]),
-                "count": 0,
-                "mean_confidence": None,
-                "mean_accuracy": None,
-            })
+            bins.append(
+                {
+                    "bin_low": float(bin_edges[i]),
+                    "bin_high": float(bin_edges[i + 1]),
+                    "count": 0,
+                    "mean_confidence": None,
+                    "mean_accuracy": None,
+                }
+            )
         else:
-            bins.append({
-                "bin_low": float(bin_edges[i]),
-                "bin_high": float(bin_edges[i + 1]),
-                "count": int(count),
-                "mean_confidence": float(scores[mask].mean()),
-                "mean_accuracy": float(labels[mask].mean()),
-            })
+            bins.append(
+                {
+                    "bin_low": float(bin_edges[i]),
+                    "bin_high": float(bin_edges[i + 1]),
+                    "count": int(count),
+                    "mean_confidence": float(scores[mask].mean()),
+                    "mean_accuracy": float(labels[mask].mean()),
+                }
+            )
 
     return bins
 
@@ -166,24 +172,30 @@ def reliability_data(
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Train Platt scaling calibration for a forensic agent."
     )
     parser.add_argument(
-        "--dataset", required=True,
+        "--dataset",
+        required=True,
         help="Path to CSV with columns: score, label (0 or 1)",
     )
     parser.add_argument(
-        "--agent", required=True,
+        "--agent",
+        required=True,
         help="Agent ID, e.g. agent1_image",
     )
     parser.add_argument(
-        "--output-dir", default="./calibration_models",
+        "--output-dir",
+        default="./calibration_models",
         help="Directory to write trained model JSON (default: ./calibration_models)",
     )
     parser.add_argument(
-        "--method", default="platt", choices=["platt"],
+        "--method",
+        default="platt",
+        choices=["platt"],
         help="Calibration method (default: platt)",
     )
     args = parser.parse_args()
@@ -206,13 +218,13 @@ def main() -> int:
         for row in reader:
             try:
                 s = float(row["score"])
-                l = int(row["label"])
+                label = int(row["label"])
                 if not (0.0 <= s <= 1.0):
                     continue
-                if l not in (0, 1):
+                if label not in (0, 1):
                     continue
                 scores_list.append(s)
-                labels_list.append(l)
+                labels_list.append(label)
             except (ValueError, KeyError):
                 continue
 
@@ -249,9 +261,7 @@ def main() -> int:
     print(f"  B = {B:.6f}")
 
     # --- Evaluate calibration quality -----------------------------------------
-    calibrated_scores = np.array([
-        _sigmoid(A, B, float(s)) for s in scores
-    ])
+    calibrated_scores = np.array([_sigmoid(A, B, float(s)) for s in scores])
 
     ece_before = expected_calibration_error(scores, labels)
     ece_after = expected_calibration_error(calibrated_scores, labels)
@@ -320,7 +330,9 @@ def main() -> int:
     print(f"\nModel saved to: {model_path}")
     print(f"Latest symlink: {latest_path}")
     print(f"\nTo use: set calibration_models_path={args.output_dir} in settings,")
-    print(f"or copy {model_path} to your deployment's calibration_models/{args.agent}/ directory.")
+    print(
+        f"or copy {model_path} to your deployment's calibration_models/{args.agent}/ directory."
+    )
 
     return 0
 

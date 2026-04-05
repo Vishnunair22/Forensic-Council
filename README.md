@@ -2,7 +2,7 @@
 
 Upload digital evidence. Five specialized AI agents analyze it. Get a cryptographically signed forensic report.
 
-[![Version](https://img.shields.io/badge/version-v1.1.1-blue.svg)](#) [![Status](https://img.shields.io/badge/status-stable-green.svg)](#) [![License](https://img.shields.io/badge/license-MIT-green.svg)](#) [![Python](https://img.shields.io/badge/python-3.12-blue.svg)](#) [![Next.js](https://img.shields.io/badge/next.js-15-black.svg)](#) [![Postgres](https://img.shields.io/badge/postgres-17-blue.svg)](#)
+[![Version](https://img.shields.io/badge/version-v1.2.0-blue.svg)](#) [![Status](https://img.shields.io/badge/status-stable-green.svg)](#) [![License](https://img.shields.io/badge/license-MIT-green.svg)](#) [![Python](https://img.shields.io/badge/python-3.12-blue.svg)](#) [![Next.js](https://img.shields.io/badge/next.js-15-black.svg)](#) [![Postgres](https://img.shields.io/badge/postgres-17-blue.svg)](#)
 
 *A Multi-Agent Forensic Evidence Analysis System with cryptographic chain of custody*
 
@@ -62,7 +62,7 @@ cp .env.example .env
 # Edit .env: set LLM_API_KEY (Groq, required) and GEMINI_API_KEY (recommended)
 
 # 2. Start
-docker compose -f docs/docker/docker-compose.yml --env-file .env up --build
+docker compose -f infra/docker-compose.yml --env-file .env up --build
 ```
 
 **Access:**
@@ -70,9 +70,9 @@ docker compose -f docs/docker/docker-compose.yml --env-file .env up --build
 - Backend API: http://localhost:8000
 - API Docs (dev): http://localhost:8000/docs
 
-Login: username `investigator`, password = `NEXT_PUBLIC_DEMO_PASSWORD` from `.env` (default: `inv123!`)
+Login: username `investigator`, password = `DEMO_PASSWORD` from `.env` (default: `CHANGE_ME_dev_only_password`)
 
-> **First run:** ML models download automatically (15–60 min). Subsequent starts are instant.
+> **First run:** ML models download automatically in the background (15–60 min). The API starts immediately and serves requests while models cache. Subsequent starts are instant.
 
 ---
 
@@ -81,13 +81,16 @@ Login: username `investigator`, password = `NEXT_PUBLIC_DEMO_PASSWORD` from `.en
 | Command | Action |
 |---------|--------|
 | `docker compose up` | Standard start |
-| `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.dev.yml up` | Development start (hot-reload) |
-| `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.prod.yml up` | Production build |
-| `docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.infra.yml up` | Postgres + Redis + Qdrant only |
+| `docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml up` | Development start (hot-reload) |
+| `docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml up` | Production build |
+| `docker compose -f infra/docker-compose.yml -f infra/docker-compose.infra.yml up` | Postgres + Redis + Qdrant only |
 | `docker compose logs -f` | Tail all logs |
+| `docker compose logs -f backend worker` | Tail backend + worker logs |
 | `docker compose down` | Stop (keep volumes) |
-| `docker compose down -v` | Stop + delete all volumes |
+| `docker compose down -v` | Stop + delete all volumes (**deletes ML models**) |
 | `docker system df -v` | Check ML cache volumes |
+| `python backend/scripts/init_db.py` | Re-run database migrations |
+| `python backend/scripts/cleanup_storage.py` | Purge expired evidence |
 
 ---
 
@@ -140,9 +143,66 @@ Three-tier cache keeps rebuilds fast:
 2. **BuildKit cache mounts** — `uv`/`npm`/Next.js compiler; persists across rebuilds
 3. **Named ML volumes** — Model weights; never deleted by `--no-cache`
 
-> ⚠️ `docker compose down -v` deletes all ML models. Avoid unless intentional.
+> `docker compose down -v` deletes all ML models. Avoid unless intentional.
 
-Full caching guide → [`docs/docker/README.md`](docs/docker/README.md)
+Full caching guide → [`infra/README.md`](infra/README.md)
+
+---
+
+## Project Structure
+
+```
+Forensic Council/
+├── .github/workflows/   # CI pipeline
+├── backend/
+│   ├── agents/          # 5 specialist agents + Council Arbiter
+│   ├── api/             # FastAPI routes, schemas, middleware
+│   ├── config/          # Settings, constants
+│   ├── core/            # Auth, signing, calibration, memory, ReAct loop
+│   ├── infra/           # PostgreSQL, Redis, Qdrant clients
+│   ├── orchestration/   # Pipeline, session manager, investigation queue
+│   ├── tools/           # Forensic analysis tools (ELA, OCR, YOLO, etc.)
+│   ├── reports/         # Report template generation
+│   ├── scripts/         # Utility scripts
+│   ├── storage/         # Evidence store, key management
+│   └── pyproject.toml
+├── frontend/
+│   ├── src/
+│   │   ├── app/         # Next.js pages (landing, investigate, result)
+│   │   ├── components/  # UI components (evidence, result, lightswind)
+│   │   ├── hooks/       # React hooks (WebSocket, sound, forensic data)
+│   │   ├── lib/         # API client, constants, utilities
+│   │   └── types/       # TypeScript definitions
+│   └── package.json
+├── infra/
+│   ├── docker-compose*.yml
+│   └── Caddyfile
+├── docs/
+│   ├── agent-context/   # Agent memory, rules, project context
+│   └── *.md             # Architecture, API, security, testing, runbooks
+├── tests/
+│   ├── backend/
+│   │   ├── unit/
+│   │   ├── integration/
+│   │   └── security/
+│   ├── frontend/
+│   │   ├── unit/
+│   │   ├── integration/
+│   │   ├── e2e/
+│   │   └── accessibility/
+│   ├── connectivity/    # Live stack tests
+│   ├── fixtures/        # Test data
+│   └── infra/           # Infrastructure tests
+├── storage/
+│   └── calibration_models/  # Platt scaling calibration data (gitignored)
+├── .env
+├── .env.example
+├── .gitignore
+├── .dockerignore
+├── setup.cfg
+├── LICENSE
+└── README.md
+```
 
 ---
 
@@ -151,41 +211,49 @@ Full caching guide → [`docs/docker/README.md`](docs/docker/README.md)
 | Symptom | Fix |
 |---------|-----|
 | CORS errors | Check `NEXT_PUBLIC_API_URL` in `.env` matches browser-reachable URL |
-| ML models re-downloading | `down -v` was run; models will re-cache automatically |
-| `SIGNING_KEY` error | `python -c "import secrets; print(secrets.token_hex(32))"` |
+| ML models re-downloading | `down -v` was run; models will re-cache automatically (check `/tmp/model_download.log`) |
+| `SIGNING_KEY` error | `python -c "import secrets; print(secrets.token_hex(32))"` — set in `.env` |
+| `JWT_SECRET_KEY` error | `python -c "import secrets; print(secrets.token_hex(32))"` — must be 32+ chars with mixed case |
 | Old UI after `.env` change | `NEXT_PUBLIC_*` bakes at build time: `docker compose build frontend` |
 | Audio agent failures | Set `HF_TOKEN` for pyannote gated models (free at hf.co/settings/tokens) |
+| WebSocket disconnects | Check Caddy `flush_interval -1` in Caddyfile; verify network segmentation |
+| Database migration failures | Check `docker compose logs migration`; verify `POSTGRES_PASSWORD` matches |
+| WebSocket disconnects | Check Caddy `flush_interval -1` in Caddyfile; verify network segmentation |
+| Database migration failures | Check `docker compose logs migration`; verify `POSTGRES_PASSWORD` matches |
 
 ---
 
 ## Changelog
 
+**v1.2.0 (2026-04-02)** — Full codebase audit, deep analysis UI, production hardening:
+- **Audit**: Aligned all version strings to 1.2.0 across `pyproject.toml`, `package.json`, `api/main.py`.
+- **Audit**: Added missing `import asyncio` in `api/main.py` (would crash ML warmup in production).
+- **Audit**: Added `"use client"` directive to `not-found.tsx` (framer-motion SSR crash fix).
+- **Audit**: Cleaned 86 stale `.pyc` files and `__pycache__` directories from tracked paths.
+- **UI**: Deep Analysis result page — 3 new specialized components: Deep Model Telemetry, Tribunal Consensus Matrix, Cross-Modal Evidence Graph.
+- **UI**: History panel — file preview thumbnails, dismiss button, clear all, improved layout.
+- **UI**: Result page — section reordering (Agent Analysis before Timeline), Verdict banner, tab graphics.
+
+**v1.1.2 (2026-04-02)** — Project cleanup, bug fixes, result page redesign:
+- **Cleanup**: Removed `nul` file, `__pycache__` directories, `.pytest_cache` from root. Consolidated `claude/` into `docs/agent-context/`. Updated `.gitignore`.
+- **Bug fix**: `metadata_tools.py` — `file_created` now uses `st_birthtime` (cross-platform creation time) instead of `st_ctime` (which is metadata-change-time on Unix).
+- **Bug fix**: Chain-of-custody — JSON double-encoding in `PostgresClient._process_args` removed. The JSONB codec now handles serialization without pre-stringification, fixing signature verification failures.
+- **Bug fix**: Gemini vision findings — `analysis_source` flattened to top-level in agent handler return dicts so the arbiter can correctly detect Gemini findings.
+- **Observability**: Added `get_custody_metrics()` to `CustodyLogger` for monitoring write-failure and retry-queue-size counters.
+- **UI**: Result page redesigned with tab structure (Current Analysis / History), analysis timeline waterfall, metrics grid, and pill-shaped navigation.
+- **UI**: Agent progress display redesigned with per-tool cards showing elapsed time, findings with expand, and metrics grid.
+
 **v1.1.1 (2026-03-29)** — UI Refinements, Bug Fixes & Project Cleanup:
-- **UI**: Agent card grid changed to 3×2 layout on large screens for better visual balance.
-- **UI**: Status badges (Queued, Scan, Finished, N/A, Error) now use transparent/opaque backgrounds instead of solid fills.
-- **File preview fix**: Upload success modal now renders image previews correctly using native `<img>` for data URLs (Next.js `Image` doesn't support base64 sources).
-- **Auth delay fix**: Evidence page no longer fires a redundant `autoLoginAsInvestigator()` on mount if the landing page already authenticated. Cuts the post-upload delay by one full network round-trip.
-- **Progress text fix**: Backend thinking text no longer resets to "Analyzing..." when an empty string is received. Uses nullish coalescing to preserve the last known thinking. Pipeline message/thinking state is also cleared on deep-phase transition.
-- **Naming**: Package renamed from `agent-council-front-end` to `forensic-council-front-end`.
-- **Security**: Removed `Locks and Keys.txt` containing exposed API keys. Rotate any keys that were previously committed.
-- **Cleanup**: Removed stale `test-three.js`, Python `__pycache__` directories, and `.mypy_cache`/`.pytest_cache`/`.ruff_cache` from root.
+- **UI**: Agent card grid changed to 3×2 layout on large screens.
+- **UI**: Status badges use transparent/opaque backgrounds.
+- **File preview fix**: Upload success modal renders image previews correctly.
+- **Auth delay fix**: Evidence page no longer fires redundant `autoLoginAsInvestigator()`.
+- **Progress text fix**: Backend thinking text no longer resets on empty string.
+- **Security**: Removed exposed API keys file.
 
-**v1.1.0 (2026-03-24)** — Comprehensive Minimalist Redesign & Robustness Audit:
-- **UI Redesign**: Transitioned from "CyberNoir" neon aesthetic to a premium Indigo/Slate minimalist design system.
-- **Component Standardisation**: Replaced all custom neon panels with `SurfaceCard` and `surface-panel` classes; added index barrels for cleaner imports.
-- **Orchestration**: Simplifed Docker entry point with `docs/docker/docker-compose.yml` and updated build documentation.
-- **Audit**: Phase 1 of the 5-phase comprehensive codebase audit completed (Cleanup, missing files, and structure).
-- **Security**: Reinforced CSP headers and correlation tracking in FastAPI middleware.
+**v1.1.0 (2026-03-24)** — Comprehensive Minimalist Redesign & Robustness Audit.
 
-**v1.0.4 (2026-03-16)** — Full production hardening across all layers:
-- **Session 5 runtime audit**: Report race-window fix (report cached before pipeline eviction) · `AttributeError: _custody_logger` in Agents 2/3/4 inter-agent calls · Pipeline `_final_report`/`_error` now initialized on `__init__` · WorkingMemory in-memory fallback survives Redis outages · CustodyLogger DB write wrapped in try/except (never crashes pipeline) · Frontend unsupported-agent detection matches backend `"Not applicable"` strings · Docker-compose `LLM_MODEL` default corrected to `llama-3.3-70b-versatile` · `.env.example` `GEMINI_TIMEOUT` corrected to `55.0`
-- **Session 4 backend audit**: Resume endpoint URL mismatch fixed (was 404 on every Accept/Deep click) · DB report rebuild missing 5 fields · `update_session_status` NOT NULL violation · Qdrant singleton race condition · HTML injection in report renderer · `TransactionContext.fetch` dict args · pytest path and `backend/__init__.py` · CI test job fixed
-- **Session 3 connectivity**: All frontend↔backend URL mappings verified · Docker CORS origins confirmed · WebSocket subprotocol match · MIME type allowlists identical
-- **Critical bug fixes**: `useRef` lazy-init fixed (was breaking every POST), `react_loop` `update_state` missing `agent_id`, deep pass returning combined findings (duplication), stale `agentUpdates` on deep phase start
-- **Deep analysis**: Agent1 Gemini runs first → context injected into Agents 3 & 5 · Phase-aware Groq synthesis (deep pass compares vs initial) · Active-agent-only deep queue
-- **Arbiter**: 5-tier verdict (CERTAIN/LIKELY/UNCERTAIN/INCONCLUSIVE/MANIPULATION DETECTED) · Per-agent Groq narrative · `AgentMetrics` with confidence + error rate · Finding deduplication
-- **UI**: Syne + JetBrains Mono fonts · `MicroscopeScanner` + `EnvelopeCTA` + `GlassCard` · Glass agent cards with skeleton loading · `GlobalFooter` on all pages · `PageTransition` · `cursor: pointer` globally
-- **Audit fixes (v1.0.2–v1.0.4)**: JWT 60-min expiry · Rate limiting · Bootstrap credentials from env vars · Redis/PostgreSQL production hardening · ECDSA signing · numpy<2.0 bound · Test file correct imports
+**v1.0.4 (2026-03-16)** — Full production hardening across all layers.
 
 Full changelog → [`docs/Development-Status.md`](docs/Development-Status.md)
 

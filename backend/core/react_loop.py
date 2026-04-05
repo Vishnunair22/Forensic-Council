@@ -31,6 +31,7 @@ _tracer = get_tracer("forensic-council.react_loop")
 
 class ReActStepType(str, Enum):
     """Types of steps in a ReAct loop."""
+
     THOUGHT = "THOUGHT"
     ACTION = "ACTION"
     OBSERVATION = "OBSERVATION"
@@ -38,14 +39,12 @@ class ReActStepType(str, Enum):
 
 class ReActStep(BaseModel):
     """A single step in the ReAct reasoning chain."""
-    
+
     step_type: Literal["THOUGHT", "ACTION", "OBSERVATION"] = Field(
         ..., description="Type of reasoning step"
     )
     content: str = Field(..., description="The content of the step")
-    tool_name: str | None = Field(
-        default=None, description="Tool name if ACTION step"
-    )
+    tool_name: str | None = Field(default=None, description="Tool name if ACTION step")
     tool_input: dict[str, Any] | None = Field(
         default=None, description="Tool input if ACTION step"
     )
@@ -55,12 +54,13 @@ class ReActStep(BaseModel):
     iteration: int = Field(..., description="Current iteration number")
     timestamp_utc: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
-        description="UTC timestamp of the step"
+        description="UTC timestamp of the step",
     )
 
 
 class HITLCheckpointReason(str, Enum):
     """Reasons for triggering a Human-in-the-Loop checkpoint."""
+
     ITERATION_CEILING_50PCT = "ITERATION_CEILING_50PCT"
     CONTESTED_FINDING = "CONTESTED_FINDING"
     TOOL_UNAVAILABLE = "TOOL_UNAVAILABLE"
@@ -70,6 +70,7 @@ class HITLCheckpointReason(str, Enum):
 
 class HITLCheckpointStatus(str, Enum):
     """Status of a HITL checkpoint."""
+
     PAUSED = "PAUSED"
     RESUMED = "RESUMED"
     OVERRIDDEN = "OVERRIDDEN"
@@ -78,10 +79,9 @@ class HITLCheckpointStatus(str, Enum):
 
 class HITLCheckpointState(BaseModel):
     """State of a Human-in-the-Loop checkpoint."""
-    
+
     checkpoint_id: uuid.UUID = Field(
-        default_factory=uuid.uuid4,
-        description="Unique checkpoint identifier"
+        default_factory=uuid.uuid4, description="Unique checkpoint identifier"
     )
     agent_id: str = Field(..., description="Agent that triggered checkpoint")
     session_id: uuid.UUID = Field(..., description="Session ID")
@@ -107,6 +107,7 @@ class HITLCheckpointState(BaseModel):
 
 class HumanDecisionType(str, Enum):
     """Types of human decisions in HITL."""
+
     APPROVE = "APPROVE"
     REDIRECT = "REDIRECT"
     OVERRIDE = "OVERRIDE"
@@ -116,10 +117,10 @@ class HumanDecisionType(str, Enum):
 
 class HumanDecision(BaseModel):
     """A human decision in response to a HITL checkpoint."""
-    
-    decision_type: Literal["APPROVE", "REDIRECT", "OVERRIDE", "TERMINATE", "ESCALATE"] = Field(
-        ..., description="Type of decision made"
-    )
+
+    decision_type: Literal[
+        "APPROVE", "REDIRECT", "OVERRIDE", "TERMINATE", "ESCALATE"
+    ] = Field(..., description="Type of decision made")
     investigator_id: str = Field(..., description="ID of the human investigator")
     notes: str = Field(default="", description="Notes from the investigator")
     override_finding: dict[str, Any] | None = Field(
@@ -132,6 +133,7 @@ class HumanDecision(BaseModel):
 
 class AgentFindingStatus(str, Enum):
     """Status of an agent finding."""
+
     CONFIRMED = "CONFIRMED"
     CONTESTED = "CONTESTED"
     INCONCLUSIVE = "INCONCLUSIVE"
@@ -140,28 +142,28 @@ class AgentFindingStatus(str, Enum):
 
 class AgentFinding(BaseModel):
     """A finding produced by an agent."""
-    
+
     finding_id: uuid.UUID = Field(
-        default_factory=uuid.uuid4,
-        description="Unique finding identifier"
+        default_factory=uuid.uuid4, description="Unique finding identifier"
     )
     agent_id: str = Field(..., description="Agent that produced the finding")
     agent_name: str = Field(default="", description="Human-readable name of the agent")
     finding_type: str = Field(..., description="Type of finding")
     confidence_raw: float = Field(
-        ..., ge=0.0, le=1.0,
-        description="Raw confidence score (0-1)"
+        ..., ge=0.0, le=1.0, description="Raw confidence score (0-1)"
     )
     raw_confidence_score: float | None = Field(
-        default=None, ge=0.0, le=1.0,
-        description="Rescaled confidence score (Platt sigmoid), None if not rescaled"
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Rescaled confidence score (Platt sigmoid), None if not rescaled",
     )
     calibrated: bool = Field(
         default=False, description="Whether confidence has been calibrated"
     )
     calibration_status: str = Field(
         default="UNCALIBRATED",
-        description="TRAINED if parameters were fitted to data, UNCALIBRATED if engineering defaults"
+        description="TRAINED if parameters were fitted to data, UNCALIBRATED if engineering defaults",
     )
     status: Literal["CONFIRMED", "CONTESTED", "INCONCLUSIVE", "INCOMPLETE"] = Field(
         default="CONFIRMED", description="Finding status"
@@ -182,7 +184,8 @@ class AgentFinding(BaseModel):
         default_factory=list, description="Text extracted from image via OCR"
     )
     metadata: dict[str, Any] = Field(
-        default_factory=dict, description="Additional metadata including tool results and court_defensible flag"
+        default_factory=dict,
+        description="Additional metadata including tool results and court_defensible flag",
     )
 
     @field_validator("metadata", mode="before")
@@ -193,7 +196,7 @@ class AgentFinding(BaseModel):
 
 class ReActLoopResult(BaseModel):
     """Result of a completed ReAct loop."""
-    
+
     session_id: uuid.UUID = Field(..., description="Session ID")
     agent_id: str = Field(..., description="Agent ID")
     completed: bool = Field(
@@ -216,8 +219,7 @@ class ReActLoopResult(BaseModel):
 
 # Type for LLM step generators - async function that returns next ReActStep
 LLMStepGenerator = Callable[
-    [list[ReActStep], WorkingMemoryState],
-    Coroutine[Any, Any, ReActStep | None]
+    [list[ReActStep], WorkingMemoryState], Coroutine[Any, Any, ReActStep | None]
 ]
 
 
@@ -229,48 +231,54 @@ def create_llm_step_generator(
 ) -> LLMStepGenerator:
     """
     Create an LLM-based step generator for the ReAct loop.
-    
+
     This factory creates a step generator that uses the LLM to reason about
     tool outputs and decide the next action, enabling true ReAct reasoning
     rather than just task decomposition.
-    
+
     Args:
         llm_client: Initialized LLM client
         config: Application settings
         agent_name: Name of the agent for context
         evidence_context: Context about the evidence being analyzed
-        
+
     Returns:
         LLMStepGenerator function that can be passed to ReActLoopEngine.run()
     """
-    
+
     async def llm_step_generator(
         react_chain: list[ReActStep],
         state: WorkingMemoryState,
     ) -> ReActStep | None:
         """Generate next ReAct step using LLM reasoning."""
-        
+
         # Skip if LLM is not enabled
-        if not config.llm_enable_react_reasoning or not config.llm_api_key or not llm_client.is_available:
+        if (
+            not config.llm_enable_react_reasoning
+            or not config.llm_api_key
+            or not llm_client.is_available
+        ):
             return None
-        
+
         # Build system prompt with forensic context
         system_prompt = _build_forensic_system_prompt(
             agent_name=agent_name,
             evidence_context=evidence_context,
-            available_tasks=[t.description for t in state.tasks if t.status != "COMPLETE"],
+            available_tasks=[
+                t.description for t in state.tasks if t.status != "COMPLETE"
+            ],
         )
-        
+
         # Get available tools from state/tool registry context
         available_tools = _get_available_tools_for_llm(state)
-        
+
         # Get current task
         current_task = None
         for task in state.tasks:
             if task.status == "IN_PROGRESS":
                 current_task = task.description
                 break
-        
+
         try:
             # Call LLM for reasoning
             response: LLMResponse = await llm_client.generate_reasoning_step(
@@ -279,10 +287,10 @@ def create_llm_step_generator(
                 available_tools=available_tools,
                 current_task=current_task,
             )
-            
+
             # Parse response into a ReAct step
             parsed = parse_llm_step(response.content, response.tool_call)
-            
+
             # Create the ReAct step
             step = ReActStep(
                 step_type=parsed["step_type"],  # type: ignore
@@ -291,24 +299,25 @@ def create_llm_step_generator(
                 tool_input=parsed.get("tool_input"),
                 iteration=0,  # Will be set by the loop
             )
-            
+
             logger.info(
                 "LLM generated ReAct step",
                 agent_name=agent_name,
                 step_type=step.step_type,
                 tool_name=step.tool_name,
             )
-            
+
             return step
-            
+
         except Exception as e:
             logger.error(
                 "LLM step generation failed, falling back to default",
                 error=str(e),
                 agent_name=agent_name,
+                exc_info=True,
             )
             return None
-    
+
     return llm_step_generator
 
 
@@ -342,12 +351,14 @@ def _build_forensic_system_prompt(
         "Arbiter": "cross-modal deliberation — synthesising all agent findings into a court-admissible verdict",
     }
     agent_key = next((k for k in mandates if k.lower() in agent_name.lower()), None)
-    mandate = mandates.get(agent_key, "multi-modal forensic analysis of the submitted evidence")
+    mandate = mandates.get(
+        agent_key, "multi-modal forensic analysis of the submitted evidence"
+    )
 
     size_line = f"  File size: {file_size} bytes\n" if file_size else ""
     hash_line = f"  SHA-256:   {file_hash}\n" if file_hash else ""
 
-    tasks_block = "\n".join(f"  {i+1}. {t}" for i, t in enumerate(available_tasks))
+    tasks_block = "\n".join(f"  {i + 1}. {t}" for i, t in enumerate(available_tasks))
 
     prompt = f"""You are {agent_name}, a specialist forensic analysis agent in the Forensic Council multi-agent system.
 
@@ -398,57 +409,179 @@ def _get_available_tools_for_llm(state: WorkingMemoryState) -> list[dict[str, An
     so the LLM always has accurate tool names even without a live registry.
     """
     # Use live registry snapshot if the base agent injected it
-    registry_snapshot: list[dict] | None = getattr(state, "tool_registry_snapshot", None)
+    registry_snapshot: list[dict] | None = getattr(
+        state, "tool_registry_snapshot", None
+    )
     if registry_snapshot:
         return registry_snapshot
 
     # Comprehensive fallback catalogue — covers all real tools across all 5 agents
     return [
         # Agent 1 — Image
-        {"name": "ela_full_image",            "description": "Full-image Error Level Analysis — detects re-saved or spliced regions"},
-        {"name": "ela_anomaly_classify",       "description": "IsolationForest classification of ELA anomaly blocks"},
-        {"name": "roi_extract",               "description": "Extract Region of Interest bounding boxes from anomaly map"},
-        {"name": "jpeg_ghost_detect",         "description": "Detect JPEG re-compression ghosts (double-save artifacts)"},
-        {"name": "frequency_domain_analysis", "description": "FFT spectral analysis — detect GAN/Stable Diffusion frequency artifacts"},
-        {"name": "splicing_detect",           "description": "DCT quantization table inconsistency — identifies spliced regions"},
-        {"name": "noise_fingerprint",         "description": "PRNU camera noise fingerprint — detects inconsistent sensor patterns"},
-        {"name": "deepfake_frequency_check",  "description": "GAN deepfake artifact detection in frequency domain"},
-        {"name": "file_hash_verify",          "description": "SHA-256 hash verification — confirms file integrity"},
-        {"name": "perceptual_hash",           "description": "pHash perceptual similarity hash for near-duplicate detection"},
-        {"name": "copy_move_detect",          "description": "SIFT keypoint self-matching — detects copy-move forgery"},
-        {"name": "extract_text_from_image",   "description": "Tesseract OCR — extract visible text from image evidence"},
-        {"name": "extract_evidence_text",     "description": "Auto-dispatching OCR: PDF->PyMuPDF, Image->EasyOCR->Tesseract"},
-        {"name": "analyze_image_content",     "description": "CLIP semantic understanding — identify objects, scenes, context"},
+        {
+            "name": "ela_full_image",
+            "description": "Full-image Error Level Analysis — detects re-saved or spliced regions",
+        },
+        {
+            "name": "ela_anomaly_classify",
+            "description": "IsolationForest classification of ELA anomaly blocks",
+        },
+        {
+            "name": "roi_extract",
+            "description": "Extract Region of Interest bounding boxes from anomaly map",
+        },
+        {
+            "name": "jpeg_ghost_detect",
+            "description": "Detect JPEG re-compression ghosts (double-save artifacts)",
+        },
+        {
+            "name": "frequency_domain_analysis",
+            "description": "FFT spectral analysis — detect GAN/Stable Diffusion frequency artifacts",
+        },
+        {
+            "name": "splicing_detect",
+            "description": "DCT quantization table inconsistency — identifies spliced regions",
+        },
+        {
+            "name": "noise_fingerprint",
+            "description": "PRNU camera noise fingerprint — detects inconsistent sensor patterns",
+        },
+        {
+            "name": "deepfake_frequency_check",
+            "description": "GAN deepfake artifact detection in frequency domain",
+        },
+        {
+            "name": "file_hash_verify",
+            "description": "SHA-256 hash verification — confirms file integrity",
+        },
+        {
+            "name": "perceptual_hash",
+            "description": "pHash perceptual similarity hash for near-duplicate detection",
+        },
+        {
+            "name": "copy_move_detect",
+            "description": "SIFT keypoint self-matching — detects copy-move forgery",
+        },
+        {
+            "name": "extract_text_from_image",
+            "description": "Tesseract OCR — extract visible text from image evidence",
+        },
+        {
+            "name": "extract_evidence_text",
+            "description": "Auto-dispatching OCR: PDF->PyMuPDF, Image->EasyOCR->Tesseract",
+        },
+        {
+            "name": "analyze_image_content",
+            "description": "CLIP semantic understanding — identify objects, scenes, context",
+        },
         # Agent 2 — Audio
-        {"name": "speaker_diarize",           "description": "Pyannote speaker diarization — count and segment speakers"},
-        {"name": "anti_spoofing_detect",      "description": "SpeechBrain anti-spoofing — detect synthetic/replayed speech"},
-        {"name": "prosody_analyze",           "description": "Praat prosody analysis — F0, jitter, shimmer, HNR"},
-        {"name": "audio_splice_detect",       "description": "ML splice point detection in audio waveform"},
-        {"name": "background_noise_analysis", "description": "Background noise consistency across audio segments"},
-        {"name": "codec_fingerprinting",      "description": "Audio codec and encoding chain fingerprinting"},
+        {
+            "name": "speaker_diarize",
+            "description": "Pyannote speaker diarization — count and segment speakers",
+        },
+        {
+            "name": "anti_spoofing_detect",
+            "description": "SpeechBrain anti-spoofing — detect synthetic/replayed speech",
+        },
+        {
+            "name": "prosody_analyze",
+            "description": "Praat prosody analysis — F0, jitter, shimmer, HNR",
+        },
+        {
+            "name": "audio_splice_detect",
+            "description": "ML splice point detection in audio waveform",
+        },
+        {
+            "name": "background_noise_analysis",
+            "description": "Background noise consistency across audio segments",
+        },
+        {
+            "name": "codec_fingerprinting",
+            "description": "Audio codec and encoding chain fingerprinting",
+        },
         # Agent 3 — Scene
-        {"name": "object_detection",          "description": "YOLOv8 object detection on full scene"},
-        {"name": "lighting_consistency",      "description": "Shadow direction and lighting consistency validation"},
-        {"name": "scene_incongruence",        "description": "CLIP semantic incongruence — objects that do not belong in scene"},
-        {"name": "image_splice_check",        "description": "Splicing detection on detected object regions"},
+        {
+            "name": "object_detection",
+            "description": "YOLOv8 object detection on full scene",
+        },
+        {
+            "name": "lighting_consistency",
+            "description": "Shadow direction and lighting consistency validation",
+        },
+        {
+            "name": "scene_incongruence",
+            "description": "CLIP semantic incongruence — objects that do not belong in scene",
+        },
+        {
+            "name": "image_splice_check",
+            "description": "Splicing detection on detected object regions",
+        },
         # Agent 4 — Video
-        {"name": "optical_flow_analyze",      "description": "Dense optical flow analysis — detect frame discontinuities"},
-        {"name": "frame_window_extract",      "description": "Extract frame window for per-frame analysis"},
-        {"name": "frame_consistency_analysis","description": "Frame-to-frame histogram and edge consistency"},
-        {"name": "face_swap_detection",       "description": "DeepFace embedding comparison — detect face swap events"},
-        {"name": "video_metadata_extract",    "description": "Extract video container metadata"},
-        {"name": "mediainfo_profile",         "description": "Deep AV container profiling: codec, VFR flag, encoding tool, forensic flags"},
-        {"name": "av_file_identity",          "description": "Lightweight AV pre-screen: format, codec, duration, high-severity flags"},
+        {
+            "name": "optical_flow_analyze",
+            "description": "Dense optical flow analysis — detect frame discontinuities",
+        },
+        {
+            "name": "frame_window_extract",
+            "description": "Extract frame window for per-frame analysis",
+        },
+        {
+            "name": "frame_consistency_analysis",
+            "description": "Frame-to-frame histogram and edge consistency",
+        },
+        {
+            "name": "face_swap_detection",
+            "description": "DeepFace embedding comparison — detect face swap events",
+        },
+        {
+            "name": "video_metadata_extract",
+            "description": "Extract video container metadata",
+        },
+        {
+            "name": "mediainfo_profile",
+            "description": "Deep AV container profiling: codec, VFR flag, encoding tool, forensic flags",
+        },
+        {
+            "name": "av_file_identity",
+            "description": "Lightweight AV pre-screen: format, codec, duration, high-severity flags",
+        },
         # Agent 5 — Metadata
-        {"name": "exif_extract",              "description": "Full EXIF extraction via ExifTool + hachoir including MakerNotes"},
-        {"name": "metadata_anomaly_score",    "description": "IsolationForest ML anomaly score on metadata fields"},
-        {"name": "gps_timezone_validate",     "description": "Cross-validate GPS coordinates against claimed timestamp timezone"},
-        {"name": "steganography_scan",        "description": "LSB steganography detection in image data"},
-        {"name": "file_structure_analysis",   "description": "Binary file structure forensic analysis — detect appended data"},
-        {"name": "hex_signature_scan",        "description": "Hex signature scan for hidden editing software watermarks"},
-        {"name": "timestamp_analysis",        "description": "Timestamp consistency analysis across all metadata fields"},
-        {"name": "extract_deep_metadata",     "description": "Deep metadata extraction including MakerNotes and XMP"},
-        {"name": "get_physical_address",      "description": "Reverse geocode GPS coordinates to physical address"},
+        {
+            "name": "exif_extract",
+            "description": "Full EXIF extraction via ExifTool + hachoir including MakerNotes",
+        },
+        {
+            "name": "metadata_anomaly_score",
+            "description": "IsolationForest ML anomaly score on metadata fields",
+        },
+        {
+            "name": "gps_timezone_validate",
+            "description": "Cross-validate GPS coordinates against claimed timestamp timezone",
+        },
+        {
+            "name": "steganography_scan",
+            "description": "LSB steganography detection in image data",
+        },
+        {
+            "name": "file_structure_analysis",
+            "description": "Binary file structure forensic analysis — detect appended data",
+        },
+        {
+            "name": "hex_signature_scan",
+            "description": "Hex signature scan for hidden editing software watermarks",
+        },
+        {
+            "name": "timestamp_analysis",
+            "description": "Timestamp consistency analysis across all metadata fields",
+        },
+        {
+            "name": "extract_deep_metadata",
+            "description": "Deep metadata extraction including MakerNotes and XMP",
+        },
+        {
+            "name": "get_physical_address",
+            "description": "Reverse geocode GPS coordinates to physical address",
+        },
     ]
 
 
@@ -481,11 +614,11 @@ class ReActLoopEngine:
         working_memory: WorkingMemory,
         custody_logger: CustodyLogger,
         redis_client: Any = None,  # Redis client for HITL checkpoint storage
-        hitl_timeout: float = 300.0  # Timeout for HITL resume wait (5 minutes default)
+        hitl_timeout: float = 300.0,  # Timeout for HITL resume wait (5 minutes default)
     ) -> None:
         """
         Initialize the ReAct loop engine.
-        
+
         Args:
             agent_id: ID of the agent running this loop
             session_id: Session ID for this analysis
@@ -502,7 +635,7 @@ class ReActLoopEngine:
         self.custody_logger = custody_logger
         self.redis_client = redis_client
         self.hitl_timeout = hitl_timeout
-        
+
         # Internal state
         self._current_iteration = 0
         self._react_chain: list[ReActStep] = []
@@ -517,25 +650,24 @@ class ReActLoopEngine:
         self,
         initial_thought: str,
         tool_registry: ToolRegistry,
-        llm_generator: LLMStepGenerator | None = None
+        llm_generator: LLMStepGenerator | None = None,
     ) -> ReActLoopResult:
         """
         Run the ReAct loop from an initial thought.
-        
+
         Args:
             initial_thought: The starting thought for the loop
             tool_registry: Registry of available tools
             llm_generator: Async function that generates next step from LLM.
                           If None, uses a simple mock that signals completion.
-                          
+
         Returns:
             ReActLoopResult with findings and reasoning chain
         """
         # Initialize working memory state
         try:
             state = await self.working_memory.get_state(
-                session_id=self.session_id,
-                agent_id=self.agent_id
+                session_id=self.session_id, agent_id=self.agent_id
             )
         except Exception:
             state = None
@@ -545,15 +677,13 @@ class ReActLoopEngine:
             _loop_span.set_attribute("session_id", str(self.session_id))
             _loop_span.set_attribute("iteration_ceiling", self.iteration_ceiling)
 
-        # Create initial THOUGHT step
+            # Create initial THOUGHT step
             initial_step = ReActStep(
-                step_type="THOUGHT",
-                content=initial_thought,
-                iteration=0
+                step_type="THOUGHT", content=initial_thought, iteration=0
             )
             self._react_chain.append(initial_step)
             await self._log_step(initial_step)
-        
+
         self._current_iteration = 0
 
         # Main loop
@@ -561,8 +691,7 @@ class ReActLoopEngine:
             # Get current state
             try:
                 state = await self.working_memory.get_state(
-                    session_id=self.session_id,
-                    agent_id=self.agent_id
+                    session_id=self.session_id, agent_id=self.agent_id
                 )
             except Exception:
                 state = None
@@ -574,37 +703,35 @@ class ReActLoopEngine:
             if hitl_reason is not None:
                 checkpoint = await self.pause_for_hitl(
                     reason=hitl_reason,
-                    brief=f"Paused at iteration {self._current_iteration} due to {hitl_reason.value}"
+                    brief=f"Paused at iteration {self._current_iteration} due to {hitl_reason.value}",
                 )
                 self._hitl_checkpoints.append(checkpoint)
-                
+
                 # Wait for resume signal (in real implementation, this would be external)
                 # For now, we check if a decision was set via resume_from_hitl
                 if self._resume_event is None:
                     self._resume_event = asyncio.Event()
-                
+
                 # In test mode, we might have a pending decision already
                 if self._pending_decision is None:
                     # Wait for external resume (with timeout for safety)
                     try:
                         await asyncio.wait_for(
-                            self._resume_event.wait(),
-                            timeout=self.hitl_timeout
+                            self._resume_event.wait(), timeout=self.hitl_timeout
                         )
                     except asyncio.TimeoutError:
                         # Timeout - terminate loop
                         self._terminated = True
                         break
-                
+
                 # Process the decision
                 if self._pending_decision is not None:
                     await self.resume_from_hitl(
-                        checkpoint.checkpoint_id,
-                        self._pending_decision
+                        checkpoint.checkpoint_id, self._pending_decision
                     )
                     self._pending_decision = None
                     self._resume_event.clear()
-                
+
                 # Check if terminated after HITL
                 if self._terminated:
                     break
@@ -616,14 +743,12 @@ class ReActLoopEngine:
             next_step = None
             if llm_generator is not None:
                 next_step = await llm_generator(self._react_chain, state)
-            
+
             # If LLM returned None (failure, not configured, or no suggestion),
             # fall back to the built-in task-decomposition driver so agents
             # still produce real tool-based findings without LLM reasoning.
             if next_step is None:
-                next_step = await self._default_step_generator(
-                    state, tool_registry
-                )
+                next_step = await self._default_step_generator(state, tool_registry)
 
             if next_step is None:
                 # Both LLM and task driver signal completion
@@ -635,7 +760,9 @@ class ReActLoopEngine:
 
             # Handle ACTION steps
             if next_step.step_type == "ACTION" and next_step.tool_name:
-                with _tracer.start_as_current_span("react_loop.tool_call") as _tool_span:
+                with _tracer.start_as_current_span(
+                    "react_loop.tool_call"
+                ) as _tool_span:
                     _tool_span.set_attribute("tool_name", next_step.tool_name)
                     _tool_span.set_attribute("agent_id", self.agent_id)
                     _tool_span.set_attribute("iteration", self._current_iteration)
@@ -644,29 +771,48 @@ class ReActLoopEngine:
                         input_data=next_step.tool_input or {},
                         agent_id=self.agent_id,
                         session_id=self.session_id,
-                        custody_logger=self.custody_logger
+                        custody_logger=self.custody_logger,
                     )
                     _tool_span.set_attribute("tool_success", tool_result.success)
-                    _tool_span.set_attribute("tool_unavailable", tool_result.unavailable)
+                    _tool_span.set_attribute(
+                        "tool_unavailable", tool_result.unavailable
+                    )
 
                 # --- Generate AgentFinding from Tool Result ---
                 if tool_result.success:
                     output = tool_result.output or {}
                     # Parse confidence: try "confidence" first, then domain-specific keys,
                     # then derive from anomaly/consistency scores, finally fall back to 0.75.
-                    raw_conf = output.get("confidence") if isinstance(output, dict) else None
+                    raw_conf = (
+                        output.get("confidence") if isinstance(output, dict) else None
+                    )
                     # Explicit None means "no confidence available" — use 0.50 (uncertain)
-                    if raw_conf is None and isinstance(output, dict) and "confidence" in output:
+                    if (
+                        raw_conf is None
+                        and isinstance(output, dict)
+                        and "confidence" in output
+                    ):
                         raw_conf = 0.50
                     if raw_conf is None and isinstance(output, dict):
                         # Map domain-specific keys to a 0-1 confidence score
-                        for key in ("anomaly_score", "tampering_score", "synthetic_probability", "forgery_score"):
+                        for key in (
+                            "anomaly_score",
+                            "tampering_score",
+                            "synthetic_probability",
+                            "forgery_score",
+                        ):
                             val = output.get(key)
                             if isinstance(val, (int, float)):
                                 raw_conf = 1.0 - max(0.0, min(1.0, float(val)))
                                 break
                         if raw_conf is None:
-                            for key in ("noise_consistency_score", "consistency_score", "overall_consistency", "avg_confidence", "confidence_score"):
+                            for key in (
+                                "noise_consistency_score",
+                                "consistency_score",
+                                "overall_consistency",
+                                "avg_confidence",
+                                "confidence_score",
+                            ):
                                 val = output.get(key)
                                 if isinstance(val, (int, float)):
                                     raw_conf = max(0.0, min(1.0, float(val)))
@@ -694,68 +840,115 @@ class ReActLoopEngine:
                             # Derive from verdict field
                             elif "verdict" in output:
                                 v = str(output.get("verdict", "")).upper()
-                                if v in ("CONSISTENT", "AUTHENTIC", "CLEAN", "CONTENT_CREDENTIALS_PRESENT", "NO_CONTENT_CREDENTIALS"):
+                                if v in (
+                                    "CONSISTENT",
+                                    "AUTHENTIC",
+                                    "CLEAN",
+                                    "CONTENT_CREDENTIALS_PRESENT",
+                                    "NO_CONTENT_CREDENTIALS",
+                                ):
                                     raw_conf = 0.85
                                 elif v in ("INCONSISTENT", "SUSPICIOUS", "TAMPERED"):
                                     raw_conf = 0.40
                                 elif v in ("INCONCLUSIVE", "ERROR"):
                                     raw_conf = 0.50
                                 elif v == "NOT_APPLICABLE":
-                                    raw_conf = 0.0  # excluded from confidence calculations
+                                    raw_conf = (
+                                        0.0  # excluded from confidence calculations
+                                    )
                             # Derive from anomaly_detected OR inconsistency_detected
-                            elif output.get("anomaly_detected") is True or output.get("inconsistency_detected") is True:
+                            elif (
+                                output.get("anomaly_detected") is True
+                                or output.get("inconsistency_detected") is True
+                            ):
                                 raw_conf = 0.40
-                            elif output.get("anomaly_detected") is False or output.get("inconsistency_detected") is False:
+                            elif (
+                                output.get("anomaly_detected") is False
+                                or output.get("inconsistency_detected") is False
+                            ):
                                 raw_conf = 0.85
                             # Derive from file structure analysis
                             elif output.get("header_valid") is not None:
                                 anomalies = output.get("anomalies", [])
-                                raw_conf = 0.85 if (isinstance(anomalies, list) and len(anomalies) == 0) else 0.40
+                                raw_conf = (
+                                    0.85
+                                    if (
+                                        isinstance(anomalies, list)
+                                        and len(anomalies) == 0
+                                    )
+                                    else 0.40
+                                )
                             # Derive from editing software detection
                             elif output.get("editing_software_detected") is True:
                                 raw_conf = 0.30
                             elif output.get("editing_software_detected") is False:
                                 raw_conf = 0.90
                             # Derive from EXIF field presence (more fields = higher confidence)
-                            elif "present_fields" in output and "absent_fields" in output:
+                            elif (
+                                "present_fields" in output and "absent_fields" in output
+                            ):
                                 present = len(output.get("present_fields") or [])
                                 absent = len(output.get("absent_fields") or [])
                                 total = present + absent
-                                raw_conf = max(0.40, min(0.90, present / total)) if total > 0 else 0.50
+                                raw_conf = (
+                                    max(0.40, min(0.90, present / total))
+                                    if total > 0
+                                    else 0.50
+                                )
                             # Derive from GPS plausibility
                             elif "plausible" in output:
                                 p = output.get("plausible")
-                                raw_conf = 0.80 if p is True else (0.40 if p is False else 0.50)
+                                raw_conf = (
+                                    0.80
+                                    if p is True
+                                    else (0.40 if p is False else 0.50)
+                                )
                     try:
                         confidence = float(raw_conf) if raw_conf is not None else 0.75
                     except (TypeError, ValueError):
                         confidence = 0.75
-                    status_val = str(output.get("status", "CONFIRMED")).upper() if isinstance(output, dict) else "CONFIRMED"
-                    if status_val not in ("CONFIRMED", "CONTESTED", "INCONCLUSIVE", "INCOMPLETE"):
+                    status_val = (
+                        str(output.get("status", "CONFIRMED")).upper()
+                        if isinstance(output, dict)
+                        else "CONFIRMED"
+                    )
+                    if status_val not in (
+                        "CONFIRMED",
+                        "CONTESTED",
+                        "INCONCLUSIVE",
+                        "INCOMPLETE",
+                    ):
                         status_val = "CONFIRMED"
-                    
-                    is_stub = isinstance(output, dict) and (output.get("status") == "stub" or output.get("court_defensible") is False)
+
+                    is_stub = isinstance(output, dict) and (
+                        output.get("status") == "stub"
+                        or output.get("court_defensible") is False
+                    )
                     calibrated_prob = None
-                    
+
                     cal_status_str = "UNCALIBRATED"
                     _ci_dict = None
                     _uncertainty = None
                     try:
                         from core.calibration import get_calibration_layer
+
                         calibration_layer = get_calibration_layer()
                         if calibration_layer and not is_stub:
                             cal_result = calibration_layer.calibrate(
                                 agent_id=self.agent_id,
                                 raw_score=confidence,
-                                finding_class=next_step.tool_name
+                                finding_class=next_step.tool_name,
                             )
                             calibrated_prob = cal_result.raw_confidence_score
                             cal_status_str = cal_result.calibration_status.value
                             _ci_dict = cal_result.confidence_interval
                             _uncertainty = cal_result.uncertainty
                     except Exception:
-                        pass
-    
+                        logger.warning(
+                            "Calibration layer failed",
+                            agent_id=self.agent_id,
+                            exc_info=True,
+                        )
                     _AGENT_ID_TO_NAME = {
                         "Agent1": "Image Forensics",
                         "Agent2": "Audio Forensics",
@@ -769,7 +962,7 @@ class ReActLoopEngine:
                         "Agent4_deep": "Video Forensics",
                         "Agent5_deep": "Metadata Forensics",
                     }
-    
+
                     # Build a clean, human-readable finding type.
                     # Priority: tool label > task description > tool name.
                     # We avoid using raw LLM THOUGHT text (which can be 80+
@@ -846,13 +1039,12 @@ class ReActLoopEngine:
                     }
                     tool_label = _TOOL_LABELS.get(
                         next_step.tool_name,
-                        next_step.tool_name.replace("_", " ").title()
+                        next_step.tool_name.replace("_", " ").title(),
                     )
                     # Use the tool label as the canonical finding type.
                     # Attach the preceding LLM thought (if any) separately
                     # via the llm_reasoning metadata key — not as the label.
                     task_desc = tool_label
-                    
 
                     finding = AgentFinding(
                         agent_id=self.agent_id,
@@ -865,15 +1057,27 @@ class ReActLoopEngine:
                         status=status_val,
                         evidence_refs=[],
                         reasoning_summary=self._build_readable_summary(
-                            next_step.tool_name, task_desc, tool_result, confidence, status_val
+                            next_step.tool_name,
+                            task_desc,
+                            tool_result,
+                            confidence,
+                            status_val,
                         ),
                         metadata={
                             "tool_name": next_step.tool_name,
                             "court_defensible": not is_stub,
-                            "stub_warning": output.get("warning") if isinstance(output, dict) and is_stub else None,
+                            "stub_warning": output.get("warning")
+                            if isinstance(output, dict) and is_stub
+                            else None,
                             "confidence_interval": _ci_dict,
-                            "uncertainty": _uncertainty.model_dump() if _uncertainty else None,
-                            **(output if isinstance(output, dict) else {"raw_output": str(output)}),
+                            "uncertainty": _uncertainty.model_dump()
+                            if _uncertainty
+                            else None,
+                            **(
+                                output
+                                if isinstance(output, dict)
+                                else {"raw_output": str(output)}
+                            ),
                         },
                     )
                     self._findings.append(finding)
@@ -907,7 +1111,7 @@ class ReActLoopEngine:
                     content=self._format_tool_result(tool_result),
                     tool_name=next_step.tool_name,
                     tool_output=tool_result.model_dump(),
-                    iteration=self._current_iteration
+                    iteration=self._current_iteration,
                 )
                 self._react_chain.append(observation)
                 await self._log_step(observation)
@@ -916,11 +1120,13 @@ class ReActLoopEngine:
                 # Use the task_id stored in tool_input by _default_step_generator
                 # instead of scanning WM for IN_PROGRESS tasks.
                 from core.working_memory import TaskStatus as _TS
+
                 _task_id_str = (next_step.tool_input or {}).get("_task_id")
                 _wm_updated = False
                 if _task_id_str:
                     try:
                         from uuid import UUID as _UUID
+
                         await self.working_memory.update_task(
                             session_id=self.session_id,
                             agent_id=self.agent_id,
@@ -970,8 +1176,12 @@ class ReActLoopEngine:
                                 if task.status == _TS.IN_PROGRESS:
                                     task.status = _TS.COMPLETE
                                     task.result_ref = next_step.tool_name
-                            key = self.working_memory._get_key(self.session_id, self.agent_id)
-                            self.working_memory._local_cache[key] = cache_state.model_dump_json()
+                            key = self.working_memory._get_key(
+                                self.session_id, self.agent_id
+                            )
+                            self.working_memory._local_cache[key] = (
+                                cache_state.model_dump_json()
+                            )
                     except Exception:
                         pass
 
@@ -981,7 +1191,7 @@ class ReActLoopEngine:
                     if hitl_reason == HITLCheckpointReason.TOOL_UNAVAILABLE:
                         checkpoint = await self.pause_for_hitl(
                             reason=hitl_reason,
-                            brief=f"Tool '{next_step.tool_name}' unavailable"
+                            brief=f"Tool '{next_step.tool_name}' unavailable",
                         )
                         self._hitl_checkpoints.append(checkpoint)
 
@@ -989,7 +1199,7 @@ class ReActLoopEngine:
             await self.working_memory.update_state(
                 session_id=self.session_id,
                 agent_id=self.agent_id,
-                updates={"current_iteration": self._current_iteration}
+                updates={"current_iteration": self._current_iteration},
             )
 
         # Build result
@@ -1001,15 +1211,17 @@ class ReActLoopEngine:
             findings=self._findings,
             hitl_checkpoints=self._hitl_checkpoints,
             total_iterations=self._current_iteration,
-            react_chain=self._react_chain
+            react_chain=self._react_chain,
         )
 
-    async def _should_trigger_followup(self, task_description: str | None, tool_result: dict) -> str | None:
+    async def _should_trigger_followup(
+        self, task_description: str | None, tool_result: dict
+    ) -> str | None:
         """
         Return a follow-up tool name if the result warrants deeper analysis,
         or None if the task can be marked complete.
         """
-        result_str = str(tool_result).lower()
+        str(tool_result).lower()
 
         # If ELA finds anomalies, follow up with ROI extraction
         if task_description and "ela" in task_description.lower():
@@ -1029,15 +1241,14 @@ class ReActLoopEngine:
         return None
 
     async def check_hitl_triggers(
-        self,
-        state: WorkingMemoryState
+        self, state: WorkingMemoryState
     ) -> HITLCheckpointReason | None:
         """
         Check if any HITL trigger conditions are met.
-        
+
         Args:
             state: Current working memory state
-            
+
         Returns:
             HITLCheckpointReason if triggered, None otherwise
         """
@@ -1057,35 +1268,32 @@ class ReActLoopEngine:
         # This would be checked against findings in a real implementation
         # For now, we check if any task has severity_threshold flag
         for task in state.tasks:
-            if hasattr(task, 'severity_threshold') and task.severity_threshold:
+            if hasattr(task, "severity_threshold") and task.severity_threshold:
                 return HITLCheckpointReason.SEVERITY_THRESHOLD_BREACH
 
         # Check for tribunal escalation flag (set by epistemic uncertainty check)
-        if getattr(state, 'tribunal_escalation', False):
+        if getattr(state, "tribunal_escalation", False):
             return HITLCheckpointReason.TRIBUNAL_ESCALATION
 
         return None
 
     async def pause_for_hitl(
-        self,
-        reason: HITLCheckpointReason,
-        brief: str
+        self, reason: HITLCheckpointReason, brief: str
     ) -> HITLCheckpointState:
         """
         Pause the loop for Human-in-the-Loop intervention.
-        
+
         Args:
             reason: Why the checkpoint was triggered
             brief: Brief description for the investigator
-            
+
         Returns:
             HITLCheckpointState with PAUSED status
         """
         # Serialize working memory state
         try:
             state = await self.working_memory.get_state(
-                session_id=self.session_id,
-                agent_id=self.agent_id
+                session_id=self.session_id, agent_id=self.agent_id
             )
         except Exception:
             state = None
@@ -1099,7 +1307,7 @@ class ReActLoopEngine:
             paused_at_iteration=self._current_iteration,
             investigator_brief=brief,
             status="PAUSED",
-            serialized_state=serialized_state
+            serialized_state=serialized_state,
         )
 
         # Log HITL checkpoint
@@ -1112,29 +1320,26 @@ class ReActLoopEngine:
                     "checkpoint_id": str(checkpoint.checkpoint_id),
                     "reason": reason.value,
                     "paused_at_iteration": self._current_iteration,
-                    "brief": brief
-                }
+                    "brief": brief,
+                },
             )
 
         # Store checkpoint in Redis
         if self.redis_client is not None:
             key = f"hitl:{self.session_id}:{self.agent_id}"
             await self.redis_client.set(
-                key,
-                json.dumps(checkpoint.model_dump(), default=str)
+                key, json.dumps(checkpoint.model_dump(), default=str)
             )
 
         self._current_checkpoint = checkpoint
         return checkpoint
 
     async def resume_from_hitl(
-        self,
-        checkpoint_id: uuid.UUID,
-        decision: HumanDecision
+        self, checkpoint_id: uuid.UUID, decision: HumanDecision
     ) -> None:
         """
         Resume the loop after a HITL decision.
-        
+
         Args:
             checkpoint_id: ID of the checkpoint to resume from
             decision: The human decision
@@ -1149,8 +1354,8 @@ class ReActLoopEngine:
                     "checkpoint_id": str(checkpoint_id),
                     "decision_type": decision.decision_type,
                     "investigator_id": decision.investigator_id,
-                    "notes": decision.notes
-                }
+                    "notes": decision.notes,
+                },
             )
 
         # Handle different decision types
@@ -1167,7 +1372,7 @@ class ReActLoopEngine:
                 finding_type="HUMAN_OVERRIDE",
                 confidence_raw=1.0,  # Human judgment is certain
                 status="CONFIRMED",
-                reasoning_summary=decision.notes
+                reasoning_summary=decision.notes,
             )
             self._findings.append(finding)
             if self._current_checkpoint:
@@ -1178,7 +1383,7 @@ class ReActLoopEngine:
             await self.working_memory.update_state(
                 session_id=self.session_id,
                 agent_id=self.agent_id,
-                updates={"redirect_context": decision.redirect_context}
+                updates={"redirect_context": decision.redirect_context},
             )
             if self._current_checkpoint:
                 self._current_checkpoint.status = "RESUMED"
@@ -1192,7 +1397,7 @@ class ReActLoopEngine:
             await self.working_memory.update_state(
                 session_id=self.session_id,
                 agent_id=self.agent_id,
-                updates={"tribunal_escalation": True}
+                updates={"tribunal_escalation": True},
             )
             if self._current_checkpoint:
                 self._current_checkpoint.status = "RESUMED"
@@ -1283,7 +1488,9 @@ class ReActLoopEngine:
             "for frames containing",  # Conditional tasks
         }
 
-        if pending_task.description and any(skip in pending_task.description.lower() for skip in _SKIP_TASKS):
+        if pending_task.description and any(
+            skip in pending_task.description.lower() for skip in _SKIP_TASKS
+        ):
             try:
                 await self.working_memory.update_task(
                     session_id=self.session_id,
@@ -1348,11 +1555,8 @@ class ReActLoopEngine:
             iteration=self._current_iteration,
         )
 
-
     @staticmethod
-    def _match_tool_to_task(
-        task_description: str, tools: list
-    ):
+    def _match_tool_to_task(task_description: str, tools: list):
         """
         Match a task description to the best available tool using keyword
         overlap between the task text and tool name/description.
@@ -1408,9 +1612,7 @@ class ReActLoopEngine:
             "ACTION": EntryType.ACTION,
             "OBSERVATION": EntryType.OBSERVATION,
         }
-        entry_type = step_type_to_entry_type.get(
-            step.step_type, EntryType.THOUGHT
-        )
+        entry_type = step_type_to_entry_type.get(step.step_type, EntryType.THOUGHT)
         if self.custody_logger:
             await self.custody_logger.log_entry(
                 agent_id=self.agent_id,
@@ -1422,8 +1624,8 @@ class ReActLoopEngine:
                     "iteration": step.iteration,
                     "tool_name": step.tool_name,
                     "tool_input": step.tool_input,
-                    "timestamp": step.timestamp_utc.isoformat()
-                }
+                    "timestamp": step.timestamp_utc.isoformat(),
+                },
             )
 
     def _build_readable_summary(
@@ -1445,10 +1647,22 @@ class ReActLoopEngine:
 
         if not tool_result.success:
             err = tool_result.error or "unknown error"
-            for prefix in ("[ToolUnavailableError]", "[ToolError]", "ToolError:", "Exception:", "ValueError:", "TypeError:", "KeyError:"):
+            for prefix in (
+                "[ToolUnavailableError]",
+                "[ToolError]",
+                "ToolError:",
+                "Exception:",
+                "ValueError:",
+                "TypeError:",
+                "KeyError:",
+            ):
                 err = err.replace(prefix, "").strip()
             # Classify error type for a cleaner message
-            if "ModuleNotFoundError" in err or "ImportError" in err or "No module named" in err:
+            if (
+                "ModuleNotFoundError" in err
+                or "ImportError" in err
+                or "No module named" in err
+            ):
                 dep_name = err.split("'")[1] if "'" in err else "required dependency"
                 err_msg = f"ML dependency '{dep_name}' not installed — tool skipped."
             elif "Timeout" in err or "timeout" in err:
@@ -1457,10 +1671,7 @@ class ReActLoopEngine:
                 err_msg = "Evidence file not accessible — skipped."
             else:
                 err_msg = err[:140] + ("…" if len(err) > 140 else "")
-            return (
-                f"{tool_label}: {err_msg} "
-                f"Confidence adjusted to {confidence:.0%}."
-            )
+            return f"{tool_label}: {err_msg} Confidence adjusted to {confidence:.0%}."
 
         output = tool_result.output or {}
 
@@ -1476,37 +1687,42 @@ class ReActLoopEngine:
             "ela_full_image": lambda o: (
                 # ELA not applicable for lossless formats (PNG, BMP, TIFF, etc.)
                 o.get("ela_limitation_note", "")
-                if o.get("ela_not_applicable") else
+                if o.get("ela_not_applicable")
                 # Make the region count more human and avoid implying that
                 # every connected component is a large "region".
-                (lambda count, max_a: (
-                    "ELA detected "
-                    + (
-                        "no anomaly regions "
-                        if count == 0 else
-                        "a small number of localized anomaly regions "
-                        if count < 50 else
-                        "dozens of clustered anomaly regions "
-                        if count < 200 else
-                        "hundreds of clustered anomaly regions "
-                        if count < 2000 else
-                        "extensive anomaly patterns (thousands of small regions) "
+                else (
+                    lambda count, max_a: (
+                        "ELA detected "
+                        + (
+                            "no anomaly regions "
+                            if count == 0
+                            else "a small number of localized anomaly regions "
+                            if count < 50
+                            else "dozens of clustered anomaly regions "
+                            if count < 200
+                            else "hundreds of clustered anomaly regions "
+                            if count < 2000
+                            else "extensive anomaly patterns (thousands of small regions) "
+                        )
+                        + f"(~{count} connected region(s)) with a maximum deviation of {max_a:.1f} "
+                        + (
+                            "(significant manipulation signature)."
+                            if max_a > 20
+                            else "within normal compression range."
+                        )
                     )
-                    + f"(~{count} connected region(s)) with a maximum deviation of {max_a:.1f} "
-                    + (
-                        "(significant manipulation signature)."
-                        if max_a > 20
-                        else "within normal compression range."
-                    )
-                ))(
+                )(
                     int(o.get("num_anomaly_regions", 0) or 0),
                     float(o.get("max_anomaly", 0) or 0.0),
                 )
             ),
             "jpeg_ghost_detect": lambda o: (
-                o.get("ghost_limitation_note", "JPEG ghost detection: not applicable for this file type.")
-                if o.get("ghost_not_applicable") else
-                f"JPEG ghost analysis {'detected double-compression artifacts' if o.get('ghost_detected') else 'found no ghost artifacts'} "
+                o.get(
+                    "ghost_limitation_note",
+                    "JPEG ghost detection: not applicable for this file type.",
+                )
+                if o.get("ghost_not_applicable")
+                else f"JPEG ghost analysis {'detected double-compression artifacts' if o.get('ghost_detected') else 'found no ghost artifacts'} "
                 f"with {o.get('confidence', 0):.0%} confidence across {len(o.get('ghost_regions', []))} region(s)."
             ),
             "frequency_domain_analysis": lambda o: (
@@ -1516,7 +1732,10 @@ class ReActLoopEngine:
             ),
             # FIXED: key was 'noise_inconsistency' — actual keys: noise_consistency_score, outlier_region_count, verdict
             "noise_fingerprint": lambda o: (
-                o.get("file_format_note", "PRNU noise fingerprint analysis not applicable for this file type.")
+                o.get(
+                    "file_format_note",
+                    "PRNU noise fingerprint analysis not applicable for this file type.",
+                )
                 if o.get("noise_fingerprint_not_applicable")
                 else (
                     f"PRNU noise fingerprint: {o.get('verdict', 'INCONCLUSIVE')} — "
@@ -1526,7 +1745,11 @@ class ReActLoopEngine:
             ),
             "copy_move_detect": lambda o: (
                 f"Copy-move detection: {o.get('match_count', o.get('num_matches', 0))} keypoint match(es). "
-                + ("Copy-move forgery detected." if o.get('copy_move_detected') else "No copy-move cloning detected.")
+                + (
+                    "Copy-move forgery detected."
+                    if o.get("copy_move_detected")
+                    else "No copy-move cloning detected."
+                )
             ),
             # FIXED: actual keys from splicing_detector: splicing_detected, num_inconsistent_blocks, inconsistency_ratio
             "splicing_detect": lambda o: (
@@ -1541,9 +1764,13 @@ class ReActLoopEngine:
             # FIXED: correct keys; also added for both tool name aliases
             "file_hash_verify": lambda o: (
                 "Hash verification: SHA-256 = "
-                + str(o.get('current_hash', o.get('original_hash', '')))[:20] + "... "
-                + ("Hash matches chain-of-custody record — file integrity confirmed."
-                   if o.get('hash_matches') else "WARNING: hash mismatch — file may have been modified after ingestion.")
+                + str(o.get("current_hash", o.get("original_hash", "")))[:20]
+                + "... "
+                + (
+                    "Hash matches chain-of-custody record — file integrity confirmed."
+                    if o.get("hash_matches")
+                    else "WARNING: hash mismatch — file may have been modified after ingestion."
+                )
             ),
             "adversarial_robustness_check": lambda o: (
                 f"Adversarial robustness: {'EVASION DETECTED — findings may be adversarially engineered.' if o.get('adversarial_pattern_detected') else 'Findings are stable under perturbation — robust.'} "
@@ -1553,12 +1780,16 @@ class ReActLoopEngine:
             "object_detection": lambda o: (
                 f"YOLO object detection: {o.get('detection_count', len(o.get('detections', [])))} object(s) detected "
                 f"({', '.join(o.get('classes_found', [])[:8]) or 'none'}). "
-                + (f"WEAPON CLASSES DETECTED: {', '.join(d['class_name'] for d in o.get('weapon_detections', []))}." if o.get('weapon_detections') else "No weapons detected.")
+                + (
+                    f"WEAPON CLASSES DETECTED: {', '.join(d['class_name'] for d in o.get('weapon_detections', []))}."
+                    if o.get("weapon_detections")
+                    else "No weapons detected."
+                )
             ),
             "secondary_classification": lambda o: (
                 f"Secondary CLIP classification of '{o.get('input_object_class', 'object')}': "
                 f"top match = '{o.get('top_refined_match', 'unknown')}' ({o.get('top_confidence', 0):.0%}). "
-                + ("CONCERN FLAGGED." if o.get('concern_flag') else "No concern flag.")
+                + ("CONCERN FLAGGED." if o.get("concern_flag") else "No concern flag.")
             ),
             "scale_validation": lambda o: (
                 f"Scale/proportion analysis: {'consistent perspective angles' if o.get('scale_consistent') else 'INCONSISTENT perspective — possible compositing'}. "
@@ -1568,40 +1799,73 @@ class ReActLoopEngine:
                 f"Scene noise coherence: {o.get('contextual_anomalies_detected', 0)} anomalous region(s) detected. "
                 f"Noise std across quadrants: {o.get('noise_variance_across_quadrants', 0):.1f} "
                 f"(mean: {o.get('mean_noise_level', 0):.1f}). "
-                + (o.get('anomaly_description', '') or "")
+                + (o.get("anomaly_description", "") or "")
             ),
             "contraband_database": lambda o: (
                 f"Contraband/CLIP analysis: top match = '{o.get('top_matches', [{}])[0].get('category', 'none') if o.get('top_matches') else 'none'}'. "
-                + ("CONCERN FLAG raised." if o.get('concern_flag') else "No concern flag raised.")
+                + (
+                    "CONCERN FLAG raised."
+                    if o.get("concern_flag")
+                    else "No concern flag raised."
+                )
             ),
             "lighting_consistency": lambda o: (
                 f"Lighting/shadow consistency: {'INCONSISTENCY detected' if o.get('inconsistency_detected') else 'consistent across scene'}. "
-                + (f"Details: {o.get('details', '')}" if o.get('details') else "")
-                + (f" Flags: {'; '.join(o.get('flags', []))}" if o.get('flags') else "")
+                + (f"Details: {o.get('details', '')}" if o.get("details") else "")
+                + (f" Flags: {'; '.join(o.get('flags', []))}" if o.get("flags") else "")
             ),
             # ── Metadata tools (Agent 5) ─────────────────────────────────────
             # FIXED: exif_extract_enhanced returns total_fields_extracted, absent_mandatory_fields, not has_exif/device_model/absent_fields
             "exif_extract": lambda o: (
                 f"File: {o.get('file_name', 'unknown')} ({o.get('file_size_human', '')}) · {o.get('mime_type', '')}. "
-                + (f"Device: {o.get('device_model', o.get('camera_make', '') + ' ' + o.get('camera_model', '')).strip()}. " if o.get('device_model') or o.get('camera_make') else "Device: not recorded. ")
-                + (f"Captured: {o.get('datetime_original', '')}. " if o.get('datetime_original') else "Capture time: not in EXIF. ")
-                + (f"Modified: {o.get('datetime_modified', '')}. " if o.get('datetime_modified') else "")
-                + (f"Software: {o.get('software', '')}. " if o.get('software') else "")
-                + (f"Dimensions: {o.get('image_dimensions', '')}. " if o.get('image_dimensions') else "")
+                + (
+                    f"Device: {o.get('device_model', o.get('camera_make', '') + ' ' + o.get('camera_model', '')).strip()}. "
+                    if o.get("device_model") or o.get("camera_make")
+                    else "Device: not recorded. "
+                )
+                + (
+                    f"Captured: {o.get('datetime_original', '')}. "
+                    if o.get("datetime_original")
+                    else "Capture time: not in EXIF. "
+                )
+                + (
+                    f"Modified: {o.get('datetime_modified', '')}. "
+                    if o.get("datetime_modified")
+                    else ""
+                )
+                + (f"Software: {o.get('software', '')}. " if o.get("software") else "")
+                + (
+                    f"Dimensions: {o.get('image_dimensions', '')}. "
+                    if o.get("image_dimensions")
+                    else ""
+                )
                 + f"GPS: {'Present' if o.get('gps_coordinates') else 'Absent'}. "
                 + f"{o.get('total_fields_extracted', 0)} EXIF field(s) extracted. "
-                + (f"Missing mandatory fields: {', '.join(str(f) for f in o.get('absent_mandatory_fields', [])[:5])}." if o.get('absent_mandatory_fields') else (o.get('file_format_note') or "All mandatory EXIF fields present."))
+                + (
+                    f"Missing mandatory fields: {', '.join(str(f) for f in o.get('absent_mandatory_fields', [])[:5])}."
+                    if o.get("absent_mandatory_fields")
+                    else (
+                        o.get("file_format_note")
+                        or "All mandatory EXIF fields present."
+                    )
+                )
             ),
             # FIXED: gps_timezone_validate returns 'plausible' bool + 'issues' list, NOT 'inconsistent' + 'distance_km'
             "gps_timezone_validate": lambda o: (
                 "No GPS coordinates embedded — location origin cannot be verified from metadata."
-                if o.get('plausible') is None and any("no gps" in str(i).lower() or "no gps data" in str(i).lower() for i in o.get('issues', []))
+                if o.get("plausible") is None
+                and any(
+                    "no gps" in str(i).lower() or "no gps data" in str(i).lower()
+                    for i in o.get("issues", [])
+                )
                 else (
                     "No timestamp in EXIF — GPS-timezone cross-validation not possible."
-                    if o.get('plausible') is None and any("timestamp" in str(i).lower() for i in o.get('issues', []))
+                    if o.get("plausible") is None
+                    and any("timestamp" in str(i).lower() for i in o.get("issues", []))
                     else (
-                        "GPS-timezone is INCONSISTENT — " + "; ".join(o.get('issues', ['Unknown issue']))
-                        if o.get('plausible') is False
+                        "GPS-timezone is INCONSISTENT — "
+                        + "; ".join(o.get("issues", ["Unknown issue"]))
+                        if o.get("plausible") is False
                         else f"GPS-timestamp timezone cross-validation passed. Timezone: {o.get('timezone', 'N/A')}."
                     )
                 )
@@ -1623,12 +1887,24 @@ class ReActLoopEngine:
             ),
             "timestamp_analysis": lambda o: (
                 f"Timestamp cross-check found {len(o.get('inconsistencies', []))} inconsistency(ies). "
-                + (f"Issues: {'; '.join(o.get('inconsistencies', []))}" if o.get('inconsistencies') else "All timestamps are consistent.")
+                + (
+                    f"Issues: {'; '.join(o.get('inconsistencies', []))}"
+                    if o.get("inconsistencies")
+                    else "All timestamps are consistent."
+                )
             ),
             "metadata_anomaly_score": lambda o: (
                 f"ML anomaly score: {o.get('anomaly_score', 0):.3f} "
-                + ("(ANOMALOUS). " if o.get('is_anomalous') else "(within normal range). ")
-                + ("Anomalous fields: " + ", ".join(o.get('anomalous_fields', [])[:5]) if o.get('anomalous_fields') else "")
+                + (
+                    "(ANOMALOUS). "
+                    if o.get("is_anomalous")
+                    else "(within normal range). "
+                )
+                + (
+                    "Anomalous fields: " + ", ".join(o.get("anomalous_fields", [])[:5])
+                    if o.get("anomalous_fields")
+                    else ""
+                )
             ),
             "device_fingerprint_db": lambda o: (
                 f"Device fingerprint: {o.get('camera_make', 'Unknown')} {o.get('camera_model', '')}. "
@@ -1637,28 +1913,59 @@ class ReActLoopEngine:
             ),
             # ── OCR tools ────────────────────────────────────────────────────
             "extract_evidence_text": lambda o: (
-                "OCR extracted " + str(o.get('word_count', 0)) + " word(s) "
-                "via " + str(o.get('method', 'OCR')) + " "
-                "(confidence: " + f"{o.get('confidence', 0):.0%}" + "). "
-                + ("Preview: '" + str(o.get('full_text', ''))[:120] + "...'" if o.get('full_text') else "No text content detected.")
+                "OCR extracted " + str(o.get("word_count", 0)) + " word(s) "
+                "via " + str(o.get("method", "OCR")) + " "
+                "(confidence: "
+                + f"{o.get('confidence', 0):.0%}"
+                + "). "
+                + (
+                    "Preview: '" + str(o.get("full_text", ""))[:120] + "...'"
+                    if o.get("full_text")
+                    else "No text content detected."
+                )
             ),
             "extract_text_from_image": lambda o: (
-                "Tesseract OCR extracted " + str(o.get('word_count', 0)) + " word(s). "
-                + ("Preview: '" + str(o.get('text', o.get('full_text', '')))[:100] + "...'" if o.get('text') or o.get('full_text') else "No visible text found.")
+                "Tesseract OCR extracted "
+                + str(o.get("word_count", 0))
+                + " word(s). "
+                + (
+                    "Preview: '"
+                    + str(o.get("text", o.get("full_text", "")))[:100]
+                    + "...'"
+                    if o.get("text") or o.get("full_text")
+                    else "No visible text found."
+                )
             ),
             # ── MediaInfo tools ───────────────────────────────────────────────
             "mediainfo_profile": lambda o: (
-                "MediaInfo profiled: " + str(o.get('format', 'unknown'))
-                + " / " + str(o.get('video_codec', o.get('codec', 'unknown')))
-                + ". Forensic flags: " + str(len(o.get('forensic_flags', [])))
-                + (" — " + "; ".join(o.get('forensic_flags', []))[:200] if o.get('forensic_flags') else " — none detected.")
+                "MediaInfo profiled: "
+                + str(o.get("format", "unknown"))
+                + " / "
+                + str(o.get("video_codec", o.get("codec", "unknown")))
+                + ". Forensic flags: "
+                + str(len(o.get("forensic_flags", [])))
+                + (
+                    " — " + "; ".join(o.get("forensic_flags", []))[:200]
+                    if o.get("forensic_flags")
+                    else " — none detected."
+                )
             ),
             "av_file_identity": lambda o: (
-                "AV pre-screen: " + str(o.get('format', 'unknown'))
-                + " / " + str(o.get('primary_video_codec', o.get('codec', 'unknown')))
-                + " " + str(o.get('duration_seconds', '?')) + "s "
-                + str(o.get('resolution', '')) + ". "
-                + ("HIGH-SEVERITY FLAGS: " + ", ".join(o.get('high_severity_flags', [])) if o.get('high_severity_flags') else "No high-severity flags.")
+                "AV pre-screen: "
+                + str(o.get("format", "unknown"))
+                + " / "
+                + str(o.get("primary_video_codec", o.get("codec", "unknown")))
+                + " "
+                + str(o.get("duration_seconds", "?"))
+                + "s "
+                + str(o.get("resolution", ""))
+                + ". "
+                + (
+                    "HIGH-SEVERITY FLAGS: "
+                    + ", ".join(o.get("high_severity_flags", []))
+                    if o.get("high_severity_flags")
+                    else "No high-severity flags."
+                )
             ),
             # ── Audio tools (Agent 2) — FIXED: keys match actual return dicts ─
             # FIXED: pyannote returns speaker_count + segments; legacy returns speaker_count + num_segments
@@ -1678,73 +1985,118 @@ class ReActLoopEngine:
                 f"Prosody analysis: F0={o.get('f0_mean_hz', 0):.1f}Hz, "
                 f"jitter={o.get('jitter_local', 0):.5f}, shimmer={o.get('shimmer_local', 0):.5f}, "
                 f"HNR={o.get('hnr_db', 0):.1f}dB. "
-                + ("PROSODY ANOMALY DETECTED." if o.get('prosody_anomaly_detected') else "Prosody within normal range.")
+                + (
+                    "PROSODY ANOMALY DETECTED."
+                    if o.get("prosody_anomaly_detected")
+                    else "Prosody within normal range."
+                )
             ),
             # ── Video tools (Agent 4) ─────────────────────────────────────────
             "optical_flow_analysis": lambda o: (
                 f"Optical flow: {o.get('anomaly_frame_count', o.get('num_anomaly_frames', 0))} anomalous frame(s). "
                 f"Mean magnitude: {o.get('mean_flow_magnitude', 0):.3f}. "
-                + ("Temporal discontinuity detected." if o.get('discontinuity_detected') else "Flow is temporally consistent.")
+                + (
+                    "Temporal discontinuity detected."
+                    if o.get("discontinuity_detected")
+                    else "Flow is temporally consistent."
+                )
             ),
             "face_swap_detection": lambda o: (
                 f"Face-swap: {o.get('faces_detected', 0)} face(s) analysed. "
-                + ("Face-swap event detected." if o.get('face_swap_detected') else "No face-swap artifacts found.")
+                + (
+                    "Face-swap event detected."
+                    if o.get("face_swap_detected")
+                    else "No face-swap artifacts found."
+                )
                 + f" Max embedding distance: {o.get('max_distance', 0):.3f}."
             ),
             # ── Gemini vision tools (Agents 1, 3, 5 deep pass) ───────────────
             # Gemini findings share common fields via GeminiFinding.to_finding_dict()
             "gemini_identify_content": lambda o: (
-                f"Gemini Vision Error: {o.get('error')}." if o.get('error') else
-                f"Gemini Vision content identification: {o.get('gemini_content_type', o.get('file_type_assessment', 'unknown type'))}. "
+                f"Gemini Vision Error: {o.get('error')}."
+                if o.get("error")
+                else f"Gemini Vision content identification: {o.get('gemini_content_type', o.get('file_type_assessment', 'unknown type'))}. "
                 f"Scene: {str(o.get('gemini_scene', o.get('content_description', '')))[:150]}. "
-                + (f"Manipulation signals: {'; '.join(o.get('gemini_manipulation_signals', o.get('manipulation_signals', [])))[:200]}."
-                   if o.get('gemini_manipulation_signals') or o.get('manipulation_signals') else "No manipulation signals identified.")
+                + (
+                    f"Manipulation signals: {'; '.join(o.get('gemini_manipulation_signals', o.get('manipulation_signals', [])))[:200]}."
+                    if o.get("gemini_manipulation_signals")
+                    or o.get("manipulation_signals")
+                    else "No manipulation signals identified."
+                )
             ),
             "gemini_cross_validate_manipulation": lambda o: (
-                f"Gemini Vision Error: {o.get('error')}." if o.get('error') else
-                f"Gemini cross-validation: {str(o.get('gemini_authenticity_assessment', o.get('content_description', '')))[:200]}. "
-                + (f"Additional anomalies: {'; '.join(str(s) for s in o.get('gemini_additional_anomalies', o.get('manipulation_signals', [])))[:200]}."
-                   if o.get('gemini_additional_anomalies') or o.get('manipulation_signals') else "No additional anomalies identified.")
+                f"Gemini Vision Error: {o.get('error')}."
+                if o.get("error")
+                else f"Gemini cross-validation: {str(o.get('gemini_authenticity_assessment', o.get('content_description', '')))[:200]}. "
+                + (
+                    f"Additional anomalies: {'; '.join(str(s) for s in o.get('gemini_additional_anomalies', o.get('manipulation_signals', [])))[:200]}."
+                    if o.get("gemini_additional_anomalies")
+                    or o.get("manipulation_signals")
+                    else "No additional anomalies identified."
+                )
             ),
             "gemini_object_scene_analysis": lambda o: (
-                f"Gemini Vision Error: {o.get('error')}." if o.get('error') else
-                f"Gemini object/scene analysis: {str(o.get('gemini_scene_coherence', o.get('content_description', '')))[:200]}. "
+                f"Gemini Vision Error: {o.get('error')}."
+                if o.get("error")
+                else f"Gemini object/scene analysis: {str(o.get('gemini_scene_coherence', o.get('content_description', '')))[:200]}. "
                 f"Validated objects: {', '.join(str(x) for x in o.get('gemini_validated_objects', o.get('detected_objects', [])))[:150] or 'none identified'}. "
-                + (f"Compositing signals: {'; '.join(str(s) for s in o.get('gemini_compositing_signals', o.get('manipulation_signals', [])))[:200]}."
-                   if o.get('gemini_compositing_signals') or o.get('manipulation_signals') else "No compositing signals detected.")
+                + (
+                    f"Compositing signals: {'; '.join(str(s) for s in o.get('gemini_compositing_signals', o.get('manipulation_signals', [])))[:200]}."
+                    if o.get("gemini_compositing_signals")
+                    or o.get("manipulation_signals")
+                    else "No compositing signals detected."
+                )
             ),
             "gemini_metadata_visual_consistency": lambda o: (
-                f"Gemini Vision Error: {o.get('error')}." if o.get('error') else
-                f"Gemini metadata-visual consistency: {str(o.get('gemini_metadata_verdict', o.get('content_description', '')))[:200]}. "
-                + (f"Provenance flags: {'; '.join(str(s) for s in o.get('gemini_provenance_flags', o.get('manipulation_signals', [])))[:200]}."
-                   if o.get('gemini_provenance_flags') or o.get('manipulation_signals') else "No provenance flags raised.")
+                f"Gemini Vision Error: {o.get('error')}."
+                if o.get("error")
+                else f"Gemini metadata-visual consistency: {str(o.get('gemini_metadata_verdict', o.get('content_description', '')))[:200]}. "
+                + (
+                    f"Provenance flags: {'; '.join(str(s) for s in o.get('gemini_provenance_flags', o.get('manipulation_signals', [])))[:200]}."
+                    if o.get("gemini_provenance_flags") or o.get("manipulation_signals")
+                    else "No provenance flags raised."
+                )
             ),
             # ── Comprehensive deep forensic (Agents 1, 3, 5) ──────────────────
             "gemini_deep_forensic": lambda o: (
-                f"Gemini Vision Error: {o.get('error')}." if o.get('error') else
-                (lambda
-                    ctype=(o.get('gemini_content_type', o.get('file_type_assessment', '')) or "unidentified content"),
-                    narrative=(str(o.get('gemini_narrative', o.get('content_description', ''))) or "Visual analysis complete."),
-                    objects=o.get('gemini_detected_objects', o.get('gemini_validated_objects', o.get('detected_objects', []))),
-                    texts=o.get('gemini_extracted_text', []),
-                    verdict=o.get('gemini_verdict', ''),
-                    meta_consistency=str(o.get('gemini_metadata_consistency', '')),
-                    iface=o.get('gemini_interface', ''),
-                    signals=list(o.get('gemini_manipulation_signals') or o.get('manipulation_signals') or []):
-                    "Gemini deep forensic complete. "
-                    + f"Content: {ctype}. "
-                    + (f"Interface/UI: {iface}. " if iface else "")
-                    + (f"Scene: {narrative[:400]}. " if narrative else "")
-                    + (f"Objects/subjects detected: {', '.join(str(x) for x in objects[:12])}. " if objects else "No specific objects identified. ")
-                    + (f"Text extracted from image ({len(texts)} item(s)): {' | '.join(str(t) for t in texts[:8])}. " if texts else "No text found in image. ")
-                    + (f"Authenticity verdict: {verdict}. " if verdict else "")
-                    + (f"Metadata vs visual: {meta_consistency[:200]}. " if meta_consistency else "")
-                    + (f"Manipulation signals: {'; '.join(str(s) for s in signals[:6])}." if signals else "No manipulation signals detected.")
+                f"Gemini Vision Error: {o.get('error')}."
+                if o.get("error")
+                else (
+                    lambda ctype=(o.get("gemini_content_type", o.get("file_type_assessment", "")) or "unidentified content"), narrative=(str(o.get("gemini_narrative", o.get("content_description", ""))) or "Visual analysis complete."), objects=o.get("gemini_detected_objects", o.get("gemini_validated_objects", o.get("detected_objects", []))), texts=o.get("gemini_extracted_text", []), verdict=o.get("gemini_verdict", ""), meta_consistency=str(o.get("gemini_metadata_consistency", "")), iface=o.get("gemini_interface", ""), signals=list(o.get("gemini_manipulation_signals") or o.get("manipulation_signals") or []): (
+                        "Gemini deep forensic complete. "
+                        + f"Content: {ctype}. "
+                        + (f"Interface/UI: {iface}. " if iface else "")
+                        + (f"Scene: {narrative[:400]}. " if narrative else "")
+                        + (
+                            f"Objects/subjects detected: {', '.join(str(x) for x in objects[:12])}. "
+                            if objects
+                            else "No specific objects identified. "
+                        )
+                        + (
+                            f"Text extracted from image ({len(texts)} item(s)): {' | '.join(str(t) for t in texts[:8])}. "
+                            if texts
+                            else "No text found in image. "
+                        )
+                        + (f"Authenticity verdict: {verdict}. " if verdict else "")
+                        + (
+                            f"Metadata vs visual: {meta_consistency[:200]}. "
+                            if meta_consistency
+                            else ""
+                        )
+                        + (
+                            f"Manipulation signals: {'; '.join(str(s) for s in signals[:6])}."
+                            if signals
+                            else "No manipulation signals detected."
+                        )
+                    )
                 )()
             ),
             # ── New tools added in this session ───────────────────────────────
             "prnu_analysis": lambda o: (
-                o.get("file_format_note", "PRNU camera fingerprint analysis not applicable for this file type.")
+                o.get(
+                    "file_format_note",
+                    "PRNU camera fingerprint analysis not applicable for this file type.",
+                )
                 if o.get("prnu_not_applicable")
                 else (
                     f"PRNU camera sensor fingerprint: {o.get('prnu_verdict', 'INCONCLUSIVE')}. "
@@ -1752,7 +2104,11 @@ class ReActLoopEngine:
                     f"min: {o.get('min_block_correlation', 0):.4f}, "
                     f"noise variance CV: {o.get('noise_variance_cv', 0):.4f}. "
                     f"{o.get('outlier_block_count', 0)} of {o.get('total_blocks', 0)} block(s) inconsistent. "
-                    + ("MULTI-SOURCE SENSOR DETECTED — possible splice/compositing." if o.get('inconsistent') else "Single camera source confirmed.")
+                    + (
+                        "MULTI-SOURCE SENSOR DETECTED — possible splice/compositing."
+                        if o.get("inconsistent")
+                        else "Single camera source confirmed."
+                    )
                 )
             ),
             "cfa_demosaicing": lambda o: (
@@ -1760,7 +2116,11 @@ class ReActLoopEngine:
                 f"Inconsistency ratio: {o.get('inconsistency_ratio', 0):.4f}, "
                 f"{o.get('outlier_block_count', 0)} outlier block(s) of {o.get('total_blocks_analyzed', 0)}. "
                 f"R/G corr std: {o.get('rg_correlation_std', 0):.4f}, G/B corr std: {o.get('gb_correlation_std', 0):.4f}. "
-                + ("CFA INCONSISTENCY — region may originate from a different sensor pipeline or AI generation." if o.get('inconsistent') else "CFA pattern internally consistent — single sensor pipeline.")
+                + (
+                    "CFA INCONSISTENCY — region may originate from a different sensor pipeline or AI generation."
+                    if o.get("inconsistent")
+                    else "CFA pattern internally consistent — single sensor pipeline."
+                )
             ),
             "voice_clone_detect": lambda o: (
                 f"Voice clone detection: {o.get('verdict', 'UNKNOWN')}. "
@@ -1768,59 +2128,87 @@ class ReActLoopEngine:
                 f"Spectral flatness: {o.get('spectral_flatness', 0):.4f}, "
                 f"pitch stability (ZCR std): {o.get('pitch_stability_zcr_std', 0):.4f}, "
                 f"energy CV: {o.get('energy_coefficient_of_variation', 0):.3f}. "
-                + (f"Flags: {'; '.join(o.get('flags', []))}" if o.get('flags') else "No synthetic speech indicators detected.")
+                + (
+                    f"Flags: {'; '.join(o.get('flags', []))}"
+                    if o.get("flags")
+                    else "No synthetic speech indicators detected."
+                )
             ),
             "enf_analysis": lambda o: (
-                (f"ENF analysis: {o.get('verdict', 'NO_ENF_SIGNAL')}. "
-                 f"Grid standard: {o.get('grid_standard', 'unknown')} ({o.get('enf_frequency_hz', '?')} Hz). "
-                 f"Consistency score: {o.get('enf_consistency_score', 0):.4f}. "
-                 f"Splice candidate points: {o.get('splice_candidate_points', 0)}. "
-                 f"Duration analysed: {o.get('duration_analyzed_s', '?')}s."
-                 if o.get('enf_detected') else
-                 f"ENF analysis: {o.get('verdict', 'NO_ENF_SIGNAL')}. "
-                 + (o.get('note', 'No ENF signal present.'))
-                )
+                f"ENF analysis: {o.get('verdict', 'NO_ENF_SIGNAL')}. "
+                f"Grid standard: {o.get('grid_standard', 'unknown')} ({o.get('enf_frequency_hz', '?')} Hz). "
+                f"Consistency score: {o.get('enf_consistency_score', 0):.4f}. "
+                f"Splice candidate points: {o.get('splice_candidate_points', 0)}. "
+                f"Duration analysed: {o.get('duration_analyzed_s', '?')}s."
+                if o.get("enf_detected")
+                else f"ENF analysis: {o.get('verdict', 'NO_ENF_SIGNAL')}. "
+                + (o.get("note", "No ENF signal present."))
             ),
             "object_text_ocr": lambda o: (
                 f"Object OCR: text {'found' if o.get('text_found') else 'not found'} "
                 f"in {o.get('regions_analyzed', 0)} region(s), {o.get('total_words', 0)} word(s) total. "
-                + (f"Preview: '{o.get('combined_text_preview', '')[:200]}'" if o.get('text_found') else "No legible text detected.")
+                + (
+                    f"Preview: '{o.get('combined_text_preview', '')[:200]}'"
+                    if o.get("text_found")
+                    else "No legible text detected."
+                )
             ),
             "document_authenticity": lambda o: (
                 f"Document authenticity: {o.get('verdict', 'UNKNOWN')} "
                 f"(forgery score {o.get('forgery_score', 0):.3f}). "
                 f"Font inconsistency CV: {o.get('font_inconsistency_cv', 0):.4f}, "
                 f"frequency peaks: {o.get('frequency_domain_peaks', 0)}. "
-                + (f"Flags: {'; '.join(o.get('flags', []))}" if o.get('flags') else "No forgery indicators detected.")
+                + (
+                    f"Flags: {'; '.join(o.get('flags', []))}"
+                    if o.get("flags")
+                    else "No forgery indicators detected."
+                )
             ),
             "c2pa_verify": lambda o: (
                 f"C2PA Content Credentials: {o.get('verdict', 'UNKNOWN')}. "
-                + ("XMP C2PA present. " if o.get('xmp_c2pa_found') else "")
-                + ("JUMBF manifest present. " if o.get('jumbf_present') else "")
-                + (o.get('forensic_note', '') if o.get('forensic_note') else "")
+                + ("XMP C2PA present. " if o.get("xmp_c2pa_found") else "")
+                + ("JUMBF manifest present. " if o.get("jumbf_present") else "")
+                + (o.get("forensic_note", "") if o.get("forensic_note") else "")
             ),
             "thumbnail_mismatch": lambda o: (
                 f"Thumbnail mismatch: {o.get('verdict', 'NO_THUMBNAIL')}. "
-                + (f"MAD={o.get('mean_absolute_difference', 0):.1f}, "
-                   f"Hamming={o.get('phash_hamming_distance', 'N/A')}. "
-                   if o.get('thumbnail_present') else "")
-                + (o.get('forensic_note', '') if o.get('forensic_note') else "")
+                + (
+                    f"MAD={o.get('mean_absolute_difference', 0):.1f}, "
+                    f"Hamming={o.get('phash_hamming_distance', 'N/A')}. "
+                    if o.get("thumbnail_present")
+                    else ""
+                )
+                + (o.get("forensic_note", "") if o.get("forensic_note") else "")
             ),
             # ── Image tools — missing entries ──────────────────────────────────
             "ela_anomaly_classify": lambda o: (
-                o.get("ela_limitation_note", "ELA block classification not applicable for this file format.")
-                if o.get("ela_not_applicable") else
-                f"ELA anomaly classification: {o.get('anomaly_block_count', o.get('num_anomaly_regions', 0))} "
+                o.get(
+                    "ela_limitation_note",
+                    "ELA block classification not applicable for this file format.",
+                )
+                if o.get("ela_not_applicable")
+                else f"ELA anomaly classification: {o.get('anomaly_block_count', o.get('num_anomaly_regions', 0))} "
                 f"anomalous block(s) out of {o.get('total_blocks', '?')} total. "
                 f"ELA mean: {o.get('ela_mean', 0):.3f}, max deviation: {o.get('max_anomaly', 0)}. "
-                + ("Anomaly detected — possible manipulation." if o.get('anomaly_detected') else "No significant anomaly blocks.")
+                + (
+                    "Anomaly detected — possible manipulation."
+                    if o.get("anomaly_detected")
+                    else "No significant anomaly blocks."
+                )
             ),
             "deepfake_frequency_check": lambda o: (
-                o.get("limitation_note", "GAN/deepfake frequency analysis not applicable for this file format.")
-                if o.get("gan_not_applicable") else
-                f"GAN/deepfake frequency check: anomaly score {o.get('anomaly_score', 0):.3f}, "
+                o.get(
+                    "limitation_note",
+                    "GAN/deepfake frequency analysis not applicable for this file format.",
+                )
+                if o.get("gan_not_applicable")
+                else f"GAN/deepfake frequency check: anomaly score {o.get('anomaly_score', 0):.3f}, "
                 f"high-frequency ratio {o.get('high_freq_ratio', 0):.4f}. "
-                + ("GAN-style frequency artifacts detected — possible synthetic image origin." if o.get('gan_artifact_detected') else "Frequency distribution appears natural — no GAN artifacts detected.")
+                + (
+                    "GAN-style frequency artifacts detected — possible synthetic image origin."
+                    if o.get("gan_artifact_detected")
+                    else "Frequency distribution appears natural — no GAN artifacts detected."
+                )
             ),
             "roi_extract": lambda o: (
                 f"ROI extraction: bounding box {o.get('bounding_box', {})}. "
@@ -1828,39 +2216,75 @@ class ReActLoopEngine:
             ),
             "perceptual_hash": lambda o: (
                 f"Perceptual hash (pHash): {o.get('phash', o.get('hash_value', 'not computed'))}. "
-                + (f"Hamming distance from reference: {o.get('hamming_distance')}." if 'hamming_distance' in o else "No reference hash comparison performed.")
+                + (
+                    f"Hamming distance from reference: {o.get('hamming_distance')}."
+                    if "hamming_distance" in o
+                    else "No reference hash comparison performed."
+                )
             ),
             "analyze_image_content": lambda o: (
                 f"CLIP semantic analysis: image identified as '{o.get('image_type', o.get('top_match', 'unknown'))}' "
                 f"at {o.get('confidence', o.get('top_confidence', 0)):.0%} confidence"
-                + (f" — context: {str(o.get('semantic_context', ''))[:120]}." if o.get('semantic_context') else ". ")
-                + ("CONCERN FLAG raised — content may be sensitive or anomalous." if o.get('concern_flag') else "No concern flags raised.")
+                + (
+                    f" — context: {str(o.get('semantic_context', ''))[:120]}."
+                    if o.get("semantic_context")
+                    else ". "
+                )
+                + (
+                    "CONCERN FLAG raised — content may be sensitive or anomalous."
+                    if o.get("concern_flag")
+                    else "No concern flags raised."
+                )
             ),
             "sensor_db_query": lambda o: (
                 f"Sensor/PRNU analysis: camera {o.get('camera_make', 'Unknown')} {o.get('camera_model', '')} "
                 f"classified as {o.get('sensor_class', 'unknown')} "
                 f"(PRNU variance {o.get('prnu_variance', 0):.4f}, std {o.get('prnu_block_std', 0):.4f}). "
-                + ("Inconsistent noise profile — possible regional insertion." if o.get('inconsistent_noise_profile') else "Sensor noise profile is internally consistent.")
+                + (
+                    "Inconsistent noise profile — possible regional insertion."
+                    if o.get("inconsistent_noise_profile")
+                    else "Sensor noise profile is internally consistent."
+                )
             ),
             # ── Audio tools — missing entries ──────────────────────────────────
             "audio_splice_detect": lambda o: (
                 f"Audio splice detection: {o.get('splice_count', len(o.get('splice_points', [])))} splice point(s) found. "
-                + ("Splicing detected — audio may have been cut and re-joined." if o.get('splice_detected') else "No splice points detected — audio appears continuous.")
+                + (
+                    "Splicing detected — audio may have been cut and re-joined."
+                    if o.get("splice_detected")
+                    else "No splice points detected — audio appears continuous."
+                )
             ),
             "background_noise_analysis": lambda o: (
                 f"Background noise consistency: {o.get('inconsistency_count', 0)} segment shift(s) detected "
                 f"across {o.get('segment_count', '?')} segment(s). "
-                + ("INCONSISTENT background noise — possible audio splice or re-recording." if o.get('inconsistency_detected') else "Background noise is consistent throughout recording.")
+                + (
+                    "INCONSISTENT background noise — possible audio splice or re-recording."
+                    if o.get("inconsistency_detected")
+                    else "Background noise is consistent throughout recording."
+                )
             ),
             "codec_fingerprinting": lambda o: (
                 f"Codec fingerprint: {o.get('codec', o.get('audio_codec', 'unknown'))}, "
                 f"sample rate {o.get('sample_rate', '?')}Hz, channels {o.get('channels', '?')}. "
-                + (f"Encoding chain: {o.get('encoding_chain', o.get('encoding_history', ''))}. " if o.get('encoding_chain') or o.get('encoding_history') else "No multi-generation encoding detected. ")
-                + (f"Duration: {o.get('duration_seconds', o.get('duration', '?'))}s." if o.get('duration_seconds') or o.get('duration') else "")
+                + (
+                    f"Encoding chain: {o.get('encoding_chain', o.get('encoding_history', ''))}. "
+                    if o.get("encoding_chain") or o.get("encoding_history")
+                    else "No multi-generation encoding detected. "
+                )
+                + (
+                    f"Duration: {o.get('duration_seconds', o.get('duration', '?'))}s."
+                    if o.get("duration_seconds") or o.get("duration")
+                    else ""
+                )
             ),
             "audio_visual_sync": lambda o: (
                 f"A/V sync: offset {o.get('av_offset_ms', o.get('sync_offset_ms', 0)):.1f}ms. "
-                + ("SYNC DRIFT DETECTED — audio and video timestamps diverge." if o.get('sync_drift_detected', o.get('desync_detected')) else "Audio-visual sync is within acceptable tolerance.")
+                + (
+                    "SYNC DRIFT DETECTED — audio and video timestamps diverge."
+                    if o.get("sync_drift_detected", o.get("desync_detected"))
+                    else "Audio-visual sync is within acceptable tolerance."
+                )
             ),
             # ── Video tools — missing entries ──────────────────────────────────
             "frame_extraction": lambda o: (
@@ -1870,31 +2294,55 @@ class ReActLoopEngine:
             "frame_consistency_analysis": lambda o: (
                 f"Frame consistency: {o.get('inconsistent_frame_count', 0)} inconsistent frame(s) "
                 f"out of {o.get('total_frames', '?')} analysed. "
-                + ("Frame inconsistency detected — possible splice or compositing." if o.get('inconsistency_detected') else "Frames are visually consistent across the window.")
+                + (
+                    "Frame inconsistency detected — possible splice or compositing."
+                    if o.get("inconsistency_detected")
+                    else "Frames are visually consistent across the window."
+                )
             ),
             "rolling_shutter_validation": lambda o: (
                 f"Rolling shutter: {'VIOLATION detected — inconsistent scanline skew.' if o.get('violation_detected') else 'consistent with claimed device characteristics.'} "
-                + (f"Details: {o.get('details', '')}" if o.get('details') else "")
+                + (f"Details: {o.get('details', '')}" if o.get("details") else "")
             ),
             "video_metadata": lambda o: (
                 f"Video metadata: codec {o.get('codec', 'unknown')}, "
                 f"{o.get('fps', 0):.1f}fps, {o.get('resolution', '?')}, "
                 f"duration {o.get('duration', '?')}s. "
-                + (f"Encoding tool: {o.get('encoding_tool', '')}." if o.get('encoding_tool') else "No encoding tool recorded in metadata.")
+                + (
+                    f"Encoding tool: {o.get('encoding_tool', '')}."
+                    if o.get("encoding_tool")
+                    else "No encoding tool recorded in metadata."
+                )
             ),
             "anomaly_classification": lambda o: (
                 f"Anomaly classification result: {o.get('classification', 'INCONCLUSIVE')}. "
-                + (f"Details: {o.get('note', '')}" if o.get('note') else "No additional detail available.")
+                + (
+                    f"Details: {o.get('note', '')}"
+                    if o.get("note")
+                    else "No additional detail available."
+                )
             ),
             # ── Metadata tools — missing entries ───────────────────────────────
             "extract_deep_metadata": lambda o: (
                 f"Deep metadata extraction: {o.get('total_fields', o.get('field_count', 0))} field(s) extracted. "
-                + (f"MakerNotes: {o.get('makernotes_summary', 'none present')}. " if o.get('makernotes_summary') else "No MakerNotes extracted. ")
-                + (f"XMP data: {str(o.get('xmp_summary', ''))[:100]}." if o.get('xmp_summary') else "No XMP data.")
+                + (
+                    f"MakerNotes: {o.get('makernotes_summary', 'none present')}. "
+                    if o.get("makernotes_summary")
+                    else "No MakerNotes extracted. "
+                )
+                + (
+                    f"XMP data: {str(o.get('xmp_summary', ''))[:100]}."
+                    if o.get("xmp_summary")
+                    else "No XMP data."
+                )
             ),
             "get_physical_address": lambda o: (
                 f"GPS reverse geocoding: {o.get('address', o.get('formatted_address', 'no address resolved'))}. "
-                + (f"Coordinates: {o.get('latitude', '?')}, {o.get('longitude', '?')}." if o.get('latitude') else "No GPS coordinates available.")
+                + (
+                    f"Coordinates: {o.get('latitude', '?')}, {o.get('longitude', '?')}."
+                    if o.get("latitude")
+                    else "No GPS coordinates available."
+                )
             ),
         }
 
@@ -1911,11 +2359,18 @@ class ReActLoopEngine:
 
         highlights: list[str] = []
         for key, value in output.items():
-            if key.startswith("_") or key in ("status", "tool_name", "analysis_report", "artifact_id", "session_id", "case_id"):
+            if key.startswith("_") or key in (
+                "status",
+                "tool_name",
+                "analysis_report",
+                "artifact_id",
+                "session_id",
+                "case_id",
+            ):
                 continue
 
-            clean_key = key.replace('_', ' ')
-            
+            clean_key = key.replace("_", " ")
+
             if isinstance(value, list):
                 if len(value) > 5:
                     highlights.append(f"{len(value)} {clean_key}")
@@ -1924,10 +2379,10 @@ class ReActLoopEngine:
                     if items:
                         highlights.append(f"{clean_key}: {items}")
                 continue
-                
+
             if isinstance(value, dict):
                 continue
-                
+
             if isinstance(value, bool):
                 highlights.append(f"{clean_key}: {'yes' if value else 'no'}")
             elif isinstance(value, float):

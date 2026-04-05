@@ -28,13 +28,24 @@ import json
 
 
 EDITING_SOFTWARE_SIGNATURES = [
-    b"Adobe", b"Photoshop", b"GIMP", b"Lightroom",
-    b"Affinity", b"Capture One", b"DxO", b"Luminar",
+    b"Adobe",
+    b"Photoshop",
+    b"GIMP",
+    b"Lightroom",
+    b"Affinity",
+    b"Capture One",
+    b"DxO",
+    b"Luminar",
 ]
 
 EXPECTED_CAMERA_FIELDS = [
-    "Make", "Model", "ExposureTime", "FNumber",
-    "ISOSpeedRatings", "DateTimeOriginal", "FocalLength",
+    "Make",
+    "Model",
+    "ExposureTime",
+    "FNumber",
+    "ISOSpeedRatings",
+    "DateTimeOriginal",
+    "FocalLength",
 ]
 
 
@@ -43,6 +54,7 @@ def read_exif_simple(image_path: str) -> dict:
     try:
         from PIL import Image
         from PIL.ExifTags import TAGS
+
         img = Image.open(image_path)
         raw_exif = img._getexif()
         if not raw_exif:
@@ -72,18 +84,21 @@ def score_metadata(image_path: str) -> dict:
 
     violations = []
     score = 0.0
-    field_vector = []
 
     # Rule 1: Editing software in hex
     if hex_sigs:
-        violations.append(f"Editing software signature found in file bytes: {', '.join(hex_sigs)}")
+        violations.append(
+            f"Editing software signature found in file bytes: {', '.join(hex_sigs)}"
+        )
         score += 0.35
 
     # Rule 2: Missing mandatory camera fields
     if exif:
         missing = [f for f in EXPECTED_CAMERA_FIELDS if f not in exif]
         if len(missing) > 3:
-            violations.append(f"Missing {len(missing)} expected camera fields: {', '.join(missing[:4])}")
+            violations.append(
+                f"Missing {len(missing)} expected camera fields: {', '.join(missing[:4])}"
+            )
             score += min(0.25, len(missing) * 0.04)
     else:
         violations.append("No EXIF data present — stripped or never written")
@@ -91,7 +106,10 @@ def score_metadata(image_path: str) -> dict:
 
     # Rule 3: Software field in EXIF
     software = exif.get("Software", "")
-    if software and any(s.lower() in str(software).lower() for s in ["photoshop", "gimp", "lightroom", "affinity"]):
+    if software and any(
+        s.lower() in str(software).lower()
+        for s in ["photoshop", "gimp", "lightroom", "affinity"]
+    ):
         violations.append(f"EXIF Software field indicates editing: '{software}'")
         score += 0.25
 
@@ -99,21 +117,29 @@ def score_metadata(image_path: str) -> dict:
     dt_orig = str(exif.get("DateTimeOriginal", ""))
     dt_mod = str(exif.get("DateTime", ""))
     if dt_orig and dt_mod and dt_orig != dt_mod:
-        violations.append(f"DateTimeOriginal ({dt_orig}) differs from DateTime ({dt_mod}) — indicates re-save")
+        violations.append(
+            f"DateTimeOriginal ({dt_orig}) differs from DateTime ({dt_mod}) — indicates re-save"
+        )
         score += 0.15
 
     # Rule 5: GPS present but no timezone-confirming fields
     gps_info = exif.get("GPSInfo")
     if gps_info and not dt_orig:
-        violations.append("GPS coordinates present but no DateTimeOriginal — timezone cross-check impossible")
+        violations.append(
+            "GPS coordinates present but no DateTimeOriginal — timezone cross-check impossible"
+        )
         score += 0.10
 
     # Rule 6: Impossible/zero exposure values
     exposure = exif.get("ExposureTime")
-    fnumber = exif.get("FNumber")
+    exif.get("FNumber")
     if exposure is not None:
         try:
-            exp_val = float(exposure) if not isinstance(exposure, tuple) else exposure[0]/exposure[1]
+            exp_val = (
+                float(exposure)
+                if not isinstance(exposure, tuple)
+                else exposure[0] / exposure[1]
+            )
             if exp_val == 0.0 or exp_val > 30.0:
                 violations.append(f"Suspicious exposure time: {exp_val}s")
                 score += 0.10
@@ -121,7 +147,7 @@ def score_metadata(image_path: str) -> dict:
             pass
 
     # Feature vector for anomaly scoring
-    field_vector = [
+    [
         1.0 if exif else 0.0,
         float(len(exif)),
         1.0 if gps_info else 0.0,

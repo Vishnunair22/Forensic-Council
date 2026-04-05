@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 
 class RetryConfig:
     """Configuration for retry behavior."""
-    
+
     def __init__(
         self,
         max_retries: int = 3,
@@ -35,7 +35,7 @@ class RetryConfig:
     ):
         """
         Initialize retry configuration.
-        
+
         Args:
             max_retries: Maximum number of retry attempts
             base_delay: Initial delay between retries in seconds
@@ -57,57 +57,54 @@ class RetryConfig:
 def calculate_delay(attempt: int, config: RetryConfig) -> float:
     """
     Calculate delay for a retry attempt using exponential backoff.
-    
+
     Args:
         attempt: Current attempt number (1-based)
         config: Retry configuration
-    
+
     Returns:
         Delay in seconds
     """
     # Exponential backoff: base_delay * (exponential_base ^ attempt)
     delay = config.base_delay * (config.exponential_base ** (attempt - 1))
     delay = min(delay, config.max_delay)
-    
+
     if config.jitter:
         # Add random jitter (±25% of delay)
         jitter_amount = delay * 0.25
         delay = delay + random.uniform(-jitter_amount, jitter_amount)
         delay = max(0, delay)  # Ensure non-negative
-    
+
     return delay
 
 
 async def retry_async(
-    func: Callable[..., Any],
-    *args,
-    config: Optional[RetryConfig] = None,
-    **kwargs
+    func: Callable[..., Any], *args, config: Optional[RetryConfig] = None, **kwargs
 ) -> Any:
     """
     Execute an async function with retry logic.
-    
+
     Args:
         func: Async function to execute
         *args: Positional arguments for func
         config: Retry configuration
         **kwargs: Keyword arguments for func
-    
+
     Returns:
         Result of func
-    
+
     Raises:
         Last exception if all retries fail
     """
     config = config or RetryConfig()
     last_exception = None
-    
+
     for attempt in range(1, config.max_retries + 1):
         try:
             return await func(*args, **kwargs)
         except config.retry_exceptions as e:
             last_exception = e
-            
+
             if attempt >= config.max_retries:
                 logger.error(
                     "All retry attempts failed",
@@ -116,9 +113,9 @@ async def retry_async(
                     error=str(e),
                 )
                 raise
-            
+
             delay = calculate_delay(attempt, config)
-            
+
             logger.warning(
                 "Retry attempt failed",
                 func=func.__name__,
@@ -127,46 +124,43 @@ async def retry_async(
                 delay=delay,
                 error=str(e),
             )
-            
+
             if config.on_retry:
                 config.on_retry(e, attempt)
-            
+
             await asyncio.sleep(delay)
-    
+
     # This should never be reached, but just in case
     raise last_exception or Exception("Retry failed without exception")
 
 
 def retry_sync(
-    func: Callable[..., Any],
-    *args,
-    config: Optional[RetryConfig] = None,
-    **kwargs
+    func: Callable[..., Any], *args, config: Optional[RetryConfig] = None, **kwargs
 ) -> Any:
     """
     Execute a sync function with retry logic.
-    
+
     Args:
         func: Function to execute
         *args: Positional arguments for func
         config: Retry configuration
         **kwargs: Keyword arguments for func
-    
+
     Returns:
         Result of func
-    
+
     Raises:
         Last exception if all retries fail
     """
     config = config or RetryConfig()
     last_exception = None
-    
+
     for attempt in range(1, config.max_retries + 1):
         try:
             return func(*args, **kwargs)
         except config.retry_exceptions as e:
             last_exception = e
-            
+
             if attempt >= config.max_retries:
                 logger.error(
                     "All retry attempts failed",
@@ -175,9 +169,9 @@ def retry_sync(
                     error=str(e),
                 )
                 raise
-            
+
             delay = calculate_delay(attempt, config)
-            
+
             logger.warning(
                 "Retry attempt failed",
                 func=func.__name__,
@@ -186,13 +180,13 @@ def retry_sync(
                 delay=delay,
                 error=str(e),
             )
-            
+
             if config.on_retry:
                 config.on_retry(e, attempt)
-            
+
             # For sync, use time.sleep
             time.sleep(delay)
-    
+
     raise last_exception or Exception("Retry failed without exception")
 
 
@@ -206,7 +200,7 @@ def with_retry(
 ):
     """
     Decorator to add retry logic to a function.
-    
+
     Args:
         max_retries: Maximum number of retry attempts
         base_delay: Initial delay between retries
@@ -214,7 +208,7 @@ def with_retry(
         exponential_base: Base for exponential backoff
         jitter: Whether to add jitter
         retry_exceptions: Exception types to retry on
-    
+
     Returns:
         Decorated function with retry logic
     """
@@ -226,32 +220,32 @@ def with_retry(
         jitter=jitter,
         retry_exceptions=retry_exceptions,
     )
-    
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs):
             return await retry_async(func, *args, config=config, **kwargs)
-        
+
         @functools.wraps(func)
         def sync_wrapper(*args, **kwargs):
             return retry_sync(func, *args, config=config, **kwargs)
-        
+
         # Return appropriate wrapper based on function type
         if asyncio.iscoroutinefunction(func):
             return async_wrapper
         return sync_wrapper
-    
+
     return decorator
 
 
 class CircuitBreaker:
     """
     Circuit breaker pattern implementation.
-    
+
     Prevents repeated calls to failing services.
     States: CLOSED (normal), OPEN (failing), HALF_OPEN (testing)
     """
-    
+
     def __init__(
         self,
         failure_threshold: int = 5,
@@ -260,7 +254,7 @@ class CircuitBreaker:
     ):
         """
         Initialize circuit breaker.
-        
+
         Args:
             failure_threshold: Number of failures before opening circuit
             recovery_timeout: Seconds to wait before attempting recovery
@@ -269,13 +263,13 @@ class CircuitBreaker:
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
         self.half_open_max_calls = half_open_max_calls
-        
+
         self._failure_count = 0
         self._success_count = 0
         self._last_failure_time = None
         self._state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
         self._half_open_calls = 0
-    
+
     @property
     def state(self) -> str:
         """Get current circuit state (read-only — no side effects)."""
@@ -294,56 +288,56 @@ class CircuitBreaker:
                 self._half_open_calls = 0
                 logger.info("Circuit breaker transitioning to HALF_OPEN")
         return self._state
-    
+
     def record_success(self):
         """Record a successful call."""
         self._failure_count = 0
-        
+
         if self._state == "HALF_OPEN":
             self._success_count += 1
             if self._success_count >= self.half_open_max_calls:
                 logger.info("Circuit breaker transitioning to CLOSED")
                 self._state = "CLOSED"
                 self._success_count = 0
-    
+
     def record_failure(self):
         """Record a failed call."""
         self._failure_count += 1
         self._last_failure_time = time.monotonic()
-        
+
         if self._state == "HALF_OPEN":
             logger.warning("Circuit breaker transitioning to OPEN")
             self._state = "OPEN"
         elif self._failure_count >= self.failure_threshold:
             logger.warning("Circuit breaker transitioning to OPEN")
             self._state = "OPEN"
-    
+
     async def call(self, func: Callable, *args, **kwargs) -> Any:
         """
         Execute function with circuit breaker protection.
-        
+
         Args:
             func: Function to call
             *args: Positional arguments
             **kwargs: Keyword arguments
-        
+
         Returns:
             Function result
-        
+
         Raises:
             CircuitBreakerOpen: If circuit is open
             Exception: If function raises
         """
         state = self._check_and_maybe_half_open()
-        
+
         if state == "OPEN":
             raise CircuitBreakerOpen("Circuit breaker is OPEN")
-        
+
         if state == "HALF_OPEN":
             if self._half_open_calls >= self.half_open_max_calls:
                 raise CircuitBreakerOpen("Circuit breaker HALF_OPEN limit reached")
             self._half_open_calls += 1
-        
+
         try:
             if asyncio.iscoroutinefunction(func):
                 result = await func(*args, **kwargs)
@@ -354,9 +348,6 @@ class CircuitBreaker:
         except Exception:
             self.record_failure()
             raise
-
-
-
 
 
 # Predefined retry configs for common scenarios

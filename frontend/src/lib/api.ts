@@ -8,9 +8,9 @@
 /** Dev-only logger — silenced in production builds */
 const isDev = process.env.NODE_ENV !== "production";
 const dbg = {
-    log: isDev ? console.log.bind(console) : () => {},
-    warn: isDev ? console.warn.bind(console) : () => {},
-    error: isDev ? console.error.bind(console) : () => {},
+  log: isDev ? console.log.bind(console) : () => {},
+  warn: isDev ? console.warn.bind(console) : () => {},
+  error: isDev ? console.error.bind(console) : () => {},
 };
 
 // ── API Base URL ─────────────────────────────────────────────────────────────
@@ -23,14 +23,14 @@ const dbg = {
 //
 // Server-side (SSR / Next.js API routes) use the absolute internal URL so
 // they can reach the backend container directly without going through a port.
-const API_BASE =
+export const API_BASE =
   typeof window === "undefined"
     ? // Server-side: use Docker-internal service name or fall back to localhost
-    process.env.INTERNAL_API_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    "http://localhost:8000"
+      process.env.INTERNAL_API_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      "http://localhost:8000"
     : // Browser: empty string → relative path → no cross-origin request
-    "";
+      "";
 
 // WebSocket — must use the SAME origin as the page so the browser sends the
 // HttpOnly auth cookie with the upgrade request.  Connecting cross-origin
@@ -41,15 +41,72 @@ const API_BASE =
 // the proxy forwards all request headers including Cookie.
 const WS_BASE =
   typeof window !== "undefined"
-    ? `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}`
-    : (() => {
-        const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    ? // Browser: prefer NEXT_PUBLIC_WS_URL if set manually, otherwise default to same-origin.
+      process.env.NEXT_PUBLIC_WS_URL ||
+      `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}`
+    : // Server-side (fallback): use API URL base
+      (() => {
+        const base =
+          process.env.INTERNAL_API_URL ||
+          process.env.NEXT_PUBLIC_API_URL ||
+          "http://localhost:8000";
         return base.replace(/^https?/, (m) => (m === "https" ? "wss" : "ws"));
       })();
 
 // Token storage key — used for non-HttpOnly auth flows and test compatibility
 const _TOKEN_KEY = "forensic_auth_token";
 const _TOKEN_EXPIRY_KEY = "forensic_auth_token_expiry";
+
+function readCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+
+  const match = document.cookie.match(
+    new RegExp(`(?:^|; )${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}=([^;]*)`),
+  );
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+async function _waitForCookie(name: string, maxMs = 2000): Promise<string | null> {
+  const start = Date.now();
+  while (Date.now() - start < maxMs) {
+    const val = readCookie(name);
+    if (val) return val;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return null;
+}
+
+async function ensureCsrfToken(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+
+  const token = readCookie("csrf_token");
+  if (token) return token;
+
+  try {
+    // Hit health endpoint to get the CSRF cookie — wait for browser to persist it.
+    // The Next.js API proxy forwards the Set-Cookie header.
+    await fetch(`${API_BASE}/api/v1/health`, {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+      signal: AbortSignal.timeout(5_000),
+    });
+    return await _waitForCookie("csrf_token");
+  } catch {
+    return null;
+  }
+}
+
+export async function getMutationHeaders(init?: HeadersInit): Promise<Headers> {
+  const headers = new Headers(init);
+  const csrfToken = await ensureCsrfToken();
+
+  if (csrfToken) {
+    headers.set("X-CSRF-Token", csrfToken);
+  }
+
+  return headers;
+}
 
 /**
  * Set an auth token in sessionStorage (compatibility wrapper).
@@ -60,7 +117,10 @@ export function setAuthToken(token: string, expiresInSec?: number): void {
   if (typeof window !== "undefined") {
     sessionStorage.setItem(_TOKEN_KEY, token);
     if (expiresInSec) {
-      sessionStorage.setItem(_TOKEN_EXPIRY_KEY, String(Date.now() + expiresInSec * 1000));
+      sessionStorage.setItem(
+        _TOKEN_EXPIRY_KEY,
+        String(Date.now() + expiresInSec * 1000),
+      );
     }
   }
 }
@@ -101,7 +161,7 @@ export interface AgentFindingDTO {
   status: string;
   confidence_raw: number;
   calibrated: boolean;
-  calibrated_probability: number | null;  // DEPRECATED — use raw_confidence_score
+  calibrated_probability: number | null; // DEPRECATED — use raw_confidence_score
   raw_confidence_score: number | null;
   court_statement: string | null;
   robustness_caveat: boolean;
@@ -156,23 +216,33 @@ export interface ReportDTO {
   skipped_agents?: Record<string, string>;
   analysis_coverage_note?: string;
   // Flat per-agent summary (D)
-  per_agent_summary?: Record<string, {
-    agent_name: string;
-    verdict: string;
-    confidence_pct: number;
-    tools_ok: number;
-    tools_total: number;
-    findings: number;
-    error_rate_pct: number;
-    skipped: boolean;
-  }>;
+  per_agent_summary?: Record<
+    string,
+    {
+      agent_name: string;
+      verdict: string;
+      confidence_pct: number;
+      tools_ok: number;
+      tools_total: number;
+      findings: number;
+      error_rate_pct: number;
+      skipped: boolean;
+    }
+  >;
   // Degradation transparency — non-empty when analysis ran in reduced-capability mode.
   // Always render a visible warning when this array is non-empty.
   degradation_flags?: string[];
 }
 
 export interface BriefUpdate {
-  type: "AGENT_UPDATE" | "HITL_CHECKPOINT" | "AGENT_COMPLETE" | "PIPELINE_COMPLETE" | "ERROR" | "CONNECTED" | "PIPELINE_PAUSED";
+  type:
+    | "AGENT_UPDATE"
+    | "HITL_CHECKPOINT"
+    | "AGENT_COMPLETE"
+    | "PIPELINE_COMPLETE"
+    | "ERROR"
+    | "CONNECTED"
+    | "PIPELINE_PAUSED";
   session_id: string;
   agent_id: string | null;
   agent_name: string | null;
@@ -190,7 +260,12 @@ export interface HITLCheckpoint {
   created_at: string;
 }
 
-export type HITLDecision = "APPROVE" | "REDIRECT" | "OVERRIDE" | "TERMINATE" | "ESCALATE";
+export type HITLDecision =
+  | "APPROVE"
+  | "REDIRECT"
+  | "OVERRIDE"
+  | "TERMINATE"
+  | "ESCALATE";
 
 export interface HITLDecisionRequest {
   session_id: string;
@@ -228,25 +303,42 @@ export interface UserInfo {
 }
 
 export function isAuthenticated(): boolean {
-  // If a session token is explicitly stored, use it as the auth signal.
-  // Otherwise assume HttpOnly cookie flow (always "authenticated" until 401).
-  return getAuthToken() !== null;
+  // HttpOnly cookies are not visible to JavaScript.
+  // If a session token is explicitly stored (test/compatibility flow), use it.
+  // Otherwise, assume the HttpOnly cookie auth flow is active and let the
+  // API call determine validity (401 triggers re-auth in handleAuthError).
+  if (getAuthToken() !== null) return true;
+  // Only check for actual forensic council session cookies
+  if (typeof document !== "undefined") {
+    return (
+      document.cookie.includes("fc_session=") ||
+      document.cookie.includes("sessionid=")
+    );
+  }
+  return false;
 }
 
-export async function login(username: string, password: string): Promise<TokenResponse> {
+export async function login(
+  username: string,
+  password: string,
+): Promise<TokenResponse> {
   const formData = new URLSearchParams();
   formData.append("username", username);
   formData.append("password", password);
 
   const response = await fetch(`${API_BASE}/api/v1/auth/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: await getMutationHeaders({
+      "Content-Type": "application/x-www-form-urlencoded",
+    }),
     body: formData.toString(),
     credentials: "include", // Required for cookies
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: "Login failed" }));
+    const error = await response
+      .json()
+      .catch(() => ({ detail: "Login failed" }));
     throw new Error(error.detail || "Authentication failed");
   }
 
@@ -254,16 +346,36 @@ export async function login(username: string, password: string): Promise<TokenRe
   return data;
 }
 
+let _pendingAuth: Promise<TokenResponse> | null = null;
+
 export async function autoLoginAsInvestigator(): Promise<TokenResponse> {
-  const response = await fetch("/api/auth/demo", { method: "POST" });
+  if (_pendingAuth) return _pendingAuth;
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: "Demo auth failed" }));
-    throw new Error(error.error || "Authentication failed");
-  }
+  _pendingAuth = (async () => {
+    try {
+      const response = await fetch("/api/auth/demo", { 
+        method: "POST",
+        signal: AbortSignal.timeout(12_000),
+      });
 
-  const data: TokenResponse = await response.json();
-  return data;
+      if (!response.ok) {
+        const error = await response
+          .json()
+          .catch(() => ({ error: "Demo auth failed" }));
+        throw new Error(error.error || "Authentication failed");
+      }
+
+      return await response.json();
+    } finally {
+      // Clear the lock after a small delay to allow subsequent legitimate calls 
+      // but block immediate rapid-fire bursts from a React render loop.
+      setTimeout(() => {
+        _pendingAuth = null;
+      }, 500);
+    }
+  })();
+
+  return _pendingAuth;
 }
 
 export async function ensureAuthenticated(): Promise<void> {
@@ -284,8 +396,10 @@ export async function ensureAuthenticated(): Promise<void> {
 
 export async function logout(): Promise<void> {
   try {
+    const headers = await getMutationHeaders();
     await fetch(`${API_BASE}/api/v1/auth/logout`, {
       method: "POST",
+      headers,
       credentials: "include",
     });
   } catch {
@@ -299,7 +413,9 @@ export async function getCurrentUser(): Promise<UserInfo> {
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: "Failed to get user info" }));
+    const error = await response
+      .json()
+      .catch(() => ({ detail: "Failed to get user info" }));
     throw new Error(error.detail || "Failed to get user info");
   }
 
@@ -309,9 +425,7 @@ export async function getCurrentUser(): Promise<UserInfo> {
 // E6 fix: use a per-invocation retry flag instead of a shared module-level
 // counter, which was not safe for concurrent requests (two simultaneous 401s
 // would both increment the counter and block each other's legitimate retry).
-async function handleAuthError<T>(
-  operation: () => Promise<T>
-): Promise<T> {
+async function handleAuthError<T>(operation: () => Promise<T>): Promise<T> {
   try {
     return await operation();
   } catch (error) {
@@ -337,16 +451,15 @@ async function handleAuthError<T>(
   }
 }
 
-async function _getAuthHeaders(): Promise<HeadersInit> {
-  return {}; // Auth now handled via HttpOnly cookies automatically
-}
 
 /** Redis/content dedup: same file + case already has an active session (HTTP 409). */
 export class DuplicateInvestigationError extends Error {
   readonly existingSessionId: string;
 
   constructor(existingSessionId: string, message?: string) {
-    super(message ?? `Duplicate evidence — existing session ${existingSessionId}`);
+    super(
+      message ?? `Duplicate evidence — existing session ${existingSessionId}`,
+    );
     this.name = "DuplicateInvestigationError";
     this.existingSessionId = existingSessionId;
   }
@@ -355,7 +468,7 @@ export class DuplicateInvestigationError extends Error {
 function _parseSessionIdFromDetail(detail: unknown): string | null {
   const d = typeof detail === "string" ? detail : "";
   const m = d.match(
-    /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i
+    /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i,
   );
   return m?.[1] ?? null;
 }
@@ -366,17 +479,21 @@ function _parseSessionIdFromDetail(detail: unknown): string | null {
 export async function startInvestigation(
   file: File,
   caseId: string,
-  investigatorId: string
+  investigatorId: string,
 ): Promise<InvestigationResponse> {
   const caseIdRegex =
     /^CASE-(?:\d{10,14}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i;
   const investigatorIdRegex = /^REQ-\d{5,10}$/i;
 
   if (!caseIdRegex.test(caseId)) {
-    throw new Error("Invalid Case ID format. Expected CASE-[timestamp] or CASE-[uuid].");
+    throw new Error(
+      "Invalid Case ID format. Expected CASE-[timestamp] or CASE-[uuid].",
+    );
   }
   if (!investigatorIdRegex.test(investigatorId)) {
-    throw new Error("Invalid Investigator ID format. Expected REQ-[5-10 digits].");
+    throw new Error(
+      "Invalid Investigator ID format. Expected REQ-[5-10 digits].",
+    );
   }
 
   return handleAuthError(async () => {
@@ -390,14 +507,19 @@ export async function startInvestigation(
     let lastError: unknown;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
+        const headers = await getMutationHeaders();
         const response = await fetch(`${API_BASE}/api/v1/investigate`, {
           method: "POST",
+          headers,
           body: formData,
           credentials: "include",
+          signal: AbortSignal.timeout(25_000), // Uploads take longer but must still timeout
         });
 
         if (!response.ok) {
-          const errorBody = await response.json().catch(() => ({ detail: "Unknown error" }));
+          const errorBody = await response
+            .json()
+            .catch(() => ({ detail: `HTTP ${response.status} ${response.statusText}`.trim() }));
           const detailRaw = errorBody.detail;
           const detail =
             typeof detailRaw === "string"
@@ -408,13 +530,18 @@ export async function startInvestigation(
           const devHint = errorBody.message ? ` — ${errorBody.message}` : "";
 
           if (response.status === 409) {
-            const fromHeader = response.headers.get("X-Existing-Session")?.trim();
+            const fromHeader = response.headers
+              .get("X-Existing-Session")
+              ?.trim();
             const existing =
               (fromHeader && /^[0-9a-f-]{36}$/i.test(fromHeader)
                 ? fromHeader
                 : null) ?? _parseSessionIdFromDetail(detail);
             if (existing) {
-              throw new DuplicateInvestigationError(existing, `${detail}${devHint}`);
+              throw new DuplicateInvestigationError(
+                existing,
+                `${detail}${devHint}`,
+              );
             }
           }
 
@@ -427,7 +554,9 @@ export async function startInvestigation(
         // Only retry on network errors (TypeError: Failed to fetch)
         if (err instanceof TypeError && attempt < maxRetries) {
           const delay = Math.min(1000 * 2 ** attempt, 4000);
-          dbg.warn(`Investigation fetch failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms...`);
+          dbg.warn(
+            `Investigation fetch failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms...`,
+          );
           await new Promise((r) => setTimeout(r, delay));
           continue;
         }
@@ -447,12 +576,24 @@ export interface ArbiterStatusResponse {
 /**
  * Poll arbiter compilation status (lightweight — no report body)
  */
-export async function getArbiterStatus(sessionId: string): Promise<ArbiterStatusResponse> {
+export async function getArbiterStatus(
+  sessionId: string,
+): Promise<ArbiterStatusResponse> {
   return handleAuthError(async () => {
-    const response = await fetch(`${API_BASE}/api/v1/sessions/${sessionId}/arbiter-status`, {
-      credentials: "include",
-    });
-    if (!response.ok) return { status: "not_found" };
+    const response = await fetch(
+      `${API_BASE}/api/v1/sessions/${sessionId}/arbiter-status`,
+      {
+        credentials: "include",
+      },
+    );
+    if (response.status === 404) return { status: "not_found" };
+    if (!response.ok) {
+      const errText = await response.text().catch(() => response.statusText);
+      return {
+        status: "running",
+        message: `Server error (${response.status}): ${errText.slice(0, 100)}`,
+      };
+    }
     return response.json();
   });
 }
@@ -462,32 +603,52 @@ export async function getArbiterStatus(sessionId: string): Promise<ArbiterStatus
  */
 export async function getReport(sessionId: string): Promise<ReportResponse> {
   return handleAuthError(async () => {
-    const response = await fetch(`${API_BASE}/api/v1/sessions/${sessionId}/report`, {
-      credentials: "include",
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/v1/sessions/${sessionId}/report`,
+        {
+          credentials: "include",
+          signal: controller.signal,
+        },
+      );
 
-    if (response.status === 404) throw new Error("Session not found");
-    if (response.status === 202) return { status: "in_progress" };
+      if (response.status === 404) throw new Error("Session not found");
+      if (response.status === 202) return { status: "in_progress" };
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: "Unknown error" }));
-      throw new Error(error.detail || `HTTP ${response.status}`);
+      if (!response.ok) {
+        const error = await response
+          .json()
+          .catch(() => ({ detail: "Unknown error" }));
+        throw new Error(error.detail || `HTTP ${response.status}`);
+      }
+
+      const report: ReportDTO = await response.json();
+      return { status: "complete", report };
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const report: ReportDTO = await response.json();
-    return { status: "complete", report };
   });
 }
 
-export async function getBrief(sessionId: string, agentId: string): Promise<string> {
+export async function getBrief(
+  sessionId: string,
+  agentId: string,
+): Promise<string> {
   return handleAuthError(async () => {
-    const response = await fetch(`${API_BASE}/api/v1/sessions/${sessionId}/brief/${agentId}`, {
-      credentials: "include",
-    });
+    const response = await fetch(
+      `${API_BASE}/api/v1/sessions/${sessionId}/brief/${agentId}`,
+      {
+        credentials: "include",
+      },
+    );
 
     if (response.status === 404) return "No brief available.";
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: "Unknown error" }));
+      const error = await response
+        .json()
+        .catch(() => ({ detail: "Unknown error" }));
       throw new Error(error.detail || `HTTP ${response.status}`);
     }
 
@@ -496,15 +657,22 @@ export async function getBrief(sessionId: string, agentId: string): Promise<stri
   });
 }
 
-export async function getCheckpoints(sessionId: string): Promise<HITLCheckpoint[]> {
+export async function getCheckpoints(
+  sessionId: string,
+): Promise<HITLCheckpoint[]> {
   return handleAuthError(async () => {
-    const response = await fetch(`${API_BASE}/api/v1/sessions/${sessionId}/checkpoints`, {
-      credentials: "include",
-    });
+    const response = await fetch(
+      `${API_BASE}/api/v1/sessions/${sessionId}/checkpoints`,
+      {
+        credentials: "include",
+      },
+    );
 
     if (response.status === 404) return [];
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: "Unknown error" }));
+      const error = await response
+        .json()
+        .catch(() => ({ detail: "Unknown error" }));
       throw new Error(error.detail || `HTTP ${response.status}`);
     }
 
@@ -512,17 +680,24 @@ export async function getCheckpoints(sessionId: string): Promise<HITLCheckpoint[
   });
 }
 
-export async function submitHITLDecision(decision: HITLDecisionRequest): Promise<void> {
+export async function submitHITLDecision(
+  decision: HITLDecisionRequest,
+): Promise<void> {
   return handleAuthError(async () => {
+    const headers = await getMutationHeaders({
+      "Content-Type": "application/json",
+    });
     const response = await fetch(`${API_BASE}/api/v1/hitl/decision`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       credentials: "include",
       body: JSON.stringify(decision),
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: "Unknown error" }));
+      const error = await response
+        .json()
+        .catch(() => ({ detail: "Unknown error" }));
       throw new Error(error.detail || `HTTP ${response.status}`);
     }
   });
@@ -539,11 +714,21 @@ export async function submitHITLDecision(decision: HITLDecisionRequest): Promise
  *      This ensures broadcasts that start immediately after /investigate
  *      are never lost because the socket wasn't registered yet.
  */
-export function createLiveSocket(
-  sessionId: string
-): { ws: WebSocket; connected: Promise<void> } {
+export function createLiveSocket(sessionId: string): {
+  ws: WebSocket;
+  connected: Promise<void>;
+} {
   const wsUrl = `${WS_BASE}/api/v1/sessions/${sessionId}/live`;
-  const ws = new WebSocket(wsUrl, ["forensic-v1"]);
+
+  // Include the auth token in subprotocols (token.<JWT>) as a robust fallback
+  // if cookies are stripped by a proxy or blocked in certain cross-origin dev flows.
+  const protocols = ["forensic-v1"];
+  const token = getAuthToken();
+  if (token) {
+    protocols.push(`token.${token}`);
+  }
+
+  const ws = new WebSocket(wsUrl, protocols);
 
   let resolveConnected!: () => void;
   let rejectConnected!: (err: Error) => void;
@@ -569,7 +754,11 @@ export function createLiveSocket(
 
   // Connection timeout — if CONNECTED not received within 12 s, fail
   const connectTimeout = setTimeout(() => {
-    safeReject(new Error("WebSocket connection timed out — no CONNECTED message received"));
+    safeReject(
+      new Error(
+        "WebSocket connection timed out — no CONNECTED message received",
+      ),
+    );
     ws.close();
   }, 12_000);
 
@@ -592,8 +781,8 @@ export function createLiveSocket(
         new Error(
           event.reason
             ? `WebSocket closed: ${event.reason}`
-            : `WebSocket closed unexpectedly (code ${event.code})`
-        )
+            : `WebSocket closed unexpectedly (code ${event.code})`,
+        ),
       );
     }
   };
@@ -604,7 +793,10 @@ export function createLiveSocket(
   ws.onmessage = (event: MessageEvent) => {
     try {
       const msg = JSON.parse(event.data as string);
-      if ((msg.type === "CONNECTED" || msg.type === "AGENT_UPDATE") && !settled) {
+      if (
+        (msg.type === "CONNECTED" || msg.type === "AGENT_UPDATE") &&
+        !settled
+      ) {
         clearTimeout(connectTimeout);
         safeResolve();
       }
@@ -633,7 +825,7 @@ export async function pollForReport(
   sessionId: string,
   onProgress: (status: string) => void,
   intervalMs = 3000,
-  maxAttempts = 60
+  maxAttempts = 60,
 ): Promise<ReportDTO> {
   return new Promise((resolve, reject) => {
     let intervalId: ReturnType<typeof setInterval>;
@@ -659,7 +851,10 @@ export async function pollForReport(
         } else {
           onProgress("in_progress");
           // Exponential backoff with jitter: base * 1.5^attempt, capped at 15s
-          const nextDelay = Math.min(intervalMs * Math.pow(1.5, attempts), 15000);
+          const nextDelay = Math.min(
+            intervalMs * Math.pow(1.5, attempts),
+            15000,
+          );
           const jitter = nextDelay * 0.2 * (Math.random() - 0.5);
           clearInterval(intervalId);
           intervalId = setInterval(poll, nextDelay + jitter);

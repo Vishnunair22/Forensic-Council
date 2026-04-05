@@ -22,19 +22,19 @@ logger = get_logger(__name__)
 class PostgresClient:
     """
     Async PostgreSQL client wrapper using asyncpg.
-    
+
     Provides a high-level interface for PostgreSQL operations with:
     - Async context manager support
     - Connection pooling
     - Connection event logging
     - Typed exception handling
-    
+
     Usage:
         async with PostgresClient() as client:
             await client.execute("INSERT INTO table VALUES ($1, $2)", "val1", "val2")
             rows = await client.fetch("SELECT * FROM table WHERE id = $1", id)
     """
-    
+
     def __init__(
         self,
         host: Optional[str] = None,
@@ -47,7 +47,7 @@ class PostgresClient:
     ) -> None:
         """
         Initialize PostgreSQL client.
-        
+
         Args:
             host: PostgreSQL host (defaults to settings)
             port: PostgreSQL port (defaults to settings)
@@ -63,29 +63,34 @@ class PostgresClient:
         self._user = user or settings.postgres_user
         self._password = password or settings.postgres_password
         self._database = database or settings.postgres_db
-        self._min_pool_size = min_pool_size if min_pool_size is not None else settings.postgres_min_pool_size
-        self._max_pool_size = max_pool_size if max_pool_size is not None else settings.postgres_max_pool_size
-        
+        self._min_pool_size = (
+            min_pool_size
+            if min_pool_size is not None
+            else settings.postgres_min_pool_size
+        )
+        self._max_pool_size = (
+            max_pool_size
+            if max_pool_size is not None
+            else settings.postgres_max_pool_size
+        )
+
         self._pool: Optional[Pool] = None
-    
+
     async def __aenter__(self) -> "PostgresClient":
         """Async context manager entry."""
         await self.connect()
         return self
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Async context manager exit."""
         await self.disconnect()
-    
+
     async def _init_connection(self, conn: Connection) -> None:
         """Initialize a connection with JSON codec."""
         await conn.set_type_codec(
-            'jsonb',
-            encoder=json.dumps,
-            decoder=json.loads,
-            schema='pg_catalog'
+            "jsonb", encoder=json.dumps, decoder=json.loads, schema="pg_catalog"
         )
-    
+
     async def connect(self) -> None:
         """Establish connection pool to PostgreSQL."""
         try:
@@ -100,11 +105,11 @@ class PostgresClient:
                 init=self._init_connection,
                 timeout=2.0,
             )
-            
+
             # Test connection
             async with self._pool.acquire() as conn:
                 await conn.fetchval("SELECT 1")
-            
+
             logger.info(
                 "Connected to PostgreSQL",
                 host=self._host,
@@ -113,32 +118,42 @@ class PostgresClient:
                 pool_size=f"{self._min_pool_size}-{self._max_pool_size}",
             )
         except Exception as e:
-            logger.error("Failed to connect to PostgreSQL", error=str(e))
+            logger.error("Failed to connect to PostgreSQL", error=str(e), exc_info=True)
             raise DatabaseConnectionError(
                 f"Failed to connect to PostgreSQL at {self._host}:{self._port}/{self._database}",
-                details={"host": self._host, "port": self._port, "database": self._database, "error": str(e)},
+                details={
+                    "host": self._host,
+                    "port": self._port,
+                    "database": self._database,
+                    "error": str(e),
+                },
             )
-    
+
     async def disconnect(self) -> None:
         """Close connection pool."""
         if self._pool:
             await self._pool.close()
             self._pool = None
             logger.info("Disconnected from PostgreSQL")
-    
+
     @property
     def pool(self) -> Pool:
         """Get the connection pool."""
         if self._pool is None:
-            raise DatabaseConnectionError("PostgreSQL pool not connected. Call connect() first.")
+            raise DatabaseConnectionError(
+                "PostgreSQL pool not connected. Call connect() first."
+            )
         return self._pool
-    
+
     def _process_args(self, args: tuple[Any, ...]) -> list[Any]:
-        """Convert dictionary arguments to JSON strings for JSONB columns."""
-        return [
-            json.dumps(arg) if isinstance(arg, dict) else arg
-            for arg in args
-        ]
+        """Pass arguments through; JSONB codec handles dict serialization.
+
+        The connection-level JSONB codec (registered in _init_connection)
+        converts dicts/lists to JSON wire format. Pre-serialising here
+        would double-encode JSONB values, breaking round-trip fidelity
+        and chain-of-custody signature verification.
+        """
+        return list(args)
 
     async def execute(
         self,
@@ -147,11 +162,11 @@ class PostgresClient:
     ) -> str:
         """
         Execute a query without returning results.
-        
+
         Args:
             query: SQL query with $1, $2, ... placeholders
             *args: Query parameters
-        
+
         Returns:
             Status string from PostgreSQL
         """
@@ -160,7 +175,7 @@ class PostgresClient:
             result = await conn.execute(query, *processed_args)
             logger.debug("Executed query", query=query[:100], status=result)
             return result
-    
+
     async def execute_many(
         self,
         query: str,
@@ -168,22 +183,23 @@ class PostgresClient:
     ) -> None:
         """
         execute a query multiple times with different parameters.
-        
+
         CRITICAL SECURITY: Use $1, $2, etc. placeholders for parameters.
         NEVER use f-strings or string formatting for queries!
-        
+
         Args:
             query: SQL query with $1, $2, ... placeholders
             args_list: List of parameter tuples
         """
         async with self.pool.acquire() as conn:
             processed_args_list = [
-                tuple(self._process_args(args))
-                for args in args_list
+                tuple(self._process_args(args)) for args in args_list
             ]
             await conn.executemany(query, processed_args_list)
-            logger.debug("Executed batch query", query=query[:100], count=len(args_list))
-    
+            logger.debug(
+                "Executed batch query", query=query[:100], count=len(args_list)
+            )
+
     async def fetch(
         self,
         query: str,
@@ -191,11 +207,11 @@ class PostgresClient:
     ) -> list[asyncpg.Record]:
         """
         Execute a query and return all results.
-        
+
         Args:
             query: SQL query with $1, $2, ... placeholders
             *args: Query parameters
-        
+
         Returns:
             List of records
         """
@@ -204,7 +220,7 @@ class PostgresClient:
             results = await conn.fetch(query, *processed_args)
             logger.debug("Fetched rows", query=query[:100], count=len(results))
             return results
-    
+
     async def fetch_one(
         self,
         query: str,
@@ -212,20 +228,22 @@ class PostgresClient:
     ) -> Optional[asyncpg.Record]:
         """
         Execute a query and return a single result.
-        
+
         Args:
             query: SQL query with $1, $2, ... placeholders
             *args: Query parameters
-        
+
         Returns:
             Single record or None
         """
         async with self.pool.acquire() as conn:
             processed_args = self._process_args(args)
             result = await conn.fetchrow(query, *processed_args)
-            logger.debug("Fetched single row", query=query[:100], found=result is not None)
+            logger.debug(
+                "Fetched single row", query=query[:100], found=result is not None
+            )
             return result
-    
+
     async def fetch_val(
         self,
         query: str,
@@ -233,11 +251,11 @@ class PostgresClient:
     ) -> Any:
         """
         Execute a query and return a single value.
-        
+
         Args:
             query: SQL query with $1, $2, ... placeholders
             *args: Query parameters
-        
+
         Returns:
             Single value or None
         """
@@ -246,18 +264,18 @@ class PostgresClient:
             result = await conn.fetchval(query, *processed_args)
             logger.debug("Fetched single value", query=query[:100])
             return result
-    
+
     def transaction(self):
         """
         Start a transaction.
-        
+
         Usage:
             async with client.transaction() as tx:
                 await tx.execute("INSERT ...")
                 await tx.execute("UPDATE ...")
         """
         return TransactionContext(self.pool)
-    
+
     async def health_check(self) -> bool:
         """Test PostgreSQL connection."""
         try:
@@ -265,24 +283,26 @@ class PostgresClient:
             return result == 1
         except Exception as e:
             logger.error("PostgreSQL health check failed", error=str(e))
-            raise DatabaseConnectionError("PostgreSQL health check failed", details={"error": str(e)})
+            raise DatabaseConnectionError(
+                "PostgreSQL health check failed", details={"error": str(e)}
+            )
 
 
 class TransactionContext:
     """Context manager for database transactions."""
-    
+
     def __init__(self, pool: Pool):
         self._pool = pool
         self._conn: Optional[Connection] = None
         self._tx = None
-    
+
     async def __aenter__(self) -> "TransactionContext":
         """Start transaction."""
         self._conn = await self._pool.acquire()
         self._tx = self._conn.transaction()
         await self._tx.start()
         return self
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Commit or rollback transaction."""
         if exc_type is not None:
@@ -290,31 +310,18 @@ class TransactionContext:
         else:
             await self._tx.commit()
         await self._pool.release(self._conn)
-    
+
     async def execute(self, query: str, *args: Any) -> str:
         """Execute a query within the transaction."""
-        # Convert dict args to JSON strings for JSONB columns
-        processed_args = [
-            json.dumps(arg) if isinstance(arg, dict) else arg
-            for arg in args
-        ]
-        return await self._conn.execute(query, *processed_args)
-    
+        return await self._conn.execute(query, *args)
+
     async def fetch(self, query: str, *args: Any) -> list[asyncpg.Record]:
         """Fetch rows within the transaction."""
-        processed_args = [
-            json.dumps(arg) if isinstance(arg, dict) else arg
-            for arg in args
-        ]
-        return await self._conn.fetch(query, *processed_args)
-    
+        return await self._conn.fetch(query, *args)
+
     async def fetch_one(self, query: str, *args: Any) -> Optional[asyncpg.Record]:
         """Fetch a single row within the transaction."""
-        processed_args = [
-            json.dumps(arg) if isinstance(arg, dict) else arg
-            for arg in args
-        ]
-        return await self._conn.fetchrow(query, *processed_args)
+        return await self._conn.fetchrow(query, *args)
 
 
 # Singleton instance — protected by a lock to prevent concurrent init races
@@ -341,7 +348,10 @@ async def get_postgres_client() -> PostgresClient:
         PostgresClient instance
     """
     global _postgres_client
-    if _postgres_client is not None and getattr(_postgres_client, "_pool", None) is not None:
+    if (
+        _postgres_client is not None
+        and getattr(_postgres_client, "_pool", None) is not None
+    ):
         return _postgres_client
     async with _get_postgres_lock():
         # Double-checked locking

@@ -1,8 +1,11 @@
+import { Suspense } from "react";
 import { Fira_Sans, Fira_Code } from "next/font/google";
 import { GlobalNavbar } from "@/components/ui/GlobalNavbar";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { GlassBackground } from "@/components/ui/GlassBackground";
+import { RouteExperience } from "@/components/ui/RouteExperience";
 import { DevErrorProvider } from "@/components/DevErrorOverlay";
+import { Toaster } from "@/components/ui/Toaster";
 import "./globals.css";
 
 const firaSans = Fira_Sans({
@@ -30,10 +33,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" dir="ltr" className="dark">
-      <body className={`${firaSans.variable} ${firaCode.variable} font-sans text-slate-50 antialiased min-h-screen flex flex-col`} style={{ background: "transparent" }}>
+    <html lang="en" dir="ltr" suppressHydrationWarning>
+      <body
+        className={`${firaSans.variable} ${firaCode.variable} font-sans text-slate-50 antialiased min-h-screen flex flex-col`}
+        style={{ background: "transparent" }}
+      >
         {/* Shared glass background — visible on all pages */}
         <GlassBackground />
+        <Suspense fallback={null}>
+          <RouteExperience />
+        </Suspense>
         <GlobalNavbar />
 
         {/* Skip navigation — visible on focus for keyboard users */}
@@ -45,13 +54,12 @@ export default function RootLayout({
         </a>
         {/* Main content takes up available space */}
         <div className="flex-1 relative z-10" id="main-content">
-          <DevErrorProvider>
-            {children}
-          </DevErrorProvider>
+          <DevErrorProvider>{children}</DevErrorProvider>
         </div>
-        
+
         {/* Global Footer anchors to the bottom of the layout */}
         <GlobalFooter />
+        <Toaster />
       </body>
     </html>
   );

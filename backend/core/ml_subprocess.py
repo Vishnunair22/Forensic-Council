@@ -3,17 +3,17 @@ ML subprocess runner — calls CLI tool scripts without polluting the app proces
 
 Improvements over original:
   - Model warm-up on first call (pre-loads heavy models)
+  - Worker-process pool with per-tool reuse (avoids repeated Python startup)
   - Health check endpoint for readiness probes
-  - Subprocess pool with connection reuse for frequently-called tools
   - Structured error reporting with tool name context
   - Timeout budget tracking (propagates remaining investigation time)
 """
+
 import asyncio
 import json
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 from core.structured_logging import get_logger
 
@@ -40,6 +40,94 @@ _WARMUP_SCRIPTS = {
     "metadata_anomaly_scorer.py",
 }
 
+# ── Worker-process pool ────────────────────────────────────────────────────
+# One persistent worker per script, created on first use.  The worker reads
+# JSON-encoded calls from stdin and writes JSON results to stdout, so we
+# never pay the Python interpreter + model-import cost more than once per
+# tool lifetime.
+
+
+class _MLWorker:
+    """Persistent worker process that handles multiple tool calls."""
+
+    def __init__(self, script_name: str, script_path: Path):
+        self.script_name = script_name
+        self.script_path = script_path
+        self.tool_name = script_name.replace(".py", "")
+        self._proc: asyncio.subprocess.Process | None = None
+        self._lock = asyncio.Lock()
+
+    async def _ensure_started(self) -> None:
+        if self._proc is not None and self._proc.returncode is None:
+            return
+        self._proc = await asyncio.create_subprocess_exec(
+            sys.executable,
+            str(self.script_path),
+            "--worker",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        logger.info(f"ML worker started for {self.tool_name}", pid=self._proc.pid)
+
+    async def call(
+        self, input_path: str, extra_args: list[str] | None, timeout: float
+    ) -> dict:
+        """Send a call to the worker and return the JSON result."""
+        async with self._lock:
+            await self._ensure_started()
+            request = json.dumps({"input": input_path, "extra_args": extra_args or []})
+            try:
+                if not self._proc or not self._proc.stdin or not self._proc.stdout:
+                    raise RuntimeError(f"Worker for {self.tool_name} not properly initialized")
+                self._proc.stdin.write((request + "\n").encode())
+                await self._proc.stdin.drain()
+                raw = await asyncio.wait_for(
+                    self._proc.stdout.readline(), timeout=timeout
+                )
+                if not raw:
+                    raise RuntimeError(f"Worker for {self.tool_name} closed stdout")
+                return json.loads(raw.decode().strip())
+            except asyncio.TimeoutError:
+                logger.warning(
+                    f"Worker {self.tool_name} timed out after {timeout:.1f}s — restarting"
+                )
+                await self.kill()
+                return {
+                    "error": f"Worker timed out after {timeout:.1f}s",
+                    "available": False,
+                    "tool_name": self.tool_name,
+                }
+            except Exception as e:
+                logger.warning(f"Worker {self.tool_name} call failed: {e}")
+                await self.kill()
+                return {
+                    "error": str(e),
+                    "available": False,
+                    "tool_name": self.tool_name,
+                }
+
+    async def kill(self) -> None:
+        if self._proc and self._proc.returncode is None:
+            try:
+                self._proc.kill()
+                await self._proc.wait()
+            except OSError:
+                pass
+        self._proc = None
+
+
+# Global worker pool — one worker per script
+_worker_pool: dict[str, _MLWorker] = {}
+_pool_lock = asyncio.Lock()
+
+
+async def _get_or_create_worker(script_name: str, script_path: Path) -> _MLWorker:
+    async with _pool_lock:
+        if script_name not in _worker_pool or _worker_pool[script_name]._proc is None:
+            _worker_pool[script_name] = _MLWorker(script_name, script_path)
+        return _worker_pool[script_name]
+
 
 async def warmup_ml_tool(script_name: str, timeout: float = 60.0) -> bool:
     """
@@ -47,13 +135,6 @@ async def warmup_ml_tool(script_name: str, timeout: float = 60.0) -> bool:
 
     Heavy ML scripts load PyTorch/YOLO/transformer models on first call.
     Warm-up pre-loads these so the first real investigation call is fast.
-
-    Args:
-        script_name: Name of the ML tool script
-        timeout: Warm-up timeout in seconds
-
-    Returns:
-        True if warm-up succeeded or script doesn't need warm-up
     """
     async with _warmup_lock:
         if _warmed_up.get(script_name):
@@ -75,7 +156,9 @@ async def warmup_ml_tool(script_name: str, timeout: float = 60.0) -> bool:
 
         # Try --warmup flag first; fall back to a no-op input if unsupported
         proc = await asyncio.create_subprocess_exec(
-            sys.executable, str(script_path), "--warmup",
+            sys.executable,
+            str(script_path),
+            "--warmup",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -113,16 +196,9 @@ async def warmup_all_tools(timeout_per_tool: float = 60.0) -> dict[str, bool]:
 
     Call this at application startup (in lifespan) so the first investigation
     doesn't incur 30-50s of cold-start model loading.
-
-    Args:
-        timeout_per_tool: Timeout for each tool warm-up
-
-    Returns:
-        Dict mapping script_name → success status
     """
     tasks = {
-        name: warmup_ml_tool(name, timeout=timeout_per_tool)
-        for name in _WARMUP_SCRIPTS
+        name: warmup_ml_tool(name, timeout=timeout_per_tool) for name in _WARMUP_SCRIPTS
     }
     results = {}
     for name, coro in tasks.items():
@@ -144,6 +220,7 @@ def get_warmup_status() -> dict[str, bool]:
 
 # ── Health check ───────────────────────────────────────────────────────────
 
+
 async def health_check_ml_tools() -> dict[str, str]:
     """
     Check availability of all ML tool scripts.
@@ -159,11 +236,12 @@ async def health_check_ml_tools() -> dict[str, str]:
         elif _warmed_up.get(script_name):
             status[script_name] = "warmed_up"
         else:
-            status[script_name] = "cold"
+            status[script_name] = "not_warmed_up"
     return status
 
 
-# ── Core runner ────────────────────────────────────────────────────────────
+# ── Main runner ────────────────────────────────────────────────────────────
+
 
 async def run_ml_tool(
     script_name: str,
@@ -209,18 +287,43 @@ async def run_ml_tool(
                 "tool_name": tool_name,
             }
 
+    # Try persistent worker first (faster — no Python startup cost)
+    try:
+        worker = await _get_or_create_worker(script_name, script_path)
+        t0 = time.monotonic()
+        result = await worker.call(input_path, extra_args, effective_timeout)
+        elapsed = time.monotonic() - t0
+        if isinstance(result, dict):
+            result.setdefault("tool_name", tool_name)
+            result.setdefault("elapsed_s", round(elapsed, 2))
+            # If the worker call succeeded, return immediately
+            if not result.get("error"):
+                return result
+            # Worker returned error — fall through to subprocess fallback
+            logger.debug(
+                f"Worker {tool_name} returned error, falling back to subprocess: {result.get('error', '')[:100]}"
+            )
+    except Exception as _worker_err:
+        logger.debug(
+            f"Worker unavailable for {tool_name}, using subprocess: {_worker_err}"
+        )
+
+    # Subprocess fallback — spawn a fresh process
     cmd = [sys.executable, str(script_path), "--input", input_path]
     if extra_args:
         cmd.extend(extra_args)
 
     t0 = time.monotonic()
+    proc = None
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=effective_timeout)
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(), timeout=effective_timeout
+        )
 
         elapsed = time.monotonic() - t0
 
@@ -251,10 +354,11 @@ async def run_ml_tool(
         return result
 
     except asyncio.TimeoutError:
-        try:
-            proc.kill()
-        except OSError:
-            pass
+        if proc is not None:
+            try:
+                proc.kill()
+            except OSError:
+                pass
         elapsed = time.monotonic() - t0
         logger.warning(
             f"ML tool {tool_name} timed out after {elapsed:.1f}s (limit: {effective_timeout:.1f}s)",

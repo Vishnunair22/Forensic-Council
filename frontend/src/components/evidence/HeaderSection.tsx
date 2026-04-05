@@ -9,7 +9,11 @@ interface HeaderSectionProps {
   onBrowseClick: () => void;
 }
 
-export function HeaderSection({ status, showBrowse, onBrowseClick }: HeaderSectionProps) {
+export function HeaderSection({
+  status,
+  showBrowse,
+  onBrowseClick,
+}: HeaderSectionProps) {
   const router = useRouter();
 
   return (
@@ -26,7 +30,9 @@ export function HeaderSection({ status, showBrowse, onBrowseClick }: HeaderSecti
       <button
         type="button"
         className="flex items-center gap-4 cursor-pointer group"
-        onClick={() => { if (status !== "analyzing") router.push("/"); }}
+        onClick={() => {
+          if (status !== "analyzing") router.push("/");
+        }}
         aria-label="Return to Forensic Council home"
       >
         <div
@@ -36,13 +42,21 @@ export function HeaderSection({ status, showBrowse, onBrowseClick }: HeaderSecti
             border: "1px solid rgba(34,211,238,0.18)",
           }}
         >
-          <span className="font-black text-[10px] tracking-widest" style={{ color: "#22D3EE" }}>FC</span>
+          <span
+            className="font-black text-[10px] tracking-widest"
+            style={{ color: "#22D3EE" }}
+          >
+            FC
+          </span>
         </div>
         <div className="flex flex-col justify-center">
           <span className="text-[11px] font-black tracking-[0.1em] text-white block leading-tight uppercase transition-colors group-hover:text-cyan-300">
             Forensic Council
           </span>
-          <span className="text-[8px] font-mono uppercase tracking-[0.3em] leading-relaxed font-bold" style={{ color: "rgba(34,211,238,0.45)" }}>
+          <span
+            className="text-[8px] font-mono uppercase tracking-[0.3em] leading-relaxed font-bold"
+            style={{ color: "rgba(34,211,238,0.45)" }}
+          >
             Investigation Node
           </span>
         </div>

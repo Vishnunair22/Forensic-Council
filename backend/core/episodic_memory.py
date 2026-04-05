@@ -15,13 +15,18 @@ from pydantic import BaseModel, Field
 
 from core.structured_logging import get_logger
 from core.custody_logger import CustodyLogger, EntryType
-from infra.qdrant_client import QdrantClient, get_qdrant_client, EPISODIC_MEMORY_COLLECTION
+from infra.qdrant_client import (
+    QdrantClient,
+    get_qdrant_client,
+    EPISODIC_MEMORY_COLLECTION,
+)
 
 logger = get_logger(__name__)
 
 
 class ForensicSignatureType(str, Enum):
     """Types of forensic signatures stored in episodic memory."""
+
     DEVICE_FINGERPRINT = "DEVICE_FINGERPRINT"
     METADATA_PATTERN = "METADATA_PATTERN"
     OBJECT_DETECTION = "OBJECT_DETECTION"
@@ -32,6 +37,7 @@ class ForensicSignatureType(str, Enum):
 
 class EpisodicEntry(BaseModel):
     """An entry in episodic memory."""
+
     entry_id: UUID = Field(default_factory=uuid4)
     case_id: str
     agent_id: str
@@ -41,7 +47,7 @@ class EpisodicEntry(BaseModel):
     confidence: float
     summary: str
     timestamp_utc: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for Qdrant payload."""
         return {
@@ -55,7 +61,7 @@ class EpisodicEntry(BaseModel):
             "summary": self.summary,
             "timestamp_utc": self.timestamp_utc.isoformat(),
         }
-    
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "EpisodicEntry":
         """Create from dictionary (Qdrant payload)."""
@@ -77,58 +83,60 @@ class EpisodicEntry(BaseModel):
 class EpisodicMemory:
     """
     Qdrant-backed episodic memory for forensic signature storage.
-    
+
     Provides:
     - Vector similarity search for forensic patterns
     - Case-based retrieval
     - Chain-of-custody logging
-    
+
     Usage:
         async with EpisodicMemory() as memory:
             entry = EpisodicEntry(...)
             await memory.store(entry, embedding_vector)
-            
+
             results = await memory.query(
                 query_embedding=embedding,
                 signature_type=ForensicSignatureType.DEVICE_FINGERPRINT,
             )
     """
-    
+
     def __init__(
         self,
         qdrant_client: Optional[QdrantClient] = None,
         custody_logger: Optional[CustodyLogger] = None,
-        vector_size: int = 768,
+        vector_size: int = 512,
     ) -> None:
         """
         Initialize episodic memory.
-        
+
         Args:
             qdrant_client: Optional Qdrant client
             custody_logger: Optional custody logger
-            vector_size: Vector embedding dimension (default 768)
+            vector_size: Vector embedding dimension (default 512 — CLIP ViT-B-32 output size)
         """
         self._qdrant = qdrant_client
         self._custody_logger = custody_logger
         self._vector_size = vector_size
         self._owned_client = qdrant_client is None
-    
+
     async def __aenter__(self) -> "EpisodicMemory":
         """Async context manager entry."""
         if self._qdrant is None:
             self._qdrant = await get_qdrant_client()
         return self
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Async context manager exit."""
         if self._owned_client and self._qdrant:
             await self._qdrant.disconnect()
             self._qdrant = None
-    
+
     async def ensure_collection(self) -> bool:
         """Ensure the collection exists. Returns False if Qdrant is unavailable."""
         if self._qdrant is None:
-            logger.warning("EpisodicMemory: Qdrant unavailable, skipping ensure_collection")
+            logger.warning(
+                "EpisodicMemory: Qdrant unavailable, skipping ensure_collection"
+            )
             return False
         try:
             await self._qdrant.create_collection(
@@ -139,7 +147,7 @@ class EpisodicMemory:
         except Exception as e:
             logger.warning("EpisodicMemory: ensure_collection failed", error=str(e))
             return False
-    
+
     async def store(
         self,
         entry: EpisodicEntry,
@@ -147,10 +155,10 @@ class EpisodicMemory:
     ) -> None:
         """
         Store an entry with its embedding.
-        
+
         Args:
             entry: EpisodicEntry to store
-            embedding: Vector embedding (768 dimensions)
+            embedding: Vector embedding (512 dimensions — CLIP ViT-B-32)
         """
         # Ensure collection exists — bail out if Qdrant is unavailable
         if not await self.ensure_collection():
@@ -161,7 +169,8 @@ class EpisodicMemory:
             return
 
         # Upsert to Qdrant
-        assert self._qdrant is not None
+        if self._qdrant is None:
+            raise RuntimeError("Qdrant client not initialized")
         try:
             await self._qdrant.upsert(
                 collection_name=EPISODIC_MEMORY_COLLECTION,
@@ -172,7 +181,7 @@ class EpisodicMemory:
         except Exception as e:
             logger.warning("EpisodicMemory.store: upsert failed", error=str(e))
             return
-        
+
         # Log to custody logger
         if self._custody_logger:
             await self._custody_logger.log_entry(
@@ -188,14 +197,14 @@ class EpisodicMemory:
                     "confidence": entry.confidence,
                 },
             )
-        
+
         logger.info(
             "Stored episodic entry",
             entry_id=str(entry.entry_id),
             case_id=entry.case_id,
             signature_type=entry.signature_type.value,
         )
-    
+
     async def query(
         self,
         query_embedding: list[float],
@@ -204,12 +213,12 @@ class EpisodicMemory:
     ) -> list[EpisodicEntry]:
         """
         Query for similar entries.
-        
+
         Args:
             query_embedding: Query vector embedding
             signature_type: Optional filter by signature type
             top_k: Number of results to return
-        
+
         Returns:
             List of matching EpisodicEntry objects
         """
@@ -224,7 +233,8 @@ class EpisodicMemory:
             filter_conditions = {"signature_type": signature_type.value}
 
         # Query Qdrant
-        assert self._qdrant is not None
+        if self._qdrant is None:
+            raise RuntimeError("Qdrant client not initialized")
         try:
             results = await self._qdrant.query(
                 collection_name=EPISODIC_MEMORY_COLLECTION,
@@ -235,13 +245,10 @@ class EpisodicMemory:
         except Exception as e:
             logger.warning("EpisodicMemory.query: failed", error=str(e))
             return []
-        
+
         # Convert to EpisodicEntry
-        entries = [
-            EpisodicEntry.from_dict(result["payload"])
-            for result in results
-        ]
-        
+        entries = [EpisodicEntry.from_dict(result["payload"]) for result in results]
+
         # Log to custody logger
         if self._custody_logger and entries:
             await self._custody_logger.log_entry(
@@ -250,30 +257,32 @@ class EpisodicMemory:
                 entry_type=EntryType.MEMORY_READ,
                 content={
                     "operation": "query_episodic",
-                    "signature_type_filter": signature_type.value if signature_type else None,
+                    "signature_type_filter": signature_type.value
+                    if signature_type
+                    else None,
                     "top_k": top_k,
                     "result_count": len(entries),
                 },
             )
-        
+
         logger.debug(
             "Queried episodic memory",
             signature_type=signature_type.value if signature_type else "any",
             result_count=len(entries),
         )
-        
+
         return entries
-    
+
     async def get_by_case(
         self,
         case_id: str,
     ) -> list[EpisodicEntry]:
         """
         Get all entries for a case.
-        
+
         Args:
             case_id: Case identifier
-        
+
         Returns:
             List of EpisodicEntry objects for the case
         """
@@ -283,7 +292,8 @@ class EpisodicMemory:
             return []
 
         # Query with case_id filter using scroll (filter-only query)
-        assert self._qdrant is not None
+        if self._qdrant is None:
+            raise RuntimeError("Qdrant client not initialized")
         try:
             results = await self._qdrant.scroll(
                 collection_name=EPISODIC_MEMORY_COLLECTION,
@@ -293,41 +303,42 @@ class EpisodicMemory:
         except Exception as e:
             logger.warning("EpisodicMemory.get_by_case: scroll failed", error=str(e))
             return []
-        
+
         # Convert to EpisodicEntry
-        entries = [
-            EpisodicEntry.from_dict(result["payload"])
-            for result in results
-        ]
-        
+        entries = [EpisodicEntry.from_dict(result["payload"]) for result in results]
+
         logger.debug(
             "Retrieved case entries",
             case_id=case_id,
             entry_count=len(entries),
         )
-        
+
         return entries
-    
+
     async def get_by_session(
         self,
         session_id: UUID,
     ) -> list[EpisodicEntry]:
         """
         Get all entries for a session.
-        
+
         Args:
             session_id: Session UUID
-        
+
         Returns:
             List of EpisodicEntry objects for the session
         """
         # Ensure collection exists — return empty list if Qdrant is unavailable
         if not await self.ensure_collection():
-            logger.warning("EpisodicMemory.get_by_session: skipped — Qdrant unavailable")
+            logger.warning(
+                "EpisodicMemory.get_by_session: skipped — Qdrant unavailable"
+            )
             return []
 
         # Query with session_id filter using scroll (filter-only query)
-        assert self._qdrant is not None
+        if self._qdrant is None:
+            logger.warning("EpisodicMemory.get_by_session: skipped — Qdrant not initialized")
+            return []
         try:
             results = await self._qdrant.scroll(
                 collection_name=EPISODIC_MEMORY_COLLECTION,
@@ -337,13 +348,10 @@ class EpisodicMemory:
         except Exception as e:
             logger.warning("EpisodicMemory.get_by_session: scroll failed", error=str(e))
             return []
-        
+
         # Convert to EpisodicEntry
-        entries = [
-            EpisodicEntry.from_dict(result["payload"])
-            for result in results
-        ]
-        
+        entries = [EpisodicEntry.from_dict(result["payload"]) for result in results]
+
         return entries
 
     async def retrieve_similar_cases(
@@ -372,7 +380,8 @@ class EpisodicMemory:
         if not await self.ensure_collection():
             return []
 
-        assert self._qdrant is not None
+        if self._qdrant is None:
+            raise RuntimeError("Qdrant client not initialized")
 
         # Build filter conditions
         conditions: dict[str, Any] = {}
@@ -386,17 +395,24 @@ class EpisodicMemory:
                 limit=top_k * 3,  # Over-fetch to account for filtering
             )
         except Exception as e:
-            logger.debug("EpisodicMemory.retrieve_similar_cases: scroll failed", error=str(e))
+            logger.debug(
+                "EpisodicMemory.retrieve_similar_cases: scroll failed", error=str(e)
+            )
             return []
 
         entries = []
         for result in results:
             payload = result.get("payload", {})
             # Skip entries from current session
-            if exclude_session_id and payload.get("session_id") == str(exclude_session_id):
+            if exclude_session_id and payload.get("session_id") == str(
+                exclude_session_id
+            ):
                 continue
             # Optional finding_type substring match
-            if finding_type and finding_type.lower() not in payload.get("finding_type", "").lower():
+            if (
+                finding_type
+                and finding_type.lower() not in payload.get("finding_type", "").lower()
+            ):
                 continue
             try:
                 entries.append(EpisodicEntry.from_dict(payload))
@@ -422,7 +438,7 @@ _episodic_memory: Optional[EpisodicMemory] = None
 async def get_episodic_memory() -> EpisodicMemory:
     """
     Get or create the episodic memory singleton.
-    
+
     Returns:
         EpisodicMemory instance
     """

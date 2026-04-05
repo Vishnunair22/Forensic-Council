@@ -13,16 +13,16 @@ from uuid import UUID
 class ForensicCouncilBaseException(Exception):
     """
     Base exception for all Forensic Council exceptions.
-    
+
     All custom exceptions in the system should inherit from this class.
     Provides consistent structure for error messages and additional context.
-    
+
     Attributes:
         message: Human-readable error message
         error_code: Machine-readable error code for programmatic handling
         details: Optional dictionary with additional error context
     """
-    
+
     def __init__(
         self,
         message: str,
@@ -31,7 +31,7 @@ class ForensicCouncilBaseException(Exception):
     ) -> None:
         """
         Initialize the exception.
-        
+
         Args:
             message: Human-readable error message
             error_code: Optional machine-readable error code
@@ -41,7 +41,7 @@ class ForensicCouncilBaseException(Exception):
         self.error_code = error_code or self.__class__.__name__
         self.details = details or {}
         super().__init__(self.message)
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convert exception to dictionary for JSON serialization."""
         return {
@@ -49,7 +49,7 @@ class ForensicCouncilBaseException(Exception):
             "message": self.message,
             "details": self.details,
         }
-    
+
     def __str__(self) -> str:
         return f"[{self.error_code}] {self.message}"
 
@@ -58,8 +58,10 @@ class ForensicCouncilBaseException(Exception):
 # Configuration Errors
 # -------------------
 
+
 class ConfigurationError(ForensicCouncilBaseException):
     """Raised when there is a configuration error."""
+
     pass
 
 
@@ -67,15 +69,22 @@ class ConfigurationError(ForensicCouncilBaseException):
 # Infrastructure Errors
 # -------------------
 
+
 class InfrastructureError(ForensicCouncilBaseException):
     """Base class for infrastructure-related errors."""
+
     pass
 
 
 class CircuitBreakerOpen(InfrastructureError):
     """Raised when the circuit breaker is open and refusing calls."""
 
-    def __init__(self, message: str = "Circuit breaker is open", retry_after: float = 30.0, service_name: str = "unknown"):
+    def __init__(
+        self,
+        message: str = "Circuit breaker is open",
+        retry_after: float = 30.0,
+        service_name: str = "unknown",
+    ):
         self.service_name = service_name
         self.retry_after = retry_after
         super().__init__(
@@ -85,16 +94,19 @@ class CircuitBreakerOpen(InfrastructureError):
 
 class DatabaseConnectionError(InfrastructureError):
     """Raised when database connection fails."""
+
     pass
 
 
 class RedisConnectionError(InfrastructureError):
     """Raised when Redis connection fails."""
+
     pass
 
 
 class QdrantConnectionError(InfrastructureError):
     """Raised when Qdrant connection fails."""
+
     pass
 
 
@@ -102,18 +114,22 @@ class QdrantConnectionError(InfrastructureError):
 # Security & Signing Errors
 # -------------------
 
+
 class SecurityError(ForensicCouncilBaseException):
     """Base class for security-related errors."""
+
     pass
 
 
 class SigningError(SecurityError):
     """Raised when cryptographic signing fails."""
+
     pass
 
 
 class VerificationError(SecurityError):
     """Raised when signature verification fails."""
+
     pass
 
 
@@ -121,18 +137,22 @@ class VerificationError(SecurityError):
 # Evidence Errors
 # -------------------
 
+
 class EvidenceError(ForensicCouncilBaseException):
     """Base class for evidence-related errors."""
+
     pass
 
 
 class EvidenceIntegrityError(EvidenceError):
     """Raised when evidence integrity check fails."""
+
     pass
 
 
 class EvidenceNotFoundError(EvidenceError):
     """Raised when requested evidence is not found."""
+
     pass
 
 
@@ -140,24 +160,28 @@ class EvidenceNotFoundError(EvidenceError):
 # Tool Errors
 # -------------------
 
+
 class ToolError(ForensicCouncilBaseException):
     """Base class for tool-related errors."""
+
     pass
 
 
 class ToolUnavailableError(ToolError):
     """
     Raised when a required tool is unavailable.
-    
+
     This exception should be caught and handled gracefully - it should
     never crash the system. Instead, it should result in an INCOMPLETE
     finding being logged.
     """
+
     pass
 
 
 class ToolExecutionError(ToolError):
     """Raised when a tool execution fails."""
+
     pass
 
 
@@ -165,18 +189,22 @@ class ToolExecutionError(ToolError):
 # HITL Errors
 # -------------------
 
+
 class HITLError(ForensicCouncilBaseException):
     """Base class for Human-in-the-Loop errors."""
+
     pass
 
 
 class HITLCheckpointError(HITLError):
     """Raised when HITL checkpoint operations fail."""
+
     pass
 
 
 class HITLResumeError(HITLError):
     """Raised when resuming from HITL checkpoint fails."""
+
     pass
 
 
@@ -184,24 +212,28 @@ class HITLResumeError(HITLError):
 # Inter-Agent Communication Errors
 # -------------------
 
+
 class InterAgentError(ForensicCouncilBaseException):
     """Base class for inter-agent communication errors."""
+
     pass
 
 
 class InterAgentCallError(InterAgentError):
     """Raised when an inter-agent call fails."""
+
     pass
 
 
 class PermittedCallViolationError(InterAgentError):
     """Raised when an inter-agent call violates permitted paths."""
+
     pass
 
 
 class ArbiterRechallengeError(InterAgentError):
     """Raised when an agent attempts to re-challenge an Arbiter challenge."""
-    
+
     def __init__(self, agent_id: str):
         self.agent_id = agent_id
         super().__init__(
@@ -211,7 +243,7 @@ class ArbiterRechallengeError(InterAgentError):
 
 class CircularCallError(InterAgentError):
     """Raised when a circular inter-agent call is detected."""
-    
+
     def __init__(self, caller: str, callee: str, artifact_id: Optional[UUID]):
         self.caller = caller
         self.callee = callee
@@ -226,18 +258,22 @@ class CircularCallError(InterAgentError):
 # Agent Errors
 # -------------------
 
+
 class AgentError(ForensicCouncilBaseException):
     """Base class for agent-related errors."""
+
     pass
 
 
 class AgentInitializationError(AgentError):
     """Raised when agent initialization fails."""
+
     pass
 
 
 class AgentExecutionError(AgentError):
     """Raised when agent execution fails."""
+
     pass
 
 
@@ -245,13 +281,16 @@ class AgentExecutionError(AgentError):
 # Calibration Errors
 # -------------------
 
+
 class CalibrationError(ForensicCouncilBaseException):
     """Base class for calibration-related errors."""
+
     pass
 
 
 class CalibrationModelError(CalibrationError):
     """Raised when calibration model operations fail."""
+
     pass
 
 
@@ -259,13 +298,16 @@ class CalibrationModelError(CalibrationError):
 # Report Errors
 # -------------------
 
+
 class ReportError(ForensicCouncilBaseException):
     """Base class for report-related errors."""
+
     pass
 
 
 class ReportSigningError(ReportError):
     """Raised when report signing fails."""
+
     pass
 
 
@@ -273,16 +315,20 @@ class ReportSigningError(ReportError):
 # Memory Errors
 # -------------------
 
+
 class ForensicMemoryError(ForensicCouncilBaseException):
     """Base class for memory-related errors."""
+
     pass
 
 
 class WorkingMemoryError(ForensicMemoryError):
     """Raised when working memory operations fail."""
+
     pass
 
 
 class EpisodicMemoryError(ForensicMemoryError):
     """Raised when episodic memory operations fail."""
+
     pass

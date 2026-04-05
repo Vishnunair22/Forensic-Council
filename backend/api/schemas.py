@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class InvestigationRequest(BaseModel):
     """Request to start an investigation."""
+
     model_config = ConfigDict(extra="forbid")
     case_id: str = Field(..., description="Case identifier")
     investigator_id: str = Field(..., description="ID of the investigator")
@@ -19,6 +20,7 @@ class InvestigationRequest(BaseModel):
 
 class InvestigationResponse(BaseModel):
     """Response from starting an investigation."""
+
     session_id: str
     case_id: str
     status: str
@@ -27,6 +29,7 @@ class InvestigationResponse(BaseModel):
 
 class AgentFindingDTO(BaseModel):
     """Serializable subset of AgentFinding for frontend."""
+
     finding_id: str
     agent_id: str
     agent_name: str
@@ -34,19 +37,24 @@ class AgentFindingDTO(BaseModel):
     status: str
     confidence_raw: float
     calibrated: bool
-    calibrated_probability: Optional[float] = None  # DEPRECATED — use raw_confidence_score
+    calibrated_probability: Optional[float] = (
+        None  # DEPRECATED — use raw_confidence_score
+    )
     raw_confidence_score: Optional[float] = None
     calibration_status: str = "UNCALIBRATED"  # TRAINED or UNCALIBRATED
     court_statement: Optional[str] = None
     robustness_caveat: bool
     robustness_caveat_detail: Optional[str] = None
     reasoning_summary: str
-    metadata: Optional[dict[str, Any]] = None  # includes analysis_phase, analysis_source, etc.
-    severity_tier: str = "LOW"   # INFO / LOW / MEDIUM / HIGH / CRITICAL
+    metadata: Optional[dict[str, Any]] = (
+        None  # includes analysis_phase, analysis_source, etc.
+    )
+    severity_tier: str = "LOW"  # INFO / LOW / MEDIUM / HIGH / CRITICAL
 
 
 class AgentMetricsDTO(BaseModel):
     """Per-agent performance metrics for the result page."""
+
     agent_id: str
     agent_name: str
     total_tools_called: int = 0
@@ -61,6 +69,7 @@ class AgentMetricsDTO(BaseModel):
 
 class ReportDTO(BaseModel):
     """Serializable subset of ForensicReport for frontend."""
+
     report_id: str
     session_id: str
     case_id: str
@@ -103,6 +112,7 @@ class ReportDTO(BaseModel):
 
 class HITLDecisionRequest(BaseModel):
     """Request for human-in-the-loop decision."""
+
     model_config = ConfigDict(extra="forbid")
     session_id: str
     checkpoint_id: str
@@ -114,6 +124,7 @@ class HITLDecisionRequest(BaseModel):
 
 class HITLCheckpointDTO(BaseModel):
     """HITL checkpoint information."""
+
     checkpoint_id: str
     session_id: str
     agent_id: str
@@ -125,7 +136,16 @@ class HITLCheckpointDTO(BaseModel):
 
 class BriefUpdate(BaseModel):
     """WebSocket message model."""
-    type: Literal["AGENT_UPDATE", "HITL_CHECKPOINT", "AGENT_COMPLETE", "PIPELINE_COMPLETE", "PIPELINE_PAUSED", "CONNECTED", "ERROR"]
+
+    type: Literal[
+        "AGENT_UPDATE",
+        "HITL_CHECKPOINT",
+        "AGENT_COMPLETE",
+        "PIPELINE_COMPLETE",
+        "PIPELINE_PAUSED",
+        "CONNECTED",
+        "ERROR",
+    ]
     session_id: str
     agent_id: Optional[str] = None
     agent_name: Optional[str] = None
@@ -135,6 +155,7 @@ class BriefUpdate(BaseModel):
 
 class SessionInfo(BaseModel):
     """Session information."""
+
     session_id: str
     case_id: str
     status: str
@@ -143,5 +164,14 @@ class SessionInfo(BaseModel):
 
 class ErrorResponse(BaseModel):
     """Error response."""
+
     detail: str
     error_code: Optional[str] = None
+
+
+class ReportStatusDTO(BaseModel):
+    """Returned when the investigation is still in progress."""
+
+    status: str = "in_progress"
+    session_id: str
+    message: str = "Investigation still in progress"

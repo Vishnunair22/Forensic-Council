@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import atexit
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Optional
 
@@ -40,7 +41,6 @@ logger = get_logger(__name__)
 # Thread pool for blocking OCR calls — keeps event loop free
 _OCR_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ocr_worker")
 
-import atexit
 atexit.register(_OCR_EXECUTOR.shutdown, wait=False)
 
 # ---------------------------------------------------------------------------
@@ -71,16 +71,23 @@ def _get_easyocr_reader() -> Optional[Any]:
 
     try:
         import easyocr  # noqa: PLC0415
+        from core.config import get_settings
 
-        model_dir = os.environ.get("EASYOCR_MODEL_DIR", "/app/cache/easyocr")
+        settings = get_settings()
+        model_dir = settings.easyocr_model_dir
         os.makedirs(model_dir, exist_ok=True)
+        
+        # Enforce local-only mode if configured
+        if settings.offline_mode:
+            os.environ["HF_HUB_OFFLINE"] = "1"
+            os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
         _easyocr_reader = easyocr.Reader(
             ["en"],
-            gpu=False,              # CPU-only — no GPU required in forensic deployments
+            gpu=False,  # CPU-only — no GPU required in forensic deployments
             verbose=False,
             model_storage_directory=model_dir,
-            download_enabled=True,  # Downloads once, cached in named volume
+            download_enabled=not settings.offline_mode,
         )
         _easyocr_available = True
         logger.info("EasyOCR reader initialised", model_dir=model_dir)
@@ -253,11 +260,13 @@ def _extract_text_easyocr_sync(
             lines.append(text)
             confidences.append(conf)
             if detail:
-                bboxes.append({
-                    "text": text,
-                    "confidence": round(conf, 4),
-                    "bbox": bbox,  # [[x1,y1],[x2,y1],[x2,y2],[x1,y2]]
-                })
+                bboxes.append(
+                    {
+                        "text": text,
+                        "confidence": round(conf, 4),
+                        "bbox": bbox,  # [[x1,y1],[x2,y1],[x2,y2],[x1,y2]]
+                    }
+                )
 
         full_text = " ".join(lines)
         avg_conf = round(sum(confidences) / len(confidences), 4) if confidences else 0.0
@@ -362,7 +371,9 @@ def _extract_text_tesseract_sync(file_path: str) -> dict[str, Any]:
         thresh_adaptive = cv2.adaptiveThreshold(
             gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
         )
-        _, thresh_otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        _, thresh_otsu = cv2.threshold(
+            gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+        )
 
         cfg = r"--oem 3 --psm 6 -l eng"
         text_a = pytesseract.image_to_string(thresh_adaptive, config=cfg)
@@ -451,7 +462,18 @@ async def extract_evidence_text(
     # Determine file category
     pdf_exts = {".pdf"}
     image_exts = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".bmp", ".webp", ".gif"}
-    av_exts = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".mp3", ".wav", ".flac", ".aac", ".m4a"}
+    av_exts = {
+        ".mp4",
+        ".avi",
+        ".mov",
+        ".mkv",
+        ".webm",
+        ".mp3",
+        ".wav",
+        ".flac",
+        ".aac",
+        ".m4a",
+    }
 
     if ext in pdf_exts or _is_pdf(file_path):
         file_type_hint = "pdf_document"

@@ -1,17 +1,17 @@
 export type AgentResult = {
-    id: string;
-    name: string;
-    role: string;
-    result: string;
-    confidence: number;
-    thinking?: string;
-    metadata?: Record<string, unknown>;
+  id: string;
+  name: string;
+  role: string;
+  result: string;
+  confidence: number;
+  thinking?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export type Report = {
-    id: string;
-    fileName: string;
-    timestamp: string;
-    summary: string;
-    agents: AgentResult[];
+  id: string;
+  fileName: string;
+  timestamp: string;
+  summary: string;
+  agents: AgentResult[];
 };

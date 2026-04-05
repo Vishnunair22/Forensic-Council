@@ -25,7 +25,7 @@ from core.react_loop import HumanDecision
 from core.working_memory import WorkingMemory
 from infra.evidence_store import EvidenceStore
 
-_tracer = get_tracer("forensic-council.pipeline")
+
 
 from agents.agent1_image import Agent1Image
 from agents.agent2_audio import Agent2Audio
@@ -36,18 +36,19 @@ from agents.arbiter import CouncilArbiter, ForensicReport
 
 from orchestration.session_manager import SessionManager, SessionStatus
 
+_tracer = get_tracer("forensic-council.pipeline")
 logger = get_logger(__name__)
 
 
 class AgentFactory:
     """
     Factory for creating and re-invoking forensic agents.
-    
+
     Provides a clean interface for the Arbiter to re-invoke agents
     during challenge loops without needing direct knowledge of agent
     instantiation details.
     """
-    
+
     def __init__(
         self,
         config: Settings,
@@ -64,11 +65,11 @@ class AgentFactory:
         self.evidence_store = evidence_store
         self.inter_agent_bus = inter_agent_bus
         self._evidence_artifact: Optional[EvidenceArtifact] = None
-    
+
     def set_evidence_artifact(self, artifact: EvidenceArtifact) -> None:
         """Set the evidence artifact for agent re-invocation."""
         self._evidence_artifact = artifact
-    
+
     async def reinvoke_agent(
         self,
         agent_id: str,
@@ -77,28 +78,30 @@ class AgentFactory:
     ) -> dict[str, Any]:
         """
         Re-invoke an agent with challenge context.
-        
+
         Args:
             agent_id: ID of the agent to re-invoke (Agent1-5)
             session_id: Session ID for the investigation
             challenge_context: Context from the contradicting finding
-            
+
         Returns:
             Agent results including findings and reflection report
         """
         if self._evidence_artifact is None:
-            raise ValueError("Evidence artifact not set - call set_evidence_artifact first")
-        
+            raise ValueError(
+                "Evidence artifact not set - call set_evidence_artifact first"
+            )
+
         logger.info(
             "Re-invoking agent for challenge loop",
             agent_id=agent_id,
             session_id=str(session_id),
             challenge_id=challenge_context.get("challenge_id"),
         )
-        
+
         # Create the appropriate agent class
         agent_class = self._get_agent_class(agent_id)
-        
+
         # Build agent kwargs
         agent_kwargs = {
             "agent_id": agent_id,
@@ -110,30 +113,30 @@ class AgentFactory:
             "custody_logger": self.custody_logger,
             "evidence_store": self.evidence_store,
         }
-        
+
         # Add inter_agent_bus for Agent2, Agent3, and Agent4
         if agent_id in ("Agent2", "Agent3", "Agent4") and self.inter_agent_bus:
             agent_kwargs["inter_agent_bus"] = self.inter_agent_bus
-        
+
         # Create and run the agent
         agent = agent_class(**agent_kwargs)
-        
+
         # Run investigation
         findings = await agent.run_investigation()
-        
+
         # Return results in expected format
         return {
             "agent_id": agent_id,
             "findings": [f.model_dump() for f in findings],
             "reflection_report": (
                 agent._reflection_report.model_dump()
-                if hasattr(agent, '_reflection_report') and agent._reflection_report
+                if hasattr(agent, "_reflection_report") and agent._reflection_report
                 else {}
             ),
-            "react_chain": getattr(agent, '_react_chain', []),
+            "react_chain": getattr(agent, "_react_chain", []),
             "challenge_context": challenge_context,
         }
-    
+
     def _get_agent_class(self, agent_id: str) -> type:
         """Get the agent class for a given agent ID."""
         agent_map = {
@@ -143,15 +146,16 @@ class AgentFactory:
             "Agent4": Agent4Video,
             "Agent5": Agent5Metadata,
         }
-        
+
         if agent_id not in agent_map:
             raise ValueError(f"Unknown agent_id: {agent_id}")
-        
+
         return agent_map[agent_id]
 
 
 class AgentLoopResult:
     """Result from running an agent's investigation loop."""
+
     def __init__(
         self,
         agent_id: str,
@@ -169,41 +173,46 @@ class AgentLoopResult:
         self.react_chain = react_chain
         self.error = error
         self.agent_active = agent_active  # Whether agent actually ran
-        self.supports_file_type = supports_file_type  # Whether agent supports this file type
-        self.deep_findings_count = deep_findings_count  # Number of findings from deep analysis
+        self.supports_file_type = (
+            supports_file_type  # Whether agent supports this file type
+        )
+        self.deep_findings_count = (
+            deep_findings_count  # Number of findings from deep analysis
+        )
 
 
 class ForensicCouncilPipeline:
     """
     End-to-end pipeline for forensic evidence analysis.
-    
+
     Orchestrates:
     - Evidence ingestion and artifact creation
     - Multi-agent investigation (5 specialist agents)
     - Council arbiter deliberation
     - Report generation with cryptographic signing
     """
-    
+
     def __init__(self, config: Optional[Settings] = None):
         """
         Initialize the pipeline.
-        
+
         Args:
             config: Optional override configuration
         """
         self.config = config or get_settings()
-        
+
         # State tracking for the two-phase deep analysis pause
         self.deep_analysis_decision_event = asyncio.Event()
         self.run_deep_analysis_flag = False
-        
+        self._degradation_flags: list[str] = []
+
         # Report and error state — set by the investigation task
         self._final_report: Optional[ForensicReport] = None
         self._error: Optional[str] = None
-        
+
         # Initialize infrastructure
         self._setup_infrastructure()
-        
+
         # Initialize components
         self.custody_logger: Optional[CustodyLogger] = None
         self.working_memory: Optional[WorkingMemory] = None
@@ -212,22 +221,23 @@ class ForensicCouncilPipeline:
         self.evidence_store: Optional[EvidenceStore] = None
         self.session_manager: Optional[SessionManager] = None
         self.arbiter: Optional[CouncilArbiter] = None
-    
+
     def _setup_infrastructure(self) -> None:
         """Set up infrastructure slot placeholders — actual connections are
         acquired lazily in _initialize_components using the global singletons."""
         self._redis = None
         self._qdrant = None
         self._postgres = None
-    
+
     async def _initialize_components(self, session_id: UUID) -> None:
         """Initialize all components for a session."""
         from infra.qdrant_client import get_qdrant_client
         from infra.postgres_client import get_postgres_client
-        
+
         if self._redis is None:
             try:
                 from infra.redis_client import get_redis_client
+
                 self._redis = await get_redis_client()
             except Exception as e:
                 logger.warning("Failed to connect to Redis", error=str(e))
@@ -253,40 +263,42 @@ class ForensicCouncilPipeline:
             except Exception as e:
                 logger.warning("Failed to connect to PostgreSQL", error=str(e))
                 self._postgres = None
-                
+
         # Initialize custody logger
         self.custody_logger = CustodyLogger(
             postgres_client=self._postgres,
         )
-        
+
         from infra.storage import LocalStorageBackend
         from infra.evidence_store import EvidenceStore
-        
+
         if self.evidence_store is None:
             self.evidence_store = EvidenceStore(
                 postgres_client=self._postgres,
-                storage_backend=LocalStorageBackend(storage_path=str(self.config.evidence_storage_path)),
+                storage_backend=LocalStorageBackend(
+                    storage_path=str(self.config.evidence_storage_path)
+                ),
                 custody_logger=self.custody_logger,
             )
-            
+
         # Initialize working memory
         self.working_memory = WorkingMemory(
             redis_client=self._redis,
             custody_logger=self.custody_logger,
         )
-        
+
         # Initialize episodic memory
         self.episodic_memory = EpisodicMemory(
             qdrant_client=self._qdrant,
             custody_logger=self.custody_logger,
         )
-        
+
         # Initialize inter-agent bus
         self.inter_agent_bus = InterAgentBus()
-        
+
         # Initialize session manager
         self.session_manager = SessionManager(redis_client=self._redis)
-        
+
         # Initialize agent factory for challenge loops
         self.agent_factory = AgentFactory(
             config=self.config,
@@ -296,7 +308,7 @@ class ForensicCouncilPipeline:
             evidence_store=self.evidence_store,
             inter_agent_bus=self.inter_agent_bus,
         )
-        
+
         # Initialize arbiter with agent factory
         self.arbiter = CouncilArbiter(
             session_id=session_id,
@@ -305,7 +317,7 @@ class ForensicCouncilPipeline:
             agent_factory=self.agent_factory,
             config=self.config,
         )
-    
+
     async def run_investigation(
         self,
         evidence_file_path: str,
@@ -316,7 +328,7 @@ class ForensicCouncilPipeline:
     ) -> ForensicReport:
         """
         Run a complete forensic investigation on evidence.
-        
+
         Steps:
         1. Ingest evidence → EvidenceArtifact (with hash)
         2. Create session_id UUID (use provided if available)
@@ -325,13 +337,13 @@ class ForensicCouncilPipeline:
         5. Collect all AgentLoopResults
         6. Pass to CouncilArbiter.deliberate()
         7. Return signed ForensicReport
-        
+
         Args:
             evidence_file_path: Path to the evidence file
             case_id: Case identifier
             investigator_id: ID of the investigator running this analysis
             session_id: Optional existing session_id to use (for continued sessions)
-            
+
         Returns:
             Signed ForensicReport with all findings
         """
@@ -346,7 +358,7 @@ class ForensicCouncilPipeline:
             span.set_attribute("case_id", case_id)
             span.set_attribute("investigator_id", investigator_id)
             span.set_attribute("evidence_path", evidence_file_path)
-        
+
         # Step 1 & 2: Create session and ingest evidence
         # Use provided session_id if available, otherwise create new one
         if session_id is None:
@@ -355,10 +367,12 @@ class ForensicCouncilPipeline:
         self._started_at = datetime.now(timezone.utc).isoformat()
         self._degradation_flags: list[str] = []
         # Hierarchical timeout budget: investigation (600s) → agents share the budget
-        self._investigation_deadline = time.monotonic() + self.config.investigation_timeout
+        self._investigation_deadline = (
+            time.monotonic() + self.config.investigation_timeout
+        )
 
         await self._initialize_components(session_id)
-        
+
         # Create evidence artifact
         evidence_artifact = await self._ingest_evidence(
             evidence_file_path,
@@ -366,16 +380,16 @@ class ForensicCouncilPipeline:
             investigator_id,
             original_filename=original_filename,
         )
-        
+
         # Set evidence artifact in agent factory for challenge loops
-        if hasattr(self, 'agent_factory'):
+        if hasattr(self, "agent_factory"):
             self.agent_factory.set_evidence_artifact(evidence_artifact)
-        
+
         # Set evidence artifact in inter-agent bus for on-demand agent creation
-        if hasattr(self, 'inter_agent_bus'):
+        if hasattr(self, "inter_agent_bus"):
             self.inter_agent_bus._evidence_artifact = evidence_artifact
             self.inter_agent_bus._session_id = session_id
-        
+
         # Create session in manager
         await self.session_manager.create_session(
             session_id=session_id,
@@ -383,13 +397,13 @@ class ForensicCouncilPipeline:
             investigator_id=investigator_id,
             agent_ids=["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"],
         )
-        
+
         # Step 3 & 4: Instantiate and run all agents concurrently
         agent_results = await self._run_agents_concurrent(
             evidence_artifact=evidence_artifact,
             session_id=session_id,
         )
-        
+
         # Step 5: Mark all agents as completed
         for aid in ["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"]:
             await self.session_manager.update_agent_status(
@@ -397,10 +411,10 @@ class ForensicCouncilPipeline:
                 agent_id=aid,
                 status=SessionStatus.COMPLETED,
             )
-        
+
         # Step 6: Run arbiter deliberation
         logger.info("Running council arbiter deliberation")
-        
+
         # Build agent results dict for arbiter
         arbiter_results = {}
         for result in agent_results:
@@ -414,13 +428,13 @@ class ForensicCouncilPipeline:
                         normalized_findings.append(f)
                     else:
                         normalized_findings.append(vars(f))
-                        
+
                 arbiter_results[result.agent_id] = {
                     "findings": normalized_findings,
                     "reflection_report": result.reflection_report,
                     "react_chain": result.react_chain,
                 }
-        
+
         # Run deliberation with a hard 90-second ceiling so the pipeline never
         # hangs indefinitely if Groq is down. If it times out, regenerate the
         # report without LLM synthesis (template fallback path in the arbiter).
@@ -466,12 +480,14 @@ class ForensicCouncilPipeline:
                 elapsed_seconds=round(_arbiter_elapsed, 2),
                 session_id=str(session_id),
             )
-        
+
         # ── Detect Gemini degradation ────────────────────────────────────────
         # If Gemini is configured but all gemini_vision findings are errors,
         # or no gemini_vision findings appear at all, flag degradation.
         gemini_key = self.config.gemini_api_key
-        is_gemini_configured = bool(gemini_key) and "your_gemini_key" not in (gemini_key or "")
+        is_gemini_configured = bool(gemini_key) and "your_gemini_key" not in (
+            gemini_key or ""
+        )
         if is_gemini_configured:
             gemini_findings = report.gemini_vision_findings
             if not gemini_findings:
@@ -483,7 +499,8 @@ class ForensicCouncilPipeline:
             else:
                 # Check if ALL Gemini findings are errors (none succeeded)
                 all_gemini_errored = all(
-                    isinstance(gf, dict) and (
+                    isinstance(gf, dict)
+                    and (
                         gf.get("error")
                         or gf.get("metadata", {}).get("error")
                         or gf.get("status") == "INCOMPLETE"
@@ -492,8 +509,10 @@ class ForensicCouncilPipeline:
                 )
                 if all_gemini_errored:
                     error_msgs = [
-                        gf.get("error") or gf.get("metadata", {}).get("error", "unknown")
-                        for gf in gemini_findings if isinstance(gf, dict)
+                        gf.get("error")
+                        or gf.get("metadata", {}).get("error", "unknown")
+                        for gf in gemini_findings
+                        if isinstance(gf, dict)
                     ]
                     first_err = str(error_msgs[0])[:200] if error_msgs else "unknown"
                     self._degradation_flags.append(
@@ -536,7 +555,7 @@ class ForensicCouncilPipeline:
         report.self_reflection_outputs = {
             r.agent_id: r.reflection_report for r in agent_results if r.error is None
         }
-        
+
         # Verify chain-of-custody integrity before signing the report.
         # A broken chain means an entry was tampered with after being written —
         # this is a critical integrity failure that must be disclosed.
@@ -597,13 +616,13 @@ class ForensicCouncilPipeline:
             except Exception as e:
                 logger.debug("Sign step hook failed", error=str(e))
         report = await self.arbiter.sign_report(report)
-        
+
         # Step 7: Return signed report
         await self.session_manager.set_final_report(
             session_id=session_id,
             report_id=report.report_id,
         )
-        
+
         # Log completion
         if self.custody_logger:
             await self.custody_logger.log_entry(
@@ -612,18 +631,20 @@ class ForensicCouncilPipeline:
                 session_id=session_id,
                 content={
                     "report_id": str(report.report_id),
-                    "total_findings": sum(len(f) for f in report.per_agent_findings.values()),
+                    "total_findings": sum(
+                        len(f) for f in report.per_agent_findings.values()
+                    ),
                 },
             )
-        
+
         logger.info(
             "Investigation complete",
             report_id=str(report.report_id),
             session_id=str(session_id),
         )
-        
+
         return report
-    
+
     async def _ingest_evidence(
         self,
         file_path: str,
@@ -645,11 +666,11 @@ class ForensicCouncilPipeline:
             metadata={
                 "mime_type": self._get_mime_type(file_path),
                 "original_filename": original_filename or file_path_obj.name,
-            }
+            },
         )
-        
+
         return stored_artifact
-    
+
     async def _run_agents_concurrent(
         self,
         evidence_artifact: EvidenceArtifact,
@@ -657,14 +678,14 @@ class ForensicCouncilPipeline:
     ) -> list[AgentLoopResult]:
         """
         Run all 5 specialist agents concurrently.
-        
+
         Only agents that support the uploaded file type will run.
         After initial investigation, deep analysis is run for supported agents.
         """
-        
+
         with _tracer.start_as_current_span("pipeline.run_agents_concurrent") as span:
             span.set_attribute("session_id", str(session_id))
-        
+
         # --- TWO-PHASE EXECUTION for cross-agent context sharing ---
         # Phase 1: Run all agents' INITIAL passes concurrently, then
         # Phase 2: Inject Agent 1's Gemini findings into Agent 3 and run all deep passes
@@ -675,7 +696,9 @@ class ForensicCouncilPipeline:
             extra_kwargs: dict = None,
         ) -> tuple:
             """Run only the initial investigation pass. Returns (agent_instance, initial_findings)."""
-            with _tracer.start_as_current_span(f"agent.{agent_id}.initial_pass") as span:
+            with _tracer.start_as_current_span(
+                f"agent.{agent_id}.initial_pass"
+            ) as span:
                 span.set_attribute("agent_id", agent_id)
                 try:
                     kwargs = {
@@ -701,7 +724,9 @@ class ForensicCouncilPipeline:
                     span.set_attribute("finding_count", len(initial_findings))
                     return agent, initial_findings, True
                 except Exception as e:
-                    logger.error(f"{agent_id} initial pass failed", error=str(e))
+                    logger.error(
+                        f"{agent_id} initial pass failed", error=str(e), exc_info=True
+                    )
                     return None, [], False
 
         async def run_agent_deep_only(
@@ -712,12 +737,24 @@ class ForensicCouncilPipeline:
         ) -> AgentLoopResult:
             """Run the deep investigation pass on an already-initialized agent."""
             if agent is None:
-                return AgentLoopResult(agent_id=agent_id, findings=[], reflection_report={},
-                                       react_chain=[], agent_active=False, supports_file_type=supports_file,
-                                       error="Initial pass failed")
+                return AgentLoopResult(
+                    agent_id=agent_id,
+                    findings=[],
+                    reflection_report={},
+                    react_chain=[],
+                    agent_active=False,
+                    supports_file_type=supports_file,
+                    error="Initial pass failed",
+                )
             if not supports_file:
-                return AgentLoopResult(agent_id=agent_id, findings=[], reflection_report={},
-                                       react_chain=[], agent_active=False, supports_file_type=False)
+                return AgentLoopResult(
+                    agent_id=agent_id,
+                    findings=[],
+                    reflection_report={},
+                    react_chain=[],
+                    agent_active=False,
+                    supports_file_type=False,
+                )
             with _tracer.start_as_current_span(f"agent.{agent_id}.deep_pass") as span:
                 span.set_attribute("agent_id", agent_id)
                 try:
@@ -736,7 +773,8 @@ class ForensicCouncilPipeline:
                         findings=[f.model_dump() for f in all_findings],
                         reflection_report=(
                             getattr(agent, "_reflection_report", None).model_dump()
-                            if getattr(agent, "_reflection_report", None) else {}
+                            if getattr(agent, "_reflection_report", None)
+                            else {}
                         ),
                         react_chain=getattr(agent, "_react_chain", []),
                         agent_active=True,
@@ -744,16 +782,18 @@ class ForensicCouncilPipeline:
                         deep_findings_count=max(0, deep_count),
                     )
                 except Exception as e:
-                    logger.error(f"{agent_id} deep pass failed", error=str(e))
+                    logger.error(
+                        f"{agent_id} deep pass failed", error=str(e), exc_info=True
+                    )
                     return AgentLoopResult(
-                    agent_id=agent_id,
-                    findings=[f.model_dump() for f in initial_findings],
-                    reflection_report={},
-                    react_chain=getattr(agent, "_react_chain", []),
-                    agent_active=True,
-                    supports_file_type=True,
-                    error=str(e),
-                )
+                        agent_id=agent_id,
+                        findings=[f.model_dump() for f in initial_findings],
+                        reflection_report={},
+                        react_chain=getattr(agent, "_react_chain", []),
+                        agent_active=True,
+                        supports_file_type=True,
+                        error=str(e),
+                    )
 
         # --- Phase 1: All initial passes concurrently ---
         (
@@ -766,9 +806,15 @@ class ForensicCouncilPipeline:
             r if not isinstance(r, BaseException) else (None, [], False)
             for r in await asyncio.gather(
                 run_agent_initial_only(Agent1Image, "Agent1"),
-                run_agent_initial_only(Agent2Audio, "Agent2", {"inter_agent_bus": self.inter_agent_bus}),
-                run_agent_initial_only(Agent3Object, "Agent3", {"inter_agent_bus": self.inter_agent_bus}),
-                run_agent_initial_only(Agent4Video, "Agent4", {"inter_agent_bus": self.inter_agent_bus}),
+                run_agent_initial_only(
+                    Agent2Audio, "Agent2", {"inter_agent_bus": self.inter_agent_bus}
+                ),
+                run_agent_initial_only(
+                    Agent3Object, "Agent3", {"inter_agent_bus": self.inter_agent_bus}
+                ),
+                run_agent_initial_only(
+                    Agent4Video, "Agent4", {"inter_agent_bus": self.inter_agent_bus}
+                ),
                 run_agent_initial_only(Agent5Metadata, "Agent5"),
                 return_exceptions=True,
             )
@@ -797,8 +843,12 @@ class ForensicCouncilPipeline:
                 if agent1 is not None:
                     gemini_result = getattr(agent1, "_gemini_vision_result", {})
                     if not gemini_result:
-                        for f in (result.findings or []):
-                            if isinstance(f, dict) and f.get("metadata", {}).get("tool_name") == "gemini_deep_forensic":
+                        for f in result.findings or []:
+                            if (
+                                isinstance(f, dict)
+                                and f.get("metadata", {}).get("tool_name")
+                                == "gemini_deep_forensic"
+                            ):
                                 gemini_result = f.get("metadata", {})
                                 break
                     if gemini_result:
@@ -808,11 +858,17 @@ class ForensicCouncilPipeline:
                             agent5.inject_agent1_context(gemini_result)
                         logger.info(
                             "Agent1 Gemini context injected into Agent3/5",
-                            has_content_type=bool(gemini_result.get("gemini_content_type")),
-                            has_objects=bool(gemini_result.get("gemini_detected_objects")),
+                            has_content_type=bool(
+                                gemini_result.get("gemini_content_type")
+                            ),
+                            has_objects=bool(
+                                gemini_result.get("gemini_detected_objects")
+                            ),
                         )
             except Exception as _ctx_err:
-                logger.warning(f"Could not inject Agent1 context into Agent3/5: {_ctx_err}")
+                logger.warning(
+                    f"Could not inject Agent1 context into Agent3/5: {_ctx_err}"
+                )
             finally:
                 # Always unblock Agent3/5 — even if Agent1 failed or context was empty.
                 agent1_context_event.set()
@@ -832,14 +888,24 @@ class ForensicCouncilPipeline:
         results = []
         for i, r in enumerate(raw_deep):
             if isinstance(r, BaseException):
-                logger.error(f"Agent {agent_ids_deep[i]} deep pass raised unexpectedly", error=str(r))
-                results.append(AgentLoopResult(
-                    agent_id=agent_ids_deep[i], findings=[], reflection_report={},
-                    react_chain=[], error=str(r), agent_active=False,
-                ))
+                logger.error(
+                    f"Agent {agent_ids_deep[i]} deep pass raised unexpectedly",
+                    error=str(r),
+                    exc_info=r,
+                )
+                results.append(
+                    AgentLoopResult(
+                        agent_id=agent_ids_deep[i],
+                        findings=[],
+                        reflection_report={},
+                        react_chain=[],
+                        error=str(r),
+                        agent_active=False,
+                    )
+                )
             else:
                 results.append(r)
-        
+
         # Log summary of active agents
         active_agents = [r.agent_id for r in results if r.agent_active]
         skipped_agents = [r.agent_id for r in results if not r.supports_file_type]
@@ -848,9 +914,9 @@ class ForensicCouncilPipeline:
             active_agents=active_agents,
             skipped_agents=skipped_agents,
         )
-        
+
         return list(results)
-    
+
     async def handle_hitl_decision(
         self,
         session_id: UUID,
@@ -859,7 +925,7 @@ class ForensicCouncilPipeline:
     ) -> None:
         """
         Route human decision to correct agent's loop engine.
-        
+
         Args:
             session_id: Session ID
             checkpoint_id: Checkpoint ID requiring human decision
@@ -871,14 +937,16 @@ class ForensicCouncilPipeline:
             checkpoint_id=str(checkpoint_id),
             decision=decision.decision_type,
         )
-        
+
         # Get checkpoint info
         checkpoints = await self.session_manager.get_active_checkpoints(session_id)
-        checkpoint = next((cp for cp in checkpoints if cp.checkpoint_id == checkpoint_id), None)
-        
+        checkpoint = next(
+            (cp for cp in checkpoints if cp.checkpoint_id == checkpoint_id), None
+        )
+
         if not checkpoint:
             raise ValueError(f"Checkpoint {checkpoint_id} not found")
-        
+
         # Resolve in session manager
         await self.session_manager.resolve_checkpoint(
             checkpoint_id=checkpoint_id,
@@ -888,7 +956,7 @@ class ForensicCouncilPipeline:
                 "modified_content": decision.override_finding,
             },
         )
-        
+
         # Log the decision
         if self.custody_logger:
             await self.custody_logger.log_entry(
@@ -901,7 +969,7 @@ class ForensicCouncilPipeline:
                     "notes": decision.notes,
                 },
             )
-    
+
     async def _collect_case_linking_flags(
         self,
         session_id: UUID,
@@ -909,21 +977,23 @@ class ForensicCouncilPipeline:
     ) -> list[dict[str, Any]]:
         """Collect case linking flags from episodic memory."""
         flags = []
-        
+
         try:
             entries = await self.episodic_memory.get_by_session(session_id)
             for entry in entries:
                 if entry.signature_type and "LINK" in entry.signature_type.value:
-                    flags.append({
-                        "flag_type": entry.signature_type.value,
-                        "description": entry.description,
-                        "artifact_id": str(entry.artifact_id),
-                    })
+                    flags.append(
+                        {
+                            "flag_type": entry.signature_type.value,
+                            "description": entry.description,
+                            "artifact_id": str(entry.artifact_id),
+                        }
+                    )
         except Exception as e:
             logger.warning("Failed to collect case linking flags", error=str(e))
-        
+
         return flags
-    
+
     async def _get_custody_log(self, session_id: UUID) -> list[dict[str, Any]]:
         """Get chain of custody log for session."""
         try:
@@ -941,7 +1011,7 @@ class ForensicCouncilPipeline:
         except Exception as e:
             logger.warning("Failed to get custody log", error=str(e))
             return []
-    
+
     async def _get_version_trees(
         self,
         artifact_id: UUID,
@@ -951,7 +1021,7 @@ class ForensicCouncilPipeline:
             tree = await self.evidence_store.get_version_tree(artifact_id)
             if not tree:
                 return []
-            
+
             versions = tree.get_all_artifacts()
             return [
                 {
@@ -965,7 +1035,7 @@ class ForensicCouncilPipeline:
         except Exception as e:
             logger.warning("Failed to get version trees", error=str(e))
             return []
-    
+
     def _get_mime_type(self, file_path: str) -> str:
         """
         Detect MIME type from file magic bytes (not extension).
@@ -976,6 +1046,7 @@ class ForensicCouncilPipeline:
         """
         try:
             import magic  # python-magic — already a project dependency
+
             return magic.from_file(file_path, mime=True)
         except Exception:
             # Extension-based fallback — kept for robustness

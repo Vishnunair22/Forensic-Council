@@ -42,9 +42,9 @@ const variantAccent: Record<
 type Stage = "uploading" | "connecting" | "analyzing" | "synthesizing";
 
 const STREAM_STAGES: { key: Stage; label: string }[] = [
-  { key: "uploading",    label: "Upload"     },
-  { key: "connecting",   label: "Connect"    },
-  { key: "analyzing",    label: "Analyze"    },
+  { key: "uploading", label: "Upload" },
+  { key: "connecting", label: "Connect" },
+  { key: "analyzing", label: "Analyze" },
   { key: "synthesizing", label: "Synthesize" },
 ];
 
@@ -58,7 +58,8 @@ function detectStage(texts: string[], variant: ForensicProgressVariant): Stage {
     combined.includes("council") ||
     combined.includes("signing") ||
     combined.includes("report")
-  ) return "synthesizing";
+  )
+    return "synthesizing";
   if (
     combined.includes("agent") ||
     combined.includes("ela") ||
@@ -72,7 +73,8 @@ function detectStage(texts: string[], variant: ForensicProgressVariant): Stage {
     combined.includes("exif") ||
     combined.includes("calling") ||
     combined.includes("classif")
-  ) return "analyzing";
+  )
+    return "analyzing";
   if (
     combined.includes("connect") ||
     combined.includes("stream") ||
@@ -80,7 +82,8 @@ function detectStage(texts: string[], variant: ForensicProgressVariant): Stage {
     combined.includes("session") ||
     combined.includes("websocket") ||
     combined.includes("agents")
-  ) return "connecting";
+  )
+    return "connecting";
   return "uploading";
 }
 
@@ -94,8 +97,10 @@ function categorize(text: string): MsgCategory {
     text.toLowerCase().includes("complete") ||
     text.toLowerCase().includes("finished") ||
     text.toLowerCase().includes("done") ||
-    text.startsWith("✅") || text.startsWith("✓")
-  ) return "success";
+    text.startsWith("✅") ||
+    text.startsWith("✓")
+  )
+    return "success";
   if (
     text.toLowerCase().includes("calling") ||
     text.toLowerCase().includes("running") ||
@@ -107,14 +112,16 @@ function categorize(text: string): MsgCategory {
     text.toLowerCase().includes("analysing") ||
     text.toLowerCase().includes("analyzing") ||
     text.toLowerCase().includes("detecting")
-  ) return "action";
+  )
+    return "action";
   if (
     text.toLowerCase().includes("connect") ||
     text.toLowerCase().includes("upload") ||
     text.toLowerCase().includes("deploy") ||
     text.toLowerCase().includes("initializ") ||
     text.toLowerCase().includes("establ")
-  ) return "system";
+  )
+    return "system";
   return "info";
 }
 
@@ -152,26 +159,32 @@ export function ForensicProgressOverlay({
 
   useEffect(() => {
     const stripRegex = /[\u{1F300}-\u{1FFFF}]|[\u2600-\u27FF]/gu;
-    const trimmed = liveText.replace(stripRegex, '').trim();
+    const trimmed = liveText.replace(stripRegex, "").trim();
     if (!trimmed || trimmed === lastTextRef.current) return;
     lastTextRef.current = trimmed;
     const id = ++idRef.current;
     setLog((prev) => {
-      const next = [...prev, { id, text: trimmed, category: categorize(trimmed) }];
+      const next = [
+        ...prev,
+        { id, text: trimmed, category: categorize(trimmed) },
+      ];
       return next.length > MAX_LOG ? next.slice(next.length - MAX_LOG) : next;
     });
   }, [liveText]);
 
   // Stage indicator
-  const currentStage = detectStage(log.map((m) => m.text), variant);
+  const currentStage = detectStage(
+    log.map((m) => m.text),
+    variant,
+  );
   const stageIndex = STREAM_STAGES.findIndex((s) => s.key === currentStage);
 
   // Per-category text colours
   const catColor: Record<MsgCategory, string> = {
-    action:  accent.primary,
+    action: accent.primary,
     success: "#4ade80",
-    info:    "rgba(255,255,255,0.65)",
-    system:  "rgba(255,255,255,0.38)",
+    info: "rgba(255,255,255,0.65)",
+    system: "rgba(255,255,255,0.38)",
   };
 
   return (
@@ -187,20 +200,30 @@ export function ForensicProgressOverlay({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.4 }}
+      role="status"
+      aria-live="polite"
     >
       {/* ── Ambient layer ─────────────────────────────────────────────────── */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+      <div
+        className="absolute inset-0 pointer-events-none overflow-hidden"
+        aria-hidden="true"
+      >
         {/* Primary glow */}
         <motion.div
           className="absolute -top-48 left-1/2 -translate-x-1/2 w-[min(100vw,780px)] h-[min(100vw,780px)] rounded-full"
-          style={{ background: `radial-gradient(circle, ${accent.glow} 0%, transparent 62%)` }}
+          style={{
+            background: `radial-gradient(circle, ${accent.glow} 0%, transparent 62%)`,
+          }}
           animate={{ scale: [1, 1.1, 1], opacity: [0.45, 0.8, 0.45] }}
           transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
         />
         {/* Secondary corner glow */}
         <motion.div
           className="absolute -bottom-32 right-0 w-[420px] h-[420px] rounded-full opacity-25"
-          style={{ background: "radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%)" }}
+          style={{
+            background:
+              "radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%)",
+          }}
           animate={{ x: [0, -35, 0], y: [0, -25, 0] }}
           transition={{ duration: 13, repeat: Infinity, ease: "easeInOut" }}
         />
@@ -259,10 +282,8 @@ export function ForensicProgressOverlay({
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
 
         <div className="relative px-7 py-7 flex flex-col items-center gap-5">
-
           {/* ── Header: orb + title + stage ─────────────────────────────── */}
           <div className="flex items-center gap-4 w-full">
-
             {/* Multi-ring orb */}
             <div className="relative w-[72px] h-[72px] flex-shrink-0 flex items-center justify-center">
               {/* Outermost slow ring */}
@@ -293,9 +314,18 @@ export function ForensicProgressOverlay({
               {/* Pulsing inner glow */}
               <motion.div
                 className="absolute inset-[10px] rounded-lg"
-                style={{ background: `radial-gradient(circle, ${accent.glow} 0%, transparent 75%)` }}
-                animate={{ scale: [0.85, 1.25, 0.85], opacity: [0.35, 0.85, 0.35] }}
-                transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+                style={{
+                  background: `radial-gradient(circle, ${accent.glow} 0%, transparent 75%)`,
+                }}
+                animate={{
+                  scale: [0.85, 1.25, 0.85],
+                  opacity: [0.35, 0.85, 0.35],
+                }}
+                transition={{
+                  duration: 2.4,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
               />
               {/* Core icon */}
               <div
@@ -307,16 +337,26 @@ export function ForensicProgressOverlay({
                 }}
               >
                 {variant === "council" ? (
-                  <Radio className="w-[18px] h-[18px]" style={{ color: accent.primary }} aria-hidden />
+                  <Radio
+                    className="w-[18px] h-[18px]"
+                    style={{ color: accent.primary }}
+                    aria-hidden
+                  />
                 ) : (
-                  <Activity className="w-[18px] h-[18px]" style={{ color: accent.primary }} aria-hidden />
+                  <Activity
+                    className="w-[18px] h-[18px]"
+                    style={{ color: accent.primary }}
+                    aria-hidden
+                  />
                 )}
               </div>
             </div>
 
             {/* Title + stage breadcrumb */}
             <div className="flex-1 min-w-0">
-              <p className={`text-[9px] font-mono font-bold uppercase tracking-[0.32em] mb-0.5 ${accent.label}`}>
+              <p
+                className={`text-[9px] font-mono font-bold uppercase tracking-[0.32em] mb-0.5 ${accent.label}`}
+              >
                 {telemetryLabel}
               </p>
               <h2 className="text-[17px] font-black text-white tracking-tight font-heading uppercase leading-tight truncate">
@@ -324,10 +364,10 @@ export function ForensicProgressOverlay({
               </h2>
 
               {/* Stage breadcrumb */}
-              <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+              <div className="flex items-center gap-1 mt-1.5 flex-wrap" role="status" aria-live="polite">
                 {STREAM_STAGES.map((s, i) => {
                   const isActive = i === stageIndex;
-                  const isDone   = i < stageIndex;
+                  const isDone = i < stageIndex;
                   return (
                     <Fragment key={s.key}>
                       <div className="flex items-center gap-1">
@@ -335,7 +375,9 @@ export function ForensicProgressOverlay({
                           className="w-1.5 h-1.5 rounded-full"
                           style={{
                             background:
-                              isActive || isDone ? accent.primary : "rgba(255,255,255,0.18)",
+                              isActive || isDone
+                                ? accent.primary
+                                : "rgba(255,255,255,0.18)",
                           }}
                           animate={
                             isActive
@@ -343,6 +385,7 @@ export function ForensicProgressOverlay({
                               : {}
                           }
                           transition={{ duration: 1.1, repeat: Infinity }}
+                          aria-hidden="true"
                         />
                         <span
                           className="text-[8px] font-mono font-bold uppercase tracking-wide"
@@ -350,9 +393,10 @@ export function ForensicProgressOverlay({
                             color: isActive
                               ? accent.primary
                               : isDone
-                              ? "rgba(255,255,255,0.45)"
-                              : "rgba(255,255,255,0.2)",
+                                ? "rgba(255,255,255,0.45)"
+                                : "rgba(255,255,255,0.2)",
                           }}
+                          aria-label={`Stage: ${s.label}, ${isActive ? 'active' : isDone ? 'complete' : 'pending'}`}
                         >
                           {s.label}
                         </span>
@@ -362,7 +406,9 @@ export function ForensicProgressOverlay({
                           className="w-3 h-px rounded-full"
                           style={{
                             background:
-                              i < stageIndex ? accent.primary : "rgba(255,255,255,0.1)",
+                              i < stageIndex
+                                ? accent.primary
+                                : "rgba(255,255,255,0.1)",
                           }}
                         />
                       )}
@@ -379,7 +425,8 @@ export function ForensicProgressOverlay({
             style={{
               background: "rgba(0,0,0,0.45)",
               border: "1px solid rgba(255,255,255,0.07)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), inset 0 0 28px rgba(0,0,0,0.28)",
+              boxShadow:
+                "inset 0 1px 0 rgba(255,255,255,0.04), inset 0 0 28px rgba(0,0,0,0.28)",
             }}
           >
             {/* Mac-style terminal header */}
@@ -387,8 +434,8 @@ export function ForensicProgressOverlay({
               className="flex items-center gap-1.5 px-3 py-1.5 border-b border-white/[0.05]"
               style={{ background: "rgba(255,255,255,0.025)" }}
             >
-              <div className="w-2 h-2 rounded-full bg-red-500/45"   />
-              <div className="w-2 h-2 rounded-full bg-yellow-500/45"/>
+              <div className="w-2 h-2 rounded-full bg-red-500/45" />
+              <div className="w-2 h-2 rounded-full bg-yellow-500/45" />
               <div className="w-2 h-2 rounded-full bg-green-500/45" />
               <span
                 className="ml-2 text-[8px] font-mono uppercase tracking-[0.25em] select-none"
@@ -411,7 +458,7 @@ export function ForensicProgressOverlay({
             </div>
 
             {/* Log lines */}
-            <div className="px-3 pt-2.5 pb-2 min-h-[112px] flex flex-col justify-end gap-[3px]">
+            <div className="px-3 pt-2.5 pb-2 min-h-[112px] flex flex-col justify-end gap-[3px]" aria-live="polite">
               <AnimatePresence initial={false}>
                 {log.length === 0 ? (
                   <motion.div
@@ -427,8 +474,11 @@ export function ForensicProgressOverlay({
                 ) : (
                   log.map((entry, idx) => {
                     const isLatest = idx === log.length - 1;
-                    const ageRatio = (log.length - 1 - idx) / Math.max(log.length - 1, 1);
-                    const textOpacity = isLatest ? 1 : Math.max(0.18, 0.75 - ageRatio * 0.55);
+                    const ageRatio =
+                      (log.length - 1 - idx) / Math.max(log.length - 1, 1);
+                    const textOpacity = isLatest
+                      ? 1
+                      : Math.max(0.18, 0.75 - ageRatio * 0.55);
 
                     return (
                       <motion.div
@@ -436,13 +486,24 @@ export function ForensicProgressOverlay({
                         className="flex items-start gap-2 leading-none"
                         initial={{ opacity: 0, y: 10, x: -6 }}
                         animate={{ opacity: textOpacity, y: 0, x: 0 }}
-                        exit={{ opacity: 0, y: -8, transition: { duration: 0.18 } }}
-                        transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+                        exit={{
+                          opacity: 0,
+                          y: -8,
+                          transition: { duration: 0.18 },
+                        }}
+                        transition={{
+                          duration: 0.32,
+                          ease: [0.22, 1, 0.36, 1],
+                        }}
                       >
                         {/* Indicator */}
                         <span
                           className="text-[9px] font-mono font-bold shrink-0 mt-[1px] w-3"
-                          style={{ color: isLatest ? catColor[entry.category] : "rgba(255,255,255,0.2)" }}
+                          style={{
+                            color: isLatest
+                              ? catColor[entry.category]
+                              : "rgba(255,255,255,0.2)",
+                          }}
                         >
                           {isLatest ? "▶" : "·"}
                         </span>
@@ -470,7 +531,12 @@ export function ForensicProgressOverlay({
                 className="text-[11px] font-mono leading-none"
                 style={{ color: accent.primary }}
                 animate={{ opacity: [1, 1, 0, 0] }}
-                transition={{ duration: 1.0, repeat: Infinity, ease: "linear", times: [0, 0.45, 0.5, 1] }}
+                transition={{
+                  duration: 1.0,
+                  repeat: Infinity,
+                  ease: "linear",
+                  times: [0, 0.45, 0.5, 1],
+                }}
               >
                 █
               </motion.span>
@@ -489,7 +555,11 @@ export function ForensicProgressOverlay({
                 boxShadow: `0 0 14px ${accent.primary}`,
               }}
               animate={{ x: ["-130%", "240%"] }}
-              transition={{ duration: 2.0, repeat: Infinity, ease: "easeInOut" }}
+              transition={{
+                duration: 2.0,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
             />
           </div>
 
@@ -500,14 +570,15 @@ export function ForensicProgressOverlay({
                 className="text-[8px] font-mono font-bold uppercase tracking-widest"
                 style={{ color: `${accent.primary}55` }}
               >
-                {variant === "council" ? "Council deliberation" : "Forensic stream"}
+                {variant === "council"
+                  ? "Council deliberation"
+                  : "Forensic stream"}
               </span>
               <span className="text-[8px] font-mono font-bold tracking-widest text-white/22 uppercase">
                 {elapsed}s elapsed
               </span>
             </div>
           )}
-
         </div>
       </motion.div>
     </motion.div>

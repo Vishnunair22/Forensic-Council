@@ -30,6 +30,7 @@ logger = get_logger(__name__)
 
 class FindingVerdict(str, Enum):
     """Verdict for finding comparison."""
+
     AGREEMENT = "AGREEMENT"
     INDEPENDENT = "INDEPENDENT"
     CONTRADICTION = "CONTRADICTION"
@@ -37,6 +38,7 @@ class FindingVerdict(str, Enum):
 
 class FindingComparison(BaseModel):
     """Comparison between two agent findings."""
+
     finding_a: dict[str, Any]
     finding_b: dict[str, Any]
     verdict: FindingVerdict
@@ -45,6 +47,7 @@ class FindingComparison(BaseModel):
 
 class ChallengeResult(BaseModel):
     """Result of a challenge loop."""
+
     challenge_id: UUID = Field(default_factory=uuid4)
     challenged_agent: str
     original_finding: dict[str, Any]
@@ -54,6 +57,7 @@ class ChallengeResult(BaseModel):
 
 class TribunalCase(BaseModel):
     """Tribunal case for unresolved contradictions."""
+
     tribunal_id: UUID = Field(default_factory=uuid4)
     agent_a_id: str
     agent_b_id: str
@@ -64,20 +68,24 @@ class TribunalCase(BaseModel):
 
 class AgentMetrics(BaseModel):
     """Per-agent performance metrics computed at arbiter deliberation time."""
+
     agent_id: str
     agent_name: str
     total_tools_called: int = 0
     tools_succeeded: int = 0
     tools_failed: int = 0
-    tools_not_applicable: int = 0    # tools that don't apply to this file type (not errors)
-    error_rate: float = 0.0          # 0.0–1.0 (failed / applicable tools run)
-    confidence_score: float = 0.0    # avg confidence across real applicable findings
+    tools_not_applicable: int = (
+        0  # tools that don't apply to this file type (not errors)
+    )
+    error_rate: float = 0.0  # 0.0–1.0 (failed / applicable tools run)
+    confidence_score: float = 0.0  # avg confidence across real applicable findings
     finding_count: int = 0
-    skipped: bool = False            # True when file type not applicable
+    skipped: bool = False  # True when file type not applicable
 
 
 class ForensicReport(BaseModel):
     """Complete forensic report with all required sections."""
+
     report_id: UUID = Field(default_factory=uuid4)
     session_id: UUID
     case_id: str
@@ -163,7 +171,7 @@ class CouncilArbiter:
     Council Arbiter - the deliberation, challenge loop, Tribunal, and
     court-admissible report generator.
     """
-    
+
     def __init__(
         self,
         session_id: UUID,
@@ -185,7 +193,7 @@ class CouncilArbiter:
         # Shared LLM client reused across all synthesis calls to avoid
         # repeated TCP/TLS handshakes during parallel deliberation.
         self._synthesis_client: Optional[LLMClient] = None
-    
+
     # ── Shared agent name map ────────────────────────────────────────────
     _AGENT_NAMES: dict[str, str] = {
         "Agent1": "Image Forensics",
@@ -201,35 +209,58 @@ class CouncilArbiter:
     # not just an overlapping bag-of-words token.
     _FINDING_CATEGORY_MAP: dict[str, str] = {
         # Image integrity
-        "ela": "image_integrity", "error_level": "image_integrity",
-        "ghost": "image_integrity", "jpeg_ghost": "image_integrity",
-        "noise": "image_integrity", "frequency": "image_integrity",
-        "prnu": "image_integrity", "chromatic": "image_integrity",
+        "ela": "image_integrity",
+        "error_level": "image_integrity",
+        "ghost": "image_integrity",
+        "jpeg_ghost": "image_integrity",
+        "noise": "image_integrity",
+        "frequency": "image_integrity",
+        "prnu": "image_integrity",
+        "chromatic": "image_integrity",
         # Manipulation signals
-        "splicing": "manipulation", "copy_move": "manipulation",
-        "manipulation": "manipulation", "deepfake": "manipulation",
-        "face_swap": "manipulation", "tamper": "manipulation",
+        "splicing": "manipulation",
+        "copy_move": "manipulation",
+        "manipulation": "manipulation",
+        "deepfake": "manipulation",
+        "face_swap": "manipulation",
+        "tamper": "manipulation",
         "forgery": "manipulation",
         # Metadata / provenance
-        "exif": "metadata", "gps": "metadata", "metadata": "metadata",
-        "timestamp": "metadata", "geolocation": "metadata",
-        "hex_signature": "metadata", "file_signature": "metadata",
+        "exif": "metadata",
+        "gps": "metadata",
+        "metadata": "metadata",
+        "timestamp": "metadata",
+        "geolocation": "metadata",
+        "hex_signature": "metadata",
+        "file_signature": "metadata",
         # Codec / encoding
-        "codec": "codec", "encoding": "codec", "bitrate": "codec",
-        "compression": "codec", "quantization": "codec",
+        "codec": "codec",
+        "encoding": "codec",
+        "bitrate": "codec",
+        "compression": "codec",
+        "quantization": "codec",
         # Audio authenticity
-        "speaker": "audio", "anti_spoofing": "audio", "audio": "audio",
-        "diarization": "audio", "voice": "audio",
+        "speaker": "audio",
+        "anti_spoofing": "audio",
+        "audio": "audio",
+        "diarization": "audio",
+        "voice": "audio",
         # Object / scene
-        "yolo": "object_detection", "object": "object_detection",
-        "lighting": "object_detection", "contraband": "object_detection",
+        "yolo": "object_detection",
+        "object": "object_detection",
+        "lighting": "object_detection",
+        "contraband": "object_detection",
         "scene": "object_detection",
         # Video motion
-        "optical_flow": "video", "video": "video",
-        "rolling_shutter": "video", "frame": "video",
+        "optical_flow": "video",
+        "video": "video",
+        "rolling_shutter": "video",
+        "frame": "video",
         # Steganography
-        "steganography": "steganography", "steg": "steganography",
-        "hidden": "steganography", "lsb": "steganography",
+        "steganography": "steganography",
+        "steg": "steganography",
+        "hidden": "steganography",
+        "lsb": "steganography",
     }
 
     # ── B: Tool reliability tiers ────────────────────────────────────────
@@ -238,18 +269,29 @@ class CouncilArbiter:
     # carry 0.75x; heuristic/metadata carry 0.50x.
     _TOOL_RELIABILITY_TIERS: dict[str, float] = {
         # Calibrated (highest weight — statistically validated)
-        "ela": 1.0, "jpeg_ghost": 1.0, "prnu_analysis": 1.0,
-        "codec_fingerprint": 1.0, "error_level_analysis": 1.0,
-        "noise_fingerprint": 1.0, "frequency_domain": 1.0,
+        "ela": 1.0,
+        "jpeg_ghost": 1.0,
+        "prnu_analysis": 1.0,
+        "codec_fingerprint": 1.0,
+        "error_level_analysis": 1.0,
+        "noise_fingerprint": 1.0,
+        "frequency_domain": 1.0,
         # ML-based (medium weight — model-dependent)
-        "yolo_detection": 0.75, "deepfake_detection": 0.75,
-        "face_swap_detection": 0.75, "speaker_diarization": 0.75,
-        "anti_spoofing": 0.75, "optical_flow_analysis": 0.75,
-        "object_detection": 0.75, "lighting_consistency": 0.75,
+        "yolo_detection": 0.75,
+        "deepfake_detection": 0.75,
+        "face_swap_detection": 0.75,
+        "speaker_diarization": 0.75,
+        "anti_spoofing": 0.75,
+        "optical_flow_analysis": 0.75,
+        "object_detection": 0.75,
+        "lighting_consistency": 0.75,
         # Heuristic / metadata (lower weight — easily spoofed)
-        "exif_analysis": 0.5, "metadata_analysis": 0.5,
-        "steganography_scan": 0.5, "hex_signature": 0.5,
-        "gps_analysis": 0.5, "timestamp_analysis": 0.5,
+        "exif_analysis": 0.5,
+        "metadata_analysis": 0.5,
+        "steganography_scan": 0.5,
+        "hex_signature": 0.5,
+        "gps_analysis": 0.5,
+        "timestamp_analysis": 0.5,
     }
     _DEFAULT_TOOL_RELIABILITY = 0.65  # fallback for unrecognised tool names
 
@@ -291,12 +333,16 @@ class CouncilArbiter:
                 for f in findings
             )
 
-        def _deduplicate_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        def _deduplicate_findings(
+            findings: list[dict[str, Any]],
+        ) -> list[dict[str, Any]]:
             """Remove duplicate findings, assign severity tier in one pass."""
             seen: set[tuple[str, str, str, str]] = set()
             out: list[dict[str, Any]] = []
             for f in findings:
-                meta = f.get("metadata", {}) if isinstance(f.get("metadata"), dict) else {}
+                meta = (
+                    f.get("metadata", {}) if isinstance(f.get("metadata"), dict) else {}
+                )
                 key = (
                     str(f.get("agent_id", "")),
                     str(f.get("finding_type", "")),
@@ -306,7 +352,7 @@ class CouncilArbiter:
                 if key not in seen:
                     seen.add(key)
                     if isinstance(f, dict) and "severity_tier" not in f:
-                        f["severity_tier"] = _assign_severity_tier(f)
+                        f["severity_tier"] = assign_severity_tier(f)
                     out.append(f)
             return out
 
@@ -316,18 +362,31 @@ class CouncilArbiter:
             agent_name = self._AGENT_NAMES.get(agent_id, agent_id)
             if skipped:
                 return AgentMetrics(
-                    agent_id=agent_id, agent_name=agent_name, skipped=True,
-                    total_tools_called=0, tools_succeeded=0, tools_failed=0,
-                    tools_not_applicable=0, error_rate=0.0,
-                    confidence_score=0.0, finding_count=0,
+                    agent_id=agent_id,
+                    agent_name=agent_name,
+                    skipped=True,
+                    total_tools_called=0,
+                    tools_succeeded=0,
+                    tools_failed=0,
+                    tools_not_applicable=0,
+                    error_rate=0.0,
+                    confidence_score=0.0,
+                    finding_count=0,
                 )
-            real = [f for f in findings if str(f.get("finding_type","")).lower() not in _SKIP_FINDING_TYPES]
+            real = [
+                f
+                for f in findings
+                if str(f.get("finding_type", "")).lower() not in _SKIP_FINDING_TYPES
+            ]
             total = len(real)
 
             not_applicable_flags = (
-                "ela_not_applicable", "ghost_not_applicable",
-                "noise_fingerprint_not_applicable", "prnu_not_applicable",
+                "ela_not_applicable",
+                "ghost_not_applicable",
+                "noise_fingerprint_not_applicable",
+                "prnu_not_applicable",
             )
+
             def _is_not_applicable(f: dict) -> bool:
                 meta = f.get("metadata") or {}
                 # Also treat NOT_APPLICABLE verdict (from lossless-format guards) as not-applicable
@@ -354,22 +413,28 @@ class CouncilArbiter:
             error_rate = round(failed / applicable, 3) if applicable > 0 else 0.0
             # Confidence only over findings that actually ran (not not-applicable, not failed)
             conf_scores = [
-                f.get("raw_confidence_score") or f.get("calibrated_probability") or f.get("confidence_raw") or 0.0
+                f.get("raw_confidence_score")
+                or f.get("calibrated_probability")
+                or f.get("confidence_raw")
+                or 0.0
                 for f in real
                 if not _is_not_applicable(f) and not _is_failed(f)
             ]
-            confidence = round(sum(conf_scores) / len(conf_scores), 3) if conf_scores else 0.0
+            confidence = (
+                round(sum(conf_scores) / len(conf_scores), 3) if conf_scores else 0.0
+            )
             return AgentMetrics(
-                agent_id=agent_id, agent_name=agent_name, skipped=False,
-                total_tools_called=total, tools_succeeded=succeeded,
-                tools_failed=failed, tools_not_applicable=not_applicable,
-                error_rate=error_rate, confidence_score=confidence,
+                agent_id=agent_id,
+                agent_name=agent_name,
+                skipped=False,
+                total_tools_called=total,
+                tools_succeeded=succeeded,
+                tools_failed=failed,
+                tools_not_applicable=not_applicable,
+                error_rate=error_rate,
+                confidence_score=confidence,
                 finding_count=total,
             )
-
-        def _assign_severity_tier(f: Any) -> str:
-            """Assign INFO/LOW/MEDIUM/HIGH/CRITICAL to a finding. Uses shared logic."""
-            return assign_severity_tier(f)
 
         # Helper: call optional step-progress hook if set externally
         async def _step(msg: str) -> None:
@@ -377,8 +442,8 @@ class CouncilArbiter:
             if hook is not None:
                 try:
                     await hook(msg)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Arbiter step hook failed: {e}")
 
         # ── Partition agents into active vs skipped ───────────────────────
         await _step("Gathering all agent findings…")
@@ -400,7 +465,8 @@ class CouncilArbiter:
                 active_agent_results[agent_id] = {**result, "findings": deduped}
                 all_findings.extend(deduped)
                 agent_gemini = [
-                    f for f in deduped
+                    f
+                    for f in deduped
                     if isinstance(f, dict)
                     and f.get("metadata", {}).get("analysis_source") == "gemini_vision"
                 ]
@@ -408,19 +474,25 @@ class CouncilArbiter:
                     gemini_findings_by_agent[agent_id] = agent_gemini
 
         # Severity tiers already assigned in _deduplicate_findings — rebuild all_findings
-        all_findings = [f for findings_list in [
-            per_agent_findings[aid] for aid in active_agent_results
-        ] for f in findings_list]
+        all_findings = [
+            f
+            for findings_list in [
+                per_agent_findings[aid] for aid in active_agent_results
+            ]
+            for f in findings_list
+        ]
 
         logger.info(
             f"Arbiter: {len(active_agent_results)} active agents, "
             f"{len(agent_results) - len(active_agent_results)} skipped, "
             f"{len(all_findings)} total findings"
         )
-        
+
         # ── Early return if no active agents reported ────────────────────
         if not active_agent_results:
-            logger.warning("Arbiter: No active agents produced findings. Generating empty report.")
+            logger.warning(
+                "Arbiter: No active agents produced findings. Generating empty report."
+            )
             return ForensicReport(
                 session_id=self.session_id,
                 case_id=case_id or f"case_{self.session_id}",
@@ -442,11 +514,14 @@ class CouncilArbiter:
         for gf_list in gemini_findings_by_agent.values():
             gemini_vision_findings.extend(gf_list)
         if gemini_vision_findings:
-            logger.info(f"Arbiter: {len(gemini_vision_findings)} Gemini vision findings across {len(gemini_findings_by_agent)} agent(s)")
+            logger.info(
+                f"Arbiter: {len(gemini_vision_findings)} Gemini vision findings across {len(gemini_findings_by_agent)} agent(s)"
+            )
 
         # ── Compute overall confidence + error rate ───────────────────────
         active_metrics = [
-            m for m in per_agent_metrics.values()
+            m
+            for m in per_agent_metrics.values()
             if not m.get("skipped") and m.get("total_tools_called", 0) > 0
         ]
         # Weighted confidence: weight each agent by reliability × applicable tool count.
@@ -455,7 +530,9 @@ class CouncilArbiter:
         _w_sum = 0.0
         _wc_sum = 0.0
         for _m in active_metrics:
-            _applicable = _m.get("total_tools_called", 0) - _m.get("tools_not_applicable", 0)
+            _applicable = _m.get("total_tools_called", 0) - _m.get(
+                "tools_not_applicable", 0
+            )
             if _applicable <= 0:
                 continue
             _reliability = max(0.0, 1.0 - _m.get("error_rate", 0.0))
@@ -463,18 +540,26 @@ class CouncilArbiter:
             _wc_sum += _m["confidence_score"] * _weight
             _w_sum += _weight
         overall_confidence = round(_wc_sum / _w_sum, 3) if _w_sum > 0 else 0.0
-        overall_error_rate = round(
-            sum(m["error_rate"] for m in active_metrics) / len(active_metrics), 3
-        ) if active_metrics else 0.0
+        overall_error_rate = (
+            round(sum(m["error_rate"] for m in active_metrics) / len(active_metrics), 3)
+            if active_metrics
+            else 0.0
+        )
 
         # ── C: Confidence range across active agent scores ────────────────
-        _all_conf_scores = [m["confidence_score"] for m in active_metrics if m.get("confidence_score", 0) > 0]
+        _all_conf_scores = [
+            m["confidence_score"]
+            for m in active_metrics
+            if m.get("confidence_score", 0) > 0
+        ]
         if _all_conf_scores:
             confidence_min = round(min(_all_conf_scores), 3)
             confidence_max = round(max(_all_conf_scores), 3)
             _mean = sum(_all_conf_scores) / len(_all_conf_scores)
-            _variance = sum((x - _mean) ** 2 for x in _all_conf_scores) / len(_all_conf_scores)
-            confidence_std_dev = round(_variance ** 0.5, 3)
+            _variance = sum((x - _mean) ** 2 for x in _all_conf_scores) / len(
+                _all_conf_scores
+            )
+            confidence_std_dev = round(_variance**0.5, 3)
         else:
             confidence_min = confidence_max = confidence_std_dev = 0.0
 
@@ -502,11 +587,11 @@ class CouncilArbiter:
                 _fa = comparison.finding_a
                 _fb = comparison.finding_b
                 _plain = (
-                    f"{self._AGENT_NAMES.get(_fa.get('agent_id',''), _fa.get('agent_id','Unknown'))} "
-                    f"reported \"{_fa.get('finding_type','unknown')}\" as {_fa.get('status','?')} "
+                    f"{self._AGENT_NAMES.get(_fa.get('agent_id', ''), _fa.get('agent_id', 'Unknown'))} "
+                    f'reported "{_fa.get("finding_type", "unknown")}" as {_fa.get("status", "?")} '
                     f"({(_fa.get('confidence_raw') or 0.0):.0%} confidence), "
-                    f"while {self._AGENT_NAMES.get(_fb.get('agent_id',''), _fb.get('agent_id','Unknown'))} "
-                    f"reported \"{_fb.get('finding_type','unknown')}\" as {_fb.get('status','?')} "
+                    f"while {self._AGENT_NAMES.get(_fb.get('agent_id', ''), _fb.get('agent_id', 'Unknown'))} "
+                    f'reported "{_fb.get("finding_type", "unknown")}" as {_fb.get("status", "?")} '
                     f"({(_fb.get('confidence_raw') or 0.0):.0%} confidence). "
                     "Flagged for human review."
                 )
@@ -523,7 +608,8 @@ class CouncilArbiter:
                     else comparison.finding_a.get("agent_id", "")
                 )
                 context_from_other = (
-                    comparison.finding_b if challenged_agent == comparison.finding_a.get("agent_id", "")
+                    comparison.finding_b
+                    if challenged_agent == comparison.finding_a.get("agent_id", "")
                     else comparison.finding_a
                 )
                 result = await self.challenge_loop(
@@ -535,8 +621,10 @@ class CouncilArbiter:
         seen_ids = set()
         cross_modal_confirmed = []
         for comparison in comparisons:
-            if (comparison.verdict == FindingVerdict.AGREEMENT and
-                    comparison.cross_modal_confirmed):
+            if (
+                comparison.verdict == FindingVerdict.AGREEMENT
+                and comparison.cross_modal_confirmed
+            ):
                 fid = comparison.finding_a.get("finding_id")
                 if fid not in seen_ids:
                     seen_ids.add(fid)
@@ -544,16 +632,12 @@ class CouncilArbiter:
 
         # Incomplete findings (excluding stub results which are not court-defensible)
         incomplete_findings = [
-            f for f in all_findings
-            if f.get("status") == "INCOMPLETE"
+            f for f in all_findings if f.get("status") == "INCOMPLETE"
         ]
 
         # Stub findings - results from unimplemented tools
         # These are tracked separately and excluded from verdict calculation
-        stub_findings = [
-            f for f in all_findings
-            if f.get("stub_result") is True
-        ]
+        stub_findings = [f for f in all_findings if f.get("stub_result") is True]
 
         # Log warning if stub findings are present
         if stub_findings:
@@ -566,16 +650,21 @@ class CouncilArbiter:
         # Also count findings with INCONSISTENT status as contested, since they
         # signal conflicting forensic evidence that warrants human review.
         inconsistent_as_contested = [
-            _f for _f in all_findings
+            _f
+            for _f in all_findings
             if str(_f.get("status", "")).upper() == "CONTESTED"
-            or (str(_f.get("status", "")).upper() == "CONFIRMED"
+            or (
+                str(_f.get("status", "")).upper() == "CONFIRMED"
                 and any(
                     "INCONSISTENT" in str(_f.get("metadata", {}).get(k, "")).upper()
                     for k in ("verdict", "prnu_verdict")
                     if _f.get("metadata", {}).get(k) is not None
-                ))
+                )
+            )
         ]
-        contested_findings_count = len(contested_findings) + len(inconsistent_as_contested)
+        contested_findings_count = len(contested_findings) + len(
+            inconsistent_as_contested
+        )
 
         # ── applicable_agent_count and skipped_agents ─────────────────────
         applicable_agent_count = len(active_agent_results)
@@ -585,7 +674,11 @@ class CouncilArbiter:
                 _skip_reason = "Not applicable for this file type"
                 for _f in _findings:
                     if str(_f.get("finding_type", "")).lower() in _SKIP_FINDING_TYPES:
-                        _r = str(_f.get("reasoning_summary") or _f.get("court_statement") or "")
+                        _r = str(
+                            _f.get("reasoning_summary")
+                            or _f.get("court_statement")
+                            or ""
+                        )
                         if _r:
                             _skip_reason = _r[:200]
                         break
@@ -621,21 +714,32 @@ class CouncilArbiter:
         _failed_tools = sum(m.get("tools_failed", 0) for m in active_metrics)
         _na_tools = sum(m.get("tools_not_applicable", 0) for m in active_metrics)
         _fallback_count = sum(
-            1 for f in all_findings
+            1
+            for f in all_findings
             if "fallback" in str((f.get("metadata") or {}).get("backend", "")).lower()
-            and not any((f.get("metadata") or {}).get(flag) for flag in ("ela_not_applicable", "ghost_not_applicable"))
+            and not any(
+                (f.get("metadata") or {}).get(flag)
+                for flag in ("ela_not_applicable", "ghost_not_applicable")
+            )
         )
         _cov_parts: list[str] = []
         if _failed_tools > 0:
-            _cov_parts.append(f"{_failed_tools} of {_total_tools} applicable tools failed — findings carry reduced evidential weight")
+            _cov_parts.append(
+                f"{_failed_tools} of {_total_tools} applicable tools failed — findings carry reduced evidential weight"
+            )
         if _fallback_count > 0:
             _t = "tool" if _fallback_count == 1 else "tools"
-            _cov_parts.append(f"{_fallback_count} {_t} used simplified fallback implementations (full ML model unavailable)")
+            _cov_parts.append(
+                f"{_fallback_count} {_t} used simplified fallback implementations (full ML model unavailable)"
+            )
         if _na_tools > 0:
             _t = "tool" if _na_tools == 1 else "tools"
-            _cov_parts.append(f"{_na_tools} {_t} not applicable to this file type (excluded from verdict)")
+            _cov_parts.append(
+                f"{_na_tools} {_t} not applicable to this file type (excluded from verdict)"
+            )
         analysis_coverage_note = (
-            "; ".join(_cov_parts) if _cov_parts
+            "; ".join(_cov_parts)
+            if _cov_parts
             else f"All {_total_tools} applicable tools ran successfully across {applicable_agent_count} active agent(s)"
         )
 
@@ -655,19 +759,36 @@ class CouncilArbiter:
                 or _meta.get("mismatch_detected") is True
                 or _meta.get("stego_suspected") is True
                 or _meta.get("scale_consistent") is False
-                or ("INCONSISTENT" in str(_meta.get("prnu_verdict", "")).upper()
-                    and _meta.get("prnu_verdict") is not None)
-                or ("INCONSISTENT" in str(_meta.get("verdict", "")).upper()
-                    and _meta.get("verdict") is not None)
-                or ("TAMPERED" in str(_meta.get("verdict", "")).upper()
-                    and _meta.get("verdict") is not None)
+                or (
+                    "INCONSISTENT" in str(_meta.get("prnu_verdict", "")).upper()
+                    and _meta.get("prnu_verdict") is not None
+                )
+                or (
+                    "INCONSISTENT" in str(_meta.get("verdict", "")).upper()
+                    and _meta.get("verdict") is not None
+                )
+                or (
+                    "TAMPERED" in str(_meta.get("verdict", "")).upper()
+                    and _meta.get("verdict") is not None
+                )
             )
             if _is_direct_manip:
-                _c = float(_f.get("raw_confidence_score") or _f.get("calibrated_probability") or _f.get("confidence_raw") or 0.5)
+                _c = float(
+                    _f.get("raw_confidence_score")
+                    or _f.get("calibrated_probability")
+                    or _f.get("confidence_raw")
+                    or 0.5
+                )
                 if _c >= 0.50:
                     # Look up the reliability weight for this tool (B)
-                    _tool = str(_meta.get("tool_name", _f.get("finding_type", ""))).lower().replace(" ", "_")
-                    _w = self._TOOL_RELIABILITY_TIERS.get(_tool, self._DEFAULT_TOOL_RELIABILITY)
+                    _tool = (
+                        str(_meta.get("tool_name", _f.get("finding_type", "")))
+                        .lower()
+                        .replace(" ", "_")
+                    )
+                    _w = self._TOOL_RELIABILITY_TIERS.get(
+                        _tool, self._DEFAULT_TOOL_RELIABILITY
+                    )
                     _manip_weighted.append((_c, _w))
         _manip_confs = [c for c, _ in _manip_weighted]
         if not _manip_weighted:
@@ -676,10 +797,15 @@ class CouncilArbiter:
             _c0, _w0 = _manip_weighted[0]
             manipulation_probability = round(_c0 * _w0 * self._SINGLE_SIGNAL_DECAY, 3)
         else:
-            _top = sorted(_manip_weighted, key=lambda x: x[0] * x[1], reverse=True)[:self._MANIP_TOP_K]
+            _top = sorted(_manip_weighted, key=lambda x: x[0] * x[1], reverse=True)[
+                : self._MANIP_TOP_K
+            ]
             _tw = sum(_w for _, _w in _top)
             manipulation_probability = round(
-                min(self._MANIP_PROBABILITY_CAP, sum(_c * _w for _c, _w in _top) / _tw) if _tw > 0 else 0.0, 3
+                min(self._MANIP_PROBABILITY_CAP, sum(_c * _w for _c, _w in _top) / _tw)
+                if _tw > 0
+                else 0.0,
+                3,
             )
 
         # ── F: Verdict (tightened thresholds) ────────────────────────────
@@ -695,14 +821,18 @@ class CouncilArbiter:
             overall_verdict = "MANIPULATED"
         elif manipulation_probability >= 0.45 or manipulation_signals >= 1:
             overall_verdict = "LIKELY_MANIPULATED"
-        elif (manipulation_signals == 0
-              and overall_confidence >= 0.75
-              and overall_error_rate <= 0.15
-              and contested_findings_count == 0):
+        elif (
+            manipulation_signals == 0
+            and overall_confidence >= 0.75
+            and overall_error_rate <= 0.15
+            and contested_findings_count == 0
+        ):
             overall_verdict = "AUTHENTIC"
-        elif (manipulation_signals == 0
-              and overall_confidence >= 0.60
-              and overall_error_rate <= 0.25):
+        elif (
+            manipulation_signals == 0
+            and overall_confidence >= 0.60
+            and overall_error_rate <= 0.25
+        ):
             overall_verdict = "LIKELY_AUTHENTIC"
         else:
             overall_verdict = "INCONCLUSIVE"
@@ -727,24 +857,33 @@ class CouncilArbiter:
         executive_summary: str = ""
         uncertainty_statement: str = ""
 
-        _template_fallback = lambda: (
-            *self._template_structured_summary(
-                overall_verdict, overall_confidence, overall_error_rate,
-                manipulation_probability, applicable_agent_count, all_findings,
-                len(cross_modal_confirmed), contested_findings_count,
-                analysis_coverage_note,
-            ),
-            {},
-            self._template_executive_summary(
-                len(active_agent_results), len(all_findings),
-                len(cross_modal_confirmed), len(contested_findings), all_findings,
-            ),
-            (
-                f"Analysis based on {len(all_findings)} findings from "
-                f"{len(active_agent_results)} active agent(s). "
-                f"Overall error rate: {overall_error_rate:.0%}."
-            ),
-        )
+        def _template_fallback():
+            return (
+                *self._template_structured_summary(
+                    overall_verdict,
+                    overall_confidence,
+                    overall_error_rate,
+                    manipulation_probability,
+                    applicable_agent_count,
+                    all_findings,
+                    len(cross_modal_confirmed),
+                    contested_findings_count,
+                    analysis_coverage_note,
+                ),
+                {},
+                self._template_executive_summary(
+                    len(active_agent_results),
+                    len(all_findings),
+                    len(cross_modal_confirmed),
+                    len(contested_findings),
+                    all_findings,
+                ),
+                (
+                    f"Analysis based on {len(all_findings)} findings from "
+                    f"{len(active_agent_results)} active agent(s). "
+                    f"Overall error rate: {overall_error_rate:.0%}."
+                ),
+            )
 
         llm_enabled = (
             use_llm
@@ -763,19 +902,31 @@ class CouncilArbiter:
                 llm_enabled = False
             else:
                 try:
-                    _healthy = await asyncio.wait_for(_client.health_check(), timeout=5.0)
+                    _healthy = await asyncio.wait_for(
+                        _client.health_check(), timeout=5.0
+                    )
                     if not _healthy:
-                        logger.warning("LLM health check failed — using template fallbacks")
+                        logger.warning(
+                            "LLM health check failed — using template fallbacks"
+                        )
                         llm_enabled = False
                     else:
                         self._synthesis_client = _client
                 except asyncio.TimeoutError:
-                    logger.warning("LLM health check timed out — using template fallbacks")
+                    logger.warning(
+                        "LLM health check timed out — using template fallbacks"
+                    )
                     llm_enabled = False
 
         if not llm_enabled:
-            (verdict_sentence, key_findings_list, reliability_note,
-             per_agent_analysis, executive_summary, uncertainty_statement) = _template_fallback()
+            (
+                verdict_sentence,
+                key_findings_list,
+                reliability_note,
+                per_agent_analysis,
+                executive_summary,
+                uncertainty_statement,
+            ) = _template_fallback()
         else:
             await _step("Generating forensic summary via Groq (parallel synthesis)…")
 
@@ -799,9 +950,14 @@ class CouncilArbiter:
                 except Exception as e:
                     logger.warning(f"Structured summary failed: {e}")
                     return self._template_structured_summary(
-                        overall_verdict, overall_confidence, overall_error_rate,
-                        manipulation_probability, applicable_agent_count, all_findings,
-                        len(cross_modal_confirmed), contested_findings_count,
+                        overall_verdict,
+                        overall_confidence,
+                        overall_error_rate,
+                        manipulation_probability,
+                        applicable_agent_count,
+                        all_findings,
+                        len(cross_modal_confirmed),
+                        contested_findings_count,
                         analysis_coverage_note,
                     )
 
@@ -820,7 +976,9 @@ class CouncilArbiter:
                         try:
                             narr = await asyncio.wait_for(
                                 self._generate_agent_narrative(
-                                    aid, findings, per_agent_metrics.get(aid, {}),
+                                    aid,
+                                    findings,
+                                    per_agent_metrics.get(aid, {}),
                                 ),
                                 timeout=_NARRATIVE_TIMEOUT,
                             )
@@ -844,8 +1002,10 @@ class CouncilArbiter:
                 try:
                     return await asyncio.wait_for(
                         self._generate_executive_summary(
-                            len(active_agent_results), len(all_findings),
-                            len(cross_modal_confirmed), len(contested_findings),
+                            len(active_agent_results),
+                            len(all_findings),
+                            len(cross_modal_confirmed),
+                            len(contested_findings),
                             all_findings=all_findings,
                             gemini_findings=gemini_vision_findings,
                             active_agent_metrics=active_metrics,
@@ -856,8 +1016,11 @@ class CouncilArbiter:
                 except (asyncio.TimeoutError, Exception) as e:
                     logger.warning(f"Executive summary failed: {e}")
                     return self._template_executive_summary(
-                        len(active_agent_results), len(all_findings),
-                        len(cross_modal_confirmed), len(contested_findings), all_findings,
+                        len(active_agent_results),
+                        len(all_findings),
+                        len(cross_modal_confirmed),
+                        len(contested_findings),
+                        all_findings,
                     )
 
             # ── Task 4: Uncertainty statement (30s) ────────────────────
@@ -865,7 +1028,8 @@ class CouncilArbiter:
                 try:
                     return await asyncio.wait_for(
                         self._generate_uncertainty_statement(
-                            len(incomplete_findings), len(contested_findings),
+                            len(incomplete_findings),
+                            len(contested_findings),
                             overall_error_rate=overall_error_rate,
                         ),
                         timeout=30.0,
@@ -894,7 +1058,11 @@ class CouncilArbiter:
             )
 
         # ── Cross-modal fusion analysis ────────────────────────────────────
-        fusion_result = cross_modal_fuse(active_agent_results)
+        try:
+            fusion_result = cross_modal_fuse(active_agent_results)
+        except Exception as _fusion_err:
+            logger.warning(f"Cross-modal fusion failed: {_fusion_err}")
+            fusion_result = {}
 
         # ── Build report ──────────────────────────────────────────────────
         await _step("Finalising court-ready report…")
@@ -949,8 +1117,7 @@ class CouncilArbiter:
         return None
 
     async def cross_agent_comparison(
-        self,
-        all_findings: list[dict[str, Any]]
+        self, all_findings: list[dict[str, Any]]
     ) -> list[FindingComparison]:
         """Compare findings across agents using category-indexed comparison.
 
@@ -963,6 +1130,7 @@ class CouncilArbiter:
 
         # Memoise category lookups
         _cat_cache: dict[str, str | None] = {}
+
         def _cat(ft: str) -> str | None:
             if ft not in _cat_cache:
                 _cat_cache[ft] = self._get_category(ft)
@@ -984,15 +1152,20 @@ class CouncilArbiter:
         for cat, agent_map in category_buckets.items():
             agent_ids = list(agent_map.keys())
             for i, agent_a in enumerate(agent_ids):
-                for agent_b in agent_ids[i + 1:]:
+                for agent_b in agent_ids[i + 1 :]:
                     for fa in agent_map[agent_a]:
                         for fb in agent_map[agent_b]:
                             same = fa.get("status", "") == fb.get("status", "")
-                            comparisons.append(FindingComparison(
-                                finding_a=fa, finding_b=fb,
-                                verdict=FindingVerdict.AGREEMENT if same else FindingVerdict.CONTRADICTION,
-                                cross_modal_confirmed=same,
-                            ))
+                            comparisons.append(
+                                FindingComparison(
+                                    finding_a=fa,
+                                    finding_b=fb,
+                                    verdict=FindingVerdict.AGREEMENT
+                                    if same
+                                    else FindingVerdict.CONTRADICTION,
+                                    cross_modal_confirmed=same,
+                                )
+                            )
 
             # Same-agent findings within category (no cross-modal confirmation)
             for _aid, fl in agent_map.items():
@@ -1000,29 +1173,39 @@ class CouncilArbiter:
                     for jj in range(ii + 1, len(fl)):
                         fa, fb = fl[ii], fl[jj]
                         same = fa.get("status", "") == fb.get("status", "")
-                        comparisons.append(FindingComparison(
-                            finding_a=fa, finding_b=fb,
-                            verdict=FindingVerdict.AGREEMENT if same else FindingVerdict.CONTRADICTION,
-                            cross_modal_confirmed=False,
-                        ))
+                        comparisons.append(
+                            FindingComparison(
+                                finding_a=fa,
+                                finding_b=fb,
+                                verdict=FindingVerdict.AGREEMENT
+                                if same
+                                else FindingVerdict.CONTRADICTION,
+                                cross_modal_confirmed=False,
+                            )
+                        )
 
         # ── 3. Uncategorised findings → INDEPENDENT ───────────────────────
         for f in uncategorised:
-            comparisons.append(FindingComparison(
-                finding_a=f, finding_b=f,
-                verdict=FindingVerdict.INDEPENDENT,
-                cross_modal_confirmed=False,
-            ))
+            comparisons.append(
+                FindingComparison(
+                    finding_a=f,
+                    finding_b=f,
+                    verdict=FindingVerdict.INDEPENDENT,
+                    cross_modal_confirmed=False,
+                )
+            )
         for f in uncategorised:
-            comparisons.append(FindingComparison(
-                finding_a=f,
-                finding_b=f,
-                verdict=FindingVerdict.INDEPENDENT,
-                cross_modal_confirmed=False,
-            ))
+            comparisons.append(
+                FindingComparison(
+                    finding_a=f,
+                    finding_b=f,
+                    verdict=FindingVerdict.INDEPENDENT,
+                    cross_modal_confirmed=False,
+                )
+            )
 
         return comparisons
-    
+
     async def challenge_loop(
         self,
         contradiction: FindingComparison,
@@ -1031,31 +1214,31 @@ class CouncilArbiter:
     ) -> ChallengeResult:
         """
         Run challenge loop for a contradiction.
-        
+
         When agents disagree, the lower-confidence finding is challenged.
         The challenged agent is re-invoked with the contradicting context
         and asked to reconsider their finding.
-        
+
         Args:
             contradiction: The contradiction between two findings
             agent_id: ID of the agent being challenged
             context_from_other: The contradicting finding's data as context
-            
+
         Returns:
             ChallengeResult with the outcome of the challenge
         """
         from core.custody_logger import EntryType
         from core.structured_logging import get_logger
-        
+
         logger = get_logger(__name__)
         challenge_id = uuid4()
-        
+
         logger.info(
             "Challenge loop: contradiction recorded for human review",
             challenge_id=str(challenge_id),
             challenged_agent=agent_id,
         )
-        
+
         # Single custody log entry (reduced from 2) for the contradiction
         if self.custody_logger:
             await self.custody_logger.log_entry(
@@ -1067,12 +1250,16 @@ class CouncilArbiter:
                     "challenge_id": str(challenge_id),
                     "challenged_agent": agent_id,
                     "contradiction_type": contradiction.verdict.value,
-                    "original_finding_type": contradiction.finding_a.get("finding_type"),
-                    "contradicting_finding_type": contradiction.finding_b.get("finding_type"),
+                    "original_finding_type": contradiction.finding_a.get(
+                        "finding_type"
+                    ),
+                    "contradicting_finding_type": contradiction.finding_b.get(
+                        "finding_type"
+                    ),
                     "note": "Contested finding flagged for human review — no agent re-invocation",
                 },
             )
-        
+
         return ChallengeResult(
             challenge_id=challenge_id,
             challenged_agent=agent_id,
@@ -1080,11 +1267,12 @@ class CouncilArbiter:
             revised_finding=None,
             resolved=False,
         )
-    
+
     async def trigger_tribunal(self, case: TribunalCase) -> None:
         """Trigger tribunal for unresolved contradiction."""
         if self.custody_logger:
             from core.custody_logger import EntryType
+
             await self.custody_logger.log_entry(
                 entry_type=EntryType.HITL_CHECKPOINT,
                 agent_id="Arbiter",
@@ -1094,30 +1282,33 @@ class CouncilArbiter:
                     "tribunal_id": str(case.tribunal_id),
                 },
             )
-    
+
     async def sign_report(self, report: ForensicReport) -> ForensicReport:
         """Sign the forensic report with the Arbiter key."""
         # Use mode="json" to safely cast UUIDs/DateTimes to string types
         report_dict = report.model_dump(
             mode="json",
-            exclude={"cryptographic_signature", "report_hash", "signed_utc"}
+            exclude={"cryptographic_signature", "report_hash", "signed_utc"},
         )
-        
+
         # Now json.dumps won't require a generic default=str fallback
         report_json = json.dumps(report_dict, sort_keys=True)
         report_hash = hashlib.sha256(report_json.encode()).hexdigest()
-        
+
         signed_entry = sign_content(
             agent_id="Arbiter",
-            content={"hash": report_hash, "timestamp": datetime.now(timezone.utc).isoformat()},
+            content={
+                "hash": report_hash,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
         )
-        
+
         report.report_hash = report_hash
         report.cryptographic_signature = signed_entry.signature
         report.signed_utc = datetime.now(timezone.utc)
-        
+
         return report
-    
+
     # ── Agent name map ────────────────────────────────────────────────────
     _AGENT_FULL_NAMES: dict[str, str] = {
         "Agent1": "Image Integrity Agent (ELA · JPEG Ghost · Frequency Domain · Noise Fingerprint)",
@@ -1149,23 +1340,41 @@ class CouncilArbiter:
         if not client.is_available:
             return ""
         agent_full_name = self._AGENT_FULL_NAMES.get(agent_id, agent_id)
-        confidence_pct  = round(metrics.get("confidence_score", 0) * 100)
-        error_rate_pct  = round(metrics.get("error_rate", 0) * 100)
-        tools_ok        = metrics.get("tools_succeeded", 0)
-        tools_total     = metrics.get("total_tools_called", 0)
+        confidence_pct = round(metrics.get("confidence_score", 0) * 100)
+        error_rate_pct = round(metrics.get("error_rate", 0) * 100)
+        tools_ok = metrics.get("tools_succeeded", 0)
+        tools_total = metrics.get("total_tools_called", 0)
 
         # Split findings by phase
-        initial_f = [f for f in findings
-                     if (f.get("metadata") or {}).get("analysis_phase", "initial") == "initial"]
-        deep_f    = [f for f in findings
-                     if (f.get("metadata") or {}).get("analysis_phase") == "deep"]
+        initial_f = [
+            f
+            for f in findings
+            if (f.get("metadata") or {}).get("analysis_phase", "initial") == "initial"
+        ]
+        deep_f = [
+            f
+            for f in findings
+            if (f.get("metadata") or {}).get("analysis_phase") == "deep"
+        ]
 
         _NOT_APPLICABLE_FLAGS = ("ela_not_applicable", "ghost_not_applicable")
-        _NOT_APPLICABLE_KEYS = {"ela_not_applicable", "ghost_not_applicable",
-                                "ela_limitation_note", "ghost_limitation_note",
-                                "file_format_note", "is_camera_format"}
-        _STRIP_KEYS = {"stub_warning", "llm_synthesis", "llm_reasoning",
-                       "synthesis_phase", "analysis_phase", "tool_name", "warning"}
+        _NOT_APPLICABLE_KEYS = {
+            "ela_not_applicable",
+            "ghost_not_applicable",
+            "ela_limitation_note",
+            "ghost_limitation_note",
+            "file_format_note",
+            "is_camera_format",
+        }
+        _STRIP_KEYS = {
+            "stub_warning",
+            "llm_synthesis",
+            "llm_reasoning",
+            "synthesis_phase",
+            "analysis_phase",
+            "tool_name",
+            "warning",
+        }
 
         def _fmt(findings_list: list[dict]) -> str:
             out = []
@@ -1173,10 +1382,7 @@ class CouncilArbiter:
                 meta = f.get("metadata") or {}
                 tool_name = meta.get("tool_name", f.get("finding_type", ""))
                 is_na = any(meta.get(flag) for flag in _NOT_APPLICABLE_FLAGS)
-                is_failed = (
-                    not is_na
-                    and meta.get("court_defensible") is False
-                )
+                is_failed = not is_na and meta.get("court_defensible") is False
                 # Collect the key metrics Groq needs to cite real numbers
                 key_metrics: dict = {}
                 for k, v in meta.items():
@@ -1189,17 +1395,21 @@ class CouncilArbiter:
                         key_metrics[k] = v
                     elif isinstance(v, str) and len(v) < 200:
                         key_metrics[k] = v
-                    elif isinstance(v, list) and len(v) <= 10 and all(
-                        isinstance(x, (str, int, float, bool, dict)) for x in v
+                    elif (
+                        isinstance(v, list)
+                        and len(v) <= 10
+                        and all(isinstance(x, (str, int, float, bool, dict)) for x in v)
                     ):
                         key_metrics[k] = v
                 entry = {
-                    "tool":            tool_name,
-                    "confidence":      round(f.get("confidence_raw", 0), 3),
-                    "status":          f.get("status", ""),
-                    "applicability":   "NOT_APPLICABLE" if is_na else ("FAILED" if is_failed else "RAN"),
-                    "summary":         (f.get("reasoning_summary") or "")[:400],
-                    "metrics":         key_metrics,
+                    "tool": tool_name,
+                    "confidence": round(f.get("confidence_raw", 0), 3),
+                    "status": f.get("status", ""),
+                    "applicability": "NOT_APPLICABLE"
+                    if is_na
+                    else ("FAILED" if is_failed else "RAN"),
+                    "summary": (f.get("reasoning_summary") or "")[:400],
+                    "metrics": key_metrics,
                 }
                 out.append(entry)
             return json.dumps(out, indent=2)
@@ -1208,9 +1418,7 @@ class CouncilArbiter:
         has_deep = bool(deep_f)
         comparison_section = ""
         if has_deep:
-            comparison_section = (
-                f"\n\nDeep analysis findings ({len(deep_f)} tool scans):\n{_fmt(deep_f)}"
-            )
+            comparison_section = f"\n\nDeep analysis findings ({len(deep_f)} tool scans):\n{_fmt(deep_f)}"
 
         system_prompt = f"""You are the Council Arbiter writing the per-agent analysis section of a forensic report.
 
@@ -1248,7 +1456,7 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
                 json_mode=False,
             )
         except Exception as e:
-            logger.warning(f"Per-agent narrative Groq call failed for {agent_id}: {e}")
+            logger.debug(f"Per-agent narrative Groq parsing/call failed for {agent_id}: {e}")
             return ""
 
     async def _generate_executive_summary(
@@ -1273,9 +1481,14 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
         if self.config.llm_api_key and self.config.llm_provider != "none":
             try:
                 result = await self._llm_executive_summary(
-                    num_agents, num_findings, cross_modal_confirmed,
-                    contested, all_findings or [], gemini_findings or [],
-                    active_agent_metrics or [], overall_verdict,
+                    num_agents,
+                    num_findings,
+                    cross_modal_confirmed,
+                    contested,
+                    all_findings or [],
+                    gemini_findings or [],
+                    active_agent_metrics or [],
+                    overall_verdict,
                 )
                 if result:
                     return result
@@ -1306,36 +1519,44 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
 
         # Build structured findings digest for the model
         top_findings = sorted(
-            [f for f in all_findings if not f.get("stub_result")
-             and f.get("metadata", {}).get("analysis_source") != "gemini_vision"],
+            [
+                f
+                for f in all_findings
+                if not f.get("stub_result")
+                and f.get("metadata", {}).get("analysis_source") != "gemini_vision"
+            ],
             key=lambda f: f.get("confidence_raw", 0),
             reverse=True,
         )[:8]
 
         findings_digest = []
         for f in top_findings:
-            findings_digest.append({
-                "agent": f.get("agent_id", "unknown"),
-                "type": f.get("finding_type", "unknown"),
-                "confidence": round(f.get("confidence_raw", 0), 3),
-                "summary": f.get("reasoning_summary", ""),
-                "status": f.get("status", ""),
-                "cross_modal": f.get("cross_modal_confirmed", False),
-            })
+            findings_digest.append(
+                {
+                    "agent": f.get("agent_id", "unknown"),
+                    "type": f.get("finding_type", "unknown"),
+                    "confidence": round(f.get("confidence_raw", 0), 3),
+                    "summary": f.get("reasoning_summary", ""),
+                    "status": f.get("status", ""),
+                    "cross_modal": f.get("cross_modal_confirmed", False),
+                }
+            )
 
         # Build Gemini vision digest
         gemini_digest = []
         for gf in (gemini_findings or [])[:4]:
             meta = gf.get("metadata", {})
-            gemini_digest.append({
-                "agent": gf.get("agent_id", "unknown"),
-                "analysis_type": meta.get("analysis_type", "vision"),
-                "model": meta.get("model_used", "gemini"),
-                "confidence": round(gf.get("confidence_raw", 0), 3),
-                "summary": gf.get("reasoning_summary", ""),
-                "manipulation_signals": meta.get("manipulation_signals", []),
-                "detected_objects": meta.get("detected_objects", []),
-            })
+            gemini_digest.append(
+                {
+                    "agent": gf.get("agent_id", "unknown"),
+                    "analysis_type": meta.get("analysis_type", "vision"),
+                    "model": meta.get("model_used", "gemini"),
+                    "confidence": round(gf.get("confidence_raw", 0), 3),
+                    "summary": gf.get("reasoning_summary", ""),
+                    "manipulation_signals": meta.get("manipulation_signals", []),
+                    "detected_objects": meta.get("detected_objects", []),
+                }
+            )
 
         gemini_section = ""
         if gemini_digest:
@@ -1343,21 +1564,32 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
 
         metrics_summary = ""
         if active_agent_metrics:
-            metrics_summary = "\n\nAgent performance metrics (active agents only):\n" + json.dumps([
-                {
-                    "agent":           m.get("agent_name", m.get("agent_id","")),
-                    "confidence":      f"{m.get('confidence_score',0)*100:.0f}%",
-                    "error_rate":      f"{m.get('error_rate',0)*100:.0f}%",
-                    "tools_ran":       m.get("tools_succeeded", 0),
-                    "tools_failed":    m.get("tools_failed", 0),
-                    "not_applicable":  m.get("tools_not_applicable", 0),
-                    "total_tools":     m.get("total_tools_called", 0),
-                    "findings":        m.get("finding_count", 0),
-                }
-                for m in active_agent_metrics if not m.get("skipped")
-            ], indent=2)
+            metrics_summary = (
+                "\n\nAgent performance metrics (active agents only):\n"
+                + json.dumps(
+                    [
+                        {
+                            "agent": m.get("agent_name", m.get("agent_id", "")),
+                            "confidence": f"{m.get('confidence_score', 0) * 100:.0f}%",
+                            "error_rate": f"{m.get('error_rate', 0) * 100:.0f}%",
+                            "tools_ran": m.get("tools_succeeded", 0),
+                            "tools_failed": m.get("tools_failed", 0),
+                            "not_applicable": m.get("tools_not_applicable", 0),
+                            "total_tools": m.get("total_tools_called", 0),
+                            "findings": m.get("finding_count", 0),
+                        }
+                        for m in active_agent_metrics
+                        if not m.get("skipped")
+                    ],
+                    indent=2,
+                )
+            )
 
-        verdict_line = f"\n\nCouncil Arbiter computed verdict: {overall_verdict}" if overall_verdict else ""
+        verdict_line = (
+            f"\n\nCouncil Arbiter computed verdict: {overall_verdict}"
+            if overall_verdict
+            else ""
+        )
 
         system_prompt = f"""You are the Council Arbiter writing the Executive Summary of a court-admissible forensic evidence report.
 The computed verdict for this evidence is: {overall_verdict or "REVIEW REQUIRED"}
@@ -1418,8 +1650,14 @@ Write the Executive Summary for this forensic report. Justify the {overall_verdi
                 "review or tribunal resolution."
             )
         if all_findings:
-            top = sorted(all_findings, key=lambda f: f.get("confidence_raw", 0), reverse=True)[:3]
-            highlights = [f.get("reasoning_summary", "") for f in top if f.get("reasoning_summary")]
+            top = sorted(
+                all_findings, key=lambda f: f.get("confidence_raw", 0), reverse=True
+            )[:3]
+            highlights = [
+                f.get("reasoning_summary", "")
+                for f in top
+                if f.get("reasoning_summary")
+            ]
             if highlights:
                 lines.append("Key findings include: " + " ".join(highlights[:2]))
         lines.append(
@@ -1427,7 +1665,7 @@ Write the Executive Summary for this forensic report. Justify the {overall_verdi
             "ReAct chains sections of this report."
         )
         return " ".join(lines)
-    
+
     async def _generate_uncertainty_statement(
         self, incomplete: int, contested: int, overall_error_rate: float = 0.0
     ) -> str:
@@ -1437,15 +1675,25 @@ Write the Executive Summary for this forensic report. Justify the {overall_verdi
         Uses LLM to produce a nuanced, legally-aware statement when configured.
         Falls back to deterministic template otherwise.
         """
-        if self.config.llm_api_key and self.config.llm_provider != "none" and (incomplete > 0 or contested > 0 or overall_error_rate > 0.15):
+        if (
+            self.config.llm_api_key
+            and self.config.llm_provider != "none"
+            and (incomplete > 0 or contested > 0 or overall_error_rate > 0.15)
+        ):
             try:
-                result = await self._llm_uncertainty_statement(incomplete, contested, overall_error_rate)
+                result = await self._llm_uncertainty_statement(
+                    incomplete, contested, overall_error_rate
+                )
                 if result:
                     return result
             except Exception as exc:
-                logger.warning(f"LLM uncertainty statement failed, using template: {exc}")
+                logger.warning(
+                    f"LLM uncertainty statement failed, using template: {exc}"
+                )
 
-        return self._template_uncertainty_statement(incomplete, contested, overall_error_rate)
+        return self._template_uncertainty_statement(
+            incomplete, contested, overall_error_rate
+        )
 
     async def _llm_uncertainty_statement(
         self, incomplete: int, contested: int, overall_error_rate: float = 0.0
@@ -1461,7 +1709,7 @@ Write 2-3 sentences only. Do not use bullet points."""
         user_content = (
             f"Incomplete findings (tools unavailable or evidence insufficient): {incomplete}\n"
             f"Contested findings (agents disagree, not yet resolved): {contested}\n"
-            f"Overall tool error rate across active agents: {overall_error_rate*100:.1f}%\n\n"
+            f"Overall tool error rate across active agents: {overall_error_rate * 100:.1f}%\n\n"
             "Write the uncertainty and limitations statement."
         )
 
@@ -1492,9 +1740,14 @@ Write 2-3 sentences only. Do not use bullet points."""
             try:
                 result = await asyncio.wait_for(
                     self._llm_structured_summary(
-                        overall_verdict, overall_confidence, overall_error_rate,
-                        manipulation_probability, applicable_agent_count,
-                        all_findings, cross_modal_confirmed_count, contested_count,
+                        overall_verdict,
+                        overall_confidence,
+                        overall_error_rate,
+                        manipulation_probability,
+                        applicable_agent_count,
+                        all_findings,
+                        cross_modal_confirmed_count,
+                        contested_count,
                         analysis_coverage_note,
                     ),
                     timeout=25.0,
@@ -1505,9 +1758,15 @@ Write 2-3 sentences only. Do not use bullet points."""
                 logger.warning(f"Structured summary LLM call failed: {exc}")
 
         return self._template_structured_summary(
-            overall_verdict, overall_confidence, overall_error_rate,
-            manipulation_probability, applicable_agent_count, all_findings,
-            cross_modal_confirmed_count, contested_count, analysis_coverage_note,
+            overall_verdict,
+            overall_confidence,
+            overall_error_rate,
+            manipulation_probability,
+            applicable_agent_count,
+            all_findings,
+            cross_modal_confirmed_count,
+            contested_count,
+            analysis_coverage_note,
         )
 
     async def _llm_structured_summary(
@@ -1526,16 +1785,25 @@ Write 2-3 sentences only. Do not use bullet points."""
 
         def _strip_rs_prefix(s: str) -> str:
             idx = s.find(":")
-            if 0 < idx < 55 and s[:idx].replace(" ", "").replace("/", "").replace("-", "").replace("_", "").isalpha():
-                return s[idx + 1:].lstrip()
+            if (
+                0 < idx < 55
+                and s[:idx]
+                .replace(" ", "")
+                .replace("/", "")
+                .replace("-", "")
+                .replace("_", "")
+                .isalpha()
+            ):
+                return s[idx + 1 :].lstrip()
             return s
 
         top_findings = sorted(
             [f for f in all_findings if not f.get("stub_result")],
-            key=lambda f: f.get("confidence_raw", 0), reverse=True,
+            key=lambda f: f.get("confidence_raw", 0),
+            reverse=True,
         )[:6]
         findings_brief = [
-            f"{f.get('finding_type','?')} ({f.get('agent_id','?')}) — "
+            f"{f.get('finding_type', '?')} ({f.get('agent_id', '?')}) — "
             f"{(f.get('confidence_raw') or 0):.0%} — {_strip_rs_prefix((f.get('reasoning_summary') or '')[:200].rsplit(' ', 1)[0])}"
             for f in top_findings
         ]
@@ -1556,8 +1824,8 @@ Rules:
 
         user_content = (
             f"Verdict: {overall_verdict}\n"
-            f"Confidence: {overall_confidence*100:.0f}%  |  Error rate: {overall_error_rate*100:.0f}%  |  "
-            f"Manipulation probability: {manipulation_probability*100:.0f}%\n"
+            f"Confidence: {overall_confidence * 100:.0f}%  |  Error rate: {overall_error_rate * 100:.0f}%  |  "
+            f"Manipulation probability: {manipulation_probability * 100:.0f}%\n"
             f"Active agents: {applicable_agent_count}  |  Cross-modal confirmed: {cross_modal_confirmed_count}  |  Contested: {contested_count}\n"
             f"Coverage: {analysis_coverage_note}\n\n"
             f"Top findings:\n" + "\n".join(f"- {b}" for b in findings_brief)
@@ -1577,14 +1845,14 @@ Rules:
                 raw = raw.split("```", 2)[-1].lstrip("json").strip()
                 if raw.endswith("```"):
                     raw = raw[:-3].strip()
-            data = json.loads(raw[raw.find("{"):raw.rfind("}")+1])
+            data = json.loads(raw[raw.find("{") : raw.rfind("}") + 1])
             vs = str(data.get("verdict_sentence", ""))
             kf = [str(x) for x in data.get("key_findings", []) if x][:5]
             rn = str(data.get("reliability_note", ""))
             if vs and kf and rn:
                 return vs, kf, rn
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"LLM structured summary JSON parsing failed: {e}")
         return None
 
     def _template_structured_summary(
@@ -1606,13 +1874,23 @@ Rules:
             "LIKELY_MANIPULATED": "Evidence shows probable manipulation signals requiring further investigation.",
             "MANIPULATED": "Strong manipulation indicators detected across multiple independent agents.",
         }
-        verdict_sentence = _VERDICT_PHRASES.get(overall_verdict, f"Verdict: {overall_verdict}.")
+        verdict_sentence = _VERDICT_PHRASES.get(
+            overall_verdict, f"Verdict: {overall_verdict}."
+        )
 
         def _strip_rs_prefix(s: str) -> str:
             """Strip tool-name prefixes like 'GAN/deepfake frequency check: ' from reasoning summaries."""
             idx = s.find(":")
-            if 0 < idx < 55 and s[:idx].replace(" ", "").replace("/", "").replace("-", "").replace("_", "").isalpha():
-                return s[idx + 1:].lstrip()
+            if (
+                0 < idx < 55
+                and s[:idx]
+                .replace(" ", "")
+                .replace("/", "")
+                .replace("-", "")
+                .replace("_", "")
+                .isalpha()
+            ):
+                return s[idx + 1 :].lstrip()
             return s
 
         def _truncate(s: str, max_len: int = 200) -> str:
@@ -1622,20 +1900,28 @@ Rules:
             return s[:max_len].rsplit(" ", 1)[0] + ("…" if len(s) > max_len else "")
 
         top = sorted(
-            [f for f in all_findings if not f.get("stub_result") and f.get("reasoning_summary")],
-            key=lambda f: f.get("confidence_raw", 0), reverse=True,
+            [
+                f
+                for f in all_findings
+                if not f.get("stub_result") and f.get("reasoning_summary")
+            ],
+            key=lambda f: f.get("confidence_raw", 0),
+            reverse=True,
         )[:5]
         key_findings_list = [
-            _strip_rs_prefix(_truncate(f.get("reasoning_summary") or ""))
-            for f in top
+            _strip_rs_prefix(_truncate(f.get("reasoning_summary") or "")) for f in top
         ]
         if not key_findings_list:
             key_findings_list = ["No significant findings were identified."]
 
-        err_note = f"; {overall_error_rate*100:.0f}% tool error rate" if overall_error_rate > 0.05 else ""
+        err_note = (
+            f"; {overall_error_rate * 100:.0f}% tool error rate"
+            if overall_error_rate > 0.05
+            else ""
+        )
         _a = "agent" if applicable_agent_count == 1 else "agents"
         reliability_note = (
-            f"{overall_confidence*100:.0f}% overall confidence across "
+            f"{overall_confidence * 100:.0f}% overall confidence across "
             f"{applicable_agent_count} active {_a}{err_note}."
         )
         return verdict_sentence, key_findings_list, reliability_note
@@ -1647,7 +1933,7 @@ Rules:
         statements = []
         if overall_error_rate > 0.15:
             statements.append(
-                f"Average tool error rate across active agents is {overall_error_rate*100:.0f}%, "
+                f"Average tool error rate across active agents is {overall_error_rate * 100:.0f}%, "
                 "indicating some analysis dimensions may be incomplete or unreliable."
             )
         if incomplete > 0:
@@ -1661,7 +1947,9 @@ Rules:
                 "or human judgment."
             )
         if not statements:
-            statements.append("All findings have been resolved. No significant uncertainties remain.")
+            statements.append(
+                "All findings have been resolved. No significant uncertainties remain."
+            )
         return " ".join(statements)
 
 
@@ -1677,22 +1965,24 @@ def render_text_report(report: ForensicReport) -> str:
     if report.signed_utc:
         lines.append(f"Signed: {report.signed_utc.isoformat()}")
     lines.append("")
-    
+
     lines.append("-" * 80)
     lines.append("EXECUTIVE SUMMARY")
     lines.append("-" * 80)
     lines.append(report.executive_summary)
     lines.append("")
-    
+
     lines.append("-" * 80)
     lines.append("PER-AGENT FINDINGS")
     lines.append("-" * 80)
     for agent_id, findings in report.per_agent_findings.items():
         lines.append(f"### {agent_id}")
         for finding in findings:
-            lines.append(f"  - {finding.get('finding_type', 'Unknown')}: {finding.get('confidence_raw', 0):.2f}")
+            lines.append(
+                f"  - {finding.get('finding_type', 'Unknown')}: {finding.get('confidence_raw', 0):.2f}"
+            )
     lines.append("")
-    
+
     if report.cross_modal_confirmed:
         lines.append("-" * 80)
         lines.append("CROSS-MODAL CONFIRMED FINDINGS")
@@ -1700,13 +1990,13 @@ def render_text_report(report: ForensicReport) -> str:
         for finding in report.cross_modal_confirmed:
             lines.append(f"  - {finding.get('finding_type', 'Unknown')}")
         lines.append("")
-    
+
     lines.append("-" * 80)
     lines.append("UNCERTAINTY STATEMENT")
     lines.append("-" * 80)
     lines.append(report.uncertainty_statement)
     lines.append("")
-    
+
     lines.append("-" * 80)
     lines.append("CRYPTOGRAPHIC SIGNATURE")
     lines.append("-" * 80)
@@ -1714,5 +2004,5 @@ def render_text_report(report: ForensicReport) -> str:
     lines.append(f"Signature: {report.cryptographic_signature[:64]}...")
     lines.append("")
     lines.append("=" * 80)
-    
+
     return "\n".join(lines)

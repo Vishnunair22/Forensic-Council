@@ -39,6 +39,7 @@ from core.config import get_settings
 
 class CalibrationMethod(str, Enum):
     """Calibration methods available."""
+
     PLATT_SCALING = "PLATT_SCALING"
     ISOTONIC_REGRESSION = "ISOTONIC_REGRESSION"
     TEMPERATURE_SCALING = "TEMPERATURE_SCALING"
@@ -47,12 +48,14 @@ class CalibrationMethod(str, Enum):
 
 class CalibrationStatus(str, Enum):
     """Whether the calibration parameters were fitted to real data."""
+
     TRAINED = "TRAINED"
     UNCALIBRATED = "UNCALIBRATED"
 
 
 class CalibrationModel(BaseModel):
     """Calibration model metadata and parameters."""
+
     model_id: UUID = Field(default_factory=uuid4)
     agent_id: str
     method: CalibrationMethod
@@ -65,6 +68,7 @@ class CalibrationModel(BaseModel):
 
 class CalibratedConfidence(BaseModel):
     """Confidence result with honest calibration status disclosure."""
+
     raw_score: float
     raw_confidence_score: float  # Rescaled score (Platt sigmoid or engineering default)
     true_positive_rate: float
@@ -100,20 +104,29 @@ class UncertaintyDecomposition(BaseModel):
     The escalation_threshold is exceeded when epistemic uncertainty dominates,
     meaning the agent should NOT proceed autonomously.
     """
+
     total_uncertainty: float = Field(
-        ..., ge=0.0, le=1.0,
+        ...,
+        ge=0.0,
+        le=1.0,
         description="Total uncertainty (CI width)",
     )
     epistemic_uncertainty: float = Field(
-        ..., ge=0.0, le=1.0,
+        ...,
+        ge=0.0,
+        le=1.0,
         description="Model/parameter uncertainty — reducible with better calibration",
     )
     aleatoric_uncertainty: float = Field(
-        ..., ge=0.0, le=1.0,
+        ...,
+        ge=0.0,
+        le=1.0,
         description="Inherent data noise — irreducible",
     )
     epistemic_fraction: float = Field(
-        ..., ge=0.0, le=1.0,
+        ...,
+        ge=0.0,
+        le=1.0,
         description="Fraction of total uncertainty that is epistemic",
     )
     should_escalate: bool = Field(
@@ -167,9 +180,13 @@ class CalibrationLayer:
                         data = json.load(f)
                         model = CalibrationModel(**data)
                 else:
-                    raise FileNotFoundError(f"No calibration model found for {agent_id}")
+                    raise FileNotFoundError(
+                        f"No calibration model found for {agent_id}"
+                    )
             else:
-                raise FileNotFoundError(f"Calibration model directory not found for {agent_id}")
+                raise FileNotFoundError(
+                    f"Calibration model directory not found for {agent_id}"
+                )
 
         self._loaded_models[cache_key] = model
         return model
@@ -197,22 +214,53 @@ class CalibrationLayer:
         # THESE ARE ENGINEERING DEFAULTS, NOT BENCHMARK-DERIVED VALUES.
         # Conservative (erring toward lower output) to reduce false-positive rate.
         _DEFAULT_PARAMS: dict[str, dict[str, Any]] = {
-            "agent1_image":    {"method": "platt", "A": 2.5,  "B": -1.2,
-                                "baseline_tpr": 0.80, "baseline_fpr": 0.10},
-            "agent2_audio":    {"method": "platt", "A": 2.0,  "B": -1.0,
-                                "baseline_tpr": 0.75, "baseline_fpr": 0.12},
-            "agent3_object":   {"method": "platt", "A": 1.8,  "B": -0.9,
-                                "baseline_tpr": 0.72, "baseline_fpr": 0.15},
-            "agent4_video":    {"method": "platt", "A": 2.2,  "B": -1.1,
-                                "baseline_tpr": 0.78, "baseline_fpr": 0.11},
-            "agent5_metadata": {"method": "platt", "A": 3.0,  "B": -1.5,
-                                "baseline_tpr": 0.82, "baseline_fpr": 0.08},
+            "agent1_image": {
+                "method": "platt",
+                "A": 2.5,
+                "B": -1.2,
+                "baseline_tpr": 0.80,
+                "baseline_fpr": 0.10,
+            },
+            "agent2_audio": {
+                "method": "platt",
+                "A": 2.0,
+                "B": -1.0,
+                "baseline_tpr": 0.75,
+                "baseline_fpr": 0.12,
+            },
+            "agent3_object": {
+                "method": "platt",
+                "A": 1.8,
+                "B": -0.9,
+                "baseline_tpr": 0.72,
+                "baseline_fpr": 0.15,
+            },
+            "agent4_video": {
+                "method": "platt",
+                "A": 2.2,
+                "B": -1.1,
+                "baseline_tpr": 0.78,
+                "baseline_fpr": 0.11,
+            },
+            "agent5_metadata": {
+                "method": "platt",
+                "A": 3.0,
+                "B": -1.5,
+                "baseline_tpr": 0.82,
+                "baseline_fpr": 0.08,
+            },
         }
 
-        params = _DEFAULT_PARAMS.get(agent_id, {
-            "method": "platt", "A": 2.0, "B": -1.0,
-            "baseline_tpr": 0.75, "baseline_fpr": 0.12,
-        })
+        params = _DEFAULT_PARAMS.get(
+            agent_id,
+            {
+                "method": "platt",
+                "A": 2.0,
+                "B": -1.0,
+                "baseline_tpr": 0.75,
+                "baseline_fpr": 0.12,
+            },
+        )
 
         model = CalibrationModel(
             agent_id=agent_id,
@@ -352,7 +400,9 @@ class CalibrationLayer:
             A = params.get("A", 2.0)
             B = params.get("B", -1.0)
             # Perturbation std: 20% of parameter value for uncalibrated, 10% for trained
-            is_uncal = params.get("calibration_status", "UNCALIBRATED") == "UNCALIBRATED"
+            is_uncal = (
+                params.get("calibration_status", "UNCALIBRATED") == "UNCALIBRATED"
+            )
             scale = 0.20 if is_uncal else 0.10
             A_std = abs(A) * scale
             B_std = abs(B) * scale
@@ -419,11 +469,13 @@ class CalibrationLayer:
 
         if method == "platt":
             import math
+
             A = params.get("A", 2.0)
             B = params.get("B", -1.0)
             calibrated_prob = 1.0 / (1.0 + math.exp(A * raw_score + B))
         else:
             import math
+
             k = params.get("k", 10.0)
             x0 = params.get("x0", 0.5)
             calibrated_prob = 1.0 / (1.0 + math.exp(-k * (raw_score - x0)))
@@ -434,9 +486,7 @@ class CalibrationLayer:
         fpr = baseline_fpr * (1.0 - calibrated_prob)
 
         cal_status = (
-            CalibrationStatus.UNCALIBRATED
-            if is_default
-            else model.calibration_status
+            CalibrationStatus.UNCALIBRATED if is_default else model.calibration_status
         )
 
         if cal_status == CalibrationStatus.UNCALIBRATED:
@@ -465,7 +515,11 @@ class CalibrationLayer:
 
         # Decompose uncertainty into epistemic/aleatoric components
         uncertainty = self._decompose_uncertainty(
-            raw_score, params, method, ci, is_default,
+            raw_score,
+            params,
+            method,
+            ci,
+            is_default,
         )
 
         return CalibratedConfidence(

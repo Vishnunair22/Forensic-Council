@@ -15,6 +15,7 @@ from uuid import UUID, uuid4
 
 class ArtifactType(str, Enum):
     """Types of evidence artifacts."""
+
     ORIGINAL = "ORIGINAL"
     ELA_OUTPUT = "ELA_OUTPUT"
     ROI_CROP = "ROI_CROP"
@@ -31,7 +32,7 @@ class ArtifactType(str, Enum):
 class EvidenceArtifact:
     """
     An evidence artifact with immutable versioning.
-    
+
     Attributes:
         artifact_id: Unique identifier for this artifact
         parent_id: Parent artifact ID (None for root/original)
@@ -45,6 +46,7 @@ class EvidenceArtifact:
         timestamp_utc: When this artifact was created
         metadata: Additional metadata
     """
+
     artifact_id: UUID
     parent_id: Optional[UUID]
     root_id: UUID
@@ -75,7 +77,7 @@ class EvidenceArtifact:
     ) -> "EvidenceArtifact":
         """
         Create a root artifact (original evidence).
-        
+
         Args:
             artifact_type: Type of artifact
             file_path: Path to the artifact file
@@ -84,7 +86,7 @@ class EvidenceArtifact:
             agent_id: Agent that created this artifact
             session_id: Analysis session ID
             metadata: Additional metadata
-        
+
         Returns:
             New EvidenceArtifact with parent_id=None
         """
@@ -101,7 +103,7 @@ class EvidenceArtifact:
             session_id=session_id,
             metadata=metadata or {},
         )
-    
+
     @classmethod
     def create_derivative(
         cls,
@@ -115,7 +117,7 @@ class EvidenceArtifact:
     ) -> "EvidenceArtifact":
         """
         Create a derivative artifact from a parent.
-        
+
         Args:
             parent: Parent artifact
             artifact_type: Type of derivative artifact
@@ -124,7 +126,7 @@ class EvidenceArtifact:
             action: Action that created this derivative
             agent_id: Agent that created this derivative
             metadata: Additional metadata
-        
+
         Returns:
             New EvidenceArtifact linked to parent
         """
@@ -140,7 +142,7 @@ class EvidenceArtifact:
             session_id=parent.session_id,
             metadata=metadata or {},
         )
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
@@ -156,7 +158,7 @@ class EvidenceArtifact:
             "timestamp_utc": self.timestamp_utc.isoformat(),
             "metadata": self.metadata,
         }
-    
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "EvidenceArtifact":
         """Create from dictionary."""
@@ -175,7 +177,7 @@ class EvidenceArtifact:
             else data["timestamp_utc"],
             metadata=data.get("metadata", {}),
         )
-    
+
     def is_root(self) -> bool:
         """Check if this is a root/original artifact."""
         return self.parent_id is None
@@ -185,42 +187,43 @@ class EvidenceArtifact:
 class VersionTree:
     """
     A tree structure representing the version history of an evidence artifact.
-    
+
     Attributes:
         root: The root artifact
         children: List of child VersionTree nodes
     """
+
     artifact: EvidenceArtifact
     children: list["VersionTree"] = field(default_factory=list)
-    
+
     def add_child(self, child: "VersionTree") -> None:
         """Add a child node to this tree."""
         self.children.append(child)
-    
+
     def find_by_id(self, artifact_id: UUID) -> Optional["VersionTree"]:
         """
         Find a node in the tree by artifact ID.
-        
+
         Args:
             artifact_id: ID to search for
-        
+
         Returns:
             VersionTree node if found, None otherwise
         """
         if self.artifact.artifact_id == artifact_id:
             return self
-        
+
         for child in self.children:
             result = child.find_by_id(artifact_id)
             if result:
                 return result
-        
+
         return None
-    
+
     def get_all_artifacts(self) -> list[EvidenceArtifact]:
         """
         Get all artifacts in this tree.
-        
+
         Returns:
             Flat list of all artifacts
         """
@@ -228,17 +231,17 @@ class VersionTree:
         for child in self.children:
             artifacts.extend(child.get_all_artifacts())
         return artifacts
-    
+
     def count(self) -> int:
         """Count total artifacts in tree."""
         return 1 + sum(child.count() for child in self.children)
-    
+
     def max_depth(self) -> int:
         """Get maximum depth of the tree."""
         if not self.children:
             return 1
         return 1 + max(child.max_depth() for child in self.children)
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {

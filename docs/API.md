@@ -1,6 +1,6 @@
 # Forensic Council — API Reference
 
-**Version:** v1.0.4 | **Base URL:** `http://localhost:8000`
+**Version:** v1.2.0 | **Base URL:** `http://localhost:8000`
 
 All REST endpoints are prefixed with `/api/v1`. Authentication uses JWT Bearer tokens. Obtain a token via `POST /api/v1/auth/login`.
 
@@ -15,7 +15,7 @@ Authenticate and receive a JWT access token.
 
 **Body:**
 ```
-username=investigator&password=inv123!
+username=investigator&password=CHANGE_ME_dev_only_password
 ```
 
 **Response 200:**

@@ -62,7 +62,7 @@
 - **Context:** The `is_token_blacklisted()` function in `core/auth.py` returns `True` (denies access) when Redis is unavailable.
 - **Decision:** Maintain fail-secure behaviour — treat Redis unavailability as "all tokens unverifiable" and deny access.
 - **Rationale:** This is an intentional security/availability tradeoff. For a forensic evidence system handling potentially classified or evidentiary material, a temporarily locked-out investigator is a recoverable situation; a stolen token granted access during a Redis outage is not. The cost is that investigators cannot log in during Redis downtime; the benefit is that logged-out tokens cannot be replayed. The `blacklist_token()` function is best-effort (warns on failure without crashing logout).
-- **Session 4 verification (2026-03-16):** Confirmed that blacklist keys use the JWT `jti` claim (not the raw token string), with TTL equal to remaining token validity. This means entries expire automatically and carry no unbounded memory risk. The fail-secure path was also confirmed to be exercised by `test_security.py` via a mocked Redis timeout. See `docs/SECURITY.md` — *Token blacklisting* section for the full audit note.
+- **Session 4 verification (2026-03-16):** Confirmed that blacklist keys use the JWT `jti` claim (not the raw token string), with TTL equal to remaining token validity. This means entries expire automatically and carry no unbounded memory risk. The fail-secure path was also confirmed to be exercised by `test_security.py` via a mocked Redis timeout. See `SECURITY.md` — *Token blacklisting* section for the full audit note.
 
 ---
 

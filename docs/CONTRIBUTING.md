@@ -18,6 +18,14 @@ Commit messages should be precise. We loosely follow Conventional Commits.
 *   `feat: add IsolationForest routing for deepfakes`
 *   `fix(api): catch AttributeError on literal property evaluation`
 *   `docs: document HITL webhook structure`
+*   `chore: update .env.example with CHANGE_ME placeholders`
+
+**Scope prefixes** (optional but encouraged):
+- `api:` — API route or middleware changes
+- `agent:` — Agent logic changes
+- `ui:` — Frontend component changes
+- `infra:` — Docker, compose, or infrastructure changes
+- `security:` — Auth, signing, or security-related changes
 
 ## 3. Pull Request Process
 
@@ -48,13 +56,43 @@ PRs that fail any non-advisory job are blocked from merge.
 
 ## 5. Pull Request Checklist
 
+Before requesting review, verify:
+
+- [ ] All tests pass locally (`pytest` for backend, `npm test` for frontend)
+- [ ] Linting passes (`ruff check .` for backend, `npm run lint` for frontend)
+- [ ] TypeScript compiles without errors (`npx tsc --noEmit`)
+- [ ] Docker builds succeed (`docker compose build`)
+- [ ] No `CHANGE_ME` placeholders left in `.env` (if adding new secrets)
+- [ ] Documentation updated for user-facing changes
+- [ ] Security implications considered (auth, data exposure, injection)
+
+**For security-sensitive changes** (auth, signing, data handling):
+- [ ] Threat model documented in PR description
+- [ ] Security review requested from team lead
+- [ ] Regression tests added for security boundaries
+
+Before requesting review, verify:
+
+- [ ] All tests pass locally (`pytest` for backend, `npm test` for frontend)
+- [ ] Linting passes (`ruff check .` for backend, `npm run lint` for frontend)
+- [ ] TypeScript compiles without errors (`npx tsc --noEmit`)
+- [ ] Docker builds succeed (`docker compose build`)
+- [ ] No `CHANGE_ME` placeholders left in `.env` (if adding new secrets)
+- [ ] Documentation updated for user-facing changes
+- [ ] Security implications considered (auth, data exposure, injection)
+
+**For security-sensitive changes** (auth, signing, data handling):
+- [ ] Threat model documented in PR description
+- [ ] Security review requested from team lead
+- [ ] Regression tests added for security boundaries
+
 Before submitting a PR, verify every item:
 
 - [ ] Code follows project style (`ruff check .`, `npm run lint`)
 - [ ] All tests pass (`pytest tests/`, `npm test -- --watchAll=false`)
 - [ ] TypeScript compiles cleanly (`npm run type-check`)
 - [ ] No secrets in code (`SIGNING_KEY`, API keys, `.env` values)
-- [ ] `CHANGELOG.md` updated with your changes
+- [ ] `docs/Development-Status.md` updated with your changes
 - [ ] New `.env` vars documented in `.env.example`
 - [ ] Database schema changes include migration scripts
 - [ ] Screenshots/video attached for UI changes
@@ -62,7 +100,7 @@ Before submitting a PR, verify every item:
 
 ## 5. Setting up the Development Environment
 
-Please consult the root [`README.md`](../README.md) and [`docs/docker/DOCKER_BUILD.md`](docker/DOCKER_BUILD.md) to spin up the local Docker environment.
+Please consult the root [`README.md`](../README.md) and [`infra/DOCKER_BUILD.md`](docker/DOCKER_BUILD.md) to spin up the local Docker environment.
 
 **Linux / macOS** — use the provided shell script:
 ```bash

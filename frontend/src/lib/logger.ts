@@ -1,6 +1,6 @@
 /**
  * Shared Dev-Only Logger Utility
- * 
+ *
  * Provides consistent logging pattern across the frontend codebase.
  * All console output is silenced in production builds for security and performance.
  */
@@ -30,10 +30,6 @@ export function devLog(message: string, ...args: unknown[]): void {
 export function logError(context: string, error: unknown): void {
   if (isDev) {
     console.error(`[${context}]`, error);
-  } else {
-    // In production, only log error type (not sensitive details)
-    const errorType = error instanceof Error ? error.name : 'UnknownError';
-    console.error(`[${context}] ${errorType}`);
   }
 }
 

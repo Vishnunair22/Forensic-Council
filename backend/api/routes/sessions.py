@@ -7,6 +7,8 @@ Routes for managing investigation sessions.
 
 from typing import List, Optional
 import asyncio
+import json
+from pydantic import BaseModel as _BaseModel
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
@@ -19,11 +21,10 @@ from api.routes.investigation import (
     pop_active_task,
     get_session_websockets,
     clear_session_websockets,
-    register_websocket,
-    unregister_websocket,
     _assign_severity_tier,
 )
-from api.schemas import SessionInfo, ReportDTO, AgentFindingDTO
+from api.routes._session_state import register_websocket, unregister_websocket
+from api.schemas import SessionInfo, ReportDTO, AgentFindingDTO, ReportStatusDTO
 from api.routes.investigation import _final_reports, _active_tasks
 from fastapi.responses import JSONResponse
 from datetime import datetime, timezone
@@ -44,6 +45,7 @@ def _forensic_report_to_dto(report) -> ReportDTO:
     - stub/no-op findings (zero reasoning_summary and no tool output) are filtered
     - per_agent_findings only includes agents with at least 1 real finding
     """
+
     def _as_dict(f) -> dict:
         """Convert finding to dict — handles both Pydantic models and plain dicts."""
         if isinstance(f, dict):
@@ -61,6 +63,7 @@ def _forensic_report_to_dto(report) -> ReportDTO:
             # Shouldn't happen, but guard against accidental serialisation
             try:
                 import json as _json
+
                 meta = _json.loads(meta)
             except Exception:
                 meta = {}
@@ -72,8 +75,10 @@ def _forensic_report_to_dto(report) -> ReportDTO:
             status=str(d.get("status", "CONFIRMED")),
             confidence_raw=float(d.get("confidence_raw") or 0.0),
             calibrated=bool(d.get("calibrated", False)),
-            calibrated_probability=d.get("raw_confidence_score") or d.get("calibrated_probability"),
-            raw_confidence_score=d.get("raw_confidence_score") or d.get("calibrated_probability"),
+            calibrated_probability=d.get("raw_confidence_score")
+            or d.get("calibrated_probability"),
+            raw_confidence_score=d.get("raw_confidence_score")
+            or d.get("calibrated_probability"),
             calibration_status=str(d.get("calibration_status", "UNCALIBRATED")),
             court_statement=d.get("court_statement") or meta.get("court_statement"),
             robustness_caveat=bool(d.get("robustness_caveat", False)),
@@ -103,19 +108,27 @@ def _forensic_report_to_dto(report) -> ReportDTO:
         if real:
             per_agent[agent_id] = real
 
-    cross_modal = [_to_finding_dto(f) for f in (report.cross_modal_confirmed or []) if _is_real_finding(f)]
-    incomplete = [_to_finding_dto(f) for f in (report.incomplete_findings or []) if _is_real_finding(f)]
+    cross_modal = [
+        _to_finding_dto(f)
+        for f in (report.cross_modal_confirmed or [])
+        if _is_real_finding(f)
+    ]
+    incomplete = [
+        _to_finding_dto(f)
+        for f in (report.incomplete_findings or [])
+        if _is_real_finding(f)
+    ]
 
     # TribunalCase objects need explicit serialization
     tribunal_resolved = []
-    for item in (report.tribunal_resolved or []):
+    for item in report.tribunal_resolved or []:
         if hasattr(item, "model_dump"):
             tribunal_resolved.append(item.model_dump(mode="json"))
         elif isinstance(item, dict):
             tribunal_resolved.append(item)
 
     contested = []
-    for item in (report.contested_findings or []):
+    for item in report.contested_findings or []:
         if hasattr(item, "model_dump"):
             contested.append(item.model_dump(mode="json"))
         elif isinstance(item, dict):
@@ -138,7 +151,8 @@ def _forensic_report_to_dto(report) -> ReportDTO:
         per_agent_analysis=getattr(report, "per_agent_analysis", {}) or {},
         overall_confidence=getattr(report, "overall_confidence", 0.0) or 0.0,
         overall_error_rate=getattr(report, "overall_error_rate", 0.0) or 0.0,
-        overall_verdict=getattr(report, "overall_verdict", "REVIEW REQUIRED") or "REVIEW REQUIRED",
+        overall_verdict=getattr(report, "overall_verdict", "REVIEW REQUIRED")
+        or "REVIEW REQUIRED",
         cross_modal_confirmed=cross_modal,
         contested_findings=contested,
         tribunal_resolved=tribunal_resolved,
@@ -150,7 +164,9 @@ def _forensic_report_to_dto(report) -> ReportDTO:
         verdict_sentence=getattr(report, "verdict_sentence", "") or "",
         key_findings=list(getattr(report, "key_findings", []) or []),
         reliability_note=getattr(report, "reliability_note", "") or "",
-        manipulation_probability=float(getattr(report, "manipulation_probability", 0.0) or 0.0),
+        manipulation_probability=float(
+            getattr(report, "manipulation_probability", 0.0) or 0.0
+        ),
         confidence_min=float(getattr(report, "confidence_min", 0.0) or 0.0),
         confidence_max=float(getattr(report, "confidence_max", 0.0) or 0.0),
         confidence_std_dev=float(getattr(report, "confidence_std_dev", 0.0) or 0.0),
@@ -165,46 +181,54 @@ def _forensic_report_to_dto(report) -> ReportDTO:
 @router.get("", response_model=List[SessionInfo])
 async def list_sessions(current_user: User = Depends(get_current_user)):
     """List all active sessions. Requires authentication."""
+    # This now only lists sessions from Redis metadata
+    from api.routes._session_state import SESSION_METADATA_KEY_PREFIX
+    from infra.redis_client import get_redis_client
+    
+    redis = await get_redis_client()
+    keys = await redis.keys(f"{SESSION_METADATA_KEY_PREFIX}*")
+    
     sessions = []
-    for session_id, pipeline in get_all_active_pipelines().items():
-        final_report = getattr(pipeline, "_final_report", None)
-        error = getattr(pipeline, "_error", None)
-        if final_report is not None:
-            status = "completed"
-        elif error:
-            status = "error"
-        else:
-            status = "running"
-        session_info = SessionInfo(
-            session_id=session_id,
-            case_id=getattr(pipeline, "_case_id", "unknown"),
-            status=status,
-            started_at=getattr(pipeline, "_started_at", ""),
-        )
-        sessions.append(session_info)
+    for key in keys:
+        session_id = key.replace(SESSION_METADATA_KEY_PREFIX, "")
+        metadata = await redis.get(key)
+        if metadata:
+            sessions.append(SessionInfo(
+                session_id=session_id,
+                case_id=metadata.get("case_id", "unknown"),
+                status=metadata.get("status", "running"),
+                started_at=metadata.get("created_at", ""),
+            ))
     return sessions
 
 
 @router.delete("/{session_id}")
-async def terminate_session(session_id: str, current_user: User = Depends(get_current_user)):
+async def terminate_session(
+    session_id: str, current_user: User = Depends(get_current_user)
+):
     """Terminate a running session. Requires authentication."""
-    if not get_active_pipeline(session_id):
+    from api.routes._session_state import get_active_pipeline_metadata
+    
+    metadata = await get_active_pipeline_metadata(session_id)
+    if not metadata:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Cancel the background task if still running
-    task = pop_active_task(session_id)
-    if task and not task.done():
-        task.cancel()
-
-    # Close WebSocket connections
+    # Close local WebSocket connections
     for ws in get_session_websockets(session_id):
         try:
             await ws.close()
         except Exception:
             pass
-    clear_session_websockets(session_id)
+    # register_websocket/unregister_websocket and get_session_websockets 
+    # are still needed for local broadcast, so we don't clear them entirely here.
 
-    remove_active_pipeline(session_id)
+    # Note: In a distributed system, we would publish a TERMINATE event to Redis
+    # so the worker in another process can stop its pipeline.
+    # For now, we just remove the metadata.
+    from infra.redis_client import get_redis_client
+    redis = await get_redis_client()
+    await redis.delete(f"forensic:session:metadata:{session_id}")
+    
     return {"status": "terminated", "session_id": session_id}
 
 
@@ -213,104 +237,139 @@ async def live_updates(websocket: WebSocket, session_id: str):
     """
     WebSocket endpoint for live investigation updates.
 
-    Auth: Client must send {"type": "AUTH", "token": "<jwt>"} within 10 s of
-    connecting.  The pipeline session must exist — we poll briefly to handle
-    the small window between POST /investigate returning and the WS arriving.
+    Bridges messages from the background worker via Redis Pub/Sub.
     """
-    # ── 1. Wait for the pipeline to be registered (handles edge-case race) ──
-    # The HTTP /investigate handler registers the pipeline *before* returning
-    # the session_id to the client, so this should resolve almost immediately.
-    # Higher timeout (12s) to handle slow disk/DB during initial ingestion.
-    pipeline_found = False
-    for i in range(120):  # up to 12 s
-        if get_active_pipeline(session_id):
-            pipeline_found = True
-            break
-        if i % 20 == 0 and i > 0:
-            from core.structured_logging import get_logger as _gl
-            _gl(__name__).info(f"WS for {session_id} still waiting for pipeline registration...")
-        await asyncio.sleep(0.1)
+    from api.routes._session_state import (
+        get_active_pipeline_metadata,
+        register_websocket,
+        unregister_websocket,
+    )
+    from infra.redis_client import get_redis_client
 
-    # ── 2. Accept the WebSocket BEFORE checking — required by the WS protocol.
-    #       Closing before accept produces a broken handshake on many clients.
+    # ── 1. Accept WebSocket and Authenticate ─────────────────────────────────
+    # We must accept the connection before we can send JSON error messages.
+    # We use a subprotocol-based token fallback for environments where cookies
+    # are blocked or stripped (e.g. cross-origin development).
     await websocket.accept(subprotocol="forensic-v1")
 
-    if not get_active_pipeline(session_id):
-        await websocket.send_json({
-            "type": "ERROR",
-            "session_id": session_id,
-            "message": "Session not found",
-            "agent_id": None,
-            "agent_name": None,
-            "data": None,
-        })
-        await websocket.close(code=4004, reason="Session not found")
-        return
+    # Check for session cookies (fc_session or sessionid) or access_token
+    auth_token = (
+        websocket.cookies.get("fc_session")
+        or websocket.cookies.get("sessionid")
+        or websocket.cookies.get("access_token")
+    )
 
-    # ── 3. Authenticate via post-connect AUTH message ──────────────────────
-    # ── 3. Authenticate via HttpOnly cookie in upgrade headers ─────────────
-    # Cookies are automatically sent by the browser in the initial WS upgrade HTTP request.
-    token = websocket.cookies.get("access_token")
-    
-    if not token:
-        # Fallback to subprotocols for non-browser clients if needed
+    # Fallback: check subprotocols if cookie is missing
+    if not auth_token:
         for protocol in websocket.scope.get("subprotocols", []):
             if protocol.startswith("token."):
-                token = protocol[6:]
+                auth_token = protocol[6:]
                 break
 
-    if not token:
-        await websocket.send_json({
-            "type": "ERROR",
-            "session_id": session_id,
-            "message": "Authentication required. Missing access token.",
-        })
-        await websocket.close(code=4001, reason="Authentication required")
+    if auth_token:
+        # Debug: log token extraction (obscure the middle)
+        token_preview = f"{auth_token[:10]}...{auth_token[-10:]}" if len(auth_token) > 20 else "short"
+        logger.info("Extracted WebSocket auth token", session_id=session_id, token_preview=token_preview)
+
+    if not auth_token:
+        logger.warning("WebSocket auth failed: No token found", session_id=session_id)
+        await websocket.send_json({"type": "ERROR", "message": "Auth required"})
+        await websocket.close(code=4001)
         return
 
+    user_id = "anonymous"
     try:
-        token_data = await decode_token(token)
-    except Exception:
-        await websocket.send_json({
-            "type": "ERROR",
-            "session_id": session_id,
-            "message": "Invalid or expired session. Please log in again.",
-        })
-        await websocket.close(code=4001, reason="Invalid session")
+        # Decode token to verify and get user_id
+        token_data = await decode_token(auth_token)
+        user_id = token_data.user_id
+    except Exception as e:
+        logger.warning(
+            "WebSocket auth failed: Invalid token",
+            session_id=session_id,
+            error=str(e),
+        )
+        await websocket.send_json({"type": "ERROR", "message": "Invalid token"})
+        await websocket.close(code=4001)
         return
 
-    # ── 4. Register and send welcome ──────────────────────────────────────
+    # ── 2. Wait for session metadata ─────────────────────────────────────────
+    # We wait up to 6 seconds for metadata to appear in Redis (indicating
+    # the pipeline has been initialized by the /investigate endpoint).
+    metadata = None
+    for i in range(60):  # up to 6 s
+        metadata = await get_active_pipeline_metadata(session_id)
+        if metadata:
+            break
+        await asyncio.sleep(0.1)
+
+    if not metadata:
+        logger.warning(
+            "WebSocket connection rejected: Session metadata not found",
+            session_id=session_id,
+        )
+        await websocket.send_json({"type": "ERROR", "message": "Session not found"})
+        await websocket.close(code=4004)
+        return
+
+    # ── 4. Subscribe to Redis Updates for this session ───────────────────────
+    # This task listens for messages published by the Worker to the session channel
+    # and forwards them directly to the user's specific WebSocket connection.
+    async def _redis_subscriber():
+        pubsub = None
+        try:
+            redis = await get_redis_client()
+            pubsub = redis.client.pubsub()
+            channel = f"forensic:updates:{session_id}"
+            await pubsub.subscribe(channel)
+            
+            async for message in pubsub.listen():
+                if message["type"] == "message":
+                    data = json.loads(message["data"])
+                    await websocket.send_json(data)
+        except Exception as e:
+            logger.debug("Redis subscriber task terminated", session_id=session_id, error=str(e))
+        finally:
+            if pubsub:
+                try:
+                    await pubsub.unsubscribe()
+                except Exception:
+                    pass
+                try:
+                    await pubsub.close()
+                except Exception:
+                    pass
+
+    subscriber_task = asyncio.create_task(_redis_subscriber())
     register_websocket(session_id, websocket)
 
     try:
-        # Welcome message — the client resolves its "connected" promise on this.
         await websocket.send_json({
             "type": "CONNECTED",
             "session_id": session_id,
-            "agent_id": None,
-            "agent_name": None,
-            "message": "Connected to live updates",
-            "data": {"status": "connected", "user_id": token_data.user_id},
+            "message": "Connected to distributed live updates",
+            "data": {"status": "connected", "user_id": user_id},
         })
 
-        # Keep connection alive; client may send heartbeat pings
+        # Wait for client to close or disconnect
         while True:
+            # We don't expect messages from client for now, but need to await to detect disconnect
             await websocket.receive_text()
 
     except WebSocketDisconnect:
         pass
     except asyncio.CancelledError:
-        # Must re-raise CancelledError so asyncio task cancellation works correctly
         raise
-    except Exception:
-        pass
+    except Exception as ws_err:
+        logger.warning("WebSocket error", session_id=session_id, error=str(ws_err))
     finally:
+        subscriber_task.cancel()
         unregister_websocket(session_id, websocket)
 
 
 # ============================================================================
 # ARBITER STATUS ENDPOINT - Lightweight poll to track arbiter deliberation
 # ============================================================================
+
 
 @router.get("/{session_id}/arbiter-status")
 async def get_arbiter_status(
@@ -319,55 +378,34 @@ async def get_arbiter_status(
 ):
     """
     Lightweight endpoint polled by the frontend while the arbiter compiles.
-    Returns one of:
-      - {status: running,   message: current step}
-      - {status: complete,  report_id: ...}
-      - {status: error,     message: ...}
-      - {status: not_found}
+    Returns status from Redis persistence.
     """
-    pipeline = get_active_pipeline(session_id)
+    from api.routes._session_state import get_final_report, get_active_pipeline_metadata
+    
+    # 1. Check if report is already complete (Redis cache)
+    report_data = await get_final_report(session_id)
+    if report_data:
+        report, _ = report_data
+        report_id = report.get("report_id") if isinstance(report, dict) else getattr(report, "report_id", session_id)
+        return {"status": "complete", "report_id": str(report_id)}
 
-    # Report already in memory cache
-    if session_id in _final_reports:
-        report, _ = _final_reports[session_id]
-        return {"status": "complete", "report_id": str(report.report_id)}
-
-    if pipeline:
-        report = getattr(pipeline, "_final_report", None)
-        if report:
-            return {"status": "complete", "report_id": str(report.report_id)}
-
-        error = getattr(pipeline, "_error", None)
-        if error:
-            return {"status": "error", "message": error[:200]}
-
-        evt = getattr(pipeline, "deep_analysis_decision_event", None)
-        task = _active_tasks.get(session_id)
-        task_running = task is not None and not task.done()
-
-        if evt and not evt.is_set():
-            return {"status": "running", "message": "Agents analysing evidence…"}
-
-        # Post-decision: arbiter / final report (even if task handle missing or asyncio finished)
-        live_step = getattr(pipeline, "_arbiter_step", "") or ""
-        msg = (
-            live_step
-            if live_step
-            else "Arbiter deliberating — synthesising findings…"
-        )
-        if task_running:
-            return {"status": "running", "message": msg}
-        if task is not None and task.done():
-            # Task finished but _final_report and _error are both None —
-            # the pipeline crashed without setting either sentinel.
-            if not getattr(pipeline, "_final_report", None) and not getattr(pipeline, "_error", None):
-                return {"status": "error", "message": "Pipeline terminated unexpectedly — no report generated."}
-            return {"status": "running", "message": "Finalising report…"}
+    # 2. Check active metadata in Redis
+    metadata = await get_active_pipeline_metadata(session_id)
+    if metadata:
+        status = metadata.get("status", "running")
+        if status == "completed":
+             return {"status": "complete", "report_id": session_id}
+        if status == "error":
+             return {"status": "error", "message": metadata.get("error", "Unknown error")}
+             
+        # Map worker status to frontend expectation
+        msg = metadata.get("brief") or "Investigation in progress..."
         return {"status": "running", "message": msg}
 
-    # Try DB
+    # 3. Try DB Fallback
     try:
         from core.session_persistence import get_session_persistence
+
         persistence = await get_session_persistence()
         db_row = await persistence.get_report(session_id)
         if db_row:
@@ -377,7 +415,10 @@ async def get_arbiter_status(
             if s in ("running", "pending"):
                 return {"status": "running", "message": "Investigation in progress..."}
             if s == "error":
-                return {"status": "error", "message": db_row.get("error_message", "Unknown error")}
+                return {
+                    "status": "error",
+                    "message": db_row.get("error_message", "Unknown error"),
+                }
     except Exception:
         pass
 
@@ -388,7 +429,12 @@ async def get_arbiter_status(
 # REPORT ENDPOINT - Fetch final report for results page
 # ============================================================================
 
-@router.get("/{session_id}/report", response_model=ReportDTO)
+
+@router.get(
+    "/{session_id}/report",
+    response_model=None,
+    responses={200: {"model": ReportDTO}, 202: {"model": ReportStatusDTO}},
+)
 async def get_session_report(
     session_id: str,
     current_user: User = Depends(get_current_user),
@@ -413,7 +459,9 @@ async def get_session_report(
         # Failed (error set on pipeline)
         error = getattr(pipeline, "_error", None)
         if error:
-            raise HTTPException(status_code=500, detail=f"Investigation failed: {error}")
+            raise HTTPException(
+                status_code=500, detail=f"Investigation failed: {error}"
+            )
 
         # Pipeline exists but report not ready: agents, arbiter, or persistence in flight.
         # Do not fall through to 404 just because _active_tasks lost the handle or the
@@ -437,6 +485,7 @@ async def get_session_report(
     # ── 3. PostgreSQL — restart-resilient fallback ────────────────────────────
     try:
         from core.session_persistence import get_session_persistence
+
         persistence = await get_session_persistence()
         db_row = await persistence.get_report(session_id)
         if db_row:
@@ -468,8 +517,10 @@ async def get_session_report(
                         status=str(f.get("status", "CONFIRMED")),
                         confidence_raw=float(f.get("confidence_raw", 0.0)),
                         calibrated=bool(f.get("calibrated", False)),
-                        calibrated_probability=f.get("raw_confidence_score") or f.get("calibrated_probability"),
-                        raw_confidence_score=f.get("raw_confidence_score") or f.get("calibrated_probability"),
+                        calibrated_probability=f.get("raw_confidence_score")
+                        or f.get("calibrated_probability"),
+                        raw_confidence_score=f.get("raw_confidence_score")
+                        or f.get("calibrated_probability"),
                         court_statement=f.get("court_statement"),
                         robustness_caveat=bool(f.get("robustness_caveat", False)),
                         robustness_caveat_detail=f.get("robustness_caveat_detail"),
@@ -480,7 +531,9 @@ async def get_session_report(
                 rd = db_row["report_data"]
                 per_agent = {
                     agent_id: [_rebuild_finding(f) for f in findings]
-                    for agent_id, findings in (rd.get("per_agent_findings") or {}).items()
+                    for agent_id, findings in (
+                        rd.get("per_agent_findings") or {}
+                    ).items()
                 }
                 return _RD(
                     report_id=str(rd.get("report_id", "")),
@@ -493,10 +546,14 @@ async def get_session_report(
                     overall_confidence=float(rd.get("overall_confidence") or 0.0),
                     overall_error_rate=float(rd.get("overall_error_rate") or 0.0),
                     overall_verdict=rd.get("overall_verdict") or "REVIEW REQUIRED",
-                    cross_modal_confirmed=[_rebuild_finding(f) for f in rd.get("cross_modal_confirmed", [])],
+                    cross_modal_confirmed=[
+                        _rebuild_finding(f) for f in rd.get("cross_modal_confirmed", [])
+                    ],
                     contested_findings=rd.get("contested_findings", []),
                     tribunal_resolved=rd.get("tribunal_resolved", []),
-                    incomplete_findings=[_rebuild_finding(f) for f in rd.get("incomplete_findings", [])],
+                    incomplete_findings=[
+                        _rebuild_finding(f) for f in rd.get("incomplete_findings", [])
+                    ],
                     uncertainty_statement=rd.get("uncertainty_statement", ""),
                     cryptographic_signature=rd.get("cryptographic_signature", ""),
                     report_hash=rd.get("report_hash", ""),
@@ -504,7 +561,9 @@ async def get_session_report(
                     verdict_sentence=rd.get("verdict_sentence", ""),
                     key_findings=list(rd.get("key_findings") or []),
                     reliability_note=rd.get("reliability_note", ""),
-                    manipulation_probability=float(rd.get("manipulation_probability") or 0.0),
+                    manipulation_probability=float(
+                        rd.get("manipulation_probability") or 0.0
+                    ),
                     confidence_min=float(rd.get("confidence_min") or 0.0),
                     confidence_max=float(rd.get("confidence_max") or 0.0),
                     confidence_std_dev=float(rd.get("confidence_std_dev") or 0.0),
@@ -538,6 +597,7 @@ async def get_session_report(
 # BRIEF ENDPOINT — last known thinking text for an agent
 # ============================================================================
 
+
 @router.get("/{session_id}/brief/{agent_id}")
 async def get_agent_brief(
     session_id: str,
@@ -561,12 +621,17 @@ async def get_agent_brief(
             wm = getattr(pipeline, "working_memory", None)
             if wm is not None:
                 from uuid import UUID
+
                 state = await wm.get_state(UUID(session_id), agent_id)
                 if state:
                     # Extract the most recent in-progress task description as brief
                     tasks = getattr(state, "tasks", [])
-                    in_progress = [t for t in tasks if getattr(t, "status", None) and
-                                   str(getattr(t, "status", "")) == "IN_PROGRESS"]
+                    in_progress = [
+                        t
+                        for t in tasks
+                        if getattr(t, "status", None)
+                        and str(getattr(t, "status", "")) == "IN_PROGRESS"
+                    ]
                     if in_progress:
                         brief_text = getattr(in_progress[-1], "description", "")
         except Exception:
@@ -578,6 +643,7 @@ async def get_agent_brief(
 # ============================================================================
 # CHECKPOINTS ENDPOINT — pending HITL decisions
 # ============================================================================
+
 
 @router.get("/{session_id}/checkpoints")
 async def get_session_checkpoints(
@@ -596,34 +662,44 @@ async def get_session_checkpoints(
     checkpoints = []
     try:
         from core.session_persistence import get_session_persistence
+
         persistence = await get_session_persistence()
-        rows = await persistence.client.fetch(
-            """
+        rows = (
+            await persistence.client.fetch(
+                """
             SELECT checkpoint_id, agent_id, reason, investigator_brief, status, created_utc
             FROM hitl_checkpoints
             WHERE session_id = $1 AND status = 'PAUSED'
             ORDER BY created_utc DESC
             """,
-            session_id,
-        ) if persistence.client else []
+                session_id,
+            )
+            if persistence.client
+            else []
+        )
         for row in rows:
-            checkpoints.append({
-                "checkpoint_id": str(row["checkpoint_id"]),
-                "session_id": session_id,
-                "agent_id": row["agent_id"],
-                "agent_name": row["agent_id"],
-                "brief_text": row.get("investigator_brief") or "",
-                "decision_needed": "APPROVE, REDIRECT, OVERRIDE, TERMINATE, or ESCALATE",
-                "created_at": row["created_utc"].isoformat() if row.get("created_utc") else "",
-            })
+            checkpoints.append(
+                {
+                    "checkpoint_id": str(row["checkpoint_id"]),
+                    "session_id": session_id,
+                    "agent_id": row["agent_id"],
+                    "agent_name": row["agent_id"],
+                    "brief_text": row.get("investigator_brief") or "",
+                    "decision_needed": "APPROVE, REDIRECT, OVERRIDE, TERMINATE, or ESCALATE",
+                    "created_at": row["created_utc"].isoformat()
+                    if row.get("created_utc")
+                    else "",
+                }
+            )
     except Exception as e:
         # Non-fatal — return empty list if DB unavailable
         from core.structured_logging import get_logger as _gl
-        _gl(__name__).warning(f"Failed to fetch checkpoints: {e}")
+
+        _gl(__name__).warning(
+            "Failed to fetch checkpoints", error=str(e), exc_info=True
+        )
 
     return checkpoints
-
-
 
 
 # ============================================================================
@@ -631,11 +707,12 @@ async def get_session_checkpoints(
 # matching the frontend call from useSimulation.ts
 # ============================================================================
 
-from pydantic import BaseModel as _BaseModel
+
 
 
 class ResumeRequest(_BaseModel):
     """Request body for the resume endpoint."""
+
     deep_analysis: bool
 
 
@@ -657,6 +734,7 @@ async def resume_investigation(
     {"status": "already_resumed"} rather than 409.
     """
     from core.structured_logging import get_logger as _get_logger
+
     _log = _get_logger(__name__)
 
     _log.info(
@@ -705,5 +783,7 @@ async def resume_investigation(
         "status": "resumed",
         "session_id": session_id,
         "deep_analysis": request.deep_analysis,
-        "message": "Deep analysis started" if request.deep_analysis else "Proceeding to final report",
+        "message": "Deep analysis started"
+        if request.deep_analysis
+        else "Proceeding to final report",
     }

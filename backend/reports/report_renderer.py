@@ -14,10 +14,10 @@ from agents.arbiter import ForensicReport, render_text_report
 def render_text(report: ForensicReport) -> str:
     """
     Render a forensic report as plain text/markdown.
-    
+
     Args:
         report: The ForensicReport to render
-        
+
     Returns:
         Formatted text report
     """
@@ -27,10 +27,10 @@ def render_text(report: ForensicReport) -> str:
 def render_html(report: ForensicReport) -> str:
     """
     Render a forensic report as HTML.
-    
+
     Args:
         report: The ForensicReport to render
-        
+
     Returns:
         HTML-formatted report
     """
@@ -61,53 +61,63 @@ def render_html(report: ForensicReport) -> str:
         f"    <p>{_esc(report.executive_summary or 'N/A')}</p>",
         "  </div>",
     ]
-    
+
     # Per-agent findings
     html_parts.append("  <div class='section'>")
     html_parts.append("    <h2>Per-Agent Findings</h2>")
     for agent_id, findings in report.per_agent_findings.items():
         html_parts.append(f"    <h3>{_esc(str(agent_id))}</h3>")
         for finding in findings:
-            html_parts.append(f"    <div class='finding'>{_esc(str(finding.get('finding_type', 'Unknown')))}</div>")
+            html_parts.append(
+                f"    <div class='finding'>{_esc(str(finding.get('finding_type', 'Unknown')))}</div>"
+            )
     html_parts.append("  </div>")
-    
+
     # Cross-modal confirmed
     if report.cross_modal_confirmed:
         html_parts.append("  <div class='section'>")
         html_parts.append("    <h2>Cross-Modal Confirmed Findings</h2>")
         for finding in report.cross_modal_confirmed:
-            html_parts.append(f"    <div class='finding'>{_esc(str(finding.get('finding_type', 'Unknown')))}</div>")
+            html_parts.append(
+                f"    <div class='finding'>{_esc(str(finding.get('finding_type', 'Unknown')))}</div>"
+            )
         html_parts.append("  </div>")
-    
+
     # Uncertainty statement
     html_parts.append("  <div class='section'>")
     html_parts.append("    <h2>Uncertainty Statement</h2>")
     html_parts.append(f"    <p>{_esc(report.uncertainty_statement or 'N/A')}</p>")
     html_parts.append("  </div>")
-    
+
     # Cryptographic signature
     html_parts.append("  <div class='section'>")
     html_parts.append("    <h2>Cryptographic Signature</h2>")
-    html_parts.append(f"    <p><strong>Report Hash:</strong> {_esc(report.report_hash)}</p>")
-    html_parts.append(f"    <p class='signature'><strong>Signature:</strong> {_esc((report.cryptographic_signature or '')[:64])}...</p>")
+    html_parts.append(
+        f"    <p><strong>Report Hash:</strong> {_esc(report.report_hash)}</p>"
+    )
+    html_parts.append(
+        f"    <p class='signature'><strong>Signature:</strong> {_esc((report.cryptographic_signature or '')[:64])}...</p>"
+    )
     html_parts.append("  </div>")
-    
-    html_parts.extend([
-        "</body>",
-        "</html>",
-    ])
-    
+
+    html_parts.extend(
+        [
+            "</body>",
+            "</html>",
+        ]
+    )
+
     return "\n".join(html_parts)
 
 
 def render_json(report: ForensicReport) -> dict[str, Any]:
     """
     Render a forensic report as JSON-serializable dict.
-    
+
     Args:
         report: The ForensicReport to render
-        
+
     Returns:
         Dictionary representation of the report
     """
-    return report.model_dump(mode='json')
+    return report.model_dump(mode="json")

@@ -7,7 +7,10 @@ interface PageTransitionProps {
   className?: string;
 }
 
-export function PageTransition({ children, className = "" }: PageTransitionProps) {
+export function PageTransition({
+  children,
+  className = "",
+}: PageTransitionProps) {
   return (
     <motion.div
       className={className}
@@ -20,7 +23,15 @@ export function PageTransition({ children, className = "" }: PageTransitionProps
   );
 }
 
-export function StaggerIn({ children, className = "", delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
+export function StaggerIn({
+  children,
+  className = "",
+  delay = 0,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  delay?: number;
+}) {
   return (
     <motion.div
       className={className}
@@ -28,7 +39,9 @@ export function StaggerIn({ children, className = "", delay = 0 }: { children: R
       animate="visible"
       variants={{
         hidden: {},
-        visible: { transition: { staggerChildren: 0.08, delayChildren: delay } },
+        visible: {
+          transition: { staggerChildren: 0.08, delayChildren: delay },
+        },
       }}
     >
       {children}
@@ -36,13 +49,23 @@ export function StaggerIn({ children, className = "", delay = 0 }: { children: R
   );
 }
 
-export function StaggerChild({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+export function StaggerChild({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
     <motion.div
       className={className}
       variants={{
         hidden: { opacity: 0, y: 16 },
-        visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" } },
+        visible: {
+          opacity: 1,
+          y: 0,
+          transition: { duration: 0.35, ease: "easeOut" },
+        },
       }}
     >
       {children}

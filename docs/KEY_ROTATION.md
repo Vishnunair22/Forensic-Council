@@ -25,7 +25,7 @@ SIGNING_KEY=<new_value_from_step_1>
 ### 3. Restart the backend
 
 ```bash
-docker compose -f docs/docker/docker-compose.yml --env-file .env up -d --force-recreate backend
+docker compose -f infra/docker-compose.yml --env-file .env up -d --force-recreate backend
 ```
 
 ### 4. Verify

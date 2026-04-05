@@ -1,3 +1,7 @@
+"use client";
+
+"use client";
+
 /**
  * FileUploadSection Component
  * ===========================
@@ -100,7 +104,8 @@ export function FileUploadSection({
     >
       {/* Title Section */}
       <div className="text-center mb-10">
-        <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full mb-6 relative overflow-hidden"
+        <div
+          className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full mb-6 relative overflow-hidden"
           style={{
             background: "rgba(34,211,238,0.05)",
             border: "1px solid rgba(34,211,238,0.12)",
@@ -110,7 +115,10 @@ export function FileUploadSection({
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-60" />
             <span className="relative inline-flex rounded-full h-full w-full bg-cyan-400" />
           </span>
-          <span className="uppercase tracking-[0.35em] font-bold text-[9px]" style={{ color: "rgba(34,211,238,0.7)" }}>
+          <span
+            className="uppercase tracking-[0.35em] font-bold text-[9px]"
+            style={{ color: "rgba(34,211,238,0.7)" }}
+          >
             Evidence Intake Portal
           </span>
         </div>
@@ -134,13 +142,17 @@ export function FileUploadSection({
             backdropFilter: "blur(24px)",
             WebkitBackdropFilter: "blur(24px)",
             border: "1px solid rgba(255,255,255,0.06)",
-            boxShadow: "0 8px 40px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04)",
+            boxShadow:
+              "0 8px 40px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04)",
           }}
         >
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
 
           {/* Preview */}
-          <div className="relative w-full" style={{ minHeight: "220px", background: "rgba(0,0,0,0.25)" }}>
+          <div
+            className="relative w-full"
+            style={{ minHeight: "220px", background: "rgba(0,0,0,0.25)" }}
+          >
             {file.type.startsWith("image/") && (
               /* eslint-disable-next-line @next/next/no-img-element -- Dynamic blob URL preview */
               <img
@@ -171,13 +183,22 @@ export function FileUploadSection({
                     }}
                   >
                     {file.type.startsWith("audio/") ? (
-                      <FileAudio className="w-8 h-8 text-emerald-400" aria-hidden="true" />
+                      <FileAudio
+                        className="w-8 h-8 text-emerald-400"
+                        aria-hidden="true"
+                      />
                     ) : (
-                      <File className="w-8 h-8 text-slate-400" aria-hidden="true" />
+                      <File
+                        className="w-8 h-8 text-slate-400"
+                        aria-hidden="true"
+                      />
                     )}
                   </div>
                   {file.type.startsWith("audio/") && (
-                    <div className="flex items-end gap-[3px] h-8" aria-hidden="true">
+                    <div
+                      className="flex items-end gap-[3px] h-8"
+                      aria-hidden="true"
+                    >
                       {[3, 7, 5, 9, 6, 4, 8, 5, 7, 3, 6, 8].map((_h, i) => (
                         <div
                           key={i}
@@ -194,10 +215,16 @@ export function FileUploadSection({
               )}
 
             {/* File Info Overlay */}
-            <div className="absolute bottom-0 inset-x-0 px-6 py-4"
-              style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%)" }}
+            <div
+              className="absolute bottom-0 inset-x-0 px-6 py-4"
+              style={{
+                background:
+                  "linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%)",
+              }}
             >
-              <p className="text-sm font-mono text-white truncate font-bold">{file.name}</p>
+              <p className="text-sm font-mono text-white truncate font-bold">
+                {file.name}
+              </p>
               <p className="text-[11px] text-white/40 mt-0.5 font-medium">
                 {(file.size / 1024 / 1024).toFixed(2)} MB
               </p>
@@ -207,30 +234,32 @@ export function FileUploadSection({
           {/* Action Buttons */}
           <div
             className="flex gap-3 p-4 relative"
-            style={{ background: "rgba(0,0,0,0.15)", borderTop: "1px solid rgba(255,255,255,0.04)" }}
+            style={{
+              background: "rgba(0,0,0,0.15)",
+              borderTop: "1px solid rgba(255,255,255,0.04)",
+            }}
           >
             <button
-              onClick={() => { playSound("click"); onClear(); }}
-              disabled={isUploading}
-              className="flex-1 py-3 rounded-xl text-[10px] font-bold uppercase tracking-[0.15em] flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer disabled:cursor-not-allowed"
-              style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.08)",
-                color: "rgba(255,255,255,0.5)",
+              onClick={() => {
+                playSound("click");
+                onClear();
               }}
+              disabled={isUploading}
+              className="btn-pill-secondary flex-1 py-3 text-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <RotateCcw className="w-3.5 h-3.5 opacity-70" aria-hidden="true" />
+              <RotateCcw
+                className="w-3.5 h-3.5 opacity-70"
+                aria-hidden="true"
+              />
               Reset
             </button>
             <button
-              onClick={() => { playSound("upload"); onUpload(file); }}
-              disabled={isUploading}
-              className="flex-1 py-3 rounded-xl text-[10px] font-bold uppercase tracking-[0.15em] flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer disabled:cursor-not-allowed relative overflow-hidden"
-              style={{
-                background: "linear-gradient(135deg, rgba(217,119,6,0.9) 0%, rgba(180,83,9,0.9) 100%)",
-                color: "#fff",
-                boxShadow: "0 0 24px rgba(217,119,6,0.25), inset 0 1px 0 rgba(255,255,255,0.15)",
+              onClick={() => {
+                playSound("upload");
+                onUpload(file);
               }}
+              disabled={isUploading}
+              className="btn-pill-primary flex-1 py-3 text-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isUploading ? (
                 <>
@@ -241,7 +270,10 @@ export function FileUploadSection({
                 <>
                   <ScanLine className="w-4 h-4" aria-hidden="true" />
                   Initiate Audit
-                  <ArrowRight className="w-3.5 h-3.5 opacity-70" aria-hidden="true" />
+                  <ArrowRight
+                    className="w-3.5 h-3.5 opacity-70"
+                    aria-hidden="true"
+                  />
                 </>
               )}
             </button>
@@ -256,10 +288,12 @@ export function FileUploadSection({
           className={clsx(
             "w-full group overflow-hidden rounded-2xl transition-all duration-500 relative cursor-pointer",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50 focus-visible:ring-offset-4 focus-visible:ring-offset-background",
-            isDragging ? "scale-[1.01]" : ""
+            isDragging ? "scale-[1.01]" : "",
           )}
           style={{
-            background: isDragging ? "rgba(34,211,238,0.04)" : "rgba(255,255,255,0.015)",
+            background: isDragging
+              ? "rgba(34,211,238,0.04)"
+              : "rgba(255,255,255,0.015)",
             backdropFilter: "blur(20px)",
             WebkitBackdropFilter: "blur(20px)",
             border: isDragging
@@ -269,7 +303,10 @@ export function FileUploadSection({
               ? "0 0 40px rgba(34,211,238,0.08), inset 0 1px 0 rgba(255,255,255,0.03)"
               : "inset 0 1px 0 rgba(255,255,255,0.03), 0 4px 24px rgba(0,0,0,0.12)",
           }}
-          onClick={() => { playSound("click"); fileInputRef.current?.click(); }}
+          onClick={() => {
+            playSound("click");
+            fileInputRef.current?.click();
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
@@ -277,7 +314,10 @@ export function FileUploadSection({
             }
           }}
           onDragEnter={handleDragEnter}
-          onDragOver={(e) => { e.preventDefault(); if (!isDragging) onDragEnter(); }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (!isDragging) onDragEnter();
+          }}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
@@ -286,20 +326,26 @@ export function FileUploadSection({
             <div
               className={clsx(
                 "w-16 h-16 rounded-2xl flex items-center justify-center transition-all duration-300",
-                isDragging ? "scale-110" : "group-hover:scale-105"
+                isDragging ? "scale-110" : "group-hover:scale-105",
               )}
               style={{
-                background: isDragging ? "rgba(34,211,238,0.1)" : "rgba(255,255,255,0.03)",
+                background: isDragging
+                  ? "rgba(34,211,238,0.1)"
+                  : "rgba(255,255,255,0.03)",
                 border: isDragging
                   ? "1px solid rgba(34,211,238,0.3)"
                   : "1px solid rgba(255,255,255,0.06)",
-                boxShadow: isDragging ? "0 0 30px rgba(34,211,238,0.15)" : "none",
+                boxShadow: isDragging
+                  ? "0 0 30px rgba(34,211,238,0.15)"
+                  : "none",
               }}
             >
               <UploadCloud
                 className={clsx(
                   "w-7 h-7 transition-all duration-300",
-                  isDragging ? "text-cyan-400" : "text-white/20 group-hover:text-cyan-400/70"
+                  isDragging
+                    ? "text-cyan-400"
+                    : "text-white/20 group-hover:text-cyan-400/70",
                 )}
                 strokeWidth={1.5}
                 aria-hidden="true"
@@ -311,7 +357,9 @@ export function FileUploadSection({
               <p
                 className={clsx(
                   "text-base font-bold transition-colors duration-300 mb-1.5 tracking-tight",
-                  isDragging ? "text-cyan-300" : "text-white/80 group-hover:text-white"
+                  isDragging
+                    ? "text-cyan-300"
+                    : "text-white/80 group-hover:text-white",
                 )}
               >
                 {isDragging ? "Release to submit" : "Drop evidence here"}
@@ -357,8 +405,13 @@ export function FileUploadSection({
             boxShadow: "0 8px 30px rgba(239,68,68,0.1)",
           }}
         >
-          <ShieldAlert className="w-5 h-5 text-red-400 shrink-0 mt-0.5" aria-hidden="true" />
-          <span className="text-sm text-red-200 font-medium leading-relaxed">{validationError}</span>
+          <ShieldAlert
+            className="w-5 h-5 text-red-400 shrink-0 mt-0.5"
+            aria-hidden="true"
+          />
+          <span className="text-sm text-red-200 font-medium leading-relaxed">
+            {validationError}
+          </span>
         </div>
       )}
 

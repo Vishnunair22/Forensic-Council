@@ -13,6 +13,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Header, Request
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
+import os as _os
 from pydantic import BaseModel
 
 from core.auth import (
@@ -32,9 +33,9 @@ router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 # ── Brute-force login protection ─────────────────────────────────────────────
 # Per-IP attempt tracking with a sliding window.
 # Redis is used when available; falls back to an in-process dict.
-_MAX_LOGIN_ATTEMPTS = 5        # max failures before lockout
-_LOCKOUT_WINDOW_SECS = 300     # 5-minute rolling window
-_LOCKOUT_DURATION_SECS = 900   # 15-minute lockout
+_MAX_LOGIN_ATTEMPTS = 5  # max failures before lockout
+_LOCKOUT_WINDOW_SECS = 60 if settings.app_env != "production" else 300
+_LOCKOUT_DURATION_SECS = 30 if settings.app_env != "production" else 900
 
 # In-memory fallback: {ip: [(timestamp, count), ...]}
 _failed_attempts: dict[str, list[float]] = defaultdict(list)
@@ -47,6 +48,7 @@ async def _is_rate_limited(ip: str) -> bool:
 
     try:
         from infra.redis_client import get_redis_client
+
         redis = await get_redis_client()
         if redis:
             count_raw = await redis.get(key)
@@ -62,16 +64,21 @@ async def _is_rate_limited(ip: str) -> bool:
     except HTTPException:
         raise
     except Exception as e:
-        # FAIL-SECURE: If Redis is configured but unreachable for an auth endpoint,
-        # we MUST DENY access rather than falling back to in-memory, to prevent
-        # multi-worker brute-force bypass.  Only skip if Redis is truly not configured.
-        if settings.redis_host != "localhost" or settings.app_env == "production":
-            logger.error("Redis unreachable for rate limiting - failing secure on auth", error=str(e))
+        # FAIL-SECURE: In production, or whenever Redis is not the local dev instance,
+        # deny access rather than falling back to in-memory state.  In-memory fallback
+        # is NOT safe in multi-worker deployments — brute-force requests can be spread
+        # across workers to bypass it.  Only allow fallback in explicit local dev.
+        if settings.app_env == "production" or settings.redis_host != "localhost":
+            logger.error(
+                "Redis unreachable for rate limiting - failing secure on auth",
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Security validation service unavailable. Please retry later.",
             )
-        pass  # allow local fallback in dev only
+        pass  # allow local in-memory fallback in development only # nosec: B110
 
     # In-memory fallback — prune old entries outside the window
     attempts = _failed_attempts[ip]
@@ -92,6 +99,7 @@ async def _record_failed_attempt(ip: str) -> None:
     key = f"login_fail:{ip}"
     try:
         from infra.redis_client import get_redis_client
+
         redis = await get_redis_client()
         if redis:
             pipe = redis.pipeline()
@@ -99,8 +107,10 @@ async def _record_failed_attempt(ip: str) -> None:
             pipe.expire(key, _LOCKOUT_DURATION_SECS)
             await pipe.execute()
             return
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            "Redis pipeline failure for rate limiting", error=str(e), exc_info=True
+        )
     _failed_attempts[ip].append(time.time())
 
 
@@ -109,18 +119,23 @@ async def _clear_failed_attempts(ip: str) -> None:
     key = f"login_fail:{ip}"
     try:
         from infra.redis_client import get_redis_client
+
         redis = await get_redis_client()
         if redis:
             await redis.delete(key)
             return
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            "Redis delete failure for clearing login attempts",
+            error=str(e),
+            exc_info=True,
+        )
     _failed_attempts.pop(ip, None)
-
 
 
 class TokenResponse(BaseModel):
     """Token response model."""
+
     access_token: str
     token_type: str = "bearer"
     expires_in: int
@@ -130,6 +145,7 @@ class TokenResponse(BaseModel):
 
 class UserResponse(BaseModel):
     """User information response."""
+
     user_id: str
     username: str
     role: str
@@ -146,16 +162,15 @@ class UserResponse(BaseModel):
 # To set passwords: export BOOTSTRAP_ADMIN_PASSWORD and BOOTSTRAP_INVESTIGATOR_PASSWORD
 # (already documented in .env.example).  These are the same variables used by
 # scripts/init_db.py to bootstrap the users table.
-import os as _os
 
 # Only load demo credentials in non-production environments
 _settings = get_settings()
 if _settings.app_env != "production":
-    _DEV_ADMIN_PASSWORD    = _os.environ.get("BOOTSTRAP_ADMIN_PASSWORD", "")
-    _DEV_INV_PASSWORD      = _os.environ.get("BOOTSTRAP_INVESTIGATOR_PASSWORD", "")
+    _DEV_ADMIN_PASSWORD = _os.environ.get("BOOTSTRAP_ADMIN_PASSWORD", "")
+    _DEV_INV_PASSWORD = _os.environ.get("BOOTSTRAP_INVESTIGATOR_PASSWORD", "")
 else:
-    _DEV_ADMIN_PASSWORD    = ""
-    _DEV_INV_PASSWORD      = ""
+    _DEV_ADMIN_PASSWORD = "" # nosec: B105
+    _DEV_INV_PASSWORD = "" # nosec: B105
 
 
 def _build_dev_fallback() -> dict:
@@ -163,6 +178,7 @@ def _build_dev_fallback() -> dict:
     if not _DEV_ADMIN_PASSWORD and not _DEV_INV_PASSWORD:
         return {}
     from passlib.context import CryptContext as _CC
+
     _ctx = _CC(schemes=["bcrypt"], deprecated="auto")
     users: dict = {}
     if _DEV_ADMIN_PASSWORD:
@@ -191,12 +207,13 @@ _DEMO_USERS_FALLBACK: dict = _build_dev_fallback()
 async def get_user_from_db(username: str) -> Optional[dict]:
     """Fetch user from PostgreSQL database."""
     from infra.postgres_client import get_postgres_client
+
     try:
         client = await get_postgres_client()
         row = await client.fetch_one(
             "SELECT user_id, username, hashed_password, role, is_disabled "
             "FROM users WHERE username = $1 AND is_active = TRUE",
-            username
+            username,
         )
         if row:
             return {
@@ -215,69 +232,90 @@ async def get_user_from_db(username: str) -> Optional[dict]:
 async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     """
     Authenticate user and return JWT token.
-    
+
     Accepts standard OAuth2 password flow credentials.
     Returns a JWT access token for subsequent authenticated requests.
-    
+
     Args:
         form_data: OAuth2 password request form with username and password
-    
+
     Returns:
         TokenResponse with access token and user information
-    
+
     Raises:
         HTTPException: If authentication fails
     """
     # Verify password using bcrypt
     from core.auth import verify_password
-    
+
     # Rate-limit check before any database work
     client_ip = request.client.host if request.client else "unknown"
     await _is_rate_limited(client_ip)
 
     # Try to fetch user from database first
     user = await get_user_from_db(form_data.username)
-    
+
     # Fallback to demo users if database is unavailable (strictly non-production)
     if not user and settings.app_env != "production":
         user = _DEMO_USERS_FALLBACK.get(form_data.username)
-    
-    if not user or not verify_password(form_data.password, user["hashed_password"]):
+
+    fallback_user = (
+        _DEMO_USERS_FALLBACK.get(form_data.username)
+        if settings.app_env != "production"
+        else None
+    )
+
+    password_valid = bool(
+        user and verify_password(form_data.password, user["hashed_password"])
+    )
+
+    if not password_valid and fallback_user:
+        if verify_password(form_data.password, fallback_user["hashed_password"]):
+            user = fallback_user
+            password_valid = True
+
+    if not user or not password_valid:
         await _record_failed_attempt(client_ip)
-        logger.warning("Failed login attempt", username=form_data.username, ip=client_ip)
+        logger.warning(
+            "Failed login attempt", username=form_data.username, ip=client_ip
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     if user["disabled"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is disabled",
         )
-    
-    access_token_expires = timedelta(minutes=get_settings().jwt_access_token_expire_minutes)
+
+    access_token_expires = timedelta(
+        minutes=get_settings().jwt_access_token_expire_minutes
+    )
     access_token = create_access_token(
         user_id=user["user_id"],
         role=user["role"],
         expires_delta=access_token_expires,
         username=user["username"],
     )
-    
+
     await _clear_failed_attempts(client_ip)
-    logger.info("User logged in successfully", user_id=user["user_id"], role=user["role"].value)
-    
+    logger.info(
+        "User logged in successfully", user_id=user["user_id"], role=user["role"].value
+    )
+
     response = JSONResponse(
         content=TokenResponse(
             access_token=access_token,
-            token_type="bearer",
+            token_type="bearer", # nosec: B106
             expires_in=get_settings().jwt_access_token_expire_minutes * 60,
             user_id=user["user_id"],
             role=user["role"].value,
         ).model_dump()
     )
-    
+
     # Set HttpOnly cookie for production-hardened XSS protection
     response.set_cookie(
         key="access_token",
@@ -288,7 +326,7 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
         samesite="strict",
         secure=True if settings.app_env == "production" else False,
     )
-    
+
     return response
 
 
@@ -296,7 +334,7 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """
     Get current authenticated user information.
-    
+
     Returns:
         UserResponse with user details
     """
@@ -311,22 +349,24 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
 async def refresh_token(current_user: User = Depends(get_current_user)):
     """
     Refresh the access token.
-    
+
     Returns a new access token with extended expiration.
-    
+
     Returns:
         TokenResponse with new access token
     """
-    access_token_expires = timedelta(minutes=get_settings().jwt_access_token_expire_minutes)
+    access_token_expires = timedelta(
+        minutes=get_settings().jwt_access_token_expire_minutes
+    )
     access_token = create_access_token(
         user_id=current_user.user_id,
         role=current_user.role,
         expires_delta=access_token_expires,
         username=current_user.username,
     )
-    
+
     logger.info("Token refreshed", user_id=current_user.user_id)
-    
+
     return TokenResponse(
         access_token=access_token,
         token_type="bearer",
@@ -339,23 +379,23 @@ async def refresh_token(current_user: User = Depends(get_current_user)):
 @router.post("/logout")
 async def logout(
     current_user: User = Depends(get_current_user),
-    authorization: Optional[str] = Header(None)
+    authorization: Optional[str] = Header(None),
 ):
     """
     Logout endpoint.
-    
+
     Adds the JWT token to a blacklist in Redis until it expires.
-    
+
     Returns:
         Logout confirmation message
     """
     from core.auth import blacklist_token, decode_token
-    
+
     # Extract token from Authorization header
     token = None
     if authorization and authorization.startswith("Bearer "):
         token = authorization[7:]
-    
+
     # Blacklist the token if we have it
     if token:
         try:
@@ -363,18 +403,25 @@ async def logout(
             token_data = await decode_token(token)
             if token_data.exp:
                 import time
+
                 expires_in = int(token_data.exp.timestamp() - time.time())
                 if expires_in > 0:
                     await blacklist_token(token, expires_in)
-                    logger.info("Token blacklisted on logout", user_id=current_user.user_id)
+                    logger.info(
+                        "Token blacklisted on logout", user_id=current_user.user_id
+                    )
         except Exception as e:
-            logger.warning("Failed to blacklist token on logout", error=str(e))
-    
+            logger.warning(
+                "Failed to blacklist token on logout", error=str(e), exc_info=True
+            )
+
     logger.info("User logged out", user_id=current_user.user_id)
-    
-    response = JSONResponse(content={
-        "status": "success",
-        "message": "Successfully logged out",
-    })
+
+    response = JSONResponse(
+        content={
+            "status": "success",
+            "message": "Successfully logged out",
+        }
+    )
     response.delete_cookie("access_token")
     return response

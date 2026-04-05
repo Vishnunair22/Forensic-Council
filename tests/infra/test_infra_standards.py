@@ -19,9 +19,9 @@ from pathlib import Path
 # ── Project Constants ──────────────────────────────────────────────────────────
 
 ROOT = Path(__file__).parent.parent.parent
-COMPOSE_FILE = ROOT / "docs/docker/docker-compose.yml"
-DEV_COMPOSE = ROOT / "docs/docker/docker-compose.dev.yml"
-PROD_COMPOSE = ROOT / "docs/docker/docker-compose.prod.yml"
+COMPOSE_FILE = ROOT / "infra/docker-compose.yml"
+DEV_COMPOSE = ROOT / "infra/docker-compose.dev.yml"
+PROD_COMPOSE = ROOT / "infra/docker-compose.prod.yml"
 FRONTEND_DIR = ROOT / "frontend"
 BACKEND_DIR = ROOT / "backend"
 ENV_EXAMPLE = ROOT / ".env.example"

@@ -58,7 +58,7 @@ pytest tests/backend/ --cov=backend --cov-report=html
 ### Connectivity (requires running Docker stack)
 
 ```bash
-./manage.sh up
+docker compose -f infra/docker-compose.yml --env-file .env up -d
 pytest tests/connectivity/ -v
 ```
 

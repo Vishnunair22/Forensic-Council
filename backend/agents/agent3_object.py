@@ -1,17 +1,22 @@
 """
 Agent 3 - Object & Weapon Analysis Agent.
 
-Object identification and contextual validation specialist for detecting 
+Object identification and contextual validation specialist for detecting
 and contextually validating objects, weapons, and contraband.
 """
 
 from __future__ import annotations
 
 import asyncio
+import os
+import pathlib
+import threading
 import uuid
 from typing import Any, Optional
 
 from agents.base_agent import ForensicAgent
+from core.gemini_client import GeminiVisionClient
+from core.image_utils import is_lossless_image
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
@@ -24,15 +29,12 @@ from core.tool_registry import ToolRegistry
 from core.working_memory import WorkingMemory
 from core.ml_subprocess import run_ml_tool
 from infra.evidence_store import EvidenceStore
-from core.gemini_client import GeminiVisionClient
-from core.image_utils import is_lossless_image
+
+
+
 
 # Module-level YOLO singleton — load once, reuse across all calls
 # Process-safe: uses a lock and validates model state on each access.
-import threading
-import os
-import pathlib
-
 _yolo_model: Optional[Any] = None
 _yolo_lock = threading.Lock()
 
@@ -51,14 +53,30 @@ def _get_yolo_model() -> Any:
         if _yolo_model is not None:
             return _yolo_model
 
+        from core.config import get_settings
+        settings = get_settings()
+
         from ultralytics import YOLO, settings as yolo_settings
-        yolo_cache = os.getenv("YOLO_CONFIG_DIR", str(pathlib.Path.home() / ".cache" / "ultralytics"))
+
+        yolo_cache = settings.yolo_config_dir
         os.makedirs(yolo_cache, exist_ok=True)
         os.environ["YOLO_CONFIG_DIR"] = yolo_cache
         os.environ["ULTRALYTICS_CACHE_DIR"] = yolo_cache
+        
+        if settings.offline_mode:
+            os.environ["ULTRALYTICS_OFFLINE"] = "True"
+            os.environ["HF_HUB_OFFLINE"] = "1"
 
-        valid_keys = set(yolo_settings.keys()) if hasattr(yolo_settings, "keys") else set(dict(yolo_settings).keys())
-        safe_updates = {k: v for k, v in {"weights_dir": yolo_cache, "datasets_dir": yolo_cache}.items() if k in valid_keys}
+        valid_keys = (
+            set(yolo_settings.keys())
+            if hasattr(yolo_settings, "keys")
+            else set(dict(yolo_settings).keys())
+        )
+        safe_updates = {
+            k: v
+            for k, v in {"weights_dir": yolo_cache, "datasets_dir": yolo_cache}.items()
+            if k in valid_keys
+        }
         if safe_updates:
             yolo_settings.update(safe_updates)
 
@@ -70,10 +88,10 @@ def _get_yolo_model() -> Any:
 class Agent3Object(ForensicAgent):
     """
     Agent 3 - Object & Weapon Analysis Agent.
-    
+
     Mandate: Detect and contextually validate objects, weapons, and contraband.
     Identify compositing through lighting inconsistency.
-    
+
     Task Decomposition:
     1. Run full-scene primary object detection
     2. For each detected object below confidence threshold: run secondary classification pass
@@ -88,7 +106,7 @@ class Agent3Object(ForensicAgent):
     11. Self-reflection pass
     12. Submit calibrated findings to Arbiter
     """
-    
+
     def inject_agent1_context(self, agent1_gemini_findings: dict) -> None:
         """
         Called by pipeline to share Agent 1's Gemini vision findings with this agent instance.
@@ -130,7 +148,7 @@ class Agent3Object(ForensicAgent):
     def agent_name(self) -> str:
         """Human-readable name of this agent."""
         return "Agent3_ObjectWeapon"
-    
+
     @property
     def task_decomposition(self) -> list[str]:
         """
@@ -167,16 +185,16 @@ class Agent3Object(ForensicAgent):
     def iteration_ceiling(self) -> int:
         """Maximum iterations — tasks + 2 buffer to prevent runaway loops."""
         return len(self.task_decomposition) + 2
-    
+
     @property
     def supported_file_types(self) -> list[str]:
         """Object agent supports image file types only (YOLO requires still frames)."""
-        return ['image/']
-    
+        return ["image/"]
+
     async def build_tool_registry(self) -> ToolRegistry:
         """
         Build and return the tool registry for this agent.
-        
+
         Registers real tool implementations for:
         - object_detection: Full-scene object detection
         - secondary_classification: Secondary classification pass
@@ -188,31 +206,36 @@ class Agent3Object(ForensicAgent):
         - adversarial_robustness_check: Adversarial robustness check
         """
         registry = ToolRegistry()
-        
+
         async def object_detection(input_data: dict) -> dict:
             """
             Object detection using YOLOv8 (upgrade from OpenCV heuristics).
-            
+
             YOLOv8n is ~6MB and runs CPU-only in ~200ms per image.
             Detects 80 COCO classes including weapons (knife, gun, etc.)
             """
             import os
             import asyncio
-            
+
             # Set YOLO cache directory BEFORE importing - this controls where models are downloaded
             import pathlib
-            yolo_cache = os.getenv("YOLO_CONFIG_DIR", str(pathlib.Path.home() / ".cache" / "ultralytics"))
+
+            yolo_cache = os.getenv(
+                "YOLO_CONFIG_DIR", str(pathlib.Path.home() / ".cache" / "ultralytics")
+            )
             os.makedirs(yolo_cache, exist_ok=True)
             os.environ["YOLO_CONFIG_DIR"] = yolo_cache
             os.environ["ULTRALYTICS_CACHE_DIR"] = yolo_cache
-            
+
             artifact = input_data.get("artifact") or self.evidence_artifact
-            
+
             try:
                 # Use module-level singleton — avoids ~200ms reload on every call.
                 # Load via thread executor to avoid blocking the event loop on first call
                 # (model download + memory load can take several seconds).
-                model = await asyncio.get_event_loop().run_in_executor(None, _get_yolo_model)
+                model = await asyncio.get_event_loop().run_in_executor(
+                    None, _get_yolo_model
+                )
 
                 # If the artifact is a video, extract a representative frame first.
                 # This prevents "skipped/useless" results for videos and makes the analysis actionable.
@@ -220,11 +243,18 @@ class Agent3Object(ForensicAgent):
                 tmp_frame_path: str | None = None
                 try:
                     fp_lower = str(target_path).lower()
-                    mime = (artifact.metadata or {}).get("mime_type", "").lower() if getattr(artifact, "metadata", None) else ""
-                    is_video = fp_lower.endswith((".mp4", ".avi", ".mov", ".mkv", ".webm", ".wmv", ".flv")) or mime.startswith("video/")
+                    mime = (
+                        (artifact.metadata or {}).get("mime_type", "").lower()
+                        if getattr(artifact, "metadata", None)
+                        else ""
+                    )
+                    is_video = fp_lower.endswith(
+                        (".mp4", ".avi", ".mov", ".mkv", ".webm", ".wmv", ".flv")
+                    ) or mime.startswith("video/")
                     if is_video:
                         import cv2
                         import tempfile
+
                         cap = cv2.VideoCapture(target_path)
                         if cap.isOpened():
                             frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
@@ -232,8 +262,10 @@ class Agent3Object(ForensicAgent):
                             # to avoid black/empty frames at the start of videos.
                             best_frame = None
                             max_edges = -1
-                            
-                            sample_points = [0.1, 0.5, 0.9] if frame_count > 10 else [0.5]
+
+                            sample_points = (
+                                [0.1, 0.5, 0.9] if frame_count > 10 else [0.5]
+                            )
                             for p in sample_points:
                                 cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_count * p))
                                 ok, frame = cap.read()
@@ -243,35 +275,50 @@ class Agent3Object(ForensicAgent):
                                     if edge_score > max_edges:
                                         max_edges = edge_score
                                         best_frame = frame.copy()
-                            
+
                             if best_frame is not None:
-                                with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                                with tempfile.NamedTemporaryFile(
+                                    suffix=".jpg", delete=False
+                                ) as tmp:
                                     tmp_frame_path = tmp.name
-                                cv2.imwrite(tmp_frame_path, best_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+                                cv2.imwrite(
+                                    tmp_frame_path,
+                                    best_frame,
+                                    [int(cv2.IMWRITE_JPEG_QUALITY), 95],
+                                )
                                 target_path = tmp_frame_path
                         cap.release()
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"Video frame extraction for YOLO failed, using original: {e}")
                     # Fall back to passing the original path (YOLO may still handle it in some environments)
-                    pass
 
                 results = model(target_path, conf=0.20, verbose=False)
-                
+
                 detections = []
                 for r in results:
                     for box in r.boxes:
-                        detections.append({
-                            "class_name": model.names[int(box.cls)],
-                            "confidence": round(float(box.conf), 3),
-                            "bbox_xywh": [round(float(v), 1) for v in box.xywh[0].tolist()],
-                            "bbox_xyxy": [round(float(v), 1) for v in box.xyxy[0].tolist()],
-                        })
-                
+                        detections.append(
+                            {
+                                "class_name": model.names[int(box.cls)],
+                                "confidence": round(float(box.conf), 3),
+                                "bbox_xywh": [
+                                    round(float(v), 1) for v in box.xywh[0].tolist()
+                                ],
+                                "bbox_xyxy": [
+                                    round(float(v), 1) for v in box.xyxy[0].tolist()
+                                ],
+                            }
+                        )
+
                 # Flag weapons/dangerous items specifically
                 # COCO-80 has "knife" but NOT "gun" — we rely on CLIP for gun detection below
                 WEAPON_CLASSES = {"knife", "scissors"}
-                weapon_detections = [d for d in detections 
-                                     if any(w in d["class_name"].lower() for w in WEAPON_CLASSES)]
-                
+                weapon_detections = [
+                    d
+                    for d in detections
+                    if any(w in d["class_name"].lower() for w in WEAPON_CLASSES)
+                ]
+
                 detection_result = {
                     "detections": detections,
                     "detection_count": len(detections),
@@ -283,7 +330,7 @@ class Agent3Object(ForensicAgent):
                     "backend": "ultralytics-yolov8n",
                 }
                 await self._record_tool_result("object_detection", detection_result)
-                
+
                 # YOLO COCO has no "gun" class. If person detected but no weapon flagged,
                 # run CLIP on person bounding boxes to check for firearms.
                 # This runs OUTSIDE the main try/except so CLIP failure doesn't discard YOLO results.
@@ -293,6 +340,7 @@ class Agent3Object(ForensicAgent):
                         from tools.clip_utils import get_clip_analyzer
                         import tempfile as _tf
                         from PIL import Image as _PILImage
+
                         analyzer = get_clip_analyzer()
                         img_full = _PILImage.open(target_path).convert("RGB")
 
@@ -310,11 +358,17 @@ class Agent3Object(ForensicAgent):
                             x1, y1, x2, y2 = [int(v) for v in pd["bbox_xyxy"]]
                             iw, ih = img_full.size
                             pad = 20
-                            region = img_full.crop((
-                                max(0, x1 - pad), max(0, y1 - pad),
-                                min(iw, x2 + pad), min(ih, y2 + pad),
-                            ))
-                            with _tf.NamedTemporaryFile(suffix=".jpg", delete=False) as _t:
+                            region = img_full.crop(
+                                (
+                                    max(0, x1 - pad),
+                                    max(0, y1 - pad),
+                                    min(iw, x2 + pad),
+                                    min(ih, y2 + pad),
+                                )
+                            )
+                            with _tf.NamedTemporaryFile(
+                                suffix=".jpg", delete=False
+                            ) as _t:
                                 region.save(_t.name, format="JPEG", quality=95)
                                 person_tmp_paths.append((pd, _t.name))
 
@@ -352,12 +406,16 @@ class Agent3Object(ForensicAgent):
                         clip_weapon_finds = [r for r in clip_results if r is not None]
 
                         if clip_weapon_finds:
-                            detection_result["weapon_detections"] = weapon_detections + clip_weapon_finds
+                            detection_result["weapon_detections"] = (
+                                weapon_detections + clip_weapon_finds
+                            )
                             detection_result["clip_weapon_finds"] = clip_weapon_finds
-                            await self._record_tool_result("object_detection", detection_result)
-                    except Exception:
-                        pass  # CLIP check is supplementary — YOLO result already recorded
-                
+                            await self._record_tool_result(
+                                "object_detection", detection_result
+                            )
+                    except Exception as e:
+                        logger.debug(f"CLIP supplementary weapon check failed: {e}")
+
                 return detection_result
             except Exception:
                 # Fallback to OpenCV heuristics — also record result so Gemini handler has context
@@ -369,15 +427,17 @@ class Agent3Object(ForensicAgent):
                 try:
                     if "tmp_frame_path" in locals() and tmp_frame_path:
                         import os
+
                         os.unlink(tmp_frame_path)
-                except Exception:
-                    pass
-        
+                except Exception as e:
+                    logger.debug(f"Video frame cleanup failed: {e}")
+
         async def _object_detection_opencv(input_data: dict) -> dict:
             """Legacy OpenCV heuristic-based object detection."""
             import cv2
             import numpy as np
             from PIL import Image
+
             artifact = input_data.get("artifact") or self.evidence_artifact
             try:
                 img = np.array(Image.open(artifact.file_path).convert("RGB"))
@@ -385,7 +445,9 @@ class Agent3Object(ForensicAgent):
                 # Canny edge map
                 edges = cv2.Canny(gray, 50, 150)
                 # Find contours as proxy for distinct objects
-                contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                contours, _ = cv2.findContours(
+                    edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                )
                 # Filter by area (lowered threshold to catch more objects)
                 h, w = gray.shape
                 min_area = (h * w) * 0.001  # 0.1% of image (was 0.5%)
@@ -393,14 +455,16 @@ class Agent3Object(ForensicAgent):
                 objects = []
                 for c in significant[:15]:
                     x, y, bw, bh = cv2.boundingRect(c)
-                    region = img[y:y+bh, x:x+bw]
-                    mean_color = region.mean(axis=(0,1)).tolist()
-                    objects.append({
-                        "region_id": len(objects),
-                        "bbox": [int(x), int(y), int(bw), int(bh)],
-                        "area_ratio": round(float(cv2.contourArea(c)) / (h * w), 4),
-                        "mean_color_rgb": [round(c, 1) for c in mean_color],
-                    })
+                    region = img[y : y + bh, x : x + bw]
+                    mean_color = region.mean(axis=(0, 1)).tolist()
+                    objects.append(
+                        {
+                            "region_id": len(objects),
+                            "bbox": [int(x), int(y), int(bw), int(bh)],
+                            "area_ratio": round(float(cv2.contourArea(c)) / (h * w), 4),
+                            "mean_color_rgb": [round(c, 1) for c in mean_color],
+                        }
+                    )
                 return {
                     "objects_detected": objects,
                     "total_count": len(objects),
@@ -410,8 +474,12 @@ class Agent3Object(ForensicAgent):
                 }
             except Exception as e:
                 # Return graceful error dictionary rather than raising
-                return {"error": f"Object detection failed: {e}", "objects_detected": [], "total_count": 0}
-        
+                return {
+                    "error": f"Object detection failed: {e}",
+                    "objects_detected": [],
+                    "total_count": 0,
+                }
+
         async def secondary_classification(input_data: dict) -> dict:
             """
             Secondary classification pass using CLIP zero-shot classifier.
@@ -447,6 +515,7 @@ class Agent3Object(ForensicAgent):
                 # Save cropped region to temp file for CLIP analyzer
                 import tempfile
                 import os
+
                 with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
                     img.save(tmp.name, format="JPEG", quality=95)
                     tmp_path = tmp.name
@@ -535,26 +604,38 @@ class Agent3Object(ForensicAgent):
                     "refined_classifications": None,
                     "error": str(e),
                 }
-        
+
         async def scale_validation(input_data: dict) -> dict:
             import cv2
             import numpy as np
             from PIL import Image
+
             artifact = input_data.get("artifact") or self.evidence_artifact
             try:
                 img = np.array(Image.open(artifact.file_path).convert("RGB"))
                 gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
                 # Use HoughLinesP to detect straight lines → perspective cues
                 edges = cv2.Canny(gray, 50, 150, apertureSize=3)
-                lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=100, minLineLength=60, maxLineGap=10)
+                lines = cv2.HoughLinesP(
+                    edges,
+                    1,
+                    np.pi / 180,
+                    threshold=100,
+                    minLineLength=60,
+                    maxLineGap=10,
+                )
                 if lines is None:
-                    return {"scale_consistent": True, "line_count": 0, "note": "Insufficient line features for perspective analysis"}
+                    return {
+                        "scale_consistent": True,
+                        "line_count": 0,
+                        "note": "Insufficient line features for perspective analysis",
+                    }
                 # Compute line angles
                 angles = []
                 for line in lines:
                     x1, y1, x2, y2 = line[0]
                     if x2 != x1:
-                        angles.append(float(np.degrees(np.arctan2(y2-y1, x2-x1))))
+                        angles.append(float(np.degrees(np.arctan2(y2 - y1, x2 - x1))))
                 angle_std = float(np.std(angles)) if angles else 0.0
                 # Interpretation:
                 #   angle_std < 5°  → near-perfectly parallel lines only → likely digitally
@@ -594,20 +675,20 @@ class Agent3Object(ForensicAgent):
                 await self._record_tool_result("scale_validation", out)
                 return out
             except Exception as e:
-                return {"error": f"Scale validation failed: {e}", "scale_consistent": True}
-        
+                return {
+                    "error": f"Scale validation failed: {e}",
+                    "scale_consistent": True,
+                }
+
         async def lighting_consistency(input_data: dict) -> dict:
-            """Lighting analysis using Hough shadow-direction detector with inline fallback."""
+            """Lighting analysis using Hough shadow-direction detector."""
             import cv2
             import numpy as np
             from PIL import Image
+
             artifact = input_data.get("artifact") or self.evidence_artifact
-            # Try ML subprocess first (reduced timeout — inline fallback is fast)
-            ml_result = await run_ml_tool("lighting_analyzer.py", artifact.file_path, timeout=8.0)
-            if ml_result.get("available") and not ml_result.get("error"):
-                await self._record_tool_result("lighting_consistency", ml_result)
-                return ml_result
-            # Inline fallback: gradient direction consistency
+            # ── Initial pass: use inline Sobel gradient directly (no ML subprocess).
+            # The ML lighting_analyzer.py runs in the deep pass.
             try:
                 img = np.array(Image.open(artifact.file_path).convert("RGB"))
                 gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY).astype(np.float32)
@@ -624,7 +705,11 @@ class Agent3Object(ForensicAgent):
                 out = {
                     "inconsistency_detected": inconsistency,
                     "details": f"Gradient direction std={angle_std:.1f}° across {mask.sum()} high-gradient pixels.",
-                    "flags": ["High gradient direction variance — possible lighting splice"] if inconsistency else [],
+                    "flags": [
+                        "High gradient direction variance — possible lighting splice"
+                    ]
+                    if inconsistency
+                    else [],
                     "backend": "opencv-gradient-inline",
                     "court_defensible": True,
                     "available": True,
@@ -632,13 +717,19 @@ class Agent3Object(ForensicAgent):
                 await self._record_tool_result("lighting_consistency", out)
                 return out
             except Exception as e:
-                return {"error": f"Lighting analysis failed: {e}", "inconsistency_detected": False,
-                        "backend": "tool-exception", "court_defensible": False}
-        
+                await self._record_tool_error("lighting_consistency", str(e))
+                return {
+                    "error": f"Lighting analysis failed: {e}",
+                    "inconsistency_detected": False,
+                    "backend": "tool-exception",
+                    "court_defensible": False,
+                }
+
         async def scene_incongruence(input_data: dict) -> dict:
             import cv2
             import numpy as np
             from PIL import Image
+
             artifact = input_data.get("artifact") or self.evidence_artifact
             # Lossless/digital files have content-driven Laplacian variance (text vs blank areas)
             # that is NOT a sensor noise inconsistency — skip sensor-based check
@@ -665,7 +756,10 @@ class Agent3Object(ForensicAgent):
                 quadrant_noise = []
                 for row in range(2):
                     for col in range(2):
-                        q = gray[row*h//2:(row+1)*h//2, col*w//2:(col+1)*w//2]
+                        q = gray[
+                            row * h // 2 : (row + 1) * h // 2,
+                            col * w // 2 : (col + 1) * w // 2,
+                        ]
                         lap = cv2.Laplacian(q.astype(np.uint8), cv2.CV_64F)
                         quadrant_noise.append(float(lap.var()))
                 noise_std = float(np.std(quadrant_noise))
@@ -681,31 +775,35 @@ class Agent3Object(ForensicAgent):
                     "anomaly_description": (
                         f"Noise profile inconsistency detected across image regions "
                         f"(std={noise_std:.1f}, mean={noise_mean:.1f}) — possible inserted region"
-                        if anomaly_detected else "Noise profile appears consistent across image regions"
+                        if anomaly_detected
+                        else "Noise profile appears consistent across image regions"
                     ),
                 }
             except Exception as e:
-                return {"error": f"Scene incongruence analysis failed: {e}", "contextual_anomalies_detected": 0}
-        
+                return {
+                    "error": f"Scene incongruence analysis failed: {e}",
+                    "contextual_anomalies_detected": 0,
+                }
+
         async def contraband_database_handler(input_data: dict) -> dict:
             """
             CLIP zero-shot contextual analysis (upgrade from fake contraband DB).
-            
+
             Uses shared CLIP utility to avoid loading the model multiple times.
             This does not claim a real weapons registry — it uses semantic similarity,
             which is court-defensible as "contextual analysis" rather than database matching.
-            
+
             Runs two passes: one with default categories + concerns (broader context),
             and one with ONLY concern categories (focused weapon/drug detection).
             """
             from tools.clip_utils import get_clip_analyzer
-            
+
             artifact = input_data.get("artifact") or self.evidence_artifact
-            
+
             try:
                 analyzer = get_clip_analyzer()
                 _loop = asyncio.get_running_loop()
-                
+
                 # Pass 1: Full context (default categories + concerns)
                 result = await _loop.run_in_executor(
                     None,
@@ -715,7 +813,7 @@ class Agent3Object(ForensicAgent):
                         check_concerns=True,
                     ),
                 )
-                
+
                 # Pass 2: Focused concern-only detection (no dilution from safe categories)
                 concern_result = await _loop.run_in_executor(
                     None,
@@ -725,7 +823,7 @@ class Agent3Object(ForensicAgent):
                         check_concerns=False,
                     ),
                 )
-                
+
                 if not result.available:
                     return {
                         "status": "unavailable",
@@ -738,12 +836,21 @@ class Agent3Object(ForensicAgent):
                     "court_defensible": True,
                     "method": "CLIP zero-shot semantic similarity — NOT a weapons registry lookup (shared model)",
                     "top_matches": [
-                        {"category": cat, "similarity": score} 
+                        {"category": cat, "similarity": score}
                         for cat, score in result.all_scores[:3]
                     ],
-                    "concern_flag": result.concern_flag or (concern_result.available and concern_result.top_confidence > 0.3 and concern_result.top_match != "a safe everyday object"),
-                    "focused_concern_match": concern_result.top_match if concern_result.available else None,
-                    "focused_concern_score": round(concern_result.top_confidence, 3) if concern_result.available else 0.0,
+                    "concern_flag": result.concern_flag
+                    or (
+                        concern_result.available
+                        and concern_result.top_confidence > 0.3
+                        and concern_result.top_match != "a safe everyday object"
+                    ),
+                    "focused_concern_match": concern_result.top_match
+                    if concern_result.available
+                    else None,
+                    "focused_concern_score": round(concern_result.top_confidence, 3)
+                    if concern_result.available
+                    else 0.0,
                     "available": True,
                     "backend": "open-clip ViT-B-32 (shared)",
                 }
@@ -755,7 +862,7 @@ class Agent3Object(ForensicAgent):
                     "court_defensible": False,
                     "error": str(e),
                 }
-            
+
         async def image_splice_check(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact
             # DCT quantization splicing detection only detects JPEG re-compression inconsistencies.
@@ -772,14 +879,13 @@ class Agent3Object(ForensicAgent):
                     "available": True,
                     "backend": "not-applicable-lossless",
                 }
-            ml_result = await run_ml_tool("splicing_detector.py", artifact.file_path, timeout=10.0)
-            if ml_result.get("available") and not ml_result.get("error"):
-                return ml_result
-            # Inline DCT-based splicing fallback
+            # ── Initial pass: use inline DCT directly (no ML subprocess overhead).
+            # The ML splicing_detector.py runs in the deep pass.
             try:
                 import cv2
                 import numpy as np
                 from PIL import Image
+
                 img = np.array(Image.open(artifact.file_path).convert("L"))
                 h, w = img.shape
                 block_size = 8
@@ -788,31 +894,51 @@ class Agent3Object(ForensicAgent):
                 q_vals = []
                 for y in range(0, h - block_size, block_size):
                     for x in range(0, w - block_size, block_size):
-                        block = img[y:y+block_size, x:x+block_size].astype(np.float32)
+                        block = img[y : y + block_size, x : x + block_size].astype(
+                            np.float32
+                        )
                         dct = cv2.dct(block)
                         q_vals.append(float(np.abs(dct[4:, 4:]).mean()))
                         total_blocks += 1
                 if q_vals:
                     mean_q = np.mean(q_vals)
                     std_q = np.std(q_vals)
-                    inconsistent_blocks = int(sum(1 for v in q_vals if abs(v - mean_q) > 2 * std_q))
-                splicing_detected = total_blocks > 0 and (inconsistent_blocks / total_blocks) > 0.15
-                return {
+                    inconsistent_blocks = int(
+                        sum(1 for v in q_vals if abs(v - mean_q) > 2 * std_q)
+                    )
+                splicing_detected = (
+                    total_blocks > 0 and (inconsistent_blocks / total_blocks) > 0.15
+                )
+                splice_result = {
                     "splicing_detected": splicing_detected,
                     "num_inconsistent_blocks": inconsistent_blocks,
                     "total_blocks": total_blocks,
-                    "inconsistency_ratio": round(inconsistent_blocks / total_blocks, 3) if total_blocks else 0,
+                    "inconsistency_ratio": round(inconsistent_blocks / total_blocks, 3)
+                    if total_blocks
+                    else 0,
                     "backend": "opencv-dct-inline",
-                    "court_defensible": True, "available": True,
+                    "court_defensible": True,
+                    "available": True,
                 }
+                await self._record_tool_result("image_splice_check", splice_result)
+                return splice_result
             except Exception as e:
-                return {"splicing_detected": False, "error": str(e), "backend": "tool-exception", "court_defensible": False}
+                await self._record_tool_error("image_splice_check", str(e))
+                return {
+                    "splicing_detected": False,
+                    "error": str(e),
+                    "backend": "tool-exception",
+                    "court_defensible": False,
+                }
 
         def _artifact_is_lossless(artifact) -> bool:
             """Return True if the artifact is a lossless image format (PNG/BMP/TIFF/GIF/WEBP)."""
-            import os as _os
             file_path = str(artifact.file_path)
-            mime = ((artifact.metadata or {}).get("mime_type", "") if getattr(artifact, "metadata", None) else "") or None
+            mime = (
+                (artifact.metadata or {}).get("mime_type", "")
+                if getattr(artifact, "metadata", None)
+                else ""
+            ) or None
             return is_lossless_image(file_path, mime)
 
         async def noise_fingerprint(input_data: dict) -> dict:
@@ -832,8 +958,12 @@ class Agent3Object(ForensicAgent):
                     "available": True,
                 }
             regions = input_data.get("regions", 6)
-            ml_result = await run_ml_tool("noise_fingerprint.py", artifact.file_path,
-                                          extra_args=["--regions", str(regions)], timeout=10.0)
+            ml_result = await run_ml_tool(
+                "noise_fingerprint.py",
+                artifact.file_path,
+                extra_args=["--regions", str(regions)],
+                timeout=10.0,
+            )
             if ml_result.get("available") and not ml_result.get("error"):
                 return ml_result
             # Inline PRNU-lite fallback using wavelet high-frequency residual
@@ -841,7 +971,10 @@ class Agent3Object(ForensicAgent):
                 import cv2
                 import numpy as np
                 from PIL import Image
-                img = np.array(Image.open(artifact.file_path).convert("L"), dtype=np.float32)
+
+                img = np.array(
+                    Image.open(artifact.file_path).convert("L"), dtype=np.float32
+                )
                 h, w = img.shape
                 denoised = cv2.GaussianBlur(img, (5, 5), 0)
                 noise = img - denoised
@@ -849,28 +982,41 @@ class Agent3Object(ForensicAgent):
                 quadrant_stds = []
                 for r in range(2):
                     for c in range(2):
-                        q_noise = noise[r*rh:(r+1)*rh, c*rw:(c+1)*rw]
+                        q_noise = noise[r * rh : (r + 1) * rh, c * rw : (c + 1) * rw]
                         quadrant_stds.append(float(q_noise.std()))
                 mean_std = float(np.mean(quadrant_stds))
                 std_of_stds = float(np.std(quadrant_stds))
-                outlier_regions = int(sum(1 for s in quadrant_stds if abs(s - mean_std) > std_of_stds))
+                outlier_regions = int(
+                    sum(1 for s in quadrant_stds if abs(s - mean_std) > std_of_stds)
+                )
                 verdict = "INCONSISTENT" if outlier_regions > 0 else "CONSISTENT"
                 return {
                     "verdict": verdict,
-                    "noise_consistency_score": round(1.0 - std_of_stds / (mean_std + 1e-6), 3),
+                    "noise_consistency_score": round(
+                        1.0 - std_of_stds / (mean_std + 1e-6), 3
+                    ),
                     "outlier_region_count": outlier_regions,
                     "total_regions": len(quadrant_stds),
                     "region_noise_stds": [round(s, 3) for s in quadrant_stds],
                     "backend": "opencv-prnu-lite-inline",
-                    "court_defensible": True, "available": True,
+                    "court_defensible": True,
+                    "available": True,
                 }
             except Exception as e:
-                return {"verdict": "INCONCLUSIVE", "error": str(e), "backend": "tool-exception", "court_defensible": False}
-        
+                return {
+                    "verdict": "INCONCLUSIVE",
+                    "error": str(e),
+                    "backend": "tool-exception",
+                    "court_defensible": False,
+                }
+
         async def inter_agent_call_handler(input_data: dict) -> dict:
             """Real inter-agent call via InterAgentBus (calls Agent 1 for lighting inconsistencies)."""
             if self._inter_agent_bus is None:
-                return {"status": "skipped", "message": "No inter_agent_bus — cross-agent call skipped"}
+                return {
+                    "status": "skipped",
+                    "message": "No inter_agent_bus — cross-agent call skipped",
+                }
 
             call = InterAgentCall(
                 caller_agent_id=self.agent_id,
@@ -878,21 +1024,26 @@ class Agent3Object(ForensicAgent):
                 call_type=InterAgentCallType.COLLABORATIVE,
                 payload={
                     "region": input_data.get("region"),
-                    "question": input_data.get("question", "Confirm lighting inconsistency in this region"),
-                }
+                    "question": input_data.get(
+                        "question", "Confirm lighting inconsistency in this region"
+                    ),
+                },
             )
             try:
                 import asyncio
+
                 response = await asyncio.wait_for(
-                    self._inter_agent_bus.send(call, self.custody_logger),
-                    timeout=15.0
+                    self._inter_agent_bus.send(call, self.custody_logger), timeout=15.0
                 )
                 return response
             except asyncio.TimeoutError:
-                return {"status": "timeout", "message": "Inter-agent call timed out after 15s — proceeding without cross-validation"}
+                return {
+                    "status": "timeout",
+                    "message": "Inter-agent call timed out after 15s — proceeding without cross-validation",
+                }
             except Exception as e:
                 return {"status": "error", "message": f"Inter-agent call failed: {e}"}
-        
+
         async def adversarial_robustness_check_handler(input_data: dict) -> dict:
             """
             Adversarial robustness check for object detection evasion.
@@ -919,12 +1070,18 @@ class Agent3Object(ForensicAgent):
 
                     # Set YOLO cache directory BEFORE importing
                     import pathlib
-                    yolo_cache = os.getenv("YOLO_CONFIG_DIR", str(pathlib.Path.home() / ".cache" / "ultralytics"))
+
+                    yolo_cache = os.getenv(
+                        "YOLO_CONFIG_DIR",
+                        str(pathlib.Path.home() / ".cache" / "ultralytics"),
+                    )
                     os.makedirs(yolo_cache, exist_ok=True)
                     os.environ["YOLO_CONFIG_DIR"] = yolo_cache
                     os.environ["ULTRALYTICS_CACHE_DIR"] = yolo_cache
-                    
-                    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+
+                    with tempfile.NamedTemporaryFile(
+                        suffix=".jpg", delete=False
+                    ) as tmp:
                         pil_image.save(tmp.name, format="JPEG", quality=95)
                         tmp_path = tmp.name
                     try:
@@ -940,12 +1097,17 @@ class Agent3Object(ForensicAgent):
                         except ImportError:
                             # OpenCV contour fallback — just return count
                             import cv2
+
                             arr = np.array(pil_image)
                             gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
                             edges = cv2.Canny(gray, 50, 150)
-                            cnts, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                            cnts, _ = cv2.findContours(
+                                edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                            )
                             h, w = gray.shape
-                            sig = [c for c in cnts if cv2.contourArea(c) > h * w * 0.005]
+                            sig = [
+                                c for c in cnts if cv2.contourArea(c) > h * w * 0.005
+                            ]
                             return {f"region_{i}" for i in range(len(sig))}
                     finally:
                         os.unlink(tmp_path)
@@ -963,7 +1125,7 @@ class Agent3Object(ForensicAgent):
                     / max(len(original_classes | blurred_classes), 1),
                 }
 
-                # 2 — Brightness +20 % 
+                # 2 — Brightness +20 %
                 arr = np.array(img_orig, dtype=np.float32)
                 bright = np.clip(arr * 1.20, 0, 255).astype(np.uint8)
                 bright_classes = _detect_classes(PILImage.fromarray(bright))
@@ -988,8 +1150,12 @@ class Agent3Object(ForensicAgent):
                     / max(len(original_classes | noisy_classes), 1),
                 }
 
-                min_similarity = min(v["jaccard_similarity"] for v in perturbation_results.values())
-                evasion_detected = min_similarity < 0.50  # < 50 % class overlap under perturbation
+                min_similarity = min(
+                    v["jaccard_similarity"] for v in perturbation_results.values()
+                )
+                evasion_detected = (
+                    min_similarity < 0.50
+                )  # < 50 % class overlap under perturbation
 
                 return {
                     "status": "real",
@@ -1014,6 +1180,7 @@ class Agent3Object(ForensicAgent):
                     "confidence": None,
                     "error": str(e),
                 }
+
         async def object_text_ocr_handler(input_data: dict) -> dict:
             """
             OCR focused on detected object regions.
@@ -1024,18 +1191,26 @@ class Agent3Object(ForensicAgent):
             forensically significant but not returned by YOLO detection alone.
             """
             import json as _json
+
             artifact = input_data.get("artifact") or self.evidence_artifact
             # Context: pull bboxes from the object_detection result that ran before us
-            ctx_detections = self._tool_context.get("object_detection", {}).get("detections", [])
+            ctx_detections = self._tool_context.get("object_detection", {}).get(
+                "detections", []
+            )
             detections = input_data.get("detections") or ctx_detections
-            result = await run_ml_tool("object_text_ocr.py", artifact.file_path,
-                                       extra_args=["--detections", _json.dumps(detections)], timeout=15.0)
+            result = await run_ml_tool(
+                "object_text_ocr.py",
+                artifact.file_path,
+                extra_args=["--detections", _json.dumps(detections)],
+                timeout=15.0,
+            )
             if result.get("available") and not result.get("error"):
                 await self._record_tool_result("object_text_ocr", result)
                 return result
             try:
                 from PIL import Image
                 import asyncio as _aio
+
                 img = Image.open(artifact.file_path).convert("RGB")
                 w_img, h_img = img.size
                 extracted_texts = []
@@ -1043,46 +1218,65 @@ class Agent3Object(ForensicAgent):
                 # Full-image Tesseract pass — run in thread to avoid blocking event loop
                 async def _run_tesseract():
                     import pytesseract
+
                     return pytesseract.image_to_string(img, config="--psm 3").strip()
+
                 try:
                     full_text = await _aio.wait_for(
-                        _aio.get_event_loop().run_in_executor(None, lambda: __import__('pytesseract').image_to_string(img, config="--psm 3").strip()),
-                        timeout=30.0,
+                        _aio.get_event_loop().run_in_executor(
+                            None,
+                            lambda: (
+                                __import__("pytesseract")
+                                .image_to_string(img, config="--psm 3")
+                                .strip()
+                            ),
+                        ),
+                        timeout=15.0,
                     )
                     words = [t.strip() for t in full_text.split() if len(t.strip()) > 1]
                     if words:
-                        extracted_texts.append({
-                            "region": "full_image",
-                            "text": full_text[:500],
-                            "word_count": len(words),
-                            "method": "tesseract",
-                        })
-                except Exception:
-                    pass
+                        extracted_texts.append(
+                            {
+                                "region": "full_image",
+                                "text": full_text[:500],
+                                "word_count": len(words),
+                                "method": "tesseract",
+                            }
+                        )
+                except Exception as e:
+                    logger.debug(f"Tesseract full-image OCR failed: {e}")
 
                 # EasyOCR fallback
                 if not extracted_texts:
                     try:
                         import asyncio as _aio
+
                         def _run_easyocr():
                             import easyocr
+
                             reader = easyocr.Reader(["en"], gpu=False, verbose=False)
                             return reader.readtext(artifact.file_path, detail=1)
+
                         ocr_results = await _aio.wait_for(
                             _aio.get_event_loop().run_in_executor(None, _run_easyocr),
-                            timeout=30.0,
+                            timeout=15.0,
                         )
-                        items = [{"text": t.strip(), "confidence": round(float(c), 3)}
-                                 for _, t, c in ocr_results if c > 0.3 and len(t.strip()) > 1]
+                        items = [
+                            {"text": t.strip(), "confidence": round(float(c), 3)}
+                            for _, t, c in ocr_results
+                            if c > 0.3 and len(t.strip()) > 1
+                        ]
                         if items:
-                            extracted_texts.append({
-                                "region": "full_image",
-                                "text_items": items,
-                                "word_count": len(items),
-                                "method": "easyocr",
-                            })
-                    except Exception:
-                        pass
+                            extracted_texts.append(
+                                {
+                                    "region": "full_image",
+                                    "text_items": items,
+                                    "word_count": len(items),
+                                    "method": "easyocr",
+                                }
+                            )
+                    except Exception as e:
+                        logger.debug(f"EasyOCR full-image fallback failed: {e}")
 
                 # Per-object-bounding-box pass
                 for det in (detections or [])[:5]:
@@ -1090,33 +1284,53 @@ class Agent3Object(ForensicAgent):
                         bbox = det.get("bbox") or det.get("bounding_box", {})
                         if isinstance(bbox, dict):
                             x1, y1 = int(bbox.get("x", 0)), int(bbox.get("y", 0))
-                            x2, y2 = int(bbox.get("x", 0) + bbox.get("w", w_img)), int(bbox.get("y", 0) + bbox.get("h", h_img))
+                            x2, y2 = (
+                                int(bbox.get("x", 0) + bbox.get("w", w_img)),
+                                int(bbox.get("y", 0) + bbox.get("h", h_img)),
+                            )
                         elif isinstance(bbox, (list, tuple)) and len(bbox) >= 4:
-                            x1, y1, x2, y2 = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
+                            x1, y1, x2, y2 = (
+                                int(bbox[0]),
+                                int(bbox[1]),
+                                int(bbox[2]),
+                                int(bbox[3]),
+                            )
                         else:
                             continue
-                        region = img.crop((max(0, x1), max(0, y1), min(w_img, x2), min(h_img, y2)))
+                        region = img.crop(
+                            (max(0, x1), max(0, y1), min(w_img, x2), min(h_img, y2))
+                        )
                         if region.size[0] < 10 or region.size[1] < 10:
                             continue
                         try:
                             import asyncio as _aio
+
                             def _run_region_ocr():
                                 import pytesseract
-                                return pytesseract.image_to_string(region, config="--psm 6").strip()
+
+                                return pytesseract.image_to_string(
+                                    region, config="--psm 6"
+                                ).strip()
+
                             region_text = await _aio.wait_for(
-                                _aio.get_event_loop().run_in_executor(None, _run_region_ocr),
+                                _aio.get_event_loop().run_in_executor(
+                                    None, _run_region_ocr
+                                ),
                                 timeout=15.0,
                             )
                             if region_text and len(region_text.strip()) > 1:
-                                extracted_texts.append({
-                                    "region": f"object_{det.get('class_name', 'unknown')}",
-                                    "text": region_text[:200],
-                                    "word_count": len(region_text.split()),
-                                    "method": "tesseract_bbox",
-                                })
-                        except Exception:
-                            pass
-                    except Exception:
+                                extracted_texts.append(
+                                    {
+                                        "region": f"object_{det.get('class_name', 'unknown')}",
+                                        "text": region_text[:200],
+                                        "word_count": len(region_text.split()),
+                                        "method": "tesseract_bbox",
+                                    }
+                                )
+                        except Exception as e:
+                            logger.debug(f"Tesseract BBox OCR failed: {e}")
+                    except Exception as _e:
+                        logger.debug("Tesseract BBox OCR extraction failed", error=str(_e))
                         continue
 
                 combined = " ".join(r.get("text", "") for r in extracted_texts)
@@ -1129,7 +1343,8 @@ class Agent3Object(ForensicAgent):
                     "forensic_note": (
                         f"OCR extracted text from {len(extracted_texts)} region(s). "
                         "May include license plates, ID numbers, usernames, timestamps, or other identifying information."
-                        if extracted_texts else "No legible text found in image or object regions."
+                        if extracted_texts
+                        else "No legible text found in image or object regions."
                     ),
                     "available": True,
                     "court_defensible": True,
@@ -1138,7 +1353,12 @@ class Agent3Object(ForensicAgent):
                 await self._record_tool_result("object_text_ocr", out)
                 return out
             except Exception as e:
-                return {"text_found": False, "error": str(e), "available": False, "court_defensible": False}
+                return {
+                    "text_found": False,
+                    "error": str(e),
+                    "available": False,
+                    "court_defensible": False,
+                }
 
         async def document_authenticity_handler(input_data: dict) -> dict:
             """
@@ -1150,13 +1370,16 @@ class Agent3Object(ForensicAgent):
             and edge sharpness variance from digital text overlaid on scanned backgrounds.
             """
             artifact = input_data.get("artifact") or self.evidence_artifact
-            result = await run_ml_tool("document_authenticity.py", artifact.file_path, timeout=15.0)
+            result = await run_ml_tool(
+                "document_authenticity.py", artifact.file_path, timeout=15.0
+            )
             if result.get("available") and not result.get("error"):
                 return result
             try:
                 import cv2
                 import numpy as np
                 from PIL import Image
+
                 img = Image.open(artifact.file_path).convert("RGB")
                 arr = np.array(img)
                 gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
@@ -1165,49 +1388,78 @@ class Agent3Object(ForensicAgent):
                 score = 0.0
 
                 # Check 1: Font/character size consistency via connected components
-                _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-                num_labels, _, stats, _ = cv2.connectedComponentsWithStats(thresh, connectivity=8)
+                _, thresh = cv2.threshold(
+                    gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+                )
+                num_labels, _, stats, _ = cv2.connectedComponentsWithStats(
+                    thresh, connectivity=8
+                )
                 char_h = stats[1:, cv2.CC_STAT_HEIGHT]
                 char_w_vals = stats[1:, cv2.CC_STAT_WIDTH]
-                char_mask = (char_h > 3) & (char_h < 80) & (char_w_vals > 2) & (char_w_vals < 100)
+                char_mask = (
+                    (char_h > 3)
+                    & (char_h < 80)
+                    & (char_w_vals > 2)
+                    & (char_w_vals < 100)
+                )
                 char_components = char_h[char_mask]
                 font_cv = 0.0
                 if len(char_components) > 20:
-                    font_cv = float(char_components.std() / (char_components.mean() + 1e-6))
+                    font_cv = float(
+                        char_components.std() / (char_components.mean() + 1e-6)
+                    )
                     if font_cv > 0.6:
-                        flags.append(f"Font size inconsistency (CV={font_cv:.3f}) — possible text insertion from a different source")
+                        flags.append(
+                            f"Font size inconsistency (CV={font_cv:.3f}) — possible text insertion from a different source"
+                        )
                         score += 0.20
 
                 # Check 2: Background edge density quadrant analysis
                 if h > 100 and w > 100:
                     from scipy import ndimage
+
                     gx = np.abs(ndimage.sobel(gray, axis=1))
                     gy = np.abs(ndimage.sobel(gray, axis=0))
-                    quad_edges = [(gx + gy)[r*h//2:(r+1)*h//2, c*w//2:(c+1)*w//2].mean()
-                                  for r in range(2) for c in range(2)]
+                    quad_edges = [
+                        (gx + gy)[
+                            r * h // 2 : (r + 1) * h // 2, c * w // 2 : (c + 1) * w // 2
+                        ].mean()
+                        for r in range(2)
+                        for c in range(2)
+                    ]
                     edge_cv = float(np.std(quad_edges) / (np.mean(quad_edges) + 1e-6))
                     if edge_cv > 0.50:
-                        flags.append(f"Background edge density inconsistency ({edge_cv:.3f}) — regions may have different source material")
+                        flags.append(
+                            f"Background edge density inconsistency ({edge_cv:.3f}) — regions may have different source material"
+                        )
                         score += 0.15
 
                 # Check 3: Frequency domain anomaly peaks (copy-paste leaves periodic peaks)
                 fft = np.fft.fft2(gray.astype(np.float32))
                 magnitude = np.log(np.abs(np.fft.fftshift(fft)) + 1)
-                freq_peaks = int(np.sum(magnitude > magnitude.mean() + 4 * magnitude.std()))
+                freq_peaks = int(
+                    np.sum(magnitude > magnitude.mean() + 4 * magnitude.std())
+                )
                 if freq_peaks > 50:
-                    flags.append(f"Unusual frequency domain peaks ({freq_peaks}) — possible repeated copied elements")
+                    flags.append(
+                        f"Unusual frequency domain peaks ({freq_peaks}) — possible repeated copied elements"
+                    )
                     score += 0.15
 
                 # Check 4: Edge sharpness variance (digital text on scanned background)
                 laplacian_vals = np.abs(cv2.Laplacian(gray, cv2.CV_64F))
                 sharpness_std = float(laplacian_vals.std())
                 if sharpness_std > 60:
-                    flags.append(f"High edge sharpness variance ({sharpness_std:.1f}) — possible digital text insertion on scanned background")
+                    flags.append(
+                        f"High edge sharpness variance ({sharpness_std:.1f}) — possible digital text insertion on scanned background"
+                    )
                     score += 0.10
 
                 verdict = (
-                    "LIKELY_FORGED" if score >= 0.45
-                    else "SUSPICIOUS" if score >= 0.25
+                    "LIKELY_FORGED"
+                    if score >= 0.45
+                    else "SUSPICIOUS"
+                    if score >= 0.25
                     else "APPEARS_AUTHENTIC"
                 )
                 return {
@@ -1223,21 +1475,70 @@ class Agent3Object(ForensicAgent):
                     "backend": "opencv-document-inline",
                 }
             except Exception as e:
-                return {"verdict": "ERROR", "error": str(e), "available": False, "court_defensible": False}
+                return {
+                    "verdict": "ERROR",
+                    "error": str(e),
+                    "available": False,
+                    "court_defensible": False,
+                }
 
         # CRITICAL: object_detection must be registered FIRST - it's the primary tool for this agent
-        registry.register("object_detection", object_detection, "Full-scene object detection using YOLOv8")
-        registry.register("secondary_classification", secondary_classification, "Secondary classification pass")
-        registry.register("scale_validation", scale_validation, "Scale and proportion validation")
-        registry.register("lighting_consistency", lighting_consistency, "Lighting and shadow consistency check")
-        registry.register("scene_incongruence", scene_incongruence, "Scene-level contextual incongruence analysis")
-        registry.register("image_splice_check", image_splice_check, "Detect image splicing via DCT quantization inconsistencies")
-        registry.register("noise_fingerprint", noise_fingerprint, "Detect camera noise fingerprint inconsistencies")
-        registry.register("contraband_database", contraband_database_handler, "Contraband and weapons database cross-reference")
-        registry.register("inter_agent_call", inter_agent_call_handler, "Inter-agent communication")
-        registry.register("adversarial_robustness_check", adversarial_robustness_check_handler, "Adversarial robustness check")
-        registry.register("object_text_ocr", object_text_ocr_handler, "OCR on detected object regions: license plates, IDs, signs, screen content")
-        registry.register("document_authenticity", document_authenticity_handler, "Document forgery analysis: font consistency, background irregularity, frequency anomalies")
+        registry.register(
+            "object_detection",
+            object_detection,
+            "Full-scene object detection using YOLOv8",
+        )
+        registry.register(
+            "secondary_classification",
+            secondary_classification,
+            "Secondary classification pass",
+        )
+        registry.register(
+            "scale_validation", scale_validation, "Scale and proportion validation"
+        )
+        registry.register(
+            "lighting_consistency",
+            lighting_consistency,
+            "Lighting and shadow consistency check",
+        )
+        registry.register(
+            "scene_incongruence",
+            scene_incongruence,
+            "Scene-level contextual incongruence analysis",
+        )
+        registry.register(
+            "image_splice_check",
+            image_splice_check,
+            "Detect image splicing via DCT quantization inconsistencies",
+        )
+        registry.register(
+            "noise_fingerprint",
+            noise_fingerprint,
+            "Detect camera noise fingerprint inconsistencies",
+        )
+        registry.register(
+            "contraband_database",
+            contraband_database_handler,
+            "Contraband and weapons database cross-reference",
+        )
+        registry.register(
+            "inter_agent_call", inter_agent_call_handler, "Inter-agent communication"
+        )
+        registry.register(
+            "adversarial_robustness_check",
+            adversarial_robustness_check_handler,
+            "Adversarial robustness check",
+        )
+        registry.register(
+            "object_text_ocr",
+            object_text_ocr_handler,
+            "OCR on detected object regions: license plates, IDs, signs, screen content",
+        )
+        registry.register(
+            "document_authenticity",
+            document_authenticity_handler,
+            "Document forgery analysis: font consistency, background irregularity, frequency anomalies",
+        )
 
         # ── Gemini deep forensic analysis handler ──────────────────────────
         _gemini = GeminiVisionClient(self.config)
@@ -1261,7 +1562,9 @@ class Agent3Object(ForensicAgent):
             _ctx_event = getattr(self, "_agent1_context_event", None)
             if _ctx_event is not None and not _ctx_event.is_set():
                 try:
-                    await asyncio.wait_for(asyncio.shield(_ctx_event.wait()), timeout=120.0)
+                    await asyncio.wait_for(
+                        asyncio.shield(_ctx_event.wait()), timeout=60.0
+                    )
                 except asyncio.TimeoutError:
                     logger.warning(
                         f"{self.agent_id}: Agent1 context wait timed out — "
@@ -1278,14 +1581,16 @@ class Agent3Object(ForensicAgent):
                         "yolo_detected_classes": yolo_cached.get("classes_found", []),
                         "yolo_detection_count": yolo_cached.get("detection_count", 0),
                         "yolo_weapon_classes": [
-                            d.get("class_name", "") for d in yolo_cached.get("weapon_detections", [])
+                            d.get("class_name", "")
+                            for d in yolo_cached.get("weapon_detections", [])
                         ],
                         "yolo_backend": yolo_cached.get("backend", ""),
                     }
                 else:
                     # Fallback: scan findings for object_detection finding
                     yolo_findings = [
-                        f for f in (self._findings or [])
+                        f
+                        for f in (self._findings or [])
                         if (f.metadata or {}).get("tool_name") == "object_detection"
                     ]
                     if yolo_findings:
@@ -1294,12 +1599,13 @@ class Agent3Object(ForensicAgent):
                             "yolo_detected_classes": yolo_out.get("classes_found", []),
                             "yolo_detection_count": yolo_out.get("detection_count", 0),
                             "yolo_weapon_classes": [
-                                d.get("class_name", "") for d in yolo_out.get("weapon_detections", [])
+                                d.get("class_name", "")
+                                for d in yolo_out.get("weapon_detections", [])
                             ],
                             "yolo_backend": yolo_out.get("backend", ""),
                         }
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"YOLO context extraction for Gemini failed: {e}")
 
             # Build Agent 1 context (injected by pipeline from Agent 1's Gemini analysis)
             agent1_context: dict = {}
@@ -1308,17 +1614,27 @@ class Agent3Object(ForensicAgent):
                 if a1:
                     agent1_context = {
                         "agent1_image_content_type": a1.get("gemini_content_type", ""),
-                        "agent1_scene_description": str(a1.get("gemini_narrative", a1.get("gemini_scene", "")))[:400],
-                        "agent1_objects_detected": a1.get("gemini_detected_objects", []),
-                        "agent1_manipulation_signals": a1.get("gemini_manipulation_signals", []),
+                        "agent1_scene_description": str(
+                            a1.get("gemini_narrative", a1.get("gemini_scene", ""))
+                        )[:400],
+                        "agent1_objects_detected": a1.get(
+                            "gemini_detected_objects", []
+                        ),
+                        "agent1_manipulation_signals": a1.get(
+                            "gemini_manipulation_signals", []
+                        ),
                         "agent1_extracted_text": a1.get("gemini_extracted_text", []),
                         "agent1_interface": a1.get("gemini_interface", ""),
                         "agent1_verdict": a1.get("gemini_verdict", ""),
                     }
                     # Remove empty fields
-                    agent1_context = {k: v for k, v in agent1_context.items() if v not in ("", None, [], {})}
-            except Exception:
-                pass
+                    agent1_context = {
+                        k: v
+                        for k, v in agent1_context.items()
+                        if v not in ("", None, [], {})
+                    }
+            except Exception as e:
+                logger.debug(f"Agent1 context extraction for Gemini failed: {e}")
 
             # Merge contexts into exif_summary-style dict for Gemini
             context_summary: dict = {}
@@ -1355,23 +1671,37 @@ class Agent3Object(ForensicAgent):
 
             result = finding.to_finding_dict(self.agent_id)
 
+            # Flatten analysis_source to top level so it's accessible as
+            # finding.metadata["analysis_source"] after the ReAct loop
+            # spreads this dict into AgentFinding.metadata via **output.
+            result["analysis_source"] = "gemini_vision"
+
             # Expose key fields; safely stringify detected_objects (may be dicts)
             raw_objects = finding.detected_objects or []
             safe_objects = []
             for obj in raw_objects:
                 if isinstance(obj, dict):
-                    label = obj.get("label") or obj.get("name") or obj.get("class_name") or str(obj)
+                    label = (
+                        obj.get("label")
+                        or obj.get("name")
+                        or obj.get("class_name")
+                        or str(obj)
+                    )
                     conf = obj.get("confidence") or obj.get("score")
                     safe_objects.append(f"{label} ({conf:.0%})" if conf else str(label))
                 else:
                     safe_objects.append(str(obj))
 
             result["gemini_validated_objects"] = safe_objects
-            result["gemini_compositing_signals"] = [str(s) for s in (finding.manipulation_signals or [])]
+            result["gemini_compositing_signals"] = [
+                str(s) for s in (finding.manipulation_signals or [])
+            ]
             result["gemini_scene_coherence"] = str(finding.content_description or "")
             result["gemini_content_type"] = finding.file_type_assessment
             result["gemini_extracted_text"] = getattr(finding, "_extracted_text", [])
-            result["gemini_interface"] = getattr(finding, "_interface_identification", "")
+            result["gemini_interface"] = getattr(
+                finding, "_interface_identification", ""
+            )
             result["gemini_narrative"] = getattr(finding, "_contextual_narrative", "")
             result["gemini_verdict"] = getattr(finding, "_authenticity_verdict", "")
             # Include cross-agent context in result for traceability
@@ -1387,7 +1717,7 @@ class Agent3Object(ForensicAgent):
         )
 
         return registry
-    
+
     async def build_initial_thought(self) -> str:
         """
         Build the contextually-grounded initial thought for the ReAct loop.
@@ -1398,7 +1728,11 @@ class Agent3Object(ForensicAgent):
         object detection and lighting consistency checks.
         """
         context_lines = []
-        context = " | ".join(context_lines) if context_lines else "Scene pre-screen unavailable."
+        context = (
+            " | ".join(context_lines)
+            if context_lines
+            else "Scene pre-screen unavailable."
+        )
         return (
             f"Starting scene and object analysis. Evidence: {self.evidence_artifact.artifact_id}. "
             f"Scene pre-screen — {context} "
@@ -1421,7 +1755,9 @@ class Agent3Object(ForensicAgent):
         file_path = self.evidence_artifact.file_path.lower()
         mime = (self.evidence_artifact.metadata or {}).get("mime_type", "").lower()
         audio_exts = (".wav", ".mp3", ".flac", ".ogg", ".aac", ".m4a")
-        is_audio = any(file_path.endswith(e) for e in audio_exts) or mime.startswith("audio/")
+        is_audio = any(file_path.endswith(e) for e in audio_exts) or mime.startswith(
+            "audio/"
+        )
         if is_audio:
             # Mark all tasks complete so the heartbeat shows full progress
             try:
@@ -1437,8 +1773,8 @@ class Agent3Object(ForensicAgent):
                             status=TaskStatus.COMPLETE,
                             result_ref="file_type_validation",
                         )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Working memory task update failed in validation: {e}")
 
             finding = AgentFinding(
                 agent_id=self.agent_id,

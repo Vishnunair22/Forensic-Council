@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Optional
 
 from core.structured_logging import get_logger
 
@@ -30,6 +30,7 @@ logger = get_logger(__name__)
 
 class Modality(str, Enum):
     """Evidence modalities."""
+
     IMAGE = "IMAGE"
     AUDIO = "AUDIO"
     OBJECT = "OBJECT"
@@ -39,6 +40,7 @@ class Modality(str, Enum):
 
 class CrossModalVerdict(str, Enum):
     """Verdict from cross-modal fusion."""
+
     CORROBORATED = "CORROBORATED"
     PARTIALLY_CORROBORATED = "PARTIALLY_CORROBORATED"
     CONTRADICTED = "CONTRADICTED"
@@ -49,6 +51,7 @@ class CrossModalVerdict(str, Enum):
 @dataclass
 class ModalitySignal:
     """A normalized signal from one modality."""
+
     modality: Modality
     agent_id: str
     finding_type: str
@@ -62,6 +65,7 @@ class ModalitySignal:
 @dataclass
 class FusionResult:
     """Result of cross-modal fusion analysis."""
+
     verdict: CrossModalVerdict
     fused_confidence: float
     corroborations: list[dict[str, str]]
@@ -139,36 +143,50 @@ def _extract_signals(findings_by_agent: dict[str, list[dict]]) -> list[ModalityS
             # Extract numeric metrics for correlation
             key_metrics: dict[str, float] = {}
             for metric_key in (
-                "anomaly_score", "noise_consistency_score", "synthetic_probability",
-                "ela_mean", "max_anomaly", "inconsistency_ratio", "splice_count",
-                "forgery_score", "confidence",
+                "anomaly_score",
+                "noise_consistency_score",
+                "synthetic_probability",
+                "ela_mean",
+                "max_anomaly",
+                "inconsistency_ratio",
+                "splice_count",
+                "forgery_score",
+                "confidence",
             ):
                 val = meta.get(metric_key)
                 if isinstance(val, (int, float)):
                     key_metrics[metric_key] = float(val)
 
-            signals.append(ModalitySignal(
-                modality=modality,
-                agent_id=agent_id,
-                finding_type=finding_type,
-                confidence=float(confidence) if confidence else 0.5,
-                status=status,
-                manipulation_detected=manipulation,
-                key_metrics=key_metrics,
-                summary=summary[:200] if summary else "",
-            ))
+            signals.append(
+                ModalitySignal(
+                    modality=modality,
+                    agent_id=agent_id,
+                    finding_type=finding_type,
+                    confidence=float(confidence) if confidence else 0.5,
+                    status=status,
+                    manipulation_detected=manipulation,
+                    key_metrics=key_metrics,
+                    summary=summary[:200] if summary else "",
+                )
+            )
 
     return signals
 
 
-def _find_corroboration(sig_a: ModalitySignal, sig_b: ModalitySignal) -> Optional[dict[str, str]]:
+def _find_corroboration(
+    sig_a: ModalitySignal, sig_b: ModalitySignal
+) -> Optional[dict[str, str]]:
     """
     Check if two signals corroborate each other.
 
     Corroboration occurs when both signals agree on the manipulation/no-manipulation
     verdict and both have CONFIRMED status.
     """
-    if sig_a.manipulation_detected == sig_b.manipulation_detected and sig_a.status == "CONFIRMED" and sig_b.status == "CONFIRMED":
+    if (
+        sig_a.manipulation_detected == sig_b.manipulation_detected
+        and sig_a.status == "CONFIRMED"
+        and sig_b.status == "CONFIRMED"
+    ):
         direction = "manipulation" if sig_a.manipulation_detected else "authenticity"
         return {
             "agents": f"{sig_a.agent_id} + {sig_b.agent_id}",
@@ -179,16 +197,20 @@ def _find_corroboration(sig_a: ModalitySignal, sig_b: ModalitySignal) -> Optiona
     return None
 
 
-def _find_contradiction(sig_a: ModalitySignal, sig_b: ModalitySignal) -> Optional[dict[str, str]]:
+def _find_contradiction(
+    sig_a: ModalitySignal, sig_b: ModalitySignal
+) -> Optional[dict[str, str]]:
     """
     Check if two signals contradict each other.
 
     Contradiction occurs when one detects manipulation and the other
     asserts authenticity, with both at CONFIRMED status.
     """
-    if (sig_a.manipulation_detected != sig_b.manipulation_detected
-            and sig_a.status == "CONFIRMED"
-            and sig_b.status == "CONFIRMED"):
+    if (
+        sig_a.manipulation_detected != sig_b.manipulation_detected
+        and sig_a.status == "CONFIRMED"
+        and sig_b.status == "CONFIRMED"
+    ):
         return {
             "agents": f"{sig_a.agent_id} vs {sig_b.agent_id}",
             "modalities": f"{sig_a.modality.value} vs {sig_b.modality.value}",
@@ -255,10 +277,9 @@ def fuse(
         for part in c.get("agents", "").replace(" vs ", " + ").split(" + "):
             involved_agents.add(part.strip())
 
-    all_modalities = {s.modality.value for s in signals}
+    {s.modality.value for s in signals}
     independent_modalities = [
-        s.modality.value for s in signals
-        if s.agent_id not in involved_agents
+        s.modality.value for s in signals if s.agent_id not in involved_agents
     ]
 
     # Compute fused confidence using weighted corroboration
@@ -267,15 +288,21 @@ def fuse(
         weighted_sum = 0.0
         weight_sum = 0.0
         for s in signals:
-            pair_key = frozenset({s.modality})
+            frozenset({s.modality})
             # Find max pair weight with any corroborating modality
             max_weight = DEFAULT_PAIR_WEIGHT
             for corr in corroborations:
                 if s.agent_id in corr.get("agents", ""):
                     for other_s in signals:
-                        if other_s.agent_id != s.agent_id and other_s.agent_id in corr.get("agents", ""):
+                        if (
+                            other_s.agent_id != s.agent_id
+                            and other_s.agent_id in corr.get("agents", "")
+                        ):
                             pk = frozenset({s.modality, other_s.modality})
-                            max_weight = max(max_weight, _MODALITY_PAIR_WEIGHTS.get(pk, DEFAULT_PAIR_WEIGHT))
+                            max_weight = max(
+                                max_weight,
+                                _MODALITY_PAIR_WEIGHTS.get(pk, DEFAULT_PAIR_WEIGHT),
+                            )
             weighted_sum += s.confidence * max_weight
             weight_sum += max_weight
         fused_confidence = weighted_sum / weight_sum if weight_sum > 0 else 0.5
@@ -314,7 +341,11 @@ def fuse(
             f"Independent modalities (no cross-modal signal): {', '.join(set(independent_modalities))}"
         )
 
-    rationale = " ".join(rationale_parts) if rationale_parts else "No cross-modal relationships detected."
+    rationale = (
+        " ".join(rationale_parts)
+        if rationale_parts
+        else "No cross-modal relationships detected."
+    )
 
     logger.info(
         "Cross-modal fusion complete",

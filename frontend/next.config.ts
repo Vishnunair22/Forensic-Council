@@ -31,7 +31,7 @@ const nextConfig: NextConfig = {
 
   // ── TypeScript ────────────────────────────────────────────────────────
   typescript: { ignoreBuildErrors: false },
-  transpilePackages: ["three", "simplex-noise", "class-variance-authority"],
+  transpilePackages: ["simplex-noise", "class-variance-authority"],
 
   // ── Turbopack (Next.js 15 default build engine) ───────────────────────────
   // Turbopack is the default bundler in Next.js 15. Declaring an explicit
@@ -41,7 +41,6 @@ const nextConfig: NextConfig = {
   turbopack: {
     resolveExtensions: ['.tsx', '.ts', '.jsx', '.js', '.json'],
     resolveAlias: {
-      three: path.resolve(process.cwd(), 'node_modules/three'),
       'simplex-noise': path.resolve(process.cwd(), 'node_modules/simplex-noise'),
       'class-variance-authority': path.resolve(process.cwd(), 'node_modules/class-variance-authority'),
     },
@@ -72,9 +71,8 @@ const nextConfig: NextConfig = {
     // Force 'three' to resolve to the local node_modules path
     config.resolve.alias = {
       ...config.resolve.alias,
-      'three': path.resolve(process.cwd(), 'node_modules/three'),
       'simplex-noise': path.resolve(process.cwd(), 'node_modules/simplex-noise'),
-      'class-variance-authority': path.resolve(process.cwd(), 'node_modules/class-variance-authority/dist/index.js'),
+      'class-variance-authority': path.resolve(process.cwd(), 'node_modules/class-variance-authority'),
     };
 
     if (dev) {
@@ -103,34 +101,28 @@ const nextConfig: NextConfig = {
     minimumCacheTTL: 31_536_000,
   },
 
-  // ── Backend API Proxy (CORS FIX) ──────────────────────────────────────────
-  // All /api/v1/* browser requests are rewritten to the backend by the
-  // Next.js server — the browser never makes a cross-origin request, so CORS
-  // is entirely bypassed.
-  //
-  // INTERNAL_API_URL uses the Docker-internal service name (http://forensic_api:8000)
-  // so this works both inside Docker and on localhost (falls back gracefully).
+  // ── Backend API Proxy ─────────────────────────────────────────────────────
+  // /api/v1/* is handled by the App Router proxy route in
+  // src/app/api/v1/[...path]/route.ts so requests can retry across backend
+  // targets instead of relying on a single static rewrite destination.
   async rewrites() {
-    const backendUrl =
-      process.env.INTERNAL_API_URL ||
-      process.env.NEXT_PUBLIC_API_URL ||
-      "http://localhost:8000";
-    return [
-      {
-        source: "/api/v1/:path*",
-        destination: `${backendUrl}/api/v1/:path*`,
-      },
-    ];
+    return [];
   },
 
   // ── HTTP response headers ─────────────────────────────────────────────────
   async headers() {
     return [
       {
+        source: "/",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+        ],
+      },
+      {
         // HTML pages — never cache: browser must revalidate on every visit.
         // Next.js 15 defaults to s-maxage=31536000 for static pages which
         // causes stale HTML to persist in the browser cache across deploys.
-        source: "/(|evidence|result|session-expired)",
+        source: "/(evidence|result|session-expired)",
         headers: [
           { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
         ],

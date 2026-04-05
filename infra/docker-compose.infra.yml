@@ -1,0 +1,25 @@
+# ============================================================================
+# Forensic Council — Infrastructure-Only Overlay
+# ============================================================================
+# Starts only Postgres, Redis, and Qdrant — zeros out backend/frontend/caddy.
+#
+# ⚠️  This is a COMPOSE OVERRIDE FILE, not a standalone file.
+#    It MUST always be combined with docker-compose.yml.
+#    DO NOT run: docker compose -f docker-compose.infra.yml up  ← starts nothing
+#
+# Correct usage:
+#   docker compose -f infra/docker-compose.yml \
+#                  -f infra/docker-compose.infra.yml \
+#                  --env-file .env up -d
+# ============================================================================
+
+services:
+  backend:
+    deploy:
+      replicas: 0
+  frontend:
+    deploy:
+      replicas: 0
+  caddy:
+    deploy:
+      replicas: 0

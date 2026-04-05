@@ -25,7 +25,9 @@ COPY package.json package-lock.json ./
 # React 19-compatible peer ranges. Once upstream releases resolve these conflicts,
 # remove --legacy-peer-deps. Tracked: check `npm ls react react-dom` periodically.
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci --legacy-peer-deps --prefer-offline --no-audit --no-fund
+    npm ci --legacy-peer-deps --prefer-offline --no-audit --no-fund && \
+    npm cache clean --force && \
+    npm cache clean --force
 
 # ── Stage 1: Development — hot-reload server ─────────────────────────────────
 FROM base AS development
@@ -36,6 +38,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=development
 
 EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+  CMD wget -qO- http://localhost:3000/ > /dev/null || exit 1
 
 CMD ["npm", "run", "dev"]
 

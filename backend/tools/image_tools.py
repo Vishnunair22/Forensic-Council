@@ -31,11 +31,12 @@ from infra.evidence_store import EvidenceStore
 @dataclass
 class BoundingBox:
     """Bounding box for region of interest."""
+
     x: int
     y: int
     w: int
     h: int
-    
+
     def to_dict(self) -> dict[str, int]:
         return {"x": self.x, "y": self.y, "w": self.w, "h": self.h}
 
@@ -49,22 +50,22 @@ async def ela_full_image(
 ) -> dict[str, Any]:
     """
     Perform Error Level Analysis (ELA) on an image.
-    
+
     Opens image with Pillow, saves at specified quality, reloads,
     and computes pixel difference to create ELA map.
-    
+
     Multi-quality sweep: When enabled, re-saves at multiple quality levels
     (70, 80, 90, 95) and fuses results by taking the maximum ELA across
     all quality levels. This catches splices that may have survived
     single re-compression.
-    
+
     Args:
         artifact: The evidence artifact to analyze
         evidence_store: Optional evidence store for creating derivative artifacts
         quality: JPEG quality level for re-saving (default 95, used when multi_quality=False)
         anomaly_threshold: Threshold for flagging anomaly regions (default 10.0)
         multi_quality: Enable multi-quality sweep for enhanced detection (default True)
-    
+
     Returns:
         Dictionary containing:
         - ela_map_array: 2D numpy array of ELA values (as list for serialization)
@@ -74,7 +75,7 @@ async def ela_full_image(
         - std_ela: Standard deviation of ELA values
         - quality_levels: List of quality levels used in analysis
         - multi_quality_fusion: Whether multi-quality fusion was applied
-    
+
     Raises:
         ToolUnavailableError: If file cannot be opened or processed
     """
@@ -148,7 +149,9 @@ async def ela_full_image(
 
             try:
                 for q in quality_levels_used:
-                    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                    with tempfile.NamedTemporaryFile(
+                        suffix=".jpg", delete=False
+                    ) as tmp:
                         tmp_path_ela = tmp.name
                         temp_files_ela.append(tmp_path_ela)
 
@@ -182,10 +185,14 @@ async def ela_full_image(
                     if np.any(rows) and np.any(cols):
                         y_min, y_max = np.where(rows)[0][[0, -1]]
                         x_min, x_max = np.where(cols)[0][[0, -1]]
-                        anomaly_regions.append(BoundingBox(
-                            x=int(x_min), y=int(y_min),
-                            w=int(x_max - x_min + 1), h=int(y_max - y_min + 1),
-                        ))
+                        anomaly_regions.append(
+                            BoundingBox(
+                                x=int(x_min),
+                                y=int(y_min),
+                                w=int(x_max - x_min + 1),
+                                h=int(y_max - y_min + 1),
+                            )
+                        )
 
                 # Optional derivative artifact (sync-safe: just file write + object construction)
                 derivative_artifact = None
@@ -225,7 +232,9 @@ async def ela_full_image(
                     "ela_mean": mean_ela,
                     "quality_levels": quality_levels_used,
                     "multi_quality_fusion": _multi_quality,
-                    "derivative_artifact": derivative_artifact.to_dict() if derivative_artifact else None,
+                    "derivative_artifact": derivative_artifact.to_dict()
+                    if derivative_artifact
+                    else None,
                     "court_defensible": True,
                     "available": True,
                 }
@@ -240,7 +249,7 @@ async def ela_full_image(
 
         loop = _asyncio.get_running_loop()
         return await loop.run_in_executor(None, _blocking_ela_compute)
-    
+
     except Exception as e:
         if isinstance(e, ToolUnavailableError):
             raise
@@ -254,21 +263,21 @@ async def roi_extract(
 ) -> dict[str, Any]:
     """
     Extract a Region of Interest (ROI) from an image.
-    
+
     Crops the image to the specified bounding box and creates
     a derivative artifact.
-    
+
     Args:
         artifact: The evidence artifact to crop
         bounding_box: Dictionary with x, y, w, h keys
         evidence_store: Optional evidence store for creating derivative
-    
+
     Returns:
         Dictionary containing:
         - roi_artifact: New derivative EvidenceArtifact
         - roi_path: Path to the cropped image
         - dimensions: Width and height of ROI
-    
+
     Raises:
         ToolUnavailableError: If file cannot be opened or crop fails
     """
@@ -276,7 +285,7 @@ async def roi_extract(
         original_path = artifact.file_path
         if not os.path.exists(original_path):
             raise ToolUnavailableError(f"File not found: {original_path}")
-        
+
         with Image.open(original_path) as _img:
             original = _img.convert("RGB") if _img.mode != "RGB" else _img.copy()
 
@@ -285,28 +294,28 @@ async def roi_extract(
         y = bounding_box.get("y", 0)
         w = bounding_box.get("w", 100)
         h = bounding_box.get("h", 100)
-        
+
         # Validate bounds
         img_w, img_h = original.size
         x = max(0, min(x, img_w - 1))
         y = max(0, min(y, img_h - 1))
         w = min(w, img_w - x)
         h = min(h, img_h - y)
-        
+
         # Crop using PIL (left, upper, right, lower)
         roi = original.crop((x, y, x + w, y + h))
-        
+
         # Save ROI
         roi_path = os.path.join(
             os.path.dirname(original_path),
-            f"roi_{artifact.artifact_id}_{x}_{y}_{w}x{h}.jpg"
+            f"roi_{artifact.artifact_id}_{x}_{y}_{w}x{h}.jpg",
         )
         roi.save(roi_path, "JPEG", quality=95)
-        
+
         # Compute hash
         with open(roi_path, "rb") as f:
             roi_hash = hashlib.sha256(f.read()).hexdigest()
-        
+
         # Create derivative artifact
         derivative_artifact = EvidenceArtifact.create_derivative(
             parent=artifact,
@@ -318,15 +327,17 @@ async def roi_extract(
             metadata={
                 "bounding_box": bounding_box,
                 "dimensions": {"width": w, "height": h},
-            }
+            },
         )
-        
+
         return {
-            "roi_artifact": derivative_artifact.to_dict() if derivative_artifact else None,
+            "roi_artifact": derivative_artifact.to_dict()
+            if derivative_artifact
+            else None,
             "roi_path": roi_path,
             "dimensions": {"width": w, "height": h},
         }
-    
+
     except Exception as e:
         if isinstance(e, ToolUnavailableError):
             raise
@@ -340,15 +351,15 @@ async def jpeg_ghost_detect(
 ) -> dict[str, Any]:
     """
     Detect JPEG ghost artifacts indicating double compression.
-    
+
     Saves image at multiple quality levels and computes variance map
     to detect regions with inconsistent compression history.
-    
+
     Args:
         artifact: The evidence artifact to analyze
         quality_levels: List of quality levels to test (default [50,60,70,80,90])
         ghost_threshold: Threshold for ghost detection confidence
-    
+
     Returns:
         Dictionary containing:
         - ghost_detected: Boolean indicating if ghost artifacts found
@@ -405,7 +416,7 @@ async def jpeg_ghost_detect(
             # Open, convert to RGB, extract array, then close immediately
             with Image.open(original_path) as _img:
                 original = _img.convert("RGB") if _img.mode != "RGB" else _img.copy()
-            original_array = np.array(original, dtype=np.float64)
+            np.array(original, dtype=np.float64)
 
             # Create compressed versions at different quality levels
             compressed_arrays = []
@@ -413,13 +424,17 @@ async def jpeg_ghost_detect(
 
             try:
                 for quality in quality_levels:
-                    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                    with tempfile.NamedTemporaryFile(
+                        suffix=".jpg", delete=False
+                    ) as tmp:
                         tmp_path_inner = tmp.name
                         temp_files_inner.append(tmp_path_inner)
 
                     original.save(tmp_path_inner, "JPEG", quality=quality)
                     with Image.open(tmp_path_inner) as _compressed:
-                        compressed_arrays.append(np.array(_compressed, dtype=np.float64))
+                        compressed_arrays.append(
+                            np.array(_compressed, dtype=np.float64)
+                        )
 
                 # Stack all compressed versions
                 stacked = np.stack(compressed_arrays, axis=0)
@@ -449,12 +464,14 @@ async def jpeg_ghost_detect(
                         y_min, y_max = np.where(rows)[0][[0, -1]]
                         x_min, x_max = np.where(cols)[0][[0, -1]]
 
-                        ghost_regions.append(BoundingBox(
-                            x=int(x_min),
-                            y=int(y_min),
-                            w=int(x_max - x_min + 1),
-                            h=int(y_max - y_min + 1),
-                        ))
+                        ghost_regions.append(
+                            BoundingBox(
+                                x=int(x_min),
+                                y=int(y_min),
+                                w=int(x_max - x_min + 1),
+                                h=int(y_max - y_min + 1),
+                            )
+                        )
 
                 # Confidence: normalise max variance to 0-1
                 confidence = min(1.0, max_variance / 50.0) if max_variance > 0 else 0.0
@@ -497,11 +514,11 @@ async def file_hash_verify(
 ) -> dict[str, Any]:
     """
     Verify file hash against stored hash in evidence store.
-    
+
     Args:
         artifact: The evidence artifact to verify
         evidence_store: Evidence store containing the original hash
-    
+
     Returns:
         Dictionary containing:
         - hash_matches: Boolean indicating if hashes match
@@ -511,7 +528,7 @@ async def file_hash_verify(
     try:
         # Verify integrity using evidence store
         hash_matches = await evidence_store.verify_artifact_integrity(artifact)
-        
+
         # Compute current hash for reporting
         original_path = artifact.file_path
         if os.path.exists(original_path):
@@ -519,13 +536,13 @@ async def file_hash_verify(
                 current_hash = hashlib.sha256(f.read()).hexdigest()
         else:
             current_hash = "file_not_found"
-        
+
         return {
             "hash_matches": hash_matches,
             "original_hash": artifact.content_hash,
             "current_hash": current_hash,
         }
-    
+
     except Exception as e:
         return {
             "hash_matches": False,
@@ -540,13 +557,13 @@ async def compute_perceptual_hash(
 ) -> dict[str, Any]:
     """
     Compute perceptual hash for image comparison.
-    
+
     Uses multiple hash algorithms for robust comparison.
-    
+
     Args:
         artifact: The evidence artifact to hash
         hash_size: Size of the hash (default 8 for 64-bit hash)
-    
+
     Returns:
         Dictionary containing:
         - phash: Perceptual hash
@@ -558,7 +575,7 @@ async def compute_perceptual_hash(
         original_path = artifact.file_path
         if not os.path.exists(original_path):
             raise ToolUnavailableError(f"File not found: {original_path}")
-        
+
         with Image.open(original_path) as _img:
             original = _img.convert("RGB") if _img.mode != "RGB" else _img.copy()
 
@@ -567,7 +584,7 @@ async def compute_perceptual_hash(
         ahash = str(imagehash.average_hash(original, hash_size=hash_size))
         dhash = str(imagehash.dhash(original, hash_size=hash_size))
         whash = str(imagehash.whash(original, hash_size=hash_size))
-        
+
         return {
             "phash": phash,
             "ahash": ahash,
@@ -576,7 +593,7 @@ async def compute_perceptual_hash(
             "confidence": None,
             "note": "Hash computed successfully. No reference hash available for comparison — similarity analysis requires a second image.",
         }
-    
+
     except Exception as e:
         if isinstance(e, ToolUnavailableError):
             raise
@@ -588,13 +605,13 @@ async def frequency_domain_analysis(
 ) -> dict[str, Any]:  # noqa: C901
     """
     Perform frequency domain analysis using DFT.
-    
+
     Analyzes the Discrete Fourier Transform of the image to detect
     anomalies that may indicate manipulation.
-    
+
     Args:
         artifact: The evidence artifact to analyze
-    
+
     Returns:
         Dictionary containing:
         - frequency_spectrum: 2D frequency spectrum (as list)
@@ -605,7 +622,7 @@ async def frequency_domain_analysis(
         original_path = artifact.file_path
         if not os.path.exists(original_path):
             raise ToolUnavailableError(f"File not found: {original_path}")
-        
+
         # ── offload blocking FFT computation to a thread ──────────────────────
         import asyncio as _asyncio
 
@@ -624,7 +641,9 @@ async def frequency_domain_analysis(
             # concentrates in the inscribed-circle low-frequency region.
             # Empirically the corners contain ~5–15% for real photos.
             center = np.array(magnitude_spectrum.shape) // 2
-            y, x = np.ogrid[:magnitude_spectrum.shape[0], :magnitude_spectrum.shape[1]]
+            y, x = np.ogrid[
+                : magnitude_spectrum.shape[0], : magnitude_spectrum.shape[1]
+            ]
             distances = np.sqrt((x - center[1]) ** 2 + (y - center[0]) ** 2)
 
             low_freq_mask = distances < min(center)
@@ -691,32 +710,32 @@ async def extract_text_from_image(
 
         # Convert PIL to OpenCV (RGB to BGR)
         img = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
-        
+
         # Preprocess for better OCR
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        
+
         thresh = cv2.adaptiveThreshold(
             gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
         )
-        
+
         _, otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        
-        custom_config = r'--oem 3 --psm 6 -l eng'
-        
+
+        custom_config = r"--oem 3 --psm 6 -l eng"
+
         text_adaptive = pytesseract.image_to_string(thresh, config=custom_config)
         text_otsu = pytesseract.image_to_string(otsu, config=custom_config)
         text_original = pytesseract.image_to_string(gray, config=custom_config)
-        
+
         texts = [text_adaptive, text_otsu, text_original]
         best_text = max(texts, key=lambda t: len(t.strip()))
-        lines = [line.strip() for line in best_text.split('\n') if line.strip()]
-        
+        lines = [line.strip() for line in best_text.split("\n") if line.strip()]
+
         data = pytesseract.image_to_data(gray, output_type=pytesseract.Output.DICT)
-        word_count = sum(1 for text in data['text'] if text.strip())
-        
-        confidences = [conf for conf in data['conf'] if conf > 0]
+        word_count = sum(1 for text in data["text"] if text.strip())
+
+        confidences = [conf for conf in data["conf"] if conf > 0]
         avg_confidence = sum(confidences) / len(confidences) if confidences else 0
-        
+
         return {
             "status": "real",
             "court_defensible": True,
@@ -726,7 +745,9 @@ async def extract_text_from_image(
             "word_count": word_count,
             "has_text": word_count > 0,
             "success": True,
-            "confidence": round(avg_confidence / 100, 4) if avg_confidence > 0 else None,
+            "confidence": round(avg_confidence / 100, 4)
+            if avg_confidence > 0
+            else None,
         }
 
     try:
@@ -813,14 +834,16 @@ async def analyze_image_content(
         # the asyncio event loop (first call loads ~300 MB model from disk).
         # Wrap with a timeout to prevent indefinite hangs.
         import asyncio as _asyncio
+
         loop = _asyncio.get_running_loop()
         result = await _asyncio.wait_for(
             loop.run_in_executor(
-                None, lambda: analyzer.analyze_image(original_path, categories=categories)
+                None,
+                lambda: analyzer.analyze_image(original_path, categories=categories),
             ),
             timeout=60.0,
         )
-        
+
         if not result.available:
             return {
                 "status": "unavailable",
@@ -832,7 +855,7 @@ async def analyze_image_content(
                 "court_defensible": False,
                 "error": result.error or "CLIP model unavailable",
             }
-        
+
         # Generate semantic context based on top match
         semantic_templates = {
             "a screenshot of a document": "Document screenshot - text content expected",
@@ -848,19 +871,17 @@ async def analyze_image_content(
             "a forensic evidence photograph": "Evidence photo - chain of custody critical",
             "a product or commercial image": "Commercial image - possible manipulation for marketing",
         }
-        
+
         semantic_context = semantic_templates.get(
-            result.top_match,
-            f"Image classified as: {result.top_match}"
+            result.top_match, f"Image classified as: {result.top_match}"
         )
-        
+
         return {
             "status": "real",
             "image_type": result.top_match,
             "confidence": result.top_confidence,
             "all_classifications": [
-                {"category": cat, "score": score}
-                for cat, score in result.all_scores
+                {"category": cat, "score": score} for cat, score in result.all_scores
             ],
             "semantic_context": semantic_context,
             "available": True,
@@ -868,7 +889,7 @@ async def analyze_image_content(
             "method": "CLIP ViT-B-32 zero-shot classification",
             "error": None,
         }
-        
+
     except ToolUnavailableError:
         raise
     except Exception as e:

@@ -21,19 +21,20 @@ logger = get_logger(__name__)
 
 class EvidenceStoreError(ForensicCouncilBaseException):
     """Exception raised for evidence store errors."""
+
     pass
 
 
 class EvidenceStore:
     """
     Manages immutable evidence artifact storage.
-    
+
     Provides:
     - Evidence ingestion with hash verification
     - Derivative artifact creation
     - Version tree tracking
     - Integrity verification
-    
+
     Usage:
         async with EvidenceStore() as store:
             # Ingest original evidence
@@ -42,7 +43,7 @@ class EvidenceStore:
                 session_id=session_uuid,
                 agent_id="ingestion_agent"
             )
-            
+
             # Create derivative
             derivative = await store.create_derivative(
                 parent=artifact,
@@ -52,7 +53,7 @@ class EvidenceStore:
                 agent_id="image_agent"
             )
     """
-    
+
     def __init__(
         self,
         postgres_client: Optional[PostgresClient] = None,
@@ -61,7 +62,7 @@ class EvidenceStore:
     ) -> None:
         """
         Initialize the evidence store.
-        
+
         Args:
             postgres_client: Optional PostgreSQL client
             storage_backend: Optional storage backend
@@ -73,7 +74,7 @@ class EvidenceStore:
         self._owned_client = postgres_client is None
         self._owned_storage = storage_backend is None
         self._owned_logger = custody_logger is None
-    
+
     async def __aenter__(self) -> "EvidenceStore":
         """Async context manager entry."""
         if self._postgres is None:
@@ -83,41 +84,43 @@ class EvidenceStore:
         if self._custody_logger is None:
             self._custody_logger = CustodyLogger(postgres_client=self._postgres)
         return self
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Async context manager exit."""
         if self._owned_client and self._postgres:
             await self._postgres.disconnect()
             self._postgres = None
-    
+
     def _compute_hash(self, data: bytes) -> str:
         """
         Compute SHA-256 hash of data.
-        
+
         Args:
             data: Bytes to hash
-        
+
         Returns:
             Hex-encoded SHA-256 hash
         """
         return hashlib.sha256(data).hexdigest()
-    
+
     async def _read_file(self, file_path: str) -> bytes:
         """
         Read file contents asynchronously.
-        
+
         Args:
             file_path: Path to file
-        
+
         Returns:
             File contents as bytes
         """
         import asyncio
+
         def _read():
             with open(file_path, "rb") as f:
                 return f.read()
+
         return await asyncio.to_thread(_read)
-    
+
     async def ingest(
         self,
         file_path: str,
@@ -129,10 +132,10 @@ class EvidenceStore:
     ) -> EvidenceArtifact:
         """
         Ingest a file as evidence.
-        
+
         Computes hash, copies to immutable storage, creates artifact record,
         and logs to chain of custody.
-        
+
         Args:
             file_path: Path to the file to ingest
             session_id: Analysis session ID
@@ -140,18 +143,18 @@ class EvidenceStore:
             artifact_type: Type of artifact (default: ORIGINAL)
             action: Action description (default: "ingest")
             metadata: Additional metadata
-        
+
         Returns:
             EvidenceArtifact representing the ingested file
-        
+
         Raises:
             EvidenceStoreError: If ingestion fails
         """
         try:
-            # Read and hash file asynchronously 
+            # Read and hash file asynchronously
             data = await self._read_file(file_path)
             content_hash = self._compute_hash(data)
-            
+
             # Create artifact record (root_id will be set to artifact_id)
             artifact = EvidenceArtifact.create_root(
                 artifact_type=artifact_type,
@@ -162,7 +165,7 @@ class EvidenceStore:
                 session_id=session_id,
                 metadata=metadata,
             )
-            
+
             # Store file in immutable storage
             stored_path = await self._storage.store(
                 root_id=artifact.root_id,
@@ -170,10 +173,10 @@ class EvidenceStore:
                 data=data,
             )
             artifact.file_path = stored_path
-            
+
             # Save to database
             await self._save_artifact(artifact)
-            
+
             # Log to chain of custody
             if self._custody_logger:
                 await self._custody_logger.log_entry(
@@ -189,7 +192,7 @@ class EvidenceStore:
                         "file_path": stored_path,
                     },
                 )
-            
+
             logger.info(
                 "Ingested evidence artifact",
                 artifact_id=str(artifact.artifact_id),
@@ -197,16 +200,16 @@ class EvidenceStore:
                 content_hash=content_hash[:16] + "...",
                 session_id=str(session_id),
             )
-            
+
             return artifact
-            
+
         except Exception as e:
             logger.error("Failed to ingest evidence", error=str(e), file_path=file_path)
             raise EvidenceStoreError(
                 f"Failed to ingest evidence: {file_path}. Cause: {repr(e)}",
                 details={"file_path": file_path, "error": str(e)},
             )
-    
+
     async def create_derivative(
         self,
         parent: EvidenceArtifact,
@@ -218,10 +221,10 @@ class EvidenceStore:
     ) -> EvidenceArtifact:
         """
         Create a derivative artifact from a parent.
-        
+
         Writes data to storage under same root_id, creates child artifact
         with parent_id set, and logs to chain of custody.
-        
+
         Args:
             parent: Parent artifact
             data: Derivative data bytes
@@ -229,14 +232,14 @@ class EvidenceStore:
             action: Action that created the derivative
             agent_id: Agent that created the derivative
             metadata: Additional metadata
-        
+
         Returns:
             EvidenceArtifact representing the derivative
         """
         try:
             # Hash the data
             content_hash = self._compute_hash(data)
-            
+
             # Create derivative artifact
             artifact = EvidenceArtifact.create_derivative(
                 parent=parent,
@@ -247,7 +250,7 @@ class EvidenceStore:
                 agent_id=agent_id,
                 metadata=metadata,
             )
-            
+
             # Store in same root directory
             stored_path = await self._storage.store(
                 root_id=artifact.root_id,
@@ -255,10 +258,10 @@ class EvidenceStore:
                 data=data,
             )
             artifact.file_path = stored_path
-            
+
             # Save to database
             await self._save_artifact(artifact)
-            
+
             # Log to chain of custody
             if self._custody_logger:
                 await self._custody_logger.log_entry(
@@ -275,7 +278,7 @@ class EvidenceStore:
                         "file_path": stored_path,
                     },
                 )
-            
+
             logger.info(
                 "Created derivative artifact",
                 artifact_id=str(artifact.artifact_id),
@@ -283,22 +286,22 @@ class EvidenceStore:
                 root_id=str(artifact.root_id),
                 artifact_type=artifact_type.value,
             )
-            
+
             return artifact
-            
+
         except Exception as e:
             logger.error("Failed to create derivative", error=str(e))
             raise EvidenceStoreError(
                 "Failed to create derivative artifact",
                 details={"parent_id": str(parent.artifact_id), "error": str(e)},
             )
-    
+
     async def _save_artifact(self, artifact: EvidenceArtifact) -> None:
         """Save artifact to database (auto-creates table if missing)."""
         if self._postgres is None:
             logger.warning("EvidenceStore: no postgres client, skipping DB save")
             return
-            
+
         query = """
             INSERT INTO evidence_artifacts (
                 artifact_id, parent_id, root_id, artifact_type,
@@ -306,7 +309,7 @@ class EvidenceStore:
                 session_id, timestamp_utc, metadata
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         """
-        
+
         args = (
             artifact.artifact_id,
             artifact.parent_id,
@@ -320,11 +323,13 @@ class EvidenceStore:
             artifact.timestamp_utc,
             artifact.metadata,
         )
-        
+
         try:
             await self._postgres.execute(query, *args)
         except Exception as e:
-            if "evidence_artifacts" in str(e).lower() and ("does not exist" in str(e).lower() or "undefined" in str(e).lower()):
+            if "evidence_artifacts" in str(e).lower() and (
+                "does not exist" in str(e).lower() or "undefined" in str(e).lower()
+            ):
                 # Auto-create the table and retry
                 logger.warning("evidence_artifacts table missing — creating inline")
                 create_sql = """
@@ -350,20 +355,20 @@ class EvidenceStore:
                 await self._postgres.execute(query, *args)
             else:
                 raise
-    
+
     async def get_artifact(self, artifact_id: UUID) -> Optional[EvidenceArtifact]:
         """
         Get an artifact by ID.
-        
+
         Args:
             artifact_id: Artifact UUID
-        
+
         Returns:
             EvidenceArtifact if found, None otherwise
         """
         if self._postgres is None:
             return None
-            
+
         query = """
             SELECT artifact_id, parent_id, root_id, artifact_type,
                    file_path, content_hash, action, agent_id,
@@ -371,12 +376,12 @@ class EvidenceStore:
             FROM evidence_artifacts
             WHERE artifact_id = $1
         """
-        
+
         row = await self._postgres.fetch_one(query, artifact_id)
-        
+
         if row is None:
             return None
-        
+
         return EvidenceArtifact(
             artifact_id=row["artifact_id"],
             parent_id=row["parent_id"],
@@ -390,20 +395,20 @@ class EvidenceStore:
             timestamp_utc=row["timestamp_utc"],
             metadata=row["metadata"],
         )
-    
+
     async def get_version_tree(self, root_id: UUID) -> Optional[VersionTree]:
         """
         Get the version tree for a root artifact.
-        
+
         Args:
             root_id: Root artifact UUID
-        
+
         Returns:
             VersionTree if found, None otherwise
         """
         if self._postgres is None:
             return None
-            
+
         query = """
             SELECT artifact_id, parent_id, root_id, artifact_type,
                    file_path, content_hash, action, agent_id,
@@ -412,12 +417,12 @@ class EvidenceStore:
             WHERE root_id = $1
             ORDER BY timestamp_utc ASC
         """
-        
+
         rows = await self._postgres.fetch(query, root_id)
-        
+
         if not rows:
             return None
-        
+
         # Create artifacts from rows
         artifacts = [
             EvidenceArtifact(
@@ -435,53 +440,53 @@ class EvidenceStore:
             )
             for row in rows
         ]
-        
+
         # Build tree
-        artifact_map = {a.artifact_id: a for a in artifacts}
+        {a.artifact_id: a for a in artifacts}
         tree_map: dict[UUID, VersionTree] = {}
-        
+
         # Find root (parent_id is None)
         root_artifact = None
         for artifact in artifacts:
             if artifact.parent_id is None:
                 root_artifact = artifact
                 break
-        
+
         if root_artifact is None:
             return None
-        
+
         # Create tree nodes
         for artifact in artifacts:
             tree_map[artifact.artifact_id] = VersionTree(artifact=artifact)
-        
+
         # Link children to parents
         for artifact in artifacts:
             if artifact.parent_id is not None:
                 parent_tree = tree_map.get(artifact.parent_id)
                 if parent_tree:
                     parent_tree.add_child(tree_map[artifact.artifact_id])
-        
+
         return tree_map[root_artifact.artifact_id]
-    
+
     async def verify_artifact_integrity(self, artifact: EvidenceArtifact) -> bool:
         """
         Verify the integrity of an artifact.
-        
+
         Recomputes hash of stored file and compares to artifact.content_hash.
-        
+
         Args:
             artifact: Artifact to verify
-        
+
         Returns:
             True if integrity is valid, False otherwise
         """
         try:
             # Use async retrieve so we don't block the event loop on disk I/O.
             data = await self._storage.retrieve(artifact.file_path)
-            
+
             # Recompute hash
             computed_hash = self._compute_hash(data)
-            
+
             # Compare
             if computed_hash != artifact.content_hash:
                 logger.warning(
@@ -491,13 +496,13 @@ class EvidenceStore:
                     computed=computed_hash[:16] + "...",
                 )
                 return False
-            
+
             logger.debug(
                 "Artifact integrity verified",
                 artifact_id=str(artifact.artifact_id),
             )
             return True
-            
+
         except Exception as e:
             logger.error(
                 "Failed to verify artifact integrity",
@@ -521,9 +526,20 @@ async def get_evidence_store() -> EvidenceStore:
     global _evidence_store
     if _evidence_store is None:
         postgres = await get_postgres_client()
-        _evidence_store = EvidenceStore(postgres_client=postgres)
-        # Ensure the context manager setup runs so _storage and _custody_logger are initialized
-        await _evidence_store.__aenter__()
+        storage = LocalStorageBackend()
+        custody_logger = CustodyLogger(postgres_client=postgres)
+        _evidence_store = EvidenceStore(
+            postgres_client=postgres,
+            storage_backend=storage,
+            custody_logger=custody_logger,
+        )
+        # Initialize the store (equivalent to __aenter__ but explicit)
+        if _evidence_store._postgres is None:
+            _evidence_store._postgres = postgres
+        if _evidence_store._storage is None:
+            _evidence_store._storage = storage
+        if _evidence_store._custody_logger is None:
+            _evidence_store._custody_logger = custody_logger
     return _evidence_store
 
 

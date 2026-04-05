@@ -9,11 +9,11 @@ Provides:
 
 This replaces the ad-hoc model loading in individual ML tool scripts.
 """
+
 from __future__ import annotations
 
 import hashlib
-import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
@@ -28,6 +28,7 @@ _DEFAULT_CACHE_DIR = Path.home() / ".cache" / "forensic_council" / "models"
 @dataclass
 class ModelSpec:
     """Specification for a versioned ML model."""
+
     name: str
     version: str
     source: str  # URL or local path

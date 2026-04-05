@@ -83,23 +83,31 @@ def get_tracer(name: str = "forensic-council"):
 
 class _NoOpSpan:
     """Minimal no-op span for non-production / missing-OTel environments."""
+
     def __enter__(self):
         return self
+
     def __exit__(self, *args):
         pass
+
     def set_attribute(self, key, value):
         pass
+
     def add_event(self, name, attributes=None):
         pass
+
     def set_status(self, status):
         pass
+
     def end(self):
         pass
 
 
 class _NoOpTracer:
     """Minimal no-op tracer that returns no-op spans."""
+
     def start_span(self, name, **kwargs):
         return _NoOpSpan()
+
     def start_as_current_span(self, name, **kwargs):
         return _NoOpSpan()

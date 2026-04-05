@@ -34,6 +34,11 @@ env/
 # Storage and model caches (mounted via Docker volumes at runtime)
 storage/evidence/
 storage/keys/
+
+# Calibration models MUST be baked into the image for first-run seeding
+!storage/calibration_models/
+!storage/calibration_models/**/*
+
 cache/
 .cache/
 .vector_cache/

@@ -22,23 +22,27 @@ settings = get_settings()
 
 class SessionPersistence:
     """Handles persistence of investigation session state."""
-    
+
     def __init__(self, client: Optional[PostgresClient] = None):
         self.client = client
         self._owned_client = False  # Never own the client — always use the singleton
-    
+
     async def _ensure_client(self):
         """Ensure database client is connected — always reuse the singleton pool."""
         if self.client is None:
             try:
-                self.client = await asyncio.wait_for(get_postgres_client(), timeout=10.0)
+                self.client = await asyncio.wait_for(
+                    get_postgres_client(), timeout=10.0
+                )
             except asyncio.TimeoutError:
-                raise RuntimeError("Database connection timed out after 10s in session persistence")
-    
+                raise RuntimeError(
+                    "Database connection timed out after 10s in session persistence"
+                )
+
     async def close(self):
         """No-op: we don't own the singleton client."""
         pass
-    
+
     async def save_session_state(
         self,
         session_id: str,
@@ -49,23 +53,25 @@ class SessionPersistence:
     ) -> bool:
         """
         Save session state to database.
-        
+
         Args:
             session_id: Unique session identifier
             case_id: Case identifier
             investigator_id: Investigator identifier
             pipeline_state: Serialized pipeline state
             status: Session status
-        
+
         Returns:
             True if saved successfully
         """
         await self._ensure_client()
-        assert self.client is not None
-        
+        if self.client is None:
+            logger.warning("SessionPersistence.save_session: database client not available")
+            return False
+
         try:
             expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
-            
+
             await self.client.execute(
                 """
                 INSERT INTO investigation_state 
@@ -84,27 +90,31 @@ class SessionPersistence:
                 status,
                 expires_at,
             )
-            
+
             logger.debug("Session state saved", session_id=session_id, status=status)
             return True
-            
+
         except Exception as e:
-            logger.error("Failed to save session state", session_id=session_id, error=str(e))
+            logger.error(
+                "Failed to save session state", session_id=session_id, error=str(e)
+            )
             return False
-    
+
     async def get_session_state(self, session_id: str) -> Optional[dict]:
         """
         Retrieve session state from database.
-        
+
         Args:
             session_id: Session identifier
-        
+
         Returns:
             Session state dict or None
         """
         await self._ensure_client()
-        assert self.client is not None
-        
+        if self.client is None:
+            logger.warning("SessionPersistence.get_session_state: database client not available")
+            return None
+
         try:
             result = await self.client.fetch_one(
                 """
@@ -115,7 +125,7 @@ class SessionPersistence:
                 """,
                 UUID(session_id),
             )
-            
+
             if result:
                 return {
                     "session_id": str(result["session_id"]),
@@ -125,15 +135,21 @@ class SessionPersistence:
                     "agent_results": result["agent_results"],
                     "checkpoints": result["checkpoints"],
                     "status": result["status"],
-                    "created_at": result["created_at"].isoformat() if result["created_at"] else None,
-                    "updated_at": result["updated_at"].isoformat() if result["updated_at"] else None,
+                    "created_at": result["created_at"].isoformat()
+                    if result["created_at"]
+                    else None,
+                    "updated_at": result["updated_at"].isoformat()
+                    if result["updated_at"]
+                    else None,
                 }
             return None
-            
+
         except Exception as e:
-            logger.error("Failed to get session state", session_id=session_id, error=str(e))
+            logger.error(
+                "Failed to get session state", session_id=session_id, error=str(e)
+            )
             return None
-    
+
     async def save_report(
         self,
         session_id: str,
@@ -143,19 +159,21 @@ class SessionPersistence:
     ) -> bool:
         """
         Save final investigation report.
-        
+
         Args:
             session_id: Session identifier
             case_id: Case identifier
             investigator_id: Investigator identifier
             report_data: Serialized report data
-        
+
         Returns:
             True if saved successfully
         """
         await self._ensure_client()
-        assert self.client is not None
-        
+        if self.client is None:
+            logger.warning("SessionPersistence.save_report: database client not available")
+            return False
+
         try:
             await self.client.execute(
                 """
@@ -173,27 +191,29 @@ class SessionPersistence:
                 "completed",
                 json.dumps(report_data),
             )
-            
+
             logger.debug("Report saved", session_id=session_id)
             return True
-            
+
         except Exception as e:
             logger.error("Failed to save report", session_id=session_id, error=str(e))
             return False
-    
+
     async def get_report(self, session_id: str) -> Optional[dict]:
         """
         Retrieve saved report.
-        
+
         Args:
             session_id: Session identifier
-        
+
         Returns:
             Report data dict or None
         """
         await self._ensure_client()
-        assert self.client is not None
-        
+        if self.client is None:
+            logger.warning("SessionPersistence.get_report: database client not available")
+            return None
+
         try:
             result = await self.client.fetch_one(
                 """
@@ -204,23 +224,25 @@ class SessionPersistence:
                 """,
                 UUID(session_id),
             )
-            
+
             if result:
                 return {
                     "session_id": str(result["session_id"]),
                     "case_id": result["case_id"],
                     "investigator_id": result["investigator_id"],
                     "status": result["status"],
-                    "completed_at": result["completed_at"].isoformat() if result["completed_at"] else None,
+                    "completed_at": result["completed_at"].isoformat()
+                    if result["completed_at"]
+                    else None,
                     "report_data": result["report_data"],
                     "error_message": result["error_message"],
                 }
             return None
-            
+
         except Exception as e:
             logger.error("Failed to get report", session_id=session_id, error=str(e))
             return None
-    
+
     async def update_session_status(
         self,
         session_id: str,
@@ -229,18 +251,20 @@ class SessionPersistence:
     ) -> bool:
         """
         Update session status.
-        
+
         Args:
             session_id: Session identifier
             status: New status
             error_message: Optional error message
-        
+
         Returns:
             True if updated successfully
         """
         await self._ensure_client()
-        assert self.client is not None
-        
+        if self.client is None:
+            logger.warning("SessionPersistence.update_session_status: database client not available")
+            return False
+
         try:
             if error_message:
                 await self.client.execute(
@@ -252,7 +276,7 @@ class SessionPersistence:
                     UUID(session_id),
                     status,
                 )
-                
+
                 # Update session_reports if a row already exists (error status + message)
                 # We use UPDATE not INSERT to avoid NOT NULL violations on case_id/investigator_id
                 # (those fields are only available at investigation start, not in the error callback)
@@ -276,25 +300,28 @@ class SessionPersistence:
                     UUID(session_id),
                     status,
                 )
-            
+
             return True
-            
+
         except Exception as e:
             logger.error("Failed to update status", session_id=session_id, error=str(e))
             return False
-    
+
     async def list_active_sessions(self, case_id: Optional[str] = None) -> list:
         """
         List active sessions.
-        
+
         Args:
             case_id: Optional case filter
-        
+
         Returns:
             List of session summaries
         """
         await self._ensure_client()
-        
+        if self.client is None:
+            logger.warning("SessionPersistence.list_active_sessions: database client not available")
+            return []
+
         try:
             if case_id:
                 result = await self.client.fetch(
@@ -317,32 +344,39 @@ class SessionPersistence:
                     ORDER BY created_at DESC
                     """
                 )
-            
+
             return [
                 {
                     "session_id": str(row["session_id"]),
                     "case_id": row["case_id"],
                     "investigator_id": row["investigator_id"],
                     "status": row["status"],
-                    "created_at": row["created_at"].isoformat() if row["created_at"] else None,
-                    "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
+                    "created_at": row["created_at"].isoformat()
+                    if row["created_at"]
+                    else None,
+                    "updated_at": row["updated_at"].isoformat()
+                    if row["updated_at"]
+                    else None,
                 }
                 for row in result
             ]
-            
+
         except Exception as e:
             logger.error("Failed to list sessions", error=str(e))
             return []
-    
+
     async def cleanup_expired_sessions(self) -> int:
         """
         Clean up expired session states.
-        
+
         Returns:
             Number of sessions cleaned up
         """
         await self._ensure_client()
-        
+        if self.client is None:
+            logger.warning("SessionPersistence.cleanup_expired_sessions: database client not available")
+            return 0
+
         try:
             result = await self.client.execute(
                 """
@@ -350,11 +384,11 @@ class SessionPersistence:
                 WHERE expires_at < NOW()
                 """
             )
-            
+
             count = result.split()[-1] if isinstance(result, str) else "0"
             logger.info("Cleaned up expired sessions", count=count)
             return int(count) if count.isdigit() else 0
-            
+
         except Exception as e:
             logger.error("Failed to cleanup sessions", error=str(e))
             return 0

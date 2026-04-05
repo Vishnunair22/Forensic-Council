@@ -6,9 +6,11 @@ Manages active pipelines, WebSocket connections, background tasks,
 and cached reports. Imported by investigation.py to keep route
 handlers focused on request/response logic.
 """
+
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -20,12 +22,12 @@ logger = get_logger(__name__)
 settings = get_settings()
 
 # ── Module-level state stores ──────────────────────────────────────────────────
-# Lazy-imported to avoid circular imports — ForensicCouncilPipeline is set
-# via set_pipeline_class() from investigation.py at module load time.
-_active_pipelines: dict[str, Any] = {}
+# WebSocket connections remain in-memory because they are tied to local sockets
 _websocket_connections: dict[str, list] = {}
-_active_tasks: dict[str, asyncio.Task] = {}
-_final_reports: dict[str, tuple[Any, datetime]] = {}
+
+# Session metadata keys in Redis
+SESSION_METADATA_KEY_PREFIX = "forensic:session:metadata:"
+REPORT_CACHE_KEY_PREFIX = "forensic:session:report:"
 
 # Agent metadata for WebSocket updates
 AGENT_IDS = ["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"]
@@ -40,91 +42,125 @@ AGENT_NAMES = {
 # Session TTL
 _SESSION_TTL_SECONDS = settings.session_ttl_hours * 3600
 
+# ── In-process state stores ────────────────────────────────────────────────────
+# These must remain in-memory because they hold live Python objects (pipeline
+# instances, asyncio Tasks) that cannot be serialised to Redis.
+# _final_reports also serves as a 24-hour hot cache for completed reports.
+_active_pipelines: dict[str, Any] = {}  # session_id → ForensicCouncilPipeline
+_final_reports: dict[str, tuple[Any, datetime]] = {}  # session_id → (report, cached_at)
+_active_tasks: dict[str, Any] = {}  # session_id → asyncio.Task
+
+
+async def _get_redis():
+    from infra.redis_client import get_redis_client
+    return await get_redis_client()
+
 
 # ── Lifecycle ──────────────────────────────────────────────────────────────────
 
-def cleanup_connections() -> None:
-    """Clean up all WebSocket connections, tasks, and active pipelines on shutdown."""
-    for sid, task in list(_active_tasks.items()):
-        if not task.done():
-            task.cancel()
-            logger.info("Cancelled in-flight investigation task", session_id=sid)
-    _active_tasks.clear()
+
+async def cleanup_connections() -> None:
+    """Clean up local WebSocket connections on shutdown."""
     _websocket_connections.clear()
-    _active_pipelines.clear()
-    _final_reports.clear()
+    logger.info("Local session state cleared")
+
+
+# ── Active pipeline accessors ──────────────────────────────────────────────────
+
+
+def set_active_pipeline(session_id: str, pipeline: Any) -> None:
+    """Register a running pipeline instance."""
+    _active_pipelines[session_id] = pipeline
+
+
+def get_active_pipeline(session_id: str) -> Optional[Any]:
+    """Return the live pipeline object, or None if not found."""
+    return _active_pipelines.get(session_id)
+
+
+def get_all_active_pipelines() -> dict[str, Any]:
+    """Return a snapshot of all active pipeline objects."""
+    return dict(_active_pipelines)
+
+
+def get_active_pipelines_count() -> int:
+    """Return the number of currently running pipelines."""
+    return len(_active_pipelines)
+
+
+def remove_active_pipeline(session_id: str) -> None:
+    """Remove a pipeline from the active set (non-raising)."""
+    _active_pipelines.pop(session_id, None)
+
+
+# ── Active task accessors ──────────────────────────────────────────────────────
+
+
+def set_active_task(session_id: str, task: Any) -> None:
+    """Track the asyncio.Task backing a session."""
+    _active_tasks[session_id] = task
+
+
+def pop_active_task(session_id: str) -> Optional[Any]:
+    """Remove and return the asyncio.Task for a session (non-raising)."""
+    return _active_tasks.pop(session_id, None)
 
 
 def evict_stale_sessions() -> None:
-    """Remove completed sessions that have exceeded SESSION_TTL."""
-    now = datetime.now(timezone.utc)
-    stale = [
-        sid for sid, (_, cached_at) in list(_final_reports.items())
-        if (now - cached_at).total_seconds() > _SESSION_TTL_SECONDS
-    ]
-    for sid in stale:
-        _final_reports.pop(sid, None)
-        task = _active_tasks.get(sid)
-        if task is None or task.done():
-            _active_pipelines.pop(sid, None)
-            _active_tasks.pop(sid, None)
-            _websocket_connections.pop(sid, None)
-    if stale:
-        logger.info(f"Evicted {len(stale)} stale session(s) from memory")
+    """No-op placeholder — stale-report eviction is performed inline in run_investigation_task."""
 
 
-# ── Pipeline accessors ────────────────────────────────────────────────────────
-
-def get_active_pipelines_count() -> int:
-    return len(_active_pipelines)
-
-def get_active_pipeline(session_id: str) -> Optional[Any]:
-    return _active_pipelines.get(session_id)
-
-def get_all_active_pipelines() -> dict:
-    return _active_pipelines.copy()
-
-def set_active_pipeline(session_id: str, pipeline: Any) -> None:
-    _active_pipelines[session_id] = pipeline
-
-def remove_active_pipeline(session_id: str) -> None:
-    _active_pipelines.pop(session_id, None)
-
-def clear_active_pipelines() -> None:
-    _active_pipelines.clear()
-    _final_reports.clear()
+# ── Pipeline/Session state accessors ──────────────────────────────────────────
 
 
-# ── Task accessors ────────────────────────────────────────────────────────────
+async def set_active_pipeline_metadata(session_id: str, metadata: dict) -> None:
+    """Store pipeline metadata (not the object) in Redis."""
+    redis = await _get_redis()
+    key = f"{SESSION_METADATA_KEY_PREFIX}{session_id}"
+    await redis.set(key, metadata, ex=_SESSION_TTL_SECONDS)
 
-def set_active_task(session_id: str, task: asyncio.Task) -> None:
-    _active_tasks[session_id] = task
 
-def pop_active_task(session_id: str) -> Optional[asyncio.Task]:
-    return _active_tasks.pop(session_id, None)
+async def get_active_pipeline_metadata(session_id: str) -> Optional[dict]:
+    """Retrieve pipeline metadata from Redis."""
+    redis = await _get_redis()
+    key = f"{SESSION_METADATA_KEY_PREFIX}{session_id}"
+    return await redis.get(key)
 
 
 # ── Report cache ──────────────────────────────────────────────────────────────
 
-def set_final_report(session_id: str, report: Any) -> None:
-    _final_reports[session_id] = (report, datetime.now(timezone.utc))
 
-def get_final_report(session_id: str) -> Optional[tuple[Any, datetime]]:
-    return _final_reports.get(session_id)
+async def set_final_report(session_id: str, report: Any) -> None:
+    """Cache final report in Redis."""
+    redis = await _get_redis()
+    key = f"{REPORT_CACHE_KEY_PREFIX}{session_id}"
+    data = report.model_dump() if hasattr(report, "model_dump") else report
+    await redis.set(key, data, ex=_SESSION_TTL_SECONDS)
+
+
+async def get_final_report(session_id: str) -> Optional[tuple[Any, datetime]]:
+    """Retrieve final report from Redis."""
+    redis = await _get_redis()
+    key = f"{REPORT_CACHE_KEY_PREFIX}{session_id}"
+    data = await redis.get(key)
+    if data:
+        # Mocking the datetime for legacy compatibility in return signature
+        return (data, datetime.now(timezone.utc))
+    return None
 
 
 # ── WebSocket management ──────────────────────────────────────────────────────
 
+
 def get_session_websockets(session_id: str) -> list:
     return _websocket_connections.get(session_id, [])
 
-def clear_session_websockets(session_id: str) -> None:
-    _websocket_connections.pop(session_id, None)
 
 def register_websocket(session_id: str, websocket: Any) -> None:
     if session_id not in _websocket_connections:
         _websocket_connections[session_id] = []
     _websocket_connections[session_id].append(websocket)
+
 
 def unregister_websocket(session_id: str, websocket: Any) -> None:
     if session_id in _websocket_connections:
@@ -133,14 +169,31 @@ def unregister_websocket(session_id: str, websocket: Any) -> None:
         except ValueError:
             pass
 
+
+def clear_session_websockets(session_id: str) -> None:
+    """Remove all WebSocket connections for a completed/terminated session."""
+    _websocket_connections.pop(session_id, None)
+
+
 async def broadcast_update(session_id: str, update: BriefUpdate) -> None:
-    """Broadcast a WebSocket update to all connected clients."""
+    """
+    Broadcast a WebSocket update.
+    In the API process, this sends to local sockets and Publishes to Redis
+    so the Worker can also trigger updates (if this logic is shared).
+    """
+    # 1. Send to local listeners (API process)
     if session_id in _websocket_connections:
+        data = update.model_dump()
         for ws in _websocket_connections[session_id]:
             try:
-                await ws.send_json(update.model_dump())
+                await ws.send_json(data)
             except Exception as e:
-                logger.warning(f"Failed to send WebSocket message: {e}")
+                logger.warning("Failed to send WebSocket message", error=str(e))
+
+    # 2. Publish to Redis (Worker -> API bridge)
+    redis = await _get_redis()
+    channel = f"forensic:updates:{session_id}"
+    await redis.client.publish(channel, json.dumps(update.model_dump()))
 
 
 # ── Batched WebSocket broadcasting ─────────────────────────────────────────────
@@ -165,20 +218,22 @@ async def _flush_batch(session_id: str) -> None:
         try:
             await ws.send_json(payload)
         except Exception as e:
-            logger.warning(f"Failed to send batched WebSocket message: {e}")
+            logger.warning("Failed to send batched WebSocket message", error=str(e))
 
 
 async def broadcast_update_batched(session_id: str, update: BriefUpdate) -> None:
     """
     Queue a WebSocket update for batched delivery.
-    
+
     Updates are accumulated and flushed every BATCH_FLUSH_INTERVAL seconds.
     This reduces per-connection I/O from O(updates) to O(flushes) — critical
     at scale with 100+ concurrent users.
     """
     _batch_buffers.setdefault(session_id, []).append(update.model_dump())
     if session_id not in _batch_timers:
+
         async def _delayed_flush():
             await asyncio.sleep(BATCH_FLUSH_INTERVAL)
             await _flush_batch(session_id)
+
         _batch_timers[session_id] = asyncio.create_task(_delayed_flush())

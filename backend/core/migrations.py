@@ -19,6 +19,7 @@ logger = get_logger(__name__)
 @dataclass
 class Migration:
     """Represents a database migration."""
+
     version: int
     name: str
     description: str
@@ -328,19 +329,19 @@ MIGRATIONS: List[Migration] = [
 
 class MigrationManager:
     """Manages database migrations."""
-    
+
     def __init__(self, client: Optional[PostgresClient] = None):
         self._owned_client = client is None
         self.client = client  # Will be set to singleton in connect()
         self._connected = False
-    
+
     async def connect(self):
         """Connect to the database — always uses the singleton pool."""
         if not self._connected:
             if self.client is None:
                 self.client = await get_postgres_client()
             self._connected = True
-    
+
     async def disconnect(self):
         """No-op when using singleton; only disconnect if client was externally provided."""
         if self._connected and not self._owned_client:
@@ -349,7 +350,7 @@ class MigrationManager:
         elif self._connected and self._owned_client and self.client:
             await self.client.disconnect()
             self._connected = False
-    
+
     async def get_applied_migrations(self) -> List[int]:
         """Get list of applied migration versions."""
         try:
@@ -373,7 +374,7 @@ class MigrationManager:
             # Table might not exist yet
             logger.debug("Could not fetch migrations", error=str(e))
             return []
-    
+
     async def apply_migration(self, migration: Migration) -> bool:
         """Apply a single migration within an explicit asyncpg transaction (atomic)."""
         import time
@@ -422,7 +423,7 @@ class MigrationManager:
                 error=str(e),
             )
             return False
-    
+
     async def rollback_migration(self, migration: Migration) -> bool:
         """Rollback a single migration within an explicit asyncpg transaction (atomic)."""
         if not migration.rollback_sql:
@@ -463,98 +464,100 @@ class MigrationManager:
                 error=str(e),
             )
             return False
-    
+
     async def migrate(self, target_version: Optional[int] = None) -> bool:
         """
         Apply all pending migrations up to target_version.
-        
+
         Args:
             target_version: Target migration version. If None, applies all.
-        
+
         Returns:
             True if all migrations applied successfully
         """
         await self.connect()
-        
+
         try:
             applied = await self.get_applied_migrations()
-            
+
             # Always ensure migrations table exists first
             if 1 not in applied:
                 migration_1 = next(m for m in MIGRATIONS if m.version == 1)
                 if not await self.apply_migration(migration_1):
                     return False
                 applied = [1]
-            
+
             pending = [
-                m for m in MIGRATIONS
+                m
+                for m in MIGRATIONS
                 if m.version not in applied
                 and (target_version is None or m.version <= target_version)
             ]
-            
+
             if not pending:
                 logger.info("No pending migrations")
                 return True
-            
+
             logger.info(f"Applying {len(pending)} migration(s)")
-            
+
             for migration in pending:
                 if not await self.apply_migration(migration):
                     return False
-            
+
             logger.info("All migrations applied successfully")
             return True
-            
+
         except Exception as e:
             logger.error("Migration failed", error=str(e))
             return False
-    
+
     async def rollback(self, target_version: int) -> bool:
         """
         Rollback migrations to target_version.
-        
+
         Args:
             target_version: Target migration version to rollback to.
-        
+
         Returns:
             True if rollback successful
         """
         await self.connect()
-        
+
         try:
             applied = await self.get_applied_migrations()
             to_rollback = [
-                m for m in MIGRATIONS
+                m
+                for m in MIGRATIONS
                 if m.version in applied and m.version > target_version
             ]
             # Rollback in reverse order
             to_rollback.reverse()
-            
+
             if not to_rollback:
                 logger.info("No migrations to rollback")
                 return True
-            
+
             logger.info(f"Rolling back {len(to_rollback)} migration(s)")
-            
+
             for migration in to_rollback:
                 if not await self.rollback_migration(migration):
                     return False
-            
+
             logger.info("Rollback completed successfully")
             return True
-            
+
         except Exception as e:
             logger.error("Rollback failed", error=str(e))
             return False
-    
+
     async def status(self) -> dict:
         """Get current migration status."""
         try:
             await self.connect()
-            
+
             applied = await self.get_applied_migrations()
             pending = [m.version for m in MIGRATIONS if m.version not in applied]
-            
+
             return {
                 "current_version": max(applied) if applied else 0,
                 "latest_version": max(m.version for m in MIGRATIONS),
@@ -575,7 +578,7 @@ async def run_migrations():
         success = await manager.migrate()
         status = await manager.status()
         await manager.disconnect()
-        
+
         if success:
             logger.info(
                 "Database is up to date",
@@ -589,7 +592,7 @@ async def run_migrations():
 
 if __name__ == "__main__":
     import sys
-    
+
     # Allow command-line usage
     if len(sys.argv) > 1 and sys.argv[1] == "status":
         manager = MigrationManager()
@@ -597,7 +600,7 @@ if __name__ == "__main__":
         print(f"Current version: {result['current_version']}")
         print(f"Latest version: {result['latest_version']}")
         print(f"Pending migrations: {result['pending_count']}")
-        if result['pending_versions']:
+        if result["pending_versions"]:
             print(f"Pending: {result['pending_versions']}")
         asyncio.run(manager.disconnect())
     else:

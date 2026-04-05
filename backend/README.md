@@ -2,7 +2,7 @@
 
 FastAPI backend for the Forensic Council multi-agent forensic evidence analysis system.
 
-**Version:** v1.1.1 | **Python:** 3.12 | **Framework:** FastAPI + asyncpg
+**Version:** v1.2.0 | **Python:** 3.12 | **Framework:** FastAPI + asyncpg
 
 ---
 
@@ -131,8 +131,8 @@ pip install uv
 uv sync --all-extras
 
 # Start infrastructure only (Postgres, Redis, Qdrant)
-docker compose -f ../docs/docker/docker-compose.yml \
-               -f ../docs/docker/docker-compose.infra.yml \
+docker compose -f ../infra/docker-compose.yml \
+               -f ../infra/docker-compose.infra.yml \
                --env-file ../.env up -d
 
 # Run database migrations

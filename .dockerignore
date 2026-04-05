@@ -1,0 +1,75 @@
+# Git
+.git
+.gitignore
+.github
+.gitattributes
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+*.log
+.pytest_cache/
+.coverage
+coverage.xml
+
+# Node / Frontend
+node_modules/
+npm-debug.log
+yarn-error.log
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+
+# Build artifacts
+dist/
+build/
+*.tar.gz
+*.zip
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.env
+
+# Test
+test-results/
+tests/output/
+playwright-report/
+playwright/.cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Kilo
+.kilo/
+.opencode/
+.kilocode/
+
+# Storage
+storage/evidence/
+storage/keys/
+
+# ML Caches
+backend/cache/
+*.pt
+*.pth
+*.onnx
+*.bin
+*.h5
+*.weights

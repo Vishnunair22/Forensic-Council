@@ -1,0 +1,50 @@
+# ============================================================================
+# Forensic Council — Docker Compose Override (Production)
+# ============================================================================
+# Ensures optimized production targets are used, tighter restart policies,
+# log rotation, and suppressed host port bindings for backend/infra services.
+# ============================================================================
+
+services:
+  backend:
+    restart: always
+    build:
+      target: production
+    # Suppress the host-facing 8000 port — in production all traffic must flow
+    # through Caddy. Direct port exposure bypasses TLS, rate limiting, and
+    # security headers.
+    ports: []
+    environment:
+      - RELOAD=false
+      - APP_ENV=production
+      - DEBUG=false
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  frontend:
+    restart: always
+    build:
+      target: runner
+    # Suppress direct port access — all traffic via Caddy in production
+    ports: []
+    environment:
+      - NODE_ENV=production
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  caddy:
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  migration:
+    restart: "no"

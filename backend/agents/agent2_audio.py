@@ -1,8 +1,8 @@
 """
 Agent 2 - Audio & Multimedia Forensics Agent.
 
-Audio authenticity and multimedia consistency expert for detecting 
-audio deepfakes, splices, re-encoding events, prosody anomalies, 
+Audio authenticity and multimedia consistency expert for detecting
+audio deepfakes, splices, re-encoding events, prosody anomalies,
 and audio-visual sync breaks.
 """
 
@@ -21,14 +21,15 @@ from core.tool_registry import ToolRegistry
 from core.working_memory import WorkingMemory
 from core.ml_subprocess import run_ml_tool
 from infra.evidence_store import EvidenceStore
+
 # Import real tool implementations
 from tools.audio_tools import (
-    speaker_diarize_pyannote as real_speaker_diarize,       # pyannote.audio 3.1
-    anti_spoofing_speechbrain as real_anti_spoofing_detect, # SpeechBrain ECAPA
-    prosody_praat as real_prosody_analyze,                  # praat-parselmouth
+    speaker_diarize_pyannote as real_speaker_diarize,  # pyannote.audio 3.1
+    anti_spoofing_speechbrain as real_anti_spoofing_detect,  # SpeechBrain ECAPA
+    prosody_praat as real_prosody_analyze,  # praat-parselmouth
     background_noise_consistency as real_background_noise_consistency,
     codec_fingerprint as real_codec_fingerprint,
-    av_sync_verify as real_av_sync_verify,                  # moviepy+librosa
+    av_sync_verify as real_av_sync_verify,  # moviepy+librosa
 )
 
 
@@ -82,7 +83,7 @@ class Agent2Audio(ForensicAgent):
     def agent_name(self) -> str:
         """Human-readable name of this agent."""
         return "Agent2_AudioForensics"
-    
+
     @property
     def task_decomposition(self) -> list[str]:
         """
@@ -116,21 +117,21 @@ class Agent2Audio(ForensicAgent):
             "Run advanced codec chain analysis for multi-generation detection",
             "Run ENF (Electrical Network Frequency) analysis to detect splice points and verify recording timestamp",
         ]
-    
+
     @property
     def iteration_ceiling(self) -> int:
         """Maximum iterations — tasks + 2 buffer to prevent runaway loops."""
         return len(self.task_decomposition) + 2
-    
+
     @property
     def supported_file_types(self) -> list[str]:
         """Audio agent supports audio and video file types (video contains audio track)."""
-        return ['audio/', 'video/']
-    
+        return ["audio/", "video/"]
+
     async def build_tool_registry(self) -> ToolRegistry:
         """
         Build and return the tool registry for this agent.
-        
+
         Registers real tool implementations for:
         - speaker_diarization: Speaker diarization
         - anti_spoofing_detection: Anti-spoofing detection
@@ -142,7 +143,7 @@ class Agent2Audio(ForensicAgent):
         - adversarial_robustness_check: Spectral perturbation stability analysis
         """
         registry = ToolRegistry()
-        
+
         # Real tool handlers - wrap to accept input_data dict
         async def speaker_diarization_handler(input_data: dict) -> dict:
             """Handle speaker diarization with input_data dict."""
@@ -175,11 +176,13 @@ class Agent2Audio(ForensicAgent):
                 segment=segment,
             )
             if result.get("error"):
-                await self._record_tool_error("anti_spoofing_detection", result["error"])
+                await self._record_tool_error(
+                    "anti_spoofing_detection", result["error"]
+                )
             else:
                 await self._record_tool_result("anti_spoofing_detection", result)
             return result
-        
+
         async def prosody_analysis_handler(input_data: dict) -> dict:
             """Handle prosody analysis with input_data dict."""
             artifact = input_data.get("artifact") or self.evidence_artifact
@@ -189,7 +192,7 @@ class Agent2Audio(ForensicAgent):
             else:
                 await self._record_tool_result("prosody_analyze", result)
             return result
-        
+
         async def background_noise_analysis_handler(input_data: dict) -> dict:
             """Handle background noise analysis with input_data dict."""
             artifact = input_data.get("artifact") or self.evidence_artifact
@@ -199,11 +202,13 @@ class Agent2Audio(ForensicAgent):
                 segment_duration=segment_duration,
             )
             if result.get("error"):
-                await self._record_tool_error("background_noise_analysis", result["error"])
+                await self._record_tool_error(
+                    "background_noise_analysis", result["error"]
+                )
             else:
                 await self._record_tool_result("background_noise_analysis", result)
             return result
-        
+
         async def codec_fingerprinting_handler(input_data: dict) -> dict:
             """Handle codec fingerprinting with input_data dict."""
             artifact = input_data.get("artifact") or self.evidence_artifact
@@ -213,19 +218,23 @@ class Agent2Audio(ForensicAgent):
             else:
                 await self._record_tool_result("codec_fingerprinting", result)
             return result
-        
+
         async def audio_splice_detect_handler(input_data: dict) -> dict:
             """Run ML-based audio splice point detection on segments."""
             artifact = input_data.get("artifact") or self.evidence_artifact
             window = input_data.get("window", 1.0)
-            result = await run_ml_tool("audio_splice_detector.py", artifact.file_path,
-                                       extra_args=["--window", str(window)], timeout=25.0)
+            result = await run_ml_tool(
+                "audio_splice_detector.py",
+                artifact.file_path,
+                extra_args=["--window", str(window)],
+                timeout=15.0,
+            )
             if result.get("error"):
                 await self._record_tool_error("audio_splice_detect", result["error"])
             elif result.get("available") and not result.get("error"):
                 await self._record_tool_result("audio_splice_detect", result)
             return result
-        
+
         async def audio_visual_sync_handler(input_data: dict) -> dict:
             """Real AV sync using moviepy+librosa onset correlation."""
             artifact = input_data.get("artifact") or self.evidence_artifact
@@ -247,8 +256,10 @@ class Agent2Audio(ForensicAgent):
                 call_type=InterAgentCallType.COLLABORATIVE,
                 payload={
                     "timestamp_ref": input_data.get("timestamp_ref"),
-                    "question": input_data.get("question", "Confirm audio-visual sync at flagged timestamp"),
-                }
+                    "question": input_data.get(
+                        "question", "Confirm audio-visual sync at flagged timestamp"
+                    ),
+                },
             )
             response = await self._inter_agent_bus.send(call, self.custody_logger)
             return response
@@ -269,12 +280,20 @@ class Agent2Audio(ForensicAgent):
             artifact = input_data.get("artifact") or self.evidence_artifact
 
             try:
-                y, sr = librosa.load(artifact.file_path, sr=None, mono=True, duration=10.0)
+                y, sr = librosa.load(
+                    artifact.file_path, sr=None, mono=True, duration=10.0
+                )
 
                 def _spectral_features(signal: np.ndarray, sample_rate: int) -> dict:
-                    flux = float(np.mean(np.diff(np.abs(librosa.stft(signal)), axis=1) ** 2))
+                    flux = float(
+                        np.mean(np.diff(np.abs(librosa.stft(signal)), axis=1) ** 2)
+                    )
                     zcr = float(np.mean(librosa.feature.zero_crossing_rate(signal)))
-                    centroid = float(np.mean(librosa.feature.spectral_centroid(y=signal, sr=sample_rate)))
+                    centroid = float(
+                        np.mean(
+                            librosa.feature.spectral_centroid(y=signal, sr=sample_rate)
+                        )
+                    )
                     return {"flux": flux, "zcr": zcr, "centroid": centroid}
 
                 original_feats = _spectral_features(y, sr)
@@ -283,20 +302,27 @@ class Agent2Audio(ForensicAgent):
 
                 # 1 — Low-pass filter at 4 kHz (common anti-spoofing evasion)
                 from scipy.signal import butter, sosfilt
+
                 sos = butter(6, 4000.0 / (sr / 2), btype="low", output="sos")
                 lp_y = sosfilt(sos, y).astype(np.float32)
                 lp_feats = _spectral_features(lp_y, sr)
                 perturbation_deltas["low_pass_4khz"] = round(
-                    abs(lp_feats["flux"] - original_feats["flux"]) / (original_feats["flux"] + 1e-9), 4
+                    abs(lp_feats["flux"] - original_feats["flux"])
+                    / (original_feats["flux"] + 1e-9),
+                    4,
                 )
 
                 # 2 — Additive white noise at -40 dB SNR
                 rng = np.random.default_rng(42)
-                noise_power = float(np.mean(y ** 2)) / (10 ** 4)  # -40 dB
-                noisy_y = (y + rng.normal(0, np.sqrt(noise_power), y.shape)).astype(np.float32)
+                noise_power = float(np.mean(y**2)) / (10**4)  # -40 dB
+                noisy_y = (y + rng.normal(0, np.sqrt(noise_power), y.shape)).astype(
+                    np.float32
+                )
                 noisy_feats = _spectral_features(noisy_y, sr)
                 perturbation_deltas["white_noise_-40db"] = round(
-                    abs(noisy_feats["zcr"] - original_feats["zcr"]) / (original_feats["zcr"] + 1e-9), 4
+                    abs(noisy_feats["zcr"] - original_feats["zcr"])
+                    / (original_feats["zcr"] + 1e-9),
+                    4,
                 )
 
                 # 3 — Time-stretch by 2 % (imperceptible pitch preservation)
@@ -305,15 +331,19 @@ class Agent2Audio(ForensicAgent):
                     s_feats = _spectral_features(stretched, sr)
                     perturbation_deltas["time_stretch_2pct"] = round(
                         abs(s_feats["centroid"] - original_feats["centroid"])
-                        / (original_feats["centroid"] + 1e-9), 4
+                        / (original_feats["centroid"] + 1e-9),
+                        4,
                     )
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"Audio time-stretch perturbation failed: {e}")
                     perturbation_deltas["time_stretch_2pct"] = 0.0
 
                 # Heuristic: if ANY perturbation produces > 50 % relative
                 # feature shift the anti-spoofing signal is fragile / engineered.
                 EVASION_THRESHOLD = 0.50
-                evasion_detected = any(v > EVASION_THRESHOLD for v in perturbation_deltas.values())
+                evasion_detected = any(
+                    v > EVASION_THRESHOLD for v in perturbation_deltas.values()
+                )
 
                 return {
                     "status": "real",
@@ -322,7 +352,9 @@ class Agent2Audio(ForensicAgent):
                     "adversarial_pattern_detected": evasion_detected,
                     "perturbation_deltas": perturbation_deltas,
                     "evasion_threshold": EVASION_THRESHOLD,
-                    "original_features": {k: round(v, 6) for k, v in original_feats.items()},
+                    "original_features": {
+                        k: round(v, 6) for k, v in original_feats.items()
+                    },
                     "confidence": 0.70 if evasion_detected else 0.88,
                     "note": (
                         "Spectral features are highly sensitive to benign perturbations — possible adversarial engineering."
@@ -338,7 +370,7 @@ class Agent2Audio(ForensicAgent):
                     "confidence": None,
                     "error": str(e),
                 }
-        
+
         async def voice_clone_detect_handler(input_data: dict) -> dict:
             """
             AI voice clone and speech synthesis detection.
@@ -350,7 +382,9 @@ class Agent2Audio(ForensicAgent):
             A positive result should be corroborated with anti_spoofing_detect.
             """
             artifact = input_data.get("artifact") or self.evidence_artifact
-            result = await run_ml_tool("voice_clone_detector.py", artifact.file_path, timeout=30.0)
+            result = await run_ml_tool(
+                "voice_clone_detector.py", artifact.file_path, timeout=15.0
+            )
             if result.get("available") and not result.get("error"):
                 await self._record_tool_result("voice_clone_detect", result)
                 return result
@@ -362,7 +396,7 @@ class Agent2Audio(ForensicAgent):
                 audio, sr = sf.read(artifact.file_path)
                 if audio.ndim > 1:
                     audio = audio.mean(axis=1)
-                audio = audio[:sr * 30].astype(np.float32)  # analyse up to 30 s
+                audio = audio[: sr * 30].astype(np.float32)  # analyse up to 30 s
 
                 # Feature 1: Spectral flatness (voice clones are spectrally smoother)
                 freqs, psd = sp_signal.welch(audio, sr, nperseg=2048)
@@ -373,12 +407,24 @@ class Agent2Audio(ForensicAgent):
                 # Feature 2: ZCR variance (natural speech has variable pitch)
                 frame_size = int(0.025 * sr)
                 hop_size = int(0.010 * sr)
-                frames = [audio[i:i+frame_size] for i in range(0, len(audio) - frame_size, hop_size)]
-                zcr = [float(np.sum(np.abs(np.diff(np.sign(f)))) / (2 * len(f))) for f in frames] if frames else [0.0]
+                frames = [
+                    audio[i : i + frame_size]
+                    for i in range(0, len(audio) - frame_size, hop_size)
+                ]
+                zcr = (
+                    [
+                        float(np.sum(np.abs(np.diff(np.sign(f)))) / (2 * len(f)))
+                        for f in frames
+                    ]
+                    if frames
+                    else [0.0]
+                )
                 zcr_std = float(np.std(zcr))
 
                 # Feature 3: Energy coefficient of variation
-                rms = [float(np.sqrt(np.mean(f**2))) for f in frames] if frames else [0.0]
+                rms = (
+                    [float(np.sqrt(np.mean(f**2))) for f in frames] if frames else [0.0]
+                )
                 energy_cv = float(np.std(rms) / (np.mean(rms) + 1e-10))
 
                 # Feature 4: Silence ratio (voice clones lack natural pauses)
@@ -389,20 +435,30 @@ class Agent2Audio(ForensicAgent):
                 flags = []
                 if spectral_flatness > 0.15:
                     synthetic_score += 0.25
-                    flags.append(f"High spectral flatness ({spectral_flatness:.3f}) — voice clone models produce spectrally smoother audio")
+                    flags.append(
+                        f"High spectral flatness ({spectral_flatness:.3f}) — voice clone models produce spectrally smoother audio"
+                    )
                 if zcr_std < 0.02:
                     synthetic_score += 0.25
-                    flags.append(f"Low pitch variation (ZCR std {zcr_std:.4f}) — natural speech has more dynamic F0 contour")
+                    flags.append(
+                        f"Low pitch variation (ZCR std {zcr_std:.4f}) — natural speech has more dynamic F0 contour"
+                    )
                 if energy_cv < 0.30:
                     synthetic_score += 0.15
-                    flags.append(f"Low energy dynamics (CV {energy_cv:.3f}) — natural speech has higher amplitude variation")
+                    flags.append(
+                        f"Low energy dynamics (CV {energy_cv:.3f}) — natural speech has higher amplitude variation"
+                    )
                 if silence_ratio < 0.05:
                     synthetic_score += 0.15
-                    flags.append("Minimal silence — natural speech includes breathing and micro-pauses")
+                    flags.append(
+                        "Minimal silence — natural speech includes breathing and micro-pauses"
+                    )
 
                 verdict = (
-                    "LIKELY_SYNTHETIC" if synthetic_score >= 0.55
-                    else "SUSPICIOUS" if synthetic_score >= 0.35
+                    "LIKELY_SYNTHETIC"
+                    if synthetic_score >= 0.55
+                    else "SUSPICIOUS"
+                    if synthetic_score >= 0.35
                     else "LIKELY_GENUINE"
                 )
                 vc_result = {
@@ -422,7 +478,12 @@ class Agent2Audio(ForensicAgent):
                 return vc_result
             except Exception as e:
                 await self._record_tool_error("voice_clone_detect", str(e))
-                return {"verdict": "ERROR", "error": str(e), "available": False, "court_defensible": False}
+                return {
+                    "verdict": "ERROR",
+                    "error": str(e),
+                    "available": False,
+                    "court_defensible": False,
+                }
 
         async def enf_analysis_handler(input_data: dict) -> dict:
             """
@@ -438,7 +499,9 @@ class Agent2Audio(ForensicAgent):
             For full timestamp verification, compare against an ENF reference database.
             """
             artifact = input_data.get("artifact") or self.evidence_artifact
-            result = await run_ml_tool("enf_analysis.py", artifact.file_path, timeout=60.0)
+            result = await run_ml_tool(
+                "enf_analysis.py", artifact.file_path, timeout=30.0
+            )
             if result.get("available") and not result.get("error"):
                 return result
             try:
@@ -453,7 +516,9 @@ class Agent2Audio(ForensicAgent):
 
                 enf_targets = [50, 100, 150, 200, 60, 120, 180, 240]
                 nperseg = min(len(audio), sr * 2)
-                freqs, times, Zxx = sp_signal.stft(audio, fs=sr, nperseg=nperseg, noverlap=nperseg // 2)
+                freqs, times, Zxx = sp_signal.stft(
+                    audio, fs=sr, nperseg=nperseg, noverlap=nperseg // 2
+                )
                 power = np.abs(Zxx) ** 2
 
                 enf_detected = False
@@ -465,7 +530,11 @@ class Agent2Audio(ForensicAgent):
                         continue
                     band_power = float(power[freq_idx, :].mean())
                     neighbor_power = float(
-                        (power[freq_idx - 2:freq_idx, :].mean() + power[freq_idx + 1:freq_idx + 3, :].mean()) / 2
+                        (
+                            power[freq_idx - 2 : freq_idx, :].mean()
+                            + power[freq_idx + 1 : freq_idx + 3, :].mean()
+                        )
+                        / 2
                     )
                     if band_power / (neighbor_power + 1e-10) > 3.0:
                         enf_detected = True
@@ -492,16 +561,22 @@ class Agent2Audio(ForensicAgent):
                 return {
                     "enf_detected": True,
                     "enf_frequency_hz": detected_freq,
-                    "grid_standard": "50Hz (European/Asian)" if detected_freq in [50, 100, 150, 200] else "60Hz (American)",
+                    "grid_standard": "50Hz (European/Asian)"
+                    if detected_freq in [50, 100, 150, 200]
+                    else "60Hz (American)",
                     "splice_candidate_points": splice_candidates,
                     "enf_consistency_score": round(consistency, 4),
-                    "verdict": "INCONSISTENT_ENF" if splice_candidates > 2 else "CONSISTENT_ENF",
-                    "duration_analyzed_s": round(float(len(times)) * (nperseg / sr) / 2, 1),
+                    "verdict": "INCONSISTENT_ENF"
+                    if splice_candidates > 2
+                    else "CONSISTENT_ENF",
+                    "duration_analyzed_s": round(
+                        float(len(times)) * (nperseg / sr) / 2, 1
+                    ),
                     "forensic_note": (
                         f"ENF shows {splice_candidates} abrupt frequency jump(s) — potential edit/splice point(s). "
                         "Compare against ENF reference database for timestamp verification."
-                        if splice_candidates > 2 else
-                        "ENF signal is internally consistent — no temporal discontinuities detected in the recording."
+                        if splice_candidates > 2
+                        else "ENF signal is internally consistent — no temporal discontinuities detected in the recording."
                     ),
                     "caveat": "ENF database comparison not performed — internal consistency only. Full timestamp verification requires ENF reference data.",
                     "available": True,
@@ -509,24 +584,65 @@ class Agent2Audio(ForensicAgent):
                     "backend": "scipy-enf-inline",
                 }
             except Exception as e:
-                return {"enf_detected": False, "verdict": "ERROR", "error": str(e),
-                        "available": False, "court_defensible": False}
+                return {
+                    "enf_detected": False,
+                    "verdict": "ERROR",
+                    "error": str(e),
+                    "available": False,
+                    "court_defensible": False,
+                }
 
         # Register tools
-        registry.register("speaker_diarize", speaker_diarization_handler, "Speaker diarization")
-        registry.register("anti_spoofing_detect", anti_spoofing_detection_handler, "Anti-spoofing detection")
-        registry.register("prosody_analyze", prosody_analysis_handler, "Prosody analysis")
-        registry.register("audio_splice_detect", audio_splice_detect_handler, "Run ML-based audio splice detection on segments")
-        registry.register("background_noise_analysis", background_noise_analysis_handler, "Background noise consistency analysis")
-        registry.register("codec_fingerprinting", codec_fingerprinting_handler, "Codec fingerprinting")
-        registry.register("audio_visual_sync", audio_visual_sync_handler, "Audio-visual sync verification")
-        registry.register("inter_agent_call", inter_agent_call_handler, "Inter-agent communication")
-        registry.register("adversarial_robustness_check", adversarial_robustness_check_handler, "Adversarial robustness check")
-        registry.register("voice_clone_detect", voice_clone_detect_handler, "AI voice clone and speech synthesis detection via spectral heuristics")
-        registry.register("enf_analysis", enf_analysis_handler, "Electrical Network Frequency (ENF) analysis for splice detection and timestamp verification")
+        registry.register(
+            "speaker_diarize", speaker_diarization_handler, "Speaker diarization"
+        )
+        registry.register(
+            "anti_spoofing_detect",
+            anti_spoofing_detection_handler,
+            "Anti-spoofing detection",
+        )
+        registry.register(
+            "prosody_analyze", prosody_analysis_handler, "Prosody analysis"
+        )
+        registry.register(
+            "audio_splice_detect",
+            audio_splice_detect_handler,
+            "Run ML-based audio splice detection on segments",
+        )
+        registry.register(
+            "background_noise_analysis",
+            background_noise_analysis_handler,
+            "Background noise consistency analysis",
+        )
+        registry.register(
+            "codec_fingerprinting", codec_fingerprinting_handler, "Codec fingerprinting"
+        )
+        registry.register(
+            "audio_visual_sync",
+            audio_visual_sync_handler,
+            "Audio-visual sync verification",
+        )
+        registry.register(
+            "inter_agent_call", inter_agent_call_handler, "Inter-agent communication"
+        )
+        registry.register(
+            "adversarial_robustness_check",
+            adversarial_robustness_check_handler,
+            "Adversarial robustness check",
+        )
+        registry.register(
+            "voice_clone_detect",
+            voice_clone_detect_handler,
+            "AI voice clone and speech synthesis detection via spectral heuristics",
+        )
+        registry.register(
+            "enf_analysis",
+            enf_analysis_handler,
+            "Electrical Network Frequency (ENF) analysis for splice detection and timestamp verification",
+        )
 
         return registry
-    
+
     async def build_initial_thought(self) -> str:
         """
         Build the contextually-grounded initial thought for the ReAct loop.
@@ -543,21 +659,34 @@ class Agent2Audio(ForensicAgent):
                     result = await handler({"artifact": self.evidence_artifact})
                     codec = result.get("codec") or result.get("audio_codec", "")
                     sample_rate = result.get("sample_rate", "")
-                    duration = result.get("duration_seconds", result.get("duration", ""))
+                    duration = result.get(
+                        "duration_seconds", result.get("duration", "")
+                    )
                     channels = result.get("channels", "")
                     bit_depth = result.get("bit_depth", "")
                     if codec:
-                        parts = [f"Codec: {codec}", f"sample rate: {sample_rate}Hz", f"duration: {duration}s", f"channels: {channels}"]
+                        parts = [
+                            f"Codec: {codec}",
+                            f"sample rate: {sample_rate}Hz",
+                            f"duration: {duration}s",
+                            f"channels: {channels}",
+                        ]
                         if bit_depth:
                             parts.append(f"bit depth: {bit_depth}")
                         context_lines.append(", ".join(parts))
-                    encoding_chain = result.get("encoding_chain", result.get("encoding_history", ""))
+                    encoding_chain = result.get(
+                        "encoding_chain", result.get("encoding_history", "")
+                    )
                     if encoding_chain:
                         context_lines.append(f"Encoding chain: {encoding_chain}")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Codec pre-screen for initial thought failed: {e}")
 
-        context = " | ".join(context_lines) if context_lines else "Codec pre-screen unavailable."
+        context = (
+            " | ".join(context_lines)
+            if context_lines
+            else "Codec pre-screen unavailable."
+        )
         return (
             f"Starting audio forensics analysis. Evidence: {self.evidence_artifact.artifact_id}. "
             f"Codec pre-screen — {context} "
@@ -583,7 +712,9 @@ class Agent2Audio(ForensicAgent):
         mime = (self.evidence_artifact.metadata or {}).get("mime_type", "").lower()
         image_exts = (".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp", ".svg")
 
-        is_image = any(file_path.endswith(ext) for ext in image_exts) or mime.startswith("image/")
+        is_image = any(
+            file_path.endswith(ext) for ext in image_exts
+        ) or mime.startswith("image/")
         is_audio_video = mime.startswith("audio/") or mime.startswith("video/")
 
         if is_image or not is_audio_video:
@@ -601,8 +732,8 @@ class Agent2Audio(ForensicAgent):
                             status=TaskStatus.COMPLETE,
                             result_ref="file_type_validation",
                         )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Working memory task update failed in validation: {e}")
 
             finding = AgentFinding(
                 agent_id=self.agent_id,

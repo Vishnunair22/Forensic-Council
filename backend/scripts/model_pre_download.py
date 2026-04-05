@@ -24,22 +24,26 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import tempfile
 import time
 from pathlib import Path
 
-# ── Cache directory mapping (must match Dockerfile ENV + docker-compose volumes)
+from core.config import get_settings
+
+# ── Cache directory mapping (centrally managed via core.config)
+settings = get_settings()
 CACHE_DIRS = {
-    "YOLO":    os.getenv("YOLO_CONFIG_DIR",   "/app/cache/ultralytics"),
-    "TORCH":   os.getenv("TORCH_HOME",         "/app/cache/torch"),
-    "HF":      os.getenv("HF_HOME",            "/app/cache/huggingface"),
-    "EASYOCR": os.getenv("EASYOCR_MODEL_DIR",  "/app/cache/easyocr"),
+    "YOLO": settings.yolo_config_dir,
+    "TORCH": settings.torch_home,
+    "HF": settings.hf_home,
+    "EASYOCR": settings.easyocr_model_dir,
 }
 
-GREEN  = "\033[0;32m"
+GREEN = "\033[0;32m"
 YELLOW = "\033[1;33m"
-CYAN   = "\033[0;36m"
-RESET  = "\033[0m"
-BOLD   = "\033[1m"
+CYAN = "\033[0;36m"
+RESET = "\033[0m"
+BOLD = "\033[1m"
 
 
 def _file_count(directory: str) -> int:
@@ -72,10 +76,15 @@ def setup_dirs() -> None:
 # ── Individual model download functions ─────────────────────────────────────
 # Each returns True on success / already-cached, False on failure.
 
+
 def download_yolo(force: bool = False) -> bool:
     yolo_dir = CACHE_DIRS["YOLO"]
     # Check for the weight file at the exact target path
-    existing = [Path(yolo_dir) / "yolov8n.pt"] if (Path(yolo_dir) / "yolov8n.pt").exists() else []
+    existing = (
+        [Path(yolo_dir) / "yolov8n.pt"]
+        if (Path(yolo_dir) / "yolov8n.pt").exists()
+        else []
+    )
     if existing and not force:
         print(f"  {GREEN}[SKIP]{RESET}  YOLOv8n — already cached ({existing[0]})")
         return True
@@ -85,6 +94,7 @@ def download_yolo(force: bool = False) -> bool:
         os.environ["YOLO_CONFIG_DIR"] = yolo_dir
         os.environ["ULTRALYTICS_CACHE_DIR"] = yolo_dir
         from ultralytics import YOLO
+
         # Pass the full destination path so YOLO saves directly to the volume.
         # Without this, YOLO("yolov8n.pt") saves to the CWD (/app) which is a
         # bind-mounted host directory — not the persistent cache volume.
@@ -108,17 +118,18 @@ def download_easyocr(force: bool = False) -> bool:
     try:
         os.environ["EASYOCR_MODEL_DIR"] = easyocr_dir
         # EasyOCR tries to write a metadata dir under $HOME/.EasyOCR regardless
-        # of model_storage_directory. Override HOME to /tmp (always writable, even
-        # in read_only: true containers which have a /tmp tmpfs mount).
+        # of model_storage_directory. Create a secure temporary directory.
         orig_home = os.environ.get("HOME", "")
-        os.environ["HOME"] = "/tmp"
-        import easyocr
-        easyocr.Reader(
-            ["en"],
-            gpu=False,
-            download_enabled=True,
-            model_storage_directory=easyocr_dir,
-        )
+        with tempfile.TemporaryDirectory(prefix="easyocr_") as temp_home:
+            os.environ["HOME"] = temp_home
+            import easyocr
+
+            easyocr.Reader(
+                ["en"],
+                gpu=False,
+                download_enabled=True,
+                model_storage_directory=easyocr_dir,
+            )
         if orig_home:
             os.environ["HOME"] = orig_home
         print(f"  {GREEN}[OK  ]{RESET}  EasyOCR downloaded.")
@@ -133,20 +144,30 @@ def download_open_clip(force: bool = False) -> bool:
     hf_dir = CACHE_DIRS["HF"]
     # open_clip (via timm) caches to HF_HOME/hub/models--timm--vit_base_patch32_clip_224.openai
     # The actual weights blob is a 578 MB content-addressed file in the blobs/ subdir.
-    timm_model_dir = Path(hf_dir) / "hub" / "models--timm--vit_base_patch32_clip_224.openai"
+    timm_model_dir = (
+        Path(hf_dir) / "hub" / "models--timm--vit_base_patch32_clip_224.openai"
+    )
     # Check for any blob > 100 MB (the actual model weights)
-    clip_cached = [
-        p for p in (timm_model_dir / "blobs").glob("*")
-        if p.is_file() and p.stat().st_size > 100_000_000
-    ] if (timm_model_dir / "blobs").exists() else []
+    clip_cached = (
+        [
+            p
+            for p in (timm_model_dir / "blobs").glob("*")
+            if p.is_file() and p.stat().st_size > 100_000_000
+        ]
+        if (timm_model_dir / "blobs").exists()
+        else []
+    )
 
     if clip_cached and not force:
-        print(f"  {GREEN}[SKIP]{RESET}  OpenCLIP ViT-B-32 — already cached ({clip_cached[0]})")
+        print(
+            f"  {GREEN}[SKIP]{RESET}  OpenCLIP ViT-B-32 — already cached ({clip_cached[0]})"
+        )
         return True
 
     print(f"  {CYAN}[DOWN]{RESET}  OpenCLIP ViT-B-32 (openai) → {hf_dir}")
     try:
         import open_clip
+
         open_clip.create_model_and_transforms("ViT-B-32", pretrained="openai")
         print(f"  {GREEN}[OK  ]{RESET}  OpenCLIP downloaded.")
         return True
@@ -155,25 +176,110 @@ def download_open_clip(force: bool = False) -> bool:
         return False
 
 
+def download_resnet50(force: bool = False) -> bool:
+    """ResNet-50 — used by deepfake_frequency tool for frequency-domain analysis."""
+    torch_dir = CACHE_DIRS["TORCH"]
+    # torchvision caches to TORCH_HOME/hub/checkpoints/
+    checkpoint_dir = Path(torch_dir) / "hub" / "checkpoints"
+    resnet_file = checkpoint_dir / "resnet50-11ad3fa6.pth"
+    if resnet_file.exists() and not force:
+        print(f"  {GREEN}[SKIP]{RESET}  ResNet-50 — already cached ({resnet_file})")
+        return True
+
+    print(f"  {CYAN}[DOWN]{RESET}  ResNet-50 weights → {torch_dir}")
+    try:
+        import torchvision
+
+        torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.DEFAULT)
+        print(f"  {GREEN}[OK  ]{RESET}  ResNet-50 downloaded.")
+        return True
+    except Exception as exc:
+        print(f"  {YELLOW}[WARN]{RESET}  ResNet-50 download failed: {exc}")
+        return False
+
+
+def download_speechbrain(force: bool = False) -> bool:
+    """SpeechBrain ECAPA-TDNN — used for audio anti-spoofing."""
+    hf_dir = CACHE_DIRS["HF"]
+    sb_dir = Path(hf_dir) / "hub" / "models--speechbrain--spkrec-ecapa-voxceleb"
+    cached = (
+        [
+            p
+            for p in (sb_dir / "blobs").glob("*")
+            if p.is_file() and p.stat().st_size > 10_000_000
+        ]
+        if (sb_dir / "blobs").exists()
+        else []
+    )
+    if cached and not force:
+        print(f"  {GREEN}[SKIP]{RESET}  SpeechBrain ECAPA — already cached ({cached[0]})")
+        return True
+
+    print(f"  {CYAN}[DOWN]{RESET}  SpeechBrain ECAPA-TDNN → {hf_dir}")
+    try:
+        from speechbrain.inference.speaker import EncoderClassifier
+        EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb", run_opts={"device": "cpu"})
+        print(f"  {GREEN}[OK  ]{RESET}  SpeechBrain downloaded.")
+        return True
+    except Exception as exc:
+        print(f"  {YELLOW}[WARN]{RESET}  SpeechBrain download failed: {exc}")
+        return False
+
+
+def download_pyannote(force: bool = False) -> bool:
+    """pyannote.audio speaker diarization — used by Agent 2 (requires HF_TOKEN)."""
+    hf_dir = CACHE_DIRS["HF"]
+    pyannote_dir = Path(hf_dir) / "hub"
+    cached = (
+        list(pyannote_dir.glob("models--pyannote--*")) if pyannote_dir.exists() else []
+    )
+    if cached and not force:
+        print(
+            f"  {GREEN}[SKIP]{RESET}  pyannote.audio — already cached ({len(cached)} models)"
+        )
+        return True
+
+    hf_token = os.getenv("HF_TOKEN")
+    if not hf_token:
+        print(
+            f"  {YELLOW}[SKIP]{RESET}  pyannote.audio — HF_TOKEN not set (set it for Agent 2 speaker diarization)"
+        )
+        return True
+
+    print(f"  {CYAN}[DOWN]{RESET}  pyannote/speaker-diarization-3.1 → {hf_dir}")
+    try:
+        from pyannote.audio import Pipeline
+
+        Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", token=hf_token)
+        print(f"  {GREEN}[OK  ]{RESET}  pyannote.audio downloaded.")
+        return True
+    except Exception as exc:
+        print(f"  {YELLOW}[WARN]{RESET}  pyannote.audio download failed: {exc}")
+        return False
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Forensic Council — ML model pre-download (idempotent)"
     )
     parser.add_argument(
-        "--force", action="store_true",
-        help="Re-download all models even if already cached in volumes"
+        "--force",
+        action="store_true",
+        help="Re-download all models even if already cached in volumes",
     )
     parser.add_argument(
-        "--check", action="store_true",
-        help="Check cache status only, do not download anything"
+        "--check",
+        action="store_true",
+        help="Check cache status only, do not download anything",
     )
     args = parser.parse_args()
 
-    print(f"\n{BOLD}{'='*55}{RESET}")
+    print(f"\n{BOLD}{'=' * 55}{RESET}")
     print(f"{BOLD}  Forensic Council — ML Model Pre-Download{RESET}")
-    print(f"{BOLD}{'='*55}{RESET}")
+    print(f"{BOLD}{'=' * 55}{RESET}")
     if args.force:
         print(f"  {YELLOW}--force: re-downloading all models{RESET}")
     if args.check:
@@ -189,7 +295,9 @@ def main() -> None:
             count = _file_count(path)
             size = _dir_size_mb(path)
             marker = GREEN + "populated" if count > 0 else YELLOW + "empty"
-            print(f"  {marker}{RESET}  {name:<10}  {size:>7.1f} MB  ({count} files)  {path}")
+            print(
+                f"  {marker}{RESET}  {name:<10}  {size:>7.1f} MB  ({count} files)  {path}"
+            )
         print()
         return
 
@@ -200,20 +308,25 @@ def main() -> None:
         download_yolo(args.force),
         download_easyocr(args.force),
         download_open_clip(args.force),
+        download_resnet50(args.force),
+        download_speechbrain(args.force),
+        download_pyannote(args.force),
     ]
 
     elapsed = time.monotonic() - t0
     passed = sum(results)
-    total  = len(results)
+    total = len(results)
 
-    print(f"\n{BOLD}{'='*55}{RESET}")
+    print(f"\n{BOLD}{'=' * 55}{RESET}")
     if passed == total:
         print(f"{GREEN}{BOLD}  All {total} models ready. ({elapsed:.0f}s){RESET}")
     else:
         failed = total - passed
-        print(f"{YELLOW}{BOLD}  {failed} model(s) failed — will retry lazily on first use.{RESET}")
+        print(
+            f"{YELLOW}{BOLD}  {failed} model(s) failed — will retry lazily on first use.{RESET}"
+        )
         print(f"  {passed}/{total} succeeded in {elapsed:.0f}s.")
-    print(f"{BOLD}{'='*55}{RESET}\n")
+    print(f"{BOLD}{'=' * 55}{RESET}\n")
 
 
 if __name__ == "__main__":

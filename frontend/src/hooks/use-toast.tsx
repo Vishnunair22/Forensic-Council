@@ -1,3 +1,4 @@
+"use client";
 
 import * as React from "react";
 
@@ -5,7 +6,12 @@ import * as React from "react";
 export type ToastActionElement = React.ReactElement;
 
 // Define toast types for visual distinction
-export type ToastType = "default" | "destructive" | "success" | "warning" | "info";
+export type ToastType =
+  | "default"
+  | "destructive"
+  | "success"
+  | "warning"
+  | "info";
 
 // Main Toast interface
 export interface ToastItem {
@@ -84,7 +90,7 @@ const reducer = (state: State, action: Action): State => {
       return {
         ...state,
         toasts: state.toasts.map((t) =>
-          t.id === action.toast.id ? { ...t, ...action.toast } : t
+          t.id === action.toast.id ? { ...t, ...action.toast } : t,
         ),
       };
 
@@ -104,7 +110,7 @@ const reducer = (state: State, action: Action): State => {
       return {
         ...state,
         toasts: state.toasts.map((t) =>
-          t.id === toastId ? { ...t, open: false } : t
+          t.id === toastId ? { ...t, open: false } : t,
         ),
       };
     }
@@ -149,15 +155,15 @@ function toast(props: ToastOptions) {
   if (props.duration !== Infinity) {
     const timeout = setTimeout(() => {
       dispatch({ type: actionTypes.DISMISS_TOAST, toastId: id });
-      
+
       // Remove after animation completes
       setTimeout(() => {
         dispatch({ type: actionTypes.REMOVE_TOAST, toastId: id });
       }, TOAST_REMOVE_DELAY);
-      
+
       toastTimeouts.delete(id);
     }, props.duration || 5000);
-    
+
     toastTimeouts.set(id, timeout);
   }
 
@@ -172,14 +178,14 @@ function toast(props: ToastOptions) {
 
   const dismiss = () => {
     dispatch({ type: actionTypes.DISMISS_TOAST, toastId: id });
-    
+
     // Clear any existing timeout
     const timeout = toastTimeouts.get(id);
     if (timeout) {
       clearTimeout(timeout);
       toastTimeouts.delete(id);
     }
-    
+
     // Remove after animation completes
     setTimeout(() => {
       dispatch({ type: actionTypes.REMOVE_TOAST, toastId: id });
@@ -208,11 +214,16 @@ function toast(props: ToastOptions) {
 }
 
 // Convenience functions for different toast types
-toast.default = (props: Omit<ToastOptions, "type">) => toast({ ...props, type: "default" });
-toast.destructive = (props: Omit<ToastOptions, "type">) => toast({ ...props, type: "destructive" });
-toast.success = (props: Omit<ToastOptions, "type">) => toast({ ...props, type: "success", variant: "success" });
-toast.warning = (props: Omit<ToastOptions, "type">) => toast({ ...props, type: "warning" });
-toast.info = (props: Omit<ToastOptions, "type">) => toast({ ...props, type: "info" });
+toast.default = (props: Omit<ToastOptions, "type">) =>
+  toast({ ...props, type: "default" });
+toast.destructive = (props: Omit<ToastOptions, "type">) =>
+  toast({ ...props, type: "destructive" });
+toast.success = (props: Omit<ToastOptions, "type">) =>
+  toast({ ...props, type: "success", variant: "success" });
+toast.warning = (props: Omit<ToastOptions, "type">) =>
+  toast({ ...props, type: "warning" });
+toast.info = (props: Omit<ToastOptions, "type">) =>
+  toast({ ...props, type: "info" });
 
 // Hook for consuming toasts
 function useToast() {
@@ -233,14 +244,14 @@ function useToast() {
     toast,
     dismiss: (toastId?: string) => {
       dispatch({ type: actionTypes.DISMISS_TOAST, toastId });
-      
+
       if (toastId) {
         const timeout = toastTimeouts.get(toastId);
         if (timeout) {
           clearTimeout(timeout);
           toastTimeouts.delete(toastId);
         }
-        
+
         setTimeout(() => {
           dispatch({ type: actionTypes.REMOVE_TOAST, toastId });
         }, TOAST_REMOVE_DELAY);

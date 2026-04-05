@@ -48,7 +48,7 @@ logger = get_logger(__name__)
 class SignedEntry:
     """
     A signed content entry for chain-of-custody.
-    
+
     Attributes:
         content: The original content dict
         content_hash: SHA-256 hash of JSON-serialized content
@@ -56,12 +56,13 @@ class SignedEntry:
         agent_id: Identifier of the agent that signed
         timestamp_utc: UTC timestamp when signed
     """
+
     content: dict[str, Any]
     content_hash: str
     signature: str
     agent_id: str
     timestamp_utc: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
@@ -71,7 +72,7 @@ class SignedEntry:
             "agent_id": self.agent_id,
             "timestamp_utc": self.timestamp_utc.isoformat(),
         }
-    
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "SignedEntry":
         """Create from dictionary."""
@@ -90,16 +91,17 @@ class SignedEntry:
 class AgentKeyPair:
     """
     ECDSA P-256 key pair for an agent.
-    
+
     Attributes:
         agent_id: Unique identifier for the agent
         private_key: ECDSA private key
         public_key: ECDSA public key
     """
+
     agent_id: str
     private_key: ec.EllipticCurvePrivateKey
     public_key: ec.EllipticCurvePublicKey
-    
+
     @classmethod
     def generate(cls, agent_id: str, seed: Optional[bytes] = None) -> "AgentKeyPair":
         """Generate a new ECDSA P-256 key pair for an agent, optionally from a seed."""
@@ -111,22 +113,20 @@ class AgentKeyPair:
             # Using the actual group order (not 2^key_size) is required for
             # correctness and avoids the operator-precedence pitfall in the
             # original  expression.
-            _P256_ORDER = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
-            private_value = (int.from_bytes(seed, "big") % (_P256_ORDER - 1)) + 1
-            private_key = ec.derive_private_key(
-                private_value,
-                curve,
-                default_backend()
+            _P256_ORDER = (
+                0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
             )
+            private_value = (int.from_bytes(seed, "big") % (_P256_ORDER - 1)) + 1
+            private_key = ec.derive_private_key(private_value, curve, default_backend())
         else:
             private_key = ec.generate_private_key(curve, default_backend())
-            
+
         return cls(
             agent_id=agent_id,
             private_key=private_key,
             public_key=private_key.public_key(),
         )
-    
+
     def get_public_key_pem(self) -> str:
         """Get public key in PEM format for storage/transmission."""
         pem = self.public_key.public_bytes(
@@ -173,6 +173,7 @@ class KeyStore:
     def __init__(self) -> None:
         """Initialize the key store."""
         from core.config import get_settings
+
         self._settings = get_settings()
         self._keys: dict[str, AgentKeyPair] = {}
         self._db_available: bool = False
@@ -186,10 +187,13 @@ class KeyStore:
             # Fernet requires a 32-byte base64-encoded key — derive one from SIGNING_KEY
             derived = hashlib.sha256(raw).digest()
             import base64
+
             fernet_key = base64.urlsafe_b64encode(derived)
             self._fernet = Fernet(fernet_key)
         except Exception as e:
-            logger.warning("Failed to initialise Fernet cipher for key encryption", error=str(e))
+            logger.warning(
+                "Failed to initialise Fernet cipher for key encryption", error=str(e)
+            )
             self._fernet = None
 
     def _derive_seed(self, agent_id: str) -> bytes:
@@ -205,6 +209,7 @@ class KeyStore:
         """Load all agent keys from PostgreSQL (encrypted with Fernet)."""
         try:
             from infra.postgres_client import get_postgres_client
+
             pg = await get_postgres_client()
             if pg is None:
                 return
@@ -224,23 +229,36 @@ class KeyStore:
                         pem_bytes = self._fernet.decrypt(encrypted_pem.encode("utf-8"))
                     else:
                         # Fernet unavailable — cannot decrypt stored keys
-                        logger.warning("Fernet unavailable, skipping stored key for agent", agent_id=agent_id)
+                        logger.warning(
+                            "Fernet unavailable, skipping stored key for agent",
+                            agent_id=agent_id,
+                        )
                         continue
-                    key_pair = AgentKeyPair.from_pem(agent_id, pem_bytes.decode("utf-8"))
+                    key_pair = AgentKeyPair.from_pem(
+                        agent_id, pem_bytes.decode("utf-8")
+                    )
                     self._keys[agent_id] = key_pair
                 except Exception as e:
-                    logger.warning("Failed to decrypt stored key for agent", agent_id=agent_id, error=str(e))
+                    logger.warning(
+                        "Failed to decrypt stored key for agent",
+                        agent_id=agent_id,
+                        error=str(e),
+                    )
 
             self._db_available = True
             logger.info("Loaded agent keys from PostgreSQL", loaded=len(self._keys))
         except Exception as e:
-            logger.debug("PostgreSQL unavailable for key storage, using deterministic fallback", error=str(e))
+            logger.debug(
+                "PostgreSQL unavailable for key storage, using deterministic fallback",
+                error=str(e),
+            )
             self._db_available = False
 
     async def _save_key_to_db(self, agent_id: str, key_pair: AgentKeyPair) -> None:
         """Save a single agent key to PostgreSQL (encrypted with Fernet)."""
         try:
             from infra.postgres_client import get_postgres_client
+
             pg = await get_postgres_client()
             if pg is None or self._fernet is None:
                 return
@@ -264,12 +282,15 @@ class KeyStore:
             )
             logger.info("Saved key to PostgreSQL", agent_id=agent_id)
         except Exception as e:
-            logger.debug("Could not save key to PostgreSQL", agent_id=agent_id, error=str(e))
+            logger.debug(
+                "Could not save key to PostgreSQL", agent_id=agent_id, error=str(e)
+            )
 
     async def _retire_key_in_db(self, agent_id: str) -> None:
         """Mark the current active key for an agent as retired (is_active=false)."""
         try:
             from infra.postgres_client import get_postgres_client
+
             pg = await get_postgres_client()
             if pg is None:
                 return
@@ -300,7 +321,9 @@ class KeyStore:
                     key_pair = AgentKeyPair.generate(agent_id)
                     self._keys[agent_id] = key_pair
                     await self._save_key_to_db(agent_id, key_pair)
-                    logger.info("Generated independent key pair for agent", agent_id=agent_id)
+                    logger.info(
+                        "Generated independent key pair for agent", agent_id=agent_id
+                    )
                 else:
                     # Deterministic fallback
                     seed = self._derive_seed(agent_id)
@@ -399,13 +422,14 @@ def get_keystore() -> KeyStore:
 def compute_content_hash(content: dict[str, Any]) -> str:
     """
     Compute SHA-256 hash of JSON-serialized content.
-    
+
     Args:
         content: Dictionary to hash
-    
+
     Returns:
         Hex-encoded SHA-256 hash
     """
+
     # Sort keys for deterministic serialization
     # Use default=str to handle datetime and other non-JSON types,
     # and round floats to 10 decimal places to avoid PostgreSQL JSONB
@@ -418,7 +442,7 @@ def compute_content_hash(content: dict[str, Any]) -> str:
         if isinstance(obj, list):
             return [_normalize(v) for v in obj]
         return obj
-    
+
     normalized = _normalize(content)
     content_json = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(content_json.encode("utf-8")).hexdigest()
@@ -432,50 +456,50 @@ def sign_content(
 ) -> SignedEntry:
     """
     Sign content with agent's private key.
-    
+
     Computes SHA-256 hash of content, then signs (hash + timestamp) with
     the agent's ECDSA private key.
-    
+
     Args:
         agent_id: Identifier of the signing agent
         content: Content dictionary to sign
         keystore: Optional keystore (uses global if not provided)
         timestamp: Optional timestamp (uses current UTC if not provided)
-    
+
     Returns:
         SignedEntry with content, hash, signature, and metadata
     """
     if keystore is None:
         keystore = get_keystore()
-    
+
     key_pair = keystore.get_or_create(agent_id)
-    
+
     # Compute content hash
     content_hash = compute_content_hash(content)
-    
+
     # Use provided timestamp or current UTC
     if timestamp is None:
         timestamp = datetime.now(timezone.utc)
-    
+
     # Create message to sign: content_hash + timestamp_iso
     timestamp_iso = timestamp.isoformat()
     message = f"{content_hash}:{timestamp_iso}".encode("utf-8")
-    
+
     # Sign with ECDSA
     signature = key_pair.private_key.sign(
         message,
         ec.ECDSA(hashes.SHA256()),
     )
-    
+
     # Encode signature as hex for storage
     signature_hex = signature.hex()
-    
+
     logger.debug(
         "Signed content",
         agent_id=agent_id,
         content_hash=content_hash[:16] + "...",
     )
-    
+
     return SignedEntry(
         content=content,
         content_hash=content_hash,
@@ -491,21 +515,21 @@ def verify_entry(
 ) -> bool:
     """
     Verify a signed entry's signature.
-    
+
     Recomputes content hash and verifies the signature using the agent's
     public key. Returns False on any verification failure (never raises).
-    
+
     Args:
         entry: SignedEntry to verify
         keystore: Optional keystore (uses global if not provided)
-    
+
     Returns:
         True if signature is valid, False otherwise
     """
     try:
         if keystore is None:
             keystore = get_keystore()
-        
+
         # Get the agent's key pair
         key_pair = keystore.get(entry.agent_id)
         if key_pair is None:
@@ -514,7 +538,7 @@ def verify_entry(
                 agent_id=entry.agent_id,
             )
             return False
-        
+
         # Recompute content hash
         expected_hash = compute_content_hash(entry.content)
         if expected_hash != entry.content_hash:
@@ -524,28 +548,28 @@ def verify_entry(
                 actual=entry.content_hash[:16] + "...",
             )
             return False
-        
+
         # Reconstruct message
         timestamp_iso = entry.timestamp_utc.isoformat()
         message = f"{entry.content_hash}:{timestamp_iso}".encode("utf-8")
-        
+
         # Decode signature from hex
         signature_bytes = bytes.fromhex(entry.signature)
-        
+
         # Verify signature
         key_pair.public_key.verify(
             signature_bytes,
             message,
             ec.ECDSA(hashes.SHA256()),
         )
-        
+
         logger.debug(
             "Verified entry signature",
             agent_id=entry.agent_id,
             content_hash=entry.content_hash[:16] + "...",
         )
         return True
-        
+
     except InvalidSignature:
         logger.warning(
             "Verification failed: invalid signature",

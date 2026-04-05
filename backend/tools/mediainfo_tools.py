@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import atexit
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Optional
 
@@ -38,7 +39,6 @@ logger = get_logger(__name__)
 # Thread pool for blocking pymediainfo calls
 _MI_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="mediainfo_worker")
 
-import atexit
 atexit.register(_MI_EXECUTOR.shutdown, wait=False)
 
 # MediaInfo availability flag (checked once at runtime)
@@ -52,6 +52,7 @@ def _check_mediainfo() -> bool:
         return _mediainfo_available
     try:
         from pymediainfo import MediaInfo  # noqa: PLC0415
+
         # Quick parse of an empty-ish probe to verify the C library is linked
         MediaInfo.parse.__doc__  # noqa: B018 — just trigger the import chain
         _mediainfo_available = True
@@ -81,7 +82,10 @@ def _profile_av_sync(file_path: str) -> dict[str, Any]:
                        compression mode, writing library
     """
     if not _check_mediainfo():
-        return {"available": False, "error": "pymediainfo not installed or libmediainfo missing"}
+        return {
+            "available": False,
+            "error": "pymediainfo not installed or libmediainfo missing",
+        }
 
     try:
         from pymediainfo import MediaInfo  # noqa: PLC0415
@@ -129,7 +133,7 @@ def _profile_av_sync(file_path: str) -> dict[str, Any]:
                 "height_px": track.height,
                 "display_aspect_ratio": track.display_aspect_ratio,
                 "frame_rate": track.frame_rate,
-                "frame_rate_mode": track.frame_rate_mode,   # CFR vs VFR
+                "frame_rate_mode": track.frame_rate_mode,  # CFR vs VFR
                 "frame_count": track.frame_count,
                 "duration_ms": track.duration,
                 "bit_depth": track.bit_depth,
@@ -163,11 +167,13 @@ def _profile_av_sync(file_path: str) -> dict[str, Any]:
             result["audio_tracks"].append(at)
 
         elif kind == "Text":
-            result["text_tracks"].append({
-                "track_id": track.track_id,
-                "format": track.format,
-                "language": track.language,
-            })
+            result["text_tracks"].append(
+                {
+                    "track_id": track.track_id,
+                    "format": track.format,
+                    "language": track.language,
+                }
+            )
 
         else:
             result["other_tracks"].append({"track_type": kind, "format": track.format})
@@ -183,59 +189,78 @@ def _profile_av_sync(file_path: str) -> dict[str, Any]:
     # Flag 1: Variable Frame Rate — deepfake synthesis pipelines produce CFR
     for vt in video_tracks:
         if vt.get("frame_rate_mode") == "VFR":
-            flags.append({
-                "signal": "VARIABLE_FRAME_RATE",
-                "detail": "Video has variable frame rate (VFR). "
-                          "Most authentic camera recordings use CFR. "
-                          "Screen recordings and some editing tools produce VFR.",
-                "severity": "medium",
-            })
+            flags.append(
+                {
+                    "signal": "VARIABLE_FRAME_RATE",
+                    "detail": "Video has variable frame rate (VFR). "
+                    "Most authentic camera recordings use CFR. "
+                    "Screen recordings and some editing tools produce VFR.",
+                    "severity": "medium",
+                }
+            )
 
     # Flag 2: Writing application mismatch (video vs audio encoded by different tools)
     if len(video_tracks) >= 1 and len(audio_tracks) >= 1:
         vlib = (video_tracks[0].get("writing_library") or "").lower()
         alib = (audio_tracks[0].get("writing_library") or "").lower()
         if vlib and alib and vlib != alib and "unknown" not in (vlib + alib):
-            flags.append({
-                "signal": "TRACK_LIBRARY_MISMATCH",
-                "detail": (
-                    f"Video writing library '{vlib}' differs from "
-                    f"audio writing library '{alib}'. "
-                    "This can indicate separate video and audio sourced from different recordings."
-                ),
-                "severity": "medium",
-            })
+            flags.append(
+                {
+                    "signal": "TRACK_LIBRARY_MISMATCH",
+                    "detail": (
+                        f"Video writing library '{vlib}' differs from "
+                        f"audio writing library '{alib}'. "
+                        "This can indicate separate video and audio sourced from different recordings."
+                    ),
+                    "severity": "medium",
+                }
+            )
 
     # Flag 3: Encoding date in the future
     enc_date = general.get("encoded_date") or ""
     if enc_date:
         try:
             from datetime import datetime, timezone  # noqa: PLC0415
+
             # MediaInfo dates are typically "UTC 2024-01-15 10:30:00"
             enc_date_clean = enc_date.replace("UTC ", "").strip()
             dt_enc = datetime.strptime(enc_date_clean, "%Y-%m-%d %H:%M:%S").replace(
                 tzinfo=timezone.utc
             )
             if dt_enc > datetime.now(timezone.utc):
-                flags.append({
-                    "signal": "FUTURE_ENCODING_DATE",
-                    "detail": f"Container encoding date is in the future: {enc_date}",
-                    "severity": "high",
-                })
+                flags.append(
+                    {
+                        "signal": "FUTURE_ENCODING_DATE",
+                        "detail": f"Container encoding date is in the future: {enc_date}",
+                        "severity": "high",
+                    }
+                )
         except (ValueError, TypeError):
             pass
 
     # Flag 4: Editing software signatures in writing_application
-    known_editors = ["premiere", "final cut", "davinci", "handbrake", "ffmpeg",
-                     "avisynth", "virtualdub", "kdenlive", "shotcut", "openshot"]
+    known_editors = [
+        "premiere",
+        "final cut",
+        "davinci",
+        "handbrake",
+        "ffmpeg",
+        "avisynth",
+        "virtualdub",
+        "kdenlive",
+        "shotcut",
+        "openshot",
+    ]
     writing_app = (general.get("writing_application") or "").lower()
     for editor in known_editors:
         if editor in writing_app:
-            flags.append({
-                "signal": "EDITING_SOFTWARE_DETECTED",
-                "detail": f"Container written by editing software: {general.get('writing_application')}",
-                "severity": "medium",
-            })
+            flags.append(
+                {
+                    "signal": "EDITING_SOFTWARE_DETECTED",
+                    "detail": f"Container written by editing software: {general.get('writing_application')}",
+                    "severity": "medium",
+                }
+            )
             break  # Only flag once
 
     # Flag 5: Container/codec mismatch (e.g. .mp4 but codec says MKV-specific)
@@ -243,23 +268,27 @@ def _profile_av_sync(file_path: str) -> dict[str, Any]:
     for vt in video_tracks:
         codec = (vt.get("codec") or "").lower()
         if container_fmt == "mpeg-4" and codec in ("av1", "theora", "vp8", "vp9"):
-            flags.append({
-                "signal": "CONTAINER_CODEC_MISMATCH",
-                "detail": (
-                    f"Codec '{vt.get('codec')}' is unusual for an MPEG-4 container. "
-                    "This may indicate re-muxing or container spoofing."
-                ),
-                "severity": "low",
-            })
+            flags.append(
+                {
+                    "signal": "CONTAINER_CODEC_MISMATCH",
+                    "detail": (
+                        f"Codec '{vt.get('codec')}' is unusual for an MPEG-4 container. "
+                        "This may indicate re-muxing or container spoofing."
+                    ),
+                    "severity": "low",
+                }
+            )
 
     # Flag 6: No creation date at all (stripped metadata)
     if not general.get("encoded_date") and not general.get("tagged_date"):
-        flags.append({
-            "signal": "NO_CREATION_DATE",
-            "detail": "Container has no encoded or tagged creation date. "
-                      "Metadata may have been stripped.",
-            "severity": "low",
-        })
+        flags.append(
+            {
+                "signal": "NO_CREATION_DATE",
+                "detail": "Container has no encoded or tagged creation date. "
+                "Metadata may have been stripped.",
+                "severity": "low",
+            }
+        )
 
     return result
 
@@ -406,7 +435,9 @@ def _build_av_summary(result: dict[str, Any]) -> str:
 
     if at:
         a = at[0]
-        parts.append(f"{a.get('codec', 'unknown audio')} {a.get('sample_rate_hz', '?')}Hz")
+        parts.append(
+            f"{a.get('codec', 'unknown audio')} {a.get('sample_rate_hz', '?')}Hz"
+        )
 
     writing_app = g.get("writing_application")
     if writing_app:

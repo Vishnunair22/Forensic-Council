@@ -16,10 +16,10 @@ import asyncio
 import json
 from typing import Any, AsyncIterator
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
-from core.auth import get_current_user
+from core.auth import User, get_current_user
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
@@ -37,8 +37,8 @@ async def _event_generator(
     Listens to the same broadcast_update channel as WebSocket clients
     and yields Server-Sent Events formatted strings.
     """
-    # Import the existing broadcast infrastructure
-    from api.routes.investigation import _websocket_connections
+    # Import the shared WebSocket connections registry
+    from api.routes._session_state import _websocket_connections
 
     # Create a queue to receive broadcasts
     queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=100)
@@ -46,6 +46,7 @@ async def _event_generator(
     # Register as a "pseudo-WebSocket" consumer
     class SSEConsumer:
         """Minimal consumer that puts messages into a queue."""
+
         def __init__(self, q: asyncio.Queue):
             self._queue = q
 
@@ -90,6 +91,7 @@ async def _event_generator(
 async def sse_progress(
     session_id: str,
     request: Request,
+    current_user: User = Depends(get_current_user),
 ):
     """
     SSE endpoint for real-time investigation progress.

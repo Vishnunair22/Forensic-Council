@@ -6,8 +6,9 @@ When an alert fires or a user reports an issue:
 
 1. Check `GET /health` — is the API responding?
 2. Check Docker container status: `docker compose ps`
-3. Check logs: `docker compose logs --tail=100 backend`
-4. Determine severity from the table below
+3. Check logs: `docker compose logs --tail=100 backend worker`
+4. Check resource usage: `docker stats --no-stream`
+5. Determine severity from the table below
 
 ---
 
@@ -31,17 +32,17 @@ When an alert fires or a user reports an issue:
 docker compose logs --tail=50 backend
 
 # 2. Common causes:
-#    - Invalid .env (missing or malformed vars)
+#    - Invalid .env (missing or malformed vars like SIGNING_KEY, JWT_SECRET_KEY)
 #    - Database unreachable
 #    - Port conflict
 
 # 3. Fix:
-#    - Validate .env: ensure all required vars are set
+#    - Validate .env: ensure all required vars are set (check for CHANGE_ME placeholders)
 #    - Check postgres: docker compose exec postgres pg_isready
 #    - Check port: netstat -tlnp | grep 8000
 
 # 4. Restart:
-docker compose -f docs/docker/docker-compose.yml --env-file .env up -d --force-recreate backend
+docker compose -f infra/docker-compose.yml --env-file .env up -d --force-recreate backend
 ```
 
 ### P0: Database connection failures
@@ -151,9 +152,9 @@ If a deployment breaks production:
 
 ```bash
 # 1. Revert to previous Docker image
-docker compose -f docs/docker/docker-compose.yml --env-file .env down
+docker compose -f infra/docker-compose.yml --env-file .env down
 git checkout HEAD~1
-docker compose -f docs/docker/docker-compose.yml --env-file .env up -d --build
+docker compose -f infra/docker-compose.yml --env-file .env up -d --build
 
 # 2. Verify health
 curl -s http://localhost:8000/health
@@ -180,4 +181,4 @@ After resolving any P0 or P1 incident:
 1. Write a brief post-mortem (what happened, root cause, fix, prevention)
 2. Update this runbook if a new failure mode was discovered
 3. Add a test case to prevent regression
-4. Update CHANGELOG.md if a code fix was deployed
+4. Update `docs/Development-Status.md` if a code fix was deployed

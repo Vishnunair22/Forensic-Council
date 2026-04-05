@@ -13,6 +13,7 @@
 FROM python:3.12-slim AS base
 
 # 1. System deps — cached aggressively via BuildKit cache mount
+# Added libmagic-dev for python-magic on Debian/Ubuntu systems
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
@@ -24,12 +25,15 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         libglib2.0-0 \
         gcc \
         libmediainfo-dev \
-        libmagic1 \
+        libmagic-dev \
+        util-linux \
+        procps \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Install uv (fast Python package manager)
 # Using pip install to avoid ghcr.io TLS issues on restricted networks
-RUN pip install --no-cache-dir uv
+# Pinned to specific version for reproducible builds
+RUN pip install --no-cache-dir uv==0.5.26
 
 WORKDIR /app
 
@@ -62,7 +66,8 @@ COPY . .
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app" \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    CURL_HOME="/tmp"
 
 # ML model cache dirs — these must match the volume mounts in docker-compose.yml.
 # Models are downloaded by the entrypoint on first run into these volume-backed
@@ -85,7 +90,7 @@ RUN mkdir -p \
     /app/cache/easyocr
 
 # Pre-compile application bytecode for faster cold starts (excluding caches)
-RUN python -m compileall -q api/ core/ orchestration/ agents/ tools/ scripts/ 2>/dev/null || true
+RUN python -m compileall -q api/ core/ orchestration/ agents/ tools/ scripts/ infra/ reports/ 2>/dev/null || true
 
 # Make entrypoint executable
 RUN chmod +x scripts/docker_entrypoint.sh
@@ -118,18 +123,12 @@ RUN addgroup --system --gid 1001 appgroup \
  && adduser  --system --uid  1001 --ingroup appgroup --no-create-home appuser \
  && chown -R appuser:appgroup /app/cache /app/storage
 
-# NOTE: We do NOT set USER here — the entrypoint starts as root so it can
-# chown runtime-mounted volumes (Docker creates them as root:root on first use),
-# then drops privileges to appuser before exec'ing the API server.
-
 HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
     CMD curl -f -s http://localhost:8000/health || exit 1
 
 EXPOSE 8000
 
-# Entrypoint fixes volume permissions, runs cache check, then starts the server.
-# Set SKIP_CACHE_CHECK=1 to bypass the model check (useful in CI/CD pipelines).
-CMD ["sh", "scripts/docker_entrypoint.sh"]
-
-# Default target is production
-FROM production
+# Run as non-root appuser. Volume permissions are handled by the chown above.
+# Set SKIP_CACHE_CHECK=1 to bypass the model cache check (useful in CI/CD pipelines).
+USER appuser
+ENTRYPOINT ["sh", "scripts/docker_entrypoint.sh"]

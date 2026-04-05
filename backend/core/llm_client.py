@@ -4,11 +4,11 @@ LLM Client for Forensic Council ReAct Loop Reasoning.
 Provides async LLM API clients for OpenAI, Anthropic, and Groq,
 with a unified interface for generating ReAct reasoning steps.
 
-Provider routing:
-  - groq      -> Groq API (Llama 3.3 70B, ~700 tok/s, recommended)
-  - openai    -> OpenAI API (GPT-4o, GPT-4)
-  - anthropic -> Anthropic API (Claude 3.5 Sonnet)
-  - none      -> Disabled; task-decomposition driver handles all steps
+    - groq      -> Groq API (Llama 3.3 70B, ~700 tok/s, recommended)
+    - gemini    -> Google Gemini API (Gemini 2.5 Pro/Flash)
+    - openai    -> OpenAI API (GPT-4o, GPT-4)
+    - anthropic -> Anthropic API (Claude 3.5 Sonnet)
+    - none      -> Disabled; task-decomposition driver handles all steps
 """
 
 from __future__ import annotations
@@ -36,6 +36,7 @@ _BASE_BACKOFF = 2.0
 @dataclass
 class LLMResponse:
     """Structured response from LLM."""
+
     content: str
     tool_call: Optional[dict[str, Any]] = None
     usage: dict[str, int] | None = None
@@ -62,7 +63,17 @@ class LLMClient:
         self.temperature = config.llm_temperature
         self.max_tokens = config.llm_max_tokens
         self.timeout = config.llm_timeout
+
+        # Fallback settings
+        self.fallback_enabled = True
+        self.gemini_api_key = config.gemini_api_key
+        self.gemini_model = "gemini-2.5-flash"  # Sturdy, fast fallback
+
         self._client: Optional[httpx.AsyncClient] = None
+
+        # Global semaphore to limit concurrency and avoid blasting API limits
+        if not hasattr(LLMClient, "_global_semaphore"):
+            LLMClient._global_semaphore = asyncio.Semaphore(4)
 
         # Circuit breaker: opens after 5 consecutive failures, recovers after 60s
         self._circuit_breaker = CircuitBreaker(
@@ -71,7 +82,9 @@ class LLMClient:
             half_open_max_calls=2,
         )
 
-    async def _get_client(self, timeout_override: Optional[float] = None) -> httpx.AsyncClient:
+    async def _get_client(
+        self, timeout_override: Optional[float] = None
+    ) -> httpx.AsyncClient:
         """Return a shared httpx.AsyncClient, creating it on first use.
 
         Connection pool is sized for concurrent agent + arbiter LLM calls:
@@ -112,16 +125,24 @@ class LLMClient:
             client = await self._get_client(timeout_override=3.0)
             url_map = {
                 "groq": "https://api.groq.com/openai/v1/models",
+                "gemini": f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}?key={self.api_key}",
                 "openai": "https://api.openai.com/v1/models",
                 "anthropic": "https://api.anthropic.com/v1/models",
             }
             url = url_map.get(self.provider)
             if not url:
-                return True  # Unknown provider — assume healthy
-            headers = {"Authorization": f"Bearer {self.api_key}"} if self.provider != "anthropic" else {
-                "x-api-key": self.api_key, "anthropic-version": "2023-06-01"
-            }
-            resp = await asyncio.wait_for(client.get(url, headers=headers), timeout=3.0)
+                return True
+            headers = {}
+            if self.provider == "groq" or self.provider == "openai":
+                headers = {"Authorization": f"Bearer {self.api_key}"}
+            elif self.provider == "anthropic":
+                headers = {"x-api-key": self.api_key, "anthropic-version": "2023-06-01"}
+            
+            # For Gemini, the key is usually in the URL for v1beta, or we can use headers
+            if self.provider == "gemini":
+                resp = await asyncio.wait_for(client.get(url), timeout=3.0)
+            else:
+                resp = await asyncio.wait_for(client.get(url, headers=headers), timeout=3.0)
             return resp.status_code < 500
         except Exception:
             return False
@@ -155,31 +176,62 @@ class LLMClient:
 
             t0 = time.monotonic()
             try:
-                if self.provider == "groq":
-                    resp = await self._call_groq(messages, available_tools)
-                elif self.provider == "openai":
-                    resp = await self._call_openai(messages, available_tools)
-                elif self.provider == "anthropic":
-                    resp = await self._call_anthropic(messages, available_tools)
-                else:
-                    logger.error(f"Unknown LLM provider: {self.provider}")
-                    return LLMResponse(content="", provider=self.provider)
-
-                resp.latency_ms = (time.monotonic() - t0) * 1000
-                resp.provider = self.provider
-                tool_name = resp.tool_call.get("name") if resp.tool_call else None
-                self._circuit_breaker.record_success()
-                span.set_attribute("latency_ms", resp.latency_ms)
-                span.set_attribute("tool_name", tool_name or "")
-                logger.debug(
-                    f"LLM call complete provider={self.provider} model={self.model} latency_ms={resp.latency_ms:.0f} tool={tool_name}"
-                )
-                return resp
-
+                return await self._execute_call(messages, available_tools, t0, span)
             except Exception as exc:
                 self._circuit_breaker.record_failure()
-                logger.error(f"LLM call failed: {exc}")
+                logger.error(f"LLM call {self.provider} failed: {exc}")
+
+                # --- Fallback Logic ---
+                if self.fallback_enabled and self.provider != "gemini" and self.gemini_api_key:
+                    logger.info("Attempting fallback to Gemini...")
+                    original_provider = self.provider
+                    original_model = self.model
+                    original_key = self.api_key
+
+                    try:
+                        self.provider = "gemini"
+                        self.model = self.gemini_model
+                        self.api_key = self.gemini_api_key
+                        
+                        resp = await self._execute_call(messages, available_tools, t0, span)
+                        resp.provider = f"{original_provider}_fallback_gemini"
+                        return resp
+                    except Exception as fallback_exc:
+                        logger.error(f"LLM fallback failed: {fallback_exc}")
+                    finally:
+                        # Restore original settings
+                        self.provider = original_provider
+                        self.model = original_model
+                        self.api_key = original_key
+
                 return LLMResponse(content="", provider=self.provider)
+
+    async def _execute_call(
+        self,
+        messages: list[dict[str, str]],
+        available_tools: list[dict[str, Any]],
+        start_time: float,
+        span: Any,
+    ) -> LLMResponse:
+        """Helper to execute the actual provider call."""
+        if self.provider == "groq":
+            resp = await self._call_groq(messages, available_tools)
+        elif self.provider == "gemini":
+            resp = await self._call_gemini(messages, available_tools)
+        elif self.provider == "openai":
+            resp = await self._call_openai(messages, available_tools)
+        elif self.provider == "anthropic":
+            resp = await self._call_anthropic(messages, available_tools)
+        else:
+            raise ValueError(f"Unknown LLM provider: {self.provider}")
+
+        resp.latency_ms = (time.monotonic() - start_time) * 1000
+        resp.provider = self.provider
+        tool_name = resp.tool_call.get("name") if resp.tool_call else None
+        self._circuit_breaker.record_success()
+        span.set_attribute("latency_ms", resp.latency_ms)
+        span.set_attribute("tool_name", tool_name or "")
+        return resp
 
     def _build_messages(
         self,
@@ -188,11 +240,11 @@ class LLMClient:
         current_task: str | None,
     ) -> list[dict[str, str]]:
         """Build the message list from the current ReAct chain."""
-        messages: list[dict[str, str]] = [
-            {"role": "system", "content": system_prompt}
-        ]
+        messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
         if current_task:
-            messages.append({"role": "user", "content": f"Current task: {current_task}"})
+            messages.append(
+                {"role": "user", "content": f"Current task: {current_task}"}
+            )
 
         for step in react_chain:
             step_type = step.get("step_type", "")
@@ -203,14 +255,18 @@ class LLMClient:
             elif step_type == "ACTION":
                 tool_name = step.get("tool_name", "")
                 tool_input = step.get("tool_input", {})
-                messages.append({
-                    "role": "assistant",
-                    "content": f"Action: {tool_name}({json.dumps(tool_input)})",
-                })
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": f"Action: {tool_name}({json.dumps(tool_input)})",
+                    }
+                )
             elif step_type == "OBSERVATION":
                 obs = content
                 if len(obs) > 3000:
-                    obs = obs[:3000] + "\n... [observation truncated for context length]"
+                    obs = (
+                        obs[:3000] + "\n... [observation truncated for context length]"
+                    )
                 messages.append({"role": "user", "content": f"Observation: {obs}"})
 
         return messages
@@ -218,14 +274,19 @@ class LLMClient:
     async def _with_retry(self, coro_factory) -> httpx.Response:
         """Execute an HTTP coroutine factory with exponential-backoff retry."""
         if not self.is_available:
-            raise RuntimeError(f"LLM API key is placeholder or missing — skipping {self.provider} calls")
+            raise RuntimeError(
+                f"LLM API key is placeholder or missing — skipping {self.provider} calls"
+            )
         last_response = None
         for attempt in range(_MAX_RETRIES):
             try:
-                response = await coro_factory()
+                # Use global semaphore to prevent API rate limit blasting
+                async with self._global_semaphore:
+                    response = await coro_factory()
+
                 last_response = response
                 if response.status_code in _RETRYABLE_STATUS:
-                    wait = _BASE_BACKOFF * (2 ** attempt)
+                    wait = _BASE_BACKOFF * (2**attempt)
                     logger.warning(
                         f"LLM API {response.status_code}, retrying in {wait:.1f}s (attempt {attempt + 1}/{_MAX_RETRIES})"
                     )
@@ -234,12 +295,14 @@ class LLMClient:
                 return response
             except (httpx.TimeoutException, httpx.NetworkError) as e:
                 if attempt < _MAX_RETRIES - 1:
-                    wait = _BASE_BACKOFF * (2 ** attempt)
-                    logger.warning(f"LLM API {type(e).__name__}, retrying in {wait:.1f}s")
+                    wait = _BASE_BACKOFF * (2**attempt)
+                    logger.warning(
+                        f"LLM API {type(e).__name__}, retrying in {wait:.1f}s"
+                    )
                     await asyncio.sleep(wait)
                 else:
                     raise
-        
+
         if last_response is not None:
             last_response.raise_for_status()
         raise RuntimeError(f"LLM API failed after {_MAX_RETRIES} attempts")
@@ -256,7 +319,9 @@ class LLMClient:
         llama-3.3-70b-versatile supports full parallel tool calling.
         """
         if not self.is_available:
-            raise RuntimeError(f"Groq API key is placeholder or missing — cannot call LLM")
+            raise RuntimeError(
+                "Groq API key is placeholder or missing — cannot call LLM"
+            )
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -280,6 +345,66 @@ class LLMClient:
         response.raise_for_status()
         return self._parse_openai_response(response.json())
 
+    async def _call_gemini(
+        self,
+        messages: list[dict[str, str]],
+        available_tools: list[dict[str, Any]],
+    ) -> LLMResponse:
+        """Call Google Gemini API (v1beta)."""
+        if not self.api_key:
+            raise RuntimeError("Gemini API key missing")
+            
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
+        
+        # Convert messages to Gemini format
+        contents = []
+        for msg in messages:
+            role = "user" if msg["role"] == "user" or msg["role"] == "system" else "model"
+            contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+
+        payload: dict[str, Any] = {
+            "contents": contents,
+            "generationConfig": {
+                "temperature": self.temperature,
+                "maxOutputTokens": self.max_tokens,
+            }
+        }
+        
+        if available_tools:
+            payload["tools"] = [{"functionDeclarations": [
+                {
+                    "name": t["name"],
+                    "description": t.get("description", ""),
+                    "parameters": t.get("parameters", {"type": "object", "properties": {}})
+                } for t in available_tools
+            ]}]
+
+        client = await self._get_client()
+        response = await self._with_retry(
+            lambda: client.post(url, json=payload)
+        )
+        response.raise_for_status()
+        data = response.json()
+        
+        try:
+            candidate = data["candidates"][0]
+            content = ""
+            tool_call = None
+            
+            for part in candidate["content"]["parts"]:
+                if "text" in part:
+                    content += part["text"]
+                elif "functionCall" in part:
+                    tool_call = {
+                        "name": part["functionCall"]["name"],
+                        "arguments": part["functionCall"].get("args", {})
+                    }
+            
+            return LLMResponse(content=content, tool_call=tool_call)
+        except (KeyError, IndexError) as e:
+            logger.error(f"Failed to parse Gemini response: {data}")
+            raise RuntimeError(f"Invalid Gemini response: {e}")
+
     async def _call_openai(
         self,
         messages: list[dict[str, str]],
@@ -287,7 +412,9 @@ class LLMClient:
     ) -> LLMResponse:
         """Call OpenAI API."""
         if not self.is_available:
-            raise RuntimeError(f"OpenAI API key is placeholder or missing — cannot call LLM")
+            raise RuntimeError(
+                "OpenAI API key is placeholder or missing — cannot call LLM"
+            )
         url = "https://api.openai.com/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -318,7 +445,9 @@ class LLMClient:
     ) -> LLMResponse:
         """Call Anthropic Claude API."""
         if not self.is_available:
-            raise RuntimeError(f"Anthropic API key is placeholder or missing — cannot call LLM")
+            raise RuntimeError(
+                "Anthropic API key is placeholder or missing — cannot call LLM"
+            )
         url = "https://api.anthropic.com/v1/messages"
         headers = {
             "x-api-key": self.api_key,
@@ -347,7 +476,9 @@ class LLMClient:
                 {
                     "name": t["name"],
                     "description": t.get("description", ""),
-                    "input_schema": t.get("parameters", {"type": "object", "properties": {}}),
+                    "input_schema": t.get(
+                        "parameters", {"type": "object", "properties": {}}
+                    ),
                 }
                 for t in available_tools
             ]
@@ -367,7 +498,9 @@ class LLMClient:
             elif block["type"] == "tool_use":
                 tool_call = {"name": block["name"], "arguments": block["input"]}
 
-        return LLMResponse(content=content, tool_call=tool_call, usage=data.get("usage"))
+        return LLMResponse(
+            content=content, tool_call=tool_call, usage=data.get("usage")
+        )
 
     @staticmethod
     def _tools_to_openai_format(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -458,13 +591,19 @@ class LLMClient:
                     }
                     if json_mode:
                         payload["response_format"] = {"type": "json_object"}
-                    _synth_timeout = timeout_override if timeout_override is not None else min(self.timeout, 12.0)
+                    _synth_timeout = (
+                        timeout_override
+                        if timeout_override is not None
+                        else min(self.timeout, 12.0)
+                    )
                     client = await self._get_client(timeout_override=_synth_timeout)
                     resp = await self._with_retry(
                         lambda: client.post(url, headers=headers, json=payload)
                     )
                     resp.raise_for_status()
-                    return resp.json()["choices"][0]["message"].get("content", "").strip()
+                    return (
+                        resp.json()["choices"][0]["message"].get("content", "").strip()
+                    )
 
                 elif self.provider == "anthropic":
                     url = "https://api.anthropic.com/v1/messages"
@@ -480,7 +619,11 @@ class LLMClient:
                         "messages": [{"role": "user", "content": user_content}],
                         "temperature": 0.2,
                     }
-                    _synth_timeout = timeout_override if timeout_override is not None else min(self.timeout, 12.0)
+                    _synth_timeout = (
+                        timeout_override
+                        if timeout_override is not None
+                        else min(self.timeout, 12.0)
+                    )
                     client = await self._get_client(timeout_override=_synth_timeout)
                     resp = await self._with_retry(
                         lambda: client.post(url, headers=headers, json=payload)
@@ -488,7 +631,9 @@ class LLMClient:
                     resp.raise_for_status()
                     data = resp.json()
                     return "".join(
-                        b["text"] for b in data.get("content", []) if b["type"] == "text"
+                        b["text"]
+                        for b in data.get("content", [])
+                        if b["type"] == "text"
                     ).strip()
 
             except Exception as exc:
@@ -517,7 +662,7 @@ def parse_llm_step(content: str, tool_call: dict[str, Any] | None) -> dict[str, 
 
     for prefix in ("Action:", "Use tool", "Call", "Execute", "Calling"):
         if content.startswith(prefix):
-            rest = content[len(prefix):].strip()
+            rest = content[len(prefix) :].strip()
             if "(" in rest:
                 tool_name = rest.split("(")[0].strip()
                 if tool_name:

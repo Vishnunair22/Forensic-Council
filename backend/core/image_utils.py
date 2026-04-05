@@ -2,7 +2,9 @@
 
 _LOSSLESS_EXTS = frozenset({".png", ".bmp", ".tiff", ".tif", ".gif", ".webp"})
 _LOSSLESS_PIL_FORMATS = frozenset({"PNG", "BMP", "TIFF", "GIF", "WEBP"})
-_LOSSLESS_MIMES = frozenset({"image/png", "image/bmp", "image/tiff", "image/gif", "image/webp"})
+_LOSSLESS_MIMES = frozenset(
+    {"image/png", "image/bmp", "image/tiff", "image/gif", "image/webp"}
+)
 
 
 def is_lossless_image(file_path: str, mime_type: str | None = None) -> bool:

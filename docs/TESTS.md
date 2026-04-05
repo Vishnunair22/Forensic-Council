@@ -59,7 +59,7 @@ pytest tests/backend/ --cov=backend --cov-report=html
 
 ```bash
 # 1. Start Infrastructure (Postgres, Redis, Qdrant)
-docker compose -f docs/docker/docker-compose.yml -f docs/docker/docker-compose.infra.yml --env-file .env up -d
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.infra.yml --env-file .env up -d
 # Wait for stack to be healthy, then:
 pytest tests/connectivity/ -v
 ```

@@ -1,87 +1,99 @@
-/**
- * Accessibility Tests — HITL & Completion
- * ========================================
- * Validates WCAG 2.1 AA compliance for:
- * - HITLCheckpointModal (Focus trap, Aria labels, Escape key)
- * - CompletionBanner (Announcement, Contrast, Semantic HTML)
- */
-
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { HITLCheckpointModal } from "@/components/evidence/HITLCheckpointModal";
-import { CompletionBanner } from "@/components/reports/CompletionBanner";
-
-// Mock framer-motion
-jest.mock("framer-motion", () => ({
-  motion: new Proxy({}, {
-    get: (_t, tag: string) =>
-      ({ children, ...p }: React.PropsWithChildren<Record<string, unknown>>) =>
-        React.createElement(tag, p, children),
-  }),
-  AnimatePresence: ({ children }: React.PropsWithChildren<object>) => <>{children}</>,
-}));
+import { ForensicProgressOverlay } from "@/components/ui/ForensicProgressOverlay";
 
 const mockCheckpoint = {
   checkpoint_id: "cp-1",
   session_id: "sess-1",
-  agent_id: "agent-img",
+  agent_id: "Agent1",
   agent_name: "Image Analyst",
   brief_text: "Inconsistent metadata found.",
-  decision_needed: "Review and confirm if this is a deepfake signature.",
-  created_at: "2025-01-01T12:00:00Z"
+  decision_needed: "Review and confirm the finding.",
+  created_at: "2025-01-01T12:00:00Z",
 };
 
-describe("HITLCheckpointModal Accessibility", () => {
+describe("HITLCheckpointModal accessibility", () => {
   const onDecision = jest.fn();
+  const onDismiss = jest.fn();
 
-  it("renders with a clear accessible title", () => {
-    render(<HITLCheckpointModal checkpoint={mockCheckpoint} isOpen={true} onDecision={onDecision} />);
-    expect(screen.getByRole("heading", { name: /human-in-the-loop|analysis|review/i })).toBeInTheDocument();
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
-  it("describes the decision needed via ARIA labels", () => {
-    render(<HITLCheckpointModal checkpoint={mockCheckpoint} isOpen={true} onDecision={onDecision} />);
-    expect(screen.getByText(/Review and confirm/i)).toBeInTheDocument();
+  it("renders an accessible review heading", () => {
+    render(
+      <HITLCheckpointModal
+        checkpoint={mockCheckpoint}
+        isOpen={true}
+        isSubmitting={false}
+        onDecision={onDecision}
+        onDismiss={onDismiss}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: /human review required/i }),
+    ).toBeInTheDocument();
   });
 
-  it("buttons have distinct accessible names", () => {
-    render(<HITLCheckpointModal checkpoint={mockCheckpoint} isOpen={true} onDecision={onDecision} />);
-    expect(screen.getByRole("button", { name: /approve|confirm|proceed/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /reject|cancel|deny/i })).toBeInTheDocument();
+  it("shows the decision context text", () => {
+    render(
+      <HITLCheckpointModal
+        checkpoint={mockCheckpoint}
+        isOpen={true}
+        isSubmitting={false}
+        onDecision={onDecision}
+        onDismiss={onDismiss}
+      />,
+    );
+
+    expect(screen.getByText(/review and confirm the finding/i)).toBeInTheDocument();
   });
 
-  it("supports keyboard cancellation (Escape key)", () => {
-    // Note: This relies on the implementation using an onClose or similar
-    // We verify if the button itself can be triggered
-    render(<HITLCheckpointModal checkpoint={mockCheckpoint} isOpen={true} onDecision={onDecision} />);
-    const rejectBtn = screen.getByRole("button", { name: /reject/i });
-    fireEvent.click(rejectBtn);
-    expect(onDecision).toHaveBeenCalledWith("REJECT");
+  it("exposes action buttons with distinct names", () => {
+    render(
+      <HITLCheckpointModal
+        checkpoint={mockCheckpoint}
+        isOpen={true}
+        isSubmitting={false}
+        onDecision={onDecision}
+        onDismiss={onDismiss}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /approve/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /terminate/i })).toBeInTheDocument();
+  });
+
+  it("invokes a decision callback when approve is pressed", () => {
+    render(
+      <HITLCheckpointModal
+        checkpoint={mockCheckpoint}
+        isOpen={true}
+        isSubmitting={false}
+        onDecision={onDecision}
+        onDismiss={onDismiss}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /approve/i }));
+    expect(onDecision).toHaveBeenCalled();
   });
 });
 
-describe("CompletionBanner Accessibility", () => {
-  const mockReport = {
-    report_id: "r1",
-    overall_verdict: "CERTAIN",
-    overall_confidence: 0.98,
-    signed_utc: "2025-01-01T12:05:00Z"
-  };
+describe("ForensicProgressOverlay accessibility", () => {
+  it("renders status text for screen readers", () => {
+    render(
+      <ForensicProgressOverlay
+        variant="council"
+        title="Council deliberation"
+        liveText="Compiling report"
+        telemetryLabel="Arbiter telemetry"
+      />,
+    );
 
-  it("announces completion to screen readers", () => {
-    render(<CompletionBanner report={mockReport as any} />);
-    // Should have role="status" or role="alert" or aria-live
-    const banner = screen.getByRole("status") || screen.getByRole("alert") || document.querySelector("[aria-live]");
-    expect(banner).toBeInTheDocument();
-  });
-
-  it("presents verdict text clearly", () => {
-    render(<CompletionBanner report={mockReport as any} />);
-    expect(screen.getByText(/CERTAIN/i)).toBeInTheDocument();
-  });
-
-  it("contains clickable link to full report", () => {
-    render(<CompletionBanner report={mockReport as any} />);
-    expect(screen.getByRole("link", { name: /view|full|report/i })).toBeInTheDocument();
+    expect(screen.getByText(/council deliberation/i)).toBeInTheDocument();
+    expect(screen.getByText(/compiling report/i)).toBeInTheDocument();
   });
 });

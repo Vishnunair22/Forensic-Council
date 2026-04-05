@@ -36,6 +36,7 @@ try:
     import torch
     import torchvision.models as models
     import torchvision.transforms as T
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -49,25 +50,52 @@ def load_univfd_model():
     """
     if not TORCH_AVAILABLE:
         return None
-    
-    model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-    model.fc = torch.nn.Linear(2048, 1)   # binary: real vs fake
-    model.eval()
-    return model
+
+    try:
+        from core.config import get_settings
+        settings = get_settings()
+
+        # Enforce local-only mode if configured
+        if settings.offline_mode:
+            import torch.hub
+            torch.hub.set_dir(settings.torch_home)
+            # torchvision models check the hub dir; if weights are missing and
+            # we are offline, it will raise an error rather than downloading.
+
+        model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        model.fc = torch.nn.Linear(2048, 1)  # binary: real vs fake
+        model.eval()
+        return model
+    except Exception:
+        return None
+
+
+# Module-level singleton — model weights are downloaded once and reused across calls
+_univfd_model_cache = None
+
+
+def get_univfd_model():
+    """Return cached ResNet-50 UnivFD model, loading on first call."""
+    global _univfd_model_cache
+    if _univfd_model_cache is None:
+        _univfd_model_cache = load_univfd_model()
+    return _univfd_model_cache
 
 
 # Image preprocessing transform for ResNet-50
-_transform = T.Compose([
-    T.Resize((224, 224)),
-    T.ToTensor(),
-    T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-])
+_transform = T.Compose(
+    [
+        T.Resize((224, 224)),
+        T.ToTensor(),
+        T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+    ]
+)
 
 
 def compute_frequency_features(image_path: str) -> dict:
     """
     Compute deepfake detection features using frequency domain analysis.
-    
+
     Combines:
     - FFT checkerboard artifact detection (GANs)
     - 1/f spectral deviation (diffusion models)
@@ -77,7 +105,7 @@ def compute_frequency_features(image_path: str) -> dict:
     img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     if img is None:
         return {"error": "Cannot read image", "available": False}
-    
+
     # Also load with PIL for PyTorch processing
     try:
         pil_img = Image.open(image_path).convert("RGB")
@@ -109,10 +137,17 @@ def compute_frequency_features(image_path: str) -> dict:
 
     # Compare to overall high-frequency energy (vectorized — avoids O(h×w) Python loops)
     _ys, _xs = np.ogrid[:h, :w]
-    high_freq_mask = np.sqrt((_ys - center_y)**2 + (_xs - center_x)**2) > min(h, w) * 0.25
-    
+    high_freq_mask = (
+        np.sqrt((_ys - center_y) ** 2 + (_xs - center_x) ** 2) > min(h, w) * 0.25
+    )
+
     overall_high_freq = float(np.mean(magnitude[high_freq_mask]))
-    checkerboard_score = min(1.0, max(0.0, (checkerboard_energy - overall_high_freq) / (overall_high_freq + 1e-6)))
+    checkerboard_score = min(
+        1.0,
+        max(
+            0.0, (checkerboard_energy - overall_high_freq) / (overall_high_freq + 1e-6)
+        ),
+    )
 
     # --- 1/f spectral deviation (diffusion model signal) ---
     radial = []
@@ -120,27 +155,31 @@ def compute_frequency_features(image_path: str) -> dict:
     for band in range(num_bands):
         r0 = band * min(center_y, center_x) / num_bands
         r1 = (band + 1) * min(center_y, center_x) / num_bands
-        
+
         # Create ring mask efficiently
         ys, xs = np.ogrid[:h, :w]
-        ring = (np.sqrt((ys-center_y)**2 + (xs-center_x)**2) >= r0) & \
-               (np.sqrt((ys-center_y)**2 + (xs-center_x)**2) < r1)
-        
+        ring = (np.sqrt((ys - center_y) ** 2 + (xs - center_x) ** 2) >= r0) & (
+            np.sqrt((ys - center_y) ** 2 + (xs - center_x) ** 2) < r1
+        )
+
         if ring.any():
             radial.append(float(np.mean(magnitude[ring])))
         else:
             radial.append(0.0)
 
     expected = [radial[0] / (i + 1) for i in range(num_bands)]
-    spectral_dev = float(np.mean(np.abs(np.array(radial) - np.array(expected))
-                                 / (np.array(expected) + 1e-6)))
+    spectral_dev = float(
+        np.mean(
+            np.abs(np.array(radial) - np.array(expected)) / (np.array(expected) + 1e-6)
+        )
+    )
     spectral_anomaly_score = min(1.0, spectral_dev / 5.0)
 
     # --- PyTorch-based feature extraction (optional) ---
     pytorch_score = 0.0
     if TORCH_AVAILABLE and pil_img is not None:
         try:
-            tensor = _transform(pil_img).unsqueeze(0)
+            _transform(pil_img).unsqueeze(0)
             # In production: load actual UnivFD weights
             # For now, use heuristic based on image statistics
             # that correlate with generated image artifacts
@@ -149,8 +188,10 @@ def compute_frequency_features(image_path: str) -> dict:
             pass
 
     # Combined score with weighted contributions
-    combined = checkerboard_score * 0.4 + spectral_anomaly_score * 0.4 + pytorch_score * 0.2
-    
+    combined = (
+        checkerboard_score * 0.4 + spectral_anomaly_score * 0.4 + pytorch_score * 0.2
+    )
+
     # Determine verdict
     if combined > 0.4:
         verdict = "LIKELY_SYNTHETIC"
@@ -168,7 +209,7 @@ def compute_frequency_features(image_path: str) -> dict:
         "verdict": verdict,
         "available": True,
         "torch_available": TORCH_AVAILABLE,
-        "note": "Swap model.fc weights with UnivFD checkpoint for production accuracy"
+        "note": "Swap model.fc weights with UnivFD checkpoint for production accuracy",
     }
 
 

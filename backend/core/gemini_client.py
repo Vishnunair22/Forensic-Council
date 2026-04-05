@@ -51,8 +51,8 @@ _GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 _DEFAULT_MODEL = "gemini-2.5-pro"
 # Ordered fallback chain: tried in sequence if the primary model fails/is unavailable.
 _DEFAULT_FALLBACK_CHAIN = "gemini-2.5-pro,gemini-2.5-flash"
-_MAX_RETRIES = 2
-_BASE_BACKOFF = 1.5
+_MAX_RETRIES = 3
+_BASE_BACKOFF = 2.0
 
 # Models that support thinkingConfig (budget-based chain-of-thought).
 # gemini-2.0-* and earlier must NOT receive thinkingConfig (returns 400).
@@ -66,6 +66,7 @@ class _ModelUnavailableError(Exception):
     Signals the cascade loop to skip immediately to the next model
     without backoff — the model simply does not exist on this API key.
     """
+
 
 # Supported inline MIME types for Gemini vision
 _VISION_MIME_TYPES = {
@@ -87,9 +88,10 @@ class GeminiVisionFinding:
     cleanly into the per-agent findings list and the Arbiter
     report compilation.
     """
-    analysis_type: str          # e.g. "file_content_identification"
-    model_used: str             # e.g. "gemini-2.5-pro"
-    content_description: str    # What the model sees in plain language
+
+    analysis_type: str  # e.g. "file_content_identification"
+    model_used: str  # e.g. "gemini-2.5-pro"
+    content_description: str  # What the model sees in plain language
     manipulation_signals: list[str] = field(default_factory=list)
     detected_objects: list[str] = field(default_factory=list)
     contextual_anomalies: list[str] = field(default_factory=list)
@@ -109,7 +111,7 @@ class GeminiVisionFinding:
 
     def to_finding_dict(self, agent_id: str) -> dict[str, Any]:
         """Convert to a dict compatible with AgentFinding / Arbiter schema."""
-        signals = self.manipulation_signals + self.contextual_anomalies
+        self.manipulation_signals + self.contextual_anomalies
         # Map analysis_type to the tool name registered in each agent's tool registry
         tool_name = (
             "gemini_deep_forensic"
@@ -120,11 +122,13 @@ class GeminiVisionFinding:
             "agent_id": agent_id,
             "finding_type": f"gemini_vision_{self.analysis_type}",
             "confidence_raw": self.confidence,
-            "status": "CONFIRMED" if (
-            self.confidence >= 0.6
-            or getattr(self, "_authenticity_verdict", "").upper()
-            in ("SUSPICIOUS", "LIKELY_MANIPULATED", "AI_GENERATED")
-        ) else "INCOMPLETE",
+            "status": "CONFIRMED"
+            if (
+                self.confidence >= 0.6
+                or getattr(self, "_authenticity_verdict", "").upper()
+                in ("SUSPICIOUS", "LIKELY_MANIPULATED", "AI_GENERATED")
+            )
+            else "INCOMPLETE",
             "evidence_refs": [],
             "reasoning_summary": self.content_description,
             "metadata": {
@@ -138,18 +142,24 @@ class GeminiVisionFinding:
                 "contextual_anomalies": self.contextual_anomalies,
                 # deep_forensic_analysis extras (populated if analysis_type == 'deep_forensic_analysis')
                 "extracted_text": getattr(self, "_extracted_text", []),
-                "interface_identification": getattr(self, "_interface_identification", ""),
+                "interface_identification": getattr(
+                    self, "_interface_identification", ""
+                ),
                 "contextual_narrative": getattr(self, "_contextual_narrative", ""),
                 "authenticity_verdict": getattr(self, "_authenticity_verdict", ""),
-                "metadata_visual_consistency": getattr(self, "_metadata_visual_consistency", ""),
+                "metadata_visual_consistency": getattr(
+                    self, "_metadata_visual_consistency", ""
+                ),
                 "analysis_phase": "deep",
                 "latency_ms": round(self.latency_ms, 1),
                 # Map authenticity_verdict to standard manipulation flags so the
                 # arbiter's _is_direct_manip check registers Gemini findings.
-                "manipulation_detected": getattr(self, "_authenticity_verdict", "").upper()
-                    in ("SUSPICIOUS", "LIKELY_MANIPULATED"),
+                "manipulation_detected": getattr(
+                    self, "_authenticity_verdict", ""
+                ).upper()
+                in ("SUSPICIOUS", "LIKELY_MANIPULATED"),
                 "deepfake_detected": getattr(self, "_authenticity_verdict", "").upper()
-                    == "AI_GENERATED",
+                == "AI_GENERATED",
             },
             "court_defensible": self.court_defensible,
             "caveat": self.caveat,
@@ -175,10 +185,13 @@ class GeminiVisionClient:
         self.model: str = getattr(config, "gemini_model", _DEFAULT_MODEL)
         # Build ordered fallback chain from comma-separated config string.
         # Duplicates and the primary model itself are removed; order is preserved.
-        _chain_str: str = getattr(config, "gemini_fallback_models", _DEFAULT_FALLBACK_CHAIN)
+        _chain_str: str = getattr(
+            config, "gemini_fallback_models", _DEFAULT_FALLBACK_CHAIN
+        )
         seen: set[str] = {self.model}
         self.fallback_chain: list[str] = [
-            m for raw in _chain_str.split(",")
+            m
+            for raw in _chain_str.split(",")
             if (m := raw.strip()) and m not in seen and not seen.add(m)  # type: ignore[func-returns-value]
         ]
         self.timeout: float = getattr(config, "gemini_timeout", 40.0)
@@ -253,7 +266,11 @@ class GeminiVisionClient:
             finding.analysis_type = "manipulation_cross_validation"
             return finding
 
-        findings_text = "\n".join(f"- {f}" for f in preliminary_findings) if preliminary_findings else "None yet."
+        findings_text = (
+            "\n".join(f"- {f}" for f in preliminary_findings)
+            if preliminary_findings
+            else "None yet."
+        )
         prompt = (
             "You are a forensic image manipulation expert. Classical forensic tools "
             "have flagged the following on this image:\n"
@@ -293,7 +310,11 @@ class GeminiVisionClient:
             finding.analysis_type = "object_scene_analysis"
             return finding
 
-        detections_text = "\n".join(f"- {d}" for d in preliminary_detections) if preliminary_detections else "None yet."
+        detections_text = (
+            "\n".join(f"- {d}" for d in preliminary_detections)
+            if preliminary_detections
+            else "None yet."
+        )
         prompt = (
             "You are a forensic scene analyst. Preliminary ML object detection found:\n"
             f"{detections_text}\n\n"
@@ -360,56 +381,44 @@ class GeminiVisionClient:
             "You are a senior forensic analyst performing a comprehensive examination "
             "of this file. Provide a thorough, court-grade analysis covering ALL of "
             "the following areas:\n\n"
-
             "1. CONTENT_TYPE: Classify the file precisely. Examples: 'photograph taken "
             "with a camera', 'screenshot of a web browser', 'screenshot of a mobile app', "
             "'scanned document', 'AI-generated image', 'screen recording frame', "
             "'screenshot of a desktop application', 'photograph of a physical document', "
             "'infographic', 'meme', etc. Be specific.\n\n"
-
             "2. SCENE_DESCRIPTION: Describe in detail what you see. What is the setting? "
             "What is happening? What is the overall context or narrative? If it is a "
             "screenshot, describe what application/website is shown and what action is "
             "being performed or displayed.\n\n"
-
             "3. EXTRACTED_TEXT: Extract ALL visible text from the image verbatim, "
             "preserving structure. Include UI labels, headings, body text, captions, "
             "URLs, usernames, timestamps, error messages, form fields, table data, "
             "watermarks — everything. If no text is present, return an empty list.\n\n"
-
             "4. DETECTED_OBJECTS: List every identifiable object, device, or item. "
             "Include: computers/laptops/phones/tablets, weapons (knives, firearms, etc.), "
             "vehicles, faces/people (describe without identifying), documents/IDs, "
             "currency, drugs/substances, clothing, furniture, logos/brands. "
             "For each object include its approximate location in the frame "
             "(e.g. 'laptop, center-left'). If none beyond the main scene, say 'None'.\n\n"
-
             "5. INTERFACE_IDENTIFICATION: If the image shows a digital interface, "
             "identify it precisely: application name (if recognisable), type of interface "
             "(web browser, mobile app, desktop app, terminal, map, social media, "
             "messaging, email client, etc.), and what the user is doing or what data "
             "is displayed.\n\n"
-
             "6. CONTEXTUAL_NARRATIVE: In 2-4 sentences, explain what is going on in this "
             "image. What event, activity, or situation does it depict? What is the forensic "
             "significance of its content?\n\n"
-
             "7. MANIPULATION_SIGNALS: List any visual forensic red flags: inconsistent "
             "lighting/shadows, copy-paste artifacts, edge blending issues, resolution "
             "inconsistencies, AI generation artefacts, metadata-visual mismatches, "
             "signs of cropping/compositing. If none, return empty list.\n\n"
-
             "8. METADATA_VISUAL_CONSISTENCY: If EXIF data is provided, assess whether "
             "the visual content is consistent with the claimed timestamp, location, and "
             "device. If no EXIF provided, return 'No metadata provided for cross-validation'.\n\n"
-
             "9. AUTHENTICITY_VERDICT: One of 'AUTHENTIC', 'SUSPICIOUS', 'LIKELY_MANIPULATED', "
             "'AI_GENERATED', or 'CANNOT_DETERMINE'.\n\n"
-
             "10. CONFIDENCE: Your overall confidence in this analysis (0.0-1.0).\n\n"
-
             f"{meta_section}\n\n"
-
             "Respond ONLY with valid JSON matching this exact schema (no markdown, no "
             "preamble, just the JSON object):\n"
             "{\n"
@@ -449,7 +458,11 @@ class GeminiVisionClient:
             finding.analysis_type = "metadata_visual_consistency"
             return finding
 
-        meta_text = json.dumps(metadata_summary, indent=2, default=str) if metadata_summary else "{}"
+        meta_text = (
+            json.dumps(metadata_summary, indent=2, default=str)
+            if metadata_summary
+            else "{}"
+        )
         prompt = (
             "You are a forensic metadata analyst. The file's EXIF/metadata claims:\n"
             f"{meta_text}\n\n"
@@ -553,15 +566,16 @@ class GeminiVisionClient:
         # Build per-model (payload, url) pairs up-front so each model gets
         # the correct thinkingConfig for its generation family.
         def _model_entry(m: str, primary_payload: Optional[dict] = None) -> tuple:
+            url = f"{_GEMINI_API_BASE}/models/{m}:generateContent"
             if primary_payload is not None:
-                return (m, primary_payload, f"{_GEMINI_API_BASE}/models/{m}:generateContent?key={self.api_key}")
+                return (m, primary_payload, url)
             gen_cfg: dict = {"temperature": 0.1, "maxOutputTokens": 8192}
             if any(p in m for p in _THINKING_MODEL_PREFIXES):
                 gen_cfg["thinkingConfig"] = {"thinkingBudget": 1024}
             return (
                 m,
                 {"contents": [{"parts": parts}], "generationConfig": gen_cfg},
-                f"{_GEMINI_API_BASE}/models/{m}:generateContent?key={self.api_key}",
+                url,
             )
 
         models_to_try = [_model_entry(self.model, payload)] + [
@@ -617,17 +631,18 @@ class GeminiVisionClient:
 
     async def _post_with_retry(self, url: str, payload: dict) -> str:
         """POST to Gemini API with exponential-backoff retry."""
+        headers = {"Authorization": f"Bearer {self.api_key}"}
         for attempt in range(_MAX_RETRIES):
             try:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    resp = await client.post(url, json=payload)
+                    resp = await client.post(url, json=payload, headers=headers)
                     if resp.status_code != 200:
                         error_detail = ""
                         try:
                             error_detail = resp.text
                         except Exception:
                             pass
-                        
+
                         # 404 means the model doesn't exist on this API key —
                         # raise immediately (no backoff) so the cascade loop
                         # can skip to the next model without waiting.
@@ -644,12 +659,19 @@ class GeminiVisionClient:
                             raise _ModelUnavailableError(
                                 f"Model unavailable (400): {error_detail[:300]}"
                             )
-                        if resp.status_code in {429, 500, 502, 503, 504}:
-                            wait = _BASE_BACKOFF * (2 ** attempt)
+                        if resp.status_code == 429:
+                            wait = _BASE_BACKOFF * (2**attempt)
                             logger.warning(
-                                f"Gemini API retryable error {resp.status_code} on attempt {attempt + 1}/{_MAX_RETRIES} "
-                                f"for model {self.model}. Retrying in {wait:.1f}s... "
-                                f"Body: {error_detail[:500]}"
+                                f"Gemini API rate limited (429) for model {self.model}. "
+                                f"Retrying in {wait:.1f}s (attempt {attempt + 1}/{_MAX_RETRIES})..."
+                            )
+                            await asyncio.sleep(wait)
+                            continue
+                        elif resp.status_code in {500, 502, 503, 504}:
+                            wait = _BASE_BACKOFF * (2**attempt)
+                            logger.warning(
+                                f"Gemini API error {resp.status_code} for model {self.model}. "
+                                f"Retrying in {wait:.1f}s (attempt {attempt + 1}/{_MAX_RETRIES})..."
                             )
                             await asyncio.sleep(wait)
                             continue
@@ -670,8 +692,10 @@ class GeminiVisionClient:
                     return ""
             except (httpx.TimeoutException, httpx.ConnectError) as net_err:
                 if attempt < _MAX_RETRIES - 1:
-                    wait = _BASE_BACKOFF * (2 ** attempt)
-                    logger.warning(f"Gemini networking error ({type(net_err).__name__}) - retrying in {wait:.1f}s...")
+                    wait = _BASE_BACKOFF * (2**attempt)
+                    logger.warning(
+                        f"Gemini networking error ({type(net_err).__name__}) - retrying in {wait:.1f}s..."
+                    )
                     await asyncio.sleep(wait)
                 else:
                     raise
@@ -698,12 +722,14 @@ class GeminiVisionClient:
             if "```" in cleaned:
                 # Extract content between first ``` pair
                 import re as _re
+
                 fence_match = _re.search(r"```(?:json)?\s*([\s\S]*?)```", cleaned)
                 if fence_match:
                     cleaned = fence_match.group(1).strip()
             # If it still doesn't start with '{', search for the first '{...}' block
             if not cleaned.startswith("{"):
                 import re as _re
+
                 obj_match = _re.search(r"\{[\s\S]*\}", cleaned)
                 if obj_match:
                     cleaned = obj_match.group(0)
@@ -724,31 +750,53 @@ class GeminiVisionClient:
 
         # Build unified description — handle all response shapes including deep_forensic_analysis
         descriptions = []
-        for key in ("scene_description", "visual_confirmation", "authenticity_assessment",
-                    "overall_verdict", "scene_coherence", "contextual_narrative"):
+        for key in (
+            "scene_description",
+            "visual_confirmation",
+            "authenticity_assessment",
+            "overall_verdict",
+            "scene_coherence",
+            "contextual_narrative",
+        ):
             val = data.get(key)
             if val and isinstance(val, str):
                 descriptions.append(val)
 
         # deep_forensic_analysis extras: interface + authenticity verdict
         iface = data.get("interface_identification", "")
-        if iface and isinstance(iface, str) and iface.lower() not in ("none", "n/a", ""):
+        if (
+            iface
+            and isinstance(iface, str)
+            and iface.lower() not in ("none", "n/a", "")
+        ):
             descriptions.insert(0, f"Interface: {iface}")
         verdict = data.get("authenticity_verdict", "")
         if verdict and isinstance(verdict, str):
             descriptions.append(f"Verdict: {verdict}")
         meta_consistency = data.get("metadata_visual_consistency", "")
-        if meta_consistency and isinstance(meta_consistency, str) and meta_consistency.lower() not in ("none", "n/a", ""):
+        if (
+            meta_consistency
+            and isinstance(meta_consistency, str)
+            and meta_consistency.lower() not in ("none", "n/a", "")
+        ):
             descriptions.append(f"Metadata consistency: {meta_consistency}")
 
         # Gather manipulation and anomaly signals
         manipulation_signals: list[str] = []
-        for key in ("manipulation_signals", "additional_anomalies", "compositing_signals",
-                    "content_provenance_flags"):
+        for key in (
+            "manipulation_signals",
+            "additional_anomalies",
+            "compositing_signals",
+            "content_provenance_flags",
+        ):
             items = data.get(key, [])
             if isinstance(items, list):
                 manipulation_signals.extend(str(i) for i in items if i)
-            elif isinstance(items, str) and items.lower() not in ("none", "none detected", ""):
+            elif isinstance(items, str) and items.lower() not in (
+                "none",
+                "none detected",
+                "",
+            ):
                 manipulation_signals.append(items)
 
         # Gather contextual anomalies
@@ -778,20 +826,33 @@ class GeminiVisionClient:
         # Build human-readable description (cap at 3 desc parts to stay concise)
         desc_parts = descriptions[:3]
         if manipulation_signals:
-            none_signals = [s for s in manipulation_signals
-                            if s.lower() not in ("none detected", "none")]
+            none_signals = [
+                s
+                for s in manipulation_signals
+                if s.lower() not in ("none detected", "none")
+            ]
             if none_signals:
-                desc_parts.append(f"Manipulation signals: {'; '.join(none_signals[:3])}")
-        content_description = " | ".join(desc_parts) if desc_parts else "Visual analysis complete."
+                desc_parts.append(
+                    f"Manipulation signals: {'; '.join(none_signals[:3])}"
+                )
+        content_description = (
+            " | ".join(desc_parts) if desc_parts else "Visual analysis complete."
+        )
 
         finding = GeminiVisionFinding(
             analysis_type=analysis_type,
             model_used=self.model,
             content_description=content_description,
-            manipulation_signals=[s for s in manipulation_signals
-                                   if s.lower() not in ("none detected", "none")],
-            detected_objects=[o for o in detected_objects
-                              if o.lower() not in ("none detected", "none")],
+            manipulation_signals=[
+                s
+                for s in manipulation_signals
+                if s.lower() not in ("none detected", "none")
+            ],
+            detected_objects=[
+                o
+                for o in detected_objects
+                if o.lower() not in ("none detected", "none")
+            ],
             contextual_anomalies=contextual_anomalies,
             file_type_assessment=file_type,
             confidence=confidence,
@@ -825,12 +886,17 @@ class GeminiVisionClient:
         if not mime_type:
             ext = path.suffix.lower()
             ext_map = {
-                ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-                ".png": "image/png", ".webp": "image/webp",
-                ".gif": "image/gif", ".bmp": "image/bmp",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".png": "image/png",
+                ".webp": "image/webp",
+                ".gif": "image/gif",
+                ".bmp": "image/bmp",
                 ".pdf": "application/pdf",
-                ".mp4": "video/mp4", ".mov": "video/quicktime",
-                ".wav": "audio/wav", ".mp3": "audio/mpeg",
+                ".mp4": "video/mp4",
+                ".mov": "video/quicktime",
+                ".wav": "audio/wav",
+                ".mp3": "audio/mpeg",
             }
             mime_type = ext_map.get(ext, "application/octet-stream")
 
@@ -840,12 +906,19 @@ class GeminiVisionClient:
         # Resize images that are too large for reliable inline-data delivery.
         # Gemini's effective inline limit is ~4 MB of base64 (~3 MB raw).
         # We only resize image types; PDFs and other formats are sent as-is.
-        _IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp", "image/bmp", "image/gif"}
+        _IMAGE_MIME_TYPES = {
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "image/bmp",
+            "image/gif",
+        }
         _MAX_RAW_BYTES = 3 * 1024 * 1024  # 3 MB
         if mime_type in _IMAGE_MIME_TYPES and len(raw) > _MAX_RAW_BYTES:
             try:
                 import io
                 from PIL import Image as _PImage
+
                 img = _PImage.open(io.BytesIO(raw))
                 # Convert palette/RGBA modes that don't survive JPEG re-encode
                 if img.mode not in ("RGB", "L"):
@@ -857,7 +930,7 @@ class GeminiVisionClient:
                 img = img.resize((new_w, new_h), _PImage.LANCZOS)
                 buf = io.BytesIO()
                 save_format = "JPEG" if mime_type == "image/jpeg" else "PNG"
-                save_mime   = "image/jpeg" if save_format == "JPEG" else "image/png"
+                save_mime = "image/jpeg" if save_format == "JPEG" else "image/png"
                 img.save(buf, format=save_format, quality=85)
                 raw = buf.getvalue()
                 mime_type = save_mime
@@ -867,7 +940,9 @@ class GeminiVisionClient:
                 )
             except Exception as resize_exc:
                 # If resize fails, fall through and send original — better than failing entirely
-                logger.warning(f"Gemini: image resize failed for {file_path}: {resize_exc}")
+                logger.warning(
+                    f"Gemini: image resize failed for {file_path}: {resize_exc}"
+                )
 
         return base64.b64encode(raw).decode("utf-8"), mime_type
 
@@ -885,7 +960,7 @@ class GeminiVisionClient:
         - EXIF metadata cross-check if provided
         """
         t0 = time.monotonic()
-        path = Path(file_path)
+        Path(file_path)
 
         try:
             from PIL import Image as PILImage
@@ -896,22 +971,29 @@ class GeminiVisionClient:
             h, w = arr.shape[:2]
 
             # Colour statistics
-            mean_rgb = arr.mean(axis=(0, 1)).tolist()
+            arr.mean(axis=(0, 1)).tolist()
             std_rgb = arr.std(axis=(0, 1)).tolist()
             brightness = float(arr.mean())
 
             # Sharpness via Laplacian variance
             import cv2
+
             gray = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2GRAY)
             laplacian_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
             is_blurry = laplacian_var < 100
 
             # Noise estimate via high-frequency residual
             blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-            noise_residual = float(np.abs(gray.astype(float) - blurred.astype(float)).mean())
+            noise_residual = float(
+                np.abs(gray.astype(float) - blurred.astype(float)).mean()
+            )
 
             # JPEG artifact check: blockiness score
-            block_diff = float(np.abs(np.diff(gray.astype(float), axis=0)[7::8].mean())) if h > 16 else 0.0
+            block_diff = (
+                float(np.abs(np.diff(gray.astype(float), axis=0)[7::8].mean()))
+                if h > 16
+                else 0.0
+            )
             likely_jpeg_compressed = block_diff > 3.0
 
             # Colour uniformity (synthetic/AI images tend to have smoother distributions)
@@ -939,51 +1021,74 @@ class GeminiVisionClient:
 
             manipulation_signals = []
             if noise_residual > 8:
-                manipulation_signals.append(f"Elevated noise residual ({noise_residual:.2f}) — possible double-compression or splicing")
+                manipulation_signals.append(
+                    f"Elevated noise residual ({noise_residual:.2f}) — possible double-compression or splicing"
+                )
             if block_diff > 8:
-                manipulation_signals.append(f"Strong JPEG block boundary artifacts (score {block_diff:.1f}) — re-encoding likely")
+                manipulation_signals.append(
+                    f"Strong JPEG block boundary artifacts (score {block_diff:.1f}) — re-encoding likely"
+                )
             if possibly_synthetic:
-                manipulation_signals.append("Channel balance and sharpness profile consistent with synthetic/AI-generated content")
+                manipulation_signals.append(
+                    "Channel balance and sharpness profile consistent with synthetic/AI-generated content"
+                )
 
             meta_notes = []
             if exif_summary:
                 dt = exif_summary.get("datetime_original", "")
                 make = exif_summary.get("camera_make", "")
                 if make:
-                    meta_notes.append(f"Claimed device: {make} {exif_summary.get('camera_model', '')}")
+                    meta_notes.append(
+                        f"Claimed device: {make} {exif_summary.get('camera_model', '')}"
+                    )
                 if dt:
                     meta_notes.append(f"Claimed capture time: {dt}")
                 if not make and not dt:
-                    meta_notes.append("No device or timestamp in EXIF — provenance cannot be verified from metadata")
+                    meta_notes.append(
+                        "No device or timestamp in EXIF — provenance cannot be verified from metadata"
+                    )
 
             # Attempt lightweight OCR to extract any visible text
             ocr_text_lines: list[str] = []
             try:
                 import pytesseract
+
                 ocr_raw = pytesseract.image_to_string(img, config="--psm 3").strip()
                 if ocr_raw:
-                    ocr_text_lines = [ln.strip() for ln in ocr_raw.splitlines() if len(ln.strip()) > 2][:10]
+                    ocr_text_lines = [
+                        ln.strip() for ln in ocr_raw.splitlines() if len(ln.strip()) > 2
+                    ][:10]
             except Exception:
                 pass
             # EasyOCR fallback
             if not ocr_text_lines:
                 try:
                     from tools.ocr_tools import _get_easyocr_reader
+
                     _reader = _get_easyocr_reader()
                     if _reader is not None:
                         _results = _reader.readtext(file_path, detail=0)
-                        ocr_text_lines = [str(t).strip() for t in _results if len(str(t).strip()) > 2][:10]
+                        ocr_text_lines = [
+                            str(t).strip() for t in _results if len(str(t).strip()) > 2
+                        ][:10]
                 except Exception:
                     pass
 
             ocr_summary = ""
             if ocr_text_lines:
-                ocr_summary = f" Text visible in image: {' | '.join(ocr_text_lines[:6])}."
+                ocr_summary = (
+                    f" Text visible in image: {' | '.join(ocr_text_lines[:6])}."
+                )
 
             narrative = (
                 f"Local forensic analysis (set GEMINI_API_KEY for full AI vision). {scene_desc}"
-                + ocr_summary + " "
-                + (f"Metadata: {'; '.join(meta_notes)}." if meta_notes else "No EXIF metadata available.")
+                + ocr_summary
+                + " "
+                + (
+                    f"Metadata: {'; '.join(meta_notes)}."
+                    if meta_notes
+                    else "No EXIF metadata available."
+                )
             )
 
             latency_ms = (time.monotonic() - t0) * 1000
@@ -1007,8 +1112,12 @@ class GeminiVisionClient:
                 _extracted_text=ocr_text_lines,
                 _interface_identification="",
                 _contextual_narrative=narrative,
-                _authenticity_verdict="SUSPICIOUS" if manipulation_signals else "CANNOT_DETERMINE",
-                _metadata_visual_consistency="; ".join(meta_notes) if meta_notes else "No EXIF for cross-validation",
+                _authenticity_verdict="SUSPICIOUS"
+                if manipulation_signals
+                else "CANNOT_DETERMINE",
+                _metadata_visual_consistency="; ".join(meta_notes)
+                if meta_notes
+                else "No EXIF for cross-validation",
             )
             return finding
 

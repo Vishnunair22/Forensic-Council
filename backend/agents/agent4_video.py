@@ -1,8 +1,8 @@
 """
 Agent 4 - Temporal Video Analysis Agent.
 
-Temporal consistency and video integrity expert for detecting 
-frame-level edit points, deepfake face swaps, optical flow anomalies, 
+Temporal consistency and video integrity expert for detecting
+frame-level edit points, deepfake face swaps, optical flow anomalies,
 rolling shutter violations, and cross-modal temporal inconsistencies.
 """
 
@@ -21,6 +21,7 @@ from core.tool_registry import ToolRegistry
 from core.working_memory import WorkingMemory
 from core.ml_subprocess import run_ml_tool
 from infra.evidence_store import EvidenceStore
+
 # Import real tool implementations
 from tools.video_tools import (
     optical_flow_analyze as real_optical_flow_analyze,
@@ -38,11 +39,11 @@ from tools.mediainfo_tools import (
 class Agent4Video(ForensicAgent):
     """
     Agent 4 - Temporal Video Analysis Agent.
-    
-    Mandate: Detect frame-level edit points, deepfake face swaps, 
-    optical flow anomalies, rolling shutter violations, and 
+
+    Mandate: Detect frame-level edit points, deepfake face swaps,
+    optical flow anomalies, rolling shutter violations, and
     cross-modal temporal inconsistencies.
-    
+
     Task Decomposition:
     1. Run full-timeline optical flow analysis and generate temporal anomaly heatmap
     2. For each flagged anomaly window: extract frames and run frame-to-frame consistency analysis
@@ -55,7 +56,7 @@ class Agent4Video(ForensicAgent):
     9. Self-reflection pass
     10. Submit calibrated findings to Arbiter with dual anomaly classification list preserved
     """
-    
+
     def __init__(
         self,
         agent_id: str,
@@ -80,12 +81,12 @@ class Agent4Video(ForensicAgent):
             evidence_store=evidence_store,
         )
         self._inter_agent_bus = inter_agent_bus
-    
+
     @property
     def agent_name(self) -> str:
         """Human-readable name of this agent."""
         return "Agent4_TemporalVideo"
-    
+
     @property
     def task_decomposition(self) -> list[str]:
         """
@@ -118,21 +119,21 @@ class Agent4Video(ForensicAgent):
             "Run advanced codec fingerprinting for re-encoding event detection",
             "Run adversarial robustness check against optical flow evasion techniques",
         ]
-    
+
     @property
     def iteration_ceiling(self) -> int:
         """Maximum iterations — tasks + 2 buffer to prevent runaway loops."""
         return len(self.task_decomposition) + 2
-    
+
     @property
     def supported_file_types(self) -> list[str]:
         """Video agent supports video file types."""
-        return ['video/']
-    
+        return ["video/"]
+
     async def build_tool_registry(self) -> ToolRegistry:
         """
         Build and return the tool registry for this agent.
-        
+
         Registers real tool implementations for:
         - optical_flow_analysis: Full-timeline optical flow analysis
         - frame_extraction: Frame window extraction
@@ -145,7 +146,7 @@ class Agent4Video(ForensicAgent):
         - adversarial_robustness_check: Optical flow perturbation stability analysis
         """
         registry = ToolRegistry()
-        
+
         # Real tool handlers - wrap to accept input_data dict
         async def optical_flow_analysis_handler(input_data: dict) -> dict:
             """Handle optical flow analysis with input_data dict."""
@@ -160,7 +161,7 @@ class Agent4Video(ForensicAgent):
             else:
                 await self._record_tool_result("optical_flow_analysis", result)
             return result
-        
+
         async def frame_extraction_handler(input_data: dict) -> dict:
             """Handle frame extraction with input_data dict."""
             artifact = input_data.get("artifact") or self.evidence_artifact
@@ -176,7 +177,7 @@ class Agent4Video(ForensicAgent):
             else:
                 await self._record_tool_result("frame_extraction", result)
             return result
-        
+
         async def frame_consistency_analysis_handler(input_data: dict) -> dict:
             """Handle frame consistency analysis with input_data dict."""
             frames_artifact = input_data.get("frames_artifact")
@@ -185,6 +186,7 @@ class Agent4Video(ForensicAgent):
                 artifact = input_data.get("artifact") or self.evidence_artifact
                 try:
                     import cv2
+
                     cap = cv2.VideoCapture(artifact.file_path)
                     if not cap.isOpened():
                         return {"error": "Cannot open video file", "available": False}
@@ -201,9 +203,13 @@ class Agent4Video(ForensicAgent):
                             break
                     cap.release()
                     if len(frames) < 2:
-                        return {"error": "Could not extract enough frames", "available": False}
+                        return {
+                            "error": "Could not extract enough frames",
+                            "available": False,
+                        }
                     # Run inline histogram + edge consistency
                     import numpy as np
+
                     diffs = []
                     for j in range(1, len(frames)):
                         g1 = cv2.cvtColor(frames[j - 1], cv2.COLOR_BGR2GRAY)
@@ -234,15 +240,21 @@ class Agent4Video(ForensicAgent):
                 edge_threshold=edge_threshold,
             )
             if result.get("error"):
-                await self._record_tool_error("frame_consistency_analysis", result["error"])
+                await self._record_tool_error(
+                    "frame_consistency_analysis", result["error"]
+                )
             else:
                 await self._record_tool_result("frame_consistency_analysis", result)
             return result
-        
+
         async def face_swap_detection_handler(input_data: dict) -> dict:
             """Handle face swap detection with input_data dict."""
             # Use artifact directly - face_swap_detect_deepface expects EvidenceArtifact, not frames
-            artifact = input_data.get("artifact") or input_data.get("frames_artifact") or self.evidence_artifact
+            artifact = (
+                input_data.get("artifact")
+                or input_data.get("frames_artifact")
+                or self.evidence_artifact
+            )
             if artifact is None:
                 return {"error": "artifact is required"}
             confidence_threshold = input_data.get("confidence_threshold", 0.5)
@@ -255,7 +267,7 @@ class Agent4Video(ForensicAgent):
             else:
                 await self._record_tool_result("face_swap_detection", result)
             return result
-        
+
         async def video_metadata_handler(input_data: dict) -> dict:
             """Handle video metadata extraction with input_data dict."""
             artifact = input_data.get("artifact") or self.evidence_artifact
@@ -265,31 +277,42 @@ class Agent4Video(ForensicAgent):
             else:
                 await self._record_tool_result("video_metadata", result)
             return result
-            
+
         async def deepfake_frequency_check_handler(input_data: dict) -> dict:
-            artifact = input_data.get("frames_artifact") or input_data.get("artifact") or self.evidence_artifact
-            result = await run_ml_tool("deepfake_frequency.py", artifact.file_path, timeout=25.0)
+            artifact = (
+                input_data.get("frames_artifact")
+                or input_data.get("artifact")
+                or self.evidence_artifact
+            )
+            result = await run_ml_tool(
+                "deepfake_frequency.py", artifact.file_path, timeout=15.0
+            )
             if result.get("available") and not result.get("error"):
                 await self._record_tool_result("deepfake_frequency_check", result)
             elif result.get("error"):
-                await self._record_tool_error("deepfake_frequency_check", result["error"])
+                await self._record_tool_error(
+                    "deepfake_frequency_check", result["error"]
+                )
             return result
-        
+
         async def anomaly_classification(input_data: dict) -> dict:
             """Classify anomaly via SSIM + motion vector analysis."""
             frame_a = input_data.get("frame_a_path")
             frame_b = input_data.get("frame_b_path")
             motion = input_data.get("motion_vector_magnitude", 0.0)
             if not frame_a or not frame_b:
-                return {"classification": "INCONCLUSIVE", "court_defensible": True,
-                        "note": "frame_a_path and frame_b_path required"}
+                return {
+                    "classification": "INCONCLUSIVE",
+                    "court_defensible": True,
+                    "note": "frame_a_path and frame_b_path required",
+                }
             return await run_ml_tool(
                 "anomaly_classifier.py",
                 frame_a,
                 extra_args=["--frameB", frame_b, "--motion", str(motion)],
-                timeout=15.0
+                timeout=15.0,
             )
-        
+
         async def rolling_shutter_validation(input_data: dict) -> dict:
             """Validate rolling shutter via optical flow scanline skew analysis."""
             artifact = input_data.get("artifact") or self.evidence_artifact
@@ -298,14 +321,16 @@ class Agent4Video(ForensicAgent):
                 "rolling_shutter_validator.py",
                 artifact.file_path,
                 extra_args=["--sample", str(sample)],
-                timeout=30.0
+                timeout=15.0,
             )
             if result.get("available") and not result.get("error"):
                 await self._record_tool_result("rolling_shutter_validation", result)
             elif result.get("error"):
-                await self._record_tool_error("rolling_shutter_validation", result["error"])
+                await self._record_tool_error(
+                    "rolling_shutter_validation", result["error"]
+                )
             return result
-        
+
         async def inter_agent_call_handler(input_data: dict) -> dict:
             """Real inter-agent call via InterAgentBus."""
             if self._inter_agent_bus is None:
@@ -317,12 +342,14 @@ class Agent4Video(ForensicAgent):
                 call_type=InterAgentCallType.COLLABORATIVE,
                 payload={
                     "timestamp_ref": input_data.get("timestamp_ref"),
-                    "question": input_data.get("question", "Confirm audio-visual sync at flagged timestamp"),
-                }
+                    "question": input_data.get(
+                        "question", "Confirm audio-visual sync at flagged timestamp"
+                    ),
+                },
             )
             response = await self._inter_agent_bus.send(call, self.custody_logger)
             return response
-        
+
         async def adversarial_robustness_check(input_data: dict) -> dict:
             """
             Adversarial robustness check for optical flow evasion.
@@ -372,8 +399,16 @@ class Agent4Video(ForensicAgent):
                     flows = []
                     for i in range(len(frame_list) - 1):
                         flow = cv2.calcOpticalFlowFarneback(
-                            frame_list[i], frame_list[i + 1],
-                            None, 0.5, 3, 15, 3, 5, 1.2, 0
+                            frame_list[i],
+                            frame_list[i + 1],
+                            None,
+                            0.5,
+                            3,
+                            15,
+                            3,
+                            5,
+                            1.2,
+                            0,
                         )
                         mag = np.sqrt(flow[..., 0] ** 2 + flow[..., 1] ** 2)
                         flows.append(float(mag.mean()))
@@ -383,7 +418,9 @@ class Agent4Video(ForensicAgent):
 
                 # 1 — Gaussian noise σ=3
                 noisy_frames = [
-                    np.clip(f.astype(np.float32) + rng.normal(0, 3.0, f.shape), 0, 255).astype(np.uint8)
+                    np.clip(
+                        f.astype(np.float32) + rng.normal(0, 3.0, f.shape), 0, 255
+                    ).astype(np.uint8)
                     for f in frames
                 ]
                 noisy_flow = _mean_flow(noisy_frames)
@@ -403,7 +440,9 @@ class Agent4Video(ForensicAgent):
                 }
 
                 EVASION_THRESHOLD = 0.40  # > 40 % relative flow shift is suspicious
-                evasion_detected = any(v > EVASION_THRESHOLD for v in perturbation_deltas.values())
+                evasion_detected = any(
+                    v > EVASION_THRESHOLD for v in perturbation_deltas.values()
+                )
 
                 return {
                     "status": "real",
@@ -454,21 +493,59 @@ class Agent4Video(ForensicAgent):
             return result
 
         # CRITICAL: optical_flow_analysis must be registered FIRST - it's the primary tool for this agent
-        registry.register("optical_flow_analysis", optical_flow_analysis_handler, "Full-timeline optical flow analysis")
-        registry.register("frame_extraction", frame_extraction_handler, "Frame window extraction")
-        registry.register("frame_consistency_analysis", frame_consistency_analysis_handler, "Frame-to-frame consistency analysis")
-        registry.register("face_swap_detection", face_swap_detection_handler, "Face-swap detection")
-        registry.register("deepfake_frequency_check", deepfake_frequency_check_handler, "Detect GAN/deepfake artifacts in frequency domain")
-        registry.register("video_metadata", video_metadata_handler, "Video metadata extraction")
-        registry.register("anomaly_classification", anomaly_classification, "Anomaly classification")
-        registry.register("rolling_shutter_validation", rolling_shutter_validation, "Rolling shutter validation")
-        registry.register("inter_agent_call", inter_agent_call_handler, "Inter-agent communication")
-        registry.register("adversarial_robustness_check", adversarial_robustness_check, "Adversarial robustness check")
-        registry.register("mediainfo_profile", mediainfo_profile_handler, "Deep AV container profiling: codec, frame rate mode, encoding tool, VFR flag, forensic flags")
-        registry.register("av_file_identity", av_file_identity_handler, "Lightweight AV pre-screen: format, codec, duration, high-severity flags")
-        
+        registry.register(
+            "optical_flow_analysis",
+            optical_flow_analysis_handler,
+            "Full-timeline optical flow analysis",
+        )
+        registry.register(
+            "frame_extraction", frame_extraction_handler, "Frame window extraction"
+        )
+        registry.register(
+            "frame_consistency_analysis",
+            frame_consistency_analysis_handler,
+            "Frame-to-frame consistency analysis",
+        )
+        registry.register(
+            "face_swap_detection", face_swap_detection_handler, "Face-swap detection"
+        )
+        registry.register(
+            "deepfake_frequency_check",
+            deepfake_frequency_check_handler,
+            "Detect GAN/deepfake artifacts in frequency domain",
+        )
+        registry.register(
+            "video_metadata", video_metadata_handler, "Video metadata extraction"
+        )
+        registry.register(
+            "anomaly_classification", anomaly_classification, "Anomaly classification"
+        )
+        registry.register(
+            "rolling_shutter_validation",
+            rolling_shutter_validation,
+            "Rolling shutter validation",
+        )
+        registry.register(
+            "inter_agent_call", inter_agent_call_handler, "Inter-agent communication"
+        )
+        registry.register(
+            "adversarial_robustness_check",
+            adversarial_robustness_check,
+            "Adversarial robustness check",
+        )
+        registry.register(
+            "mediainfo_profile",
+            mediainfo_profile_handler,
+            "Deep AV container profiling: codec, frame rate mode, encoding tool, VFR flag, forensic flags",
+        )
+        registry.register(
+            "av_file_identity",
+            av_file_identity_handler,
+            "Lightweight AV pre-screen: format, codec, duration, high-severity flags",
+        )
+
         return registry
-    
+
     async def build_initial_thought(self) -> str:
         """
         Build the contextually-grounded initial thought for the ReAct loop.
@@ -497,14 +574,23 @@ class Agent4Video(ForensicAgent):
                     high_flags = result.get("high_severity_flags", [])
                     if high_flags:
                         flags = high_flags
-                        context_lines.append("HIGH-SEVERITY FLAGS: " + ", ".join(high_flags))
-        except Exception:
-            pass
+                        context_lines.append(
+                            "HIGH-SEVERITY FLAGS: " + ", ".join(high_flags)
+                        )
+        except Exception as e:
+            logger.debug(f"Container pre-screen for initial thought failed: {e}")
 
-        context = " | ".join(context_lines) if context_lines else "Container pre-screen unavailable."
+        context = (
+            " | ".join(context_lines)
+            if context_lines
+            else "Container pre-screen unavailable."
+        )
         flag_note = (
-            " IMMEDIATE PRIORITY: investigate flags " + str(flags) + " in first 3 iterations."
-            if flags else ""
+            " IMMEDIATE PRIORITY: investigate flags "
+            + str(flags)
+            + " in first 3 iterations."
+            if flags
+            else ""
         )
         return (
             f"Starting temporal video analysis. Evidence: {self.evidence_artifact.artifact_id}. "
@@ -535,8 +621,12 @@ class Agent4Video(ForensicAgent):
         image_exts = (".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp", ".svg")
         audio_exts = (".wav", ".mp3", ".ogg", ".flac", ".m4a", ".aac", ".wma", ".aiff")
 
-        is_image = any(file_path.endswith(ext) for ext in image_exts) or mime.startswith("image/")
-        is_audio = any(file_path.endswith(ext) for ext in audio_exts) or mime.startswith("audio/")
+        is_image = any(
+            file_path.endswith(ext) for ext in image_exts
+        ) or mime.startswith("image/")
+        is_audio = any(
+            file_path.endswith(ext) for ext in audio_exts
+        ) or mime.startswith("audio/")
 
         async def _mark_all_complete():
             """Mark every task complete so the heartbeat shows full progress."""
@@ -553,8 +643,8 @@ class Agent4Video(ForensicAgent):
                             status=TaskStatus.COMPLETE,
                             result_ref="file_type_validation",
                         )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to update task status in file type validation short-circuit: {e}")
 
         if is_image:
             await _mark_all_complete()

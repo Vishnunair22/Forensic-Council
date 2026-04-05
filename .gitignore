@@ -16,10 +16,20 @@
 *credentials*
 *token*.txt
 *api_key*
+*.json_report
+bandit_security_report.json
+eslint_frontend_report.json
+ruff_backend_report.json
+git_secrets_scan.txt
+tracked_files.txt
+
 
 # ── Python ──────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
+*.sqlite
+*.sqlite3
+*.db
 *$py.class
 *.egg-info/
 dist/
@@ -42,17 +52,17 @@ frontend/out/
 frontend/.npm
 frontend/.cache
 *.tsbuildinfo
+.pnpm-store/
 
 # ── Docker build artefacts ───────────────────────────────────────────────────
-# (volumes, build context detritus)
 /backend/storage/evidence/*
 !/backend/storage/evidence/.gitkeep
 /backend/storage/keys/*
 !/backend/storage/keys/.gitkeep
-/backend/storage/calibration_models/
 
 # ── ML model caches (large binary files) ─────────────────────────────────────
 /backend/cache/
+/storage/calibration_models/
 *.pt
 *.pth
 *.onnx
@@ -81,3 +91,6 @@ tests/fixtures/*.jpeg
 .vscode/
 *.swp
 *.swo
+.cursor/
+.kilo/
+

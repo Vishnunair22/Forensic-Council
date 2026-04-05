@@ -3,11 +3,10 @@
 # Forensic Council — Docker Entrypoint
 # ============================================================================
 # Runs at container startup BEFORE the API server.
-# 1. Fixes permissions on runtime-mounted volumes (created root:root by Docker)
-# 2. On FIRST ever start (volumes empty): pre-downloads ML models IN BACKGROUND
+# 1. On FIRST ever start (volumes empty): pre-downloads ML models IN BACKGROUND
 #    so the API starts immediately while models download concurrently.
-# 3. Validates cache state and core Python imports (~3s)
-# 4. Starts the API server
+# 2. Validates cache state and core Python imports (~3s)
+# 3. Starts the API server / Worker / Script
 #
 # Environment overrides:
 #   SKIP_MODEL_DOWNLOAD=1   Skip background model pre-download (e.g. CI/CD)
@@ -15,22 +14,14 @@
 # ============================================================================
 set -e
 
-# ── 1. Fix ownership of volume-mounted directories ───────────────────────────
-# Docker named volumes are always created as root:root on first use.
-# chown ensures appuser (uid 1001) can write to them.
-# This must run as root before we drop privileges below.
-chown -R 1001:1001 /app/storage/evidence /app/cache 2>/dev/null || true
-
-# ── Privilege-drop helper ────────────────────────────────────────────────────
-# appuser exists only in the production stage. In the development stage the
-# container inherits from 'base' where adduser was never called.
-if id appuser >/dev/null 2>&1; then
-    RUN_AS="runuser -u appuser --"
-else
-    RUN_AS=""
+# SECURITY: Ensure we're not running as root in production
+if [ "$(id -u)" = "0" ] && [ "${APP_ENV:-development}" = "production" ]; then
+    echo "WARNING: Running as root in production is not recommended" >&2
 fi
 
-# ── 2a. Seed calibration models into volume on first start ───────────────────
+echo "Starting Forensic Council entrypoint as user: $(id -u)"
+
+# ── 1a. Seed calibration models into volume on first start ───────────────────
 # Calibration model JSON files are baked into the image at /app/storage/calibration_models.
 # CALIBRATION_MODELS_PATH points to /app/cache/calibration_models (a named Docker volume)
 # so models can be updated at runtime without rebuilding the image.
@@ -46,7 +37,7 @@ if [ -d "$CAL_SRC" ] && [ -d "$CAL_DST" ]; then
     fi
 fi
 
-# ── 2b. First-run ML model pre-download (background) ─────────────────────────
+# ── 1b. First-run ML model pre-download (background) ─────────────────────────
 # Check the HuggingFace and YOLO cache dirs. If they are empty this is the
 # first time the container has started against these volumes.
 # Download models in a background process so the API server starts immediately.
@@ -68,7 +59,7 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
         echo "  API server will start in parallel and be ready in ~30s."
         echo "============================================================"
         # Run in background (&) so the API starts immediately
-        $RUN_AS python scripts/model_pre_download.py > /tmp/model_download.log 2>&1 &
+        python scripts/model_pre_download.py > /tmp/model_download.log 2>&1 &
         MODEL_DL_PID=$!
         echo "  Model download started (PID $MODEL_DL_PID) — tail /tmp/model_download.log for progress"
     else
@@ -76,10 +67,29 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
     fi
 fi
 
-# ── 3. Cache status check + Python import verification ───────────────────────
+# ── 2. Cache status check + Python import verification ───────────────────────
 if [ "${SKIP_CACHE_CHECK:-0}" != "1" ]; then
-    $RUN_AS python scripts/model_cache_check.py
+    echo "  Verifying model cache and imports..."
+    python scripts/model_cache_check.py
 fi
 
-# ── 4. Start the API server ──────────────────────────────────────────────────
-exec $RUN_AS python scripts/run_api.py
+# ── 3. Start process (API by default, or Worker via CMD) ──────────────────────
+# Default to scripts/run_api.py if no arguments provided
+CMD_TO_RUN="${1:-scripts/run_api.py}"
+
+if [ "$CMD_TO_RUN" = "worker" ]; then
+    echo "  Mode: Forensic Worker — consuming tasks from Redis"
+    exec python scripts/run_worker.py
+else
+    echo "  Mode: Custom Script / API — serving requests"
+    # Decide if we need to wrap $CMD_TO_RUN in python
+    case "$CMD_TO_RUN" in
+        *.py) ACTUAL_CMD="python $CMD_TO_RUN" ;;
+        *)    ACTUAL_CMD="$CMD_TO_RUN" ;;
+    esac
+
+    echo "  Executing: $ACTUAL_CMD"
+    # Use 'sh -c' to correctly word-split the command string into binary + args.
+    # Direct 'exec "$ACTUAL_CMD"' would treat the whole string as the binary name.
+    exec sh -c "$ACTUAL_CMD"
+fi

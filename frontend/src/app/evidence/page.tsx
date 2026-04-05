@@ -13,7 +13,14 @@
 
 "use client";
 
-import React, { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from "react";
+import React, {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+} from "react";
 import { useRouter } from "next/navigation";
 import { useSimulation } from "@/hooks/useSimulation";
 import { PageTransition } from "@/components/ui/PageTransition";
@@ -27,6 +34,7 @@ import {
   getReport,
   type InvestigationResponse,
 } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 import { AGENTS_DATA, ALLOWED_MIME_TYPES } from "@/lib/constants";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
@@ -46,7 +54,7 @@ const dbg = {
   error: isDev ? console.error.bind(console) : () => {},
 };
 
-const POLL_REQUEST_MS = 12_000;
+const POLL_REQUEST_MS = 8_000;
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -59,7 +67,7 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
       (e) => {
         clearTimeout(t);
         reject(e);
-      }
+      },
     );
   });
 }
@@ -75,13 +83,17 @@ async function waitForFinalReport(
   while (Date.now() < deadline) {
     if (signal?.aborted) return false;
     try {
-      const st = await withTimeout(getArbiterStatus(sessionId), POLL_REQUEST_MS);
+      const st = await withTimeout(
+        getArbiterStatus(sessionId),
+        POLL_REQUEST_MS,
+      );
       if (st.message) onLiveMessage(st.message);
       if (st.status === "error") {
         throw new Error(st.message || "Council synthesis failed.");
       }
     } catch (e) {
-      if (e instanceof Error && e.message.includes("Council synthesis")) throw e;
+      if (e instanceof Error && e.message.includes("Council synthesis"))
+        throw e;
       /* timeout / network — keep polling */
     }
     try {
@@ -91,8 +103,10 @@ async function waitForFinalReport(
       /* in progress, 404, timeout, or not yet persisted */
     }
     await new Promise<void>((r) => {
-      const timer = setTimeout(r, 550);
-      signal?.addEventListener("abort", () => clearTimeout(timer), { once: true });
+      const timer = setTimeout(r, 1200);
+      signal?.addEventListener("abort", () => clearTimeout(timer), {
+        once: true,
+      });
     });
     if (signal?.aborted) return false;
   }
@@ -123,9 +137,9 @@ export default function EvidencePage() {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadPhaseText, setUploadPhaseText] = useState<string>("");
-  const [showLoadingOverlay, setShowLoadingOverlay] = useState(
-    typeof window !== "undefined" && sessionStorage.getItem("fc_show_loading") === "true"
-  );
+  // Initialise to false (avoids SSR/hydration mismatch) — useLayoutEffect below
+  // reads the real value from sessionStorage before the first paint.
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
   /** True once the live analysis WebSocket has opened (not just HTTP session created). */
   const [analysisStreamReady, setAnalysisStreamReady] = useState(false);
   /** Arbiter phase — latest line from GET /arbiter-status (and WS fallback). */
@@ -138,25 +152,36 @@ export default function EvidencePage() {
    */
   const [autoStartBlocking, setAutoStartBlocking] = useState(false);
   useLayoutEffect(() => {
+    // Both reads must happen before the first paint to avoid a blank flash.
+    // useLayoutEffect runs only on the client, so sessionStorage is always available.
     try {
       setAutoStartBlocking(
-        sessionStorage.getItem("forensic_auto_start") === "true"
+        sessionStorage.getItem("forensic_auto_start") === "true",
       );
+      if (sessionStorage.getItem("fc_show_loading") === "true") {
+        setShowLoadingOverlay(true);
+      }
     } catch {
       setAutoStartBlocking(false);
     }
   }, []);
 
   // Shared auth promise — reuse existing session if available, otherwise auto-login.
-  // The landing page already calls autoLoginAsInvestigator() on mount, so the cookie
-  // is usually already set by the time the evidence page loads.  Firing a second
-  // redundant login round-trip here was the primary cause of the post-upload delay.
+  // NOTE: access_token is set as httpOnly, so document.cookie cannot see it.
+  // We use a forensic_auth_ok flag written to sessionStorage by the landing page
+  // after a successful demo login — if it is present the cookie is already live.
   const authReadyRef = useRef<Promise<void>>(
-    typeof document !== "undefined" && document.cookie.includes("access_token")
+    typeof document !== "undefined" &&
+      (document.cookie.includes("access_token") ||
+        sessionStorage.getItem("forensic_auth_ok") === "1")
       ? Promise.resolve() // Already authenticated from landing page — skip re-login
       : autoLoginAsInvestigator()
-          .then(() => { /* auth cookie set */ })
-          .catch(() => { /* handled by handleAuthError on first API call */ })
+          .then(() => {
+            /* auth cookie set */
+          })
+          .catch(() => {
+            /* handled by handleAuthError on first API call */
+          }),
   );
 
   // Phase tracking:  analysis vs deep analysis
@@ -229,11 +254,18 @@ export default function EvidencePage() {
   useEffect(() => {
     const id = setTimeout(() => playSound("page_load"), 280);
     return () => clearTimeout(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // State restoring guard to prevent  mount flicker
-  const isRestoringRef = useRef(typeof window !== "undefined" ? sessionStorage.getItem("forensic_restore_view") === "true" : false);
+  const isRestoringRef = useRef(
+    typeof window !== "undefined"
+      ? sessionStorage.getItem("forensic_restore_view") === "true"
+      : false,
+  );
+
+  // Track if auto-start has already been triggered for the current pending file
+  const autoStartFiredRef = useRef(false);
 
   // Restore state if returning from Result page
   useEffect(() => {
@@ -241,11 +273,16 @@ export default function EvidencePage() {
       sessionStorage.removeItem("forensic_restore_view");
       const isDeep = sessionStorage.getItem("forensic_is_deep") === "true";
       try {
-        const stored = sessionStorage.getItem(isDeep ? "forensic_deep_agents" : "forensic_initial_agents");
+        const stored = sessionStorage.getItem(
+          isDeep ? "forensic_deep_agents" : "forensic_initial_agents",
+        );
         if (stored) {
-           const agents = JSON.parse(stored);
-           setPhase(isDeep ? "deep" : "initial");
-           restoreSimulationState(agents, isDeep ? "complete" : "awaiting_decision");
+          const agents = JSON.parse(stored);
+          setPhase(isDeep ? "deep" : "initial");
+          restoreSimulationState(
+            agents,
+            isDeep ? "complete" : "awaiting_decision",
+          );
         }
       } catch (e) {
         dbg.error("Failed to restore agents", e);
@@ -278,6 +315,8 @@ export default function EvidencePage() {
       const caseId =
         sessionStorage.getItem("forensic_case_id") || "CASE-" + Date.now();
 
+      console.log("[Trigger] Starting investigation flow...");
+
       const win = window as {
         __forensic_investigation_promise?: Promise<InvestigationResponse>;
       };
@@ -289,7 +328,9 @@ export default function EvidencePage() {
       await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
       // Wait for the auto-login to complete before hitting the backend.
+      console.log("[Trigger] Waiting for auth...");
       await authReadyRef.current;
+      console.log("[Trigger] Auth ready. Starting HTTP upload...");
 
       let sessionIdToUse: string | undefined;
       try {
@@ -307,7 +348,10 @@ export default function EvidencePage() {
 
           let goResults = false;
           try {
-            const st = await withTimeout(getArbiterStatus(sid), POLL_REQUEST_MS);
+            const st = await withTimeout(
+              getArbiterStatus(sid),
+              POLL_REQUEST_MS,
+            );
             if (st.status === "complete") goResults = true;
           } catch {
             /* keep reconnecting */
@@ -326,18 +370,20 @@ export default function EvidencePage() {
             playSound("success");
             setShowLoadingOverlay(false);
             sessionStorage.removeItem("fc_show_loading");
-            router.push("/result");
+            router.push("/result", { scroll: true });
             return;
           }
 
           sessionIdToUse = sid;
           setUploadPhaseText(
-            "This file was already submitted — reconnecting to that investigation…"
+            "This file was already submitted — reconnecting to that investigation…",
           );
         } else {
           dbg.error("Investigation start failed", err);
           let errorMsg =
-            err instanceof Error ? err.message : "Failed to start investigation";
+            err instanceof Error
+              ? err.message
+              : "Failed to start investigation";
           if (
             errorMsg.includes("422") ||
             errorMsg.toLowerCase().includes("unprocessable")
@@ -363,6 +409,10 @@ export default function EvidencePage() {
           sessionStorage.removeItem("fc_show_loading");
           resetSimulation();
           playSound("error");
+          toast.destructive({
+            title: "Investigation Failed",
+            description: errorMsg,
+          });
           return;
         }
       }
@@ -389,7 +439,11 @@ export default function EvidencePage() {
           const canvas = document.createElement("canvas");
           canvas.width = Math.round(bmp.width * scale);
           canvas.height = Math.round(bmp.height * scale);
-          canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            throw new Error("Canvas 2D context unavailable");
+          }
+          ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
           bmp.close();
           const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
           if (dataUrl.length < 60_000) {
@@ -406,6 +460,7 @@ export default function EvidencePage() {
 
       // ── Phase 2: Show analysis grid immediately, connect WS in background ─
       setIsUploading(false);
+      console.log("[Trigger] Upload success. Session:", sessionIdToUse);
       setUploadPhaseText("Connecting to analysis stream…");
 
       connectWebSocket(sessionIdToUse)
@@ -420,24 +475,23 @@ export default function EvidencePage() {
               ? wsErr.message
               : "Failed to connect to analysis stream";
           setValidationError(wsErrMsg);
+          toast.destructive({
+            title: "Connection Lost",
+            description: wsErrMsg,
+          });
           setShowLoadingOverlay(false);
           sessionStorage.removeItem("fc_show_loading");
           resetSimulation();
         });
     },
-    [
-      playSound,
-      startSimulation,
-      connectWebSocket,
-      resetSimulation,
-      router,
-    ]
+    [playSound, startSimulation, connectWebSocket, resetSimulation, router],
   );
 
   // Pick up file injected from landing page via module-scoped store
   useEffect(() => {
     const pending = __pendingFileStore.file;
-    if (pending) {
+    if (pending && !autoStartFiredRef.current) {
+      autoStartFiredRef.current = true;
       __pendingFileStore.file = null;
       setFile(pending);
 
@@ -455,7 +509,6 @@ export default function EvidencePage() {
       sessionStorage.removeItem("fc_show_loading");
     }
   }, [triggerAnalysis]);
-  
 
   // Validate file — uses the single canonical ALLOWED_MIME_TYPES from constants.ts
   const validateFile = (f: File): boolean => {
@@ -465,7 +518,9 @@ export default function EvidencePage() {
       return false;
     }
     if (!ALLOWED_MIME_TYPES.has(f.type)) {
-      setValidationError(`File type "${f.type || "unknown"}" is not supported. Upload an image, video, or audio file.`);
+      setValidationError(
+        `File type "${f.type || "unknown"}" is not supported. Upload an image, video, or audio file.`,
+      );
       return false;
     }
     return true;
@@ -484,7 +539,7 @@ export default function EvidencePage() {
   // Handle HITL decision
   const handleHITLDecision = async (
     decision: "APPROVE" | "REDIRECT" | "OVERRIDE" | "TERMINATE" | "ESCALATE",
-    note?: string
+    note?: string,
   ) => {
     if (!hitlCheckpoint) return;
     setIsSubmittingHITL(true);
@@ -503,6 +558,10 @@ export default function EvidencePage() {
     } catch (err) {
       dbg.error("HITL decision failed", err);
       playSound("error");
+      toast.destructive({
+        title: "Decision Failed",
+        description: "Could not submit your decision. Please try again.",
+      });
     } finally {
       setIsSubmittingHITL(false);
     }
@@ -515,7 +574,10 @@ export default function EvidencePage() {
     if (isNavigating) return;
     playSound("arbiter_start");
     sessionStorage.setItem("forensic_is_deep", "false");
-    sessionStorage.setItem("forensic_initial_agents", JSON.stringify(completedAgents));
+    sessionStorage.setItem(
+      "forensic_initial_agents",
+      JSON.stringify(completedAgents),
+    );
     setIsNavigating(true);
     setShowArbiterOverlay(true);
     setArbiterLiveText("Submitting investigator decision…");
@@ -525,7 +587,9 @@ export default function EvidencePage() {
       dbg.error("Accept analysis failed", err);
       playSound("error");
       setValidationError(
-        err instanceof Error ? err.message : "Could not resume the investigation on the server."
+        err instanceof Error
+          ? err.message
+          : "Could not resume the investigation on the server.",
       );
       setIsNavigating(false);
       setShowArbiterOverlay(false);
@@ -546,7 +610,7 @@ export default function EvidencePage() {
       navigated = true;
       setShowArbiterOverlay(false);
       setIsNavigating(false);
-      router.push("/result");
+      router.push("/result", { scroll: true });
     };
     // Guaranteed exit if polling hangs (unlikely with per-request timeouts, but safe).
     const safetyNav = window.setTimeout(navigateOnce, 120_000);
@@ -555,17 +619,24 @@ export default function EvidencePage() {
     pollAbortRef.current = abortController;
 
     try {
-      const ok = await waitForFinalReport(sid, setArbiterLiveText, 110_000, abortController.signal);
+      const ok = await waitForFinalReport(
+        sid,
+        setArbiterLiveText,
+        110_000,
+        abortController.signal,
+      );
       if (!ok) {
         playSound("error");
         setValidationError(
-          "The report is taking longer than expected. Opening the results view — it will keep checking."
+          "The report is taking longer than expected. Opening the results view — it will keep checking.",
         );
       }
     } catch (err) {
       dbg.error("Council synthesis wait failed", err);
       playSound("error");
-      setValidationError(err instanceof Error ? err.message : "Council synthesis failed.");
+      setValidationError(
+        err instanceof Error ? err.message : "Council synthesis failed.",
+      );
     } finally {
       window.clearTimeout(safetyNav);
       pollAbortRef.current = null;
@@ -588,7 +659,9 @@ export default function EvidencePage() {
       dbg.error("Deep analysis resume failed", err);
       playSound("error");
       setValidationError(
-        err instanceof Error ? err.message : "Could not start deep analysis on the server."
+        err instanceof Error
+          ? err.message
+          : "Could not start deep analysis on the server.",
       );
     }
   }, [playSound, resumeInvestigation, clearCompletedAgents]);
@@ -600,16 +673,19 @@ export default function EvidencePage() {
     setPhase("initial");
     setIsNavigating(false);
     resetSimulation();
-    sessionStorage.removeItem('forensic_session_id');
-    sessionStorage.removeItem('forensic_file_name');
-    sessionStorage.removeItem('forensic_case_id');
+    sessionStorage.removeItem("forensic_session_id");
+    sessionStorage.removeItem("forensic_file_name");
+    sessionStorage.removeItem("forensic_case_id");
   }, [resetSimulation, playSound]);
 
   // View Results → after deep analysis confirm report is addressable, then navigate
   const handleViewResults = useCallback(async () => {
     if (isNavigating) return;
     playSound("arbiter_start");
-    sessionStorage.setItem("forensic_deep_agents", JSON.stringify(completedAgents));
+    sessionStorage.setItem(
+      "forensic_deep_agents",
+      JSON.stringify(completedAgents),
+    );
     setIsNavigating(true);
     setShowArbiterOverlay(true);
     setArbiterLiveText("Preparing council ledger…");
@@ -620,48 +696,54 @@ export default function EvidencePage() {
       }
     } catch (err) {
       dbg.error("View results prefetch failed", err);
-      setValidationError(err instanceof Error ? err.message : "Could not confirm report status.");
+      setValidationError(
+        err instanceof Error ? err.message : "Could not confirm report status.",
+      );
     } finally {
       setShowArbiterOverlay(false);
       setIsNavigating(false);
-      router.push("/result");
+      router.push("/result", { scroll: true });
     }
   }, [playSound, router, isNavigating, completedAgents]);
 
   // Determine what to show
-  const validAgentsData = AGENTS_DATA.filter(a => a.name !== "Council Arbiter");
-  const validCompletedAgents = completedAgents.filter((c: AgentUpdate) =>
-    validAgentsData.some(v => v.id === c.agent_id)
+  const validAgentsData = AGENTS_DATA.filter(
+    (a) => a.name !== "Council Arbiter",
   );
-
-  /** Each specialist agent has received WS activity (running updates or terminal completion). */
-  const allForensicAgentsLive =
-    validAgentsData.length > 0 &&
-    validAgentsData.every(
-      (a) =>
-        Boolean(agentUpdates[a.id]) ||
-        validCompletedAgents.some((c: AgentUpdate) => c.agent_id === a.id)
-    );
+  const validCompletedAgents = completedAgents.filter((c: AgentUpdate) =>
+    validAgentsData.some((v) => v.id === c.agent_id),
+  );
 
   // In deep phase, unsupported agents never run — only count supported ones.
   // Only mark as unsupported if backend explicitly skipped or error says not applicable.
   const unsupportedAgentIds = new Set(
     validCompletedAgents
-      .filter(c =>
-        c.status === "skipped" ||
-        (c.error && /not applicable|not supported|format not supported|skipping/i.test(c.error))
+      .filter(
+        (c) =>
+          c.status === "skipped" ||
+          (c.error &&
+            /not applicable|not supported|format not supported|skipping/i.test(
+              c.error,
+            )),
       )
-      .map(c => c.agent_id)
+      .map((c) => c.agent_id),
   );
-  const supportedAgentCount = validAgentsData.filter(a => !unsupportedAgentIds.has(a.id)).length;
-  const supportedCompletedCount = validCompletedAgents.filter(c => !unsupportedAgentIds.has(c.agent_id)).length;
+  const supportedAgentCount = validAgentsData.filter(
+    (a) => !unsupportedAgentIds.has(a.id),
+  ).length;
+  const supportedCompletedCount = validCompletedAgents.filter(
+    (c) => !unsupportedAgentIds.has(c.agent_id),
+  ).length;
 
   // allAgentsDone: all supported agents finished (deep or initial)
   // For deep phase: also accept status==="complete" (PIPELINE_COMPLETE) since unsupported
   // agents don't send AGENT_COMPLETE in deep phase after completedAgents was cleared.
-  const allAgentsDone = phase === "deep"
-    ? status === "complete" || (supportedCompletedCount >= supportedAgentCount && supportedAgentCount > 0)
-    : validCompletedAgents.length >= validAgentsData.length;
+  const allAgentsDone =
+    phase === "deep"
+      ? status === "complete" ||
+        (supportedCompletedCount >= supportedAgentCount &&
+          supportedAgentCount > 0)
+      : validCompletedAgents.length >= validAgentsData.length;
 
   // Awaiting decision = backend sent PIPELINE_PAUSED
   const awaitingDecision = status === "awaiting_decision";
@@ -689,8 +771,7 @@ export default function EvidencePage() {
 
   const showUploadForm =
     !autoStartBlocking &&
-    (status === "idle" ||
-      (status === "error" && !hasStartedAnalysis)) &&
+    (status === "idle" || (status === "error" && !hasStartedAnalysis)) &&
     !isUploading &&
     !isRestoringRef.current;
 
@@ -727,28 +808,20 @@ export default function EvidencePage() {
     }
   }, [showLoadingOverlay, validationError]);
 
-  /** Stream is up but agent heartbeats are slow (e.g. stale duplicate session) — still reveal the workspace. */
-  useEffect(() => {
-    if (!showLoadingOverlay || !analysisStreamReady) return;
-    const t = setTimeout(() => {
-      setShowLoadingOverlay(false);
-      sessionStorage.removeItem("fc_show_loading");
-    }, 4_000);
-    return () => clearTimeout(t);
-  }, [showLoadingOverlay, analysisStreamReady]);
-
   // Show agent progress for both phases
   const showAgentProgress = hasStartedAnalysis && !showUploadForm;
 
   // After deep analysis, show results buttons when all agents done + pipeline complete
-  const deepAnalysisDone = phase === "deep" && (status === "complete" || allAgentsDone);
+  const deepAnalysisDone =
+    phase === "deep" && (status === "complete" || allAgentsDone);
 
   // Progress text — specific and contextual
   const runningAgentNames = Object.keys(agentUpdates)
-    .map(id => validAgentsData.find(a => a.id === id)?.name)
-    .filter((n): n is string => !!n);
+    .map((id) => validAgentsData.find((a) => a.id === id)?.name)
+    .filter((n): n is NonNullable<typeof n> => n != null);
 
-  let progressText = uploadPhaseText || "Establishing secure forensic pipeline…";
+  let progressText =
+    uploadPhaseText || "Establishing secure forensic pipeline…";
   if (awaitingDecision) {
     progressText = "Initial analysis complete. Choose how to proceed.";
   } else if (phase === "deep" && (status === "complete" || deepAnalysisDone)) {
@@ -766,9 +839,10 @@ export default function EvidencePage() {
   } else if (validCompletedAgents.length > 0) {
     const remaining = validAgentsData.length - validCompletedAgents.length;
     if (runningAgentNames.length > 0) {
-      const names = runningAgentNames.length === 1
-        ? runningAgentNames[0]
-        : `${runningAgentNames.length} agents`;
+      const names =
+        runningAgentNames.length === 1
+          ? runningAgentNames[0]
+          : `${runningAgentNames.length} agents`;
       progressText = `${validCompletedAgents.length}/${validAgentsData.length} complete — ${names} still scanning…`;
     } else {
       progressText = `${validCompletedAgents.length} of ${validAgentsData.length} agents complete — ${remaining} remaining…`;
@@ -780,14 +854,15 @@ export default function EvidencePage() {
       progressText = `${runningAgentNames.length} agents actively scanning the evidence…`;
     }
   } else if (status === "analyzing" || status === "initiating") {
-    progressText = uploadPhaseText || (isUploading ? "Uploading evidence…" : "Deploying forensic agents…");
+    progressText =
+      uploadPhaseText ||
+      (isUploading ? "Uploading evidence…" : "Deploying forensic agents…");
   } else if (isUploading) {
     progressText = uploadPhaseText || "Uploading evidence…";
   }
 
   return (
     <div className="min-h-screen text-foreground p-6 pb-20 overflow-x-hidden relative font-sans">
-
       {/* Loading overlay from landing page transition */}
       {showLoadingOverlay && (
         <LoadingOverlay
@@ -807,10 +882,7 @@ export default function EvidencePage() {
           variant="council"
           title="Council deliberation"
           liveText={
-            arbiterLiveText ||
-            pipelineMessage ||
-            pipelineThinking ||
-            ""
+            arbiterLiveText || pipelineMessage || pipelineThinking || ""
           }
           telemetryLabel="Arbiter telemetry"
           showElapsed
@@ -820,93 +892,98 @@ export default function EvidencePage() {
       {/* Main content */}
       <main className="max-w-6xl mx-auto relative z-10">
         <PageTransition>
-        <>
-          {/* Upload Form */}
-          {showUploadForm && (
-            <FileUploadSection
-              key="upload-form"
-              file={file}
-              isDragging={isDragging}
-              isUploading={isUploading}
-              validationError={validationError}
-              onFileSelect={handleFile}
-              onFileDrop={handleFile}
-              onDragEnter={() => setIsDragging(true)}
-              onDragLeave={() => setIsDragging(false)}
-              onUpload={triggerAnalysis}
-              onClear={() => {
-                setFile(null);
-                setValidationError(null);
-              }}
-            />
-          )}
-
-          {/* Agent Progress — handles both  and deep phases */}
-          {showAgentProgress && (
-            <AgentProgressDisplay
-              key="agent-progress"
-              agentUpdates={agentUpdates}
-              completedAgents={validCompletedAgents}
-              progressText={progressText}
-              allAgentsDone={allAgentsDone}
-              phase={phase}
-              awaitingDecision={awaitingDecision}
-              pipelineStatus={status}
-              pipelineMessage={pipelineMessage || pipelineThinking}
-              onAcceptAnalysis={handleAcceptAnalysis}
-              onDeepAnalysis={handleDeepAnalysis}
-              onNewUpload={handleNewUpload}
-              onViewResults={handleViewResults}
-              playSound={playSound}
-              isNavigating={isNavigating}
-            />
-          )}
-
-          {/* Error Display */}
-          {(validationError || errorMessage) && !showAgentProgress && !showUploadForm && (
-            <div key="error-display" className="flex flex-col items-center justify-center min-h-[60vh]">
-              <ErrorDisplay
-                message={validationError || errorMessage || "Unknown error"}
-                onDismiss={() => {
+          <>
+            {/* Upload Form */}
+            {showUploadForm && (
+              <FileUploadSection
+                key="upload-form"
+                file={file}
+                isDragging={isDragging}
+                isUploading={isUploading}
+                validationError={validationError}
+                onFileSelect={handleFile}
+                onFileDrop={handleFile}
+                onDragEnter={() => setIsDragging(true)}
+                onDragLeave={() => setIsDragging(false)}
+                onUpload={triggerAnalysis}
+                onClear={() => {
+                  setFile(null);
                   setValidationError(null);
-                  resetSimulation();
                 }}
-                onRetry={() => {
-                  if (file) {
-                    triggerAnalysis(file);
-                  }
-                }}
-                showRetry={!!file}
               />
-            </div>
-          )}
-
-          {/* Never render a completely empty main — avoids “page not loading” when gates desync */}
-          {!showUploadForm &&
-            !showAgentProgress &&
-            !isRestoringRef.current &&
-            !(validationError || errorMessage) && (
-              <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 text-center px-6">
-                <p className="text-sm text-foreground/55 max-w-md">
-                  Initialising the evidence workspace. If this lingers, you can clear the landing
-                  loader and try again.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAutoStartBlocking(false);
-                    setShowLoadingOverlay(false);
-                    sessionStorage.removeItem("fc_show_loading");
-                    sessionStorage.removeItem("forensic_auto_start");
-                  }}
-                  className="text-[11px] font-mono font-bold uppercase tracking-widest text-cyan-400/90 hover:text-cyan-300 border border-cyan-500/30 rounded-full px-5 py-2.5 transition-colors"
-                >
-                  Reset loading &amp; continue
-                </button>
-              </div>
             )}
-        </>
-      </PageTransition>
+
+            {/* Agent Progress — handles both  and deep phases */}
+            {showAgentProgress && (
+              <AgentProgressDisplay
+                key="agent-progress"
+                agentUpdates={agentUpdates}
+                completedAgents={validCompletedAgents}
+                progressText={progressText}
+                allAgentsDone={allAgentsDone}
+                phase={phase}
+                awaitingDecision={awaitingDecision}
+                pipelineStatus={status}
+                pipelineMessage={pipelineMessage || pipelineThinking}
+                onAcceptAnalysis={handleAcceptAnalysis}
+                onDeepAnalysis={handleDeepAnalysis}
+                onNewUpload={handleNewUpload}
+                onViewResults={handleViewResults}
+                playSound={playSound}
+                isNavigating={isNavigating}
+              />
+            )}
+
+            {/* Error Display */}
+            {(validationError || errorMessage) &&
+              !showAgentProgress &&
+              !showUploadForm && (
+                <div
+                  key="error-display"
+                  className="flex flex-col items-center justify-center min-h-[60vh]"
+                >
+                  <ErrorDisplay
+                    message={validationError || errorMessage || "Unknown error"}
+                    onDismiss={() => {
+                      setValidationError(null);
+                      resetSimulation();
+                    }}
+                    onRetry={() => {
+                      if (file) {
+                        triggerAnalysis(file);
+                      }
+                    }}
+                    showRetry={!!file}
+                  />
+                </div>
+              )}
+
+            {/* Never render a completely empty main — avoids “page not loading” when gates desync */}
+            {!showUploadForm &&
+              !showAgentProgress &&
+              !isRestoringRef.current &&
+              !(validationError || errorMessage) && (
+                <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 text-center px-6">
+                  <p className="text-sm text-foreground/55 max-w-md">
+                    Initialising the evidence workspace. If this lingers, you
+                    can clear the landing loader and try again.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAutoStartBlocking(false);
+                      setShowLoadingOverlay(false);
+                      sessionStorage.removeItem("fc_show_loading");
+                      sessionStorage.removeItem("forensic_auto_start");
+                    }}
+                    className="text-[11px] font-mono font-bold uppercase tracking-widest text-cyan-400/90 hover:text-cyan-300 border border-cyan-500/30 rounded-full px-5 py-2.5 transition-colors"
+                  >
+                    Reset loading &amp; continue
+                  </button>
+                </div>
+              )}
+          </>
+        </PageTransition>
       </main>
 
       {/* HITL Checkpoint Modal */}

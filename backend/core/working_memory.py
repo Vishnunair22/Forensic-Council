@@ -24,6 +24,7 @@ logger = get_logger(__name__)
 
 class TaskStatus(str, Enum):
     """Status of a task in working memory."""
+
     PENDING = "PENDING"
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETE = "COMPLETE"
@@ -32,12 +33,13 @@ class TaskStatus(str, Enum):
 
 class Task(BaseModel):
     """A task in working memory."""
+
     task_id: UUID = Field(default_factory=uuid4)
     description: str
     status: TaskStatus = TaskStatus.PENDING
     result_ref: Optional[str] = None
     blocked_reason: Optional[str] = None
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -47,7 +49,7 @@ class Task(BaseModel):
             "result_ref": self.result_ref,
             "blocked_reason": self.blocked_reason,
         }
-    
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Task":
         """Create from dictionary."""
@@ -62,6 +64,7 @@ class Task(BaseModel):
 
 class WorkingMemoryState(BaseModel):
     """Full state of working memory for an agent session."""
+
     session_id: UUID
     agent_id: str
     tasks: list[Task] = Field(default_factory=list)
@@ -73,16 +76,15 @@ class WorkingMemoryState(BaseModel):
     # Passed to _get_available_tools_for_llm() so the LLM sees the
     # actual registered tools (not the static fallback catalogue).
     tool_registry_snapshot: Optional[list] = Field(
-        default=None,
-        description="Live tool catalogue from this agent's ToolRegistry"
+        default=None, description="Live tool catalogue from this agent's ToolRegistry"
     )
     # Last tool error message — written by base_agent when a tool fails,
     # read by the heartbeat in investigation.py to surface ⚠️ progress text.
     last_tool_error: Optional[str] = Field(
         default=None,
-        description="Last tool failure message for live progress broadcasting"
+        description="Last tool failure message for live progress broadcasting",
     )
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -95,7 +97,7 @@ class WorkingMemoryState(BaseModel):
             "tool_registry_snapshot": self.tool_registry_snapshot,
             "last_tool_error": self.last_tool_error,
         }
-    
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "WorkingMemoryState":
         """Create from dictionary."""
@@ -113,19 +115,19 @@ class WorkingMemoryState(BaseModel):
 class WorkingMemory:
     """
     Redis-backed working memory for agent task tracking.
-    
+
     Provides:
     - Task list management with status tracking
     - Serialization for HITL checkpoint persistence
     - Chain-of-custody logging for all operations
-    
+
     Usage:
         async with WorkingMemory() as memory:
             await memory.initialize(session_id, agent_id, ["Task 1", "Task 2"])
             await memory.update_task(session_id, agent_id, task_id, TaskStatus.IN_PROGRESS)
             state = await memory.get_state(session_id, agent_id)
     """
-    
+
     def __init__(
         self,
         redis_client: Optional[RedisClient] = None,
@@ -133,7 +135,7 @@ class WorkingMemory:
     ) -> None:
         """
         Initialize working memory.
-        
+
         Args:
             redis_client: Optional Redis client
             custody_logger: Optional custody logger
@@ -147,7 +149,7 @@ class WorkingMemory:
         # File-based WAL for crash recovery when Redis is unavailable
         self._wal_dir = Path(tempfile.gettempdir()) / "forensic_council_wal"
         self._wal_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Lua script for atomic state updates
         self._lua_update_state = """
             local key = KEYS[1]
@@ -210,19 +212,19 @@ class WorkingMemory:
             redis.call('SET', key, new_json, 'EX', 86400)
             return new_json
         """
-    
+
     async def __aenter__(self) -> "WorkingMemory":
         """Async context manager entry."""
         if self._redis is None:
             self._redis = await get_redis_client()
         return self
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Async context manager exit."""
         if self._owned_client and self._redis:
             await self._redis.disconnect()
             self._redis = None
-    
+
     def _get_key(self, session_id: UUID, agent_id: str) -> str:
         """Get Redis key for session/agent."""
         return f"wm:{session_id}:{agent_id}"
@@ -244,7 +246,7 @@ class WorkingMemory:
         except Exception:
             pass
         return None
-    
+
     async def initialize(
         self,
         session_id: UUID,
@@ -254,7 +256,7 @@ class WorkingMemory:
     ) -> None:
         """
         Initialize working memory with task list.
-        
+
         Args:
             session_id: Session UUID
             agent_id: Agent identifier
@@ -263,10 +265,9 @@ class WorkingMemory:
         """
         # Create task objects
         task_objects = [
-            Task(description=desc, status=TaskStatus.PENDING)
-            for desc in tasks
+            Task(description=desc, status=TaskStatus.PENDING) for desc in tasks
         ]
-        
+
         # Create initial state
         state = WorkingMemoryState(
             session_id=session_id,
@@ -275,7 +276,7 @@ class WorkingMemory:
             current_iteration=0,
             iteration_ceiling=iteration_ceiling,
         )
-        
+
         # Store in Redis with 24h TTL
         key = self._get_key(session_id, agent_id)
         state_json = state.model_dump_json()
@@ -292,8 +293,10 @@ class WorkingMemory:
                     error=str(e),
                 )
         else:
-            logger.warning("WorkingMemory.initialize: Redis unavailable, using in-memory fallback")
-        
+            logger.warning(
+                "WorkingMemory.initialize: Redis unavailable, using in-memory fallback"
+            )
+
         # Log to custody logger
         if self._custody_logger:
             await self._custody_logger.log_entry(
@@ -307,14 +310,14 @@ class WorkingMemory:
                     "iteration_ceiling": iteration_ceiling,
                 },
             )
-        
+
         logger.info(
             "Initialized working memory",
             session_id=str(session_id),
             agent_id=agent_id,
             task_count=len(tasks),
         )
-    
+
     async def update_task(
         self,
         session_id: UUID,
@@ -326,7 +329,7 @@ class WorkingMemory:
     ) -> None:
         """
         Update a task's status.
-        
+
         Args:
             session_id: Session UUID
             agent_id: Agent identifier
@@ -347,22 +350,37 @@ class WorkingMemory:
                     str(task_id),
                     status.value,
                     result_ref or "",
-                    blocked_reason or ""
+                    blocked_reason or "",
                 )
-                
+
                 if result_json:
                     self._local_cache[key] = result_json
-                    logger.debug("Updated task atomically via Redis Lua", task_id=str(task_id))
+                    logger.debug(
+                        "Updated task atomically via Redis Lua", task_id=str(task_id)
+                    )
                 else:
-                    logger.warning("Task not found during atomic update", task_id=str(task_id))
+                    logger.warning(
+                        "Task not found during atomic update", task_id=str(task_id)
+                    )
                     # Fallback to legacy behavior if task not found in Redis (might be in local cache only)
-                    await self._legacy_update_task(session_id, agent_id, task_id, status, result_ref, blocked_reason)
+                    await self._legacy_update_task(
+                        session_id,
+                        agent_id,
+                        task_id,
+                        status,
+                        result_ref,
+                        blocked_reason,
+                    )
             except Exception as e:
                 logger.warning("Atomic task update failed, falling back", error=str(e))
-                await self._legacy_update_task(session_id, agent_id, task_id, status, result_ref, blocked_reason)
+                await self._legacy_update_task(
+                    session_id, agent_id, task_id, status, result_ref, blocked_reason
+                )
         else:
-            await self._legacy_update_task(session_id, agent_id, task_id, status, result_ref, blocked_reason)
-        
+            await self._legacy_update_task(
+                session_id, agent_id, task_id, status, result_ref, blocked_reason
+            )
+
         # Log to custody logger
         if self._custody_logger:
             await self._custody_logger.log_entry(
@@ -375,10 +393,10 @@ class WorkingMemory:
                     "status": status.value,
                     "result_ref": result_ref,
                     "blocked_reason": blocked_reason,
-                    "atomic": True
+                    "atomic": True,
                 },
             )
-    
+
     async def _legacy_update_task(
         self,
         session_id: UUID,
@@ -391,7 +409,7 @@ class WorkingMemory:
         """Legacy non-atomic task update (fallback)."""
         # Get current state
         state = await self.get_state(session_id, agent_id)
-        
+
         # Find and update task
         for task in state.tasks:
             if task.task_id == task_id:
@@ -403,14 +421,14 @@ class WorkingMemory:
                 break
         else:
             raise ValueError(f"Task {task_id} not found")
-        
+
         # Store updated state
         key = self._get_key(session_id, agent_id)
         state_json = state.model_dump_json()
         self._local_cache[key] = state_json
         if self._redis is not None:
             await self._redis.set(key, state_json, ex=86400)
-        
+
         logger.debug(
             "Updated task",
             session_id=str(session_id),
@@ -418,7 +436,7 @@ class WorkingMemory:
             task_id=str(task_id),
             status=status.value,
         )
-    
+
     async def get_state(
         self,
         session_id: UUID,
@@ -426,11 +444,11 @@ class WorkingMemory:
     ) -> WorkingMemoryState:
         """
         Get the current working memory state.
-        
+
         Args:
             session_id: Session UUID
             agent_id: Agent identifier
-        
+
         Returns:
             WorkingMemoryState with all tasks
         """
@@ -442,7 +460,10 @@ class WorkingMemory:
             try:
                 data = await self._redis.get(key)
             except Exception as e:
-                logger.debug("WorkingMemory.get_state: Redis read failed, trying local cache", error=str(e))
+                logger.debug(
+                    "WorkingMemory.get_state: Redis read failed, trying local cache",
+                    error=str(e),
+                )
 
         # Fall back to local cache
         if data is None:
@@ -450,7 +471,7 @@ class WorkingMemory:
 
         if data is None:
             raise ValueError(f"No working memory found for {session_id}/{agent_id}")
-        
+
         # Parse JSON - handle both string and dict responses
         if isinstance(data, dict):
             state_dict = data
@@ -460,9 +481,9 @@ class WorkingMemory:
             state_dict = json.loads(data)
         else:
             state_dict = json.loads(data)
-        
+
         state = WorkingMemoryState.from_dict(state_dict)
-        
+
         # Log to custody logger
         if self._custody_logger:
             await self._custody_logger.log_entry(
@@ -475,7 +496,7 @@ class WorkingMemory:
                     "task_count": len(state.tasks),
                 },
             )
-        
+
         return state
 
     async def update_state(
@@ -516,7 +537,7 @@ class WorkingMemory:
                     json.dumps(updates),
                     "86400",
                     str(session_id),
-                    agent_id
+                    agent_id,
                 )
                 self._local_cache[key] = result_json
                 state = WorkingMemoryState.model_validate_json(result_json)
@@ -536,7 +557,7 @@ class WorkingMemory:
                     "operation": "update_state",
                     "key": key,
                     "updated_fields": list(updates.keys()),
-                    "atomic": True
+                    "atomic": True,
                 },
             )
 
@@ -577,7 +598,7 @@ class WorkingMemory:
             )
 
         return state
-    
+
     async def increment_iteration(
         self,
         session_id: UUID,
@@ -585,11 +606,11 @@ class WorkingMemory:
     ) -> int:
         """
         Increment the iteration counter.
-        
+
         Args:
             session_id: Session UUID
             agent_id: Agent identifier
-        
+
         Returns:
             New iteration count
         """
@@ -604,10 +625,13 @@ class WorkingMemory:
             try:
                 await self._redis.set(key, state_json, ex=86400)
             except Exception as e:
-                logger.warning("WorkingMemory.increment_iteration: Redis write failed", error=str(e))
+                logger.warning(
+                    "WorkingMemory.increment_iteration: Redis write failed",
+                    error=str(e),
+                )
 
         return state.current_iteration
-    
+
     async def serialize_to_json(
         self,
         session_id: UUID,
@@ -615,17 +639,17 @@ class WorkingMemory:
     ) -> str:
         """
         Serialize working memory to JSON for HITL checkpoint.
-        
+
         Args:
             session_id: Session UUID
             agent_id: Agent identifier
-        
+
         Returns:
             JSON string of full state
         """
         state = await self.get_state(session_id, agent_id)
         return state.model_dump_json()
-    
+
     async def restore_from_json(
         self,
         session_id: UUID,
@@ -634,7 +658,7 @@ class WorkingMemory:
     ) -> None:
         """
         Restore working memory from JSON (HITL resume).
-        
+
         Args:
             session_id: Session UUID
             agent_id: Agent identifier
@@ -651,10 +675,14 @@ class WorkingMemory:
             try:
                 await self._redis.set(key, state_json, ex=86400)
             except Exception as e:
-                logger.warning("WorkingMemory.restore_from_json: Redis write failed", error=str(e))
+                logger.warning(
+                    "WorkingMemory.restore_from_json: Redis write failed", error=str(e)
+                )
         else:
-            logger.warning("WorkingMemory.restore_from_json: Redis unavailable, using in-memory fallback")
-        
+            logger.warning(
+                "WorkingMemory.restore_from_json: Redis unavailable, using in-memory fallback"
+            )
+
         # Log to custody logger
         if self._custody_logger:
             await self._custody_logger.log_entry(
@@ -667,13 +695,13 @@ class WorkingMemory:
                     "task_count": len(state.tasks),
                 },
             )
-        
+
         logger.info(
             "Restored working memory from JSON",
             session_id=str(session_id),
             agent_id=agent_id,
         )
-    
+
     async def clear(
         self,
         session_id: UUID,
@@ -681,23 +709,23 @@ class WorkingMemory:
     ) -> None:
         """
         Clear working memory for session end.
-        
+
         Args:
             session_id: Session UUID
             agent_id: Agent identifier
         """
         key = self._get_key(session_id, agent_id)
-        
+
         # Clear from local cache first
         if key in self._local_cache:
             del self._local_cache[key]
-            
+
         if self._redis is not None:
             try:
                 await self._redis.delete(key)
             except Exception as e:
                 logger.warning("WorkingMemory.clear: Redis delete failed", error=str(e))
-        
+
         logger.info(
             "Cleared working memory",
             session_id=str(session_id),
@@ -712,7 +740,7 @@ _working_memory: Optional[WorkingMemory] = None
 async def get_working_memory() -> WorkingMemory:
     """
     Get or create the working memory singleton.
-    
+
     Returns:
         WorkingMemory instance
     """

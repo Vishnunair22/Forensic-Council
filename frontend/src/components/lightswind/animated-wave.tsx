@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { createNoise2D } from 'simplex-noise';
-import { cn } from '../../lib/utils';
+import React, { useEffect, useRef, useCallback } from "react";
+import { createNoise2D } from "simplex-noise";
+import { cn } from "../../lib/utils";
 
 export interface AnimatedWaveProps {
   className?: string;
@@ -13,7 +13,7 @@ export interface AnimatedWaveProps {
   waveColor?: string;
   opacity?: number;
   mouseInteraction?: boolean;
-  quality?: 'low' | 'medium' | 'high';
+  quality?: "low" | "medium" | "high";
   backgroundColor?: string;
 }
 
@@ -31,7 +31,7 @@ const AnimatedWave: React.FC<AnimatedWaveProps> = ({
   waveColor,
   opacity = 1,
   mouseInteraction = true,
-  quality = 'medium',
+  quality = "medium",
   backgroundColor,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -41,9 +41,12 @@ const AnimatedWave: React.FC<AnimatedWaveProps> = ({
 
   const getSegments = useCallback(() => {
     switch (quality) {
-      case "low": return 64;
-      case "high": return 256;
-      default: return 128;
+      case "low":
+        return 64;
+      case "high":
+        return 256;
+      default:
+        return 128;
     }
   }, [quality]);
 
@@ -152,22 +155,41 @@ const AnimatedWave: React.FC<AnimatedWaveProps> = ({
     return () => {
       cancelAnimationFrame(animFrameRef.current);
       window.removeEventListener("resize", resize);
-      if (mouseInteraction) window.removeEventListener("mousemove", handleMouse);
+      if (mouseInteraction)
+        window.removeEventListener("mousemove", handleMouse);
     };
-  }, [getSegments, speed, amplitude, smoothness, wireframe, waveColor, opacity, mouseInteraction]);
+  }, [
+    getSegments,
+    speed,
+    amplitude,
+    smoothness,
+    wireframe,
+    waveColor,
+    opacity,
+    mouseInteraction,
+  ]);
 
   return (
     <div style={{ perspective: "900px" }}>
       <div
         className={cn(
           "relative w-full h-screen z-10 overflow-hidden",
-          className
+          className,
         )}
-        style={{ pointerEvents: "none", backgroundColor: backgroundColor || "transparent" }}
+        style={{
+          pointerEvents: "none",
+          backgroundColor: backgroundColor || "transparent",
+        }}
       >
         <canvas
           ref={canvasRef}
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+          }}
         />
       </div>
     </div>

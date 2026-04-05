@@ -24,10 +24,10 @@ async def submit_decision(
 ):
     """
     Submit a human-in-the-loop decision for a checkpoint.
-    
+
     Routes the decision to the active pipeline for the given session,
     which then forwards it to the correct agent's ReAct loop engine.
-    
+
     Args:
         decision: The decision including session_id, checkpoint_id, agent_id,
                   and the decision type (APPROVE, REDIRECT, OVERRIDE, TERMINATE, TRIBUNAL)
@@ -37,7 +37,7 @@ async def submit_decision(
     if pipeline is None:
         raise HTTPException(
             status_code=404,
-            detail=f"No active investigation found for session {decision.session_id}"
+            detail=f"No active investigation found for session {decision.session_id}",
         )
 
     # Build the HumanDecision from the request
@@ -56,7 +56,9 @@ async def submit_decision(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to process decision: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to process decision: {str(e)}"
+        )
 
     return {
         "status": "processed",

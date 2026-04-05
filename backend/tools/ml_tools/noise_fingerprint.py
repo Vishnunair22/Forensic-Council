@@ -41,15 +41,22 @@ def extract_noise_residual(region: np.ndarray) -> np.ndarray:
 def get_noise_features(region: np.ndarray) -> np.ndarray:
     """Summarize PRNU noise pattern of a region."""
     noise = extract_noise_residual(region)
-    return np.array([
-        float(np.mean(noise)),
-        float(np.std(noise)),
-        float(np.mean(np.abs(noise))),
-        float(np.percentile(noise, 25)),
-        float(np.percentile(noise, 75)),
-        float(np.mean(noise ** 2)),            # noise power
-        float(np.corrcoef(noise.flatten()[:100], noise.flatten()[1:101])[0, 1] if len(noise.flatten()) > 101 else 0.0),
-    ], dtype=np.float32)
+    return np.array(
+        [
+            float(np.mean(noise)),
+            float(np.std(noise)),
+            float(np.mean(np.abs(noise))),
+            float(np.percentile(noise, 25)),
+            float(np.percentile(noise, 75)),
+            float(np.mean(noise**2)),  # noise power
+            float(
+                np.corrcoef(noise.flatten()[:100], noise.flatten()[1:101])[0, 1]
+                if len(noise.flatten()) > 101
+                else 0.0
+            ),
+        ],
+        dtype=np.float32,
+    )
 
 
 def analyze_noise_fingerprint(image_path: str, num_regions: int = 6) -> dict:
@@ -62,14 +69,17 @@ def analyze_noise_fingerprint(image_path: str, num_regions: int = 6) -> dict:
     h, w = img.shape
     if h < 100 or w < 100:
         return {
-            "inconsistent_regions": [], "noise_consistency_score": 1.0,
-            "outlier_region_count": 0, "total_regions": 0,
-            "verdict": "INCONCLUSIVE", "available": True,
+            "inconsistent_regions": [],
+            "noise_consistency_score": 1.0,
+            "outlier_region_count": 0,
+            "total_regions": 0,
+            "verdict": "INCONCLUSIVE",
+            "available": True,
             "note": "Image too small",
         }
 
     # Divide image into a grid of regions
-    rows = int(num_regions ** 0.5)
+    rows = int(num_regions**0.5)
     cols = (num_regions + rows - 1) // rows
     rh, rw = h // rows, w // cols
 
@@ -79,7 +89,7 @@ def analyze_noise_fingerprint(image_path: str, num_regions: int = 6) -> dict:
     for r in range(rows):
         for c in range(cols):
             y0, x0 = r * rh, c * rw
-            region = img[y0:y0+rh, x0:x0+rw]
+            region = img[y0 : y0 + rh, x0 : x0 + rw]
             if region.size > 0:
                 feats = get_noise_features(region)
                 region_features.append(feats)
@@ -87,18 +97,21 @@ def analyze_noise_fingerprint(image_path: str, num_regions: int = 6) -> dict:
 
     if len(region_features) < 4:
         return {
-            "inconsistent_regions": [], "noise_consistency_score": 1.0,
-            "outlier_region_count": 0, "total_regions": len(region_features),
-            "verdict": "INCONCLUSIVE", "available": True,
+            "inconsistent_regions": [],
+            "noise_consistency_score": 1.0,
+            "outlier_region_count": 0,
+            "total_regions": len(region_features),
+            "verdict": "INCONCLUSIVE",
+            "available": True,
         }
 
     X = np.array(region_features)
     clf = IsolationForest(contamination=0.15, random_state=42, n_estimators=30)
     clf.fit(X)
     labels = clf.predict(X)
-    scores = clf.decision_function(X)
+    clf.decision_function(X)
 
-    outlier_idx = [i for i, l in enumerate(labels) if l == -1]
+    outlier_idx = [i for i, label in enumerate(labels) if label == -1]
     inconsistent_regions = [list(region_coords[i]) for i in outlier_idx]
 
     consistency_score = 1.0 - (len(outlier_idx) / len(region_features))
@@ -106,9 +119,9 @@ def analyze_noise_fingerprint(image_path: str, num_regions: int = 6) -> dict:
     if len(outlier_idx) == 0:
         verdict = "CONSISTENT"
     elif len(outlier_idx) <= 1:
-        verdict = "INCONCLUSIVE"   # borderline — single outlier region
+        verdict = "INCONCLUSIVE"  # borderline — single outlier region
     else:
-        verdict = "INCONSISTENT"   # multiple outlier regions = clear tampering signal
+        verdict = "INCONSISTENT"  # multiple outlier regions = clear tampering signal
 
     return {
         "inconsistent_regions": inconsistent_regions,

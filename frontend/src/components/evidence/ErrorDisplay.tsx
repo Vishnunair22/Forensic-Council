@@ -1,7 +1,11 @@
+"use client";
+
+"use client";
+
 /**
  * ErrorDisplay Component
  * ======================
- * 
+ *
  * Displays error messages during investigation.
  * Shows error details and recovery options.
  */
@@ -31,26 +35,33 @@ export function ErrorDisplay({
         {/* Header */}
         <div className="flex items-start gap-4">
           <div className="mt-1">
-            <AlertCircle className="w-6 h-6 text-red-400 flex-shrink-0" aria-hidden="true" />
+            <AlertCircle
+              className="w-6 h-6 text-red-400 flex-shrink-0"
+              aria-hidden="true"
+            />
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="text-lg font-semibold text-red-300 mb-2">
               Investigation Error
             </h3>
-            <p className="text-sm text-red-200 mb-4 break-words">
-              {message}
-            </p>
+            <p className="text-sm text-red-200 mb-4 break-words">{message}</p>
 
             {/* Action Buttons */}
             <div className="flex gap-3 flex-wrap">
               {showRetry && onRetry && (
-                <button onClick={onRetry} className="btn-premium-amber">
+                <button
+                  onClick={onRetry}
+                  className="btn-pill-primary px-5 py-2"
+                >
                   <RotateCcw className="w-4 h-4" aria-hidden="true" />
                   Try Again
                 </button>
               )}
               {onDismiss && (
-                <button onClick={onDismiss} className="btn-premium-glass">
+                <button
+                  onClick={onDismiss}
+                  className="btn-pill-secondary px-5 py-2"
+                >
                   <X className="w-4 h-4" aria-hidden="true" />
                   Dismiss
                 </button>

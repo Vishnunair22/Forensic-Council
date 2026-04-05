@@ -109,7 +109,9 @@ async def bootstrap_users(client: PostgresClient) -> None:
     admin_password = os.environ.get("BOOTSTRAP_ADMIN_PASSWORD")
 
     # Get investigator credentials from environment
-    investigator_username = os.environ.get("BOOTSTRAP_INVESTIGATOR_USERNAME", "investigator")
+    investigator_username = os.environ.get(
+        "BOOTSTRAP_INVESTIGATOR_USERNAME", "investigator"
+    )
     investigator_password = os.environ.get("BOOTSTRAP_INVESTIGATOR_PASSWORD")
 
     # Create admin user if password is provided
@@ -132,7 +134,19 @@ async def bootstrap_users(client: PostgresClient) -> None:
             )
             logger.info("Admin user created", username=admin_username)
         else:
-            logger.info("Admin user already exists", username=admin_username)
+            hashed = pwd_context.hash(admin_password)
+            await client.execute(
+                """
+                UPDATE users
+                SET hashed_password = $2,
+                    is_active = TRUE,
+                    is_disabled = FALSE
+                WHERE username = $1
+                """,
+                admin_username,
+                hashed,
+            )
+            logger.info("Admin user password synchronized", username=admin_username)
 
     # Create investigator user if password is provided
     if investigator_password:
@@ -154,7 +168,21 @@ async def bootstrap_users(client: PostgresClient) -> None:
             )
             logger.info("Investigator user created", username=investigator_username)
         else:
-            logger.info("Investigator user already exists", username=investigator_username)
+            hashed = pwd_context.hash(investigator_password)
+            await client.execute(
+                """
+                UPDATE users
+                SET hashed_password = $2,
+                    is_active = TRUE,
+                    is_disabled = FALSE
+                WHERE username = $1
+                """,
+                investigator_username,
+                hashed,
+            )
+            logger.info(
+                "Investigator user password synchronized", username=investigator_username
+            )
 
 
 def main():

@@ -7,7 +7,7 @@ Prefers Redis (replica-safe); falls back to in-process dicts.
 
 In production, rate limiting fails CLOSED when Redis is unavailable.
 """
-import os
+
 import time
 
 from fastapi import HTTPException, status
@@ -29,11 +29,11 @@ _MEM_RATE_MAX_USERS = 10_000
 # ── Per-user daily API cost quota ────────────────────────────────────────────
 _COST_PER_INVESTIGATION_USD = 1.60
 _DAILY_COST_QUOTA_USD = {
-    "investigator": float(os.getenv("DAILY_COST_QUOTA_USD", "50.0")),
-    "auditor":      float(os.getenv("DAILY_COST_QUOTA_USD", "50.0")),
-    "admin":        float(os.getenv("DAILY_COST_QUOTA_ADMIN_USD", "500.0")),
+    "investigator": 50.0,
+    "auditor": 50.0,
+    "admin": 500.0,
 }
-_DAILY_COST_QUOTA_DEFAULT_USD = float(os.getenv("DAILY_COST_QUOTA_USD", "50.0"))
+_DAILY_COST_QUOTA_DEFAULT_USD = 50.0
 _COST_QUOTA_WINDOW_SECS = 86400
 
 _mem_cost_tracker: dict[str, tuple[float, float]] = {}
@@ -53,6 +53,7 @@ async def check_investigation_rate_limit(user_id: str) -> None:
 
     try:
         from infra.redis_client import get_redis_client
+
         redis = await get_redis_client()
         if redis:
             count_raw = await redis.get(key)
@@ -84,7 +85,10 @@ async def check_investigation_rate_limit(user_id: str) -> None:
     # ── In-memory fallback (development only) ────────────────────────────────
     cutoff = now - _USER_RATE_WINDOW_SECS
 
-    if user_id not in _user_investigation_times and len(_user_investigation_times) >= _MEM_RATE_MAX_USERS:
+    if (
+        user_id not in _user_investigation_times
+        and len(_user_investigation_times) >= _MEM_RATE_MAX_USERS
+    ):
         oldest_uid = next(iter(_user_investigation_times))
         _user_investigation_times.pop(oldest_uid, None)
 
@@ -115,6 +119,7 @@ async def check_daily_cost_quota(user_id: str, user_role: str = "investigator") 
 
     try:
         from infra.redis_client import get_redis_client
+
         redis = await get_redis_client()
         if redis:
             cost_raw = await redis.get(key)
@@ -145,7 +150,10 @@ async def check_daily_cost_quota(user_id: str, user_role: str = "investigator") 
     # ── In-memory fallback ────────────────────────────────────────────────────
     now = time.time()
 
-    if user_id not in _mem_cost_tracker and len(_mem_cost_tracker) >= _MEM_COST_MAX_USERS:
+    if (
+        user_id not in _mem_cost_tracker
+        and len(_mem_cost_tracker) >= _MEM_COST_MAX_USERS
+    ):
         oldest = next(iter(_mem_cost_tracker))
         _mem_cost_tracker.pop(oldest, None)
 
@@ -167,4 +175,7 @@ async def check_daily_cost_quota(user_id: str, user_role: str = "investigator") 
             headers={"Retry-After": str(retry_after)},
         )
 
-    _mem_cost_tracker[user_id] = (current_cost + _COST_PER_INVESTIGATION_USD, window_start)
+    _mem_cost_tracker[user_id] = (
+        current_cost + _COST_PER_INVESTIGATION_USD,
+        window_start,
+    )

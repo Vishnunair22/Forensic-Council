@@ -21,7 +21,9 @@ class Tool(BaseModel):
 
     name: str = Field(..., description="Unique tool name")
     description: str = Field(default="", description="Tool description for LLM")
-    available: bool = Field(default=True, description="Whether tool is currently available")
+    available: bool = Field(
+        default=True, description="Whether tool is currently available"
+    )
 
 
 class ToolResult(BaseModel):
@@ -41,7 +43,7 @@ ToolHandler = Callable[[dict[str, Any]], Coroutine[Any, Any, dict[str, Any]]]
 class ToolRegistry:
     """
     Registry for managing tools available to an agent.
-    
+
     Handles tool registration, availability tracking, and execution
     with graceful degradation when tools are unavailable.
     """
@@ -52,33 +54,28 @@ class ToolRegistry:
         self._handlers: dict[str, ToolHandler] = {}
 
     def register(
-        self, 
-        tool_name: str, 
-        handler: ToolHandler, 
-        description: str = ""
+        self, tool_name: str, handler: ToolHandler, description: str = ""
     ) -> None:
         """
         Register a tool with its handler.
-        
+
         Args:
             tool_name: Unique name for the tool
             handler: Async function that handles tool execution
             description: Description of what the tool does
         """
         self._tools[tool_name] = Tool(
-            name=tool_name,
-            description=description,
-            available=True
+            name=tool_name, description=description, available=True
         )
         self._handlers[tool_name] = handler
 
     def get_tool(self, tool_name: str) -> Tool | None:
         """
         Get tool metadata by name.
-        
+
         Args:
             tool_name: Name of the tool
-            
+
         Returns:
             Tool object or None if not found
         """
@@ -87,7 +84,7 @@ class ToolRegistry:
     def list_tools(self) -> list[Tool]:
         """
         List all registered tools.
-        
+
         Returns:
             List of Tool objects
         """
@@ -96,7 +93,7 @@ class ToolRegistry:
     def set_unavailable(self, tool_name: str) -> None:
         """
         Mark a tool as unavailable (for testing graceful degradation).
-        
+
         Args:
             tool_name: Name of the tool to mark unavailable
         """
@@ -106,7 +103,7 @@ class ToolRegistry:
     def set_available(self, tool_name: str) -> None:
         """
         Mark a tool as available again.
-        
+
         Args:
             tool_name: Name of the tool to mark available
         """
@@ -123,29 +120,29 @@ class ToolRegistry:
     ) -> ToolResult:
         """
         Execute a tool call with logging and graceful degradation.
-        
+
         If the tool is unavailable, returns ToolResult(unavailable=True)
         without raising an exception.
-        
+
         Args:
             tool_name: Name of the tool to call
             input_data: Input parameters for the tool
             agent_id: ID of the agent making the call
             session_id: Session ID for logging
             custody_logger: Optional custody logger for audit trail
-            
+
         Returns:
             ToolResult with success/failure status and output
         """
         tool = self._tools.get(tool_name)
-        
+
         # Tool not found - treat as unavailable
         if tool is None:
             result = ToolResult(
                 tool_name=tool_name,
                 success=False,
                 unavailable=True,
-                error=f"Tool '{tool_name}' not found in registry"
+                error=f"Tool '{tool_name}' not found in registry",
             )
             # Log the unavailable call
             if custody_logger:
@@ -157,8 +154,8 @@ class ToolRegistry:
                         "tool_name": tool_name,
                         "tool_input": input_data,
                         "tool_output": result.model_dump(),
-                        "available": False
-                    }
+                        "available": False,
+                    },
                 )
             return result
 
@@ -168,7 +165,7 @@ class ToolRegistry:
                 tool_name=tool_name,
                 success=False,
                 unavailable=True,
-                error=f"Tool '{tool_name}' is currently unavailable"
+                error=f"Tool '{tool_name}' is currently unavailable",
             )
             # Log the unavailable call
             if custody_logger:
@@ -180,8 +177,8 @@ class ToolRegistry:
                         "tool_name": tool_name,
                         "tool_input": input_data,
                         "tool_output": result.model_dump(),
-                        "available": False
-                    }
+                        "available": False,
+                    },
                 )
             return result
 
@@ -193,23 +190,15 @@ class ToolRegistry:
             # 60s is generous for in-process tools; ML subprocesses have
             # their own tighter timeouts inside run_ml_tool.
             output = await asyncio.wait_for(handler(input_data), timeout=60.0)
-            result = ToolResult(
-                tool_name=tool_name,
-                success=True,
-                output=output
-            )
+            result = ToolResult(tool_name=tool_name, success=True, output=output)
         except asyncio.TimeoutError:
             result = ToolResult(
                 tool_name=tool_name,
                 success=False,
-                error=f"Tool '{tool_name}' timed out after 60s"
+                error=f"Tool '{tool_name}' timed out after 60s",
             )
         except Exception as e:
-            result = ToolResult(
-                tool_name=tool_name,
-                success=False,
-                error=str(e)
-            )
+            result = ToolResult(tool_name=tool_name, success=False, error=str(e))
 
         # Log the tool call
         if custody_logger:
@@ -221,8 +210,8 @@ class ToolRegistry:
                     "tool_name": tool_name,
                     "tool_input": input_data,
                     "tool_output": result.model_dump(),
-                    "available": True
-                }
+                    "available": True,
+                },
             )
 
         return result

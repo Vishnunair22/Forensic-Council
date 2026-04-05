@@ -25,7 +25,7 @@ pip install uv
 uv sync --all-extras
 
 # Start infrastructure only (Postgres, Redis, Qdrant)
-docker compose -f ../docs/docker/docker-compose.yml -f ../docs/docker/docker-compose.infra.yml up -d
+docker compose -f ../infra/docker-compose.yml -f ../infra/docker-compose.infra.yml up -d
 
 # Start dev server with hot-reload
 uvicorn api.main:app --reload --port 8000
@@ -59,7 +59,7 @@ To run everything in Docker (backend + frontend + infrastructure):
 cp .env.example .env
 # Edit .env with your API keys
 
-docker compose -f docs/docker/docker-compose.yml --env-file .env up --build
+docker compose -f infra/docker-compose.yml --env-file .env up --build
 ```
 
 ---

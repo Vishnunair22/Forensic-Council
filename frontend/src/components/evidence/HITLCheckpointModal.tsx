@@ -1,7 +1,9 @@
+"use client";
+
 /**
  * HITLCheckpointModal Component
  * =============================
- * 
+ *
  * Displays a modal for human-in-the-loop checkpoints during analysis.
  * Allows investigators to make decisions on agent findings.
  */
@@ -27,7 +29,12 @@ interface HITLCheckpoint {
   created_at: string;
 }
 
-type HITLDecision = "APPROVE" | "REDIRECT" | "OVERRIDE" | "TERMINATE" | "ESCALATE";
+type HITLDecision =
+  | "APPROVE"
+  | "REDIRECT"
+  | "OVERRIDE"
+  | "TERMINATE"
+  | "ESCALATE";
 
 interface HITLCheckpointModalProps {
   checkpoint: HITLCheckpoint | null;
@@ -45,7 +52,7 @@ export function HITLCheckpointModal({
   onDismiss,
 }: HITLCheckpointModalProps) {
   const [selectedDecision, setSelectedDecision] = useState<HITLDecision | null>(
-    null
+    null,
   );
   const [note, setNote] = useState("");
   const [decisionError, setDecisionError] = useState<string | null>(null);
@@ -64,7 +71,7 @@ export function HITLCheckpointModal({
       setNote("");
     } catch (error) {
       setDecisionError(
-        error instanceof Error ? error.message : "Failed to submit decision"
+        error instanceof Error ? error.message : "Failed to submit decision",
       );
     }
   };
@@ -112,8 +119,8 @@ export function HITLCheckpointModal({
                 Investigator Decision Required
               </DialogTitle>
               <DialogDescription className="text-sm text-slate-400 mt-2">
-                Agent {checkpoint.agent_name} has flagged a finding that requires
-                your assessment.
+                Agent {checkpoint.agent_name} has flagged a finding that
+                requires your assessment.
               </DialogDescription>
             </DialogHeader>
 
@@ -124,7 +131,9 @@ export function HITLCheckpointModal({
                 <h4 className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">
                   Finding Summary
                 </h4>
-                <p className="text-sm text-slate-300 leading-relaxed">{checkpoint.brief_text}</p>
+                <p className="text-sm text-slate-300 leading-relaxed">
+                  {checkpoint.brief_text}
+                </p>
               </div>
 
               {/* Decision Needed */}
@@ -132,15 +141,24 @@ export function HITLCheckpointModal({
                 <h4 className="text-xs font-mono text-amber-400 uppercase tracking-widest mb-2">
                   Action Required
                 </h4>
-                <p className="text-sm text-amber-200 leading-relaxed">{checkpoint.decision_needed}</p>
+                <p className="text-sm text-amber-200 leading-relaxed">
+                  {checkpoint.decision_needed}
+                </p>
               </div>
 
               {/* Decision Options */}
               <div className="space-y-3">
-                <h4 id="hitl-decision-label" className="text-sm font-semibold text-slate-300">
+                <h4
+                  id="hitl-decision-label"
+                  className="text-sm font-semibold text-slate-300"
+                >
                   Your Decision
                 </h4>
-                <div role="radiogroup" aria-labelledby="hitl-decision-label" className="grid grid-cols-2 gap-3">
+                <div
+                  role="radiogroup"
+                  aria-labelledby="hitl-decision-label"
+                  className="grid grid-cols-2 gap-3"
+                >
                   {decisionOptions.map((option) => (
                     <button
                       key={option.value}
@@ -172,7 +190,10 @@ export function HITLCheckpointModal({
 
               {/* Notes */}
               <div>
-                <label htmlFor="hitl-notes" className="text-sm font-semibold text-slate-300 mb-2 block">
+                <label
+                  htmlFor="hitl-notes"
+                  className="text-sm font-semibold text-slate-300 mb-2 block"
+                >
                   Additional Notes (Optional)
                 </label>
                 <textarea
@@ -198,23 +219,25 @@ export function HITLCheckpointModal({
               )}
             </div>
 
-            {/* Footer with Actions */}
             <DialogFooter className="gap-2 mt-2">
               <button
                 onClick={onDismiss}
                 disabled={isSubmitting}
-                className="btn-premium-glass px-4 py-2.5 rounded-[10px] disabled:opacity-50"
+                className="btn-pill-secondary px-8 py-2 disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={!selectedDecision || isSubmitting}
-                className="btn-premium-amber px-4 py-2.5 rounded-[10px] font-semibold disabled:opacity-50"
+                className="btn-pill-primary px-8 py-2 font-semibold disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                    <Loader2
+                      className="w-4 h-4 animate-spin"
+                      aria-hidden="true"
+                    />
                     Submitting…
                   </>
                 ) : (

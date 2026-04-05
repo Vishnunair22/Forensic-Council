@@ -6,7 +6,7 @@
 #   bash scripts/smoke_test.sh
 #
 # Prerequisites:
-#   - Docker Compose stack up  (docker compose -f docs/docker/docker-compose.yml up -d)
+#   - Docker Compose stack up  (docker compose -f infra/docker-compose.yml up -d)
 #   - uv installed
 # ============================================================================
 set -e
@@ -19,7 +19,7 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_DIR="$(cd "$BACKEND_DIR/.." && pwd)"
-COMPOSE_FILE="$PROJECT_DIR/docs/docker/docker-compose.yml"
+COMPOSE_FILE="$PROJECT_DIR/infra/docker-compose.yml"
 
 echo -e "${YELLOW}=== Forensic Council Smoke Test ===${NC}"
 echo -e "Project root: $PROJECT_DIR"

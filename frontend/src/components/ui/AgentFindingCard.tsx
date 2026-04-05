@@ -3,10 +3,29 @@
 import React, { useState, useMemo } from "react";
 import {
   ChevronDown,
-  Shield, Eye, Search, Database, Layers, Activity, Cpu,
-  Hash, Zap, ImageIcon, Scan, FileSearch, Fingerprint,
-  Wifi, Globe, Binary, Crosshair, Gauge, Brain,
-  Clock, AlertTriangle, CheckCircle2, XCircle, Minus,
+  Shield,
+  Eye,
+  Search,
+  Database,
+  Layers,
+  Activity,
+  Cpu,
+  Hash,
+  Zap,
+  ImageIcon,
+  Scan,
+  FileSearch,
+  Fingerprint,
+  Wifi,
+  Globe,
+  Binary,
+  Crosshair,
+  Gauge,
+  Brain,
+  Clock,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import clsx from "clsx";
 import { SurfaceCard } from "./SurfaceCard";
@@ -67,15 +86,18 @@ function getToolIcon(toolName: string) {
 }
 
 // ─── Agent meta ───────────────────────────────────────────────────────────────
-const AGENT_META: Record<string, {
-  name: string;
-  role: string;
-  accentColor: string;
-  accentBg: string;
-  accentBorder: string;
-  verdictColor: string;
-  icon: React.ElementType;
-}> = {
+const AGENT_META: Record<
+  string,
+  {
+    name: string;
+    role: string;
+    accentColor: string;
+    accentBg: string;
+    accentBorder: string;
+    verdictColor: string;
+    icon: React.ElementType;
+  }
+> = {
   Agent1: {
     name: "Agent 1",
     role: "Image Integrity",
@@ -85,6 +107,15 @@ const AGENT_META: Record<string, {
     verdictColor: "text-cyan-300",
     icon: Shield,
   },
+  Agent2: {
+    name: "Agent 2",
+    role: "Audio Forensics",
+    accentColor: "text-indigo-400",
+    accentBg: "bg-indigo-500/10",
+    accentBorder: "border-indigo-500/30",
+    verdictColor: "text-indigo-300",
+    icon: Activity,
+  },
   Agent3: {
     name: "Agent 3",
     role: "Object & Weapon Analysis",
@@ -93,6 +124,15 @@ const AGENT_META: Record<string, {
     accentBorder: "border-amber-500/30",
     verdictColor: "text-amber-300",
     icon: Crosshair,
+  },
+  Agent4: {
+    name: "Agent 4",
+    role: "Temporal Video",
+    accentColor: "text-teal-400",
+    accentBg: "bg-teal-500/10",
+    accentBorder: "border-teal-500/30",
+    verdictColor: "text-teal-300",
+    icon: Eye,
   },
   Agent5: {
     name: "Agent 5",
@@ -108,11 +148,16 @@ const AGENT_META: Record<string, {
 // ─── Verdict display text ─────────────────────────────────────────────────────
 function getVerdictDisplay(verdict: string): { label: string; color: string } {
   switch (verdict) {
-    case "NO ANOMALIES":      return { label: "Authentic",             color: "text-emerald-400" };
-    case "ANOMALIES DETECTED": return { label: "Manipulation Detected", color: "text-rose-400"    };
-    case "ANALYSIS FAILED":   return { label: "Analysis Failed",       color: "text-rose-500"    };
-    case "NOT APPLICABLE":    return { label: "Not Applicable",        color: "text-slate-400"   };
-    default:                  return { label: verdict,                 color: "text-foreground/60" };
+    case "NO ANOMALIES":
+      return { label: "Authentic", color: "text-emerald-400" };
+    case "ANOMALIES DETECTED":
+      return { label: "Manipulation Detected", color: "text-rose-400" };
+    case "ANALYSIS FAILED":
+      return { label: "Analysis Failed", color: "text-rose-500" };
+    case "NOT APPLICABLE":
+      return { label: "Not Applicable", color: "text-slate-400" };
+    default:
+      return { label: verdict, color: "text-foreground/60" };
   }
 }
 
@@ -121,46 +166,67 @@ function deriveStatus(
   isSkipped: boolean,
   allFailed: boolean,
   hasErrors: boolean,
-): { label: string; variant: "success" | "destructive" | "secondary" | "warning" } {
-  if (isSkipped)  return { label: "Skipped",  variant: "secondary"   };
-  if (allFailed)  return { label: "Failed",   variant: "destructive" };
-  if (hasErrors)  return { label: "Partial",  variant: "warning"     };
-  return               { label: "Finished",  variant: "success"     };
+): {
+  label: string;
+  variant: "success" | "destructive" | "secondary" | "warning";
+} {
+  if (isSkipped) return { label: "Skipped", variant: "secondary" };
+  if (allFailed) return { label: "Failed", variant: "destructive" };
+  if (hasErrors) return { label: "Partial", variant: "warning" };
+  return { label: "Finished", variant: "success" };
 }
 
 // ─── Finding status helpers ───────────────────────────────────────────────────
-function getFindingStatus(f: AgentFindingDTO): "success" | "warning" | "error" | "na" {
-  const na = f.metadata?.ela_not_applicable
-    || f.metadata?.ghost_not_applicable
-    || f.metadata?.noise_fingerprint_not_applicable
-    || f.metadata?.prnu_not_applicable;
+function getFindingStatus(
+  f: AgentFindingDTO,
+): "success" | "warning" | "error" | "na" {
+  const na =
+    f.metadata?.ela_not_applicable ||
+    f.metadata?.ghost_not_applicable ||
+    f.metadata?.noise_fingerprint_not_applicable ||
+    f.metadata?.prnu_not_applicable;
   if (na) return "na";
-  if (f.status === "CONFIRMED" || f.status === "CONFIRMED_CLEAN") return "success";
-  if (f.status === "ERROR" || f.metadata?.court_defensible === false) return "error";
+  if (f.status === "CONFIRMED" || f.status === "CONFIRMED_CLEAN")
+    return "success";
+  if (f.status === "ERROR" || f.metadata?.court_defensible === false)
+    return "error";
   return "warning";
 }
 
 function toolBadgeConfig(status: "success" | "warning" | "error" | "na") {
   switch (status) {
-    case "success": return { variant: "success"     as const, label: "Clean"   };
-    case "warning": return { variant: "warning"     as const, label: "Flagged" };
-    case "error":   return { variant: "destructive" as const, label: "Failed"  };
-    case "na":      return { variant: "secondary"   as const, label: "N/A"     };
+    case "success":
+      return { variant: "success" as const, label: "Clean" };
+    case "warning":
+      return { variant: "warning" as const, label: "Flagged" };
+    case "error":
+      return { variant: "destructive" as const, label: "Failed" };
+    case "na":
+      return { variant: "secondary" as const, label: "N/A" };
   }
 }
 
 function confColor(c: number): string {
-  return c >= 0.75 ? "text-emerald-400" : c >= 0.5 ? "text-amber-400" : "text-rose-400";
+  return c >= 0.75
+    ? "text-emerald-400"
+    : c >= 0.5
+      ? "text-amber-400"
+      : "text-rose-400";
 }
 
 // ─── Confidence bar (5 segments) ─────────────────────────────────────────────
-function ConfidenceBar({ value, accentColor }: { value: number; accentColor: string }) {
+function ConfidenceBar({
+  value,
+}: {
+  value: number;
+}) {
   const filled = Math.round(value * 5); // 0–5 segments
-  const color = value >= 0.75
-    ? "bg-emerald-400"
-    : value >= 0.5
-      ? "bg-amber-400"
-      : "bg-rose-400";
+  const color =
+    value >= 0.75
+      ? "bg-emerald-400"
+      : value >= 0.5
+        ? "bg-amber-400"
+        : "bg-rose-400";
 
   return (
     <div className="flex items-center gap-1.5">
@@ -176,7 +242,12 @@ function ConfidenceBar({ value, accentColor }: { value: number; accentColor: str
           />
         ))}
       </div>
-      <span className={clsx("text-[11px] font-black font-mono tabular-nums", confColor(value))}>
+      <span
+        className={clsx(
+          "text-[11px] font-black font-mono tabular-nums",
+          confColor(value),
+        )}
+      >
         {Math.round(value * 100)}%
       </span>
     </div>
@@ -186,8 +257,10 @@ function ConfidenceBar({ value, accentColor }: { value: number; accentColor: str
 // ─── Extract tool timing ──────────────────────────────────────────────────────
 function extractTimingMs(f: AgentFindingDTO): number | null {
   const m = f.metadata || {};
-  if (typeof m.execution_time_ms === "number") return m.execution_time_ms as number;
-  if (typeof m.tool_duration_ms  === "number") return m.tool_duration_ms  as number;
+  if (typeof m.execution_time_ms === "number")
+    return m.execution_time_ms as number;
+  if (typeof m.tool_duration_ms === "number")
+    return m.tool_duration_ms as number;
   return null;
 }
 
@@ -199,34 +272,52 @@ function fmtMs(ms: number): string {
 function PhaseBadge({ phase }: { phase: "initial" | "deep" }) {
   if (phase === "deep") {
     return (
-      <Badge variant="info" className="font-mono font-bold uppercase tracking-widest text-[8px] px-1.5 py-0">
+      <Badge
+        variant="info"
+        className="font-mono font-bold uppercase tracking-widest text-[8px] px-1.5 py-0"
+      >
         DEEP
       </Badge>
     );
   }
   return (
-    <Badge variant="success" withDot className="font-mono font-bold uppercase tracking-widest text-[8px] px-1.5 py-0">
+    <Badge
+      variant="success"
+      withDot
+      className="font-mono font-bold uppercase tracking-widest text-[8px] px-1.5 py-0"
+    >
       INITIAL
     </Badge>
   );
 }
 
 // ─── Expandable text ──────────────────────────────────────────────────────────
-function ExpandableText({ text, maxLen = 180 }: { text: string; maxLen?: number }) {
+function ExpandableText({
+  text,
+  maxLen = 180,
+}: {
+  text: string;
+  maxLen?: number;
+}) {
   const [expanded, setExpanded] = useState(false);
   if (!text) return null;
   const isLong = text.length > maxLen;
   return (
     <div>
-      <p className={clsx(
-        "text-[11px] text-foreground/65 leading-relaxed",
-        !expanded && isLong && "line-clamp-2"
-      )}>
+      <p
+        className={clsx(
+          "text-[11px] text-foreground/65 leading-relaxed",
+          !expanded && isLong && "line-clamp-2",
+        )}
+      >
         {text}
       </p>
       {isLong && (
         <button
-          onClick={(e) => { e.stopPropagation(); setExpanded(v => !v); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded((v) => !v);
+          }}
           className="text-[9px] font-mono font-bold text-amber-500/60 hover:text-amber-400 uppercase tracking-widest mt-1 cursor-pointer transition-colors"
           aria-expanded={expanded}
         >
@@ -250,15 +341,20 @@ function ToolRow({
   defaultExpanded?: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const toolName  = (finding.metadata?.tool_name as string) || finding.finding_type;
-  const status    = getFindingStatus(finding);
-  const badgeCfg  = toolBadgeConfig(status);
-  const Icon      = getToolIcon(toolName);
+  const toolName =
+    (finding.metadata?.tool_name as string) || finding.finding_type;
+  const status = getFindingStatus(finding);
+  const badgeCfg = toolBadgeConfig(status);
+  const Icon = getToolIcon(toolName);
   // Use reasoning_summary — already human-readable from _build_readable_summary()
-  const summary   = finding.reasoning_summary || "Analysis completed.";
-  const timingMs  = extractTimingMs(finding);
-  const confidence = finding.raw_confidence_score ?? finding.calibrated_probability ?? finding.confidence_raw ?? 0;
-  const isNa      = status === "na";
+  const summary = finding.reasoning_summary || "Analysis completed.";
+  const timingMs = extractTimingMs(finding);
+  const confidence =
+    finding.raw_confidence_score ??
+    finding.calibrated_probability ??
+    finding.confidence_raw ??
+    0;
+  const isNa = status === "na";
 
   const iconColor = isNa
     ? "bg-slate-800/40 border-slate-700/30 text-slate-500"
@@ -272,15 +368,20 @@ function ToolRow({
     <div className={clsx(!isLast && "border-b border-border-subtle/40")}>
       {/* ── Row header ── */}
       <button
-        onClick={() => setExpanded(v => !v)}
+        onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
         className={clsx(
           "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors cursor-pointer",
-          expanded ? "bg-white/[0.025]" : "hover:bg-white/[0.015]"
+          expanded ? "bg-white/[0.025]" : "hover:bg-white/[0.015]",
         )}
       >
         {/* Tool icon */}
-        <div className={clsx("w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border", iconColor)}>
+        <div
+          className={clsx(
+            "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border",
+            iconColor,
+          )}
+        >
           <Icon className="w-4 h-4" />
         </div>
 
@@ -307,16 +408,23 @@ function ToolRow({
 
         {/* Confidence */}
         {!isNa && (
-          <span className={clsx("text-xs font-bold font-mono tabular-nums shrink-0 w-10 text-right", confColor(confidence))}>
+          <span
+            className={clsx(
+              "text-xs font-bold font-mono tabular-nums shrink-0 w-10 text-right",
+              confColor(confidence),
+            )}
+          >
             {Math.round(confidence * 100)}%
           </span>
         )}
 
         {/* Chevron */}
-        <div className={clsx(
-          "p-1 rounded transition-all duration-200 shrink-0",
-          expanded ? "rotate-180 bg-white/5" : ""
-        )}>
+        <div
+          className={clsx(
+            "p-1 rounded transition-all duration-200 shrink-0",
+            expanded ? "rotate-180 bg-white/5" : "",
+          )}
+        >
           <ChevronDown className="w-3 h-3 text-foreground/30" />
         </div>
       </button>
@@ -355,13 +463,17 @@ function MoreFindingsToggle({
   count: number;
 }) {
   const [open, setOpen] = useState(false);
-  const warnCount     = findings.filter(f => getFindingStatus(f) === "warning").length;
-  const errCount      = findings.filter(f => getFindingStatus(f) === "error").length;
+  const warnCount = findings.filter(
+    (f) => getFindingStatus(f) === "warning",
+  ).length;
+  const errCount = findings.filter(
+    (f) => getFindingStatus(f) === "error",
+  ).length;
 
   return (
     <div>
       <button
-        onClick={() => setOpen(v => !v)}
+        onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         className="w-full flex items-center justify-between px-4 py-2.5 border-t border-border-subtle/40 hover:bg-white/[0.015] transition-colors cursor-pointer group"
       >
@@ -373,18 +485,25 @@ function MoreFindingsToggle({
             <div className="flex items-center gap-1.5">
               {warnCount > 0 && (
                 <span className="flex items-center gap-1 text-[9px] font-mono text-amber-400/70">
-                  <AlertTriangle className="w-2.5 h-2.5" />{warnCount}
+                  <AlertTriangle className="w-2.5 h-2.5" />
+                  {warnCount}
                 </span>
               )}
               {errCount > 0 && (
                 <span className="flex items-center gap-1 text-[9px] font-mono text-rose-400/70">
-                  <XCircle className="w-2.5 h-2.5" />{errCount}
+                  <XCircle className="w-2.5 h-2.5" />
+                  {errCount}
                 </span>
               )}
             </div>
           )}
         </div>
-        <div className={clsx("p-1 rounded transition-all duration-200 shrink-0", open && "rotate-180 bg-white/5")}>
+        <div
+          className={clsx(
+            "p-1 rounded transition-all duration-200 shrink-0",
+            open && "rotate-180 bg-white/5",
+          )}
+        >
           <ChevronDown className="w-3 h-3 text-foreground/30" />
         </div>
       </button>
@@ -425,33 +544,48 @@ export function AgentFindingCard({
   phase = "initial",
   defaultOpen = false,
 }: AgentFindingCardProps) {
-  const [open,     setOpen]     = useState(defaultOpen);
+  const [open, setOpen] = useState(defaultOpen);
   const [showOther, setShowOther] = useState(false);
   const meta = AGENT_META[agentId];
 
-  const SKIP_TYPES = new Set(["file type not applicable", "format not supported"]);
-  const findings      = phase === "deep" ? deepFindings : initialFindings;
+  const SKIP_TYPES = new Set([
+    "file type not applicable",
+    "format not supported",
+  ]);
+  const findings = phase === "deep" ? deepFindings : initialFindings;
   const otherFindings = phase === "deep" ? initialFindings : deepFindings;
 
   const realFindings = findings.filter(
-    f => !SKIP_TYPES.has(String(f.finding_type).toLowerCase())
+    (f) => !SKIP_TYPES.has(String(f.finding_type).toLowerCase()),
   );
   const otherReal = otherFindings.filter(
-    f => !SKIP_TYPES.has(String(f.finding_type).toLowerCase())
+    (f) => !SKIP_TYPES.has(String(f.finding_type).toLowerCase()),
   );
 
-  const isSkipped  = realFindings.length === 0 && findings.some(f => SKIP_TYPES.has(String(f.finding_type).toLowerCase()));
-  const hasErrors  = realFindings.some(f => getFindingStatus(f) === "error");
-  const allFailed  = hasErrors && realFindings.every(f => getFindingStatus(f) === "error");
+  const isSkipped =
+    realFindings.length === 0 &&
+    findings.some((f) => SKIP_TYPES.has(String(f.finding_type).toLowerCase()));
+  const hasErrors = realFindings.some((f) => getFindingStatus(f) === "error");
+  const allFailed =
+    hasErrors && realFindings.every((f) => getFindingStatus(f) === "error");
 
   // ── Stats ──
-  const toolsTotal  = metrics?.total_tools_called ?? realFindings.length;
-  const toolsOk     = metrics?.tools_succeeded   ?? realFindings.filter(f => getFindingStatus(f) === "success").length;
-  const errorRate   = metrics?.error_rate        ?? 0;
-  const confidence  = metrics?.confidence_score  ?? (
-    realFindings.reduce((s, f) => s + (f.raw_confidence_score ?? f.calibrated_probability ?? f.confidence_raw ?? 0), 0)
-    / Math.max(realFindings.length, 1)
-  );
+  const toolsTotal = metrics?.total_tools_called ?? realFindings.length;
+  const toolsOk =
+    metrics?.tools_succeeded ??
+    realFindings.filter((f) => getFindingStatus(f) === "success").length;
+  const errorRate = metrics?.error_rate ?? 0;
+  const confidence =
+    metrics?.confidence_score ??
+    realFindings.reduce(
+      (s, f) =>
+        s +
+        (f.raw_confidence_score ??
+          f.calibrated_probability ??
+          f.confidence_raw ??
+          0),
+      0,
+    ) / Math.max(realFindings.length, 1);
 
   // ── Total run time from tool metadata ──
   const totalMs = useMemo(() => {
@@ -466,61 +600,67 @@ export function AgentFindingCard({
   const verdictKey = useMemo(() => {
     if (isSkipped) return "NOT APPLICABLE";
     if (allFailed) return "ANALYSIS FAILED";
-    if (realFindings.some(f => getFindingStatus(f) === "warning")) return "ANOMALIES DETECTED";
+    if (realFindings.some((f) => getFindingStatus(f) === "warning"))
+      return "ANOMALIES DETECTED";
     return "NO ANOMALIES";
   }, [realFindings, isSkipped, allFailed]);
 
   const verdictDisplay = getVerdictDisplay(verdictKey);
-  const statusBadge    = deriveStatus(isSkipped, allFailed, hasErrors);
+  const statusBadge = deriveStatus(isSkipped, allFailed, hasErrors);
 
   // ── Tool list split: first 3 visible, rest collapsed ──
   const visibleFindings = realFindings.slice(0, VISIBLE_TOOLS_THRESHOLD);
-  const hiddenFindings  = realFindings.slice(VISIBLE_TOOLS_THRESHOLD);
+  const hiddenFindings = realFindings.slice(VISIBLE_TOOLS_THRESHOLD);
 
   if (!meta) return null;
   const Icon = meta.icon;
 
   return (
-    <SurfaceCard className={clsx(
-      "p-0 overflow-hidden transition-all duration-300",
-      isSkipped && "opacity-50 grayscale"
-    )}>
-
+    <SurfaceCard
+      className={clsx(
+        "p-0 overflow-hidden transition-all duration-300",
+        isSkipped && "opacity-50 grayscale",
+      )}
+    >
       {/* ══ HEADER ══════════════════════════════════════════════════════════ */}
       <button
-        onClick={() => !isSkipped && setOpen(v => !v)}
+        onClick={() => !isSkipped && setOpen((v) => !v)}
         disabled={isSkipped}
         aria-expanded={isSkipped ? undefined : open}
         className={clsx(
           "w-full px-5 py-5 text-left transition-colors duration-200",
-          isSkipped ? "cursor-default" : "hover:bg-white/[0.02] cursor-pointer"
+          isSkipped ? "cursor-default" : "hover:bg-white/[0.02] cursor-pointer",
         )}
       >
         <div className="flex items-start justify-between gap-4">
-
           {/* Left: icon + name/verdict/stats */}
           <div className="flex items-start gap-4 min-w-0">
             {/* Agent icon */}
-            <div className={clsx(
-              "w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border mt-0.5 transition-all duration-300",
-              isSkipped
-                ? "bg-slate-800/40 border-slate-700/30 text-slate-500"
-                : `${meta.accentBg} ${meta.accentBorder} ${meta.accentColor}`
-            )}>
+            <div
+              className={clsx(
+                "w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border mt-0.5 transition-all duration-300",
+                isSkipped
+                  ? "bg-slate-800/40 border-slate-700/30 text-slate-500"
+                  : `${meta.accentBg} ${meta.accentBorder} ${meta.accentColor}`,
+              )}
+            >
               <Icon className="w-5 h-5" />
             </div>
 
             <div className="min-w-0 space-y-1.5">
               {/* Row 1: name + role + operational status + phase */}
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className={clsx(
-                  "font-black text-sm font-heading uppercase tracking-tight",
-                  !isSkipped ? "text-white" : "text-white/40"
-                )}>
+                <h3
+                  className={clsx(
+                    "font-black text-sm font-heading uppercase tracking-tight",
+                    !isSkipped ? "text-white" : "text-white/40",
+                  )}
+                >
                   {meta.name}
                 </h3>
                 <span className="text-[9px] font-mono text-foreground/30 tracking-tighter">
-                  {"// "}{meta.role}
+                  {"// "}
+                  {meta.role}
                 </span>
                 <Badge
                   variant={statusBadge.variant}
@@ -533,10 +673,12 @@ export function AgentFindingCard({
 
               {/* Row 2: verdict — prominent, no italic */}
               {!isSkipped && (
-                <p className={clsx(
-                  "text-base font-black tracking-tight leading-none",
-                  verdictDisplay.color
-                )}>
+                <p
+                  className={clsx(
+                    "text-base font-black tracking-tight leading-none",
+                    verdictDisplay.color,
+                  )}
+                >
                   {verdictDisplay.label}
                 </p>
               )}
@@ -544,7 +686,9 @@ export function AgentFindingCard({
               {/* Row 3: tools ran · total time */}
               {!isSkipped && (
                 <p className="text-[10px] font-mono text-foreground/35 flex items-center gap-1.5">
-                  <span className="text-foreground/55 font-bold">{toolsOk}/{toolsTotal}</span>
+                  <span className="text-foreground/55 font-bold">
+                    {toolsOk}/{toolsTotal}
+                  </span>
                   <span>tools ran</span>
                   {totalMs !== null && (
                     <>
@@ -562,7 +706,7 @@ export function AgentFindingCard({
           {!isSkipped && (
             <div className="flex flex-col items-end gap-2 shrink-0">
               {/* Confidence bar */}
-              <ConfidenceBar value={confidence} accentColor={meta.accentColor} />
+              <ConfidenceBar value={confidence} />
 
               {/* Error rate */}
               <div className="flex items-center gap-1.5">
@@ -580,10 +724,13 @@ export function AgentFindingCard({
               </div>
 
               {/* Chevron */}
-              <div className={clsx(
-                "p-1.5 rounded bg-white/5 border border-white/5 transition-all duration-300 mt-1",
-                open && "rotate-180 bg-amber-500/10 border-amber-500/30 text-amber-500"
-              )}>
+              <div
+                className={clsx(
+                  "p-1.5 rounded bg-white/5 border border-white/5 transition-all duration-300 mt-1",
+                  open &&
+                    "rotate-180 bg-amber-500/10 border-amber-500/30 text-amber-500",
+                )}
+              >
                 <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
               </div>
             </div>
@@ -594,7 +741,6 @@ export function AgentFindingCard({
       {/* ══ BODY ════════════════════════════════════════════════════════════ */}
       {open && !isSkipped && (
         <div className="border-t border-border-subtle">
-
           {/* ── Agent narrative ── */}
           {narrative ? (
             <div className="px-5 pt-4 pb-2">
@@ -623,7 +769,8 @@ export function AgentFindingCard({
                 <Cpu className="w-3 h-3" aria-hidden="true" />
                 {phase === "deep" ? "Deep Analysis" : "Initial Analysis"}
                 <span className="text-foreground/20">—</span>
-                {realFindings.length} probe{realFindings.length !== 1 ? "s" : ""}
+                {realFindings.length} probe
+                {realFindings.length !== 1 ? "s" : ""}
               </p>
 
               <div className="rounded-xl border border-border-subtle overflow-hidden bg-surface-mid/40">
@@ -632,7 +779,10 @@ export function AgentFindingCard({
                   <ToolRow
                     key={f.finding_id || idx}
                     finding={f}
-                    isLast={idx === visibleFindings.length - 1 && hiddenFindings.length === 0}
+                    isLast={
+                      idx === visibleFindings.length - 1 &&
+                      hiddenFindings.length === 0
+                    }
                     defaultExpanded={idx === 0}
                   />
                 ))}
@@ -652,18 +802,21 @@ export function AgentFindingCard({
           {otherReal.length > 0 && (
             <div className="px-5 pb-5">
               <button
-                onClick={() => setShowOther(v => !v)}
+                onClick={() => setShowOther((v) => !v)}
                 className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-border-subtle/50 bg-white/[0.012] hover:bg-white/[0.025] transition-colors cursor-pointer group"
                 aria-expanded={showOther}
               >
                 <span className="flex items-center gap-2 text-[10px] font-mono font-bold uppercase tracking-widest text-foreground/35 group-hover:text-foreground/55 transition-colors">
                   <Layers className="w-3 h-3" />
-                  See {phase === "deep" ? "Initial" : "Deep"} Findings ({otherReal.length})
+                  See {phase === "deep" ? "Initial" : "Deep"} Findings (
+                  {otherReal.length})
                 </span>
-                <div className={clsx(
-                  "p-1 rounded transition-all duration-200",
-                  showOther ? "rotate-180 bg-white/5" : ""
-                )}>
+                <div
+                  className={clsx(
+                    "p-1 rounded transition-all duration-200",
+                    showOther ? "rotate-180 bg-white/5" : "",
+                  )}
+                >
                   <ChevronDown className="w-3 h-3 text-foreground/30" />
                 </div>
               </button>
@@ -682,7 +835,6 @@ export function AgentFindingCard({
               )}
             </div>
           )}
-
         </div>
       )}
     </SurfaceCard>

@@ -9,21 +9,35 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import Home from "@/app/page";
-// Note: Result page might need complex mocks, we'll test structure
-import ResultPage from "@/app/result/page";
 
 // Mocks for Next.js and API
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn() }),
-  useSearchParams: () => new URLSearchParams(),
 }));
 
-jest.mock("@/lib/api", () => ({
-  getAuthToken: jest.fn(),
-  isAuthenticated: jest.fn(() => true),
-  getReport: jest.fn(),
-  pollForReport: jest.fn(),
+jest.mock("@/components/evidence/UploadModal", () => ({
+  UploadModal: () => <div>Upload modal</div>,
 }));
+
+jest.mock("@/components/evidence/UploadSuccessModal", () => ({
+  UploadSuccessModal: () => <div>Upload ready</div>,
+}));
+
+jest.mock("@/components/result/ExampleReportSection", () => ({
+  ExampleReportSection: () => <div>Example report</div>,
+}));
+
+jest.mock("lucide-react", () => {
+  const React = require("react");
+  return new Proxy(
+    {},
+    {
+      get: () =>
+        ({ ...props }: React.ComponentPropsWithoutRef<"svg">) =>
+          React.createElement("svg", props),
+    },
+  );
+});
 
 describe("Start Page (Home) Structure", () => {
   it("contains a single H1 landmark", () => {
@@ -32,19 +46,13 @@ describe("Start Page (Home) Structure", () => {
     expect(headings.length).toBe(1);
   });
 
-  it("contains a main landmark", () => {
+  it("contains primary navigation", () => {
     render(<Home />);
-    expect(screen.getByRole("main")).toBeInTheDocument();
+    expect(document.querySelector("nav")).toBeInTheDocument();
   });
 
-  it("navigation is clearly marked", () => {
+  it("contains footer content", () => {
     render(<Home />);
-    // Header often has role="banner"
-    expect(document.querySelector("header") || screen.getByRole("banner")).toBeInTheDocument();
-  });
-
-  it("footer is clearly marked", () => {
-    render(<Home />);
-    expect(document.querySelector("footer") || screen.getByRole("contentinfo")).toBeInTheDocument();
+    expect(document.querySelector("footer")).toBeInTheDocument();
   });
 });

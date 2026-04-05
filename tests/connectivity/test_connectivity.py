@@ -4,7 +4,7 @@ Connectivity Tests — Live Service Integration
 These tests require a RUNNING Docker stack.
 
   Start stack first:
-    docker compose -f docs/docker/docker-compose.yml --env-file .env up -d
+    docker compose -f infra/docker-compose.yml --env-file .env up -d
 
   Then run:
     pytest tests/connectivity/ -v

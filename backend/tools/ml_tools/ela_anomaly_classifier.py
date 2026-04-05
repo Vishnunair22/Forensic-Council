@@ -35,13 +35,16 @@ def extract_dct_features(block: np.ndarray) -> np.ndarray:
         block = cv2.resize(block, (16, 16))
     block_f = block.astype(np.float32)
     dct = cv2.dct(block_f)
-    return np.array([
-        float(dct[0, 0]),           # DC coefficient
-        float(np.mean(np.abs(dct[1:4, 1:4]))),   # low-freq AC
-        float(np.mean(np.abs(dct[4:, 4:]))),      # high-freq AC
-        float(np.std(dct)),
-        float(np.max(np.abs(dct[1:, 1:]))),
-    ], dtype=np.float32)
+    return np.array(
+        [
+            float(dct[0, 0]),  # DC coefficient
+            float(np.mean(np.abs(dct[1:4, 1:4]))),  # low-freq AC
+            float(np.mean(np.abs(dct[4:, 4:]))),  # high-freq AC
+            float(np.std(dct)),
+            float(np.max(np.abs(dct[1:, 1:]))),
+        ],
+        dtype=np.float32,
+    )
 
 
 def run_ela(image_path: str, quality: int = 95) -> np.ndarray:
@@ -64,13 +67,13 @@ def classify_ela(image_path: str, quality: int = 95) -> dict:
     ela_map = run_ela(image_path, quality)
     h, w = ela_map.shape
     block_size = 16
-    
+
     blocks = []
     positions = []
-    
+
     for y in range(0, h - block_size, block_size):
         for x in range(0, w - block_size, block_size):
-            block = ela_map[y:y+block_size, x:x+block_size]
+            block = ela_map[y : y + block_size, x : x + block_size]
             feats = extract_dct_features(block)
             blocks.append(feats)
             positions.append((x, y))
@@ -89,22 +92,24 @@ def classify_ela(image_path: str, quality: int = 95) -> dict:
         }
 
     X = np.array(blocks)
-    
+
     # Train on all blocks — outliers are the anomalous ones
     clf = IsolationForest(contamination=0.1, random_state=42, n_estimators=50)
     clf.fit(X)
-    
+
     scores = clf.decision_function(X)  # lower = more anomalous
     labels = clf.predict(X)  # -1 = anomaly, 1 = normal
-    
+
     anomalous_idx = np.where(labels == -1)[0]
     num_anomalous = len(anomalous_idx)
-    
+
     # Normalize anomaly score to 0-1
     score_range = scores.max() - scores.min()
     if score_range > 0:
-        normalized = 1.0 - (scores.min() - scores) / score_range  
-        anomaly_score = float(np.mean(normalized[anomalous_idx])) if len(anomalous_idx) > 0 else 0.0
+        normalized = 1.0 - (scores.min() - scores) / score_range
+        anomaly_score = (
+            float(np.mean(normalized[anomalous_idx])) if len(anomalous_idx) > 0 else 0.0
+        )
     else:
         anomaly_score = 0.0
 
@@ -140,5 +145,5 @@ if __name__ == "__main__":
         result = classify_ela(args.input, args.quality)
     except Exception as e:
         result = {"error": str(e), "available": False}
-    
+
     print(json.dumps(result))
