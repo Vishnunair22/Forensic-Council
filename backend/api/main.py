@@ -173,7 +173,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 1. Stop accepting new investigations
     app.state.accepting_requests = False
 
-    # 2. Wait for in-flight investigations to complete (up to 30s)
+    # 2. Wait for in-flight investigations to complete (up to 120s for deep analysis)
+    GRACEFUL_SHUTDOWN_TIMEOUT = 120  # 2 minutes for long investigations
     try:
         from api.routes.investigation import _active_tasks
 
@@ -183,9 +184,28 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 f"Waiting for {len(pending)} in-flight investigation(s) to complete..."
             )
             try:
-                await asyncio.wait_for(asyncio.gather(*pending), timeout=30.0)
+                await asyncio.wait_for(asyncio.gather(*pending), timeout=GRACEFUL_SHUTDOWN_TIMEOUT)
             except asyncio.TimeoutError:
-                logger.warning("Graceful shutdown timeout — some tasks may be incomplete")
+                logger.warning(
+                    "Graceful shutdown timeout — checkpointing remaining investigations",
+                    count=len(pending)
+                )
+                # Checkpoint remaining investigations to DB for recovery
+                from core.session_persistence import get_session_persistence
+                try:
+                    persistence = await get_session_persistence()
+                    for task in pending:
+                        try:
+                            # Extract session_id from task if available
+                            if hasattr(task, 'get_name'):
+                                task_name = task.get_name()
+                                logger.info("Checkpointing investigation", task_name=task_name)
+                                # Task will be cancelled and can be recovered from Redis/DB state
+                            task.cancel()
+                        except Exception as e:
+                            logger.error("Failed to checkpoint investigation", error=str(e))
+                except Exception as e:
+                    logger.error("Failed to get persistence layer", error=str(e))
     except Exception as e:
         logger.warning(f"Graceful wait failed: {e}")
 

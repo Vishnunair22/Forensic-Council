@@ -203,11 +203,60 @@ class EvidenceStore:
 
             return artifact
 
+        except (OSError, IOError) as e:
+            # Disk I/O errors - potentially recoverable
+            logger.error(
+                "Disk I/O error during evidence ingest",
+                file_path=file_path,
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True
+            )
+            raise EvidenceStoreError(
+                f"Storage I/O failed for {file_path}",
+                details={
+                    "file_path": file_path,
+                    "error_type": type(e).__name__,
+                    "recoverable": True,
+                    "error": str(e)
+                },
+            )
+        except PermissionError as e:
+            # Permission denied - critical security issue
+            logger.critical(
+                "Permission denied during evidence ingest",
+                file_path=file_path,
+                error=str(e)
+            )
+            raise EvidenceStoreError(
+                f"Permission denied: {file_path}",
+                details={
+                    "file_path": file_path,
+                    "error_type": "PermissionError",
+                    "recoverable": False,
+                    "error": str(e)
+                },
+            )
+        except EvidenceStoreError:
+            # Re-raise as-is
+            raise
         except Exception as e:
-            logger.error("Failed to ingest evidence", error=str(e), file_path=file_path)
+            # Unexpected errors
+            logger.error(
+                "Unexpected error during evidence ingest",
+                file_path=file_path,
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True
+            )
             raise EvidenceStoreError(
                 f"Failed to ingest evidence: {file_path}. Cause: {repr(e)}",
-                details={"file_path": file_path, "error": str(e)},
+                details={
+                    "file_path": file_path,
+                    "error_type": type(e).__name__,
+                    "recoverable": False,
+                    "error": str(e)
+                },
             )
 
     async def create_derivative(

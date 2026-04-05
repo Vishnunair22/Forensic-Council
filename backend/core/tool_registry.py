@@ -192,13 +192,36 @@ class ToolRegistry:
             output = await asyncio.wait_for(handler(input_data), timeout=60.0)
             result = ToolResult(tool_name=tool_name, success=True, output=output)
         except asyncio.TimeoutError:
+            logger.warning(
+                f"Tool '{tool_name}' timed out after 60s",
+                tool_name=tool_name,
+                timeout=60.0
+            )
             result = ToolResult(
                 tool_name=tool_name,
                 success=False,
                 error=f"Tool '{tool_name}' timed out after 60s",
             )
-        except Exception as e:
+        except (OSError, ValueError, TypeError, RuntimeError) as e:
+            # Specific expected tool errors (file I/O, validation, etc.)
+            logger.error(
+                f"Tool '{tool_name}' execution failed",
+                tool_name=tool_name,
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True
+            )
             result = ToolResult(tool_name=tool_name, success=False, error=str(e))
+        except Exception as e:
+            # Unexpected errors get escalated - don't silently swallow
+            logger.critical(
+                f"Unexpected error in tool '{tool_name}'",
+                tool_name=tool_name,
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True
+            )
+            raise  # Re-raise unexpected exceptions
 
         # Log the tool call
         if custody_logger:

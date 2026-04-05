@@ -8,6 +8,7 @@ Routes for managing investigation sessions.
 from typing import List, Optional
 import asyncio
 import json
+import time
 from pydantic import BaseModel as _BaseModel
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
@@ -342,6 +343,48 @@ async def live_updates(websocket: WebSocket, session_id: str):
     subscriber_task = asyncio.create_task(_redis_subscriber())
     register_websocket(session_id, websocket)
 
+    # WebSocket configuration
+    IDLE_TIMEOUT = 300  # 5 minutes
+    PING_INTERVAL = 30  # seconds
+    MAX_MESSAGES_PER_MINUTE = 100
+    last_activity = time.time()
+    message_timestamps: list[float] = []
+
+    async def send_ping():
+        """Send periodic ping to detect stale connections."""
+        try:
+            while True:
+                await asyncio.sleep(PING_INTERVAL)
+                try:
+                    await websocket.send_json({"type": "PING", "timestamp": time.time()})
+                except Exception:
+                    break
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.debug("Ping task failed", session_id=session_id, error=str(e))
+
+    async def monitor_idle():
+        """Monitor for idle connections and close them."""
+        try:
+            while True:
+                await asyncio.sleep(10)
+                if time.time() - last_activity > IDLE_TIMEOUT:
+                    logger.warning(
+                        "WebSocket idle timeout",
+                        session_id=session_id,
+                        idle_seconds=time.time() - last_activity
+                    )
+                    await websocket.close(code=1000, reason="Idle timeout")
+                    break
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.debug("Idle monitor task failed", session_id=session_id, error=str(e))
+
+    ping_task = asyncio.create_task(send_ping())
+    idle_task = asyncio.create_task(monitor_idle())
+
     try:
         await websocket.send_json({
             "type": "CONNECTED",
@@ -352,8 +395,44 @@ async def live_updates(websocket: WebSocket, session_id: str):
 
         # Wait for client to close or disconnect
         while True:
-            # We don't expect messages from client for now, but need to await to detect disconnect
-            await websocket.receive_text()
+            try:
+                # Expect PONG responses or other messages
+                data = await websocket.receive_text()
+                last_activity = time.time()
+                
+                # Rate limit check
+                now = time.time()
+                one_min_ago = now - 60
+                
+                # Remove old timestamps
+                while message_timestamps and message_timestamps[0] < one_min_ago:
+                    message_timestamps.pop(0)
+                
+                if len(message_timestamps) >= MAX_MESSAGES_PER_MINUTE:
+                    logger.warning(
+                        "WebSocket rate limit exceeded",
+                        session_id=session_id,
+                        messages_per_minute=len(message_timestamps)
+                    )
+                    await websocket.send_json({
+                        "type": "ERROR",
+                        "detail": "Rate limit exceeded. Maximum 100 messages per minute.",
+                    })
+                    await websocket.close(code=1008, reason="Rate limit exceeded")
+                    break
+                
+                message_timestamps.append(now)
+                
+                # Handle PONG responses
+                try:
+                    msg = json.loads(data)
+                    if msg.get("type") == "PONG":
+                        continue  # Heartbeat response, skip processing
+                except json.JSONDecodeError:
+                    pass  # Non-JSON text, ignore
+                    
+            except WebSocketDisconnect:
+                break
 
     except WebSocketDisconnect:
         pass
@@ -362,7 +441,18 @@ async def live_updates(websocket: WebSocket, session_id: str):
     except Exception as ws_err:
         logger.warning("WebSocket error", session_id=session_id, error=str(ws_err))
     finally:
+        # Cancel background tasks
+        ping_task.cancel()
+        idle_task.cancel()
         subscriber_task.cancel()
+        
+        # Wait for tasks to finish
+        for task in [ping_task, idle_task, subscriber_task]:
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
+        
         unregister_websocket(session_id, websocket)
 
 
@@ -593,6 +683,38 @@ async def get_session_report(
     )
 
 
+@router.get("/{session_id}/report/download")
+async def download_report(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Download the forensic report as a JSON file.
+    
+    Returns the report with proper Content-Disposition headers for file download.
+    """
+    # Get the report using existing logic
+    report_dto = await get_session_report(session_id, current_user)
+    
+    # Generate filename with timestamp
+    from datetime import datetime
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    filename = f"forensic_report_{session_id}_{timestamp}.json"
+    
+    # Return as downloadable file
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        content=report_dto,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-cache",
+        },
+    )
+
+
+# ============================================================================
+# BRIEF ENDPOINT — last known thinking text for an agent
 # ============================================================================
 # BRIEF ENDPOINT — last known thinking text for an agent
 # ============================================================================
