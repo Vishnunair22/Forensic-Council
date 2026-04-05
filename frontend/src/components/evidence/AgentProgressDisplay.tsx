@@ -584,7 +584,11 @@ export function AgentProgressDisplay({
         </div>
 
         {/* Agent Cards */}
-        <div className="w-full max-w-6xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div 
+          className="w-full max-w-6xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
+          role="list"
+          aria-label="Agent analysis results"
+        >
           {visibleAgents.map((agent) => {
             const status = getAgentStatus(agent.id);
             const rawThinking = getAgentThinking(agent.id);
@@ -616,6 +620,16 @@ export function AgentProgressDisplay({
                             : status === "error"
                               ? "1px solid rgba(248,113,113,0.1)"
                               : undefined,
+                    }}
+                    role="listitem"
+                    tabIndex={0}
+                    aria-label={`${agent.name}: ${status}`}
+                    aria-describedby={`agent-${agent.id}-status`}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        // Expand/collapse card details
+                      }
                     }}
                   >
                     {/* Glass highlight */}
@@ -667,30 +681,35 @@ export function AgentProgressDisplay({
                           {agent.badge}
                         </span>
                       </div>
-                      {/* Status badge */}
-                      <div className="shrink-0">
-                        {status === "waiting" && (
-                          <Badge
-                            variant="outline"
-                            className="text-foreground/40 font-bold border-white/10 bg-white/[0.03] uppercase tracking-widest font-mono text-[9px]"
-                          >
-                            Queued
-                          </Badge>
-                        )}
-                        {status === "checking" && (
-                          <Badge
-                            variant="outline"
-                            withDot
-                            dotColor="#22D3EE"
-                            className="font-black uppercase tracking-widest font-mono text-cyan-400 border-cyan-500/20 bg-cyan-500/[0.04] text-[9px]"
-                          >
-                            Linking
-                          </Badge>
-                        )}
-                        {status === "running" && (
-                          <Badge
-                            variant="outline"
-                            withDot
+                        {/* Status badge */}
+                        <div 
+                          className="shrink-0"
+                          id={`agent-${agent.id}-status`}
+                          role="status"
+                          aria-live="polite"
+                        >
+                          {status === "waiting" && (
+                            <Badge
+                              variant="outline"
+                              className="text-foreground/40 font-bold border-white/10 bg-white/[0.03] uppercase tracking-widest font-mono text-[9px]"
+                            >
+                              Queued
+                            </Badge>
+                          )}
+                          {status === "checking" && (
+                            <Badge
+                              variant="outline"
+                              withDot
+                              dotColor="#22D3EE"
+                              className="font-black uppercase tracking-widest font-mono text-cyan-400 border-cyan-500/20 bg-cyan-500/[0.04] text-[9px]"
+                            >
+                              Linking
+                            </Badge>
+                          )}
+                          {status === "running" && (
+                            <Badge
+                              variant="outline"
+                              withDot
                             dotColor="#22D3EE"
                             className="font-black uppercase tracking-widest font-mono text-cyan-400 border-cyan-500/20 bg-cyan-500/[0.04] text-[9px]"
                           >
@@ -1220,22 +1239,24 @@ function DecisionButtons(props: {
               Initial Scan Concluded
             </h3>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-3" role="group" aria-label="Analysis decision buttons">
             <button
               onClick={props.onAcceptAnalysis}
               disabled={props.isNavigating}
               className="btn-pill-secondary flex-1 py-4 justify-center text-xs shadow-[0_0_24px_rgba(34,211,238,0.18)]"
+              aria-label="Accept current analysis and compile report"
+              aria-busy={props.isNavigating}
             >
               {props.isNavigating ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                   Compiling...
                 </>
               ) : (
                 <>
-                  <FileText className="w-4 h-4" />
+                  <FileText className="w-4 h-4" aria-hidden="true" />
                   Accept Analysis
-                  <ArrowRight className="w-3.5 h-3.5 ml-1 opacity-70" />
+                  <ArrowRight className="w-3.5 h-3.5 ml-1 opacity-70" aria-hidden="true" />
                 </>
               )}
             </button>
@@ -1243,10 +1264,12 @@ function DecisionButtons(props: {
               onClick={props.onDeepAnalysis}
               disabled={props.isNavigating}
               className="btn-pill-primary flex-1 py-4 justify-center text-xs relative overflow-hidden shadow-[0_0_28px_rgba(34,211,238,0.25)]"
+              aria-label="Run deep analysis with additional forensic tools"
+              aria-busy={props.isNavigating}
             >
-              <Microscope className="w-4 h-4" />
+              <Microscope className="w-4 h-4" aria-hidden="true" />
               Deep Analysis
-              <ArrowRight className="w-3.5 h-3.5 ml-1 opacity-70" />
+              <ArrowRight className="w-3.5 h-3.5 ml-1 opacity-70" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -1265,7 +1288,7 @@ function DecisionButtons(props: {
             Council Arbiter Verification
           </h3>
         </div>
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col sm:flex-row gap-3" role="group" aria-label="Post-analysis action buttons">
           <button
             onClick={() => {
               props.playSound?.("click");
@@ -1273,8 +1296,9 @@ function DecisionButtons(props: {
             }}
             disabled={props.isNavigating}
             className="btn-pill-secondary flex-1 py-4 justify-center text-xs"
+            aria-label="Reset and start new investigation"
           >
-            <RotateCcw className="w-4 h-4 opacity-40" />
+            <RotateCcw className="w-4 h-4 opacity-40" aria-hidden="true" />
             RESET TERMINAL
           </button>
           <button
@@ -1284,17 +1308,19 @@ function DecisionButtons(props: {
             }}
             disabled={props.isNavigating}
             className="btn-pill-primary flex-1 py-4 justify-center text-xs relative overflow-hidden shadow-[0_0_30px_rgba(34,211,238,0.3)]"
+            aria-label="View final forensic report"
+            aria-busy={props.isNavigating}
           >
             {props.isNavigating ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                 FINALIZING...
               </>
             ) : (
               <>
-                <FileText className="w-4 h-4" />
+                <FileText className="w-4 h-4" aria-hidden="true" />
                 ACCESS LEDGER
-                <ArrowRight className="w-4 h-4 ml-1" />
+                <ArrowRight className="w-4 h-4 ml-1" aria-hidden="true" />
               </>
             )}
           </button>

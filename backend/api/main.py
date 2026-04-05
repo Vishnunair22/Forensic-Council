@@ -258,9 +258,12 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "script-src 'self'; "
-        "style-src 'self' 'unsafe-inline'; "
+        f"style-src 'self' {settings.allowed_cdn_domains if hasattr(settings, 'allowed_cdn_domains') else ''}; "
         "img-src 'self' blob: data:; "
-        "connect-src 'self' ws: wss:;"
+        "connect-src 'self' ws: wss:; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self';"
     )
     if settings.app_env == "production":
         response.headers["Strict-Transport-Security"] = (

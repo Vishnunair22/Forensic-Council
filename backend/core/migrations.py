@@ -25,6 +25,8 @@ class Migration:
     description: str
     sql: str
     rollback_sql: Optional[str] = None
+    validation_sql: Optional[str] = None
+    validation_sql: Optional[str] = None
 
 
 # Migration registry - add new migrations at the end
@@ -43,6 +45,7 @@ MIGRATIONS: List[Migration] = [
         );
         """,
         rollback_sql="DROP TABLE IF EXISTS schema_migrations;",
+        validation_sql="SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'schema_migrations')",
     ),
     Migration(
         version=2,
@@ -69,6 +72,7 @@ MIGRATIONS: List[Migration] = [
             ON session_reports(created_at);
         """,
         rollback_sql="DROP TABLE IF EXISTS session_reports;",
+        validation_sql="SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'session_reports')",
     ),
     Migration(
         version=3,
@@ -375,6 +379,60 @@ class MigrationManager:
             logger.debug("Could not fetch migrations", error=str(e))
             return []
 
+    async def validate_migration(self, migration: Migration) -> bool:
+        """Verify migration applied correctly by running validation SQL."""
+        if not migration.validation_sql:
+            logger.debug(
+                "No validation SQL for migration, skipping check",
+                version=migration.version,
+            )
+            return True
+        
+        try:
+            result = await self.client.fetch_val(migration.validation_sql)
+            is_valid = bool(result)
+            if not is_valid:
+                logger.error(
+                    "Migration validation failed",
+                    version=migration.version,
+                    name=migration.name,
+                )
+            return is_valid
+        except Exception as e:
+            logger.error(
+                "Migration validation error",
+                version=migration.version,
+                error=str(e),
+            )
+            return False
+
+    async def validate_migration(self, migration: Migration) -> bool:
+        """Verify migration applied correctly by running validation SQL."""
+        if not migration.validation_sql:
+            logger.debug(
+                "No validation SQL for migration, skipping check",
+                version=migration.version,
+            )
+            return True
+        
+        try:
+            result = await self.client.fetch_val(migration.validation_sql)
+            is_valid = bool(result)
+            if not is_valid:
+                logger.error(
+                    "Migration validation failed",
+                    version=migration.version,
+                    name=migration.name,
+                )
+            return is_valid
+        except Exception as e:
+            logger.error(
+                "Migration validation error",
+                version=migration.version,
+                error=str(e),
+            )
+            return False
+
     async def apply_migration(self, migration: Migration) -> bool:
         """Apply a single migration within an explicit asyncpg transaction (atomic)."""
         import time
@@ -390,6 +448,12 @@ class MigrationManager:
             async with self.client.pool.acquire() as conn:
                 async with conn.transaction():
                     await conn.execute(migration.sql)
+
+                    # Validate before committing
+                    if not await self.validate_migration(migration):
+                        raise RuntimeError(
+                            f"Migration {migration.version} validation failed"
+                        )
 
                     execution_time = int((time.time() - start_time) * 1000)
 
@@ -415,6 +479,9 @@ class MigrationManager:
             )
             return True
 
+        except RuntimeError:
+            # Re-raise validation failures without wrapping
+            raise
         except Exception as e:
             logger.error(
                 "Migration failed",

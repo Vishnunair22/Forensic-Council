@@ -198,6 +198,9 @@ async def _snapshot() -> dict:
     total_inv = inv_completed + inv_failed
     success_rate = inv_completed / total_inv if total_inv else 1.0
 
+    # Get database connection pool stats
+    pool_stats = await _get_pool_stats()
+
     return {
         "uptime_seconds": uptime,
         "requests_total": requests_total,
@@ -209,7 +212,31 @@ async def _snapshot() -> dict:
         "investigations_completed": inv_completed,
         "investigations_failed": inv_failed,
         "success_rate": success_rate,
+        "db_pool_size": pool_stats["size"],
+        "db_pool_available": pool_stats["available"],
+        "db_pool_in_use": pool_stats["in_use"],
+        "db_pool_max": pool_stats["max"],
     }
+
+
+async def _get_pool_stats() -> dict:
+    """Get connection pool statistics."""
+    try:
+        from infra.postgres_client import get_postgres_client
+
+        client = await get_postgres_client()
+        pool = client._pool
+        if pool:
+            return {
+                "size": pool.get_size(),
+                "available": pool.get_idle_size(),
+                "in_use": pool.get_size() - pool.get_idle_size(),
+                "max": pool._holders,
+            }
+    except Exception as e:
+        logger.debug("Failed to get pool stats", error=str(e))
+    
+    return {"size": 0, "available": 0, "in_use": 0, "max": 0}
 
 
 # ── Response model ────────────────────────────────────────────────────────────
@@ -226,6 +253,10 @@ class MetricsResponse(BaseModel):
     investigations_completed: int
     investigations_failed: int
     success_rate: float
+    db_pool_size: int
+    db_pool_available: int
+    db_pool_in_use: int
+    db_pool_max: int
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -322,3 +353,9 @@ async def get_raw_metrics(request: Request):
     from fastapi.responses import PlainTextResponse as _PTR
 
     return _PTR("\n".join(lines) + "\n")
+
+
+@router.get("/pool-status")
+async def pool_status(current_user: User = Depends(require_admin)):
+    """Get detailed database connection pool statistics. Requires admin role."""
+    return await _get_pool_stats()

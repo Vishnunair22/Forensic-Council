@@ -58,7 +58,8 @@ export const useSimulation = ({
 
   const wsRef = useRef<WebSocket | null>(null);
   const completedAgentsRef = useRef<AgentUpdate[]>([]);
-  /** True after POST /resume succeeds — PIPELINE_COMPLETE must not be dropped while still `awaiting_decision` from React’s stale batch. */
+  const [sessionTimeout, setSessionTimeout] = useState<Date | null>(null);
+  /** True after POST /resume succeeds — PIPELINE_COMPLETE must not be dropped while still `awaiting_decision` from React's stale batch. */
   const expectingPipelineCompleteRef = useRef(false);
 
   // Store callbacks in refs to avoid triggering effect on every render
@@ -390,25 +391,42 @@ export const useSimulation = ({
 
   // Cleanup on unmount
   useEffect(() => {
+    // Set up token expiry checker
+    const checkTokenExpiry = setInterval(() => {
+      const expiry = sessionStorage.getItem("forensic_auth_token_expiry");
+      if (expiry && Date.now() > parseInt(expiry)) {
+        // Token expired - attempt refresh
+        fetch("/api/v1/auth/refresh", {
+          method: "POST",
+          credentials: "include",
+        })
+          .then((response) => {
+            if (!response.ok) {
+              // Refresh failed - redirect to login
+              window.location.href = "/";
+            } else {
+              // Refresh succeeded - reconnect WebSocket
+              const currentSessionId = sessionId || sessionStorage.getItem("forensic_session_id");
+              if (currentSessionId) {
+                connectWebSocket(currentSessionId);
+              }
+            }
+          })
+          .catch(() => {
+            // Network error - redirect to login
+            window.location.href = "/";
+          });
+      }
+    }, 60000); // Check every minute
+
     return () => {
+      clearInterval(checkTokenExpiry);
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
       }
     };
-  }, []);
-
-  const startSimulation = useCallback((newSessionId?: string) => {
-    setCompletedAgents([]);
-    completedAgentsRef.current = [];
-    setAgentUpdates({});
-    setPipelineMessage("");
-    setPipelineThinking("");
-    if (newSessionId) {
-      setSessionId(newSessionId);
-    }
-    setStatus("initiating");
-  }, []);
+  }, [sessionId, connectWebSocket]);
 
   const resetSimulation = useCallback(() => {
     expectingPipelineCompleteRef.current = false;
