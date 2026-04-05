@@ -23,6 +23,7 @@ Output JSON:
 
 import argparse
 import json
+import sys
 import numpy as np
 import cv2
 from PIL import Image
@@ -137,13 +138,65 @@ def classify_ela(image_path: str, quality: int = 95) -> dict:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", required=True)
-    parser.add_argument("--quality", type=int, default=95)
+    parser.add_argument("--input", type=str, help="Input image path")
+    parser.add_argument("--quality", type=int, default=95, help="JPEG quality for ELA")
+    parser.add_argument("--warmup", action="store_true", help="Warmup mode - preload dependencies")
+    parser.add_argument("--worker", action="store_true", help="Worker mode - persistent process")
     args = parser.parse_args()
-
+    
+    # Warmup mode - just verify dependencies load
+    if args.warmup:
+        try:
+            from sklearn.ensemble import IsolationForest
+            import numpy as np
+            import cv2
+            print(json.dumps({
+                "status": "warmed_up",
+                "dependencies": ["sklearn", "numpy", "cv2", "PIL"],
+                "message": "ELA anomaly classifier ready"
+            }))
+            sys.exit(0)
+        except Exception as e:
+            print(json.dumps({
+                "status": "warmup_failed",
+                "error": str(e)
+            }))
+            sys.exit(1)
+    
+    # Worker mode - persistent process reading from stdin
+    if args.worker:
+        import sys
+        logger.info("ELA anomaly classifier worker started")
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                request = json.loads(line)
+                input_path = request.get("input")
+                quality = request.get("extra_args", [95])[0] if request.get("extra_args") else 95
+                
+                if not input_path:
+                    print(json.dumps({"error": "Missing input path", "available": False}))
+                    sys.stdout.flush()
+                    continue
+                
+                result = classify_ela(input_path, int(quality))
+                print(json.dumps(result))
+                sys.stdout.flush()
+            except Exception as e:
+                print(json.dumps({"error": str(e), "available": False}))
+                sys.stdout.flush()
+        sys.exit(0)
+    
+    # Normal mode - single execution
+    if not args.input:
+        parser.print_help()
+        sys.exit(1)
+    
     try:
         result = classify_ela(args.input, args.quality)
     except Exception as e:
         result = {"error": str(e), "available": False}
-
+    
     print(json.dumps(result))

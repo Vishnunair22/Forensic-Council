@@ -46,12 +46,17 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
     HF_DIR="${HF_HOME:-/app/cache/huggingface}"
     YOLO_DIR="${YOLO_CONFIG_DIR:-/app/cache/ultralytics}"
 
-    # HF: count actual model blob files (≥ 3 means OpenCLIP weights are present)
-    HF_FILES=$(find "$HF_DIR" -type f -name "*.safetensors" -o -name "open_clip_model*" -o -name "*.bin" 2>/dev/null | wc -l || echo 0)
-    # YOLO: look for actual model weight files (.pt), NOT settings.json
-    YOLO_FILES=$(find "$YOLO_DIR" -type f -name "*.pt" 2>/dev/null | wc -l || echo 0)
+    # More robust cache detection:
+    # For HuggingFace — check for model hub directories (not just individual files)
+    # Valid models create hub/models--* directories with blobs/ subdirectories
+    HF_HUBS=$(find "$HF_DIR/hub" -type d -name "models--*" 2>/dev/null | wc -l || echo 0)
+    HF_BLOBS=$(find "$HF_DIR/hub" -type d -name "blobs" 2>/dev/null | wc -l || echo 0)
+    
+    # For YOLO — check for actual .pt weight files (not config/settings.json)
+    YOLO_WEIGHTS=$(find "$YOLO_DIR" -maxdepth 1 -type f -name "*.pt" 2>/dev/null | wc -l || echo 0)
 
-    if [ "${HF_FILES:-0}" -lt 1 ] || [ "${YOLO_FILES:-0}" -lt 1 ]; then
+    # Need at least 2 model hubs (OpenCLIP + SpeechBrain) and 1 YOLO weight
+    if [ "${HF_HUBS:-0}" -lt 2 ] || [ "${HF_BLOBS:-0}" -lt 2 ] || [ "${YOLO_WEIGHTS:-0}" -lt 1 ]; then
         echo ""
         echo "============================================================"
         echo "  FIRST RUN — pre-downloading ML models into persistent volumes"
@@ -64,7 +69,9 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
         echo "  Model download started (PID $MODEL_DL_PID) — tail /tmp/model_download.log for progress"
     else
         echo "  ML model volumes already populated — skipping download."
+        echo "  Found: $HF_HUBS model hubs, $HF_BLOBS blob dirs, $YOLO_WEIGHTS YOLO weights"
     fi
+fi
 fi
 
 # ── 2. Cache status check + Python import verification ───────────────────────
