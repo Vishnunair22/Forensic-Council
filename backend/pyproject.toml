@@ -151,6 +151,28 @@ exclude_lines = [
 [tool.hatch.build.targets.wheel]
 packages = ["core", "infra", "agents", "tools", "orchestration", "reports", "api"]
 
+# ── Ruff configuration ─────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]  # pycodestyle, pyflakes, warnings, isort
+ignore = ["E501"]  # Line length handled by formatter
+
+# ── Pyright configuration ──────────────────────────────────────────────────
+[tool.pyright]
+include = ["core", "api", "agents", "tools", "orchestration", "infra"]
+exclude = ["**/__pycache__", "**/.pytest_cache"]
+typeCheckingMode = "basic"
+strict = ["core/auth.py", "core/signing.py", "core/circuit_breaker.py"]  # Critical security modules
+
+# ── isort configuration ────────────────────────────────────────────────────
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3
+
 # ── uv source overrides ────────────────────────────────────────────────────
 # Route torch/torchvision/torchaudio to the official CPU-only PyTorch index.
 # This prevents uv from resolving the default GPU wheels from PyPI which

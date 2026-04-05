@@ -372,16 +372,23 @@ async def rate_limit_middleware(request: Request, call_next):
         identifier = f"ip:{ip}"
     
     limit = 60 if is_authenticated else 10
-    window = 60 # seconds
+    window = 60  # seconds
     
     try:
         redis = await get_redis_client()
         key = f"rate_limit:{identifier}"
         
-        # Increment and get current count
-        count = await redis.incr(key)
-        if count == 1:
-            await redis.expire(key, window)
+        # Use Lua script for atomic INCR + EXPIRE (prevents race condition)
+        lua_script = """
+        local key = KEYS[1]
+        local window = tonumber(ARGV[1])
+        local count = redis.call('incr', key)
+        if count == 1 then
+            redis.call('expire', key, window)
+        end
+        return count
+        """
+        count = await redis.eval(lua_script, keys=[key], args=[window])
             
         if count > limit:
             logger.warning(f"Rate limit exceeded for {identifier}", count=count, limit=limit)
