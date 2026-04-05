@@ -180,11 +180,11 @@ if __name__ == "__main__":
     # Warmup mode - verify dependencies load
     if args.warmup:
         try:
-            import piexif
+            from PIL import Image
             import json
             print(json.dumps({
                 "status": "warmed_up",
-                "dependencies": ["piexif", "json"],
+                "dependencies": ["PIL", "json"],
                 "message": "Metadata anomaly scorer ready"
             }))
             sys.exit(0)
