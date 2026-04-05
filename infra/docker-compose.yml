@@ -163,7 +163,7 @@ services:
       dockerfile: Dockerfile
     container_name: forensic_migration
     restart: "no"
-    command: scripts/init_db.py
+    command: ["python", "scripts/init_db.py"]
     # SECURITY: Run with minimal privileges
     security_opt:
       - no-new-privileges:true

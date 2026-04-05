@@ -10,6 +10,7 @@ import hashlib
 import warnings
 from datetime import datetime, timedelta, timezone
 from enum import Enum
+from pathlib import Path
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status, Request
@@ -193,6 +194,92 @@ _recently_blacklisted: dict[str, float] = {}  # token_hash -> expiry_timestamp
 _LOCAL_BLACKLIST_MAX_AGE = 3600  # 1 hour max age for local blacklist entries
 _LOCAL_BLACKLIST_MAX_SIZE = 10000  # prevent unbounded memory growth
 
+# Persistent SQLite cache for token blacklist (survives Redis outages and container restarts)
+_blacklist_db_path: Optional[str] = None
+
+
+def _get_blacklist_db_path() -> str:
+    """Get path to SQLite blacklist database."""
+    global _blacklist_db_path
+    if _blacklist_db_path is None:
+        from core.config import get_settings
+        settings = get_settings()
+        storage_dir = Path(getattr(settings, "storage_dir", "/tmp/forensic_storage"))
+        storage_dir.mkdir(parents=True, exist_ok=True)
+        _blacklist_db_path = str(storage_dir / "token_blacklist.db")
+    return _blacklist_db_path
+
+
+def _init_blacklist_db():
+    """Initialize SQLite database for persistent token blacklist."""
+    import sqlite3
+    
+    db_path = _get_blacklist_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS blacklisted_tokens (
+            token_hash TEXT PRIMARY KEY,
+            expires_at REAL NOT NULL,
+            created_at REAL NOT NULL DEFAULT (strftime('%s', 'now'))
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_expires ON blacklisted_tokens(expires_at)")
+    conn.commit()
+    return conn
+
+
+def _add_to_persistent_blacklist(token_hash: str, expires_at: float):
+    """Add token hash to persistent SQLite blacklist."""
+    try:
+        conn = _init_blacklist_db()
+        conn.execute(
+            "INSERT OR REPLACE INTO blacklisted_tokens (token_hash, expires_at) VALUES (?, ?)",
+            (token_hash, expires_at)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning("Failed to persist token blacklist entry", error=str(e))
+
+
+def _is_in_persistent_blacklist(token_hash: str) -> bool:
+    """Check if token hash is in persistent SQLite blacklist."""
+    try:
+        import time
+        conn = _init_blacklist_db()
+        cursor = conn.execute(
+            "SELECT expires_at FROM blacklisted_tokens WHERE token_hash = ?",
+            (token_hash,)
+        )
+        row = cursor.fetchone()
+        
+        if row:
+            expires_at = row[0]
+            if time.time() < expires_at:
+                conn.close()
+                return True
+            else:
+                # Expired - remove it
+                conn.execute("DELETE FROM blacklisted_tokens WHERE token_hash = ?", (token_hash,))
+                conn.commit()
+        conn.close()
+        return False
+    except Exception as e:
+        logger.warning("Failed to check persistent blacklist", error=str(e))
+        return False
+
+
+def _cleanup_expired_blacklist_entries():
+    """Remove expired entries from persistent blacklist."""
+    try:
+        import time
+        conn = _init_blacklist_db()
+        conn.execute("DELETE FROM blacklisted_tokens WHERE expires_at < ?", (time.time(),))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning("Failed to cleanup expired blacklist entries", error=str(e))
+
 
 def _cleanup_local_blacklist() -> None:
     """Remove expired entries from local blacklist cache."""
@@ -295,11 +382,17 @@ async def is_token_blacklisted(token: str) -> bool:
         # Check local cache as fallback
         if token_hash in _recently_blacklisted:
             return True
+        
+        # Check persistent SQLite blacklist as second fallback
+        if _is_in_persistent_blacklist(token_hash):
+            # Also add to local cache for faster future lookups
+            _recently_blacklisted[token_hash] = time.time() + _LOCAL_BLACKLIST_MAX_AGE
+            return True
 
-        # Fail-secure in production
+        # Fail-secure in production - reject tokens we can't verify
         if get_settings().app_env == "production":
             logger.error(
-                "Redis error in production — token blacklist check FAILING SECURE. "
+                "Redis unavailable in production — token blacklist check FAILING SECURE. "
                 "Token rejected because blacklist cannot be verified."
             )
             raise HTTPException(
@@ -308,8 +401,8 @@ async def is_token_blacklisted(token: str) -> bool:
             )
         else:
             logger.warning(
-                "Redis error in development — token blacklist check skipped, "
-                "proceeding with JWT claims only"
+                "Redis unavailable in development — token blacklist check skipped, "
+                "proceeding with JWT claims only (fail-open for dev convenience)"
             )
             return False
 

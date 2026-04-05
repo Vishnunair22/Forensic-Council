@@ -176,14 +176,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 2. Wait for in-flight investigations to complete (up to 30s)
     try:
         from api.routes.investigation import _active_tasks
-        import asyncio
 
         pending = [t for t in _active_tasks.values() if not t.done()]
         if pending:
             logger.info(
                 f"Waiting for {len(pending)} in-flight investigation(s) to complete..."
             )
-            await asyncio.wait(pending, timeout=30.0)
+            try:
+                await asyncio.wait_for(asyncio.gather(*pending), timeout=30.0)
+            except asyncio.TimeoutError:
+                logger.warning("Graceful shutdown timeout — some tasks may be incomplete")
     except Exception as e:
         logger.warning(f"Graceful wait failed: {e}")
 

@@ -54,7 +54,13 @@ async def main():
     async def periodic_cleanup():
         while True:
             try:
-                cleanup_evidence()
+                # Timeout cleanup after 1 hour to prevent stacking
+                await asyncio.wait_for(
+                    asyncio.to_thread(cleanup_evidence),
+                    timeout=3600
+                )
+            except asyncio.TimeoutError:
+                logger.error("Periodic cleanup exceeded 1 hour timeout — cancelling")
             except Exception as e:
                 logger.error(f"Periodic cleanup failed: {e}")
             await asyncio.sleep(24 * 3600)
