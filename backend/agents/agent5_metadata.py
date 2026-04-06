@@ -31,16 +31,32 @@ from core.tool_registry import ToolRegistry
 from tools.image_tools import file_hash_verify as real_file_hash_verify
 from tools.mediainfo_tools import (
     get_av_file_identity as real_get_av_file_identity,
+)
+from tools.mediainfo_tools import (
     profile_av_container as real_profile_av_container,
 )
 from tools.metadata_tools import (
     exif_extract_enhanced as real_exif_extract,
+)
+from tools.metadata_tools import (
     extract_deep_metadata as real_extract_deep_metadata,
+)
+from tools.metadata_tools import (
     file_structure_analysis as real_file_structure_analysis,
+)
+from tools.metadata_tools import (
     get_physical_address as real_get_physical_address,
+)
+from tools.metadata_tools import (
     gps_timezone_validate as real_gps_timezone_validate,
+)
+from tools.metadata_tools import (
     hex_signature_scan as real_hex_signature_scan,
+)
+from tools.metadata_tools import (
     steganography_scan as real_steganography_scan,
+)
+from tools.metadata_tools import (
     timestamp_analysis as real_timestamp_analysis,
 )
 from tools.ocr_tools import extract_evidence_text as real_extract_evidence_text
@@ -364,6 +380,7 @@ class Agent5Metadata(ForensicAgent):
             Validates if the claimed timestamp is consistent with sun position at GPS location.
             """
             from datetime import datetime
+
             from astral import LocationInfo
             from astral.sun import sun
 

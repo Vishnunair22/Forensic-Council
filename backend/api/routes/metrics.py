@@ -9,15 +9,15 @@ and are correct across multiple replicas.  When Redis is unavailable the
 module degrades gracefully to in-process counters (single-replica accuracy).
 """
 
-import time
 import asyncio
+import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
-from core.auth import require_admin, User
+from core.auth import User, require_admin
 from core.config import get_settings
 from core.structured_logging import get_logger
 
@@ -248,7 +248,7 @@ async def _get_pool_stats() -> dict:
             }
     except Exception as e:
         logger.debug("Failed to get pool stats", error=str(e))
-    
+
     return {"size": 0, "available": 0, "in_use": 0, "max": 0}
 
 

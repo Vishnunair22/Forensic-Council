@@ -95,9 +95,11 @@ class CLIPImageAnalyzer:
             return True
 
         try:
+            import os
+
             import open_clip
             import torch
-            import os
+
             from core.config import get_settings
 
             settings = get_settings()

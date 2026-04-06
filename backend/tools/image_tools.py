@@ -19,10 +19,9 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage
 
-from core.image_utils import is_lossless_image
-
 from core.evidence import ArtifactType, EvidenceArtifact
 from core.exceptions import ToolUnavailableError
+from core.image_utils import is_lossless_image
 from infra.evidence_store import EvidenceStore
 
 # OCR imports
@@ -695,9 +694,9 @@ async def extract_text_from_image(
     import asyncio as _asyncio
 
     def _run_ocr():
-        import pytesseract
         import cv2
         import numpy as np
+        import pytesseract
         from PIL import Image as PILImage
 
         original_path = artifact.file_path

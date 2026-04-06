@@ -17,19 +17,29 @@ from core.custody_logger import CustodyLogger
 from core.episodic_memory import EpisodicMemory
 from core.evidence import EvidenceArtifact
 from core.inter_agent_bus import InterAgentBus, InterAgentCall, InterAgentCallType
+from core.ml_subprocess import run_ml_tool
 from core.tool_registry import ToolRegistry
 from core.working_memory import WorkingMemory
-from core.ml_subprocess import run_ml_tool
 from infra.evidence_store import EvidenceStore
+from tools.audio_tools import (
+    anti_spoofing_speechbrain as real_anti_spoofing_detect,  # SpeechBrain ECAPA
+)
+from tools.audio_tools import (
+    av_sync_verify as real_av_sync_verify,  # moviepy+librosa
+)
+from tools.audio_tools import (
+    background_noise_consistency as real_background_noise_consistency,
+)
+from tools.audio_tools import (
+    codec_fingerprint as real_codec_fingerprint,
+)
+from tools.audio_tools import (
+    prosody_praat as real_prosody_analyze,  # praat-parselmouth
+)
 
 # Import real tool implementations
 from tools.audio_tools import (
     speaker_diarize_pyannote as real_speaker_diarize,  # pyannote.audio 3.1
-    anti_spoofing_speechbrain as real_anti_spoofing_detect,  # SpeechBrain ECAPA
-    prosody_praat as real_prosody_analyze,  # praat-parselmouth
-    background_noise_consistency as real_background_noise_consistency,
-    codec_fingerprint as real_codec_fingerprint,
-    av_sync_verify as real_av_sync_verify,  # moviepy+librosa
 )
 
 
@@ -274,8 +284,8 @@ class Agent2Audio(ForensicAgent):
             collapse significantly under light perturbation the recording
             may have been engineered to evade ML-based detectors.
             """
-            import numpy as np
             import librosa
+            import numpy as np
 
             artifact = input_data.get("artifact") or self.evidence_artifact
 

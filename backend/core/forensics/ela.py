@@ -6,8 +6,10 @@ Provides pixel-level anomaly detection by analyzing compression residuals.
 """
 
 import io
+
 import numpy as np
 from PIL import Image
+
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
@@ -30,15 +32,15 @@ async def classify_ela_anomalies(file_path: str, quality: int = 95, context_ela_
         img.save(buf, format="JPEG", quality=int(quality))
         buf.seek(0)
         recompressed = Image.open(buf).convert("RGB")
-        
+
         ela = np.abs(
-            np.array(img, dtype=np.int16) 
+            np.array(img, dtype=np.int16)
             - np.array(recompressed, dtype=np.int16)
         ).astype(np.uint8)
-        
+
         ela_mean = float(context_ela_mean if context_ela_mean is not None else ela.mean())
         ela_max = int(ela.max())
-        
+
         # Split into 8x8 blocks and score each
         arr = ela.mean(axis=2)  # grayscale
         h, w = arr.shape
@@ -46,10 +48,10 @@ async def classify_ela_anomalies(file_path: str, quality: int = 95, context_ela_
         for y in range(0, h - 8, 8):
             for x in range(0, w - 8, 8):
                 block_scores.append(float(arr[y : y + 8, x : x + 8].mean()))
-        
+
         # Anomaly = block mean > 2.5x the baseline ELA mean
         anomaly_blocks = int(sum(1 for s in block_scores if s > ela_mean * 2.5))
-        
+
         return {
             "anomaly_block_count": anomaly_blocks,
             "total_blocks": len(block_scores),

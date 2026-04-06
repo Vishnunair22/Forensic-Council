@@ -14,9 +14,9 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from api.schemas import BriefUpdate
 from core.config import get_settings
 from core.structured_logging import get_logger
-from api.schemas import BriefUpdate
 
 logger = get_logger(__name__)
 settings = get_settings()

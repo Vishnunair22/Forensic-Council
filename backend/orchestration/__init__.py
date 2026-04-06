@@ -6,7 +6,7 @@ This module provides the pipeline orchestration for the forensic analysis system
 """
 
 from orchestration.pipeline import ForensicCouncilPipeline
-from orchestration.session_manager import SessionManager, HITLCheckpointState
+from orchestration.session_manager import HITLCheckpointState, SessionManager
 
 __all__ = [
     "ForensicCouncilPipeline",

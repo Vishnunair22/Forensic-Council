@@ -9,10 +9,10 @@ This module contains infrastructure clients and utilities:
 - Storage abstraction for evidence files
 """
 
-from infra.redis_client import RedisClient, get_redis_client
-from infra.qdrant_client import QdrantClient, get_qdrant_client
 from infra.postgres_client import PostgresClient, get_postgres_client
-from infra.storage import StorageBackend, LocalStorageBackend
+from infra.qdrant_client import QdrantClient, get_qdrant_client
+from infra.redis_client import RedisClient, get_redis_client
+from infra.storage import LocalStorageBackend, StorageBackend
 
 __all__ = [
     "RedisClient",

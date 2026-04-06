@@ -5,9 +5,10 @@ Forensic Council — Worker Entrypoint
 Starts the background worker to consume and process forensic tasks from Redis.
 """
 
-import sys
-import os
 import asyncio
+import os
+import sys
+
 from core.structured_logging import get_logger
 
 # Ensure the backend directory is in the path

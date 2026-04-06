@@ -12,8 +12,8 @@ from enum import Enum
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from core.structured_logging import get_logger
 from core.signing import SignedEntry, sign_content, verify_entry
+from core.structured_logging import get_logger
 from infra.postgres_client import PostgresClient, get_postgres_client
 
 logger = get_logger(__name__)

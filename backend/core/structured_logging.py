@@ -6,12 +6,12 @@ Provides structured JSON logging for the Forensic Council system.
 All logs are formatted as JSON for easy parsing and analysis.
 """
 
+import contextvars
 import json
 import logging
 import sys
 from datetime import datetime, timezone
 from typing import Any, Optional
-import contextvars
 
 request_id_ctx: contextvars.ContextVar[str] = contextvars.ContextVar(
     "request_id", default=""

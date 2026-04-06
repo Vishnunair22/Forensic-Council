@@ -25,8 +25,9 @@ Output JSON:
 import argparse
 import json
 import sys
-import numpy as np
+
 import cv2
+import numpy as np
 from skimage.metrics import structural_similarity as ssim
 
 
@@ -176,13 +177,13 @@ if __name__ == "__main__":
     parser.add_argument("--warmup", action="store_true", help="Warmup mode - preload dependencies")
     parser.add_argument("--worker", action="store_true", help="Worker mode - persistent process")
     args = parser.parse_args()
-    
+
     # Warmup mode - verify dependencies load
     if args.warmup:
         try:
-            from skimage.metrics import structural_similarity as ssim
             import cv2
             import numpy as np
+            from skimage.metrics import structural_similarity as ssim
             print(json.dumps({
                 "status": "warmed_up",
                 "dependencies": ["skimage", "cv2", "numpy"],
@@ -195,7 +196,7 @@ if __name__ == "__main__":
                 "error": str(e)
             }))
             sys.exit(1)
-    
+
     # Worker mode - persistent process reading from stdin
     if args.worker:
         for line in sys.stdin:
@@ -208,12 +209,12 @@ if __name__ == "__main__":
                 extra_args = request.get("extra_args", [])
                 frameB = extra_args[0] if len(extra_args) > 0 else None
                 motion = float(extra_args[1]) if len(extra_args) > 1 else 0.0
-                
+
                 if not frameA or not frameB:
                     print(json.dumps({"error": "Missing frameA or frameB", "available": False}))
                     sys.stdout.flush()
                     continue
-                
+
                 result = classify_anomaly(frameA, frameB, motion)
                 print(json.dumps(result))
                 sys.stdout.flush()
@@ -221,7 +222,7 @@ if __name__ == "__main__":
                 print(json.dumps({"error": str(e), "available": False}))
                 sys.stdout.flush()
         sys.exit(0)
-    
+
     # Normal mode - single execution
     if not args.frameA or not args.frameB:
         parser.print_help()

@@ -8,6 +8,7 @@ Analyzes regional noise consistency to detect local tampering or source inconsis
 import cv2
 import numpy as np
 from PIL import Image
+
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
@@ -26,11 +27,11 @@ def analyze_noise_consistency(file_path: str, regions: int = 4) -> dict:
     try:
         img = np.array(Image.open(file_path).convert("L"), dtype=np.float32)
         h, w = img.shape
-        
+
         # Simple high-pass Filter to extract sensor noise
         denoised = cv2.GaussianBlur(img, (5, 5), 0)
         noise = img - denoised
-        
+
         # Sample quadrants (2x2 by default for 'regions' = 4)
         sq = int(np.sqrt(regions))
         rh, rw = h // sq, w // sq
@@ -39,14 +40,14 @@ def analyze_noise_consistency(file_path: str, regions: int = 4) -> dict:
             for c in range(sq):
                 q = noise[r * rh : (r + 1) * rh, c * rw : (c + 1) * rw]
                 quadrant_stds.append(float(q.std()))
-        
+
         mean_std = float(np.mean(quadrant_stds))
         std_of_stds = float(np.std(quadrant_stds))
-        
+
         # Outlier = quadrant has noise variance > standard deviation of all quadrant variances
         outliers = int(sum(1 for s in quadrant_stds if abs(s - mean_std) > std_of_stds))
         verdict = "INCONSISTENT" if outliers > 1 else "CONSISTENT"
-        
+
         return {
             "verdict": verdict,
             "noise_consistency_score": round(1.0 - std_of_stds / (mean_std + 1e-6), 3),

@@ -8,23 +8,22 @@ Implements EXIF extraction, GPS/timezone validation, and steganography detection
 
 from __future__ import annotations
 
-import os
 import asyncio
+import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
-import numpy as np
-from PIL import Image
-from PIL.ExifTags import TAGS, GPSTAGS
-from timezonefinder import TimezoneFinder
 import exiftool
-from geopy.geocoders import Nominatim
+import numpy as np
 from geopy.exc import GeocoderTimedOut
+from geopy.geocoders import Nominatim
+from PIL import Image
+from PIL.ExifTags import GPSTAGS, TAGS
+from timezonefinder import TimezoneFinder
 
 from core.evidence import EvidenceArtifact
 from core.exceptions import ToolUnavailableError
-
 
 # Standard EXIF fields expected in a typical JPEG from a camera
 EXPECTED_EXIF_FIELDS = [
@@ -100,8 +99,8 @@ def _get_exif_data(
         exif = image.getexif()
         if exif is None or len(exif) == 0:
             # Generate fallback EXIF using real OS statistics for stripped images
-            from datetime import datetime
             import os
+            from datetime import datetime
 
             fallback_data = {
                 "ExifImageWidth": image.width,
@@ -894,8 +893,9 @@ async def astronomical_validate_astral(
     """
     try:
         from astral import LocationInfo
-        from astral.sun import sun, elevation as sun_elevation
         from astral.moon import phase as moon_phase
+        from astral.sun import elevation as sun_elevation
+        from astral.sun import sun
     except ImportError:
         return {
             "status": "ERROR",
@@ -1026,8 +1026,8 @@ async def exif_extract_enhanced(
 
     # Layer 2: hachoir
     try:
-        from hachoir.parser import createParser
         from hachoir.metadata import extractMetadata
+        from hachoir.parser import createParser
 
         parser = createParser(artifact.file_path)
         if parser:

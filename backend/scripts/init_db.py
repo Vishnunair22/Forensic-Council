@@ -23,8 +23,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.config import get_settings
-from core.structured_logging import get_logger, configure_root_logger
 from core.migrations import MigrationManager
+from core.structured_logging import configure_root_logger, get_logger
 from infra.postgres_client import PostgresClient
 
 logger = get_logger(__name__)

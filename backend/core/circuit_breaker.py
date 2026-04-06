@@ -11,10 +11,9 @@ Usage:
 """
 
 import asyncio
-import time
-from enum import Enum
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from enum import Enum
 from typing import Any, Callable, Optional
 
 from core.structured_logging import get_logger
@@ -46,7 +45,7 @@ class CircuitBreaker:
     calls) when failures exceed a threshold. After a timeout, it allows
     test calls to see if the service has recovered.
     """
-    
+
     def __init__(self, service_name: str, config: Optional[CircuitBreakerConfig] = None):
         self.service_name = service_name
         self.config = config or CircuitBreakerConfig()
@@ -56,7 +55,7 @@ class CircuitBreaker:
         self.last_failure_time: Optional[datetime] = None
         self.last_state_change = datetime.now()
         self._lock = asyncio.Lock()
-    
+
     async def call(self, func: Callable, *args, **kwargs) -> Any:
         """
         Execute a function through the circuit breaker.
@@ -87,7 +86,7 @@ class CircuitBreaker:
                         f"Circuit breaker OPEN for {self.service_name}. "
                         f"Retry after {wait_time:.1f}s"
                     )
-        
+
         try:
             result = await func(*args, **kwargs)
             await self._on_success()
@@ -95,7 +94,7 @@ class CircuitBreaker:
         except self.config.expected_exceptions as e:
             await self._on_failure(e)
             raise
-    
+
     async def _on_success(self):
         """Handle successful call."""
         async with self._lock:
@@ -109,13 +108,13 @@ class CircuitBreaker:
                         "Circuit breaker CLOSED (recovered)",
                         service=self.service_name
                     )
-    
+
     async def _on_failure(self, exception: Exception):
         """Handle failed call."""
         async with self._lock:
             self.failure_count += 1
             self.last_failure_time = datetime.now()
-            
+
             if self.state == CircuitState.HALF_OPEN:
                 self.state = CircuitState.OPEN
                 self.last_state_change = datetime.now()
@@ -131,7 +130,7 @@ class CircuitBreaker:
                     service=self.service_name,
                     failures=self.failure_count
                 )
-    
+
     def _should_attempt_recovery(self) -> bool:
         """Check if enough time has passed to attempt recovery."""
         if not self.last_failure_time:
@@ -139,14 +138,14 @@ class CircuitBreaker:
         return datetime.now() - self.last_failure_time > timedelta(
             seconds=self.config.timeout_seconds
         )
-    
+
     def _time_until_recovery(self) -> float:
         """Calculate seconds until recovery attempt is allowed."""
         if not self.last_failure_time:
             return 0
         elapsed = (datetime.now() - self.last_failure_time).total_seconds()
         return max(0, self.config.timeout_seconds - elapsed)
-    
+
     def get_state(self) -> dict:
         """Get current circuit breaker state for monitoring."""
         return {
@@ -157,7 +156,7 @@ class CircuitBreaker:
             "last_failure_time": self.last_failure_time.isoformat() if self.last_failure_time else None,
             "time_until_recovery": self._time_until_recovery() if self.state == CircuitState.OPEN else 0
         }
-    
+
     def reset(self):
         """Manually reset the circuit breaker (for testing/admin)."""
         self.state = CircuitState.CLOSED
@@ -178,22 +177,22 @@ class CircuitBreakerRegistry:
     Central registry for all circuit breakers in the application.
     Provides monitoring and management capabilities.
     """
-    
+
     _instance: Optional["CircuitBreakerRegistry"] = None
     _breakers: dict[str, CircuitBreaker] = {}
-    
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
-    
+
     @classmethod
     def get(cls, service_name: str, config: Optional[CircuitBreakerConfig] = None) -> CircuitBreaker:
         """Get or create a circuit breaker for a service."""
         if service_name not in cls._breakers:
             cls._breakers[service_name] = CircuitBreaker(service_name, config)
         return cls._breakers[service_name]
-    
+
     @classmethod
     def get_all_states(cls) -> dict[str, dict]:
         """Get states of all registered circuit breakers."""
@@ -201,13 +200,13 @@ class CircuitBreakerRegistry:
             name: breaker.get_state()
             for name, breaker in cls._breakers.items()
         }
-    
+
     @classmethod
     def reset_all(cls):
         """Reset all circuit breakers (for testing/admin)."""
         for breaker in cls._breakers.values():
             breaker.reset()
-    
+
     @classmethod
     def clear(cls):
         """Clear all registered breakers (for testing)."""
@@ -240,13 +239,13 @@ async def with_retry(
         Exception: Last exception if all retries exhausted
     """
     last_exception: Optional[Exception] = None
-    
+
     for attempt in range(max_retries + 1):
         try:
             return await func()
         except retryable_exceptions as e:
             last_exception = e
-            
+
             if attempt == max_retries:
                 logger.error(
                     "All retry attempts exhausted",
@@ -254,7 +253,7 @@ async def with_retry(
                     error=str(e)
                 )
                 raise
-            
+
             backoff = min(initial_backoff * (exponential_base ** attempt), max_backoff)
             logger.warning(
                 f"Retry attempt {attempt + 1}/{max_retries} failed, backing off",
@@ -262,5 +261,5 @@ async def with_retry(
                 error=str(e)
             )
             await asyncio.sleep(backoff)
-    
+
     raise last_exception  # Should never reach here

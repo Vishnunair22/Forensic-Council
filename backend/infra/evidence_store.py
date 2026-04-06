@@ -9,12 +9,12 @@ import hashlib
 from typing import Any, Optional
 from uuid import UUID
 
-from core.evidence import EvidenceArtifact, ArtifactType, VersionTree
 from core.custody_logger import CustodyLogger, EntryType
-from core.structured_logging import get_logger
+from core.evidence import ArtifactType, EvidenceArtifact, VersionTree
 from core.exceptions import ForensicCouncilBaseException
+from core.structured_logging import get_logger
 from infra.postgres_client import PostgresClient, get_postgres_client
-from infra.storage import StorageBackend, LocalStorageBackend
+from infra.storage import LocalStorageBackend, StorageBackend
 
 logger = get_logger(__name__)
 

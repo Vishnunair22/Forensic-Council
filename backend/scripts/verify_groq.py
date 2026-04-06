@@ -38,12 +38,12 @@ async def verify_groq() -> dict:
     if not key:
         logger.error("LLM_API_KEY not configured")
         raise ValueError("LLM_API_KEY required for Groq verification")
-    
+
     # Check if it's the placeholder value
     if "CHANGE_ME" in key or "your_" in key.lower():
         logger.error("LLM_API_KEY contains placeholder value")
         raise ValueError("LLM_API_KEY must be set to a valid Groq API key")
-    
+
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(
@@ -51,22 +51,22 @@ async def verify_groq() -> dict:
                 headers={"Authorization": f"Bearer {key}"}
             )
             response.raise_for_status()
-            
+
             data = response.json()
             model_count = len(data.get("data", []))
-            
+
             logger.info(
                 "Groq API connectivity verified",
                 status_code=response.status_code,
                 models_available=model_count
             )
-            
+
             return {
                 "status": "ok",
                 "status_code": response.status_code,
                 "models_available": model_count
             }
-            
+
     except httpx.HTTPStatusError as e:
         logger.error(
             "Groq API returned error status",
@@ -77,7 +77,7 @@ async def verify_groq() -> dict:
     except httpx.ConnectError as e:
         logger.error("Groq API connection failed", error=str(e))
         raise
-    except httpx.TimeoutException as e:
+    except httpx.TimeoutException:
         logger.error("Groq API request timed out", timeout=10.0)
         raise
     except Exception as e:

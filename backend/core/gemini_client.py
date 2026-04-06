@@ -41,8 +41,8 @@ from typing import Any, Optional
 
 import httpx
 
+from core.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from core.config import Settings
-from core.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, with_retry
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
@@ -920,6 +920,7 @@ class GeminiVisionClient:
         if mime_type in _IMAGE_MIME_TYPES and len(raw) > _MAX_RAW_BYTES:
             try:
                 import io
+
                 from PIL import Image as _PImage
 
                 img = _PImage.open(io.BytesIO(raw))
@@ -966,8 +967,8 @@ class GeminiVisionClient:
         Path(file_path)
 
         try:
-            from PIL import Image as PILImage
             import numpy as np
+            from PIL import Image as PILImage
 
             img = PILImage.open(file_path).convert("RGB")
             arr = np.array(img, dtype=np.float32)

@@ -13,8 +13,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
@@ -366,8 +366,8 @@ async def is_token_blacklisted(token: str) -> bool:
 
     This prevents revoked tokens from being used during Redis outages.
     """
-    import time
     import hashlib
+    import time
 
     # Create a hash of the token for local storage (don't store raw tokens)
     token_hash = hashlib.sha256(token.encode()).hexdigest()[:32]
@@ -431,7 +431,7 @@ async def is_token_blacklisted(token: str) -> bool:
         # Check local cache as fallback
         if token_hash in _recently_blacklisted:
             return True
-        
+
         # Check persistent SQLite blacklist as second fallback
         if _is_in_persistent_blacklist(token_hash):
             # Also add to local cache for faster future lookups

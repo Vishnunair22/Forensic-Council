@@ -15,8 +15,8 @@ import threading
 from dataclasses import dataclass
 from typing import Any, Optional
 
-import numpy as np
 import librosa
+import numpy as np
 import soundfile as sf
 
 from core.evidence import EvidenceArtifact
@@ -127,12 +127,12 @@ async def speaker_diarize(
 
                 settings = get_settings()
                 hf_token = settings.hf_token
-                
+
                 # Enforce local-only mode if configured to prevent internet pings at runtime
                 if settings.offline_mode:
                     os.environ["HF_HUB_OFFLINE"] = "1"
                     os.environ["TRANSFORMERS_OFFLINE"] = "1"
-                
+
                 if hf_token:
                     pipeline = Pipeline.from_pretrained(
                         "pyannote/speaker-diarization-3.1",
@@ -1150,8 +1150,8 @@ async def av_sync_verify(
         This tool requires moviepy and librosa.
     """
     try:
-        from moviepy.editor import VideoFileClip
         import librosa
+        from moviepy.editor import VideoFileClip
     except ImportError:
         return {
             "av_sync": "UNAVAILABLE",

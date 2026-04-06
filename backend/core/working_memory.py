@@ -6,8 +6,8 @@ Redis-backed working memory for agent task tracking.
 Part of the dual-layer memory architecture.
 """
 
-import json
 import asyncio
+import json
 import tempfile
 from enum import Enum
 from pathlib import Path
@@ -16,8 +16,8 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
-from core.structured_logging import get_logger
 from core.custody_logger import CustodyLogger, EntryType
+from core.structured_logging import get_logger
 from infra.redis_client import RedisClient, get_redis_client
 
 logger = get_logger(__name__)

@@ -16,8 +16,8 @@ from typing import Optional
 from uuid import UUID
 
 from core.config import get_settings
-from core.structured_logging import get_logger
 from core.exceptions import EvidenceNotFoundError
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 

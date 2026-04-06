@@ -22,8 +22,8 @@ from core.config import Settings, get_settings
 from core.cross_modal_fusion import fuse as cross_modal_fuse
 from core.llm_client import LLMClient
 from core.severity import assign_severity_tier
-from core.structured_logging import get_logger
 from core.signing import KeyStore, sign_content
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -690,14 +690,14 @@ class CouncilArbiter:
                 return "NOT_APPLICABLE"
             conf = metrics.get("confidence_score", 0)
             err = metrics.get("error_rate", 0)
-            
+
             # Parameterised thresholds with fallbacks for robust verdict calibration
             thresh = getattr(self.config, "verdict_thresholds", {})
             auth_conf = thresh.get("authentic_min_conf", 0.70)
             auth_err = thresh.get("authentic_max_err", 0.15)
             susp_conf = thresh.get("suspicious_max_conf", 0.45)
             susp_err = thresh.get("suspicious_min_err", 0.40)
-            
+
             if conf >= auth_conf and err <= auth_err:
                 return "AUTHENTIC"
             if conf < susp_conf or err > susp_err:

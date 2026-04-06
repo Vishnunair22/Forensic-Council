@@ -21,49 +21,38 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Form, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
-from core.auth import get_current_user, User
-
+# Import extracted modules
+from api.routes._rate_limiting import (
+    check_daily_cost_quota,
+    check_investigation_rate_limit,
+)
+from api.routes._session_state import (
+    AGENT_NAMES,
+    _active_pipelines,
+    _final_reports,
+    broadcast_update,
+    get_session_websockets,
+    set_active_pipeline,
+    set_active_pipeline_metadata,
+    set_active_task,
+    set_final_report,
+)
 from api.routes.metrics import (
-    increment_investigations_started,
     increment_investigations_completed,
     increment_investigations_failed,
+    increment_investigations_started,
 )
 from api.schemas import (
     BriefUpdate,
     InvestigationResponse,
 )
+from core.auth import User, get_current_user
 from core.config import get_settings
 from core.severity import assign_severity_tier
 from core.structured_logging import get_logger
-from orchestration.pipeline import ForensicCouncilPipeline, AgentLoopResult
-
-# Import extracted modules
-from api.routes._rate_limiting import (
-    check_investigation_rate_limit,
-    check_daily_cost_quota,
-)
-from api.routes._session_state import (
-    _active_pipelines,
-    _final_reports,
-    _active_tasks,
-    AGENT_NAMES,
-    evict_stale_sessions,
-    set_active_pipeline,
-    set_active_pipeline_metadata,
-    set_active_task,
-    set_final_report,
-    get_active_pipeline,
-    get_all_active_pipelines,
-    get_active_pipelines_count,
-    remove_active_pipeline,
-    pop_active_task,
-    get_session_websockets,
-    clear_session_websockets,
-    cleanup_connections,
-    broadcast_update,
-)
+from orchestration.pipeline import AgentLoopResult, ForensicCouncilPipeline
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -380,7 +369,7 @@ async def start_investigation(
     # ── 4. Submit to Redis Queue ──────────────────────────────────────────────
     try:
         from orchestration.investigation_queue import get_investigation_queue
-        
+
         queue = get_investigation_queue()
         await queue.submit(
             session_id=session_id,

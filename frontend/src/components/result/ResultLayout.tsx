@@ -2,37 +2,15 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
-  AlertTriangle,
-  ShieldCheck,
   RotateCcw,
   Home,
-  ChevronDown,
-  Lock,
   FileText,
-  Shield,
   XCircle,
   Download,
-  LinkIcon,
-  Fingerprint,
-  Image as ImageIcon,
-  Film,
-  Mic,
   AlertCircle,
   Activity,
-  Info,
   History,
-  X,
-  Zap,
-  Layers,
-  Clock,
-  Target,
-  ArrowRight,
-  BarChart2,
-  Award,
   Search,
-  Cpu,
-  Hash,
-  Trash2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
@@ -43,16 +21,11 @@ import {
   getReport,
   getArbiterStatus,
   type ReportDTO,
-  type AgentMetricsDTO,
-  type AgentFindingDTO,
 } from "@/lib/api";
 import { getVerdictConfig } from "@/lib/verdict";
-import { AgentFindingCard } from "@/components/ui/AgentFindingCard";
 import { ForensicProgressOverlay } from "@/components/ui/ForensicProgressOverlay";
 import type { AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
 import { DeepModelTelemetry } from "@/components/result/DeepModelTelemetry";
-import { TribunalMatrix } from "@/components/result/TribunalMatrix";
-import { EvidenceGraph } from "@/components/result/EvidenceGraph";
 import { ResultHeader } from "./ResultHeader";
 import { AgentAnalysisTab } from "./AgentAnalysisTab";
 import { TimelineTab } from "./TimelineTab";
@@ -62,60 +35,7 @@ import { ReportFooter } from "./ReportFooter";
 const isDev = process.env.NODE_ENV !== "production";
 const dbg = { error: isDev ? console.error.bind(console) : () => {} };
 
-const ALL_AGENT_IDS = ["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"];
 
-const AGENT_META: Record<
-  string,
-  {
-    name: string;
-    role: string;
-    accentColor: string;
-    accentBg: string;
-    accentBorder: string;
-    accentFill: string;
-  }
-> = {
-  Agent1: {
-    name: "Image Integrity Expert",
-    role: "Image Integrity",
-    accentColor: "text-cyan-400",
-    accentBg: "bg-cyan-500/10",
-    accentBorder: "border-cyan-500/30",
-    accentFill: "#22d3ee",
-  },
-  Agent2: {
-    name: "Audio Forensics Expert",
-    role: "Audio Forensics",
-    accentColor: "text-indigo-400",
-    accentBg: "bg-indigo-500/10",
-    accentBorder: "border-indigo-500/30",
-    accentFill: "#818cf8",
-  },
-  Agent3: {
-    name: "Object & Weapon Analyst",
-    role: "Object & Weapons",
-    accentColor: "text-sky-400",
-    accentBg: "bg-sky-500/10",
-    accentBorder: "border-sky-500/30",
-    accentFill: "#38bdf8",
-  },
-  Agent4: {
-    name: "Temporal Video Analyst",
-    role: "Temporal Video",
-    accentColor: "text-teal-400",
-    accentBg: "bg-teal-500/10",
-    accentBorder: "border-teal-500/30",
-    accentFill: "#2dd4bf",
-  },
-  Agent5: {
-    name: "Metadata & Context Expert",
-    role: "Metadata & Context",
-    accentColor: "text-blue-400",
-    accentBg: "bg-blue-500/10",
-    accentBorder: "border-blue-500/30",
-    accentFill: "#60a5fa",
-  },
-};
 
 type Tab = "analysis" | "history";
 type PageState = "arbiter" | "ready" | "error" | "empty";
@@ -170,7 +90,8 @@ export function ResultLayout() {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     let attempts = 0;
-    const MAX = 60;
+    const MAX_ATTEMPTS = 180; // 6 minutes at 2s intervals (was 60 = 2 min)
+    const POLL_INTERVAL = 2000;
 
     async function poll() {
       if (cancelled) return;
@@ -179,7 +100,7 @@ export function ResultLayout() {
         const s = await getArbiterStatus(sid);
         if (cancelled) return;
 
-        if (s.status === "complete" || s.status === "not_found") {
+        if (s.status === "complete") {
           try {
             const res = await getReport(sid);
             if (cancelled) return;
@@ -219,7 +140,9 @@ export function ResultLayout() {
           setState("error");
           return;
         } else {
-          setArbiterMsg(s.message || "");
+          // running or not_found - keep polling
+          setArbiterMsg(s.message || "Council deliberating...");
+          // Also try to get report in case it's ready but status hasn't updated
           try {
             const res = await getReport(sid);
             if (!cancelled && res.status === "complete" && res.report) {
@@ -234,15 +157,15 @@ export function ResultLayout() {
               return;
             }
           } catch (e) {
-            dbg.error("getReport during polling failed:", e);
+            // Report not ready yet - continue polling
           }
         }
       } catch (e) {
         dbg.error("getArbiterStatus failed:", e);
       }
 
-      if (!cancelled && attempts < MAX) {
-        timer = setTimeout(poll, 2000);
+      if (!cancelled && attempts < MAX_ATTEMPTS) {
+        timer = setTimeout(poll, POLL_INTERVAL);
       } else if (!cancelled) {
         setErrorMsg("Arbiter timed out. The session may have expired.");
         setState("error");

@@ -7,19 +7,20 @@ tasks from the Redis queue.
 """
 
 import asyncio
+import os
 import signal
 import sys
-import os
 from typing import Any
+
 from scripts.cleanup_storage import cleanup_evidence
 
 # Add current directory to path so imports work
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from core.structured_logging import get_logger
-from orchestration.investigation_queue import get_investigation_queue, InvestigationWorker
-from orchestration.pipeline import ForensicCouncilPipeline
 from core.config import get_settings
+from core.structured_logging import get_logger
+from orchestration.investigation_queue import InvestigationWorker, get_investigation_queue
+from orchestration.pipeline import ForensicCouncilPipeline
 
 logger = get_logger("worker")
 settings = get_settings()

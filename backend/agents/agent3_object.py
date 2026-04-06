@@ -25,13 +25,10 @@ from core.custody_logger import CustodyLogger
 from core.episodic_memory import EpisodicMemory
 from core.evidence import EvidenceArtifact
 from core.inter_agent_bus import InterAgentCall, InterAgentCallType
+from core.ml_subprocess import run_ml_tool
 from core.tool_registry import ToolRegistry
 from core.working_memory import WorkingMemory
-from core.ml_subprocess import run_ml_tool
 from infra.evidence_store import EvidenceStore
-
-
-
 
 # Module-level YOLO singleton — load once, reuse across all calls
 # Process-safe: uses a lock and validates model state on each access.
@@ -56,13 +53,14 @@ def _get_yolo_model() -> Any:
         from core.config import get_settings
         settings = get_settings()
 
-        from ultralytics import YOLO, settings as yolo_settings
+        from ultralytics import YOLO
+        from ultralytics import settings as yolo_settings
 
         yolo_cache = settings.yolo_config_dir
         os.makedirs(yolo_cache, exist_ok=True)
         os.environ["YOLO_CONFIG_DIR"] = yolo_cache
         os.environ["ULTRALYTICS_CACHE_DIR"] = yolo_cache
-        
+
         if settings.offline_mode:
             os.environ["ULTRALYTICS_OFFLINE"] = "True"
             os.environ["HF_HUB_OFFLINE"] = "1"
@@ -214,11 +212,10 @@ class Agent3Object(ForensicAgent):
             YOLOv8n is ~6MB and runs CPU-only in ~200ms per image.
             Detects 80 COCO classes including weapons (knife, gun, etc.)
             """
-            import os
             import asyncio
+            import os
 
             # Set YOLO cache directory BEFORE importing - this controls where models are downloaded
-            import pathlib
 
             yolo_cache = os.getenv(
                 "YOLO_CONFIG_DIR", str(pathlib.Path.home() / ".cache" / "ultralytics")
@@ -252,8 +249,9 @@ class Agent3Object(ForensicAgent):
                         (".mp4", ".avi", ".mov", ".mkv", ".webm", ".wmv", ".flv")
                     ) or mime.startswith("video/")
                     if is_video:
-                        import cv2
                         import tempfile
+
+                        import cv2
 
                         cap = cv2.VideoCapture(target_path)
                         if cap.isOpened():
@@ -337,9 +335,11 @@ class Agent3Object(ForensicAgent):
                 person_dets = [d for d in detections if d["class_name"] == "person"]
                 if person_dets:
                     try:
-                        from tools.clip_utils import get_clip_analyzer
                         import tempfile as _tf
+
                         from PIL import Image as _PILImage
+
+                        from tools.clip_utils import get_clip_analyzer
 
                         analyzer = get_clip_analyzer()
                         img_full = _PILImage.open(target_path).convert("RGB")
@@ -513,8 +513,8 @@ class Agent3Object(ForensicAgent):
                     img = img.crop((x1, y1, x2, y2))
 
                 # Save cropped region to temp file for CLIP analyzer
-                import tempfile
                 import os
+                import tempfile
 
                 with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
                     img.save(tmp.name, format="JPEG", quality=95)
@@ -1055,9 +1055,11 @@ class Agent3Object(ForensicAgent):
             near a decision boundary — a forensic red flag for adversarial
             patches (stickers designed to hide objects from ML detectors).
             """
-            import numpy as np
-            from PIL import Image as PILImage, ImageFilter
             import tempfile
+
+            import numpy as np
+            from PIL import Image as PILImage
+            from PIL import ImageFilter
 
             artifact = input_data.get("artifact") or self.evidence_artifact
 
@@ -1208,8 +1210,9 @@ class Agent3Object(ForensicAgent):
                 await self._record_tool_result("object_text_ocr", result)
                 return result
             try:
-                from PIL import Image
                 import asyncio as _aio
+
+                from PIL import Image
 
                 img = Image.open(artifact.file_path).convert("RGB")
                 w_img, h_img = img.size

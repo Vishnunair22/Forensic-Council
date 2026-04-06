@@ -9,12 +9,13 @@ Supports async context managers and logs connection events.
 import asyncio
 import json
 from typing import Any, Optional
+
 import asyncpg
-from asyncpg import Pool, Connection
+from asyncpg import Connection, Pool
 
 from core.config import get_settings
-from core.structured_logging import get_logger
 from core.exceptions import DatabaseConnectionError
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 

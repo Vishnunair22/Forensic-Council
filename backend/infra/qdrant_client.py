@@ -6,23 +6,23 @@ Async Qdrant client wrapper for episodic memory (vector storage).
 Supports async context managers and logs connection events.
 """
 
+import asyncio
 from typing import Any, Optional
 from uuid import UUID
-import asyncio
 
 from qdrant_client import AsyncQdrantClient as QdrantAsyncClient
 from qdrant_client.models import (
     Distance,
-    VectorParams,
-    PointStruct,
-    Filter,
     FieldCondition,
+    Filter,
     MatchValue,
+    PointStruct,
+    VectorParams,
 )
 
 from core.config import get_settings
-from core.structured_logging import get_logger
 from core.exceptions import QdrantConnectionError
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 

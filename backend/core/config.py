@@ -7,14 +7,13 @@ All configuration is centralized and validated at startup.
 """
 
 import os
+import warnings
 from functools import lru_cache
 from typing import Optional
 from urllib.parse import quote_plus
 
-import warnings
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 
 # Default credentials that must be changed in production
 INSECURE_DEFAULTS = {

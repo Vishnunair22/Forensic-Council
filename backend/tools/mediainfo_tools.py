@@ -25,8 +25,8 @@ Model caching:
 from __future__ import annotations
 
 import asyncio
-import os
 import atexit
+import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Optional
 

@@ -8,13 +8,12 @@ Manages active investigation sessions, agent loops, and HITL checkpoints.
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Optional
 from uuid import UUID, uuid4
-
-import json
 
 from core.structured_logging import get_logger
 

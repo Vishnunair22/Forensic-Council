@@ -17,22 +17,32 @@ from core.custody_logger import CustodyLogger
 from core.episodic_memory import EpisodicMemory
 from core.evidence import EvidenceArtifact
 from core.inter_agent_bus import InterAgentCall, InterAgentCallType
+from core.ml_subprocess import run_ml_tool
 from core.tool_registry import ToolRegistry
 from core.working_memory import WorkingMemory
-from core.ml_subprocess import run_ml_tool
 from infra.evidence_store import EvidenceStore
+from tools.mediainfo_tools import (
+    get_av_file_identity as real_get_av_file_identity,
+)
+from tools.mediainfo_tools import (
+    profile_av_container as real_profile_av_container,
+)
+from tools.video_tools import (
+    face_swap_detect_deepface as real_face_swap_detect,  # DeepFace embedding model
+)
+from tools.video_tools import (
+    frame_consistency_analyze as real_frame_consistency_analyze,
+)
+from tools.video_tools import (
+    frame_window_extract as real_frame_window_extract,
+)
 
 # Import real tool implementations
 from tools.video_tools import (
     optical_flow_analyze as real_optical_flow_analyze,
-    frame_window_extract as real_frame_window_extract,
-    frame_consistency_analyze as real_frame_consistency_analyze,
-    face_swap_detect_deepface as real_face_swap_detect,  # DeepFace embedding model
-    video_metadata_extract as real_video_metadata_extract,
 )
-from tools.mediainfo_tools import (
-    profile_av_container as real_profile_av_container,
-    get_av_file_identity as real_get_av_file_identity,
+from tools.video_tools import (
+    video_metadata_extract as real_video_metadata_extract,
 )
 
 
@@ -361,8 +371,8 @@ class Agent4Video(ForensicAgent):
             original flow analysis is fragile and may have been engineered
             to evade temporal detectors.
             """
-            import numpy as np
             import cv2
+            import numpy as np
 
             artifact = input_data.get("artifact") or self.evidence_artifact
 

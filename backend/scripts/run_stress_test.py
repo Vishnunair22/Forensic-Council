@@ -1,7 +1,7 @@
 import asyncio
+import logging
 import os
 import sys
-import logging
 from pathlib import Path
 from uuid import uuid4
 

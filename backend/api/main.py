@@ -7,15 +7,15 @@ Production-hardened with security headers, CORS controls, and
 environment-aware configuration.
 """
 
+import asyncio
+import hashlib
+import secrets
+import time
+import uuid
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-import asyncio
-import hashlib
-import time
-import secrets
-
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -30,7 +30,6 @@ from core.config import get_settings, validate_production_settings
 from core.observability import setup_observability
 from core.structured_logging import get_logger, request_id_ctx
 from infra.redis_client import get_redis_client
-import uuid
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -107,8 +106,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Bootstrap default users (idempotent — skips if users already exist)
     try:
-        from scripts.init_db import bootstrap_users
         from infra.postgres_client import get_postgres_client
+        from scripts.init_db import bootstrap_users
 
         pg = await get_postgres_client()
         await bootstrap_users(pg)
@@ -148,10 +147,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 warmup_all_tools(timeout_per_tool=120.0),
                 timeout=180.0  # Total timeout for all tools
             )
-            
+
             succeeded = sum(1 for v in warmup_results.values() if v)
             total = len(warmup_results)
-            
+
             if succeeded < total:
                 logger.warning(
                     f"Only {succeeded}/{total} ML tools warmed up — investigations may be slow",
@@ -417,14 +416,14 @@ async def rate_limit_middleware(request: Request, call_next):
         )
     else:
         identifier = f"ip:{ip}"
-    
+
     limit = 60 if is_authenticated else 10
     window = 60  # seconds
-    
+
     try:
         redis = await get_redis_client()
         key = f"rate_limit:{identifier}"
-        
+
         # Use Lua script for atomic INCR + EXPIRE (prevents race condition)
         lua_script = """
         local key = KEYS[1]
@@ -436,7 +435,7 @@ async def rate_limit_middleware(request: Request, call_next):
         return count
         """
         count = await redis.eval(lua_script, keys=[key], args=[window])
-            
+
         if count > limit:
             logger.warning(f"Rate limit exceeded for {identifier}", count=count, limit=limit)
             return JSONResponse(
@@ -447,7 +446,7 @@ async def rate_limit_middleware(request: Request, call_next):
     except Exception as e:
         # Don't block requests if Redis is down, just log
         logger.error("Rate limiting error (Redis)", error=str(e))
-        
+
     return await call_next(request)
 
 
@@ -714,15 +713,15 @@ async def ml_tools_health():
     Returns detailed information about ML tool warm-up status.
     Used by operators to verify models are ready before investigations.
     """
-    from core.ml_subprocess import get_warmup_status
     from core.config import get_settings
-    
+    from core.ml_subprocess import get_warmup_status
+
     settings = get_settings()
     warmup_status = get_warmup_status()
-    
+
     tools_ready = sum(1 for v in warmup_status.values() if v)
     tools_total = len(warmup_status)
-    
+
     return {
         "status": "ready" if tools_ready == tools_total else "warming_up",
         "tools_ready": tools_ready,

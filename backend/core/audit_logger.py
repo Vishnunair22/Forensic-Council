@@ -17,8 +17,8 @@ Usage:
     )
 """
 
-from typing import Optional, Any
 from datetime import datetime, timezone
+from typing import Any, Optional
 
 from core.structured_logging import get_logger
 
@@ -59,7 +59,7 @@ async def log_sensitive_operation(
         "result": result,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
-    
+
     # Truncate sensitive values to prevent log flooding
     if old_value is not None:
         audit_entry["old_value"] = str(old_value)[:100]
@@ -69,7 +69,7 @@ async def log_sensitive_operation(
         audit_entry["details"] = details
     if ip_address:
         audit_entry["ip_address"] = ip_address
-    
+
     # Log at INFO level for successful operations, WARNING for failures
     if result == "success":
         audit_logger.info("Sensitive operation completed", **audit_entry)

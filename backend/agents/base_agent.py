@@ -16,19 +16,19 @@ from pydantic import BaseModel, Field
 
 from core.config import Settings
 from core.custody_logger import CustodyLogger, EntryType
-from core.episodic_memory import EpisodicMemory, EpisodicEntry, ForensicSignatureType
+from core.episodic_memory import EpisodicEntry, EpisodicMemory, ForensicSignatureType
 from core.evidence import EvidenceArtifact
 from core.inter_agent_bus import InterAgentCall
 from core.llm_client import LLMClient
-from core.structured_logging import get_logger
 from core.react_loop import (
     AgentFinding,
     HITLCheckpointReason,
     ReActLoopEngine,
     create_llm_step_generator,
 )
+from core.structured_logging import get_logger
 from core.tool_registry import ToolRegistry
-from core.working_memory import WorkingMemory, WorkingMemoryState, TaskStatus
+from core.working_memory import TaskStatus, WorkingMemory, WorkingMemoryState
 from infra.evidence_store import EvidenceStore
 
 logger = get_logger(__name__)

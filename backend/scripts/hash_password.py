@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Hash a password using bcrypt. Usage: python hash_password.py <password>"""
 
-import sys
 import os
+import sys
 
 sys.path.insert(
     0,

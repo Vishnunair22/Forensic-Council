@@ -116,30 +116,6 @@ async function waitForFinalReport(
   }
   return false;
 }
-      if (st.status === "complete") {
-        try {
-          const res = await withTimeout(getReport(sessionId, 30_000), 30_000);
-          if (res.status === "complete" && res.report) return true;
-        } catch {
-          /* in progress, 404, timeout, or not yet persisted */
-        }
-      }
-    } catch (e) {
-      if (e instanceof Error && e.message.includes("Council synthesis"))
-        throw e;
-      /* timeout / network — keep polling */
-    }
-    await new Promise<void>((r) => {
-      const timer = setTimeout(r, pollInterval);
-      signal?.addEventListener("abort", () => clearTimeout(timer), {
-        once: true,
-      });
-    });
-    if (signal?.aborted) return false;
-    pollInterval = Math.min(pollInterval * 1.2, 3000);
-  }
-  return false;
-}
 
 export default function EvidencePage() {
   const router = useRouter();
@@ -352,8 +328,9 @@ export default function EvidencePage() {
       if (inflightPromise) delete win.__forensic_investigation_promise;
 
       // ── Phase 1: Ensure auth is ready, then HTTP upload ───────────────
-      // Yield one tick so React can paint the analysis grid before the async work.
-      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+      // Show loading overlay immediately to provide visual feedback
+      setShowLoadingOverlay(true);
+      sessionStorage.setItem("fc_show_loading", "true");
 
       // Wait for the auto-login to complete before hitting the backend.
       console.log("[Trigger] Waiting for auth...");

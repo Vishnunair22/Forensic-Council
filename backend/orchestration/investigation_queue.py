@@ -1,9 +1,8 @@
 import asyncio
-import json
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Callable, Coroutine, Optional, Dict
+from typing import Any, Callable, Dict, Optional
 from uuid import UUID, uuid4
 
 from core.structured_logging import get_logger
@@ -185,7 +184,7 @@ class InvestigationWorker:
                         original_filename=task.original_filename,
                         session_id=task.session_id,
                     )
-                    
+
                     task.status = InvestigationStatus.COMPLETED
                     task.result = result.model_dump() if hasattr(result, "model_dump") else result
                     task.completed_at = time.time()

@@ -9,12 +9,13 @@ Supports async context managers and logs connection events.
 import asyncio
 import json
 from typing import Any, Optional
+
 from redis.asyncio import Redis
 from redis.asyncio.connection import ConnectionPool
 
 from core.config import get_settings
-from core.structured_logging import get_logger
 from core.exceptions import RedisConnectionError
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -79,11 +80,11 @@ class RedisClient:
                 "socket_timeout": 2.0,
                 "socket_connect_timeout": 2.0,
             }
-            
+
             # Explicitly check for None not truthy to allow empty string passwords
             if self._password is not None:
                 connection_kwargs["password"] = self._password
-                
+
             self._pool = ConnectionPool(**connection_kwargs)
             self._client = Redis(connection_pool=self._pool)
 

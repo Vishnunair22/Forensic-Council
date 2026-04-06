@@ -36,7 +36,7 @@ Usage in ML tool:
 import json
 import sys
 import time
-from typing import Callable, Any, Optional
+from typing import Callable, Optional
 
 from core.structured_logging import get_logger
 
@@ -64,30 +64,30 @@ def run_worker_mode(
             logger.error("Failed to load model", error=str(e), exc_info=True)
             print(json.dumps({"error": f"Model load failed: {str(e)}", "available": False}))
             sys.exit(1)
-    
+
     logger.info("Worker mode started, reading from stdin...")
-    
+
     try:
         for line in sys.stdin:
             line = line.strip()
             if not line:
                 continue
-            
+
             try:
                 request = json.loads(line)
                 input_path = request.get("input")
                 extra_args = request.get("extra_args", [])
-                
+
                 if not input_path:
                     print(json.dumps({"error": "Missing 'input' field", "available": False}))
                     sys.stdout.flush()
                     continue
-                
+
                 # Run inference
                 result = inference_fn(input_path, extra_args)
                 print(json.dumps(result))
                 sys.stdout.flush()
-                
+
             except json.JSONDecodeError as e:
                 logger.error("Invalid JSON from stdin", error=str(e))
                 print(json.dumps({"error": f"Invalid JSON: {str(e)}", "available": False}))
@@ -112,12 +112,12 @@ def run_warmup_mode(model_loader: Callable, timeout: float = 60.0):
         timeout: Maximum time to wait for warmup (seconds)
     """
     start_time = time.time()
-    
+
     try:
         logger.info("Starting model warmup...")
         model = model_loader()
         elapsed = time.time() - start_time
-        
+
         if model is None:
             print(json.dumps({
                 "status": "warmup_failed",
@@ -125,14 +125,14 @@ def run_warmup_mode(model_loader: Callable, timeout: float = 60.0):
                 "elapsed_seconds": round(elapsed, 2)
             }))
             sys.exit(1)
-        
+
         logger.info(f"Model warmup completed in {elapsed:.1f}s")
         print(json.dumps({
             "status": "warmed_up",
             "elapsed_seconds": round(elapsed, 2),
             "model_type": type(model).__name__
         }))
-        
+
     except Exception as e:
         elapsed = time.time() - start_time
         logger.error("Model warmup failed", error=str(e), exc_info=True)

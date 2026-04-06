@@ -27,8 +27,8 @@ Design principles:
 from __future__ import annotations
 
 import asyncio
-import os
 import atexit
+import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Optional
 
@@ -71,12 +71,13 @@ def _get_easyocr_reader() -> Optional[Any]:
 
     try:
         import easyocr  # noqa: PLC0415
+
         from core.config import get_settings
 
         settings = get_settings()
         model_dir = settings.easyocr_model_dir
         os.makedirs(model_dir, exist_ok=True)
-        
+
         # Enforce local-only mode if configured
         if settings.offline_mode:
             os.environ["HF_HUB_OFFLINE"] = "1"

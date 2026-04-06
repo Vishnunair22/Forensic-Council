@@ -22,8 +22,9 @@ Output JSON:
 import argparse
 import json
 import sys
-import numpy as np
+
 import cv2
+import numpy as np
 from scipy.signal import wiener
 
 
@@ -141,13 +142,13 @@ if __name__ == "__main__":
     parser.add_argument("--warmup", action="store_true", help="Warmup mode - preload dependencies")
     parser.add_argument("--worker", action="store_true", help="Worker mode - persistent process")
     args = parser.parse_args()
-    
+
     # Warmup mode - verify dependencies load
     if args.warmup:
         try:
-            from scipy.signal import wiener
-            import numpy as np
             import cv2
+            import numpy as np
+            from scipy.signal import wiener
             print(json.dumps({
                 "status": "warmed_up",
                 "dependencies": ["scipy", "numpy", "cv2"],
@@ -160,7 +161,7 @@ if __name__ == "__main__":
                 "error": str(e)
             }))
             sys.exit(1)
-    
+
     # Worker mode - persistent process reading from stdin
     if args.worker:
         for line in sys.stdin:
@@ -171,12 +172,12 @@ if __name__ == "__main__":
                 request = json.loads(line)
                 input_path = request.get("input")
                 num_regions = request.get("extra_args", [6])[0] if request.get("extra_args") else 6
-                
+
                 if not input_path:
                     print(json.dumps({"error": "Missing input path", "available": False}))
                     sys.stdout.flush()
                     continue
-                
+
                 result = analyze_noise_fingerprint(input_path, int(num_regions))
                 print(json.dumps(result))
                 sys.stdout.flush()
@@ -184,7 +185,7 @@ if __name__ == "__main__":
                 print(json.dumps({"error": str(e), "available": False}))
                 sys.stdout.flush()
         sys.exit(0)
-    
+
     # Normal mode - single execution
     if not args.input:
         parser.print_help()

@@ -218,12 +218,16 @@ Forensic Council/
 | Audio agent failures | Set `HF_TOKEN` for pyannote gated models (free at hf.co/settings/tokens) |
 | WebSocket disconnects | Check Caddy `flush_interval -1` in Caddyfile; verify network segmentation |
 | Database migration failures | Check `docker compose logs migration`; verify `POSTGRES_PASSWORD` matches |
-| WebSocket disconnects | Check Caddy `flush_interval -1` in Caddyfile; verify network segmentation |
-| Database migration failures | Check `docker compose logs migration`; verify `POSTGRES_PASSWORD` matches |
 
 ---
 
 ## Changelog
+
+**v1.2.1 (2026-04-06)** — Full repository structure cleanup and backend/frontend optimizations:
+- **Audit**: Comprehensive automated auditing of frontend ESLint and backend Python styles using Ruff.
+- **Backend Clean**: Resolved 422 linting warnings (mostly empty/unused imports and spacing) optimizing backend flow.
+- **Frontend Clean**: Addressed unused arguments, purged orphaned variables, and removed invalid duplicated code blocks in the App Router UI layout rendering.
+- **Docs**: Removed duplicated table entries and synced architectural changes.
 
 **v1.2.0 (2026-04-02)** — Full codebase audit, deep analysis UI, production hardening:
 - **Audit**: Aligned all version strings to 1.2.0 across `pyproject.toml`, `package.json`, `api/main.py`.

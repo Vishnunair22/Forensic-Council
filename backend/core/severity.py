@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 # Not-applicable metadata flags that indicate a tool doesn't apply to this file type
 _NA_FLAGS = (
     "ela_not_applicable",

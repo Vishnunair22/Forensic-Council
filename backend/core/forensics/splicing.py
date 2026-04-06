@@ -8,6 +8,7 @@ Detects image splicing through DCT (Discrete Cosine Transform) inconsistency.
 import cv2
 import numpy as np
 from PIL import Image
+
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
@@ -32,7 +33,7 @@ def detect_splicing(file_path: str) -> dict:
                 dct = cv2.dct(block)
                 # Analyzing high-frequency coefficients (bottom-right 4x4)
                 q_vals.append(float(np.abs(dct[4:, 4:]).mean()))
-        
+
         total_blocks = len(q_vals)
         if q_vals:
             mean_q = np.mean(q_vals)
@@ -41,9 +42,9 @@ def detect_splicing(file_path: str) -> dict:
             inconsistent = int(sum(1 for v in q_vals if abs(v - mean_q) > 2 * std_q))
         else:
             inconsistent = 0
-            
+
         splicing_detected = total_blocks > 0 and (inconsistent / total_blocks) > 0.15
-        
+
         return {
             "splicing_detected": splicing_detected,
             "num_inconsistent_blocks": inconsistent,

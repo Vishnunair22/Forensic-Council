@@ -1,0 +1,54 @@
+
+> forensic-council-frontend@1.2.0 lint
+> eslint src --max-warnings 0
+
+
+D:\Forensic Council\frontend\src\app\api\v1\[...path]\route.ts
+  47:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  48:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\Forensic Council\frontend\src\app\evidence\page.tsx
+  127:4  error  Parsing error: Declaration or statement expected
+
+D:\Forensic Council\frontend\src\components\evidence\AgentProgressDisplay.tsx
+  533:21  warning  The ref value 'hideTimersRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'hideTimersRef.current' to a variable inside the effect, and use that variable in the cleanup function        react-hooks/exhaustive-deps
+  535:24  warning  The ref value 'fadeOutTimersRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'fadeOutTimersRef.current' to a variable inside the effect, and use that variable in the cleanup function  react-hooks/exhaustive-deps
+
+D:\Forensic Council\frontend\src\components\result\ResultLayout.tsx
+    5:3   warning  'AlertTriangle' is defined but never used. Allowed unused vars must match /^_/u                                  @typescript-eslint/no-unused-vars
+    6:3   warning  'ShieldCheck' is defined but never used. Allowed unused vars must match /^_/u                                    @typescript-eslint/no-unused-vars
+    9:3   warning  'ChevronDown' is defined but never used. Allowed unused vars must match /^_/u                                    @typescript-eslint/no-unused-vars
+   10:3   warning  'Lock' is defined but never used. Allowed unused vars must match /^_/u                                           @typescript-eslint/no-unused-vars
+   12:3   warning  'Shield' is defined but never used. Allowed unused vars must match /^_/u                                         @typescript-eslint/no-unused-vars
+   15:3   warning  'LinkIcon' is defined but never used. Allowed unused vars must match /^_/u                                       @typescript-eslint/no-unused-vars
+   16:3   warning  'Fingerprint' is defined but never used. Allowed unused vars must match /^_/u                                    @typescript-eslint/no-unused-vars
+   17:12  warning  'ImageIcon' is defined but never used. Allowed unused vars must match /^_/u                                      @typescript-eslint/no-unused-vars
+   18:3   warning  'Film' is defined but never used. Allowed unused vars must match /^_/u                                           @typescript-eslint/no-unused-vars
+   19:3   warning  'Mic' is defined but never used. Allowed unused vars must match /^_/u                                            @typescript-eslint/no-unused-vars
+   22:3   warning  'Info' is defined but never used. Allowed unused vars must match /^_/u                                           @typescript-eslint/no-unused-vars
+   24:3   warning  'X' is defined but never used. Allowed unused vars must match /^_/u                                              @typescript-eslint/no-unused-vars
+   25:3   warning  'Zap' is defined but never used. Allowed unused vars must match /^_/u                                            @typescript-eslint/no-unused-vars
+   26:3   warning  'Layers' is defined but never used. Allowed unused vars must match /^_/u                                         @typescript-eslint/no-unused-vars
+   27:3   warning  'Clock' is defined but never used. Allowed unused vars must match /^_/u                                          @typescript-eslint/no-unused-vars
+   28:3   warning  'Target' is defined but never used. Allowed unused vars must match /^_/u                                         @typescript-eslint/no-unused-vars
+   29:3   warning  'ArrowRight' is defined but never used. Allowed unused vars must match /^_/u                                     @typescript-eslint/no-unused-vars
+   30:3   warning  'BarChart2' is defined but never used. Allowed unused vars must match /^_/u                                      @typescript-eslint/no-unused-vars
+   31:3   warning  'Award' is defined but never used. Allowed unused vars must match /^_/u                                          @typescript-eslint/no-unused-vars
+   33:3   warning  'Cpu' is defined but never used. Allowed unused vars must match /^_/u                                            @typescript-eslint/no-unused-vars
+   34:3   warning  'Hash' is defined but never used. Allowed unused vars must match /^_/u                                           @typescript-eslint/no-unused-vars
+   35:3   warning  'Trash2' is defined but never used. Allowed unused vars must match /^_/u                                         @typescript-eslint/no-unused-vars
+   46:8   warning  'AgentMetricsDTO' is defined but never used. Allowed unused vars must match /^_/u                                @typescript-eslint/no-unused-vars
+   47:8   warning  'AgentFindingDTO' is defined but never used. Allowed unused vars must match /^_/u                                @typescript-eslint/no-unused-vars
+   50:10  warning  'AgentFindingCard' is defined but never used. Allowed unused vars must match /^_/u                               @typescript-eslint/no-unused-vars
+   54:10  warning  'TribunalMatrix' is defined but never used. Allowed unused vars must match /^_/u                                 @typescript-eslint/no-unused-vars
+   55:10  warning  'EvidenceGraph' is defined but never used. Allowed unused vars must match /^_/u                                  @typescript-eslint/no-unused-vars
+   65:7   warning  'ALL_AGENT_IDS' is assigned a value but never used. Allowed unused vars must match /^_/u                         @typescript-eslint/no-unused-vars
+   67:7   warning  'AGENT_META' is assigned a value but never used. Allowed unused vars must match /^_/u                            @typescript-eslint/no-unused-vars
+  239:20  warning  'e' is defined but never used                                                                                    @typescript-eslint/no-unused-vars
+  260:6   warning  React Hook useEffect has a missing dependency: 'addToHistory'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+D:\Forensic Council\frontend\src\lib\api.ts
+  920:5  warning  'timeoutId' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+✖ 37 problems (1 error, 36 warnings)
+

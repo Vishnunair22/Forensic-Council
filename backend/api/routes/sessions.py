@@ -5,30 +5,26 @@ Sessions Routes
 Routes for managing investigation sessions.
 """
 
-from typing import List, Optional
 import asyncio
 import json
 import time
-from pydantic import BaseModel as _BaseModel
+from datetime import datetime, timezone
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-
-from core.auth import get_current_user, User, decode_token
-from core.structured_logging import get_logger
-from api.routes.investigation import (
-    get_all_active_pipelines,
-    get_active_pipeline,
-    remove_active_pipeline,
-    pop_active_task,
-    get_session_websockets,
-    clear_session_websockets,
-    _assign_severity_tier,
-)
-from api.routes._session_state import register_websocket, unregister_websocket
-from api.schemas import SessionInfo, ReportDTO, AgentFindingDTO, ReportStatusDTO
-from api.routes.investigation import _final_reports, _active_tasks
 from fastapi.responses import JSONResponse
-from datetime import datetime, timezone
+from pydantic import BaseModel as _BaseModel
+
+from api.routes._session_state import register_websocket, unregister_websocket
+from api.routes.investigation import (
+    _assign_severity_tier,
+    _final_reports,
+    get_active_pipeline,
+    get_session_websockets,
+)
+from api.schemas import AgentFindingDTO, ReportDTO, ReportStatusDTO, SessionInfo
+from core.auth import User, decode_token, get_current_user
+from core.structured_logging import get_logger
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 logger = get_logger(__name__)
@@ -105,78 +101,146 @@ def _forensic_report_to_dto(report) -> ReportDTO:
 
     per_agent: dict = {}
     for agent_id, findings in (report.per_agent_findings or {}).items():
-        real = [_to_finding_dto(f) for f in findings if _is_real_finding(f)]
-        if real:
-            per_agent[agent_id] = real
+        try:
+            real = [_to_finding_dto(f) for f in findings if _is_real_finding(f)]
+            if real:
+                per_agent[agent_id] = real
+        except Exception as e:
+            logger.warning(
+                "Failed to convert findings for agent",
+                agent_id=agent_id,
+                error=str(e),
+            )
+            # Skip this agent's findings rather than failing the entire report
 
-    cross_modal = [
-        _to_finding_dto(f)
-        for f in (report.cross_modal_confirmed or [])
-        if _is_real_finding(f)
-    ]
-    incomplete = [
-        _to_finding_dto(f)
-        for f in (report.incomplete_findings or [])
-        if _is_real_finding(f)
-    ]
+    cross_modal = []
+    try:
+        cross_modal = [
+            _to_finding_dto(f)
+            for f in (report.cross_modal_confirmed or [])
+            if _is_real_finding(f)
+        ]
+    except Exception as e:
+        logger.warning("Failed to convert cross-modal findings", error=str(e))
+
+    incomplete = []
+    try:
+        incomplete = [
+            _to_finding_dto(f)
+            for f in (report.incomplete_findings or [])
+            if _is_real_finding(f)
+        ]
+    except Exception as e:
+        logger.warning("Failed to convert incomplete findings", error=str(e))
 
     # TribunalCase objects need explicit serialization
     tribunal_resolved = []
     for item in report.tribunal_resolved or []:
-        if hasattr(item, "model_dump"):
-            tribunal_resolved.append(item.model_dump(mode="json"))
-        elif isinstance(item, dict):
-            tribunal_resolved.append(item)
+        try:
+            if hasattr(item, "model_dump"):
+                tribunal_resolved.append(item.model_dump(mode="json"))
+            elif isinstance(item, dict):
+                tribunal_resolved.append(item)
+        except Exception as e:
+            logger.warning("Failed to serialize tribunal case", error=str(e))
 
     contested = []
     for item in report.contested_findings or []:
-        if hasattr(item, "model_dump"):
-            contested.append(item.model_dump(mode="json"))
-        elif isinstance(item, dict):
-            contested.append(item)
+        try:
+            if hasattr(item, "model_dump"):
+                contested.append(item.model_dump(mode="json"))
+            elif isinstance(item, dict):
+                contested.append(item)
+        except Exception as e:
+            logger.warning("Failed to serialize contested finding", error=str(e))
 
     signed_utc_str: Optional[str] = None
     if report.signed_utc is not None:
-        if hasattr(report.signed_utc, "isoformat"):
-            signed_utc_str = report.signed_utc.isoformat()
-        else:
-            signed_utc_str = str(report.signed_utc)
+        try:
+            if hasattr(report.signed_utc, "isoformat"):
+                signed_utc_str = report.signed_utc.isoformat()
+            else:
+                signed_utc_str = str(report.signed_utc)
+        except Exception as e:
+            logger.warning("Failed to serialize signed_utc", error=str(e))
+            signed_utc_str = None
 
-    return ReportDTO(
-        report_id=str(report.report_id),
-        session_id=str(report.session_id),
-        case_id=report.case_id,
-        executive_summary=report.executive_summary or "",
-        per_agent_findings=per_agent,
-        per_agent_metrics=getattr(report, "per_agent_metrics", {}) or {},
-        per_agent_analysis=getattr(report, "per_agent_analysis", {}) or {},
-        overall_confidence=getattr(report, "overall_confidence", 0.0) or 0.0,
-        overall_error_rate=getattr(report, "overall_error_rate", 0.0) or 0.0,
-        overall_verdict=getattr(report, "overall_verdict", "REVIEW REQUIRED")
-        or "REVIEW REQUIRED",
-        cross_modal_confirmed=cross_modal,
-        contested_findings=contested,
-        tribunal_resolved=tribunal_resolved,
-        incomplete_findings=incomplete,
-        uncertainty_statement=report.uncertainty_statement or "",
-        cryptographic_signature=report.cryptographic_signature or "",
-        report_hash=report.report_hash or "",
-        signed_utc=signed_utc_str,
-        verdict_sentence=getattr(report, "verdict_sentence", "") or "",
-        key_findings=list(getattr(report, "key_findings", []) or []),
-        reliability_note=getattr(report, "reliability_note", "") or "",
-        manipulation_probability=float(
-            getattr(report, "manipulation_probability", 0.0) or 0.0
-        ),
-        confidence_min=float(getattr(report, "confidence_min", 0.0) or 0.0),
-        confidence_max=float(getattr(report, "confidence_max", 0.0) or 0.0),
-        confidence_std_dev=float(getattr(report, "confidence_std_dev", 0.0) or 0.0),
-        applicable_agent_count=int(getattr(report, "applicable_agent_count", 0) or 0),
-        skipped_agents=dict(getattr(report, "skipped_agents", {}) or {}),
-        analysis_coverage_note=getattr(report, "analysis_coverage_note", "") or "",
-        per_agent_summary=dict(getattr(report, "per_agent_summary", {}) or {}),
-        degradation_flags=list(getattr(report, "degradation_flags", []) or []),
-    )
+    # Build DTO with defensive defaults for all fields
+    try:
+        return ReportDTO(
+            report_id=str(report.report_id),
+            session_id=str(report.session_id),
+            case_id=report.case_id,
+            executive_summary=report.executive_summary or "",
+            per_agent_findings=per_agent,
+            per_agent_metrics=getattr(report, "per_agent_metrics", {}) or {},
+            per_agent_analysis=getattr(report, "per_agent_analysis", {}) or {},
+            overall_confidence=float(getattr(report, "overall_confidence", 0.0) or 0.0),
+            overall_error_rate=float(getattr(report, "overall_error_rate", 0.0) or 0.0),
+            overall_verdict=str(getattr(report, "overall_verdict", "REVIEW REQUIRED") or "REVIEW REQUIRED"),
+            cross_modal_confirmed=cross_modal,
+            contested_findings=contested,
+            tribunal_resolved=tribunal_resolved,
+            incomplete_findings=incomplete,
+            uncertainty_statement=report.uncertainty_statement or "",
+            cryptographic_signature=report.cryptographic_signature or "",
+            report_hash=report.report_hash or "",
+            signed_utc=signed_utc_str,
+            verdict_sentence=getattr(report, "verdict_sentence", "") or "",
+            key_findings=list(getattr(report, "key_findings", []) or []),
+            reliability_note=getattr(report, "reliability_note", "") or "",
+            manipulation_probability=float(
+                getattr(report, "manipulation_probability", 0.0) or 0.0
+            ),
+            confidence_min=float(getattr(report, "confidence_min", 0.0) or 0.0),
+            confidence_max=float(getattr(report, "confidence_max", 0.0) or 0.0),
+            confidence_std_dev=float(getattr(report, "confidence_std_dev", 0.0) or 0.0),
+            applicable_agent_count=int(getattr(report, "applicable_agent_count", 0) or 0),
+            skipped_agents=dict(getattr(report, "skipped_agents", {}) or {}),
+            analysis_coverage_note=getattr(report, "analysis_coverage_note", "") or "",
+            per_agent_summary=dict(getattr(report, "per_agent_summary", {}) or {}),
+            degradation_flags=list(getattr(report, "degradation_flags", []) or []),
+        )
+    except Exception as e:
+        logger.error(
+            "Failed to serialize report to DTO - returning minimal valid DTO",
+            error=str(e),
+            exc_info=True,
+        )
+        # Return a minimal valid DTO rather than crashing with 500
+        return ReportDTO(
+            report_id=str(getattr(report, "report_id", "")),
+            session_id=str(getattr(report, "session_id", "")),
+            case_id=str(getattr(report, "case_id", "")),
+            executive_summary="Report serialization failed - data may be incomplete",
+            per_agent_findings={},
+            per_agent_metrics={},
+            per_agent_analysis={},
+            overall_confidence=0.0,
+            overall_error_rate=0.0,
+            overall_verdict="INCONCLUSIVE",
+            cross_modal_confirmed=[],
+            contested_findings=[],
+            tribunal_resolved=[],
+            incomplete_findings=[],
+            uncertainty_statement="Report data unavailable due to serialization error",
+            cryptographic_signature="",
+            report_hash="",
+            signed_utc=None,
+            verdict_sentence="",
+            key_findings=[],
+            reliability_note="",
+            manipulation_probability=0.0,
+            confidence_min=0.0,
+            confidence_max=0.0,
+            confidence_std_dev=0.0,
+            applicable_agent_count=0,
+            skipped_agents={},
+            analysis_coverage_note="",
+            per_agent_summary={},
+            degradation_flags=["Report serialization failed"],
+        )
+
 
 
 @router.get("", response_model=List[SessionInfo])
@@ -185,10 +249,10 @@ async def list_sessions(current_user: User = Depends(get_current_user)):
     # This now only lists sessions from Redis metadata
     from api.routes._session_state import SESSION_METADATA_KEY_PREFIX
     from infra.redis_client import get_redis_client
-    
+
     redis = await get_redis_client()
     keys = await redis.keys(f"{SESSION_METADATA_KEY_PREFIX}*")
-    
+
     sessions = []
     for key in keys:
         session_id = key.replace(SESSION_METADATA_KEY_PREFIX, "")
@@ -209,7 +273,7 @@ async def terminate_session(
 ):
     """Terminate a running session. Requires authentication."""
     from api.routes._session_state import get_active_pipeline_metadata
-    
+
     metadata = await get_active_pipeline_metadata(session_id)
     if not metadata:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -220,7 +284,7 @@ async def terminate_session(
             await ws.close()
         except Exception:
             pass
-    # register_websocket/unregister_websocket and get_session_websockets 
+    # register_websocket/unregister_websocket and get_session_websockets
     # are still needed for local broadcast, so we don't clear them entirely here.
 
     # Note: In a distributed system, we would publish a TERMINATE event to Redis
@@ -229,7 +293,7 @@ async def terminate_session(
     from infra.redis_client import get_redis_client
     redis = await get_redis_client()
     await redis.delete(f"forensic:session:metadata:{session_id}")
-    
+
     return {"status": "terminated", "session_id": session_id}
 
 
@@ -242,8 +306,6 @@ async def live_updates(websocket: WebSocket, session_id: str):
     """
     from api.routes._session_state import (
         get_active_pipeline_metadata,
-        register_websocket,
-        unregister_websocket,
     )
     from infra.redis_client import get_redis_client
 
@@ -322,7 +384,7 @@ async def live_updates(websocket: WebSocket, session_id: str):
             pubsub = redis.client.pubsub()
             channel = f"forensic:updates:{session_id}"
             await pubsub.subscribe(channel)
-            
+
             async for message in pubsub.listen():
                 if message["type"] == "message":
                     data = json.loads(message["data"])
@@ -401,15 +463,15 @@ async def live_updates(websocket: WebSocket, session_id: str):
                 # Expect PONG responses or other messages
                 data = await websocket.receive_text()
                 last_activity = time.time()
-                
+
                 # Rate limit check
                 now = time.time()
                 one_min_ago = now - 60
-                
+
                 # Remove old timestamps
                 while message_timestamps and message_timestamps[0] < one_min_ago:
                     message_timestamps.pop(0)
-                
+
                 if len(message_timestamps) >= MAX_MESSAGES_PER_MINUTE:
                     logger.warning(
                         "WebSocket rate limit exceeded",
@@ -422,9 +484,9 @@ async def live_updates(websocket: WebSocket, session_id: str):
                     })
                     await websocket.close(code=1008, reason="Rate limit exceeded")
                     break
-                
+
                 message_timestamps.append(now)
-                
+
                 # Handle PONG responses
                 try:
                     msg = json.loads(data)
@@ -432,7 +494,7 @@ async def live_updates(websocket: WebSocket, session_id: str):
                         continue  # Heartbeat response, skip processing
                 except json.JSONDecodeError:
                     pass  # Non-JSON text, ignore
-                    
+
             except WebSocketDisconnect:
                 break
 
@@ -447,14 +509,14 @@ async def live_updates(websocket: WebSocket, session_id: str):
         ping_task.cancel()
         idle_task.cancel()
         subscriber_task.cancel()
-        
+
         # Wait for tasks to finish
         for task in [ping_task, idle_task, subscriber_task]:
             try:
                 await task
             except (asyncio.CancelledError, Exception):
                 pass
-        
+
         unregister_websocket(session_id, websocket)
 
 
@@ -474,7 +536,7 @@ async def get_arbiter_status(
     safe JSON body so the frontend can keep polling without hitting 500s.
     """
     try:
-        from api.routes._session_state import get_final_report, get_active_pipeline_metadata
+        from api.routes._session_state import get_active_pipeline_metadata, get_final_report
 
         # 1. Check if report is already complete (in-memory / Redis cache)
         try:
@@ -612,7 +674,8 @@ async def get_session_report(
                 )
             if status == "completed" and db_row.get("report_data"):
                 # Re-hydrate from the stored JSON dict
-                from api.schemas import ReportDTO as _RD, AgentFindingDTO as _AFD
+                from api.schemas import AgentFindingDTO as _AFD
+                from api.schemas import ReportDTO as _RD
 
                 def _rebuild_finding(f: dict) -> _AFD:
                     return _AFD(
@@ -711,12 +774,12 @@ async def download_report(
     """
     # Get the report using existing logic
     report_dto = await get_session_report(session_id, current_user)
-    
+
     # Generate filename with timestamp
     from datetime import datetime
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     filename = f"forensic_report_{session_id}_{timestamp}.json"
-    
+
     # Serialize Pydantic model before passing to JSONResponse
     from fastapi.responses import JSONResponse
     content = report_dto.model_dump() if hasattr(report_dto, "model_dump") else report_dto

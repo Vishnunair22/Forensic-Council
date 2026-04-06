@@ -6,10 +6,10 @@ Automated purging of forensic evidence files based on retention policy.
 Prevents storage exhaustion and reduces data liability.
 """
 
-import os
-import time
 import shutil
+import time
 from pathlib import Path
+
 from core.config import get_settings
 from core.structured_logging import get_logger
 
@@ -27,12 +27,12 @@ def cleanup_evidence():
 
     retention_seconds = settings.evidence_retention_days * 24 * 3600
     now = time.time()
-    
+
     purged_count = 0
     purged_bytes = 0
-    
+
     logger.info(f"Starting evidence cleanup (retention: {settings.evidence_retention_days} days)")
-    
+
     # Evidence is usually stored in subdirectories by investigation ID
     for item in storage_path.iterdir():
         if item.is_dir():
@@ -42,18 +42,18 @@ def cleanup_evidence():
                 try:
                     # Calculate size before deletion for logging
                     dir_size = sum(f.stat().st_size for f in item.glob('**/*') if f.is_file())
-                    
+
                     shutil.rmtree(item)
                     purged_count += 1
                     purged_bytes += dir_size
                     logger.info(f"Purged expired evidence session: {item.name}", size_kb=dir_size//1024)
                 except Exception as e:
                     logger.error(f"Failed to purge {item}: {e}")
-                    
+
     if purged_count > 0:
         logger.info(
-            "Evidence cleanup complete", 
-            purged_sessions=purged_count, 
+            "Evidence cleanup complete",
+            purged_sessions=purged_count,
             freed_mb=purged_bytes // (1024 * 1024)
         )
     else:

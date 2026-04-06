@@ -6,36 +6,51 @@ compositing, and anti-forensics evasion.
 """
 
 from __future__ import annotations
+
 import os
-import io
-import numpy as np
+
 from PIL import Image
+
 from agents.base_agent import ForensicAgent
-from core.tool_registry import ToolRegistry
-from core.ml_subprocess import run_ml_tool
+
+# Core Forensic Engines
+from core.forensics.ela import check_adversarial_robustness, classify_ela_anomalies
+from core.forensics.frequency import analyze_frequency_bands
+from core.forensics.noise import analyze_noise_consistency
+from core.forensics.sift import detect_copy_move
+from core.forensics.splicing import detect_splicing
 from core.gemini_client import GeminiVisionClient
 from core.image_utils import is_lossless_image
+from core.ml_subprocess import run_ml_tool
 from core.structured_logging import get_logger
+from core.tool_registry import ToolRegistry
+from tools.image_tools import (
+    analyze_image_content as real_analyze_image_content,
+)
+from tools.image_tools import (
+    compute_perceptual_hash as real_compute_perceptual_hash,
+)
 
 # Import real tool implementations
 from tools.image_tools import (
     ela_full_image as real_ela_full_image,
-    roi_extract as real_roi_extract,
-    jpeg_ghost_detect as real_jpeg_ghost_detect,
-    file_hash_verify as real_file_hash_verify,
-    frequency_domain_analysis as real_frequency_domain_analysis,
-    compute_perceptual_hash as real_compute_perceptual_hash,
+)
+from tools.image_tools import (
     extract_text_from_image as real_extract_text_from_image,
-    analyze_image_content as real_analyze_image_content,
+)
+from tools.image_tools import (
+    file_hash_verify as real_file_hash_verify,
+)
+from tools.image_tools import (
+    frequency_domain_analysis as real_frequency_domain_analysis,
+)
+from tools.image_tools import (
+    jpeg_ghost_detect as real_jpeg_ghost_detect,
+)
+from tools.image_tools import (
+    roi_extract as real_roi_extract,
 )
 from tools.ocr_tools import extract_evidence_text as real_extract_evidence_text
-
-# Core Forensic Engines
-from core.forensics.ela import classify_ela_anomalies, check_adversarial_robustness
-from core.forensics.splicing import detect_splicing
-from core.forensics.noise import analyze_noise_consistency
-from core.forensics.frequency import analyze_frequency_bands
-from core.forensics.sift import detect_copy_move
 
 logger = get_logger(__name__)
 
@@ -86,7 +101,7 @@ class Agent1Image(ForensicAgent):
         registry = ToolRegistry()
 
         # ── Standard Tool Handlers ───────────────────────────────────────────
-        
+
         async def ela_full_image_handler(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact
             result = await real_ela_full_image(
@@ -122,12 +137,12 @@ class Agent1Image(ForensicAgent):
             artifact = input_data.get("artifact") or self.evidence_artifact
             if self._is_lossless:
                 return {"ela_not_applicable": True, "anomaly_detected": False, "available": True}
-            
+
             result = await run_ml_tool("ela_anomaly_classifier.py", artifact.file_path, extra_args=["--quality", str(input_data.get("quality", 95))], timeout=10.0)
             if not result.get("error") and result.get("available"):
                 await self._record_tool_result("ela_anomaly_classify", result)
                 return result
-            
+
             p_ela = self._tool_context.get("ela_full_image", {})
             res = await classify_ela_anomalies(artifact.file_path, input_data.get("quality", 95), p_ela.get("ela_mean"))
             await self._record_tool_result("ela_anomaly_classify", res)
@@ -142,7 +157,7 @@ class Agent1Image(ForensicAgent):
             artifact = input_data.get("artifact") or self.evidence_artifact
             if self._is_lossless:
                 return {"noise_fingerprint_not_applicable": True, "verdict": "NOT_APPLICABLE", "available": True}
-            
+
             regions = input_data.get("regions", 4)
             result = await run_ml_tool("noise_fingerprint.py", artifact.file_path, extra_args=["--regions", str(regions)], timeout=10.0)
             if not result.get("error") and result.get("available"):
@@ -169,7 +184,7 @@ class Agent1Image(ForensicAgent):
             return check_adversarial_robustness(artifact.file_path)
 
         # ── Registration ─────────────────────────────────────────────────────
-        
+
         registry.register("ela_full_image", ela_full_image_handler, "Full-image ELA")
         registry.register("roi_extract", roi_extract_handler, "ROI extraction")
         registry.register("jpeg_ghost_detect", jpeg_ghost_detect_handler, "JPEG ghost detect")
@@ -179,7 +194,7 @@ class Agent1Image(ForensicAgent):
         registry.register("deepfake_frequency_check", deepfake_frequency_check_handler, "GAN artifact check")
         registry.register("copy_move_detect", copy_move_detect_handler, "SIFT copy-move check")
         registry.register("adversarial_robustness_check", adversarial_robustness_check_handler, "ELA stability check")
-        
+
         # Wrapped tools
         registry.register("file_hash_verify", self._wrap_tool(real_file_hash_verify), "Hash verification")
         registry.register("perceptual_hash", self._wrap_tool(real_compute_perceptual_hash), "PHash computation")
@@ -222,7 +237,7 @@ class Agent1Image(ForensicAgent):
         if path.endswith((".wav", ".mp3", ".mp4", ".mov", ".avi")):
             from core.react_loop import AgentFinding
             return [AgentFinding(agent_id=self.agent_id, finding_type="Not Applicable", confidence_raw=1.0, status="CONFIRMED", reasoning_summary="File is audio/video; image analysis skipped.")]
-        
+
         self._skip_memory_init = True
         self._tool_registry = await self.build_tool_registry()
         return await super().run_investigation()

@@ -5,15 +5,15 @@ Authentication Routes
 Routes for user authentication and token management.
 """
 
+import os as _os
 import time
 from collections import defaultdict
 from datetime import timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Header, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
-import os as _os
 from pydantic import BaseModel
 
 from core.auth import (

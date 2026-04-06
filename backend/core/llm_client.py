@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 import httpx
+
 from core.config import Settings
 from core.observability import get_tracer
 from core.retry import CircuitBreaker
@@ -137,7 +138,7 @@ class LLMClient:
                 headers = {"Authorization": f"Bearer {self.api_key}"}
             elif self.provider == "anthropic":
                 headers = {"x-api-key": self.api_key, "anthropic-version": "2023-06-01"}
-            
+
             # For Gemini, the key is usually in the URL for v1beta, or we can use headers
             if self.provider == "gemini":
                 resp = await asyncio.wait_for(client.get(url), timeout=3.0)
@@ -192,7 +193,7 @@ class LLMClient:
                         self.provider = "gemini"
                         self.model = self.gemini_model
                         self.api_key = self.gemini_api_key
-                        
+
                         resp = await self._execute_call(messages, available_tools, t0, span)
                         resp.provider = f"{original_provider}_fallback_gemini"
                         return resp
@@ -353,9 +354,9 @@ class LLMClient:
         """Call Google Gemini API (v1beta)."""
         if not self.api_key:
             raise RuntimeError("Gemini API key missing")
-            
+
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
-        
+
         # Convert messages to Gemini format
         contents = []
         for msg in messages:
@@ -369,7 +370,7 @@ class LLMClient:
                 "maxOutputTokens": self.max_tokens,
             }
         }
-        
+
         if available_tools:
             payload["tools"] = [{"functionDeclarations": [
                 {
@@ -385,12 +386,12 @@ class LLMClient:
         )
         response.raise_for_status()
         data = response.json()
-        
+
         try:
             candidate = data["candidates"][0]
             content = ""
             tool_call = None
-            
+
             for part in candidate["content"]["parts"]:
                 if "text" in part:
                     content += part["text"]
@@ -399,7 +400,7 @@ class LLMClient:
                         "name": part["functionCall"]["name"],
                         "arguments": part["functionCall"].get("args", {})
                     }
-            
+
             return LLMResponse(content=content, tool_call=tool_call)
         except (KeyError, IndexError) as e:
             logger.error(f"Failed to parse Gemini response: {data}")

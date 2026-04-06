@@ -14,26 +14,22 @@ from pathlib import Path
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from core.config import Settings, get_settings
-from core.custody_logger import CustodyLogger, EntryType
-from core.episodic_memory import EpisodicMemory
-from core.evidence import EvidenceArtifact
-from core.inter_agent_bus import InterAgentBus
-from core.observability import get_tracer
-from core.structured_logging import get_logger
-from core.react_loop import HumanDecision
-from core.working_memory import WorkingMemory
-from infra.evidence_store import EvidenceStore
-
-
-
 from agents.agent1_image import Agent1Image
 from agents.agent2_audio import Agent2Audio
 from agents.agent3_object import Agent3Object
 from agents.agent4_video import Agent4Video
 from agents.agent5_metadata import Agent5Metadata
 from agents.arbiter import CouncilArbiter, ForensicReport
-
+from core.config import Settings, get_settings
+from core.custody_logger import CustodyLogger, EntryType
+from core.episodic_memory import EpisodicMemory
+from core.evidence import EvidenceArtifact
+from core.inter_agent_bus import InterAgentBus
+from core.observability import get_tracer
+from core.react_loop import HumanDecision
+from core.structured_logging import get_logger
+from core.working_memory import WorkingMemory
+from infra.evidence_store import EvidenceStore
 from orchestration.session_manager import SessionManager, SessionStatus
 
 _tracer = get_tracer("forensic-council.pipeline")
@@ -231,8 +227,8 @@ class ForensicCouncilPipeline:
 
     async def _initialize_components(self, session_id: UUID) -> None:
         """Initialize all components for a session."""
-        from infra.qdrant_client import get_qdrant_client
         from infra.postgres_client import get_postgres_client
+        from infra.qdrant_client import get_qdrant_client
 
         if self._redis is None:
             try:
@@ -269,8 +265,8 @@ class ForensicCouncilPipeline:
             postgres_client=self._postgres,
         )
 
-        from infra.storage import LocalStorageBackend
         from infra.evidence_store import EvidenceStore
+        from infra.storage import LocalStorageBackend
 
         if self.evidence_store is None:
             self.evidence_store = EvidenceStore(

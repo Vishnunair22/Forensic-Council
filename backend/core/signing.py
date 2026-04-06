@@ -26,6 +26,7 @@ Key Rotation:
    The old key is retired but kept for verifying historical entries.
 """
 
+import base64
 import hashlib
 import hmac as _hmac
 import json
@@ -33,13 +34,12 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from cryptography.exceptions import InvalidSignature
+from cryptography.fernet import Fernet
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from cryptography.hazmat.backends import default_backend
-from cryptography.exceptions import InvalidSignature
-from cryptography.fernet import Fernet
-import base64
 
 from core.structured_logging import get_logger
 

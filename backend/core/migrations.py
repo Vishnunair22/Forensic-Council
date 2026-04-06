@@ -10,8 +10,8 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any, List, Optional
 
-from infra.postgres_client import PostgresClient, get_postgres_client
 from core.structured_logging import get_logger
+from infra.postgres_client import PostgresClient, get_postgres_client
 
 logger = get_logger(__name__)
 
@@ -392,7 +392,7 @@ class MigrationManager:
                 version=migration.version,
             )
             return True
-        
+
         try:
             # Use the provided connection (active transaction) if available.
             # This is critical because uncommitted tables are not visible
@@ -401,7 +401,7 @@ class MigrationManager:
                 result = await conn.fetchval(migration.validation_sql)
             else:
                 result = await self.client.fetch_val(migration.validation_sql)
-            
+
             is_valid = bool(result)
             if not is_valid:
                 logger.error(

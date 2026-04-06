@@ -13,12 +13,12 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
-from core.structured_logging import get_logger
 from core.custody_logger import CustodyLogger, EntryType
+from core.structured_logging import get_logger
 from infra.qdrant_client import (
+    EPISODIC_MEMORY_COLLECTION,
     QdrantClient,
     get_qdrant_client,
-    EPISODIC_MEMORY_COLLECTION,
 )
 
 logger = get_logger(__name__)

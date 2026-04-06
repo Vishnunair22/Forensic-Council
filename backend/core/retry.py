@@ -12,10 +12,10 @@ import random
 import time
 from typing import Any, Callable, Optional, Tuple, Type
 
-from core.structured_logging import get_logger
 from core.exceptions import (
     CircuitBreakerOpen,
 )
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
