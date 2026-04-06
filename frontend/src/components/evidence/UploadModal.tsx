@@ -133,6 +133,9 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
               </div>
 
               <motion.div
+                role="button"
+                tabIndex={0}
+                aria-label="Upload evidence — click or press Enter to browse, or drag and drop a file"
                 className="group relative rounded-2xl border-2 border-dashed p-12 text-center cursor-pointer overflow-hidden"
                 style={{
                   borderColor: isDragging
@@ -159,6 +162,12 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
                   if (f) handleFile(f);
                 }}
                 onClick={() => fileInputRef.current?.click()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    fileInputRef.current?.click();
+                  }
+                }}
               >
                 <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                 <div className="relative z-10">

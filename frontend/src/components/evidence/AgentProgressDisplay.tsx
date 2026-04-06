@@ -392,6 +392,10 @@ function LiveThinkingText({ text, active }: { text: string; active: boolean }) {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
+const allValidAgents = AGENTS_DATA.filter(
+  (a) => a.name !== "Council Arbiter",
+);
+
 export function AgentProgressDisplay({
   agentUpdates,
   completedAgents,
@@ -408,10 +412,6 @@ export function AgentProgressDisplay({
   playSound,
   isNavigating = false,
 }: AgentProgressDisplayProps) {
-  const allValidAgents = AGENTS_DATA.filter(
-    (a) => a.name !== "Council Arbiter",
-  );
-
   // ── Stagger reveal ─────────────────────────────────────────────────────────
   const [revealedAgents, setRevealedAgents] = useState<Set<string>>(new Set());
   const [unsupportedAgents, setUnsupportedAgents] = useState<Set<string>>(
@@ -420,13 +420,16 @@ export function AgentProgressDisplay({
   const [hiddenUnsupportedAgents, setHiddenUnsupportedAgents] = useState<
     Set<string>
   >(new Set());
+  const [fadingOutAgents, setFadingOutAgents] = useState<Set<string>>(
+    new Set(),
+  );
 
   const baseVisibleAgents = useMemo(
     () =>
       phase === "deep"
         ? allValidAgents.filter((a) => !unsupportedAgents.has(a.id))
         : allValidAgents,
-    [allValidAgents, phase, unsupportedAgents],
+    [phase, unsupportedAgents],
   );
   const visibleAgents = useMemo(
     () =>
@@ -498,19 +501,40 @@ export function AgentProgressDisplay({
     });
   }, [completedAgents]);
 
+  // Store timers in a ref so React effect cleanup never cancels them prematurely.
+  // Each skipped agent gets exactly one 10s timer, started when it is revealed.
+  const hideTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const fadeOutTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   useEffect(() => {
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    unsupportedAgents.forEach((id) => {
-      if (!hiddenUnsupportedAgents.has(id)) {
-        timers.push(
-          setTimeout(() => {
+    revealedAgents.forEach((id) => {
+      if (unsupportedAgents.has(id) && !hideTimersRef.current.has(id)) {
+        const timer = setTimeout(() => {
+          setFadingOutAgents((prev) => new Set([...prev, id]));
+          const fadeOutTimer = setTimeout(() => {
             setHiddenUnsupportedAgents((prev) => new Set([...prev, id]));
-          }, 12000),
-        );
+            setFadingOutAgents((prev) => {
+              const next = new Set(prev);
+              next.delete(id);
+              return next;
+            });
+            hideTimersRef.current.delete(id);
+            fadeOutTimersRef.current.delete(id);
+          }, 500);
+          fadeOutTimersRef.current.set(id, fadeOutTimer);
+        }, 10000);
+        hideTimersRef.current.set(id, timer);
       }
     });
-    return () => timers.forEach(clearTimeout);
-  }, [unsupportedAgents, hiddenUnsupportedAgents]);
+  }, [revealedAgents, unsupportedAgents]);
+  // Clear any pending timers on unmount only
+  useEffect(() => {
+    return () => {
+      hideTimersRef.current.forEach((t) => clearTimeout(t));
+      hideTimersRef.current.clear();
+      fadeOutTimersRef.current.forEach((t) => clearTimeout(t));
+      fadeOutTimersRef.current.clear();
+    };
+  }, []);
 
   // ── Status helpers ─────────────────────────────────────────────────────────
   const getAgentStatus = (agentId: string) => {
@@ -602,6 +626,7 @@ export function AgentProgressDisplay({
                   <div
                     className={clsx(
                       "rounded-2xl p-5 transition-all duration-500 relative overflow-hidden flex flex-col h-full glass-panel",
+                      fadingOutAgents.has(agent.id) && "opacity-0 scale-95",
                       (status === "waiting" || status === "checking") &&
                         "opacity-40",
                       status === "running" &&

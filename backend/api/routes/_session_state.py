@@ -131,21 +131,34 @@ async def get_active_pipeline_metadata(session_id: str) -> Optional[dict]:
 
 
 async def set_final_report(session_id: str, report: Any) -> None:
-    """Cache final report in Redis."""
+    """Cache final report in Redis with real creation timestamp."""
     redis = await _get_redis()
     key = f"{REPORT_CACHE_KEY_PREFIX}{session_id}"
+    ts_key = f"{REPORT_CACHE_KEY_PREFIX}{session_id}:created_at"
     data = report.model_dump() if hasattr(report, "model_dump") else report
-    await redis.set(key, data, ex=_SESSION_TTL_SECONDS)
+    import json as _json
+    await redis.set(key, _json.dumps(data) if isinstance(data, dict) else data, ex=_SESSION_TTL_SECONDS)
+    # Issue 9.2: Store the real creation timestamp alongside the report data
+    await redis.set(ts_key, datetime.now(timezone.utc).isoformat(), ex=_SESSION_TTL_SECONDS)
 
 
 async def get_final_report(session_id: str) -> Optional[tuple[Any, datetime]]:
-    """Retrieve final report from Redis."""
+    """Retrieve final report from Redis with real creation timestamp."""
     redis = await _get_redis()
     key = f"{REPORT_CACHE_KEY_PREFIX}{session_id}"
+    ts_key = f"{REPORT_CACHE_KEY_PREFIX}{session_id}:created_at"
     data = await redis.get(key)
     if data:
-        # Mocking the datetime for legacy compatibility in return signature
-        return (data, datetime.now(timezone.utc))
+        # Issue 9.2: Return the real creation timestamp instead of datetime.now()
+        ts_raw = await redis.get(ts_key)
+        if ts_raw:
+            try:
+                created_at = datetime.fromisoformat(ts_raw)
+            except ValueError:
+                created_at = datetime.now(timezone.utc)
+        else:
+            created_at = datetime.now(timezone.utc)
+        return (data, created_at)
     return None
 
 
@@ -178,22 +191,37 @@ def clear_session_websockets(session_id: str) -> None:
 async def broadcast_update(session_id: str, update: BriefUpdate) -> None:
     """
     Broadcast a WebSocket update.
-    In the API process, this sends to local sockets and Publishes to Redis
-    so the Worker can also trigger updates (if this logic is shared).
+
+    Issue 9.3: Dead WebSocket refs are automatically removed when send_json
+    raises, preventing the connections dict from leaking closed sockets.
     """
     # 1. Send to local listeners (API process)
     if session_id in _websocket_connections:
         data = update.model_dump()
+        dead: list = []
         for ws in _websocket_connections[session_id]:
             try:
                 await ws.send_json(data)
             except Exception as e:
-                logger.warning("Failed to send WebSocket message", error=str(e))
+                logger.warning("Failed to send WebSocket message — marking dead", error=str(e))
+                dead.append(ws)
+        # Remove dead refs in a second pass to avoid mutating while iterating
+        for ws in dead:
+            unregister_websocket(session_id, ws)
 
-    # 2. Publish to Redis (Worker -> API bridge)
-    redis = await _get_redis()
-    channel = f"forensic:updates:{session_id}"
-    await redis.client.publish(channel, json.dumps(update.model_dump()))
+    # 2. Issue 9.1: Publish to Redis only when real subscribers exist.
+    # This avoids a pointless PUBLISH RTT on every heartbeat when the
+    # Redis pub/sub channel has no listeners.
+    try:
+        redis = await _get_redis()
+        channel = f"forensic:updates:{session_id}"
+        num_subscribers = await redis.client.pubsub_numsub(channel)
+        # pubsub_numsub returns a dict {channel: count}
+        subscriber_count = num_subscribers.get(channel, 0) if isinstance(num_subscribers, dict) else 0
+        if subscriber_count > 0:
+            await redis.client.publish(channel, json.dumps(update.model_dump()))
+    except Exception as e:
+        logger.debug("Redis pub/sub publish skipped", error=str(e))
 
 
 # ── Batched WebSocket broadcasting ─────────────────────────────────────────────

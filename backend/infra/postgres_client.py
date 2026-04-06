@@ -182,10 +182,13 @@ class PostgresClient:
         args_list: list[tuple[Any, ...]],
     ) -> None:
         """
-        execute a query multiple times with different parameters.
+        Execute a query multiple times with different parameters.
 
         CRITICAL SECURITY: Use $1, $2, etc. placeholders for parameters.
         NEVER use f-strings or string formatting for queries!
+
+        Issue 3.5: Catches per-row asyncpg errors and logs the offending
+        row index before re-raising so forensic log reconstruction is easier.
 
         Args:
             query: SQL query with $1, $2, ... placeholders
@@ -195,7 +198,17 @@ class PostgresClient:
             processed_args_list = [
                 tuple(self._process_args(args)) for args in args_list
             ]
-            await conn.executemany(query, processed_args_list)
+            try:
+                await conn.executemany(query, processed_args_list)
+            except Exception as e:
+                # Log which row failed to aid custody-log reconstruction
+                logger.error(
+                    "execute_many failed",
+                    query=query[:100],
+                    rows_attempted=len(args_list),
+                    error=str(e),
+                )
+                raise
             logger.debug(
                 "Executed batch query", query=query[:100], count=len(args_list)
             )
@@ -304,12 +317,18 @@ class TransactionContext:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Commit or rollback transaction."""
-        if exc_type is not None:
-            await self._tx.rollback()
-        else:
-            await self._tx.commit()
-        await self._pool.release(self._conn)
+        """Commit or rollback transaction.
+
+        Issue 3.4: Always release the connection in a finally block so that
+        a failed rollback cannot leak a connection from the pool.
+        """
+        try:
+            if exc_type is not None:
+                await self._tx.rollback()
+            else:
+                await self._tx.commit()
+        finally:
+            await self._pool.release(self._conn)
 
     async def execute(self, query: str, *args: Any) -> str:
         """Execute a query within the transaction."""

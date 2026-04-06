@@ -132,12 +132,22 @@ def increment_request_count() -> None:
         _local["request_count"] = _local.get("request_count", 0) + 1
 
 
-def record_request_duration(duration_ms: float) -> None:
+def increment_error_count() -> None:
     try:
         loop = asyncio.get_running_loop()
         loop.create_task(_redis_incr(_KEY_ERRORS))
     except RuntimeError:
         _local["error_count"] = _local.get("error_count", 0) + 1
+
+
+def record_request_duration(duration_ms: float) -> None:
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_redis_incr(_KEY_DURATION_SUM, int(duration_ms)))
+        loop.create_task(_redis_incr(_KEY_DURATION_COUNT))
+    except RuntimeError:
+        _local["request_duration_sum"] = _local.get("request_duration_sum", 0.0) + duration_ms
+        _local["request_duration_count"] = _local.get("request_duration_count", 0) + 1
 
 
 def set_active_sessions(count: int) -> None:
@@ -227,11 +237,14 @@ async def _get_pool_stats() -> dict:
         client = await get_postgres_client()
         pool = client._pool
         if pool:
+            size = pool.get_size()
+            idle = pool.get_idle_size()
+            max_size = pool.get_max_size() if hasattr(pool, "get_max_size") else size
             return {
-                "size": pool.get_size(),
-                "available": pool.get_idle_size(),
-                "in_use": pool.get_size() - pool.get_idle_size(),
-                "max": pool._holders,
+                "size": size,
+                "available": idle,
+                "in_use": size - idle,
+                "max": max_size,
             }
     except Exception as e:
         logger.debug("Failed to get pool stats", error=str(e))

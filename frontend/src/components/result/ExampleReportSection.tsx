@@ -3,7 +3,76 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShieldCheck, AlertTriangle, CheckCircle } from "lucide-react";
-import { REPORT_TABS, TAB_ICONS, MOCK_REPORTS } from "@/lib/constants";
+import { REPORT_TABS, TAB_ICONS } from "@/lib/constants";
+
+interface MockAgent {
+  name: string;
+  verdict: string;
+  conf: number;
+  finding: string;
+}
+
+interface MockReport {
+  file: string;
+  verdict: string;
+  verdictLabel: string;
+  confidence: number;
+  agents: MockAgent[];
+  arbiterNote: string;
+}
+
+type ReportTab = (typeof REPORT_TABS)[number];
+
+const MOCK_REPORTS: Record<ReportTab, MockReport> = {
+  Image: {
+    file: "crime_scene_photo.jpg",
+    verdict: "MANIPULATED",
+    verdictLabel: "Manipulation Detected",
+    confidence: 94,
+    agents: [
+      { name: "Image Forensics", verdict: "SUSPICIOUS", conf: 96, finding: "ELA reveals compression artefacts inconsistent with original JPEG encoding. Copy-move detection flagged 3 duplicated regions." },
+      { name: "Audio Forensics", verdict: "NOT_APPLICABLE", conf: 0, finding: "No audio stream present." },
+      { name: "Metadata Expert", verdict: "AUTHENTIC", conf: 88, finding: "EXIF data consistent with claimed device. GPS coordinates match reported location." },
+    ],
+    arbiterNote: "Convergent signals from Image and Object agents confirm high-confidence manipulation. Audio and Video agents were inapplicable to this file type.",
+  },
+  Text: {
+    file: "incident_report.pdf",
+    verdict: "AUTHENTIC",
+    verdictLabel: "Authentic",
+    confidence: 87,
+    agents: [
+      { name: "Metadata Expert", verdict: "AUTHENTIC", conf: 91, finding: "PDF metadata timestamps are internally consistent. No sign of post-creation editing detected." },
+      { name: "Image Forensics", verdict: "AUTHENTIC", conf: 83, finding: "Embedded images show no signs of manipulation." },
+      { name: "Audio Forensics", verdict: "NOT_APPLICABLE", conf: 0, finding: "No audio content in document." },
+    ],
+    arbiterNote: "All applicable agents report authentic signals. Confidence is high but slight uncertainty remains due to limited cross-modal corroboration.",
+  },
+  Audio: {
+    file: "witness_statement.wav",
+    verdict: "SUSPICIOUS",
+    verdictLabel: "Suspicious",
+    confidence: 71,
+    agents: [
+      { name: "Audio Forensics", verdict: "SUSPICIOUS", conf: 74, finding: "Wav2Vec2 deepfake classifier flags synthetic voice probability at 68%. Spectral splice detected at 00:14.3." },
+      { name: "Image Forensics", verdict: "NOT_APPLICABLE", conf: 0, finding: "No image content present." },
+      { name: "Metadata Expert", verdict: "AUTHENTIC", conf: 88, finding: "Recording device fingerprint matches known microphone profile." },
+    ],
+    arbiterNote: "Audio agent detects moderate deepfake probability. Metadata is clean, creating minor conflict. Escalated to SUSPICIOUS pending deeper Wav2Vec2 analysis.",
+  },
+  Video: {
+    file: "surveillance_clip.mp4",
+    verdict: "MANIPULATED",
+    verdictLabel: "Manipulation Detected",
+    confidence: 98,
+    agents: [
+      { name: "Image Forensics", verdict: "SUSPICIOUS", conf: 91, finding: "Frame-level ELA detects inconsistent compression in facial regions across 47 frames." },
+      { name: "Audio Forensics", verdict: "AUTHENTIC", conf: 89, finding: "Audio track shows no signs of splicing or synthesis." },
+      { name: "Object Detection", verdict: "SUSPICIOUS", conf: 94, finding: "Lighting inconsistency detected: subject shadow direction contradicts ambient light source." },
+    ],
+    arbiterNote: "Image and Object agents deliver convergent high-confidence manipulation signals. Face-swap artefacts confirmed across temporal analysis. Verdict: MANIPULATED.",
+  },
+};
 
 export function ExampleReportSection() {
   const [activeTab, setActiveTab] = useState(0);
@@ -130,7 +199,7 @@ export function ExampleReportSection() {
               </div>
             </div>
             <div className="space-y-2">
-              {report.agents.map((agent) => {
+              {report.agents.map((agent: MockAgent) => {
                 const isNA = agent.verdict === "NOT_APPLICABLE";
                 return (
                   <div

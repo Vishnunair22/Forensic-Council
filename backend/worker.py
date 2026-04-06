@@ -26,12 +26,30 @@ settings = get_settings()
 
 async def main():
     """Main worker entry point."""
-    logger.info("Starting Forensic Council Worker")
-    
+    logger.info("Starting Forensic Council Worker", pid=os.getpid())
+
+    # ── Graceful shutdown event ─────────────────────────────────────────────
+    # Docker sends SIGTERM before SIGKILL (default grace period: 10 s).
+    # We set this event on SIGTERM/SIGINT so the worker finishes its current
+    # task and drains the queue before exiting rather than being killed mid-flight.
+    _shutdown = asyncio.Event()
+
+    def _handle_signal(sig):
+        logger.info("Received shutdown signal — draining worker", signal=sig.name)
+        _shutdown.set()
+
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(sig, _handle_signal, sig)
+        except (NotImplementedError, OSError):
+            # Windows does not support loop.add_signal_handler for SIGTERM
+            signal.signal(sig, lambda s, f: _shutdown.set())
+
     queue = get_investigation_queue()
     worker = InvestigationWorker(queue, worker_id=os.getpid())
-    
-    # Define the handler for investigations
+
+    # ── Investigation handler ───────────────────────────────────────────────
     async def investigation_handler(
         evidence_file_path: str,
         case_id: str,
@@ -45,35 +63,52 @@ async def main():
             case_id=case_id,
             investigator_id=investigator_id,
             original_filename=original_filename,
-            session_id=session_id
+            session_id=session_id,
         )
-    
+
     worker.set_handler(investigation_handler)
-    
-    # 3. Schedule periodic cleanup (every 24 hours)
+
+    # ── Periodic evidence cleanup (every 24 hours) ──────────────────────────
     async def periodic_cleanup():
-        while True:
+        while not _shutdown.is_set():
             try:
-                # Timeout cleanup after 1 hour to prevent stacking
                 await asyncio.wait_for(
                     asyncio.to_thread(cleanup_evidence),
-                    timeout=3600
+                    timeout=3600,
                 )
             except asyncio.TimeoutError:
-                logger.error("Periodic cleanup exceeded 1 hour timeout — cancelling")
+                logger.error("Periodic cleanup exceeded 1-hour timeout — skipping cycle")
             except Exception as e:
-                logger.error(f"Periodic cleanup failed: {e}")
-            await asyncio.sleep(24 * 3600)
+                logger.error("Periodic cleanup failed", error=str(e))
+            # Wait 24 h or until shutdown — whichever comes first
+            try:
+                await asyncio.wait_for(_shutdown.wait(), timeout=24 * 3600)
+            except asyncio.TimeoutError:
+                pass  # Normal 24-h cycle — continue loop
 
     cleanup_task = asyncio.create_task(periodic_cleanup())
-    
+
     try:
-        await worker.start()
+        # Run worker until shutdown signal
+        worker_task = asyncio.create_task(worker.start())
+        await _shutdown.wait()
+        logger.info("Shutdown signal received — stopping worker gracefully")
+        worker_task.cancel()
+        try:
+            await worker_task
+        except (asyncio.CancelledError, Exception):
+            pass
     except Exception as e:
         logger.critical("Worker crashed", error=str(e), exc_info=True)
     finally:
         cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except (asyncio.CancelledError, Exception):
+            pass
         await worker.stop()
+        logger.info("Worker stopped cleanly")
+
 
 if __name__ == "__main__":
     try:

@@ -162,22 +162,36 @@ class RedisClient:
         # redis-py returns True on success for basic SET, or None if nx=True and key exists
         return result is True or result == "OK"
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Optional[str]:
         """
-        Get a value from Redis.
+        Get a raw string value from Redis.
+
+        Returns the value as-is (string). Use `get_json` if you need
+        automatic JSON decoding.
+
+        Issue 3.1: Removed auto-JSON parse — callers must decode explicitly
+        to avoid silent type coercions (e.g. a JSON string being returned as
+        a Python dict when the caller expected a str).
 
         Args:
             key: Key name
 
         Returns:
-            Value if exists, None otherwise
+            Raw string value if exists, None otherwise
         """
+        value = await self.client.get(key)
+        return value  # type: ignore[return-value]
 
+    async def get_json(self, key: str) -> Optional[Any]:
+        """
+        Get and JSON-decode a value from Redis.
+
+        Use this when you know the stored value is JSON-serialised.
+        Falls back to returning the raw string if JSON parsing fails.
+        """
         value = await self.client.get(key)
         if value is None:
             return None
-
-        # Try to parse as JSON, fall back to raw string
         try:
             return json.loads(value)
         except (json.JSONDecodeError, TypeError):
@@ -249,8 +263,8 @@ class RedisClient:
         """
         Find all keys matching pattern using SCAN (non-blocking).
 
-        WARNING: The KEYS command blocks Redis until all keys are scanned.
-        This method uses SCAN internally for production safety.
+        Uses `scan_iter` internally — this is safe for production because it
+        does NOT block Redis the way the `KEYS` command does.
 
         Args:
             pattern: Key pattern (supports wildcards)
@@ -267,8 +281,18 @@ class RedisClient:
         """Return a Redis pipeline for batched commands."""
         return self.client.pipeline()
 
-    async def flushdb(self) -> bool:
-        """Clear all keys in current database."""
+    async def flushdb(self, allow_in_tests: bool = False) -> bool:
+        """Clear all keys in current database.
+
+        Issue 3.3: Gated behind allow_in_tests=True to prevent accidental
+        production data loss from a stray call in route handlers.
+        Only test code or maintenance scripts should pass allow_in_tests=True.
+        """
+        if not allow_in_tests:
+            raise RuntimeError(
+                "flushdb() is disabled in production code. "
+                "Pass allow_in_tests=True only from test helpers or maintenance scripts."
+            )
         await self.client.flushdb()
         return True
 

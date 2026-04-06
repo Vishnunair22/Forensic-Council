@@ -207,6 +207,48 @@ class Settings(BaseSettings):
     signing_key: str = Field(
         description='Key for signing audit entries. Generate with: python -c "import secrets; print(secrets.token_hex(32))"'
     )
+
+    @field_validator("signing_key")
+    @classmethod
+    def validate_signing_key_entropy(cls, v: str, info) -> str:
+        """Issue 13.1: Reject signing keys with insufficient entropy.
+
+        Enforces:
+        - Minimum 32 characters (already documented in the field description)
+        - Not all the same character (zero diversity)
+        - Minimum unique character ratio (>= 10 unique chars out of 32+)
+          to catch repeated patterns like 'abababab...' or '0101...'
+        """
+        data = info.data if hasattr(info, "data") else {}
+        env = data.get("app_env", "development")
+        if env not in ("production", "staging"):
+            return v  # only enforce in prod/staging
+
+        if len(v) < 32:
+            raise ValueError(
+                "SIGNING_KEY must be at least 32 characters in production/staging. "
+                'Generate with: python -c "import secrets; print(secrets.token_hex(32))"'
+            )
+
+        # Reject all-same-character keys (zero entropy)
+        if len(set(v)) == 1:
+            raise ValueError(
+                "SIGNING_KEY has zero entropy (all characters are identical). "
+                "Use a cryptographically random key."
+            )
+
+        # Reject keys with very low unique-character diversity
+        # A 64-char hex string from secrets.token_hex(32) has ≥ 8 unique chars;
+        # require at least 8 to catch repeat patterns.
+        unique_count = len(set(v))
+        if unique_count < 8:
+            raise ValueError(
+                f"SIGNING_KEY has very low entropy ({unique_count} unique chars). "
+                "Use a cryptographically random key with high character diversity. "
+                'Generate with: python -c "import secrets; print(secrets.token_hex(32))"'
+            )
+
+        return v
     jwt_secret_key: str = Field(
         description='Secret key for JWT token signing. Generate separate unique key with: python -c "import secrets; print(secrets.token_hex(32))"'
     )
@@ -218,6 +260,24 @@ class Settings(BaseSettings):
         default=7, description="JWT refresh token expiration in days"
     )
     jwt_algorithm: str = Field(default="HS256", description="JWT signing algorithm")
+
+    @field_validator("jwt_algorithm")
+    @classmethod
+    def validate_jwt_algorithm(cls, v: str) -> str:
+        """Block weak/dangerous JWT algorithms, especially 'none'."""
+        _allowed = {"HS256", "HS384", "HS512", "RS256", "RS384", "RS512", "ES256", "ES384", "ES512"}
+        if v.lower() == "none":
+            raise ValueError(
+                "JWT_ALGORITHM='none' is a critical security vulnerability. "
+                "It disables signature verification and allows forged tokens. "
+                "Use HS256 (default) or a strong asymmetric algorithm."
+            )
+        if v not in _allowed:
+            raise ValueError(
+                f"JWT_ALGORITHM '{v}' is not in the allowed set {sorted(_allowed)}. "
+                "Use HS256 (default) for symmetric or RS256/ES256 for asymmetric signing."
+            )
+        return v
     cors_allowed_origins: list[str] = Field(
         default=[
             "http://localhost:3000",
@@ -236,10 +296,24 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             if v.startswith("["):
                 try:
-                    return json.loads(v)
+                    parsed = json.loads(v)
                 except json.JSONDecodeError:
                     raise ValueError(f"Invalid CORS_ALLOWED_ORIGINS JSON: {v}")
+                return parsed
             return [i.strip() for i in v.split(",") if i.strip()]
+        return v
+
+    @field_validator("cors_allowed_origins")
+    @classmethod
+    def validate_cors_no_wildcard_in_production(cls, v: list, info) -> list:
+        """Block wildcard CORS in production — it nullifies same-origin protection."""
+        data = info.data if hasattr(info, "data") else {}
+        env = data.get("app_env", "development")
+        if env == "production" and ("*" in v or "" in v):
+            raise ValueError(
+                "CORS_ALLOWED_ORIGINS must not contain '*' or empty strings in production. "
+                "Specify explicit allowed origins (e.g. https://forensic.yourdomain.com)."
+            )
         return v
 
     @property

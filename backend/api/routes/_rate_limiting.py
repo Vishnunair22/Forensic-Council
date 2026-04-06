@@ -113,21 +113,49 @@ async def check_daily_cost_quota(user_id: str, user_role: str = "investigator") 
 
     Each investigation costs approximately $1.60. Quota is configurable
     via DAILY_COST_QUOTA_USD env var (default $50/day).
+
+    Issue 8.1: Check + decrement is now atomic via a Lua script to prevent
+    the TOCTOU race where two concurrent requests both see cost < quota
+    and both proceed, exceeding the budget.
     """
     key = f"cost_quota:{user_id}"
     quota = _DAILY_COST_QUOTA_USD.get(user_role, _DAILY_COST_QUOTA_DEFAULT_USD)
+    is_production = settings.app_env == "production"
+
+    # Lua script: atomically check quota then increment only if within budget.
+    # Returns [allowed (0|1), new_cost_cents, ttl_seconds]
+    # We work in integer cents to avoid floating-point precision issues in Lua.
+    _COST_CENTS = int(_COST_PER_INVESTIGATION_USD * 100)
+    _QUOTA_CENTS = int(quota * 100)
+    _lua_quota = """
+    local key = KEYS[1]
+    local cost = tonumber(ARGV[1])
+    local quota = tonumber(ARGV[2])
+    local window = tonumber(ARGV[3])
+    local current = tonumber(redis.call('GET', key) or 0)
+    if current + cost > quota then
+        return {0, current, redis.call('TTL', key)}
+    end
+    local new_val = redis.call('INCRBYFLOAT', key, cost)
+    if tonumber(new_val) <= cost then
+        redis.call('EXPIRE', key, window)
+    end
+    return {1, new_val, window}
+    """
 
     try:
         from infra.redis_client import get_redis_client
 
         redis = await get_redis_client()
         if redis:
-            cost_raw = await redis.get(key)
-            current_cost = float(cost_raw) if cost_raw else 0.0
-
-            if current_cost + _COST_PER_INVESTIGATION_USD > quota:
-                ttl = await redis.ttl(key)
+            result = await redis.client.eval(
+                _lua_quota, 1, key,
+                _COST_CENTS, _QUOTA_CENTS, _COST_QUOTA_WINDOW_SECS
+            )
+            allowed, current_cents, ttl = int(result[0]), int(result[1]), int(result[2])
+            if not allowed:
                 retry_after = ttl if ttl > 0 else _COST_QUOTA_WINDOW_SECS
+                current_cost = current_cents / 100
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail=(
@@ -137,15 +165,17 @@ async def check_daily_cost_quota(user_id: str, user_role: str = "investigator") 
                     ),
                     headers={"Retry-After": str(retry_after)},
                 )
-
-            new_cost = await redis.incrbyfloat(key, _COST_PER_INVESTIGATION_USD)
-            if new_cost <= _COST_PER_INVESTIGATION_USD:
-                await redis.expire(key, _COST_QUOTA_WINDOW_SECS)
             return
     except HTTPException:
         raise
     except Exception:
-        pass
+        # Issue 8.2: Fail CLOSED in production when Redis is unavailable
+        if is_production:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Cost quota service unavailable. Please try again later.",
+                headers={"Retry-After": "30"},
+            )
 
     # ── In-memory fallback ────────────────────────────────────────────────────
     now = time.time()

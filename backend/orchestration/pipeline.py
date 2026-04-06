@@ -366,9 +366,11 @@ class ForensicCouncilPipeline:
         self._case_id = case_id
         self._started_at = datetime.now(timezone.utc).isoformat()
         self._degradation_flags: list[str] = []
-        # Hierarchical timeout budget: investigation (600s) → agents share the budget
+        # Issue 6.1: Use asyncio monotonic clock consistently for all deadline
+        # arithmetic so clock adjustments (NTP slew) cannot skew the budget.
+        loop = asyncio.get_event_loop()
         self._investigation_deadline = (
-            time.monotonic() + self.config.investigation_timeout
+            loop.time() + self.config.investigation_timeout
         )
 
         await self._initialize_components(session_id)
@@ -645,6 +647,17 @@ class ForensicCouncilPipeline:
 
         return report
 
+    async def _clear_working_memory_for_session(self, session_id: UUID) -> None:
+        """Issue 14.3: Clean up working memory (Redis + WAL) for all agents after session ends."""
+        if self.working_memory is None:
+            return
+        agent_ids = ["Agent1", "Agent2", "Agent3", "Agent4", "Agent5", "Arbiter"]
+        for aid in agent_ids:
+            try:
+                await self.working_memory.clear(session_id, aid)
+            except Exception as e:
+                logger.debug("Working memory clear failed", agent_id=aid, error=str(e))
+
     async def _ingest_evidence(
         self,
         file_path: str,
@@ -722,6 +735,9 @@ class ForensicCouncilPipeline:
                         timeout=self.config.investigation_timeout,
                     )
                     span.set_attribute("finding_count", len(initial_findings))
+                    # Issue 6.3: Persist each agent's initial findings to Redis
+                    # immediately so a worker crash doesn't lose completed work.
+                    await self._checkpoint_agent_result(session_id, agent_id, initial_findings)
                     return agent, initial_findings, True
                 except Exception as e:
                     logger.error(
@@ -916,6 +932,35 @@ class ForensicCouncilPipeline:
         )
 
         return list(results)
+
+    async def _checkpoint_agent_result(
+        self,
+        session_id: UUID,
+        agent_id: str,
+        findings: list,
+    ) -> None:
+        """Issue 6.3: Checkpoint a completed agent's findings to Redis so the
+        work is not lost if the Uvicorn worker is killed mid-investigation."""
+        if self._redis is None:
+            return
+        import json as _json
+        key = f"forensic:checkpoint:{session_id}:{agent_id}"
+        ttl = self.config.session_ttl_hours * 3600
+        try:
+            serialisable = [
+                f.model_dump(mode="json") if hasattr(f, "model_dump") else f
+                for f in findings
+            ]
+            await self._redis.set(key, _json.dumps(serialisable), ex=ttl)
+            logger.debug(
+                "Checkpointed agent findings to Redis",
+                agent_id=agent_id,
+                count=len(findings),
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed to checkpoint agent result", agent_id=agent_id, error=str(e)
+            )
 
     async def handle_hitl_decision(
         self,

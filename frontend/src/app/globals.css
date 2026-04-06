@@ -2,6 +2,9 @@
 
 /* ── Theme Variables ──────────────────────────────────────────────────────── */
 @theme {
+  /* Gradient animation for hero headline */
+  --animate-gradient-x: gradient-x 4s ease infinite;
+
   --color-background: #080c14;
   --color-foreground: #f8fafc;
   --color-primary: #22d3ee;
@@ -228,4 +231,85 @@
 
 .btn-pill-secondary:active {
   transform: scale(0.98);
+}
+
+/* ── Keyframe Animations ──────────────────────────────────────────────────── */
+@keyframes gradient-x {
+  0%, 100% { background-position: 0% 50%; }
+  50%       { background-position: 100% 50%; }
+}
+
+@keyframes microscope-scan {
+  0%   { transform: translateX(-100%); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateX(200vw); opacity: 0; }
+}
+
+@keyframes crosshair-pulse {
+  0%, 100% { opacity: 0.12; transform: scale(0.95); }
+  50%       { opacity: 0.28; transform: scale(1.05); }
+}
+
+/* ── Microscope Background Effects ───────────────────────────────────────── */
+.microscope-evidence-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(34, 211, 238, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.microscope-scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(34, 211, 238, 0.18) 20%,
+    rgba(34, 211, 238, 0.45) 50%,
+    rgba(34, 211, 238, 0.18) 80%,
+    transparent 100%
+  );
+  animation: microscope-scan var(--scan-duration, 8s) var(--scan-delay, 0s) linear infinite;
+}
+
+.microscope-crosshair {
+  position: absolute;
+  width: var(--crosshair-size, 100px);
+  height: var(--crosshair-size, 100px);
+  transform: translate(-50%, -50%);
+  animation: crosshair-pulse var(--pulse-duration, 5s) var(--pulse-delay, 0s) ease-in-out infinite;
+}
+
+.microscope-crosshair::before,
+.microscope-crosshair::after {
+  content: "";
+  position: absolute;
+  background: rgba(34, 211, 238, 0.22);
+}
+
+.microscope-crosshair::before {
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  transform: translateX(-50%);
+}
+
+.microscope-crosshair::after {
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  transform: translateY(-50%);
+}
+
+/* ── Utility: animated gradient on background-position ───────────────────── */
+.animate-gradient-x {
+  animation: gradient-x 4s ease infinite;
+  background-size: 200% auto;
 }

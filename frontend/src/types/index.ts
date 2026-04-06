@@ -1,3 +1,13 @@
+export const VERDICTS = [
+  "AUTHENTIC",
+  "SUSPICIOUS",
+  "MANIPULATED",
+  "NOT_APPLICABLE",
+  "INCONCLUSIVE",
+] as const;
+
+export type Verdict = (typeof VERDICTS)[number];
+
 export type AgentResult = {
   id: string;
   name: string;
@@ -14,4 +24,5 @@ export type Report = {
   timestamp: string;
   summary: string;
   agents: AgentResult[];
+  verdict: Verdict;
 };

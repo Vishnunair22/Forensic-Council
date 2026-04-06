@@ -68,6 +68,7 @@ export function mapReportDtoToReport(dto: ReportDTO): Report {
     timestamp: dto.signed_utc ?? new Date().toISOString(),
     summary: dto.executive_summary,
     agents: agentResults,
+    verdict: (dto.overall_verdict ?? "INCONCLUSIVE") as Report["verdict"],
   };
 }
 

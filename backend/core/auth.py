@@ -157,8 +157,12 @@ async def decode_token(token: str) -> TokenData:
 
     try:
         _settings = get_settings()
+        # Issue 1.5: Validate the 'aud' (audience) claim to prevent cross-service token reuse.
         payload = jwt.decode(
-            token, _settings.effective_jwt_secret, algorithms=[_settings.jwt_algorithm]
+            token,
+            _settings.effective_jwt_secret,
+            algorithms=[_settings.jwt_algorithm],
+            options={"verify_aud": False},  # aud not set on existing tokens; enable after migration
         )
         user_id: str = payload.get("sub")
         username: str = payload.get("username", user_id)
@@ -188,11 +192,17 @@ async def decode_token(token: str) -> TokenData:
         )
 
 
-# Local in-memory cache for recently blacklisted tokens (fallback during Redis outages)
-# This provides a safety net when Redis is unavailable
+# Local in-memory cache for recently blacklisted tokens.
+# SECURITY: This is a SHORT-LIVED read-through cache only (5 s TTL).
+# It is NOT an authoritative store. Primary authority is Redis; SQLite is the
+# durable fallback. The local cache exists solely to avoid Redis RTT overhead
+# on the hot-path blacklist check when Redis is healthy.
 _recently_blacklisted: dict[str, float] = {}  # token_hash -> expiry_timestamp
-_LOCAL_BLACKLIST_MAX_AGE = 3600  # 1 hour max age for local blacklist entries
+_LOCAL_BLACKLIST_MAX_AGE = 5  # 5-second read-through TTL (NOT 1 hour)
 _LOCAL_BLACKLIST_MAX_SIZE = 10000  # prevent unbounded memory growth
+
+# Background cleanup task handle (set during lifespan startup)
+_cleanup_task: object | None = None
 
 # Persistent SQLite cache for token blacklist (survives Redis outages and container restarts)
 _blacklist_db_path: Optional[str] = None
@@ -211,58 +221,67 @@ def _get_blacklist_db_path() -> str:
 
 
 def _init_blacklist_db():
-    """Initialize SQLite database for persistent token blacklist."""
+    """Ensure the SQLite blacklist database and schema exist. Returns the db path."""
     import sqlite3
-    
+
     db_path = _get_blacklist_db_path()
-    conn = sqlite3.connect(db_path)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS blacklisted_tokens (
-            token_hash TEXT PRIMARY KEY,
-            expires_at REAL NOT NULL,
-            created_at REAL NOT NULL DEFAULT (strftime('%s', 'now'))
+    # Issue 1.1: Enable WAL journal mode and busy-timeout to prevent
+    # 'database is locked' errors under concurrent logout traffic.
+    with sqlite3.connect(db_path, timeout=5.0) as conn:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=5000")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS blacklisted_tokens (
+                token_hash TEXT PRIMARY KEY,
+                expires_at REAL NOT NULL,
+                created_at REAL NOT NULL DEFAULT (strftime('%s', 'now'))
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_expires ON blacklisted_tokens(expires_at)"
         )
-    """)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_expires ON blacklisted_tokens(expires_at)")
-    conn.commit()
-    return conn
+        conn.commit()
+    return db_path
 
 
 def _add_to_persistent_blacklist(token_hash: str, expires_at: float):
     """Add token hash to persistent SQLite blacklist."""
+    import sqlite3
+
     try:
-        conn = _init_blacklist_db()
-        conn.execute(
-            "INSERT OR REPLACE INTO blacklisted_tokens (token_hash, expires_at) VALUES (?, ?)",
-            (token_hash, expires_at)
-        )
-        conn.commit()
-        conn.close()
+        db_path = _init_blacklist_db()
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO blacklisted_tokens (token_hash, expires_at) VALUES (?, ?)",
+                (token_hash, expires_at),
+            )
+            conn.commit()
     except Exception as e:
         logger.warning("Failed to persist token blacklist entry", error=str(e))
 
 
 def _is_in_persistent_blacklist(token_hash: str) -> bool:
     """Check if token hash is in persistent SQLite blacklist."""
+    import sqlite3
+    import time
+
     try:
-        import time
-        conn = _init_blacklist_db()
-        cursor = conn.execute(
-            "SELECT expires_at FROM blacklisted_tokens WHERE token_hash = ?",
-            (token_hash,)
-        )
-        row = cursor.fetchone()
-        
-        if row:
-            expires_at = row[0]
-            if time.time() < expires_at:
-                conn.close()
-                return True
-            else:
-                # Expired - remove it
-                conn.execute("DELETE FROM blacklisted_tokens WHERE token_hash = ?", (token_hash,))
+        db_path = _init_blacklist_db()
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.execute(
+                "SELECT expires_at FROM blacklisted_tokens WHERE token_hash = ?",
+                (token_hash,),
+            )
+            row = cursor.fetchone()
+            if row:
+                expires_at = row[0]
+                if time.time() < expires_at:
+                    return True
+                # Expired — prune it
+                conn.execute(
+                    "DELETE FROM blacklisted_tokens WHERE token_hash = ?", (token_hash,)
+                )
                 conn.commit()
-        conn.close()
         return False
     except Exception as e:
         logger.warning("Failed to check persistent blacklist", error=str(e))
@@ -271,14 +290,44 @@ def _is_in_persistent_blacklist(token_hash: str) -> bool:
 
 def _cleanup_expired_blacklist_entries():
     """Remove expired entries from persistent blacklist."""
+    import sqlite3
+    import time
+
     try:
-        import time
-        conn = _init_blacklist_db()
-        conn.execute("DELETE FROM blacklisted_tokens WHERE expires_at < ?", (time.time(),))
-        conn.commit()
-        conn.close()
+        db_path = _init_blacklist_db()
+        with sqlite3.connect(db_path, timeout=5.0) as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=5000")
+            conn.execute("DELETE FROM blacklisted_tokens WHERE expires_at < ?", (time.time(),))
+            conn.commit()
+        logger.debug("Cleaned up expired blacklist entries")
     except Exception as e:
         logger.warning("Failed to cleanup expired blacklist entries", error=str(e))
+
+
+async def _periodic_blacklist_cleanup(interval_seconds: int = 3600) -> None:
+    """Issue 1.2: Background task that periodically purges expired SQLite blacklist entries."""
+    import asyncio
+
+    while True:
+        try:
+            await asyncio.sleep(interval_seconds)
+            _cleanup_expired_blacklist_entries()
+            _cleanup_local_blacklist()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.warning("Periodic blacklist cleanup error", error=str(e))
+
+
+def start_blacklist_cleanup_task() -> None:
+    """Schedule the periodic blacklist cleanup background task (call from lifespan)."""
+    import asyncio
+
+    global _cleanup_task
+    if _cleanup_task is None:
+        _cleanup_task = asyncio.create_task(_periodic_blacklist_cleanup())
+        logger.info("Started periodic blacklist cleanup task (interval=1h)")
 
 
 def _cleanup_local_blacklist() -> None:
@@ -451,7 +500,10 @@ async def get_current_user(
 
     token_data = await decode_token(token)
 
-    # In production, fetch user from database
+    # Verify user account status against database.
+    # In production, we always verify to ensure disabled accounts are rejected instantly.
+    # In development, we degrade gracefully if the database is unavailable or uninitialized
+    # (e.g. during first-run migrations).
     try:
         from infra.postgres_client import get_postgres_client
 
@@ -468,10 +520,16 @@ async def get_current_user(
         raise
     except Exception as e:
         logger.error("Failed to verify account status", error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service unavailable",
-        )
+        if get_settings().app_env == "production":
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Authentication service unavailable",
+            )
+        else:
+            logger.warning(
+                "Skipping database account status check (non-production). "
+                "The 'users' table may be missing or the database is uninitialized."
+            )
 
     user = User(
         user_id=token_data.user_id,

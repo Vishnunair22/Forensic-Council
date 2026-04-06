@@ -80,6 +80,7 @@ async function waitForFinalReport(
   signal?: AbortSignal,
 ): Promise<boolean> {
   const deadline = Date.now() + maxMs;
+  let pollInterval = 1000;
   while (Date.now() < deadline) {
     if (signal?.aborted) return false;
     try {
@@ -91,24 +92,51 @@ async function waitForFinalReport(
       if (st.status === "error") {
         throw new Error(st.message || "Council synthesis failed.");
       }
+      if (st.status === "complete") {
+        try {
+          const res = await withTimeout(getReport(sessionId, 30_000), 30_000);
+          if (res.status === "complete" && res.report) return true;
+        } catch {
+          /* in progress, 404, timeout, or not yet persisted */
+        }
+      }
     } catch (e) {
       if (e instanceof Error && e.message.includes("Council synthesis"))
         throw e;
       /* timeout / network — keep polling */
     }
-    try {
-      const res = await withTimeout(getReport(sessionId), POLL_REQUEST_MS);
-      if (res.status === "complete" && res.report) return true;
-    } catch {
-      /* in progress, 404, timeout, or not yet persisted */
-    }
     await new Promise<void>((r) => {
-      const timer = setTimeout(r, 1200);
+      const timer = setTimeout(r, pollInterval);
       signal?.addEventListener("abort", () => clearTimeout(timer), {
         once: true,
       });
     });
     if (signal?.aborted) return false;
+    pollInterval = Math.min(pollInterval * 1.2, 3000);
+  }
+  return false;
+}
+      if (st.status === "complete") {
+        try {
+          const res = await withTimeout(getReport(sessionId, 30_000), 30_000);
+          if (res.status === "complete" && res.report) return true;
+        } catch {
+          /* in progress, 404, timeout, or not yet persisted */
+        }
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message.includes("Council synthesis"))
+        throw e;
+      /* timeout / network — keep polling */
+    }
+    await new Promise<void>((r) => {
+      const timer = setTimeout(r, pollInterval);
+      signal?.addEventListener("abort", () => clearTimeout(timer), {
+        once: true,
+      });
+    });
+    if (signal?.aborted) return false;
+    pollInterval = Math.min(pollInterval * 1.2, 3000);
   }
   return false;
 }
@@ -604,44 +632,9 @@ export default function EvidencePage() {
       return;
     }
 
-    let navigated = false;
-    const navigateOnce = () => {
-      if (navigated) return;
-      navigated = true;
-      setShowArbiterOverlay(false);
-      setIsNavigating(false);
-      router.push("/result", { scroll: true });
-    };
-    // Guaranteed exit if polling hangs (unlikely with per-request timeouts, but safe).
-    const safetyNav = window.setTimeout(navigateOnce, 120_000);
-
-    const abortController = new AbortController();
-    pollAbortRef.current = abortController;
-
-    try {
-      const ok = await waitForFinalReport(
-        sid,
-        setArbiterLiveText,
-        110_000,
-        abortController.signal,
-      );
-      if (!ok) {
-        playSound("error");
-        setValidationError(
-          "The report is taking longer than expected. Opening the results view — it will keep checking.",
-        );
-      }
-    } catch (err) {
-      dbg.error("Council synthesis wait failed", err);
-      playSound("error");
-      setValidationError(
-        err instanceof Error ? err.message : "Council synthesis failed.",
-      );
-    } finally {
-      window.clearTimeout(safetyNav);
-      pollAbortRef.current = null;
-      navigateOnce();
-    }
+    setShowArbiterOverlay(false);
+    setIsNavigating(false);
+    router.push("/result", { scroll: true });
   }, [playSound, resumeInvestigation, router, isNavigating, completedAgents]);
 
   // Deep Analysis → run heavy ML pass
@@ -788,10 +781,8 @@ export default function EvidencePage() {
     let successTimer: ReturnType<typeof setTimeout> | undefined;
 
     if (analysisStreamReady) {
-      successTimer = setTimeout(() => {
-        setShowLoadingOverlay(false);
-        sessionStorage.removeItem("fc_show_loading");
-      }, 800);
+      setShowLoadingOverlay(false);
+      sessionStorage.removeItem("fc_show_loading");
     }
 
     return () => {

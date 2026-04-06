@@ -5,6 +5,18 @@
  * Client module for communicating with the FastAPI backend.
  */
 
+import { ReportDTOSchema } from "@/lib/schemas";
+
+function _parseReportDTO(raw: unknown): ReportDTO {
+  try {
+    return ReportDTOSchema.parse(raw) as unknown as ReportDTO;
+  } catch {
+    // Schema validation failed — return the raw data cast to ReportDTO so the
+    // UI still renders rather than silently breaking.
+    return raw as ReportDTO;
+  }
+}
+
 /** Dev-only logger — silenced in production builds */
 const isDev = process.env.NODE_ENV !== "production";
 const dbg = {
@@ -41,9 +53,24 @@ export const API_BASE =
 // the proxy forwards all request headers including Cookie.
 const WS_BASE =
   typeof window !== "undefined"
-    ? // Browser: prefer NEXT_PUBLIC_WS_URL if set manually, otherwise default to same-origin.
-      process.env.NEXT_PUBLIC_WS_URL ||
-      `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}`
+    ? (() => {
+        // Preference 1: Manually set NEXT_PUBLIC_WS_URL
+        if (process.env.NEXT_PUBLIC_WS_URL) return process.env.NEXT_PUBLIC_WS_URL;
+
+        const { protocol, host, port } = window.location;
+        const wsProto = protocol === "https:" ? "wss" : "ws";
+
+        // Preference 2: Development direct-to-backend fallback
+        // If the frontend is on port 3000 (Next.js dev), it CANNOT proxy WebSockets
+        // through its App Router 'proxy' route. We must connect directly to the
+        // backend port (default 8000) instead.
+        if (port === "3000") {
+          return `${wsProto}://localhost:8000`;
+        }
+
+        // Preference 3: Standard same-origin (handled by reverse proxy like Caddy)
+        return `${wsProto}://${host}`;
+      })()
     : // Server-side (fallback): use API URL base
       (() => {
         const base =
@@ -106,6 +133,23 @@ export async function getMutationHeaders(init?: HeadersInit): Promise<Headers> {
   }
 
   return headers;
+}
+
+export const API_TIMEOUT = 30000;
+
+export function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number = API_TIMEOUT,
+): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`Request timeout after ${timeoutMs}ms`)),
+        timeoutMs,
+      ),
+    ),
+  ]);
 }
 
 /**
@@ -353,7 +397,7 @@ export async function autoLoginAsInvestigator(): Promise<TokenResponse> {
 
   _pendingAuth = (async () => {
     try {
-      const response = await fetch("/api/auth/demo", { 
+      const response = await fetch("/api/auth/demo", {
         method: "POST",
         signal: AbortSignal.timeout(12_000),
       });
@@ -365,9 +409,27 @@ export async function autoLoginAsInvestigator(): Promise<TokenResponse> {
         throw new Error(error.error || "Authentication failed");
       }
 
-      return await response.json();
+      const data: TokenResponse = await response.json();
+
+      // CRITICAL: Store the token in sessionStorage so that createLiveSocket can
+      // include it in the WebSocket subprotocol (`token.<JWT>`).
+      //
+      // Why this is necessary:
+      //   - In dev, WS connects directly to ws://localhost:8000 (not through the
+      //     Next.js proxy on :3000). The auth cookie is set by the Next.js demo
+      //     route on the :3000 origin and is HttpOnly (invisible to JS).
+      //   - Same-site=strict / cross-origin rules mean the :3000 cookie is NEVER
+      //     sent to the :8000 WebSocket endpoint.
+      //   - The backend WS handler falls back to the `token.<JWT>` subprotocol,
+      //     but only if the token was passed in — which requires it to be readable
+      //     by JS (sessionStorage is the correct place here).
+      if (data.access_token && typeof data.expires_in === "number") {
+        setAuthToken(data.access_token, data.expires_in);
+      }
+
+      return data;
     } finally {
-      // Clear the lock after a small delay to allow subsequent legitimate calls 
+      // Clear the lock after a small delay to allow subsequent legitimate calls
       // but block immediate rapid-fire bursts from a React render loop.
       setTimeout(() => {
         _pendingAuth = null;
@@ -601,10 +663,13 @@ export async function getArbiterStatus(
 /**
  * Get the report for a session
  */
-export async function getReport(sessionId: string): Promise<ReportResponse> {
+export async function getReport(
+  sessionId: string,
+  timeoutMs = 30_000,
+): Promise<ReportResponse> {
   return handleAuthError(async () => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10_000);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(
         `${API_BASE}/api/v1/sessions/${sessionId}/report`,
@@ -624,7 +689,8 @@ export async function getReport(sessionId: string): Promise<ReportResponse> {
         throw new Error(error.detail || `HTTP ${response.status}`);
       }
 
-      const report: ReportDTO = await response.json();
+      const rawData: unknown = await response.json();
+      const report: ReportDTO = _parseReportDTO(rawData);
       return { status: "complete", report };
     } finally {
       clearTimeout(timeoutId);
@@ -723,7 +789,7 @@ export function createLiveSocket(sessionId: string): {
   // Include the auth token in subprotocols (token.<JWT>) as a robust fallback
   // if cookies are stripped by a proxy or blocked in certain cross-origin dev flows.
   const protocols = ["forensic-v1"];
-  const token = getAuthToken();
+  const token = readCookie("access_token") || readCookie("fc_session") || readCookie("sessionid") || getAuthToken();
   if (token) {
     protocols.push(`token.${token}`);
   }
@@ -787,33 +853,23 @@ export function createLiveSocket(sessionId: string): {
     }
   };
 
-  // The first incoming message handler resolves `connected` on CONNECTED type.
-  // After that, messages are routed through the caller-supplied onmessage.
-  const originalOnMessage = ws.onmessage;
-  ws.onmessage = (event: MessageEvent) => {
+  // Register an event listener for resolving connection state (Issue 11.2 fix)
+  const bootstrapListener = (event: MessageEvent) => {
+    if (settled) return;
     try {
       const msg = JSON.parse(event.data as string);
-      if (
-        (msg.type === "CONNECTED" || msg.type === "AGENT_UPDATE") &&
-        !settled
-      ) {
+      if (msg.type === "CONNECTED" || msg.type === "AGENT_UPDATE") {
         clearTimeout(connectTimeout);
         safeResolve();
+        ws.removeEventListener("message", bootstrapListener);
       }
     } catch {
-      // non-JSON or parse error — still resolve (unexpected but harmless)
-      if (!settled) {
-        clearTimeout(connectTimeout);
-        safeResolve();
-      }
+      clearTimeout(connectTimeout);
+      safeResolve();
+      ws.removeEventListener("message", bootstrapListener);
     }
-    // Forward to caller's handler if already attached
-    if (originalOnMessage) {
-      originalOnMessage.call(ws, event);
-    }
-    // Also call any handler set after this bootstrap listener
-    // (will be overridden by useSimulation which sets ws.onmessage directly)
   };
+  ws.addEventListener("message", bootstrapListener);
 
   return { ws, connected };
 }
@@ -828,7 +884,7 @@ export async function pollForReport(
   maxAttempts = 60,
 ): Promise<ReportDTO> {
   return new Promise((resolve, reject) => {
-    let intervalId: ReturnType<typeof setInterval>;
+    let timeoutId: ReturnType<typeof setTimeout>;
     let finished = false;
     let attempts = 0;
 
@@ -837,7 +893,6 @@ export async function pollForReport(
       attempts++;
       if (attempts > maxAttempts) {
         finished = true;
-        clearInterval(intervalId);
         reject(new Error("Polling timeout — investigation took too long"));
         return;
       }
@@ -846,27 +901,23 @@ export async function pollForReport(
         const result = await getReport(sessionId);
         if (result.status === "complete" && result.report) {
           finished = true;
-          clearInterval(intervalId);
           resolve(result.report);
         } else {
           onProgress("in_progress");
-          // Exponential backoff with jitter: base * 1.5^attempt, capped at 15s
           const nextDelay = Math.min(
             intervalMs * Math.pow(1.5, attempts),
             15000,
           );
           const jitter = nextDelay * 0.2 * (Math.random() - 0.5);
-          clearInterval(intervalId);
-          intervalId = setInterval(poll, nextDelay + jitter);
+          timeoutId = setTimeout(poll, nextDelay + jitter);
         }
       } catch (error) {
         finished = true;
-        clearInterval(intervalId);
         reject(error);
       }
     };
 
-    intervalId = setInterval(poll, intervalMs);
+    timeoutId = setTimeout(poll, intervalMs);
     poll();
   });
 }

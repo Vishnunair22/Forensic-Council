@@ -193,6 +193,7 @@ class CouncilArbiter:
         # Shared LLM client reused across all synthesis calls to avoid
         # repeated TCP/TLS handshakes during parallel deliberation.
         self._synthesis_client: Optional[LLMClient] = None
+        self._step_hook: Any = None
 
     # ── Shared agent name map ────────────────────────────────────────────
     _AGENT_NAMES: dict[str, str] = {
@@ -438,10 +439,9 @@ class CouncilArbiter:
 
         # Helper: call optional step-progress hook if set externally
         async def _step(msg: str) -> None:
-            hook = getattr(self, "_step_hook", None)
-            if hook is not None:
+            if self._step_hook is not None:
                 try:
-                    await hook(msg)
+                    await self._step_hook(msg)
                 except Exception as e:
                     logger.debug(f"Arbiter step hook failed: {e}")
 
@@ -690,9 +690,17 @@ class CouncilArbiter:
                 return "NOT_APPLICABLE"
             conf = metrics.get("confidence_score", 0)
             err = metrics.get("error_rate", 0)
-            if conf >= 0.70 and err <= 0.15:
+            
+            # Parameterised thresholds with fallbacks for robust verdict calibration
+            thresh = getattr(self.config, "verdict_thresholds", {})
+            auth_conf = thresh.get("authentic_min_conf", 0.70)
+            auth_err = thresh.get("authentic_max_err", 0.15)
+            susp_conf = thresh.get("suspicious_max_conf", 0.45)
+            susp_err = thresh.get("suspicious_min_err", 0.40)
+            
+            if conf >= auth_conf and err <= auth_err:
                 return "AUTHENTIC"
-            if conf < 0.45 or err > 0.40:
+            if conf < susp_conf or err > susp_err:
                 return "SUSPICIOUS"
             return "INCONCLUSIVE"
 
@@ -1111,7 +1119,8 @@ class CouncilArbiter:
     def _get_category(self, finding_type: str) -> str | None:
         """Map a finding_type to its semantic category, or None."""
         ft = finding_type.lower().replace(" ", "_")
-        for keyword, category in self._FINDING_CATEGORY_MAP.items():
+        # Issue 14.5: Match longest keyword first to prevent substring overlap issues
+        for keyword, category in sorted(self._FINDING_CATEGORY_MAP.items(), key=lambda x: len(x[0]), reverse=True):
             if keyword in ft:
                 return category
         return None
@@ -1149,7 +1158,12 @@ class CouncilArbiter:
                 category_buckets.setdefault(c, {}).setdefault(agent_id, []).append(f)
 
         # ── 2. Compare within each category bucket ────────────────────────
+        _MAX_FINDINGS_PER_BUCKET = 10
         for cat, agent_map in category_buckets.items():
+            for agent_id, flist in agent_map.items():
+                if len(flist) > _MAX_FINDINGS_PER_BUCKET:
+                    flist.sort(key=lambda x: x.get("confidence_raw", 0.0), reverse=True)
+                    agent_map[agent_id] = flist[:_MAX_FINDINGS_PER_BUCKET]
             agent_ids = list(agent_map.keys())
             for i, agent_a in enumerate(agent_ids):
                 for agent_b in agent_ids[i + 1 :]:

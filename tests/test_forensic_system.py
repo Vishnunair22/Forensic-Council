@@ -14,8 +14,8 @@ from pathlib import Path
 from uuid import uuid4
 
 # Add backend to path
-sys.path.insert(0, str(Path(__file__).parent / "backend"))
-os.chdir(str(Path(__file__).parent / "backend"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
+os.chdir(str(Path(__file__).parent.parent / "backend"))
 
 from core.config import get_settings
 from core.evidence import EvidenceArtifact

@@ -8,7 +8,7 @@ Tracks applied migrations and ensures idempotent schema updates.
 
 import asyncio
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from infra.postgres_client import PostgresClient, get_postgres_client
 from core.structured_logging import get_logger
@@ -25,7 +25,6 @@ class Migration:
     description: str
     sql: str
     rollback_sql: Optional[str] = None
-    validation_sql: Optional[str] = None
     validation_sql: Optional[str] = None
 
 
@@ -379,35 +378,14 @@ class MigrationManager:
             logger.debug("Could not fetch migrations", error=str(e))
             return []
 
-    async def validate_migration(self, migration: Migration) -> bool:
-        """Verify migration applied correctly by running validation SQL."""
-        if not migration.validation_sql:
-            logger.debug(
-                "No validation SQL for migration, skipping check",
-                version=migration.version,
-            )
-            return True
-        
-        try:
-            result = await self.client.fetch_val(migration.validation_sql)
-            is_valid = bool(result)
-            if not is_valid:
-                logger.error(
-                    "Migration validation failed",
-                    version=migration.version,
-                    name=migration.name,
-                )
-            return is_valid
-        except Exception as e:
-            logger.error(
-                "Migration validation error",
-                version=migration.version,
-                error=str(e),
-            )
-            return False
+    async def validate_migration(self, migration: Migration, conn: Optional[Any] = None) -> bool:
+        """Verify migration applied correctly by running validation SQL.
 
-    async def validate_migration(self, migration: Migration) -> bool:
-        """Verify migration applied correctly by running validation SQL."""
+        Args:
+            migration: The migration to validate.
+            conn: Optional active connection. If not provided, a new one is
+                  acquired from the pool. (REQUIRED for validating uncommitted SQL).
+        """
         if not migration.validation_sql:
             logger.debug(
                 "No validation SQL for migration, skipping check",
@@ -416,20 +394,28 @@ class MigrationManager:
             return True
         
         try:
-            result = await self.client.fetch_val(migration.validation_sql)
+            # Use the provided connection (active transaction) if available.
+            # This is critical because uncommitted tables are not visible
+            # to other connections in the pool.
+            if conn:
+                result = await conn.fetchval(migration.validation_sql)
+            else:
+                result = await self.client.fetch_val(migration.validation_sql)
+            
             is_valid = bool(result)
             if not is_valid:
                 logger.error(
-                    "Migration validation failed",
+                    "Migration validation failed (result was false)",
                     version=migration.version,
                     name=migration.name,
                 )
             return is_valid
         except Exception as e:
             logger.error(
-                "Migration validation error",
+                "Migration validation error (exception during SQL)",
                 version=migration.version,
                 error=str(e),
+                exc_info=True,
             )
             return False
 
@@ -449,8 +435,9 @@ class MigrationManager:
                 async with conn.transaction():
                     await conn.execute(migration.sql)
 
-                    # Validate before committing
-                    if not await self.validate_migration(migration):
+                    # Validate before committing using the SAME connection (conn).
+                    # This ensures the validation SQL can see the uncommitted tables.
+                    if not await self.validate_migration(migration, conn=conn):
                         raise RuntimeError(
                             f"Migration {migration.version} validation failed"
                         )

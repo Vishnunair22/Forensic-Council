@@ -7,6 +7,7 @@ Part of the dual-layer memory architecture.
 """
 
 import json
+import asyncio
 import tempfile
 from enum import Enum
 from pathlib import Path
@@ -109,6 +110,9 @@ class WorkingMemoryState(BaseModel):
             iteration_ceiling=data.get("iteration_ceiling", 10),
             hitl_state=data.get("hitl_state"),
             tool_registry_snapshot=data.get("tool_registry_snapshot"),
+            # Issue 4.2: Restore last_tool_error so heartbeat broadcasts
+            # can surface tool errors after a Redis round-trip.
+            last_tool_error=data.get("last_tool_error"),
         )
 
 
@@ -710,6 +714,9 @@ class WorkingMemory:
         """
         Clear working memory for session end.
 
+        Issue 4.1: Also removes the WAL file so working memory state
+        (tasks, reasoning chains) does not persist indefinitely on disk.
+
         Args:
             session_id: Session UUID
             agent_id: Agent identifier
@@ -726,6 +733,13 @@ class WorkingMemory:
             except Exception as e:
                 logger.warning("WorkingMemory.clear: Redis delete failed", error=str(e))
 
+        # Issue 4.1: Remove WAL file to prevent PII accumulation on disk
+        try:
+            wal_path = self._wal_dir / f"{key.replace(':', '_')}.json"
+            wal_path.unlink(missing_ok=True)
+        except Exception:
+            pass  # WAL cleanup is best-effort
+
         logger.info(
             "Cleared working memory",
             session_id=str(session_id),
@@ -733,21 +747,37 @@ class WorkingMemory:
         )
 
 
-# Singleton instance
+# Singleton instance — protected by a lock to prevent concurrent init races
 _working_memory: Optional[WorkingMemory] = None
+_working_memory_lock: Optional[asyncio.Lock] = None
+
+
+def _get_working_memory_lock() -> asyncio.Lock:
+    """Issue 4.3: Lazily create the lock inside a running event loop."""
+    global _working_memory_lock
+    if _working_memory_lock is None:
+        _working_memory_lock = asyncio.Lock()
+    return _working_memory_lock
 
 
 async def get_working_memory() -> WorkingMemory:
     """
     Get or create the working memory singleton.
 
+    Issue 4.3: Double-checked locking via asyncio.Lock prevents two concurrent
+    coroutines from each creating their own WorkingMemory (and leaking a
+    RedisClient connection pool).
+
     Returns:
         WorkingMemory instance
     """
     global _working_memory
-    if _working_memory is None:
-        redis = await get_redis_client()
-        _working_memory = WorkingMemory(redis_client=redis)
+    if _working_memory is not None:
+        return _working_memory
+    async with _get_working_memory_lock():
+        if _working_memory is None:
+            redis = await get_redis_client()
+            _working_memory = WorkingMemory(redis_client=redis)
     return _working_memory
 
 

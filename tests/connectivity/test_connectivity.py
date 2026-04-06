@@ -21,6 +21,7 @@ import json
 import time
 import socket
 import asyncio
+import uuid
 import pytest
 
 try:

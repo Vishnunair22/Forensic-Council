@@ -25,11 +25,19 @@ export function devLog(message: string, ...args: unknown[]): void {
 }
 
 /**
- * Log errors - always log errors but sanitize in production
+ * Log errors — always emits in both dev and production.
+ * In production, only the context label and a sanitized message are shown
+ * (no stack traces or raw error objects that could leak internals).
  */
 export function logError(context: string, error: unknown): void {
   if (isDev) {
     console.error(`[${context}]`, error);
+  } else {
+    // Production: emit a minimal, sanitized message so errors are visible
+    // in browser devtools / monitoring without leaking implementation details.
+    const msg =
+      error instanceof Error ? error.message : "An unexpected error occurred";
+    console.error(`[${context}] ${msg}`);
   }
 }
 

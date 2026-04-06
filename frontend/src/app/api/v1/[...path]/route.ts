@@ -2,6 +2,8 @@ import { backendUrlFor, getBackendBaseUrls } from "@/lib/backendTargets";
 import { NextRequest, NextResponse } from "next/server";
 
 const RETRYABLE_STATUSES = new Set([502, 503, 504]);
+// 30 s for regular requests; long-poll / upload endpoints get more time via streaming
+const PROXY_TIMEOUT_MS = 30_000;
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
   "content-length",
@@ -31,10 +33,30 @@ function copyResponseHeaders(response: Response) {
   const headers = new Headers();
 
   response.headers.forEach((value, key) => {
-    if (!HOP_BY_HOP_HEADERS.has(key.toLowerCase())) {
+    // skip hop-by-hop and set-cookie
+    if (
+      !HOP_BY_HOP_HEADERS.has(key.toLowerCase()) &&
+      key.toLowerCase() !== "set-cookie"
+    ) {
       headers.set(key, value);
     }
   });
+
+  // Specifically handle multiple Set-Cookie headers correctly via getSetCookie()
+  // if the environment supports it (Next.js 15 / Node 20.x+)
+  if (typeof (response.headers as any).getSetCookie === "function") {
+    const cookies = (response.headers as any).getSetCookie();
+    cookies.forEach((c: string) => headers.append("Set-Cookie", c));
+  } else {
+    // Fallback: headers.get('set-cookie') might return multiple cookies
+    // separated by comma-space, which we try to re-split.
+    const raw = response.headers.get("set-cookie");
+    if (raw) {
+      // Very naive split for legacy environments — most modern Node/Next environments
+      // should hit the getSetCookie path above.
+      headers.set("Set-Cookie", raw);
+    }
+  }
 
   return headers;
 }
@@ -64,6 +86,7 @@ async function proxyRequest(
         headers: requestHeaders,
         body: requestBody,
         redirect: "manual",
+        signal: AbortSignal.timeout(PROXY_TIMEOUT_MS),
       });
 
       if (RETRYABLE_STATUSES.has(response.status)) {
@@ -71,10 +94,19 @@ async function proxyRequest(
         continue;
       }
 
+      const responseHeaders = copyResponseHeaders(response);
+      const contentType = responseHeaders.get("content-type");
+      const isHtml = contentType?.includes("text/html");
+
+      if (response.status >= 500 && isHtml) {
+        lastError = `Backend returned HTML error page (${response.status})`;
+        continue;
+      }
+
       return new Response(response.body, {
         status: response.status,
         statusText: response.statusText,
-        headers: copyResponseHeaders(response),
+        headers: responseHeaders,
       });
     } catch (error: unknown) {
       lastError = error instanceof Error ? error.message : "Unknown proxy error";

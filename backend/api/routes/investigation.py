@@ -304,8 +304,8 @@ async def start_investigation(
             ]
         elif mime.startswith("video/"):
             is_valid_mime = claimed_ext in [".mp4", ".mov", ".avi", ".mkv"]
-        else:
-            is_valid_mime = False
+        elif mime.startswith("audio/"):
+            is_valid_mime = claimed_ext in [".wav", ".mp3", ".m4a", ".flac"]
 
         if not is_valid_mime:
             raise HTTPException(
@@ -2382,6 +2382,12 @@ async def run_investigation_task(
                 error=str(persist_err),
             )
 
+    except asyncio.CancelledError:
+        logger.info("Investigation cancelled by client", session_id=session_id)
+        _active_pipelines.pop(session_id, None)
+        from ._session_state import clear_session_websockets
+        clear_session_websockets(session_id)
+        raise
     except asyncio.TimeoutError:
         error_msg = f"Investigation timed out after {timeout}s"
         logger.error(error_msg, session_id=session_id)

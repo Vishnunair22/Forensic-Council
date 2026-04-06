@@ -128,6 +128,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "Key store initialization used deterministic fallback", error=str(e)
         )
 
+    # Issue 1.2: Start periodic SQLite blacklist cleanup (runs every hour)
+    try:
+        from core.auth import start_blacklist_cleanup_task
+        start_blacklist_cleanup_task()
+    except Exception as e:
+        logger.warning("Blacklist cleanup task failed to start", error=str(e))
+
     # Warm up ML tool models before accepting requests (blocking in production,
     # non-blocking in development). This eliminates 30-60s cold-start on the
     # first investigation.

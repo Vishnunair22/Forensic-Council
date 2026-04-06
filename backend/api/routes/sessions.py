@@ -327,6 +327,8 @@ async def live_updates(websocket: WebSocket, session_id: str):
                 if message["type"] == "message":
                     data = json.loads(message["data"])
                     await websocket.send_json(data)
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             logger.debug("Redis subscriber task terminated", session_id=session_id, error=str(e))
         finally:
@@ -468,51 +470,65 @@ async def get_arbiter_status(
 ):
     """
     Lightweight endpoint polled by the frontend while the arbiter compiles.
-    Returns status from Redis persistence.
+    Returns status from Redis persistence. Never raises — always returns a
+    safe JSON body so the frontend can keep polling without hitting 500s.
     """
-    from api.routes._session_state import get_final_report, get_active_pipeline_metadata
-    
-    # 1. Check if report is already complete (Redis cache)
-    report_data = await get_final_report(session_id)
-    if report_data:
-        report, _ = report_data
-        report_id = report.get("report_id") if isinstance(report, dict) else getattr(report, "report_id", session_id)
-        return {"status": "complete", "report_id": str(report_id)}
-
-    # 2. Check active metadata in Redis
-    metadata = await get_active_pipeline_metadata(session_id)
-    if metadata:
-        status = metadata.get("status", "running")
-        if status == "completed":
-             return {"status": "complete", "report_id": session_id}
-        if status == "error":
-             return {"status": "error", "message": metadata.get("error", "Unknown error")}
-             
-        # Map worker status to frontend expectation
-        msg = metadata.get("brief") or "Investigation in progress..."
-        return {"status": "running", "message": msg}
-
-    # 3. Try DB Fallback
     try:
-        from core.session_persistence import get_session_persistence
+        from api.routes._session_state import get_final_report, get_active_pipeline_metadata
 
-        persistence = await get_session_persistence()
-        db_row = await persistence.get_report(session_id)
-        if db_row:
-            s = db_row.get("status", "")
-            if s == "completed":
-                return {"status": "complete", "report_id": session_id}
-            if s in ("running", "pending"):
-                return {"status": "running", "message": "Investigation in progress..."}
-            if s == "error":
-                return {
-                    "status": "error",
-                    "message": db_row.get("error_message", "Unknown error"),
-                }
-    except Exception:
-        pass
+        # 1. Check if report is already complete (in-memory / Redis cache)
+        try:
+            report_data = await get_final_report(session_id)
+            if report_data:
+                report, _ = report_data
+                report_id = (
+                    report.get("report_id")
+                    if isinstance(report, dict)
+                    else getattr(report, "report_id", session_id)
+                )
+                return {"status": "complete", "report_id": str(report_id)}
+        except Exception:
+            pass
 
-    return {"status": "not_found"}
+        # 2. Check active metadata in Redis
+        try:
+            metadata = await get_active_pipeline_metadata(session_id)
+            if metadata:
+                status = metadata.get("status", "running")
+                if status == "completed":
+                    return {"status": "complete", "report_id": session_id}
+                if status == "error":
+                    return {"status": "error", "message": metadata.get("error", "Unknown error")}
+                msg = metadata.get("brief") or "Investigation in progress…"
+                return {"status": "running", "message": msg}
+        except Exception:
+            pass
+
+        # 3. DB fallback
+        try:
+            from core.session_persistence import get_session_persistence
+
+            persistence = await get_session_persistence()
+            db_row = await persistence.get_report(session_id)
+            if db_row:
+                s = db_row.get("status", "")
+                if s == "completed":
+                    return {"status": "complete", "report_id": session_id}
+                if s in ("running", "pending"):
+                    return {"status": "running", "message": "Investigation in progress…"}
+                if s == "error":
+                    return {
+                        "status": "error",
+                        "message": db_row.get("error_message", "Unknown error"),
+                    }
+        except Exception:
+            pass
+
+        return {"status": "not_found"}
+
+    except Exception as e:
+        logger.warning("arbiter-status unexpected error", session_id=session_id, error=str(e))
+        return {"status": "running", "message": "Checking investigation status…"}
 
 
 # ============================================================================
@@ -701,14 +717,15 @@ async def download_report(
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     filename = f"forensic_report_{session_id}_{timestamp}.json"
     
-    # Return as downloadable file
+    # Serialize Pydantic model before passing to JSONResponse
     from fastapi.responses import JSONResponse
+    content = report_dto.model_dump() if hasattr(report_dto, "model_dump") else report_dto
     return JSONResponse(
-        content=report_dto,
+        content=content,
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
             "X-Content-Type-Options": "nosniff",
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
         },
     )
 

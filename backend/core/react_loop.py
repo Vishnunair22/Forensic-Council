@@ -297,7 +297,6 @@ def create_llm_step_generator(
                 content=parsed["content"],
                 tool_name=parsed.get("tool_name"),
                 tool_input=parsed.get("tool_input"),
-                iteration=0,  # Will be set by the loop
             )
 
             logger.info(
@@ -707,10 +706,10 @@ class ReActLoopEngine:
                 )
                 self._hitl_checkpoints.append(checkpoint)
 
-                # Wait for resume signal (in real implementation, this would be external)
-                # For now, we check if a decision was set via resume_from_hitl
-                if self._resume_event is None:
-                    self._resume_event = asyncio.Event()
+                # Issue 5.1: Create a FRESH Event for every checkpoint so a stale
+                # resume_from_hitl call from a previous checkpoint cannot accidentally
+                # unblock a new one.
+                self._resume_event = asyncio.Event()
 
                 # In test mode, we might have a pending decision already
                 if self._pending_decision is None:
@@ -720,7 +719,23 @@ class ReActLoopEngine:
                             self._resume_event.wait(), timeout=self.hitl_timeout
                         )
                     except asyncio.TimeoutError:
-                        # Timeout - terminate loop
+                        # Issue 5.2: Log timeout to chain of custody before terminating
+                        try:
+                            if self.custody_logger is not None:
+                                await self.custody_logger.log(
+                                    entry_type="SYSTEM_EVENT",
+                                    agent_id=self.agent_id,
+                                    session_id=str(self.session_id),
+                                    content={
+                                        "event": "HITL_TIMEOUT",
+                                        "checkpoint_id": str(checkpoint.checkpoint_id),
+                                        "reason": hitl_reason.value,
+                                        "timeout_seconds": self.hitl_timeout,
+                                        "iteration": self._current_iteration,
+                                    },
+                                )
+                        except Exception:
+                            pass  # best-effort; never block termination
                         self._terminated = True
                         break
 
@@ -1463,12 +1478,29 @@ class ReActLoopEngine:
         except Exception:
             pass  # Use existing state if refresh fails
 
-        # Find the next PENDING task
+        # Issue 5.3: Skip BLOCKED tasks — prefer IN_PROGRESS > PENDING, skip BLOCKED.
+        # A BLOCKED task stalls the loop; mark it complete and move to the next.
         pending_task = None
         for task in state.tasks:
-            if task.status == TaskStatus.PENDING:
+            if task.status == TaskStatus.BLOCKED:
+                # Auto-skip: mark blocked tasks complete so the loop advances
+                try:
+                    await self.working_memory.update_task(
+                        session_id=self.session_id,
+                        agent_id=self.agent_id,
+                        task_id=task.task_id,
+                        status=TaskStatus.COMPLETE,
+                        result_ref="skipped_blocked",
+                    )
+                    logger.debug(
+                        f"Skipped BLOCKED task: {task.description}",
+                        agent_id=self.agent_id,
+                    )
+                except Exception:
+                    pass
+                continue
+            if task.status == TaskStatus.PENDING and pending_task is None:
                 pending_task = task
-                break
 
         if pending_task is None:
             # All tasks complete (or force-completed) → signal loop to stop

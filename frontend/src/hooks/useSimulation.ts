@@ -15,6 +15,20 @@ import { createLiveSocket, BriefUpdate, HITLCheckpoint } from "@/lib/api";
 import { SoundType } from "./useSound";
 import type { AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
 
+// Backend uses "Agent1"–"Agent5"; frontend AGENTS_DATA uses "AGT-01"–"AGT-05".
+// Normalize incoming agent IDs so all state keying is consistent.
+const BACKEND_TO_FRONTEND_AGENT_ID: Record<string, string> = {
+  Agent1: "AGT-01",
+  Agent2: "AGT-02",
+  Agent3: "AGT-03",
+  Agent4: "AGT-04",
+  Agent5: "AGT-05",
+};
+function normalizeAgentId(id: string | null | undefined): string | null {
+  if (!id) return null;
+  return BACKEND_TO_FRONTEND_AGENT_ID[id] ?? id;
+}
+
 type SimulationStatus =
   | "idle"
   | "analyzing"
@@ -58,9 +72,18 @@ export const useSimulation = ({
 
   const wsRef = useRef<WebSocket | null>(null);
   const completedAgentsRef = useRef<AgentUpdate[]>([]);
-  const [sessionTimeout, setSessionTimeout] = useState<Date | null>(null);
+  const [_sessionTimeout, _setSessionTimeout] = useState<Date | null>(null);
   /** True after POST /resume succeeds — PIPELINE_COMPLETE must not be dropped while still `awaiting_decision` from React's stale batch. */
   const expectingPipelineCompleteRef = useRef(false);
+
+  // WebSocket reconnection config with exponential backoff
+  const reconnectConfig = useRef({
+    initialDelay: 1000,
+    maxDelay: 30000,
+    backoffFactor: 2,
+    maxRetries: 12,
+  });
+  const reconnectAttemptsRef = useRef(0);
 
   // Store callbacks in refs to avoid triggering effect on every render
   const onAgentCompleteRef = useRef(onAgentComplete);
@@ -119,9 +142,10 @@ export const useSimulation = ({
                     setPipelineThinking(
                       typeof t === "string" ? t : update.message || "",
                     );
-                    // Ensure we move out of initiating when pipeline starts streaming
+                    // Transition to "analyzing" from either "idle" or "initiating"
+                    // (status is never set to "initiating" externally; it starts as "idle")
                     setStatus((prev: SimulationStatus) =>
-                      prev === "initiating" ? "analyzing" : prev,
+                      prev === "idle" || prev === "initiating" ? "analyzing" : prev,
                     );
                     break;
                   }
@@ -132,7 +156,7 @@ export const useSimulation = ({
                       tools_done?: number;
                       tools_total?: number;
                     };
-                    const incomingId = update.agent_id;
+                    const incomingId = normalizeAgentId(update.agent_id) ?? update.agent_id;
 
                     setAgentUpdates(
                       (
@@ -164,9 +188,9 @@ export const useSimulation = ({
                         },
                       }),
                     );
-                    // Transition from initiating to analyzing on first real agent update
+                    // Transition to "analyzing" from either "idle" or "initiating"
                     setStatus((prev: SimulationStatus) =>
-                      prev === "initiating" ? "analyzing" : prev,
+                      prev === "idle" || prev === "initiating" ? "analyzing" : prev,
                     );
                   }
                   break;
@@ -176,7 +200,7 @@ export const useSimulation = ({
                     const checkpoint: HITLCheckpoint = {
                       checkpoint_id: update.data.checkpoint_id as string,
                       session_id: update.session_id,
-                      agent_id: update.agent_id || "",
+                      agent_id: normalizeAgentId(update.agent_id) ?? update.agent_id ?? "",
                       agent_name: update.agent_name || "",
                       brief_text: update.message,
                       decision_needed: "APPROVE, REDIRECT, or TERMINATE",
@@ -188,8 +212,9 @@ export const useSimulation = ({
 
                 case "AGENT_COMPLETE":
                   if (update.agent_id) {
+                    const normalizedCompleteId = normalizeAgentId(update.agent_id) ?? update.agent_id;
                     const agent = AGENTS_DATA.find(
-                      (a) => a.id === update.agent_id,
+                      (a) => a.id === normalizedCompleteId,
                     );
                     if (agent) {
                       const {
@@ -270,9 +295,9 @@ export const useSimulation = ({
                       setCompletedAgents(nextCompleted);
                       onAgentCompleteRef.current?.(newUpdate);
 
-                      // Also transition to analyzing if still in initiating
+                      // Also transition to analyzing if still idle or initiating
                       setStatus((prev: SimulationStatus) =>
-                        prev === "initiating" ? "analyzing" : prev,
+                        prev === "idle" || prev === "initiating" ? "analyzing" : prev,
                       );
                     }
                   }
@@ -319,14 +344,30 @@ export const useSimulation = ({
         const handleMessage = (event: MessageEvent) => {
           try {
             const update: BriefUpdate = JSON.parse(event.data);
+
+            // Silently discard server-side keepalive pings — they carry no state.
+            if ((update as { type: string }).type === "PING") return;
+
             dbg.log("[WebSocket] Received update, adding to queue:", update);
-            if (messageQueue.length >= 500) {
-              messageQueue.shift();
-              dbg.warn(
-                "[WebSocket] Queue limit reached, dropped oldest message",
-              );
+
+            const isCritical = ["PIPELINE_COMPLETE", "ERROR", "PIPELINE_PAUSED", "HITL_CHECKPOINT"].includes(update.type);
+            if (isCritical) {
+              messageQueue.unshift(update);
+            } else {
+              if (messageQueue.length >= 500) {
+                let dropIdx = 0;
+                while (dropIdx < messageQueue.length && ["PIPELINE_COMPLETE", "ERROR", "PIPELINE_PAUSED", "HITL_CHECKPOINT"].includes(messageQueue[dropIdx].type)) {
+                  dropIdx++;
+                }
+                if (dropIdx < messageQueue.length) {
+                  messageQueue.splice(dropIdx, 1);
+                } else {
+                  messageQueue.shift();
+                }
+                dbg.warn("[WebSocket] Queue limit reached, dropped oldest normal message");
+              }
+              messageQueue.push(update);
             }
-            messageQueue.push(update);
             processQueue();
           } catch (error) {
             dbg.error("[WebSocket] Failed to parse message:", error);
@@ -340,13 +381,9 @@ export const useSimulation = ({
         // Wire up message handler.
         // createLiveSocket attaches a bootstrap handler first (to resolve 'connected').
         // We wrap it so both handlers fire in sequence.
-        const bootstrapHandler = ws.onmessage;
-        ws.onmessage = (event: MessageEvent) => {
-          // Let the bootstrap handler run first (resolves connected promise)
-          if (bootstrapHandler) bootstrapHandler.call(ws, event);
-          // Then run our simulation handler
-          handleMessage(event);
-        };
+        // ws.onmessage has been changed in lib/api.ts to use addEventListener instead.
+        // We can safely directly assign our simulation handler.
+        ws.onmessage = handleMessage;
 
         // Handle close - reject if closed before/during connection, otherwise notify
         const handleClose = (event: CloseEvent) => {
@@ -361,16 +398,40 @@ export const useSimulation = ({
             return;
           }
 
-          // Connection was established but closed - notify status
+          // Connection was established but closed - attempt reconnection with exponential backoff
           setStatus((prev: SimulationStatus) => {
             if (prev !== "complete" && prev !== "error" && prev !== "idle") {
-              setErrorMessage("Connection to server lost.");
-              return "error";
+              if (reconnectAttemptsRef.current < reconnectConfig.current.maxRetries) {
+                const delay = Math.min(
+                  reconnectConfig.current.initialDelay *
+                    Math.pow(reconnectConfig.current.backoffFactor, reconnectAttemptsRef.current),
+                  reconnectConfig.current.maxDelay,
+                );
+                reconnectAttemptsRef.current++;
+                setErrorMessage(
+                  `Connection lost. Reconnecting in ${Math.round(delay / 1000)}s (attempt ${reconnectAttemptsRef.current}/${reconnectConfig.current.maxRetries})…`,
+                );
+                setTimeout(() => {
+                  const currentSessionId = targetSessionId || sessionStorage.getItem("forensic_session_id");
+                  if (currentSessionId) {
+                    connectWebSocket(currentSessionId).catch(() => {
+                      // Will be retried by next close event
+                    });
+                  }
+                }, delay);
+                return prev;
+              } else {
+                setErrorMessage("Connection lost. Please refresh the page.");
+                return "error";
+              }
             }
             return prev;
           });
         };
-        ws.onclose = handleClose;
+        // Use addEventListener so we don't override the onclose set in createLiveSocket
+        // (which is responsible for clearing the connection timeout and settling the
+        // `connected` promise). Both handlers will fire in order when the socket closes.
+        ws.addEventListener("close", handleClose);
 
         // Wait for connection - resolve or reject based on outcome
         connected
@@ -389,42 +450,58 @@ export const useSimulation = ({
     [],
   );
 
-  // Cleanup on unmount
+  // Cleanup WebSocket on unmount only.
+  // IMPORTANT: This must NOT depend on sessionId — if it did, the cleanup would
+  // fire every time connectWebSocket calls setSessionId(), killing the newly
+  // created socket before it can connect (WebSocket closed before established).
   useEffect(() => {
-    // Set up token expiry checker
-    const checkTokenExpiry = setInterval(() => {
-      const expiry = sessionStorage.getItem("forensic_auth_token_expiry");
-      if (expiry && Date.now() > parseInt(expiry)) {
-        // Token expired - attempt refresh
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, []);
+
+  // Token expiry checker — reschedules when session changes, but does NOT
+  // touch the WebSocket (that lives in the unmount-only effect above).
+  useEffect(() => {
+    let tokenExpiryTimeout: NodeJS.Timeout;
+    const scheduleTokenExpiryCheck = () => {
+      const expiryStr = sessionStorage.getItem("forensic_auth_token_expiry");
+      if (!expiryStr) return;
+      const expiry = parseInt(expiryStr);
+      const now = Date.now();
+      const timeToExpiry = expiry - now;
+      const checkDelay = Math.max(0, timeToExpiry - 30000);
+
+      tokenExpiryTimeout = setTimeout(() => {
+        // Token expires soon — attempt refresh
         fetch("/api/v1/auth/refresh", {
           method: "POST",
           credentials: "include",
         })
           .then((response) => {
             if (!response.ok) {
-              // Refresh failed - redirect to login
               window.location.href = "/";
             } else {
-              // Refresh succeeded - reconnect WebSocket
               const currentSessionId = sessionId || sessionStorage.getItem("forensic_session_id");
               if (currentSessionId) {
                 connectWebSocket(currentSessionId);
               }
+              // Schedule next check
+              scheduleTokenExpiryCheck();
             }
           })
           .catch(() => {
-            // Network error - redirect to login
             window.location.href = "/";
           });
-      }
-    }, 60000); // Check every minute
+      }, checkDelay);
+    };
+    scheduleTokenExpiryCheck();
 
     return () => {
-      clearInterval(checkTokenExpiry);
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
+      clearTimeout(tokenExpiryTimeout);
     };
   }, [sessionId, connectWebSocket]);
 
@@ -525,7 +602,7 @@ export const useSimulation = ({
     completedAgents,
     pipelineMessage,
     pipelineThinking,
-    startSimulation,
+    startSimulation: resetSimulation,
     connectWebSocket,
     resumeInvestigation,
     resetSimulation,

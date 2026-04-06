@@ -58,6 +58,11 @@ class Agent1Image(ForensicAgent):
         return is_lossless_image(file_path, mime or None)
 
     @property
+    def iteration_ceiling(self) -> int:
+        """Maximum iterations — tasks + 2 buffer to prevent runaway loops."""
+        return len(self.task_decomposition) + 2
+
+    @property
     def task_decomposition(self) -> list[str]:
         base = [
             "Perform semantic image understanding to identify image type and context",

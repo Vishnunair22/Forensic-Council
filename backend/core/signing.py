@@ -27,17 +27,19 @@ Key Rotation:
 """
 
 import hashlib
+import hmac as _hmac
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
-import hmac
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.backends import default_backend
 from cryptography.exceptions import InvalidSignature
 from cryptography.fernet import Fernet
+import base64
 
 from core.structured_logging import get_logger
 
@@ -181,13 +183,22 @@ class KeyStore:
         self._init_fernet()
 
     def _init_fernet(self) -> None:
-        """Initialise Fernet cipher from SIGNING_KEY for encrypting private keys at rest."""
+        """Initialise Fernet cipher from SIGNING_KEY for encrypting private keys at rest.
+
+        Issue 2.2: Use HKDF (proper KDF with domain separation) instead of a
+        single-round SHA-256, which provides no salt or iteration count.
+        """
         try:
             raw = self._settings.signing_key.encode("utf-8")
-            # Fernet requires a 32-byte base64-encoded key — derive one from SIGNING_KEY
-            derived = hashlib.sha256(raw).digest()
-            import base64
-
+            # HKDF gives us a proper 32-byte derived key with domain separation.
+            # Even a short SIGNING_KEY produces a full-entropy Fernet key.
+            derived = HKDF(
+                algorithm=hashes.SHA256(),
+                length=32,
+                salt=None,  # HKDF internally uses a zero-salt when None
+                info=b"forensic-council-keystore-v1",
+                backend=default_backend(),
+            ).derive(raw)
             fernet_key = base64.urlsafe_b64encode(derived)
             self._fernet = Fernet(fernet_key)
         except Exception as e:
@@ -197,62 +208,88 @@ class KeyStore:
             self._fernet = None
 
     def _derive_seed(self, agent_id: str) -> bytes:
-        """Derive a deterministic seed for an agent's key (fallback mode)."""
+        """Derive a deterministic seed for an agent's key (fallback mode).
+
+        Issue 2.1: Use explicit _hmac alias (imported at module level as
+        `import hmac as _hmac`) to ensure correct name resolution.
+        """
         master_key = self._settings.signing_key.encode("utf-8")
-        return hmac.new(master_key, agent_id.encode("utf-8"), hashlib.sha256).digest()
+        return _hmac.new(master_key, agent_id.encode("utf-8"), hashlib.sha256).digest()
 
     # ------------------------------------------------------------------
     # DB-backed key storage
     # ------------------------------------------------------------------
 
     async def _load_keys_from_db(self) -> None:
-        """Load all agent keys from PostgreSQL (encrypted with Fernet)."""
-        try:
-            from infra.postgres_client import get_postgres_client
+        """Load all agent keys from PostgreSQL (encrypted with Fernet).
 
-            pg = await get_postgres_client()
-            if pg is None:
-                return
+        Issue 2.3: Retry up to 3 times on transient errors before falling back
+        to deterministic derivation, and emit a CRITICAL log so operators are
+        notified of the degraded key-separation mode.
+        """
+        import asyncio
 
-            rows = await pg.fetch(
-                "SELECT agent_id, encrypted_private_key_pem, is_active "
-                "FROM agent_signing_keys WHERE is_active = true"
-            )
-            if not rows:
-                return
+        last_error: Exception | None = None
+        for attempt in range(1, 4):
+            try:
+                from infra.postgres_client import get_postgres_client
 
-            for row in rows:
-                agent_id = row["agent_id"]
-                encrypted_pem = row["encrypted_private_key_pem"]
-                try:
-                    if self._fernet:
-                        pem_bytes = self._fernet.decrypt(encrypted_pem.encode("utf-8"))
-                    else:
-                        # Fernet unavailable — cannot decrypt stored keys
-                        logger.warning(
-                            "Fernet unavailable, skipping stored key for agent",
-                            agent_id=agent_id,
+                pg = await get_postgres_client()
+                if pg is None:
+                    return
+
+                rows = await pg.fetch(
+                    "SELECT agent_id, encrypted_private_key_pem, is_active "
+                    "FROM agent_signing_keys WHERE is_active = true"
+                )
+                if not rows:
+                    return
+
+                for row in rows:
+                    agent_id = row["agent_id"]
+                    encrypted_pem = row["encrypted_private_key_pem"]
+                    try:
+                        if self._fernet:
+                            pem_bytes = self._fernet.decrypt(encrypted_pem.encode("utf-8"))
+                        else:
+                            logger.warning(
+                                "Fernet unavailable, skipping stored key for agent",
+                                agent_id=agent_id,
+                            )
+                            continue
+                        key_pair = AgentKeyPair.from_pem(
+                            agent_id, pem_bytes.decode("utf-8")
                         )
-                        continue
-                    key_pair = AgentKeyPair.from_pem(
-                        agent_id, pem_bytes.decode("utf-8")
-                    )
-                    self._keys[agent_id] = key_pair
-                except Exception as e:
+                        self._keys[agent_id] = key_pair
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to decrypt stored key for agent",
+                            agent_id=agent_id,
+                            error=str(e),
+                        )
+
+                self._db_available = True
+                logger.info("Loaded agent keys from PostgreSQL", loaded=len(self._keys))
+                return  # success — exit retry loop
+
+            except Exception as e:
+                last_error = e
+                if attempt < 3:
                     logger.warning(
-                        "Failed to decrypt stored key for agent",
-                        agent_id=agent_id,
+                        "PostgreSQL key load attempt failed, retrying",
+                        attempt=attempt,
                         error=str(e),
                     )
+                    await asyncio.sleep(0.5 * attempt)
 
-            self._db_available = True
-            logger.info("Loaded agent keys from PostgreSQL", loaded=len(self._keys))
-        except Exception as e:
-            logger.debug(
-                "PostgreSQL unavailable for key storage, using deterministic fallback",
-                error=str(e),
-            )
-            self._db_available = False
+        # All retries exhausted — fall back to deterministic derivation
+        logger.critical(
+            "Issue 2.3: All DB key-load attempts failed — falling back to deterministic "
+            "key derivation from SIGNING_KEY. Key independence is REDUCED until the DB "
+            "connection is restored and the key store is re-initialised.",
+            error=str(last_error),
+        )
+        self._db_available = False
 
     async def _save_key_to_db(self, agent_id: str, key_pair: AgentKeyPair) -> None:
         """Save a single agent key to PostgreSQL (encrypted with Fernet)."""
