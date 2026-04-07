@@ -9,6 +9,9 @@
     "url": "https://github.com/Vishnunair22/Forensic-Council.git",
     "directory": "frontend"
   },
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "dev:turbopack": "next dev",

@@ -141,6 +141,18 @@ const nextConfig: NextConfig = {
           { key: "Cache-Control", value: "public, max-age=86400, must-revalidate" },
         ],
       },
+      {
+        // API routes: defense-in-depth security headers
+        source: "/api/:path*",
+        headers: [
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, proxy-revalidate" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-XSS-Protection", value: "1; mode=block" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+        ],
+      },
     ];
   },
 };

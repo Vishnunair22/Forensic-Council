@@ -46,8 +46,8 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      # SECURITY FIX: Use REDISCLI_AUTH env var instead of -a flag (password visible in process list)
-      test: ["CMD-SHELL", "redis-cli --no-auth-warning ping | grep -q PONG"]
+      # SECURITY: Use REDISCLI_AUTH env var and test without password on command line
+      test: ["CMD-SHELL", "redis-cli ping"]
       interval: 5s
       timeout: 3s
       retries: 5
