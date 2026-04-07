@@ -133,16 +133,16 @@ finding's `caveat` field.
 3. In `.env`:
    ```dotenv
    GEMINI_API_KEY=AIzaSy_your_gemini_key_here
-   GEMINI_MODEL=gemini-3-pro-preview                              # Primary model (highest accuracy + thinking)
-   GEMINI_FALLBACK_MODELS=gemini-2.5-pro,gemini-2.5-flash  # Ordered fallback chain
+   GEMINI_MODEL=gemini-1.5-pro                              # Primary model (highest accuracy + thinking)
+   GEMINI_FALLBACK_MODELS=gemini-1.5-flash  # Ordered fallback chain
    GEMINI_TIMEOUT=55.0                                                  # API timeout in seconds
    ```
 
    The client automatically cascades through the fallback chain if the primary model is unavailable (404) or rate-limited after retries. Each fallback is tried in order; the first successful response wins.
 
 > **Free tier:** Google AI Studio's free tier supports ~15 requests/minute on
-> `gemini-3-pro-preview` and `gemini-2.5-pro` — sufficient for development. For higher throughput use
-> `gemini-2.5-flash` as primary or obtain a paid API key via Google Cloud.
+> `gemini-1.5-pro` — sufficient for development. For higher throughput use
+> `gemini-1.5-flash` as primary or obtain a paid API key via Google Cloud.
 
 ---
 

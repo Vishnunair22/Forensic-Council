@@ -47,7 +47,7 @@ Five subsystems (Gemini, LLM ReAct, Qdrant, Redis, Arbiter timeout) previously d
 `custody_logger.verify_chain()` existed but was never called. Now called in `pipeline.py` before `sign_report()`. A failed verification adds a CRITICAL degradation flag and is logged as an error.
 
 ### FIXED: Gemini Model String Wrong
-Default was `gemini-3-pro-preview` (not a real model). Changed to `gemini-2.5-pro` in both `config.py` and `.env.example`.
+Default was `gemini-3-pro-preview` (not a real model). Changed to `gemini-1.5-pro` in both `config.py` and `.env.example`.
 
 ### FIXED: Fictional Calibration Parameters
 Removed false academic citations. Parameters are now documented as engineering defaults. `CalibrationStatus.UNCALIBRATED` is set on all default models. Court statements now explicitly say "NOT court-admissible".
@@ -103,7 +103,7 @@ Always check `calibration_status` before citing a score in legal context.
 5. `BOOTSTRAP_ADMIN_PASSWORD` and `BOOTSTRAP_INVESTIGATOR_PASSWORD` set
 6. `DOMAIN` set for Caddy auto-TLS
 7. `LLM_API_KEY` set (Groq recommended)
-8. `GEMINI_API_KEY` set — use `gemini-2.5-pro` model (NOT `gemini-3-pro-preview`)
+8. `GEMINI_API_KEY` set — use `gemini-1.5-pro` model (NOT `gemini-3-pro-preview`)
 9. `HF_TOKEN` set for pyannote.audio neural diarization (Agent 2)
 10. Ports 80 and 443 open for Caddy
 11. Verify `report.degradation_flags` is empty on first test investigation

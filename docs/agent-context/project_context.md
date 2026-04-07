@@ -279,7 +279,7 @@ Pattern: `THOUGHT → ACTION → OBSERVATION` (driven by Groq LLM or hardcoded t
 | `LLM_API_KEY` | Groq key from console.groq.com/keys |
 | `LLM_MODEL` | `llama-3.3-70b-versatile` (Groq default) |
 | `GEMINI_API_KEY` | Enables vision analysis (Agents 1, 3, 5 deep pass) |
-| `GEMINI_MODEL` | `gemini-3-pro-preview` (fallbacks: 2.5-pro, 2.5-flash) |
+| `GEMINI_MODEL` | `gemini-1.5-pro` (fallbacks: 1.5-flash) |
 | `HF_TOKEN` | HuggingFace token (needed for pyannote diarization) |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Initial admin password (must set before prod deploy) |
 | `NEXT_PUBLIC_API_URL` | Browser-reachable backend URL |

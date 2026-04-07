@@ -235,8 +235,8 @@ services:
       - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-llama-3.3-70b-versatile}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.1-pro-preview}
-      - GEMINI_FALLBACK_MODELS=${GEMINI_FALLBACK_MODELS:-gemini-2.5-pro,gemini-2.5-flash}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-pro}
+      - GEMINI_FALLBACK_MODELS=${GEMINI_FALLBACK_MODELS:-gemini-1.5-flash}
       - GEMINI_TIMEOUT=${GEMINI_TIMEOUT:-55.0}
       - EVIDENCE_STORAGE_PATH=/app/storage/evidence
       - CALIBRATION_MODELS_PATH=/app/cache/calibration_models
@@ -322,7 +322,8 @@ services:
       - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-llama-3.3-70b-versatile}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3-pro-preview}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-pro}
+      - GEMINI_FALLBACK_MODELS=${GEMINI_FALLBACK_MODELS:-gemini-1.5-flash}
       - GEMINI_TIMEOUT=${GEMINI_TIMEOUT:-55.0}
       - EVIDENCE_STORAGE_PATH=/app/storage/evidence
       - CALIBRATION_MODELS_PATH=/app/cache/calibration_models

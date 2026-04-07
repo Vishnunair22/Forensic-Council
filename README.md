@@ -63,7 +63,7 @@ Frontend (Next.js 15) → FastAPI Backend → 5 2026 Agents → Council Arbiter 
 ```bash
 # 1. Configure 2026 Standards
 cp .env.example .env
-# Edit .env: set GEMINI_MODEL=gemini-3.1-pro-preview
+# Edit .env: set GEMINI_MODEL=gemini-1.5-pro
 
 # 2. Deploy
 docker compose -f infra/docker-compose.yml --env-file .env up --build

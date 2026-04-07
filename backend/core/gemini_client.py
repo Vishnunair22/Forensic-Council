@@ -11,15 +11,14 @@ Agent 5 (Metadata/Context) during their deep analysis pass to:
   - Detect objects, weapons, documents, and contextual anomalies
 
 Provider routing (cascade — first available wins):
-  1. gemini-3.1-pro-preview → default primary, highest accuracy + thinking support
-  2. gemini-2.5-pro       → stable high accuracy + thinking
-  3. gemini-2.5-flash     → fast mid-size model with thinking support
+  1. gemini-1.5-pro → default primary, high accuracy
+  2. gemini-1.5-flash → fast mid-size model
 
 Auto-cascade: 404 / "model not found" responses skip immediately to
 the next model; other errors retry with backoff then cascade forward.
 The chain is fully configurable via GEMINI_MODEL + GEMINI_FALLBACK_MODELS.
 
-NOTE: gemini-2.5-* and gemini-3.* series are the recommended 2026 standards.
+NOTE: gemini-1.5-* series is the recommended stable standard.
 
 Vision input:
   - Images: base64-encoded inline (JPEG, PNG, WEBP, GIF, BMP)
@@ -28,35 +27,11 @@ Vision input:
   - Audio:  waveform spectrogram image, or no-vision fallback
 """
 
-from __future__ import annotations
+_DEFAULT_MODEL = "gemini-1.5-pro"
 
-import asyncio
-import base64
-import json
-import mimetypes
-import time
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Optional
+_DEFAULT_FALLBACK_CHAIN = "gemini-1.5-flash"
 
-import httpx
-
-from core.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
-from core.config import Settings
-from core.structured_logging import get_logger
-
-logger = get_logger(__name__)
-
-_GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
-_DEFAULT_MODEL = "gemini-2.5-pro"
-# Ordered fallback chain: tried in sequence if the primary model fails/is unavailable.
-_DEFAULT_FALLBACK_CHAIN = "gemini-2.5-pro,gemini-2.5-flash"
-_MAX_RETRIES = 3
-_BASE_BACKOFF = 2.0
-
-# Models that support thinkingConfig (budget-based chain-of-thought).
-# gemini-2.0-* (thinking-capable endpoints), gemini-2.5-*, gemini-3.* support thinkingConfig.
-_THINKING_MODEL_PREFIXES = ("gemini-2.0-flash-thinking", "gemini-2.5", "gemini-3")
+_THINKING_MODEL_PREFIXES = ("gemini-2.0-flash-thinking",)
 
 
 class _ModelUnavailableError(Exception):
@@ -89,7 +64,7 @@ class GeminiVisionFinding:
     """
 
     analysis_type: str  # e.g. "file_content_identification"
-    model_used: str  # e.g. "gemini-2.5-pro"
+    model_used: str  # e.g. "gemini-1.5-pro"
     content_description: str  # What the model sees in plain language
     manipulation_signals: list[str] = field(default_factory=list)
     detected_objects: list[str] = field(default_factory=list)

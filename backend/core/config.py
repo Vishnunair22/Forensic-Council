@@ -426,22 +426,21 @@ class Settings(BaseSettings):
         ),
     )
     gemini_model: str = Field(
-        default="gemini-2.5-pro",
+        default="gemini-1.5-pro",
         description=(
             "Primary Gemini model for vision analysis. "
-            "gemini-2.5-pro: stable high accuracy with thinking support. "
-            "gemini-2.5-flash: fast mid-size model with thinking support. "
-            "NOTE: gemini-3.1-pro-preview recommended for deepest analysis."
+            "gemini-1.5-pro: stable high accuracy. "
+            "gemini-1.5-flash: fast mid-size model."
         ),
     )
     gemini_fallback_models: str = Field(
-        default="gemini-2.5-pro,gemini-2.5-flash",
+        default="gemini-1.5-flash",
         description=(
             "Comma-separated ordered fallback chain tried when the primary model "
             "is unavailable or fails. Each model is attempted in order; the first "
             "successful response is used. 404 / model-not-found triggers an "
             "immediate skip to the next model (no backoff). "
-            "Default: gemini-2.5-pro → gemini-2.5-flash."
+            "Default: gemini-1.5-pro → gemini-1.5-flash."
         ),
     )
     gemini_timeout: float = Field(
