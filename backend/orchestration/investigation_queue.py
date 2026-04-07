@@ -21,18 +21,19 @@ class InvestigationStatus(str, Enum):
     CANCELLED = "CANCELLED"
 
 
-@dataclass
-class InvestigationTask:
+from pydantic import BaseModel, Field
+
+class InvestigationTask(BaseModel):
     """A queued investigation task."""
 
-    task_id: UUID
+    task_id: UUID = Field(default_factory=uuid4)
     session_id: UUID
     case_id: str
     investigator_id: str
     evidence_file_path: str
     original_filename: Optional[str] = None
     status: InvestigationStatus = InvestigationStatus.QUEUED
-    created_at: float = field(default_factory=time.time)
+    created_at: float = Field(default_factory=time.time)
     started_at: Optional[float] = None
     completed_at: Optional[float] = None
     error: Optional[str] = None
@@ -40,19 +41,12 @@ class InvestigationTask:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
-        d = asdict(self)
-        d["task_id"] = str(self.task_id)
-        d["session_id"] = str(self.session_id)
-        d["status"] = self.status.value
-        return d
+        return self.model_dump(mode="json")
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "InvestigationTask":
         """Create from dictionary (JSON deserialization)."""
-        data["task_id"] = UUID(data["task_id"])
-        data["session_id"] = UUID(data["session_id"])
-        data["status"] = InvestigationStatus(data["status"])
-        return cls(**data)
+        return cls.model_validate(data)
 
 
 class InvestigationQueue:
@@ -87,7 +81,6 @@ class InvestigationQueue:
         """
         redis = await self._get_redis()
         task = InvestigationTask(
-            task_id=uuid4(),
             session_id=session_id,
             case_id=case_id,
             investigator_id=investigator_id,
@@ -95,11 +88,16 @@ class InvestigationQueue:
             original_filename=original_filename,
         )
 
-        # Store metadata
-        await redis.hset(self.METADATA_KEY, str(session_id), task.to_dict())
-
-        # Push to queue
-        await redis.client.rpush(self.QUEUE_KEY, str(session_id))
+        try:
+            # Store metadata
+            await redis.hset(self.METADATA_KEY, str(session_id), task.model_dump_json())
+            # Push to queue
+            await redis.client.rpush(self.QUEUE_KEY, str(session_id))
+        except Exception as e:
+            logger.error("Failed to submit investigation to Redis", session_id=str(session_id), error=str(e))
+            # Attempt to clean up metadata if queue push failed
+            await redis.hdel(self.METADATA_KEY, str(session_id))
+            raise
 
         logger.info(
             "Investigation queued in Redis",

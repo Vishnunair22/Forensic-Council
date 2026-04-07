@@ -654,6 +654,21 @@ class ForensicAgent(ABC):
 
         deep_findings = loop_result.findings
 
+        # 🚀 2026 SEMANTIC GROUNDING PASS
+        # Automatically run Gemini Vision verification on any suspicious findings from the initial pass
+        suspicious_findings = [f for f in self._findings if f.metadata.get("section_flag") in ("bad", "warn")]
+        if suspicious_findings and self.config.llm_api_key:
+            logger.info(f"Triggering Semantic Grounding for {len(suspicious_findings)} suspicious findings")
+            for f in suspicious_findings:
+                grounded = await self.verify_with_vision_llm(self.evidence_artifact, f)
+                if grounded:
+                    # Update the finding with grounded results
+                    f.metadata["grounded_by_gemini"] = True
+                    f.metadata["gemini_verdict"] = grounded.get("verdict")
+                    f.metadata["gemini_reasoning"] = grounded.get("reasoning")
+                    f.confidence_raw = (f.confidence_raw + grounded.get("confidence", 0.5)) / 2
+                    f.reasoning_summary = f"{f.reasoning_summary} [GROUNDED] {grounded.get('reasoning')}"
+
         # Normalize agent_id — strip _deep suffix so frontend groups correctly
         for f in deep_findings:
             if hasattr(f, "agent_id") and f.agent_id == deep_agent_id:
@@ -704,6 +719,65 @@ class ForensicAgent(ABC):
         # Return only the new deep findings — callers use self._findings for
         # the full combined set when building the arbiter payload.
         return deep_findings
+
+    async def verify_with_vision_llm(self, artifact: EvidenceArtifact, finding: AgentFinding) -> dict | None:
+        """
+        [2026 EDITION] Semantic Grounding via Gemini 3.1.
+        Cross-verifies an ML anomaly (e.g. ELA spike) against semantic image content.
+        Uses visual grounding to determine if the anomaly is a forensic artifact
+        (generative/editing) or physically consistent with the scene.
+        """
+        if not self.config.llm_api_key:
+            return None
+            
+        from core.gemini_client import GeminiVisionClient
+        _gemini = GeminiVisionClient(self.config)
+        
+        # Extract ROI if finding has coordinates (e.g. from ELA/ghost tools)
+        roi = finding.metadata.get("anomaly_regions", finding.metadata.get("roi_coordinates", []))
+        roi_context = ""
+        if roi:
+            roi_context = f"\nFOCUS AREA (ROI Coordinates): {roi}\nPay special attention to these pixel coordinates for manipulation boundaries."
+
+        prompt = (
+            f"As a specialist forensic arbiter, perform SEMANTIC GROUNDING on a suspicious finding.\n\n"
+            f"Finding Type: {finding.finding_type}\n"
+            f"Reasoning: {finding.reasoning_summary}\n"
+            f"Confidence: {finding.confidence_raw}\n"
+            f"{roi_context}\n\n"
+            "EXAMINE the image/video carefully. Is this anomaly physically consistent with the scene, or is it a generative/editing artifact?\n"
+            "Check for shadowing, reflection consistency, and object blending.\n"
+            "Respond ONLY with valid JSON:\n"
+            '{"verdict": "CONFIRMED" | "DISPUTED", "reasoning": "string", "confidence": float}'
+        )
+
+        try:
+            # We use analyze_manipulation_evidence but with our specialized grounding prompt
+            res = await _gemini._run_vision_analysis(
+                file_path=artifact.file_path,
+                prompt=prompt,
+                analysis_type="semantic_grounding"
+            )
+            # Find the JSON block in the response via the client's internal parser
+            # (or parse it here if _run_vision_analysis returns a raw finding)
+            if res.error:
+                return None
+            
+            # Since _run_vision_analysis returns a GeminiVisionFinding, we need the raw_response JSON
+            import re
+            match = re.search(r"\{[\s\S]*\}", res.raw_response or res.content_description)
+            if match:
+                import json
+                grounded_data = json.loads(match.group(0))
+                return {
+                    "verdict": grounded_data.get("verdict", "CANNOT_DETERMINE"),
+                    "reasoning": grounded_data.get("reasoning", "Semantic grounding performed."),
+                    "confidence": grounded_data.get("confidence", 0.8)
+                }
+            return {"verdict": "CONFIRMED", "reasoning": res.content_description[:200], "confidence": res.confidence}
+        except Exception as e:
+            logger.error(f"Semantic Grounding failed: {e}", agent_id=self.agent_id)
+            return None
 
     async def _initialize_working_memory(self) -> None:
         """Initialize working memory with task decomposition."""
@@ -899,8 +973,8 @@ class ForensicAgent(ABC):
                 {
                     "id": "spectral",
                     "label": "Spectral & GAN Analysis",
-                    "tools": ["frequency_domain_analysis", "deepfake_frequency_check"],
-                    "desc": "FFT-based analysis for GAN generation artifacts and frequency-domain anomalies.",
+                    "tools": ["frequency_domain_analysis", "deepfake_frequency_check", "diffusion_artifact_detector"],
+                    "desc": "FFT-based analysis for GAN/Diffusion artifacts and 2026-era frequency anomalies.",
                 },
                 {
                     "id": "structural",
@@ -1038,8 +1112,8 @@ class ForensicAgent(ABC):
                 {
                     "id": "ai_generation",
                     "label": "AI Generation Detection",
-                    "tools": ["deepfake_frequency_check"],
-                    "desc": "GAN artifact detection via frequency domain — distinct from face-swap, targets fully synthetic frames.",
+                    "tools": ["deepfake_frequency_check", "interframe_forgery_detector"],
+                    "desc": "GAN and 2026-era Diffusion artifacts detected via frequency and temporal flow.",
                 },
                 {
                     "id": "container_forensics",
@@ -1075,10 +1149,10 @@ class ForensicAgent(ABC):
                     "label": "Provenance Chain",
                     "tools": [
                         "device_fingerprint_db",
-                        "c2pa_verify",
+                        "c2pa_validator",
                         "reverse_image_search",
                     ],
-                    "desc": "Device EXIF fingerprint, Content Credentials (C2PA), and prior online-appearance check.",
+                    "desc": "Device EXIF fingerprint, 2026 C2PA Content Credentials, and prior online-appearance check.",
                 },
                 {
                     "id": "geospatial_validation",

@@ -256,8 +256,8 @@ async def list_sessions(current_user: User = Depends(get_current_user)):
     sessions = []
     for key in keys:
         session_id = key.replace(SESSION_METADATA_KEY_PREFIX, "")
-        metadata = await redis.get(key)
-        if metadata:
+        metadata = await redis.get_json(key)
+        if metadata and isinstance(metadata, dict):
             sessions.append(SessionInfo(
                 session_id=session_id,
                 case_id=metadata.get("case_id", "unknown"),

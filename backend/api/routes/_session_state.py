@@ -124,7 +124,7 @@ async def get_active_pipeline_metadata(session_id: str) -> Optional[dict]:
     """Retrieve pipeline metadata from Redis."""
     redis = await _get_redis()
     key = f"{SESSION_METADATA_KEY_PREFIX}{session_id}"
-    return await redis.get(key)
+    return await redis.get_json(key)
 
 
 # ── Report cache ──────────────────────────────────────────────────────────────
@@ -242,11 +242,16 @@ async def _flush_batch(session_id: str) -> None:
         return
     # Send as a single batch frame instead of N individual frames
     payload = {"type": "BATCH", "session_id": session_id, "updates": updates}
+    dead: list = []
     for ws in _websocket_connections[session_id]:
         try:
             await ws.send_json(payload)
         except Exception as e:
-            logger.warning("Failed to send batched WebSocket message", error=str(e))
+            logger.warning("Failed to send batched WebSocket message — marking dead", error=str(e))
+            dead.append(ws)
+    # Remove dead refs in a second pass to avoid mutating while iterating
+    for ws in dead:
+        unregister_websocket(session_id, ws)
 
 
 async def broadcast_update_batched(session_id: str, update: BriefUpdate) -> None:

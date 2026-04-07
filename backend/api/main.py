@@ -62,6 +62,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "Never use this in production."
         )
 
+    # Pre-startup dependency validation
+    import shutil
+    REQUIRED_BINARIES = ["tesseract", "exiftool", "ffmpeg"]
+    missing_bins = [b for b in REQUIRED_BINARIES if not shutil.which(b)]
+    if missing_bins:
+        msg = f"CRITICAL: Missing system dependencies: {', '.join(missing_bins)}"
+        if settings.app_env == "production":
+            logger.error(msg)
+            raise RuntimeError(msg)
+        else:
+            logger.warning(f"{msg} — Some forensic tools will fail.")
+
     # 1. Initialize databases and external clients.
     # Validate that migrations have been run in production before accepting requests.
     app.state.migrations_ok = False

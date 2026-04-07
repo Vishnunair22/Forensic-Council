@@ -165,7 +165,11 @@ async def warmup_ml_tool(script_name: str, timeout: float = 60.0) -> bool:
         try:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         except asyncio.TimeoutError:
-            proc.kill()
+            try:
+                proc.kill()
+                await proc.wait()
+            except OSError:
+                pass
             logger.warning(f"Warm-up timed out for {script_name} after {timeout}s")
             return False
 
@@ -357,6 +361,7 @@ async def run_ml_tool(
         if proc is not None:
             try:
                 proc.kill()
+                await proc.wait()
             except OSError:
                 pass
         elapsed = time.monotonic() - t0

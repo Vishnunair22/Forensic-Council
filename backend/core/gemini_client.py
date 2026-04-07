@@ -11,15 +11,15 @@ Agent 5 (Metadata/Context) during their deep analysis pass to:
   - Detect objects, weapons, documents, and contextual anomalies
 
 Provider routing (cascade — first available wins):
-  1. gemini-3-pro-preview → default primary, highest accuracy + thinking support
-  2. gemini-2.5-pro       → first fallback, high accuracy + thinking
-  3. gemini-2.5-flash     → fast fallback with thinking support
+  1. gemini-3.1-pro-preview → default primary, highest accuracy + thinking support
+  2. gemini-2.5-pro       → stable high accuracy + thinking
+  3. gemini-2.5-flash     → fast mid-size model with thinking support
 
 Auto-cascade: 404 / "model not found" responses skip immediately to
 the next model; other errors retry with backoff then cascade forward.
 The chain is fully configurable via GEMINI_MODEL + GEMINI_FALLBACK_MODELS.
 
-NOTE: gemini-1.5-* and gemini-2.0-* models are deprecated and must not be used.
+NOTE: gemini-2.5-* and gemini-3.* series are the recommended 2026 standards.
 
 Vision input:
   - Images: base64-encoded inline (JPEG, PNG, WEBP, GIF, BMP)
@@ -55,9 +55,8 @@ _MAX_RETRIES = 3
 _BASE_BACKOFF = 2.0
 
 # Models that support thinkingConfig (budget-based chain-of-thought).
-# gemini-2.0-* and earlier must NOT receive thinkingConfig (returns 400).
-# gemini-2.5-* and gemini-3-* support thinkingConfig.
-_THINKING_MODEL_PREFIXES = ("gemini-2.5", "gemini-3")
+# gemini-2.0-* (thinking-capable endpoints), gemini-2.5-*, gemini-3.* support thinkingConfig.
+_THINKING_MODEL_PREFIXES = ("gemini-2.0-flash-thinking", "gemini-2.5", "gemini-3")
 
 
 class _ModelUnavailableError(Exception):

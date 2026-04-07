@@ -111,23 +111,19 @@ class Agent4Video(ForensicAgent):
             "For frames containing human faces: run face-swap detection",
             "Run frequency-domain GAN artifact detection on extracted frames",
             "Validate rolling shutter behavior and compression patterns against claimed device metadata",
-            "For each suspicious anomaly: issue collaborative call to Agent 2 for audio cross-verification",
-            "Self-reflection pass",
-            "Submit calibrated findings to Arbiter with dual anomaly classification list preserved",
         ]
 
     @property
     def deep_task_decomposition(self) -> list[str]:
         """
-        Heavy tasks — deep face-swap detection, frequency analysis.
-        Runs in background after initial findings are returned.
+        [2026 EDITION] Heavy forensic pass.
+        Runs Inter-frame Forgery detection and Gemini 3.1 Semantic Grounding.
         """
         return [
-            "Run deep face-swap detection with deepface ensemble on extracted frames",
-            "Run comprehensive deepfake frequency analysis across full video",
+            "Run 2026 Inter-frame Forgery Detector for motion ghosting and SSIM rhythmic variance",
+            "Perform Gemini 3.1 Semantic Grounding on suspicious motion vector spikes",
             "Run inter-agent collaboration with Agent 2 for audio-visual timestamp correlation",
-            "Run advanced codec fingerprinting for re-encoding event detection",
-            "Run adversarial robustness check against optical flow evasion techniques",
+            "Self-reflection pass",
         ]
 
     @property
@@ -287,6 +283,18 @@ class Agent4Video(ForensicAgent):
             else:
                 await self._record_tool_result("video_metadata", result)
             return result
+
+        # ── 2026 Tools ───────────────────────────────────────────────────────
+
+        async def interframe_forgery_detector_handler(input_data: dict) -> dict:
+            """Identify AI-interpolated and AI-generated video artifacts."""
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            result = await run_ml_tool("interframe_forgery_detector.py", artifact.file_path, timeout=20.0)
+            if not result.get("error") and result.get("available"):
+                await self._record_tool_result("interframe_forgery_detector", result)
+            return result
+
+        registry.register("interframe_forgery_detector", interframe_forgery_detector_handler, "Interframe forgery check")
 
         async def deepfake_frequency_check_handler(input_data: dict) -> dict:
             artifact = (

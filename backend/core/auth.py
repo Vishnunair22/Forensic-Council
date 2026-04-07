@@ -464,16 +464,29 @@ async def blacklist_token(token: str, expires_in_seconds: int) -> None:
         token: JWT token string
         expires_in_seconds: How long to keep the token blacklisted
     """
+    import time
+
+    # Use the same 32-char truncated hash as is_token_blacklisted so the
+    # Redis key written here matches the key read during auth checks.
+    token_hash = hashlib.sha256(token.encode()).hexdigest()[:32]
+    expires_at = time.time() + expires_in_seconds
+
+    # Populate local in-memory cache so the fast-path check in
+    # is_token_blacklisted catches this token immediately.
+    _recently_blacklisted[token_hash] = expires_at
+
+    # Populate SQLite persistent fallback so the token survives Redis outages.
+    _add_to_persistent_blacklist(token_hash, expires_at)
+
     try:
         from infra.redis_client import get_redis_client
 
         redis = await get_redis_client()
         if redis:
-            token_hash = hashlib.sha256(token.encode()).hexdigest()
             await redis.set(f"blacklist:{token_hash}", "1", ex=expires_in_seconds)
             logger.info("Token blacklisted", expires_in=expires_in_seconds)
     except Exception as e:
-        logger.warning("Failed to blacklist token", error=str(e))
+        logger.warning("Failed to blacklist token in Redis (local+SQLite cache still active)", error=str(e))
 
 
 async def get_current_user(

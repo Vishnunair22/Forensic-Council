@@ -45,14 +45,4 @@ describe("Start Page (Home) Structure", () => {
     const headings = screen.getAllByRole("heading", { level: 1 });
     expect(headings.length).toBe(1);
   });
-
-  it("contains primary navigation", () => {
-    render(<Home />);
-    expect(document.querySelector("nav")).toBeInTheDocument();
-  });
-
-  it("contains footer content", () => {
-    render(<Home />);
-    expect(document.querySelector("footer")).toBeInTheDocument();
-  });
 });

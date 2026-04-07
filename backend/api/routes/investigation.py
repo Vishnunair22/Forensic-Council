@@ -12,6 +12,7 @@ Modules extracted:
 """
 
 import asyncio
+import hashlib
 import os
 import re
 import tempfile
@@ -19,7 +20,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
@@ -31,8 +32,12 @@ from api.routes._rate_limiting import (
 from api.routes._session_state import (
     AGENT_NAMES,
     _active_pipelines,
+    _active_tasks,
     _final_reports,
     broadcast_update,
+    cleanup_connections,
+    get_active_pipeline,
+    get_active_pipelines_count,
     get_session_websockets,
     set_active_pipeline,
     set_active_pipeline_metadata,
@@ -115,7 +120,7 @@ _SAFE_ID_RE = re.compile(r"^[A-Za-z0-9_\-\.]{1,128}$")
 def _validate_safe_id(value: str, field_name: str) -> None:
     """Raise 422 if value contains unsafe characters."""
     if not _SAFE_ID_RE.match(value):
-        logger.warning(
+        raise HTTPException(
             status_code=422,
             detail=(
                 f"Invalid {field_name}: must be 1–128 characters, "
@@ -195,9 +200,7 @@ async def start_investigation(
     tmp_path = Path(tempfile.gettempdir()) / f"{session_id}{file_extension}"
     try:
         # Stream upload to disk with size enforcement
-        import hashlib as _hl
-
-        hasher = _hl.sha256()
+        hasher = hashlib.sha256()
         total_size = 0
         chunk_size = 1024 * 1024  # 1 MB chunks
         with open(tmp_path, "wb") as f:
@@ -267,7 +270,7 @@ async def start_investigation(
                 tmp_path.unlink(missing_ok=True)
             except Exception as _e:
                 logger.debug("Temp file cleanup failed", error=str(_e))
-        raise HTTPException(status_code=500, detail="Failed to save uploaded file.")
+        raise HTTPException(status_code=500, detail=f"Failed to save uploaded file: {str(e)}")
 
     # ── 3. Content-based MIME Validation (python-magic) ──────────────────
     import magic
@@ -798,9 +801,7 @@ async def _wrap_pipeline_with_broadcasts(
                     )
                     if isinstance(_wm_session, str):
                         try:
-                            from uuid import UUID as _UUID
-
-                            _wm_session = _UUID(_wm_session)
+                            _wm_session = UUID(_wm_session)
                         except (ValueError, AttributeError):
                             pass
                     wm_state = await target_memory.get_state(
@@ -968,12 +969,10 @@ async def _wrap_pipeline_with_broadcasts(
             agent = None  # guard: defined before try so exception handlers can safely reference it
             try:
                 # Agents expect session_id as UUID
-                from uuid import UUID as _AUUID
-
                 _agent_session_id = session_id or evidence_artifact.artifact_id
                 if isinstance(_agent_session_id, str):
                     try:
-                        _agent_session_id = _AUUID(_agent_session_id)
+                        _agent_session_id = UUID(_agent_session_id)
                     except (ValueError, AttributeError):
                         pass
 
@@ -2171,9 +2170,7 @@ async def _wrap_pipeline_with_broadcasts(
     pipeline._run_agents_concurrent = instrumented_run
 
     # Convert session_id string to UUID for pipeline
-    from uuid import UUID as UUIDType
-
-    session_uuid = UUIDType(session_id)
+    session_uuid = UUID(session_id)
 
     return await pipeline.run_investigation(
         evidence_file_path=evidence_file_path,

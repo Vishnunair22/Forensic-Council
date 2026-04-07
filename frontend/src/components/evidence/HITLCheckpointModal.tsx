@@ -1,13 +1,5 @@
 "use client";
 
-/**
- * HITLCheckpointModal Component
- * =============================
- *
- * Displays a modal for human-in-the-loop checkpoints during analysis.
- * Allows investigators to make decisions on agent findings.
- */
-
 import { useState } from "react";
 import {
   Dialog,
@@ -17,7 +9,9 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, ShieldAlert, ArrowRight } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { clsx } from "clsx";
 
 interface HITLCheckpoint {
   checkpoint_id: string;
@@ -29,12 +23,7 @@ interface HITLCheckpoint {
   created_at: string;
 }
 
-type HITLDecision =
-  | "APPROVE"
-  | "REDIRECT"
-  | "OVERRIDE"
-  | "TERMINATE"
-  | "ESCALATE";
+type HITLDecision = "APPROVE" | "REDIRECT" | "OVERRIDE" | "TERMINATE" | "ESCALATE";
 
 interface HITLCheckpointModalProps {
   checkpoint: HITLCheckpoint | null;
@@ -44,6 +33,18 @@ interface HITLCheckpointModalProps {
   onDismiss: () => void;
 }
 
+const decisionOptions: Array<{
+  value: HITLDecision;
+  label: string;
+  description: string;
+  color: "emerald" | "blue" | "amber" | "red";
+}> = [
+  { value: "APPROVE", label: "Approve", description: "Accept finding and continue", color: "emerald" },
+  { value: "REDIRECT", label: "Redirect", description: "Request cross-modal review", color: "blue" },
+  { value: "OVERRIDE", label: "Override", description: "Provide alternate verdict", color: "amber" },
+  { value: "ESCALATE", label: "Escalate", description: "Flag for senior council", color: "red" },
+];
+
 export function HITLCheckpointModal({
   checkpoint,
   isOpen,
@@ -51,204 +52,156 @@ export function HITLCheckpointModal({
   onDecision,
   onDismiss,
 }: HITLCheckpointModalProps) {
-  const [selectedDecision, setSelectedDecision] = useState<HITLDecision | null>(
-    null,
-  );
+  const [selectedDecision, setSelectedDecision] = useState<HITLDecision | null>(null);
   const [note, setNote] = useState("");
   const [decisionError, setDecisionError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
     if (!selectedDecision) {
-      setDecisionError("Please select a decision");
+      setDecisionError("Please select a valid protocol decision.");
       return;
     }
-
     try {
       setDecisionError(null);
       await onDecision(selectedDecision, note);
-      // Reset on success
       setSelectedDecision(null);
       setNote("");
     } catch (error) {
-      setDecisionError(
-        error instanceof Error ? error.message : "Failed to submit decision",
-      );
+      setDecisionError(error instanceof Error ? error.message : "Protocol submission failed.");
     }
   };
 
-  const decisionOptions: Array<{
-    value: HITLDecision;
-    label: string;
-    description: string;
-    color: string;
-  }> = [
-    {
-      value: "APPROVE",
-      label: "Approve",
-      description: "Accept this finding and continue",
-      color: "emerald",
-    },
-    {
-      value: "REDIRECT",
-      label: "Redirect",
-      description: "Send to different agent for review",
-      color: "blue",
-    },
-    {
-      value: "OVERRIDE",
-      label: "Override",
-      description: "Reject and provide alternate conclusion",
-      color: "amber",
-    },
-    {
-      value: "ESCALATE",
-      label: "Escalate",
-      description: "Flag for senior investigator review",
-      color: "red",
-    },
-  ];
-
   return (
     <Dialog open={isOpen} onOpenChange={onDismiss}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-xl bg-[#06090F] border-white/10 p-0 overflow-hidden rounded-3xl shadow-[0_32px_64px_rgba(0,0,0,0.6)]">
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-500/50 via-amber-400 to-amber-500/50" />
+        
         {checkpoint ? (
-          <>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-amber-400" />
-                Investigator Decision Required
-              </DialogTitle>
-              <DialogDescription className="text-sm text-slate-400 mt-2">
-                Agent {checkpoint.agent_name} has flagged a finding that
-                requires your assessment.
-              </DialogDescription>
+          <div className="p-8 space-y-6">
+            <DialogHeader className="text-left space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                  <ShieldAlert className="w-6 h-6 text-amber-500" />
+                </div>
+                <div>
+                  <DialogTitle className="text-xl font-black text-white px-0 uppercase font-heading tracking-tight">
+                    Investigator Intervention
+                  </DialogTitle>
+                  <DialogDescription className="text-xs font-mono font-bold text-white/30 uppercase tracking-widest mt-1">
+                    Checkpoint ID: {checkpoint.checkpoint_id.slice(0, 8)} · {checkpoint.agent_name}
+                  </DialogDescription>
+                </div>
+              </div>
             </DialogHeader>
 
-            {/* Checkpoint Details */}
-            <div className="space-y-4 my-6">
-              {/* Brief */}
-              <div className="p-4 rounded-xl glass-panel border border-white/[0.08]">
-                <h4 className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-2">
-                  Finding Summary
-                </h4>
-                <p className="text-sm text-slate-300 leading-relaxed">
-                  {checkpoint.brief_text}
-                </p>
+            <div className="space-y-4">
+              {/* Context Panels */}
+              <div className="grid grid-cols-1 gap-4">
+                <div className="p-5 rounded-2xl glass-panel bg-white/[0.02] border-white/5 space-y-2">
+                  <h4 className="text-[10px] font-black font-mono text-white/20 uppercase tracking-[0.2em]">Evidence Brief</h4>
+                  <p className="text-sm text-white/70 leading-relaxed">{checkpoint.brief_text}</p>
+                </div>
+                <div className="p-5 rounded-2xl bg-amber-500/[0.03] border border-amber-500/10 space-y-2">
+                  <h4 className="text-[10px] font-black font-mono text-amber-500/50 uppercase tracking-[0.2em]">Decision Required</h4>
+                  <p className="text-sm text-amber-200/80 leading-relaxed font-medium">{checkpoint.decision_needed}</p>
+                </div>
               </div>
 
-              {/* Decision Needed */}
-              <div className="p-4 rounded-xl bg-amber-500/[0.06] border border-amber-500/[0.25] backdrop-blur-sm">
-                <h4 className="text-xs font-mono text-amber-400 uppercase tracking-widest mb-2">
-                  Action Required
-                </h4>
-                <p className="text-sm text-amber-200 leading-relaxed">
-                  {checkpoint.decision_needed}
-                </p>
-              </div>
-
-              {/* Decision Options */}
+              {/* Decision Grid */}
               <div className="space-y-3">
-                <h4
-                  id="hitl-decision-label"
-                  className="text-sm font-semibold text-slate-300"
-                >
-                  Your Decision
-                </h4>
-                <div
-                  role="radiogroup"
-                  aria-labelledby="hitl-decision-label"
-                  className="grid grid-cols-2 gap-3"
-                >
+                <h4 className="text-xs font-black text-white/40 uppercase tracking-widest px-1">Protocol Selection</h4>
+                <div className="grid grid-cols-2 gap-3" role="radiogroup">
                   {decisionOptions.map((option) => (
                     <button
                       key={option.value}
-                      role="radio"
-                      aria-checked={selectedDecision === option.value}
                       onClick={() => setSelectedDecision(option.value)}
-                      className={`p-3 rounded-xl border transition-all text-left backdrop-blur-sm ${
+                      className={clsx(
+                        "p-4 rounded-2xl border text-left transition-all duration-300 relative overflow-hidden group",
                         selectedDecision === option.value
-                          ? option.color === "emerald"
-                            ? "border-emerald-500/60 bg-emerald-500/15 shadow-[0_0_16px_rgba(16,185,129,0.15)]"
-                            : option.color === "blue"
-                              ? "border-blue-500/60 bg-blue-500/15 shadow-[0_0_16px_rgba(59,130,246,0.15)]"
-                              : option.color === "amber"
-                                ? "border-amber-500/60 bg-amber-500/15 shadow-[0_0_16px_rgba(245,158,11,0.15)]"
-                                : "border-red-500/60 bg-red-500/15 shadow-[0_0_16px_rgba(239,68,68,0.15)]"
-                          : "border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/[0.14]"
-                      }`}
+                          ? {
+                              emerald: "border-emerald-500/40 bg-emerald-500/5 shadow-[0_0_20px_rgba(16,185,129,0.1)]",
+                              blue: "border-blue-500/40 bg-blue-500/5 shadow-[0_0_20px_rgba(59,130,246,0.1)]",
+                              amber: "border-amber-500/40 bg-amber-500/5 shadow-[0_0_20px_rgba(245,158,11,0.1)]",
+                              red: "border-rose-500/40 bg-rose-500/5 shadow-[0_0_20px_rgba(244,63,94,0.1)]",
+                            }[option.color]
+                          : "border-white/5 bg-white/[0.01] hover:bg-white/[0.04] hover:border-white/10"
+                      )}
                     >
-                      <p className="text-sm font-semibold text-white">
-                        {option.label}
-                      </p>
-                      <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
-                        {option.description}
-                      </p>
+                      <div className="flex flex-col gap-1 relative z-10">
+                        <span className={clsx(
+                          "text-xs font-black uppercase tracking-tight transition-colors",
+                          selectedDecision === option.value 
+                            ? { emerald: "text-emerald-400", blue: "text-blue-400", amber: "text-amber-400", red: "text-rose-400" }[option.color]
+                            : "text-white/60 group-hover:text-white"
+                        )}>
+                          {option.label}
+                        </span>
+                        <span className="text-[10px] text-white/20 font-medium leading-tight group-hover:text-white/30 transition-colors">
+                          {option.description}
+                        </span>
+                      </div>
+                      {selectedDecision === option.value && (
+                        <motion.div 
+                          layoutId="active-bg" 
+                          className={clsx(
+                            "absolute inset-0 opacity-10",
+                            { emerald: "bg-emerald-500", blue: "bg-blue-500", amber: "bg-amber-500", red: "bg-rose-500" }[option.color]
+                          )}
+                        />
+                      )}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Notes */}
-              <div>
-                <label
-                  htmlFor="hitl-notes"
-                  className="text-sm font-semibold text-slate-300 mb-2 block"
-                >
-                  Additional Notes (Optional)
-                </label>
+              {/* Note input */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-black text-white/40 uppercase tracking-widest px-1">Supplemental Documentation</h4>
                 <textarea
                   id="hitl-notes"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="Explain your decision or provide additional context..."
-                  className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.10] text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/40 resize-none backdrop-blur-sm transition-colors"
-                  rows={3}
+                  placeholder="Enter forensic notes for this intervention..."
+                  className="w-full px-5 py-4 rounded-2xl bg-white/[0.02] border border-white/5 text-sm text-white/80 placeholder:text-white/10 focus:outline-none focus:border-cyan-500/30 transition-all min-h-[100px] resize-none"
                   disabled={isSubmitting}
                 />
               </div>
 
-              {/* Error Message */}
               {decisionError && (
-                <div
-                  role="alert"
-                  aria-live="assertive"
-                  className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-sm"
-                >
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[11px] font-bold text-center uppercase tracking-widest">
                   {decisionError}
                 </div>
               )}
             </div>
 
-            <DialogFooter className="gap-2 mt-2">
+            <DialogFooter className="sm:justify-between border-t border-white/5 pt-6 gap-4">
               <button
                 onClick={onDismiss}
                 disabled={isSubmitting}
-                className="btn-pill-secondary px-8 py-2 disabled:opacity-50"
+                className="btn-pill-secondary px-8 py-3 bg-transparent border-none text-white/30 hover:text-white/50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={!selectedDecision || isSubmitting}
-                className="btn-pill-primary px-8 py-2 font-semibold disabled:opacity-50"
+                className="btn-pill-primary px-10 py-3 gap-3 shadow-[0_0_30px_rgba(34,211,238,0.2)]"
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2
-                      className="w-4 h-4 animate-spin"
-                      aria-hidden="true"
-                    />
-                    Submitting…
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Transmitting...
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
-                    Submit Decision
+                    <CheckCircle2 className="w-4 h-4" />
+                    Finalize Decision
+                    <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </button>
             </DialogFooter>
-          </>
+          </div>
         ) : null}
       </DialogContent>
     </Dialog>

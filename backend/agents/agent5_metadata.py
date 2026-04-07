@@ -110,7 +110,7 @@ class Agent5Metadata(ForensicAgent):
             "Cross-validate GPS coordinates against timestamp timezone",
             "Run file structure forensic analysis",
             "Run hexadecimal software signature scan on raw bytes",
-            "Verify C2PA Content Credentials and provenance chain in file",
+            "Verify 2026 C2PA Content Credentials and JUMBF provenance manifests in file",
             "Run steganography scan",
             "Synthesize cross-field consistency verdict",
             "Self-reflection pass",
@@ -125,7 +125,7 @@ class Agent5Metadata(ForensicAgent):
         """
         return [
             "Check embedded thumbnail against main image for post-capture editing evidence",
-            "Run Gemini deep forensic analysis: identify content type, extract all text, detect objects and weapons, identify interfaces, describe what is happening, cross-validate metadata",
+            "Perform Gemini 3.1 Hardware-Grounded Provenance Verification: cross-validate scene content with EXIF device fingerprint",
             "Run ML metadata anomaly scoring to detect field inconsistency",
             "Run astronomical API check for GPS location and claimed date",
             "Run reverse image search for prior online appearances",
@@ -782,257 +782,35 @@ class Agent5Metadata(ForensicAgent):
                     "error": str(e),
                 }
 
-        async def c2pa_verify_handler(input_data: dict) -> dict:
+        async def c2pa_validator_handler(input_data: dict) -> dict:
             """
-            C2PA / Content Credentials provenance verification.
-
-            C2PA (Coalition for Content Provenance and Authenticity) is an emerging
-            industry standard where cameras (Leica M11-P, Sony Alpha, Nikon Z9),
-            editing software (Adobe Photoshop, Lightroom), and platforms embed a
-            cryptographically signed provenance manifest in the file. Its absence
-            in a file claimed to be from a C2PA-enabled device is forensically significant.
-            Checks: XMP C2PA fields, JUMBF APP11 marker (JPEG), caBX chunk (PNG),
-            and raw binary C2PA manifest markers.
+            [2026 EDITION] C2PA / Content Credentials provenance verification.
+            Scans for JUMBF (ISO/IEC 19566-5) manifests from signed hardware.
             """
             artifact = input_data.get("artifact") or self.evidence_artifact
-            result = await run_ml_tool(
-                "c2pa_verify.py", artifact.file_path, timeout=15.0
-            )
-            if result.get("available") and not result.get("error"):
-                await self._record_tool_result("c2pa_verify", result)
-                return result
-            try:
-                from PIL import Image as PILImage
+            result = await run_ml_tool("c2pa_validator.py", artifact.file_path, timeout=12.0)
+            if not result.get("error") and result.get("available"):
+                await self._record_tool_result("c2pa_validator", result)
+            return result
 
-                c2pa_present = False
-                xmp_c2pa = False
-                jumbf_present = False
-                provenance_data: dict = {}
+        # Original registration
+        registry.register("exif_extract", exif_extract_handler, "Full EXIF extraction")
+        registry.register("gps_timezone_validate", gps_timezone_validate_handler, "GPS/timezone validation")
+        registry.register("steganography_scan", steganography_scan_handler, "Steganography scan")
+        registry.register("file_structure_analysis", file_structure_analysis_handler, "File structure analysis")
+        registry.register("hex_signature_scan", hex_signature_scan_handler, "Hex signature scan")
+        registry.register("c2pa_validator", c2pa_validator_handler, "C2PA Provenance check")
+        registry.register("timestamp_analysis", timestamp_analysis_handler, "Timestamp analysis")
+        registry.register("file_hash_verify", file_hash_verify_handler, "Hash verification")
+        registry.register("astronomical_api", astronomical_api_handler, "Astronomical validation")
+        registry.register("reverse_image_search", reverse_image_search_handler, "Reverse image search")
+        registry.register("device_fingerprint_db", device_fingerprint_db_handler, "Device fingerprint analysis")
+        registry.register("adversarial_robustness_check", adversarial_robustness_check_handler, "Adversarial check")
+        registry.register("extract_deep_metadata", extract_deep_metadata_handler, "Deep metadata extraction")
+        registry.register("metadata_anomaly_score", metadata_anomaly_score_handler, "Metadata anomaly score")
+        registry.register("get_physical_address", get_physical_address_handler, "Reverse geocoding")
 
-                # XMP C2PA check via PIL info
-                try:
-                    img = PILImage.open(artifact.file_path)
-                    xmp_raw = img.info.get("xmp", b"")
-                    xmp_str = (
-                        xmp_raw.decode("utf-8", errors="ignore")
-                        if isinstance(xmp_raw, bytes)
-                        else str(xmp_raw)
-                    )
-                    if (
-                        "c2pa" in xmp_str.lower()
-                        or "contentcredentials" in xmp_str.lower()
-                    ):
-                        xmp_c2pa = True
-                        c2pa_present = True
-                        provenance_data["xmp_c2pa_found"] = True
-                except Exception as e:
-                    logger.debug(f"XMP C2PA check failed: {e}")
 
-                # Binary scan: JUMBF APP11 (JPEG), caBX (PNG), raw C2PA markers
-                try:
-                    with open(artifact.file_path, "rb") as fh:
-                        raw = fh.read()
-                    if b"\xff\xeb" in raw:
-                        jumbf_present = True
-                        c2pa_present = True
-                        provenance_data["jumbf_app11_found"] = True
-                    if b"caBX" in raw:
-                        c2pa_present = True
-                        jumbf_present = True
-                        provenance_data["png_cabx_chunk_found"] = True
-                    if b"c2pa" in raw or b"C2PA" in raw:
-                        c2pa_present = True
-                        provenance_data["c2pa_manifest_marker_found"] = True
-                except Exception as e:
-                    logger.debug(f"JUMBF marker check failed: {e}")
-
-                out = {
-                    "c2pa_present": c2pa_present,
-                    "xmp_c2pa_found": xmp_c2pa,
-                    "jumbf_present": jumbf_present,
-                    "provenance_data": provenance_data,
-                    "verdict": "CONTENT_CREDENTIALS_PRESENT"
-                    if c2pa_present
-                    else "NO_CONTENT_CREDENTIALS",
-                    "forensic_note": (
-                        "C2PA Content Credentials found -- verify the full signature chain for provenance."
-                        if c2pa_present
-                        else "No C2PA/Content Credentials found. File has no embedded provenance chain. "
-                        "Notable if the file is claimed to originate from a C2PA-enabled device (Leica M11-P, Sony Alpha, etc.)."
-                    ),
-                    "available": True,
-                    "court_defensible": True,
-                    "backend": "binary-scan-inline",
-                }
-                await self._record_tool_result("c2pa_verify", out)
-                return out
-            except Exception as e:
-                return {
-                    "c2pa_present": False,
-                    "verdict": "ERROR",
-                    "error": str(e),
-                    "available": False,
-                    "court_defensible": False,
-                }
-
-        async def thumbnail_mismatch_handler(input_data: dict) -> dict:
-            """
-            EXIF thumbnail vs. main image mismatch detection.
-
-            JPEG files from cameras contain an embedded thumbnail generated at capture time.
-            When an image is edited post-capture, the main image changes but the thumbnail
-            often remains unchanged -- a reliable indicator of post-capture modification.
-            Compares embedded thumbnail (via piexif) against a downscaled version of the
-            main image using mean absolute pixel difference and perceptual hashing.
-            """
-            artifact = input_data.get("artifact") or self.evidence_artifact
-            try:
-                # Extract embedded thumbnail via piexif
-                thumbnail = None
-                try:
-                    exif_raw = piexif.load(artifact.file_path)
-                    thumb_bytes = exif_raw.get("thumbnail")
-                    if thumb_bytes and len(thumb_bytes) > 100:
-                        thumbnail = PILImage.open(io.BytesIO(thumb_bytes)).convert(
-                            "RGB"
-                        )
-                except Exception as e:
-                    logger.debug(f"Thumbnail extraction failed: {e}")
-
-                if thumbnail is None:
-                    return {
-                        "thumbnail_present": False,
-                        "mismatch_detected": False,
-                        "verdict": "NO_THUMBNAIL",
-                        "forensic_note": (
-                            "No embedded thumbnail found -- cannot perform mismatch analysis. "
-                            "Thumbnails are typically present in camera-captured JPEGs; their absence "
-                            "may indicate metadata stripping."
-                        ),
-                        "available": True,
-                        "court_defensible": True,
-                    }
-
-                main_img = PILImage.open(artifact.file_path).convert("RGB")
-                main_resized = main_img.resize(thumbnail.size, PILImage.LANCZOS)
-                thumb_arr = np.array(thumbnail, dtype=np.float32)
-                main_arr = np.array(main_resized, dtype=np.float32)
-                mad = float(np.mean(np.abs(thumb_arr - main_arr)))
-
-                hamming = -1
-                try:
-                    hamming = int(
-                        imagehash.phash(thumbnail) - imagehash.phash(main_resized)
-                    )
-                except Exception as e:
-                    logger.debug(f"Perceptual hash comparison for thumbnail failed: {e}")
-
-                mismatch = mad > 15.0 or (hamming >= 0 and hamming > 10)
-                return {
-                    "thumbnail_present": True,
-                    "thumbnail_size": list(thumbnail.size),
-                    "mismatch_detected": mismatch,
-                    "mean_absolute_difference": round(mad, 2),
-                    "phash_hamming_distance": hamming
-                    if hamming >= 0
-                    else "unavailable",
-                    "verdict": "THUMBNAIL_MISMATCH"
-                    if mismatch
-                    else "THUMBNAIL_MATCHES",
-                    "forensic_note": (
-                        f"Thumbnail differs significantly from main image (MAD={mad:.1f}"
-                        + (f", Hamming={hamming}" if hamming >= 0 else "")
-                        + ") -- strong indicator of post-capture editing. The main image was likely "
-                        "modified after the embedded thumbnail was generated."
-                        if mismatch
-                        else "Thumbnail matches main image -- no indication of post-capture content replacement."
-                    ),
-                    "available": True,
-                    "court_defensible": True,
-                    "backend": "piexif-pil-inline",
-                }
-            except Exception as e:
-                return {
-                    "mismatch_detected": False,
-                    "verdict": "ERROR",
-                    "error": str(e),
-                    "available": False,
-                    "court_defensible": False,
-                }
-
-        # Register tools
-        registry.register(
-            "exif_extract",
-            exif_extract_handler,
-            "Full EXIF extraction with absent-field logging",
-        )
-        registry.register(
-            "metadata_anomaly_score",
-            metadata_anomaly_score_handler,
-            "ML metadata anomaly scoring via IsolationForest",
-        )
-        registry.register(
-            "gps_timezone_validate",
-            gps_timezone_validate_handler,
-            "GPS-timestamp cross-validation",
-        )
-        registry.register(
-            "steganography_scan", steganography_scan_handler, "Steganography scan"
-        )
-        registry.register(
-            "file_structure_analysis",
-            file_structure_analysis_handler,
-            "File structure forensic analysis",
-        )
-        registry.register(
-            "hex_signature_scan",
-            hex_signature_scan_handler,
-            "Hexadecimal signature scan for detecting hidden editing software marks",
-        )
-        registry.register(
-            "timestamp_analysis", timestamp_analysis_handler, "Timestamp analysis"
-        )
-        registry.register(
-            "file_hash_verify", file_hash_verify_handler, "File hash verification"
-        )
-        registry.register(
-            "astronomical_api",
-            astronomical_api_handler,
-            "Astronomical data API queries",
-        )
-        registry.register(
-            "reverse_image_search", reverse_image_search_handler, "Reverse image search"
-        )
-        registry.register(
-            "device_fingerprint_db",
-            device_fingerprint_db_handler,
-            "Device fingerprint database lookup",
-        )
-        registry.register(
-            "adversarial_robustness_check",
-            adversarial_robustness_check_handler,
-            "Adversarial robustness check",
-        )
-        registry.register(
-            "extract_deep_metadata",
-            extract_deep_metadata_handler,
-            "Deep metadata extraction using ExifTool including MakerNotes",
-        )
-        registry.register(
-            "get_physical_address",
-            get_physical_address_handler,
-            "Reverse geocode GPS coordinates to physical address",
-        )
-        registry.register(
-            "c2pa_verify",
-            c2pa_verify_handler,
-            "C2PA Content Credentials and provenance chain verification",
-        )
-        registry.register(
-            "thumbnail_mismatch",
-            thumbnail_mismatch_handler,
-            "EXIF thumbnail vs main image mismatch detection for post-capture editing evidence",
-        )
 
         # ── OCR & Container Profiling ─────────────────────────────────────────
 

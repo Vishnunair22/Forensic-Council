@@ -69,10 +69,16 @@ async function proxyRequest(
   const search = request.nextUrl.search || "";
   const pathname = `/api/v1/${path.join("/")}${search}`;
   const requestHeaders = copyRequestHeaders(request);
-  const requestBody =
-    request.method === "GET" || request.method === "HEAD"
-      ? undefined
-      : await request.arrayBuffer();
+  
+  // Is this an upload or a heavy forensic operation?
+  const isHeavyPath = path.includes("upload") || path.includes("deep-analysis") || path.includes("video");
+  const timeoutMs = isHeavyPath ? 300_000 : 60_000; // 5 min for uploads/deep, 1 min otherwise
+
+  // Optimization: Do not buffer the entire request in memory for large forensic uploads.
+  // We stream the Request.body directly to the fetch call.
+  // Note: Body is only supported for state-changing methods.
+  const canHaveBody = !["GET", "HEAD"].includes(request.method);
+  const streamBody = canHaveBody ? request.body : undefined;
 
   let lastError = "Backend proxy request failed";
   let lastBackendUrl = backendBaseUrls[0] || "http://localhost:8000";
@@ -84,9 +90,11 @@ async function proxyRequest(
       const response = await fetch(backendUrlFor(pathname, baseUrl), {
         method: request.method,
         headers: requestHeaders,
-        body: requestBody,
+        body: streamBody,
+        // @ts-ignore: 'duplex' is required when body is a stream in some environments
+        duplex: streamBody ? 'half' : undefined,
         redirect: "manual",
-        signal: AbortSignal.timeout(PROXY_TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
       });
 
       if (RETRYABLE_STATUSES.has(response.status)) {

@@ -87,15 +87,25 @@ class Agent1Image(ForensicAgent):
         if self._is_lossless:
             return base + [
                 "Run noise footprint analysis for region source inconsistency",
-                "Self-reflection pass",
             ]
         else:
             return base + [
                 "Run full-image ELA and map anomaly regions",
                 "Perform ELA anomaly block classification",
                 "Run JPEG ghost detection",
-                "Self-reflection pass",
             ]
+
+    @property
+    def deep_task_decomposition(self) -> list[str]:
+        """
+        [2026 EDITION] Heavy forensic pass.
+        Runs Diffusion detection and Gemini 3.1 Semantic Grounding.
+        """
+        return [
+            "Run 2026 Diffusion Artifact Detector for generative AI residues",
+            "Perform Gemini 3.1 Semantic Grounding on suspicious ELA/noise regions",
+            "Self-reflection pass",
+        ]
 
     async def build_tool_registry(self) -> ToolRegistry:
         registry = ToolRegistry()
@@ -202,6 +212,17 @@ class Agent1Image(ForensicAgent):
         registry.register("extract_text_from_image", self._wrap_tool(real_extract_text_from_image), "OCR extraction")
         registry.register("extract_evidence_text", self._wrap_tool(real_extract_evidence_text), "Evidence text extraction")
         registry.register("analyze_image_content", self._wrap_tool(real_analyze_image_content), "CLIP semantic check")
+
+        # ── 2026 Tools ───────────────────────────────────────────────────────
+
+        async def diffusion_artifact_detector_handler(input_data: dict) -> dict:
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            result = await run_ml_tool("diffusion_artifact_detector.py", artifact.file_path, timeout=12.0)
+            if not result.get("error") and result.get("available"):
+                await self._record_tool_result("diffusion_artifact_detector", result)
+            return result
+
+        registry.register("diffusion_artifact_detector", diffusion_artifact_detector_handler, "Diffusion artifact check")
 
         # Gemini Handler
         _gemini = GeminiVisionClient(self.config)

@@ -22,7 +22,7 @@ const nextConfig: NextConfig = {
   // ── Output ────────────────────────────────────────────────────────────────
   // Standalone mode: copies only required files into .next/standalone,
   // reducing the production Docker image from ~1 GB to ~150 MB.
-  // output: "standalone",
+  output: "standalone",
 
   // ── Compression ──────────────────────────────────────────────────────────
   // Disabled: Caddy handles compression via `encode zstd gzip` in Caddyfile.

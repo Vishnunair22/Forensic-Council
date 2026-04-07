@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Optional
 from uuid import UUID, uuid4
+
+from pydantic import BaseModel, Field
 
 from core.structured_logging import get_logger
 
@@ -39,11 +40,10 @@ class CheckpointStatus(str, Enum):
     MODIFIED = "MODIFIED"
 
 
-@dataclass
-class HITLCheckpointState:
+class HITLCheckpointState(BaseModel):
     """State of a human-in-the-loop checkpoint."""
 
-    checkpoint_id: UUID
+    checkpoint_id: UUID = Field(default_factory=uuid4)
     session_id: UUID
     agent_id: str
     checkpoint_type: str
@@ -51,24 +51,22 @@ class HITLCheckpointState:
     pending_content: dict[str, Any]
     status: CheckpointStatus = CheckpointStatus.PENDING
     human_decision: Optional[dict[str, Any]] = None
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     resolved_at: Optional[datetime] = None
 
 
-@dataclass
-class AgentLoopState:
+class AgentLoopState(BaseModel):
     """State of an agent's investigation loop."""
 
     agent_id: str
     session_id: UUID
     status: SessionStatus
     current_iteration: int = 0
-    findings: list[dict[str, Any]] = field(default_factory=list)
-    pending_checkpoints: list[UUID] = field(default_factory=list)
+    findings: list[dict[str, Any]] = Field(default_factory=list)
+    pending_checkpoints: list[UUID] = Field(default_factory=list)
 
 
-@dataclass
-class SessionState:
+class SessionState(BaseModel):
     """Complete state of an investigation session."""
 
     session_id: UUID
@@ -77,8 +75,8 @@ class SessionState:
     status: SessionStatus
     created_at: datetime
     updated_at: datetime
-    agent_loops: dict[str, AgentLoopState] = field(default_factory=dict)
-    checkpoints: dict[UUID, HITLCheckpointState] = field(default_factory=dict)
+    agent_loops: dict[str, AgentLoopState] = Field(default_factory=dict)
+    checkpoints: dict[UUID, HITLCheckpointState] = Field(default_factory=dict)
     final_report_id: Optional[UUID] = None
 
 
@@ -335,49 +333,10 @@ class SessionManager:
             return
 
         key = f"session:{session.session_id}"
-
-        # Serialize agent loops
-        agent_loops_data = {}
-        for aid, loop in session.agent_loops.items():
-            agent_loops_data[aid] = {
-                "agent_id": loop.agent_id,
-                "session_id": str(loop.session_id),
-                "status": loop.status.value,
-                "current_iteration": loop.current_iteration,
-                "findings": loop.findings,
-                "pending_checkpoints": [str(cid) for cid in loop.pending_checkpoints],
-            }
-
-        # Serialize checkpoints
-        checkpoints_data = {}
-        for cid, cp in session.checkpoints.items():
-            checkpoints_data[str(cid)] = {
-                "checkpoint_id": str(cp.checkpoint_id),
-                "session_id": str(cp.session_id),
-                "agent_id": cp.agent_id,
-                "checkpoint_type": cp.checkpoint_type,
-                "description": cp.description,
-                "pending_content": cp.pending_content,
-                "status": cp.status.value,
-                "human_decision": cp.human_decision,
-                "created_at": cp.created_at.isoformat(),
-                "resolved_at": cp.resolved_at.isoformat() if cp.resolved_at else None,
-            }
-
-        data = {
-            "session_id": str(session.session_id),
-            "case_id": session.case_id,
-            "investigator_id": session.investigator_id,
-            "status": session.status.value,
-            "created_at": session.created_at.isoformat(),
-            "updated_at": session.updated_at.isoformat(),
-            "final_report_id": str(session.final_report_id)
-            if session.final_report_id
-            else None,
-            "agent_loops": agent_loops_data,
-            "checkpoints": checkpoints_data,
-        }
-        await self._redis.set(key, json.dumps(data), ex=86400)
+        try:
+            await self._redis.set(key, session.model_dump_json(), ex=86400)
+        except Exception as e:
+            logger.error(f"Failed to persist session {session.session_id} to Redis", error=str(e))
 
     async def _load_session(self, session_id: UUID) -> None:
         """Load session from Redis and hydrate in-memory cache."""
@@ -388,54 +347,7 @@ class SessionManager:
         data_str = await self._redis.get(key)
         if data_str:
             try:
-                data = json.loads(data_str)
-
-                # Reconstruct agent loops
-                agent_loops = {}
-                for aid, l_data in data.get("agent_loops", {}).items():
-                    agent_loops[aid] = AgentLoopState(
-                        agent_id=l_data["agent_id"],
-                        session_id=UUID(l_data["session_id"]),
-                        status=SessionStatus(l_data["status"]),
-                        current_iteration=l_data.get("current_iteration", 0),
-                        findings=l_data.get("findings", []),
-                        pending_checkpoints=[
-                            UUID(cid) for cid in l_data.get("pending_checkpoints", [])
-                        ],
-                    )
-
-                # Reconstruct checkpoints
-                checkpoints = {}
-                for cid_str, cp_data in data.get("checkpoints", {}).items():
-                    checkpoints[UUID(cid_str)] = HITLCheckpointState(
-                        checkpoint_id=UUID(cp_data["checkpoint_id"]),
-                        session_id=UUID(cp_data["session_id"]),
-                        agent_id=cp_data["agent_id"],
-                        checkpoint_type=cp_data["checkpoint_type"],
-                        description=cp_data["description"],
-                        pending_content=cp_data["pending_content"],
-                        status=CheckpointStatus(cp_data["status"]),
-                        human_decision=cp_data.get("human_decision"),
-                        created_at=datetime.fromisoformat(cp_data["created_at"]),
-                        resolved_at=datetime.fromisoformat(cp_data["resolved_at"])
-                        if cp_data.get("resolved_at")
-                        else None,
-                    )
-
-                session = SessionState(
-                    session_id=UUID(data["session_id"]),
-                    case_id=data["case_id"],
-                    investigator_id=data["investigator_id"],
-                    status=SessionStatus(data["status"]),
-                    created_at=datetime.fromisoformat(data["created_at"]),
-                    updated_at=datetime.fromisoformat(data["updated_at"]),
-                    agent_loops=agent_loops,
-                    checkpoints=checkpoints,
-                    final_report_id=UUID(data["final_report_id"])
-                    if data.get("final_report_id")
-                    else None,
-                )
-
+                session = SessionState.model_validate_json(data_str)
                 self._sessions[session_id] = session
             except Exception as e:
                 logger.error(

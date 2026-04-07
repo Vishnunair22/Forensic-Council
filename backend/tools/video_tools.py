@@ -91,12 +91,19 @@ async def optical_flow_analyze(
             # Create heatmap accumulator
             heatmap_accumulator = np.zeros((height, width), dtype=np.float32)
 
+            # Optimization: Intelligent frame-skipping for long videos
+            # We target ~300 samples for the whole video to stay within deep analysis latency budgets.
+            skip_rate = max(1, frame_count // 300)
+            
             while True:
                 ret, frame = cap.read()
                 if not ret:
                     break
 
                 frame_idx += 1
+                if frame_idx % skip_rate != 0:
+                    continue
+
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
                 # Compute optical flow using Farneback method

@@ -1,30 +1,21 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import {
-  RotateCcw,
-  Home,
-  FileText,
-  XCircle,
-  Download,
-  AlertCircle,
-  Activity,
-  History,
-  Search,
+import React, { useMemo, memo } from "react";
+import { 
+  RotateCcw, 
+  Home as HomeIcon, 
+  FileText, 
+  XCircle, 
+  Download, 
+  AlertCircle, 
+  Activity, 
+  History as HistoryIcon, 
+  Search 
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import clsx from "clsx";
-import { useForensicData, mapReportDtoToReport } from "@/hooks/useForensicData";
-import { useSound } from "@/hooks/useSound";
-import { type HistoryItem } from "@/components/ui/HistoryDrawer";
-import {
-  getReport,
-  getArbiterStatus,
-  type ReportDTO,
-} from "@/lib/api";
+import { type Tab, useResult } from "@/hooks/useResult";
 import { getVerdictConfig } from "@/lib/verdict";
 import { ForensicProgressOverlay } from "@/components/ui/ForensicProgressOverlay";
-import type { AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
 import { DeepModelTelemetry } from "@/components/result/DeepModelTelemetry";
 import { ResultHeader } from "./ResultHeader";
 import { AgentAnalysisTab } from "./AgentAnalysisTab";
@@ -32,567 +23,202 @@ import { TimelineTab } from "./TimelineTab";
 import { MetricsPanel } from "./MetricsPanel";
 import { ReportFooter } from "./ReportFooter";
 
-const isDev = process.env.NODE_ENV !== "production";
-const dbg = { error: isDev ? console.error.bind(console) : () => {} };
-
-
-
-type Tab = "analysis" | "history";
-type PageState = "arbiter" | "ready" | "error" | "empty";
+const MemoizedResultHeader = memo(ResultHeader);
+const MemoizedAgentAnalysisTab = memo(AgentAnalysisTab);
+const MemoizedTimelineTab = memo(TimelineTab);
+const MemoizedMetricsPanel = memo(MetricsPanel);
+const MemoizedReportFooter = memo(ReportFooter);
+const MemoizedDeepModelTelemetry = memo(DeepModelTelemetry);
 
 export function ResultLayout() {
-  const router = useRouter();
-  const [mounted, setMounted] = useState(false);
-  const [state, setState] = useState<PageState>("arbiter");
-  const [report, setReport] = useState<ReportDTO | null>(null);
-  const [arbiterMsg, setArbiterMsg] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
-  const [activeTab, setActiveTab] = useState<Tab>("analysis");
-  const [isDeepPhase, setIsDeepPhase] = useState(false);
-  const [thumbnail, setThumbnail] = useState<string | null>(null);
-  const [mimeType, setMimeType] = useState<string | null>(null);
-  const [agentTimeline, setAgentTimeline] = useState<AgentUpdate[]>([]);
-  const [pipelineStartAt, setPipelineStartAt] = useState<string | null>(null);
-  const historySavedRef = useRef(false);
-  const historyPanelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setIsDeepPhase(sessionStorage.getItem("forensic_is_deep") === "true");
-    setThumbnail(sessionStorage.getItem("forensic_thumbnail"));
-    setMimeType(sessionStorage.getItem("forensic_mime_type"));
-    setPipelineStartAt(sessionStorage.getItem("forensic_pipeline_start"));
-    try {
-      const key =
-        sessionStorage.getItem("forensic_is_deep") === "true"
-          ? "forensic_deep_agents"
-          : "forensic_initial_agents";
-      const stored = sessionStorage.getItem(key);
-      if (stored) setAgentTimeline(JSON.parse(stored));
-    } catch {
-    }
-  }, []);
-
-  const { addToHistory } = useForensicData();
-  const { playSound } = useSound();
-  const soundRef = useRef(playSound);
-  useEffect(() => {
-    soundRef.current = playSound;
-  }, [playSound]);
-
-  useEffect(() => {
-    const sessionId = sessionStorage.getItem("forensic_session_id");
-    if (!sessionId) {
-      setState("empty");
-      return;
-    }
-
-    const sid = sessionId;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-    let attempts = 0;
-    const MAX_ATTEMPTS = 180; // 6 minutes at 2s intervals (was 60 = 2 min)
-    const POLL_INTERVAL = 2000;
-
-    async function poll() {
-      if (cancelled) return;
-      attempts++;
-      try {
-        const s = await getArbiterStatus(sid);
-        if (cancelled) return;
-
-        if (s.status === "complete") {
-          try {
-            const res = await getReport(sid);
-            if (cancelled) return;
-            if (res.status === "complete" && res.report) {
-              setReport(res.report);
-              setState("ready");
-              try {
-                addToHistory(mapReportDtoToReport(res.report));
-              } catch (e) {
-                dbg.error("addToHistory failed:", e);
-              }
-              try {
-                const stored = sessionStorage.getItem("fc_full_report_history");
-                const hist: ReportDTO[] = stored ? JSON.parse(stored) : [];
-                const snap = res.report;
-                if (snap && !hist.some((r) => r.report_id === snap.report_id)) {
-                  const serialised = JSON.stringify(
-                    [snap, ...hist].slice(0, 20),
-                  );
-                  if (serialised.length < 4_000_000) {
-                    sessionStorage.setItem(
-                      "fc_full_report_history",
-                      serialised,
-                    );
-                  }
-                }
-              } catch {
-              }
-              setTimeout(() => soundRef.current("arbiter_done"), 150);
-              return;
-            }
-          } catch (e) {
-            dbg.error("getReport failed:", e);
-          }
-        } else if (s.status === "error") {
-          setErrorMsg(s.message || "Investigation failed");
-          setState("error");
-          return;
-        } else {
-          // running or not_found - keep polling
-          setArbiterMsg(s.message || "Council deliberating...");
-          // Also try to get report in case it's ready but status hasn't updated
-          try {
-            const res = await getReport(sid);
-            if (!cancelled && res.status === "complete" && res.report) {
-              setReport(res.report);
-              setState("ready");
-              try {
-                addToHistory(mapReportDtoToReport(res.report));
-              } catch (e) {
-                dbg.error("addToHistory failed:", e);
-              }
-              setTimeout(() => soundRef.current("arbiter_done"), 150);
-              return;
-            }
-          } catch (e) {
-            // Report not ready yet - continue polling
-          }
-        }
-      } catch (e) {
-        dbg.error("getArbiterStatus failed:", e);
-      }
-
-      if (!cancelled && attempts < MAX_ATTEMPTS) {
-        timer = setTimeout(poll, POLL_INTERVAL);
-      } else if (!cancelled) {
-        setErrorMsg("Arbiter timed out. The session may have expired.");
-        setState("error");
-      }
-    }
-
-    poll();
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, []);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const rs = useResult();
 
   const activeAgentIds = useMemo(() => {
-    const SKIP_TYPES = new Set([
-      "file type not applicable",
-      "format not supported",
-    ]);
-    return Object.keys(report?.per_agent_findings ?? {}).filter((id) => {
-      const flist = report?.per_agent_findings[id] ?? [];
-      return (
-        flist.length > 0 &&
-        !flist.every((f) =>
-          SKIP_TYPES.has(String(f.finding_type).toLowerCase()),
-        )
-      );
+    const SKIP_TYPES = new Set(["file type not applicable", "format not supported"]);
+    return Object.keys(rs.report?.per_agent_findings ?? {}).filter((id) => {
+      const flist = rs.report?.per_agent_findings[id] ?? [];
+      return flist.length > 0 && !flist.every((f: any) => SKIP_TYPES.has(String(f.finding_type).toLowerCase()));
     });
-  }, [report]);
+  }, [rs.report]);
 
   const keyFindings = useMemo(() => {
-    if (report?.key_findings && report.key_findings.length > 0)
-      return report.key_findings;
-    const SKIP_TYPES = new Set([
-      "file type not applicable",
-      "format not supported",
-    ]);
+    if (rs.report?.key_findings && rs.report.key_findings.length > 0) return rs.report.key_findings;
     const summaries: string[] = [];
     for (const id of activeAgentIds) {
-      const findings = report?.per_agent_findings[id] ?? [];
+      const findings = rs.report?.per_agent_findings[id] ?? [];
       for (const f of findings) {
-        if (SKIP_TYPES.has(String(f.finding_type).toLowerCase())) continue;
         const s = f.reasoning_summary?.trim();
         if (s && s.length > 10 && !summaries.includes(s)) summaries.push(s);
       }
     }
     return summaries.slice(0, 8);
-  }, [report, activeAgentIds]);
+  }, [rs.report, activeAgentIds]);
 
-  const vc = report ? getVerdictConfig(report.overall_verdict ?? "") : null;
-  const confPct = Math.round((report?.overall_confidence ?? 0) * 100);
-  const errPct = Math.round((report?.overall_error_rate ?? 0) * 100);
-  const manipPct = Math.round((report?.manipulation_probability ?? 0) * 100);
-
-  const fileName = useMemo(() => {
-    if (typeof window === "undefined")
-      return report?.case_id ?? "Evidence File";
-    return (
-      sessionStorage.getItem("forensic_file_name") ||
-      report?.case_id ||
-      "Evidence File"
-    );
-  }, [report]);
-
-  const pipelineDuration = useMemo(() => {
-    if (pipelineStartAt && report?.signed_utc) {
-      return fmtDuration(pipelineStartAt, report.signed_utc);
-    }
-    if (agentTimeline.length > 0 && pipelineStartAt) {
-      const lastAgent = agentTimeline[agentTimeline.length - 1];
-      if (lastAgent?.completed_at)
-        return fmtDuration(pipelineStartAt, lastAgent.completed_at);
-    }
-    return null;
-  }, [pipelineStartAt, report, agentTimeline]);
-
-  useEffect(() => {
-    if (state === "ready" && report && !historySavedRef.current) {
-      historySavedRef.current = true;
-      const hItem: HistoryItem = {
-        sessionId: report.session_id,
-        fileName:
-          sessionStorage.getItem("forensic_file_name") || "Unknown File",
-        verdict: report.overall_verdict || "INCONCLUSIVE",
-        timestamp: Date.now(),
-        type: isDeepPhase ? "Deep" : "Initial",
-        thumbnail: sessionStorage.getItem("forensic_thumbnail") || undefined,
-        mime: sessionStorage.getItem("forensic_mime_type") || undefined,
-      };
-      try {
-        const stored = JSON.parse(
-          localStorage.getItem("forensic_history") || "[]",
-        ) as HistoryItem[];
-        const filtered = stored.filter((h) => h.sessionId !== hItem.sessionId);
-        localStorage.setItem(
-          "forensic_history",
-          JSON.stringify([hItem, ...filtered]),
-        );
-      } catch (e) {
-        dbg.error("Failed to commit history", e);
-      }
-    }
-  }, [state, report, isDeepPhase]);
-
-  const handleNew = useCallback(() => {
-    playSound("click");
-    [
-      "forensic_session_id",
-      "forensic_file_name",
-      "forensic_case_id",
-      "forensic_thumbnail",
-    ].forEach((k) => sessionStorage.removeItem(k));
-    router.push("/evidence", { scroll: true });
-  }, [playSound, router]);
-
-  const handleHome = useCallback(() => {
-    playSound("click");
-    router.push("/", { scroll: true });
-  }, [playSound, router]);
-
-  const handleExport = useCallback(() => {
-    if (!report) return;
-    const blob = new Blob([JSON.stringify(report, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `forensic-report-${report.report_id.slice(0, 8)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [report]);
-
-  if (!mounted) {
-    return (
-      <div className="min-h-screen text-foreground flex items-center justify-center px-6">
-        <div className="w-full max-w-md rounded-3xl border border-white/[0.08] bg-white/[0.03] p-6 text-center backdrop-blur-xl">
-          <p className="text-[11px] font-mono font-bold uppercase tracking-[0.22em] text-cyan-400/80">
-            Loading Session
-          </p>
-          <p className="mt-3 text-sm text-foreground/55">
-            Restoring the latest forensic view.
-          </p>
-        </div>
-      </div>
-    );
+  if (!rs.mounted) {
+    return <ResultStateView type="loading" />;
   }
 
   return (
-    <div className="min-h-screen text-foreground">
-      {state === "arbiter" && (
-        <ForensicProgressOverlay
-          variant="council"
-          title="Council deliberation"
-          liveText={arbiterMsg}
-          telemetryLabel="Report synthesis"
-          showElapsed
+    <div className="min-h-screen text-foreground selection:bg-cyan-500/20">
+      {rs.state === "arbiter" && (
+        <ForensicProgressOverlay 
+          variant="council" 
+          title="Council Deliberation" 
+          liveText={rs.arbiterMsg} 
+          telemetryLabel="Synthesizing Consensus" 
+          showElapsed 
         />
       )}
 
-      <div
-        className="w-full sticky top-[60px] z-40 transition-all duration-300"
-        style={{
-          background: "rgba(8,8,12,0.85)",
-          backdropFilter: "blur(20px)",
-          WebkitBackdropFilter: "blur(20px)",
-          borderBottom: "1px solid rgba(255,255,255,0.05)",
-        }}
-      >
-        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-center gap-4">
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider text-foreground/40 hover:text-foreground/70 border border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.06] transition-all cursor-pointer"
-          >
-            <Download className="w-3 h-3" /> Export
-          </button>
+      {/* Sticky Navigation */}
+      <nav className="sticky top-[60px] z-40 w-full bg-[#06090F]/80 backdrop-blur-2xl border-b border-white/[0.05]">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={rs.handleExport}
+              className="flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-cyan-400 hover:bg-cyan-400/5 hover:border-cyan-400/20 border border-white/5 transition-all"
+            >
+              <Download className="w-3 h-3" /> Export
+            </button>
+            <div className={clsx(
+              "px-3 py-1 rounded-full border text-[9px] font-mono font-black uppercase tracking-widest",
+              rs.isDeepPhase ? "text-violet-400 border-violet-500/20 bg-violet-500/5" : "text-cyan-400 border-cyan-500/20 bg-cyan-500/5"
+            )}>
+              {rs.isDeepPhase ? "Deep Analysis" : "Initial Scan"}
+            </div>
+          </div>
 
-          <div
-            role="tablist"
-            aria-label="Analysis views"
-            className="flex gap-1 p-1 rounded-full"
-            style={{
-              background: "rgba(255,255,255,0.02)",
-              border: "1px solid rgba(255,255,255,0.05)",
-              boxShadow: "inset 0 2px 10px rgba(0,0,0,0.5)",
-            }}
-            onKeyDown={(e) => {
-              const tabs = ["analysis", "history"] as Tab[];
-              const currentIndex = tabs.indexOf(activeTab);
-              let newIndex = currentIndex;
-              if (e.key === "ArrowRight") {
-                e.preventDefault();
-                newIndex = (currentIndex + 1) % tabs.length;
-                setActiveTab(tabs[newIndex]);
-              } else if (e.key === "ArrowLeft") {
-                e.preventDefault();
-                newIndex = (currentIndex - 1 + tabs.length) % tabs.length;
-                setActiveTab(tabs[newIndex]);
-              } else if (e.key === "Home") {
-                e.preventDefault();
-                setActiveTab(tabs[0]);
-              } else if (e.key === "End") {
-                e.preventDefault();
-                setActiveTab(tabs[tabs.length - 1]);
-              }
-            }}
-          >
+          <div role="tablist" className="bg-white/[0.02] border border-white/5 p-1 rounded-full flex gap-1 shadow-inner">
             {(["analysis", "history"] as Tab[]).map((tab) => (
               <button
                 key={tab}
                 role="tab"
-                id={`tab-${tab}`}
-                aria-selected={activeTab === tab}
-                aria-controls={`panel-${tab}`}
-                onClick={() => setActiveTab(tab)}
+                aria-selected={rs.activeTab === tab}
+                onClick={() => rs.setActiveTab(tab)}
                 className={clsx(
-                  "px-5 py-2 rounded-full text-[10px] font-bold uppercase tracking-[0.18em] transition-all duration-300 cursor-pointer flex items-center gap-2",
-                  activeTab === tab
-                    ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/25 shadow-[0_4px_20px_rgba(34,211,238,0.15)]"
-                    : "text-foreground/40 hover:text-foreground/70 hover:bg-white/[0.04] border border-transparent",
+                  "px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-2",
+                  rs.activeTab === tab 
+                    ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 shadow-[0_0_15px_rgba(34,211,238,0.1)]" 
+                    : "text-white/20 hover:text-white/40 hover:bg-white/[0.02]"
                 )}
               >
-                {tab === "analysis" ? (
-                  <Activity className="w-3.5 h-3.5" aria-hidden="true" />
-                ) : (
-                  <History className="w-3.5 h-3.5" aria-hidden="true" />
-                )}
-                {tab === "analysis" ? "Current Analysis" : "History"}
+                {tab === "analysis" ? <Activity className="w-3.5 h-3.5" /> : <HistoryIcon className="w-3.5 h-3.5" />}
+                {tab === "analysis" ? "Overview" : "History"}
               </button>
             ))}
           </div>
-
-          <div
-            className={clsx(
-              "text-[9px] font-mono font-bold uppercase tracking-widest px-3 py-1 rounded-full border",
-              isDeepPhase
-                ? "text-violet-400 border-violet-500/30 bg-violet-500/10"
-                : "text-cyan-400 border-cyan-500/25 bg-cyan-500/10",
-            )}
-          >
-            {isDeepPhase ? "Deep" : "Initial"}
-          </div>
         </div>
-      </div>
+      </nav>
 
-      {activeTab === "history" && (
-        <main
-          ref={historyPanelRef}
-          role="tabpanel"
-          id="panel-history"
-          aria-labelledby="tab-history"
-          className="max-w-5xl mx-auto px-6 pt-8 pb-24 relative"
-        >
-          <HistoryPanel onDismiss={() => setActiveTab("analysis")} />
-        </main>
-      )}
-
-      {activeTab === "analysis" && (
-        <main
-          role="tabpanel"
-          id="panel-analysis"
-          aria-labelledby="tab-analysis"
-          className="max-w-5xl mx-auto px-6 pt-6 pb-16 space-y-6"
-        >
-          {state === "arbiter" && (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center">
-              <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-white/[0.03] border border-white/[0.06]">
-                <Activity className="w-7 h-7 text-amber-400 animate-pulse" />
+      <main className="max-w-5xl mx-auto px-6 pt-10 pb-24 space-y-8">
+        {rs.activeTab === "history" ? (
+          <HistoryPanel onDismiss={() => rs.setActiveTab("analysis")} />
+        ) : (
+          <>
+            {rs.state === "error" && (
+              <ResultStateView type="error" message={rs.errorMsg} onNew={rs.handleNew} onHome={rs.handleHome} />
+            )}
+            {rs.state === "empty" && (
+              <ResultStateView type="empty" onNew={rs.handleNew} onHome={rs.handleHome} />
+            )}
+            {rs.state === "arbiter" && (
+              <div className="flex flex-col items-center justify-center py-32 gap-6 opacity-40">
+                <Activity className="w-8 h-8 text-cyan-400 animate-pulse" />
+                <p className="font-mono text-xs font-bold uppercase tracking-widest">Awaiting Arbiter Consensus...</p>
               </div>
-              <p className="text-foreground/40 text-sm font-medium font-mono">
-                Council deliberating…
-              </p>
-            </div>
-          )}
-
-          {state === "error" && (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] gap-8 text-center">
-              <div className="w-20 h-20 rounded-2xl flex items-center justify-center bg-white/[0.03] border border-white/[0.06]">
-                <XCircle className="w-10 h-10 text-rose-500" />
+            )}
+            {rs.state === "ready" && rs.report && (
+              <div 
+                className="sr-only" 
+                aria-live="assertive" 
+                aria-atomic="true"
+              >
+                Forensic Analysis Complete. Verdict: {getVerdictConfig(rs.report.overall_verdict ?? "").label}. 
+                {rs.report.verdict_sentence}
               </div>
-              <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-foreground uppercase tracking-tight">
-                  Analysis Interrupted
-                </h2>
-                <p className="text-foreground/40 text-sm max-w-sm font-medium">
-                  {errorMsg || "An unexpected error occurred during synthesis."}
-                </p>
+            )}
+            {rs.state === "ready" && rs.report && (
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-1000 space-y-8">
+                <MemoizedResultHeader 
+                  report={rs.report} 
+                  fileName={rs.report.case_id || "Evidence 01"} 
+                  mimeType={rs.mimeType} 
+                  thumbnail={rs.thumbnail} 
+                  isDeepPhase={rs.isDeepPhase}
+                  vc={getVerdictConfig(rs.report.overall_verdict ?? "")}
+                  confPct={Math.round((rs.report.overall_confidence ?? 0) * 100)}
+                  errPct={Math.round((rs.report.overall_error_rate ?? 0) * 100)}
+                  manipPct={Math.round((rs.report.manipulation_probability ?? 0) * 100)}
+                  activeAgentIds={activeAgentIds}
+                  pipelineDuration={rs.pipelineStartAt && rs.report.signed_utc ? fmtDuration(rs.pipelineStartAt, rs.report.signed_utc) : "—"}
+                />
+
+                {rs.isDeepPhase && <MemoizedDeepModelTelemetry report={rs.report} />}
+
+                <MemoizedAgentAnalysisTab report={rs.report} activeAgentIds={activeAgentIds} isDeepPhase={rs.isDeepPhase} />
+                <MemoizedTimelineTab report={rs.report} activeAgentIds={activeAgentIds} agentTimeline={rs.agentTimeline as any} pipelineStartAt={rs.pipelineStartAt} />
+                <MemoizedMetricsPanel report={rs.report} activeAgentIds={activeAgentIds} keyFindings={keyFindings} />
+                
+                <MemoizedReportFooter handleNew={rs.handleNew} handleHome={rs.handleHome} />
               </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={handleNew}
-                  className="btn-pill-primary text-xs"
-                >
-                  <RotateCcw className="w-4 h-4" /> New Analysis
-                </button>
-                <button
-                  onClick={handleHome}
-                  className="btn-pill-secondary text-xs"
-                >
-                  <Home className="w-4 h-4" /> Back to Home
-                </button>
-              </div>
-            </div>
-          )}
-
-          {state === "empty" && (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] gap-8 text-center">
-              <div className="w-20 h-20 rounded-2xl flex items-center justify-center bg-white/[0.03] border border-white/[0.06]">
-                <FileText className="w-10 h-10 text-foreground/20" />
-              </div>
-              <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-foreground uppercase tracking-tight">
-                  Null Session
-                </h2>
-                <p className="text-foreground/40 text-sm max-w-sm font-medium">
-                  No active forensic stream detected. Please return to the
-                  terminal.
-                </p>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={handleNew}
-                  className="btn-pill-primary text-xs"
-                >
-                  <Search className="w-4 h-4" /> New Investigation
-                </button>
-                <button
-                  onClick={handleHome}
-                  className="btn-pill-secondary text-xs"
-                >
-                  <Home className="w-4 h-4" /> Back to Home
-                </button>
-              </div>
-            </div>
-          )}
-
-          {state === "ready" && report && vc && (
-            <div className="space-y-6">
-              {report.degradation_flags &&
-                report.degradation_flags.length > 0 && (
-                  <div className="rounded-2xl border border-amber-500/40 bg-amber-500/[0.07] p-4 flex items-start gap-3">
-                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-[9px] font-black font-mono uppercase tracking-[0.25em] text-amber-400 mb-1.5">
-                        Degraded Analysis Mode
-                      </p>
-                      <ul className="space-y-0.5">
-                        {report.degradation_flags.map((f, i) => (
-                          <li
-                            key={i}
-                            className="text-[11px] text-amber-300/70 font-mono leading-relaxed"
-                          >
-                            • {f}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                )}
-
-              <ResultHeader
-                report={report}
-                fileName={fileName}
-                mimeType={mimeType}
-                thumbnail={thumbnail}
-                isDeepPhase={isDeepPhase}
-                vc={vc}
-                confPct={confPct}
-                errPct={errPct}
-                manipPct={manipPct}
-                activeAgentIds={activeAgentIds}
-                pipelineDuration={pipelineDuration}
-              />
-
-              {isDeepPhase && <DeepModelTelemetry report={report} />}
-
-              <AgentAnalysisTab
-                report={report}
-                activeAgentIds={activeAgentIds}
-                isDeepPhase={isDeepPhase}
-              />
-
-              <TimelineTab
-                report={report}
-                activeAgentIds={activeAgentIds}
-                agentTimeline={agentTimeline}
-                pipelineStartAt={pipelineStartAt}
-              />
-
-              <MetricsPanel
-                report={report}
-                activeAgentIds={activeAgentIds}
-                keyFindings={keyFindings}
-              />
-
-              <ReportFooter
-                handleNew={handleNew}
-                handleHome={handleHome}
-              />
-            </div>
-          )}
-        </main>
-      )}
+            )}
+          </>
+        )}
+      </main>
     </div>
   );
 }
 
-function fmtDuration(from: string, to: string): string {
-  try {
-    const ms = new Date(to).getTime() - new Date(from).getTime();
-    if (ms < 1000) return `${ms}ms`;
-    return `${(ms / 1000).toFixed(1)}s`;
-  } catch {
-    return "—";
-  }
+function ResultStateView({ type, message, onNew, onHome }: { type: "loading" | "error" | "empty", message?: string, onNew?: () => void, onHome?: () => void }) {
+  const configs = {
+    loading: { icon: Activity, title: "Restoring Session", desc: "Accessing secure forensic ledger...", color: "text-cyan-400" },
+    error: { icon: XCircle, title: "Analysis Interrupted", desc: message || "Protocol violation detected during synthesis.", color: "text-rose-500" },
+    empty: { icon: Search, title: "Null Stream", desc: "No active investigation session identified.", color: "text-white/20" }
+  };
+  const c = configs[type];
+  const Icon = c.icon;
+
+  return (
+    <div className="min-h-[70vh] flex flex-col items-center justify-center text-center px-6">
+      <div className="w-20 h-20 rounded-3xl glass-panel flex items-center justify-center mb-8 border-white/5">
+        <Icon className={clsx("w-10 h-10", c.color, type === "loading" && "animate-pulse")} />
+      </div>
+      <h2 className="text-3xl font-black text-white uppercase tracking-tighter mb-3 font-heading">{c.title}</h2>
+      <p className="text-sm font-medium text-white/30 max-w-sm mb-10">{c.desc}</p>
+      
+      {(onNew || onHome) && (
+        <div className="flex gap-4">
+          {onNew && <button onClick={onNew} className="btn-pill-primary px-8 py-3 text-[10px]">New Investigation</button>}
+          {onHome && <button onClick={onHome} className="btn-pill-secondary px-8 py-3 text-[10px]"><HomeIcon className="w-4 h-4" /> Home</button>}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function HistoryPanel({ onDismiss }: { onDismiss: () => void }) {
   return (
-    <div className="text-center text-foreground/50">
-      <p>History panel placeholder</p>
-      <button onClick={onDismiss} className="mt-4 text-cyan-400">
-        Back to Analysis
+    <div className="glass-panel rounded-3xl p-12 text-center border-white/5 bg-white/[0.01]">
+      <div className="inline-flex w-16 h-16 rounded-2xl bg-white/5 border border-white/10 items-center justify-center mb-6">
+        <HistoryIcon className="w-8 h-8 text-white/20" />
+      </div>
+      <h3 className="text-xl font-black text-white uppercase tracking-tight mb-2">History Archive</h3>
+      <p className="text-xs font-medium text-white/25 mb-8">Secure chronological log of past investigations.</p>
+      <button onClick={onDismiss} className="text-[10px] font-black uppercase tracking-widest text-cyan-400 hover:text-cyan-300 transition-colors">
+        Return to Current Analysis
       </button>
     </div>
   );
+}
+
+function fmtDuration(from: string | null, to?: string): string {
+  if (!from || !to) return "—";
+  try {
+    const ms = new Date(to).getTime() - new Date(from).getTime();
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+    return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
+  } catch {
+    return "—";
+  }
 }

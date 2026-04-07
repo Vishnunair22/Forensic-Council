@@ -27,8 +27,27 @@ class StructuredFormatter(logging.Formatter):
     - level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
     - logger: Logger name
     - message: Log message
-    - extra: Any additional fields passed to the logger
+    - extra: Any additional fields passed to the logger (masked if sensitive)
     """
+
+    SENSITIVE_KEYS = {
+        "password", "secret", "key", "token", "auth", "credential", "private", "signing"
+    }
+
+    def _mask_sensitive(self, data: Any) -> Any:
+        """Recursively mask sensitive keys in log data."""
+        if isinstance(data, dict):
+            return {
+                k: (
+                    "********" 
+                    if any(s in k.lower() for s in self.SENSITIVE_KEYS) 
+                    else self._mask_sensitive(v)
+                )
+                for k, v in data.items()
+            }
+        elif isinstance(data, list):
+            return [self._mask_sensitive(i) for i in data]
+        return data
 
     def format(self, record: logging.LogRecord) -> str:
         """Format the log record as JSON."""
@@ -46,9 +65,9 @@ class StructuredFormatter(logging.Formatter):
             "function": record.funcName,
         }
 
-        # Add any extra fields passed to the logger
+        # Add any extra fields passed to the logger (with masking)
         if hasattr(record, "extra_fields") and record.extra_fields:
-            log_data["extra"] = record.extra_fields
+            log_data["extra"] = self._mask_sensitive(record.extra_fields)
 
         # Add correlation ID
         req_id = request_id_ctx.get()

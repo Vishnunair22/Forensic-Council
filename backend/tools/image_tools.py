@@ -683,6 +683,7 @@ async def frequency_domain_analysis(
 
 async def extract_text_from_image(
     artifact: EvidenceArtifact,
+    timeout: float = 60.0,
 ) -> dict[str, Any]:
     """
     Extract visible text from an image using OCR (Tesseract/pytesseract).
@@ -753,7 +754,7 @@ async def extract_text_from_image(
         loop = _asyncio.get_running_loop()
         return await _asyncio.wait_for(
             loop.run_in_executor(None, _run_ocr),
-            timeout=45.0,
+            timeout=timeout,
         )
     except _asyncio.TimeoutError:
         return {
@@ -795,6 +796,7 @@ async def extract_text_from_image(
 async def analyze_image_content(
     artifact: EvidenceArtifact,
     custom_categories: Optional[list[str]] = None,
+    timeout: float = 90.0,
 ) -> dict[str, Any]:
     """
     Analyze image content using CLIP for semantic understanding.
@@ -840,7 +842,7 @@ async def analyze_image_content(
                 None,
                 lambda: analyzer.analyze_image(original_path, categories=categories),
             ),
-            timeout=60.0,
+            timeout=timeout,
         )
 
         if not result.available:

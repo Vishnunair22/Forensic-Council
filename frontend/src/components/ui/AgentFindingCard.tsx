@@ -1,530 +1,26 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import {
-  ChevronDown,
-  Shield,
-  Eye,
-  Search,
-  Database,
-  Layers,
-  Activity,
-  Cpu,
-  Hash,
-  Zap,
-  ImageIcon,
-  Scan,
-  FileSearch,
-  Fingerprint,
-  Wifi,
-  Globe,
-  Binary,
-  Crosshair,
-  Gauge,
-  Brain,
-  Clock,
-  AlertTriangle,
-  CheckCircle2,
-  XCircle,
+import { 
+  ChevronDown, 
+  Clock, 
+  Activity, 
+  Cpu, 
+  ShieldCheck, 
+  ShieldAlert, 
+  Shield, 
+  ShieldX,
+  Plus
 } from "lucide-react";
-import clsx from "clsx";
-import { SurfaceCard } from "./SurfaceCard";
-import { Badge } from "@/components/lightswind/badge";
-import { fmtTool } from "@/lib/fmtTool";
+import { clsx } from "clsx";
+import { Badge } from "@/components/ui/Badge";
 import { AgentFindingDTO, AgentMetricsDTO } from "@/lib/api";
+import { 
+  ConfidenceBar, 
+  ToolRow, 
+  MoreFindingsToggle 
+} from "@/components/result/AgentFindingSubComponents";
 
-// ─── Tool icon map ────────────────────────────────────────────────────────────
-const TOOL_ICONS: Record<string, React.ElementType> = {
-  ela_full_image: ImageIcon,
-  ela_anomaly_classify: Scan,
-  jpeg_ghost_detect: Eye,
-  frequency_domain_analysis: Activity,
-  deepfake_frequency_check: Brain,
-  perceptual_hash: Hash,
-  file_hash_verify: Fingerprint,
-  analyze_image_content: Eye,
-  extract_text_from_image: FileSearch,
-  extract_evidence_text: FileSearch,
-  noise_fingerprint: Gauge,
-  copy_move_detect: Crosshair,
-  splicing_detect: Layers,
-  adversarial_robustness_check: Shield,
-  sensor_db_query: Database,
-  prnu_analysis: Fingerprint,
-  cfa_demosaicing: Scan,
-  gemini_deep_forensic: Brain,
-  object_detection: Search,
-  secondary_classification: Cpu,
-  scale_validation: Gauge,
-  lighting_consistency: Zap,
-  scene_incongruence: Eye,
-  contraband_database: Database,
-  object_text_ocr: FileSearch,
-  document_authenticity: FileSearch,
-  image_splice_check: Layers,
-  inter_agent_call: Wifi,
-  exif_extract: Hash,
-  metadata_anomaly_score: Brain,
-  gps_timezone_validate: Globe,
-  steganography_scan: Binary,
-  file_structure_analysis: Layers,
-  hex_signature_scan: Binary,
-  timestamp_analysis: Clock,
-  astronomical_api: Globe,
-  reverse_image_search: Search,
-  device_fingerprint_db: Fingerprint,
-  c2pa_verify: Shield,
-  thumbnail_mismatch: ImageIcon,
-  extract_deep_metadata: Hash,
-  get_physical_address: Globe,
-  mediainfo_profile: Activity,
-  av_file_identity: Activity,
-};
-
-function getToolIcon(toolName: string) {
-  return TOOL_ICONS[toolName] || Cpu;
-}
-
-// ─── Agent meta ───────────────────────────────────────────────────────────────
-const AGENT_META: Record<
-  string,
-  {
-    name: string;
-    role: string;
-    accentColor: string;
-    accentBg: string;
-    accentBorder: string;
-    verdictColor: string;
-    icon: React.ElementType;
-  }
-> = {
-  Agent1: {
-    name: "Agent 1",
-    role: "Image Integrity",
-    accentColor: "text-cyan-400",
-    accentBg: "bg-cyan-500/10",
-    accentBorder: "border-cyan-500/30",
-    verdictColor: "text-cyan-300",
-    icon: Shield,
-  },
-  Agent2: {
-    name: "Agent 2",
-    role: "Audio Forensics",
-    accentColor: "text-indigo-400",
-    accentBg: "bg-indigo-500/10",
-    accentBorder: "border-indigo-500/30",
-    verdictColor: "text-indigo-300",
-    icon: Activity,
-  },
-  Agent3: {
-    name: "Agent 3",
-    role: "Object & Weapon Analysis",
-    accentColor: "text-amber-400",
-    accentBg: "bg-amber-500/10",
-    accentBorder: "border-amber-500/30",
-    verdictColor: "text-amber-300",
-    icon: Crosshair,
-  },
-  Agent4: {
-    name: "Agent 4",
-    role: "Temporal Video",
-    accentColor: "text-teal-400",
-    accentBg: "bg-teal-500/10",
-    accentBorder: "border-teal-500/30",
-    verdictColor: "text-teal-300",
-    icon: Eye,
-  },
-  Agent5: {
-    name: "Agent 5",
-    role: "Metadata & Context",
-    accentColor: "text-violet-400",
-    accentBg: "bg-violet-500/10",
-    accentBorder: "border-violet-500/30",
-    verdictColor: "text-violet-300",
-    icon: Database,
-  },
-};
-
-// ─── Verdict display text ─────────────────────────────────────────────────────
-function getVerdictDisplay(verdict: string): { label: string; color: string } {
-  switch (verdict) {
-    case "NO ANOMALIES":
-      return { label: "Authentic", color: "text-emerald-400" };
-    case "ANOMALIES DETECTED":
-      return { label: "Manipulation Detected", color: "text-rose-400" };
-    case "ANALYSIS FAILED":
-      return { label: "Analysis Failed", color: "text-rose-500" };
-    case "NOT APPLICABLE":
-      return { label: "Not Applicable", color: "text-slate-400" };
-    default:
-      return { label: verdict, color: "text-foreground/60" };
-  }
-}
-
-// ─── Status badge (operational state) ────────────────────────────────────────
-function deriveStatus(
-  isSkipped: boolean,
-  allFailed: boolean,
-  hasErrors: boolean,
-): {
-  label: string;
-  variant: "success" | "destructive" | "secondary" | "warning";
-} {
-  if (isSkipped) return { label: "Skipped", variant: "secondary" };
-  if (allFailed) return { label: "Failed", variant: "destructive" };
-  if (hasErrors) return { label: "Partial", variant: "warning" };
-  return { label: "Finished", variant: "success" };
-}
-
-// ─── Finding status helpers ───────────────────────────────────────────────────
-function getFindingStatus(
-  f: AgentFindingDTO,
-): "success" | "warning" | "error" | "na" {
-  const na =
-    f.metadata?.ela_not_applicable ||
-    f.metadata?.ghost_not_applicable ||
-    f.metadata?.noise_fingerprint_not_applicable ||
-    f.metadata?.prnu_not_applicable;
-  if (na) return "na";
-  if (f.status === "CONFIRMED" || f.status === "CONFIRMED_CLEAN")
-    return "success";
-  if (f.status === "ERROR" || f.metadata?.court_defensible === false)
-    return "error";
-  return "warning";
-}
-
-function toolBadgeConfig(status: "success" | "warning" | "error" | "na") {
-  switch (status) {
-    case "success":
-      return { variant: "success" as const, label: "Clean" };
-    case "warning":
-      return { variant: "warning" as const, label: "Flagged" };
-    case "error":
-      return { variant: "destructive" as const, label: "Failed" };
-    case "na":
-      return { variant: "secondary" as const, label: "N/A" };
-  }
-}
-
-function confColor(c: number): string {
-  return c >= 0.75
-    ? "text-emerald-400"
-    : c >= 0.5
-      ? "text-amber-400"
-      : "text-rose-400";
-}
-
-// ─── Confidence bar (5 segments) ─────────────────────────────────────────────
-function ConfidenceBar({
-  value,
-}: {
-  value: number;
-}) {
-  const filled = Math.round(value * 5); // 0–5 segments
-  const color =
-    value >= 0.75
-      ? "bg-emerald-400"
-      : value >= 0.5
-        ? "bg-amber-400"
-        : "bg-rose-400";
-
-  return (
-    <div className="flex items-center gap-1.5">
-      <div className="flex gap-[3px]">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div
-            key={i}
-            className={clsx(
-              "h-[6px] rounded-full transition-all duration-300",
-              i < filled ? color : "bg-white/10",
-              i < filled ? "w-5" : "w-3",
-            )}
-          />
-        ))}
-      </div>
-      <span
-        className={clsx(
-          "text-[11px] font-black font-mono tabular-nums",
-          confColor(value),
-        )}
-      >
-        {Math.round(value * 100)}%
-      </span>
-    </div>
-  );
-}
-
-// ─── Extract tool timing ──────────────────────────────────────────────────────
-function extractTimingMs(f: AgentFindingDTO): number | null {
-  const m = f.metadata || {};
-  if (typeof m.execution_time_ms === "number")
-    return m.execution_time_ms as number;
-  if (typeof m.tool_duration_ms === "number")
-    return m.tool_duration_ms as number;
-  return null;
-}
-
-function fmtMs(ms: number): string {
-  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`;
-}
-
-// ─── Phase badge ──────────────────────────────────────────────────────────────
-function PhaseBadge({ phase }: { phase: "initial" | "deep" }) {
-  if (phase === "deep") {
-    return (
-      <Badge
-        variant="info"
-        className="font-mono font-bold uppercase tracking-widest text-[8px] px-1.5 py-0"
-      >
-        DEEP
-      </Badge>
-    );
-  }
-  return (
-    <Badge
-      variant="success"
-      withDot
-      className="font-mono font-bold uppercase tracking-widest text-[8px] px-1.5 py-0"
-    >
-      INITIAL
-    </Badge>
-  );
-}
-
-// ─── Expandable text ──────────────────────────────────────────────────────────
-function ExpandableText({
-  text,
-  maxLen = 180,
-}: {
-  text: string;
-  maxLen?: number;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  if (!text) return null;
-  const isLong = text.length > maxLen;
-  return (
-    <div>
-      <p
-        className={clsx(
-          "text-[11px] text-foreground/65 leading-relaxed",
-          !expanded && isLong && "line-clamp-2",
-        )}
-      >
-        {text}
-      </p>
-      {isLong && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setExpanded((v) => !v);
-          }}
-          className="text-[9px] font-mono font-bold text-amber-500/60 hover:text-amber-400 uppercase tracking-widest mt-1 cursor-pointer transition-colors"
-          aria-expanded={expanded}
-        >
-          {expanded ? "Show Less ↑" : "Show More ↓"}
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ─── Tool row ─────────────────────────────────────────────────────────────────
-const VISIBLE_TOOLS_THRESHOLD = 3;
-
-function ToolRow({
-  finding,
-  isLast,
-  defaultExpanded = false,
-}: {
-  finding: AgentFindingDTO;
-  isLast: boolean;
-  defaultExpanded?: boolean;
-}) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
-  const toolName =
-    (finding.metadata?.tool_name as string) || finding.finding_type;
-  const status = getFindingStatus(finding);
-  const badgeCfg = toolBadgeConfig(status);
-  const Icon = getToolIcon(toolName);
-  // Use reasoning_summary — already human-readable from _build_readable_summary()
-  const summary = finding.reasoning_summary || "Analysis completed.";
-  const timingMs = extractTimingMs(finding);
-  const confidence =
-    finding.raw_confidence_score ??
-    finding.calibrated_probability ??
-    finding.confidence_raw ??
-    0;
-  const isNa = status === "na";
-
-  const iconColor = isNa
-    ? "bg-slate-800/40 border-slate-700/30 text-slate-500"
-    : status === "success"
-      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-      : status === "warning"
-        ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
-        : "bg-rose-500/10 border-rose-500/20 text-rose-400";
-
-  return (
-    <div className={clsx(!isLast && "border-b border-border-subtle/40")}>
-      {/* ── Row header ── */}
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        aria-expanded={expanded}
-        className={clsx(
-          "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors cursor-pointer",
-          expanded ? "bg-white/[0.025]" : "hover:bg-white/[0.015]",
-        )}
-      >
-        {/* Tool icon */}
-        <div
-          className={clsx(
-            "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border",
-            iconColor,
-          )}
-        >
-          <Icon className="w-4 h-4" />
-        </div>
-
-        {/* Tool name */}
-        <span className="flex-1 text-[11px] font-bold uppercase tracking-wider text-foreground min-w-0 truncate">
-          {fmtTool(toolName)}
-        </span>
-
-        {/* Timing */}
-        {timingMs !== null && (
-          <span className="flex items-center gap-1 text-[10px] font-mono text-foreground/30 shrink-0">
-            <Clock className="w-3 h-3" />
-            {fmtMs(timingMs)}
-          </span>
-        )}
-
-        {/* Status badge */}
-        <Badge
-          variant={badgeCfg.variant}
-          className="font-mono font-bold uppercase tracking-widest text-[8px] px-1.5 py-0 shrink-0"
-        >
-          {badgeCfg.label}
-        </Badge>
-
-        {/* Confidence */}
-        {!isNa && (
-          <span
-            className={clsx(
-              "text-xs font-bold font-mono tabular-nums shrink-0 w-10 text-right",
-              confColor(confidence),
-            )}
-          >
-            {Math.round(confidence * 100)}%
-          </span>
-        )}
-
-        {/* Chevron */}
-        <div
-          className={clsx(
-            "p-1 rounded transition-all duration-200 shrink-0",
-            expanded ? "rotate-180 bg-white/5" : "",
-          )}
-        >
-          <ChevronDown className="w-3 h-3 text-foreground/30" />
-        </div>
-      </button>
-
-      {/* ── Expanded analysis ── */}
-      {expanded && (
-        <div className="px-4 pb-4 pl-[3.75rem]">
-          <div className="rounded-xl bg-black/25 border border-border-subtle/40 p-4 space-y-2">
-            <p className="text-[9px] font-mono font-bold uppercase tracking-widest text-foreground/30 mb-2">
-              Analysis Output
-            </p>
-            <ExpandableText text={summary} maxLen={220} />
-            {finding.metadata?.court_defensible === false && !isNa && (
-              <p className="text-[9px] text-rose-400/70 font-mono mt-1">
-                Not court-defensible — excluded from confidence weighting.
-              </p>
-            )}
-            {String(finding.metadata?.limitation_note || "") && (
-              <p className="text-[9px] text-amber-400/60 font-mono mt-1">
-                {String(finding.metadata?.limitation_note)}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Collapsible "N more findings" section ────────────────────────────────────
-function MoreFindingsToggle({
-  findings,
-  count,
-}: {
-  findings: AgentFindingDTO[];
-  count: number;
-}) {
-  const [open, setOpen] = useState(false);
-  const warnCount = findings.filter(
-    (f) => getFindingStatus(f) === "warning",
-  ).length;
-  const errCount = findings.filter(
-    (f) => getFindingStatus(f) === "error",
-  ).length;
-
-  return (
-    <div>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="w-full flex items-center justify-between px-4 py-2.5 border-t border-border-subtle/40 hover:bg-white/[0.015] transition-colors cursor-pointer group"
-      >
-        <div className="flex items-center gap-2.5">
-          <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-foreground/40 group-hover:text-foreground/60 transition-colors">
-            {open ? "Hide" : `+${count} more finding${count !== 1 ? "s" : ""}`}
-          </span>
-          {!open && (warnCount > 0 || errCount > 0) && (
-            <div className="flex items-center gap-1.5">
-              {warnCount > 0 && (
-                <span className="flex items-center gap-1 text-[9px] font-mono text-amber-400/70">
-                  <AlertTriangle className="w-2.5 h-2.5" />
-                  {warnCount}
-                </span>
-              )}
-              {errCount > 0 && (
-                <span className="flex items-center gap-1 text-[9px] font-mono text-rose-400/70">
-                  <XCircle className="w-2.5 h-2.5" />
-                  {errCount}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-        <div
-          className={clsx(
-            "p-1 rounded transition-all duration-200 shrink-0",
-            open && "rotate-180 bg-white/5",
-          )}
-        >
-          <ChevronDown className="w-3 h-3 text-foreground/30" />
-        </div>
-      </button>
-
-      {open && (
-        <div>
-          {findings.map((f, idx) => (
-            <ToolRow
-              key={f.finding_id || idx}
-              finding={f}
-              isLast={idx === findings.length - 1}
-              defaultExpanded={false}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Main AgentFindingCard ────────────────────────────────────────────────────
 export interface AgentFindingCardProps {
   agentId: string;
   initialFindings: AgentFindingDTO[];
@@ -534,6 +30,22 @@ export interface AgentFindingCardProps {
   phase?: "initial" | "deep";
   defaultOpen?: boolean;
 }
+
+const AGENT_META: Record<string, { name: string; role: string; color: string; icon: any }> = {
+  Agent1: { name: "Agent 01", role: "Visual Integrity", color: "cyan", icon: ShieldCheck },
+  Agent2: { name: "Agent 02", role: "Acoustic Forensic", color: "blue", icon: Activity },
+  Agent3: { name: "Agent 03", role: "Contextual Analysis", color: "amber", icon: Shield },
+  Agent4: { name: "Agent 04", role: "Temporal Analysis", color: "teal", icon: ShieldAlert },
+  Agent5: { name: "Agent 05", role: "Metadata Expert", color: "violet", icon: Cpu },
+};
+
+const COLOR_MAP: Record<string, { bg: string; border: string; text: string; glow: string }> = {
+  cyan: { bg: "bg-cyan-500/5", border: "border-cyan-500/20", text: "text-cyan-400", glow: "shadow-[0_0_30px_rgba(34,211,238,0.1)]" },
+  blue: { bg: "bg-blue-500/5", border: "border-blue-500/20", text: "text-blue-400", glow: "shadow-[0_0_30px_rgba(59,130,246,0.1)]" },
+  amber: { bg: "bg-amber-500/5", border: "border-amber-500/20", text: "text-amber-400", glow: "shadow-[0_0_30px_rgba(245,158,11,0.1)]" },
+  teal: { bg: "bg-teal-500/5", border: "border-teal-500/20", text: "text-teal-400", glow: "shadow-[0_0_30px_rgba(45,212,191,0.1)]" },
+  violet: { bg: "bg-violet-500/5", border: "border-violet-500/20", text: "text-violet-400", glow: "shadow-[0_0_30px_rgba(139,92,246,0.1)]" },
+};
 
 export function AgentFindingCard({
   agentId,
@@ -545,298 +57,136 @@ export function AgentFindingCard({
   defaultOpen = false,
 }: AgentFindingCardProps) {
   const [open, setOpen] = useState(defaultOpen);
-  const [showOther, setShowOther] = useState(false);
-  const meta = AGENT_META[agentId];
+  const meta = AGENT_META[agentId] || { name: agentId, role: "Unknown", color: "cyan", icon: ShieldX };
+  const theme = COLOR_MAP[meta.color];
 
-  const SKIP_TYPES = new Set([
-    "file type not applicable",
-    "format not supported",
-  ]);
   const findings = phase === "deep" ? deepFindings : initialFindings;
-  const otherFindings = phase === "deep" ? initialFindings : deepFindings;
+  const SKIP_TYPES = new Set(["file type not applicable", "format not supported"]);
+  const realFindings = findings.filter(f => !SKIP_TYPES.has(String(f.finding_type).toLowerCase()));
 
-  const realFindings = findings.filter(
-    (f) => !SKIP_TYPES.has(String(f.finding_type).toLowerCase()),
-  );
-  const otherReal = otherFindings.filter(
-    (f) => !SKIP_TYPES.has(String(f.finding_type).toLowerCase()),
-  );
-
-  const isSkipped =
-    realFindings.length === 0 &&
-    findings.some((f) => SKIP_TYPES.has(String(f.finding_type).toLowerCase()));
-  const hasErrors = realFindings.some((f) => getFindingStatus(f) === "error");
-  const allFailed =
-    hasErrors && realFindings.every((f) => getFindingStatus(f) === "error");
-
-  // ── Stats ──
-  const toolsTotal = metrics?.total_tools_called ?? realFindings.length;
-  const toolsOk =
-    metrics?.tools_succeeded ??
-    realFindings.filter((f) => getFindingStatus(f) === "success").length;
-  const errorRate = metrics?.error_rate ?? 0;
-  const confidence =
-    metrics?.confidence_score ??
-    realFindings.reduce(
-      (s, f) =>
-        s +
-        (f.raw_confidence_score ??
-          f.calibrated_probability ??
-          f.confidence_raw ??
-          0),
-      0,
-    ) / Math.max(realFindings.length, 1);
-
-  // ── Total run time from tool metadata ──
-  const totalMs = useMemo(() => {
-    const sum = realFindings.reduce((acc, f) => {
-      const t = extractTimingMs(f);
-      return acc + (t ?? 0);
-    }, 0);
-    return sum > 0 ? sum : null;
+  const isSkipped = realFindings.length === 0 && findings.some(f => SKIP_TYPES.has(String(f.finding_type).toLowerCase()));
+  const confidence = metrics?.confidence_score ?? 0;
+  
+  const totalTimingMs = useMemo(() => {
+    return realFindings.reduce((acc, f) => acc + ((f.metadata?.execution_time_ms as number) || 0), 0);
   }, [realFindings]);
 
-  // ── Verdict ──
-  const verdictKey = useMemo(() => {
-    if (isSkipped) return "NOT APPLICABLE";
-    if (allFailed) return "ANALYSIS FAILED";
-    if (realFindings.some((f) => getFindingStatus(f) === "warning"))
-      return "ANOMALIES DETECTED";
-    return "NO ANOMALIES";
-  }, [realFindings, isSkipped, allFailed]);
-
-  const verdictDisplay = getVerdictDisplay(verdictKey);
-  const statusBadge = deriveStatus(isSkipped, allFailed, hasErrors);
-
-  // ── Tool list split: first 3 visible, rest collapsed ──
-  const visibleFindings = realFindings.slice(0, VISIBLE_TOOLS_THRESHOLD);
-  const hiddenFindings = realFindings.slice(VISIBLE_TOOLS_THRESHOLD);
-
-  if (!meta) return null;
-  const Icon = meta.icon;
+  if (isSkipped) {
+    return (
+      <div className="rounded-3xl p-6 border border-white/[0.03] bg-white/[0.01] opacity-30 flex items-center justify-between group grayscale hover:grayscale-0 transition-all duration-700">
+        <div className="flex items-center gap-4">
+          <div className="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+            <meta.icon className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-xs font-black uppercase text-white/50 tracking-widest">{meta.name}</h3>
+            <p className="text-[10px] font-mono font-bold text-white/20 uppercase mt-0.5">{meta.role} · Protocol Skip</p>
+          </div>
+        </div>
+        <span className="text-[9px] font-black uppercase tracking-widest text-white/10 px-3 py-1 rounded-full border border-white/5">Not Applicable</span>
+      </div>
+    );
+  }
 
   return (
-    <SurfaceCard
-      className={clsx(
-        "p-0 overflow-hidden transition-all duration-300",
-        isSkipped && "opacity-50 grayscale",
-      )}
-    >
-      {/* ══ HEADER ══════════════════════════════════════════════════════════ */}
+    <div className={clsx(
+      "rounded-3xl overflow-hidden glass-panel border transition-all duration-500",
+      open ? "border-white/10 shadow-[0_32px_64px_rgba(0,0,0,0.4)]" : "border-white/5 shadow-none"
+    )}>
+      {/* Header Button */}
       <button
-        onClick={() => !isSkipped && setOpen((v) => !v)}
-        disabled={isSkipped}
-        aria-expanded={isSkipped ? undefined : open}
+        onClick={() => setOpen(!open)}
         className={clsx(
-          "w-full px-5 py-5 text-left transition-colors duration-200",
-          isSkipped ? "cursor-default" : "hover:bg-white/[0.02] cursor-pointer",
+          "w-full p-6 text-left transition-all relative overflow-hidden group",
+          open ? "bg-white/[0.04]" : "hover:bg-white/[0.02]"
         )}
+        aria-expanded={open}
+        aria-controls={`agent-content-${agentId}`}
       >
-        <div className="flex items-start justify-between gap-4">
-          {/* Left: icon + name/verdict/stats */}
-          <div className="flex items-start gap-4 min-w-0">
-            {/* Agent icon */}
-            <div
-              className={clsx(
-                "w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border mt-0.5 transition-all duration-300",
-                isSkipped
-                  ? "bg-slate-800/40 border-slate-700/30 text-slate-500"
-                  : `${meta.accentBg} ${meta.accentBorder} ${meta.accentColor}`,
-              )}
-            >
-              <Icon className="w-5 h-5" />
+        <div className="flex items-start justify-between gap-6 relative z-10">
+          <div className="flex items-center gap-5">
+            <div className={clsx(
+              "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border transition-transform duration-500",
+              theme.bg, theme.border, theme.text, open && "scale-105"
+            )}>
+              <meta.icon className="w-7 h-7" />
             </div>
-
-            <div className="min-w-0 space-y-1.5">
-              {/* Row 1: name + role + operational status + phase */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3
-                  className={clsx(
-                    "font-black text-sm font-heading uppercase tracking-tight",
-                    !isSkipped ? "text-white" : "text-white/40",
-                  )}
-                >
-                  {meta.name}
-                </h3>
-                <span className="text-[9px] font-mono text-foreground/30 tracking-tighter">
-                  {"// "}
-                  {meta.role}
-                </span>
-                <Badge
-                  variant={statusBadge.variant}
-                  className="font-mono font-bold uppercase tracking-widest text-[8px] px-1.5 py-0"
-                >
-                  {statusBadge.label}
-                </Badge>
-                <PhaseBadge phase={phase} />
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-black text-white uppercase font-heading tracking-tight">{meta.name}</h3>
+                <span className="text-[10px] text-white/20 font-bold uppercase tracking-widest truncate max-w-[120px]">{meta.role}</span>
               </div>
-
-              {/* Row 2: verdict — prominent, no italic */}
-              {!isSkipped && (
-                <p
-                  className={clsx(
-                    "text-base font-black tracking-tight leading-none",
-                    verdictDisplay.color,
-                  )}
-                >
-                  {verdictDisplay.label}
-                </p>
-              )}
-
-              {/* Row 3: tools ran · total time */}
-              {!isSkipped && (
-                <p className="text-[10px] font-mono text-foreground/35 flex items-center gap-1.5">
-                  <span className="text-foreground/55 font-bold">
-                    {toolsOk}/{toolsTotal}
-                  </span>
-                  <span>tools ran</span>
-                  {totalMs !== null && (
-                    <>
-                      <span className="text-foreground/20">·</span>
-                      <Clock className="w-2.5 h-2.5 text-foreground/30" />
-                      <span>{fmtMs(totalMs)}</span>
-                    </>
-                  )}
-                </p>
-              )}
+              <p className="text-[11px] font-mono font-bold text-white/30 truncate flex items-center gap-2">
+                {realFindings.length} Active Probe{realFindings.length > 1 ? 's' : ''} 
+                <span className="text-white/10">·</span>
+                <Clock className="w-3 h-3" /> {totalTimingMs >= 1000 ? `${(totalTimingMs/1000).toFixed(1)}s` : `${totalTimingMs}ms`}
+              </p>
             </div>
           </div>
 
-          {/* Right: confidence bar + error rate + chevron */}
-          {!isSkipped && (
-            <div className="flex flex-col items-end gap-2 shrink-0">
-              {/* Confidence bar */}
-              <ConfidenceBar value={confidence} />
-
-              {/* Error rate */}
-              <div className="flex items-center gap-1.5">
-                {errorRate > 0 ? (
-                  <span className="flex items-center gap-1 text-[9px] font-mono font-bold text-amber-400/70">
-                    <AlertTriangle className="w-2.5 h-2.5" />
-                    {Math.round(errorRate * 100)}% errors
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 text-[9px] font-mono font-bold text-emerald-400/50">
-                    <CheckCircle2 className="w-2.5 h-2.5" />
-                    No errors
-                  </span>
-                )}
-              </div>
-
-              {/* Chevron */}
-              <div
-                className={clsx(
-                  "p-1.5 rounded bg-white/5 border border-white/5 transition-all duration-300 mt-1",
-                  open &&
-                    "rotate-180 bg-amber-500/10 border-amber-500/30 text-amber-500",
-                )}
-              >
-                <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
+          <div className="flex flex-col items-end gap-3 text-right">
+            <ConfidenceBar value={confidence} />
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest border-white/5 px-3 py-0">
+                {phase === 'deep' ? 'DeepPass' : 'IntakeScan'}
+              </Badge>
+              <div className={clsx(
+                "p-2 rounded-xl border transition-all duration-500",
+                open ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-400 rotate-180" : "bg-white/5 border-white/10 text-white/20"
+              )}>
+                <ChevronDown className="w-4 h-4" />
               </div>
             </div>
-          )}
+          </div>
         </div>
       </button>
 
-      {/* ══ BODY ════════════════════════════════════════════════════════════ */}
-      {open && !isSkipped && (
-        <div className="border-t border-border-subtle">
-          {/* ── Agent narrative ── */}
-          {narrative ? (
-            <div className="px-5 pt-4 pb-2">
-              <div className="rounded-xl bg-black/30 border border-white/5 px-5 py-4">
-                <p className="text-[9px] font-mono font-bold uppercase tracking-[0.2em] text-foreground/30 mb-2 flex items-center gap-1.5">
-                  <Activity className="w-3 h-3 text-amber-500/60" />
-                  Agent Narrative
-                </p>
-                <p className="text-white/75 text-[13px] leading-relaxed font-medium">
-                  {narrative}
+      {/* Expandable Content */}
+      <div 
+        id={`agent-content-${agentId}`}
+        className={clsx(
+          "grid transition-all duration-500 ease-in-out",
+          open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="p-8 pt-2 space-y-8 animate-in fade-in slide-in-from-top-4 duration-700">
+            {/* Narrative Summary */}
+            {narrative && (
+              <div className="relative p-6 rounded-2xl bg-[#000]/30 border border-white/5 group">
+                <div className="flex items-center gap-2 mb-4">
+                  <Activity className="w-3.5 h-3.5 text-cyan-400/50" />
+                  <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/20">Agent Synthesis Report</span>
+                </div>
+                <p className="text-[13px] text-white/80 leading-relaxed font-medium">
+                  "{narrative}"
                 </p>
               </div>
-            </div>
-          ) : (
-            <div className="px-5 pt-4 pb-2">
-              <p className="text-foreground/20 text-[11px] font-mono italic">
-                Narrative synthesis pending…
-              </p>
-            </div>
-          )}
+            )}
 
-          {/* ── Tool findings ── */}
-          {realFindings.length > 0 && (
-            <div className="px-5 pt-2 pb-4 space-y-2">
-              <p className="text-[10px] text-foreground/35 font-mono font-bold uppercase tracking-widest flex items-center gap-2 px-1">
-                <Cpu className="w-3 h-3" aria-hidden="true" />
-                {phase === "deep" ? "Deep Analysis" : "Initial Analysis"}
-                <span className="text-foreground/20">—</span>
-                {realFindings.length} probe
-                {realFindings.length !== 1 ? "s" : ""}
-              </p>
-
-              <div className="rounded-xl border border-border-subtle overflow-hidden bg-surface-mid/40">
-                {/* First N tools always visible */}
-                {visibleFindings.map((f, idx) => (
-                  <ToolRow
-                    key={f.finding_id || idx}
-                    finding={f}
-                    isLast={
-                      idx === visibleFindings.length - 1 &&
-                      hiddenFindings.length === 0
-                    }
-                    defaultExpanded={idx === 0}
-                  />
+            {/* Findings List */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                <div className="flex items-center gap-2">
+                  <Cpu className="w-3 h-3 text-white/20" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white/20">Signal Timeline</span>
+                </div>
+                <span className="text-[9px] font-mono text-white/10 uppercase font-black">{realFindings.length} Total Signals</span>
+              </div>
+              
+              <div className="rounded-2xl border border-white/[0.04] bg-white/[0.01] overflow-hidden">
+                {realFindings.slice(0, 4).map((f, i) => (
+                  <ToolRow key={i} finding={f} isLast={i === realFindings.length - 1 || i === 3} />
                 ))}
-
-                {/* Collapse hidden tools behind toggle */}
-                {hiddenFindings.length > 0 && (
-                  <MoreFindingsToggle
-                    findings={hiddenFindings}
-                    count={hiddenFindings.length}
-                  />
+                
+                {realFindings.length > 4 && (
+                  <MoreFindingsToggle findings={realFindings.slice(4)} count={realFindings.length - 4} />
                 )}
               </div>
             </div>
-          )}
-
-          {/* ── See other phase findings ── */}
-          {otherReal.length > 0 && (
-            <div className="px-5 pb-5">
-              <button
-                onClick={() => setShowOther((v) => !v)}
-                className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-border-subtle/50 bg-white/[0.012] hover:bg-white/[0.025] transition-colors cursor-pointer group"
-                aria-expanded={showOther}
-              >
-                <span className="flex items-center gap-2 text-[10px] font-mono font-bold uppercase tracking-widest text-foreground/35 group-hover:text-foreground/55 transition-colors">
-                  <Layers className="w-3 h-3" />
-                  See {phase === "deep" ? "Initial" : "Deep"} Findings (
-                  {otherReal.length})
-                </span>
-                <div
-                  className={clsx(
-                    "p-1 rounded transition-all duration-200",
-                    showOther ? "rotate-180 bg-white/5" : "",
-                  )}
-                >
-                  <ChevronDown className="w-3 h-3 text-foreground/30" />
-                </div>
-              </button>
-
-              {showOther && (
-                <div className="mt-2 rounded-xl border border-border-subtle overflow-hidden bg-surface-mid/40">
-                  {otherReal.map((f, idx) => (
-                    <ToolRow
-                      key={f.finding_id || idx}
-                      finding={f}
-                      isLast={idx === otherReal.length - 1}
-                      defaultExpanded={false}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+          </div>
         </div>
-      )}
-    </SurfaceCard>
+      </div>
+    </div>
   );
 }

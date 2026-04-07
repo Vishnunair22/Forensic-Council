@@ -208,7 +208,7 @@ services:
     environment:
       - APP_NAME=forensic_council
       - APP_ENV=${APP_ENV:-development}
-      - DEBUG=${DEBUG:-true}
+      - DEBUG=${DEBUG:-false}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - API_HOST=0.0.0.0
       - API_PORT=8000
@@ -235,7 +235,7 @@ services:
       - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-llama-3.3-70b-versatile}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3-pro-preview}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.1-pro-preview}
       - GEMINI_FALLBACK_MODELS=${GEMINI_FALLBACK_MODELS:-gemini-2.5-pro,gemini-2.5-flash}
       - GEMINI_TIMEOUT=${GEMINI_TIMEOUT:-55.0}
       - EVIDENCE_STORAGE_PATH=/app/storage/evidence
@@ -302,7 +302,7 @@ services:
     environment:
       - APP_NAME=forensic_worker
       - APP_ENV=${APP_ENV:-development}
-      - DEBUG=${DEBUG:-true}
+      - DEBUG=${DEBUG:-false}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - REDIS_HOST=redis
       - REDIS_PORT=6379

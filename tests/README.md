@@ -1,6 +1,6 @@
 # Forensic Council — Test Suite Quick Reference
 
-**Version:** v1.1.1
+**Version:** v1.2.2
 
 ---
 
@@ -10,13 +10,11 @@
 tests/
 ├── fixtures/       ← Test media files (gitignored)
 ├── frontend/
-│   ├── unit/
-│   │   ├── lib/        api.test.ts, schemas_utils.test.ts
-│   │   ├── hooks/      useForensicData.test.ts
-│   │   └── components/ components.test.tsx
-│   ├── accessibility/  accessibility.test.tsx
-│   ├── integration/    page_flows.test.tsx
-│   └── e2e/            websocket_flow.test.ts
+│   ├── src/tests/
+│   │   ├── a11y.test.tsx    ← WCAG 2.1 AA (NVDA optimization)
+│   │   ├── ui.test.tsx      ← Modular component rendering
+│   │   └── integration/    ← End-to-end pipeline flows (optional)
+│   └── ...
 ├── backend/
 │   ├── conftest.py
 │   ├── unit/core/      test_auth.py, test_config_signing_schemas.py

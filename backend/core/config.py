@@ -429,9 +429,9 @@ class Settings(BaseSettings):
         default="gemini-2.5-pro",
         description=(
             "Primary Gemini model for vision analysis. "
-            "gemini-2.5-pro: current generation, high accuracy with thinking support. "
-            "gemini-2.5-flash: faster, lower cost, slightly reduced accuracy. "
-            "NOTE: gemini-1.5-* and gemini-2.0-* models are deprecated and will be rejected."
+            "gemini-2.5-pro: stable high accuracy with thinking support. "
+            "gemini-2.5-flash: fast mid-size model with thinking support. "
+            "NOTE: gemini-3.1-pro-preview recommended for deepest analysis."
         ),
     )
     gemini_fallback_models: str = Field(

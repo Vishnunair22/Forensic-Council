@@ -1,16 +1,8 @@
 "use client";
 
-"use client";
-
-/**
- * ErrorDisplay Component
- * ======================
- *
- * Displays error messages during investigation.
- * Shows error details and recovery options.
- */
-
 import { AlertCircle, RotateCcw, X } from "lucide-react";
+import { motion } from "framer-motion";
+import { clsx } from "clsx";
 
 interface ErrorDisplayProps {
   message: string;
@@ -26,50 +18,53 @@ export function ErrorDisplay({
   showRetry = true,
 }: ErrorDisplayProps) {
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
       role="alert"
       aria-live="assertive"
-      className="w-full max-w-2xl mx-auto"
+      className="w-full max-w-2xl mx-auto px-4"
     >
-      <div className="p-6 rounded-2xl bg-red-500/[0.06] border border-red-500/25 backdrop-blur-xl shadow-[0_0_40px_rgba(239,68,68,0.06),inset_0_1px_0_rgba(255,255,255,0.04)]">
-        {/* Header */}
-        <div className="flex items-start gap-4">
-          <div className="mt-1">
-            <AlertCircle
-              className="w-6 h-6 text-red-400 flex-shrink-0"
-              aria-hidden="true"
-            />
+      <div className="p-8 rounded-3xl glass-panel border-rose-500/20 bg-rose-500/[0.02] shadow-[0_32px_64px_rgba(239,68,68,0.1)]">
+        <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-rose-500/10 border border-rose-500/20 shrink-0">
+            <AlertCircle className="w-8 h-8 text-rose-400" aria-hidden="true" />
           </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-semibold text-red-300 mb-2">
-              Investigation Error
-            </h3>
-            <p className="text-sm text-red-200 mb-4 break-words">{message}</p>
+          
+          <div className="flex-1 text-center md:text-left space-y-4">
+            <div>
+              <h3 className="text-xl font-black text-white uppercase font-heading tracking-tight mb-2">
+                Investigation Protocol Violated
+              </h3>
+              <div className="h-0.5 w-12 bg-rose-500/30 rounded-full mx-auto md:mx-0 mb-4" />
+              <p className="text-sm font-medium text-rose-200/60 leading-relaxed break-words">
+                {message}
+              </p>
+            </div>
 
-            {/* Action Buttons */}
-            <div className="flex gap-3 flex-wrap">
+            <div className="flex flex-col sm:flex-row gap-4 pt-2 justify-center md:justify-start">
               {showRetry && onRetry && (
                 <button
                   onClick={onRetry}
-                  className="btn-pill-primary px-5 py-2"
+                  className="btn-pill-primary px-8 py-3 text-[10px] gap-2 bg-rose-500 text-white hover:bg-rose-400 shadow-[0_0_24px_rgba(239,68,68,0.3)] border-none"
                 >
                   <RotateCcw className="w-4 h-4" aria-hidden="true" />
-                  Try Again
+                  Request Re-scan
                 </button>
               )}
               {onDismiss && (
                 <button
                   onClick={onDismiss}
-                  className="btn-pill-secondary px-5 py-2"
+                  className="btn-pill-secondary px-8 py-3 text-[10px] gap-2 border-white/5 active:scale-95"
                 >
                   <X className="w-4 h-4" aria-hidden="true" />
-                  Dismiss
+                  Clear Alert
                 </button>
               )}
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

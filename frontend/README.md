@@ -2,7 +2,7 @@
 
 Next.js 15 frontend for the Forensic Council multi-agent forensic evidence analysis system.
 
-**Version:** v1.2.0 | **Framework:** Next.js 15 / React 19 | **Styling:** Tailwind CSS v4
+**Version:** v1.2.2 | **Framework:** Next.js 15 / React 19 | **Styling:** Tailwind CSS v4 (Glassmorphism)
 
 ---
 
@@ -40,30 +40,36 @@ frontend/
 │   │   ├── globals.css                    ← Tailwind v4 theme, glass panels, button utilities
 │   │   └── api/auth/demo/route.ts         ← Next.js server route for demo auto-login
 │   ├── components/
-│   │   ├── evidence/
-│   │   │   ├── HeaderSection.tsx          ← Keyboard-accessible logo nav header
-│   │   │   ├── FileUploadSection.tsx      ← Drag-and-drop file upload with MIME validation
-│   │   │   ├── AgentProgressDisplay.tsx   ← 3×2 agent card grid, live thinking, decision buttons
-│   │   │   ├── ErrorDisplay.tsx           ← Error state display with retry
-│   │   │   ├── HITLCheckpointModal.tsx    ← Accessible human-review decision modal
-│   │   │   └── index.ts                   ← Re-exports
 │   │   ├── ui/
+│   │   │   ├── Badge.tsx                  ← High-contrast forensic status badge
+│   │   │   ├── AnimatedWave.tsx           ← WebGL background with DPR-aware resizing
 │   │   │   ├── AgentIcon.tsx              ← Per-agent Lucide icon resolver
 │   │   │   ├── AgentResponseText.tsx      ← Expandable streaming text display
 │   │   │   ├── GlobalFooter.tsx           ← Academic disclaimer footer
 │   │   │   ├── HistoryDrawer.tsx          ← Sidebar session history
 │   │   │   ├── PageTransition.tsx         ← Fade/slide page transition wrapper
 │   │   │   ├── SurfaceCard.tsx            ← Reusable glass-panel card
-│   │   │   ├── dialog.tsx                 ← Radix UI accessible dialog primitive
 │   │   │   └── index.ts                   ← Re-exports
-│   │   ├── lightswind/
-│   │   │   ├── badge.tsx                  ← Status badge with dot/color variants
-│   │   │   └── animated-wave.tsx          ← Three.js animated wave background
+│   │   ├── result/
+│   │   │   ├── ResultLayout.tsx           ← Container for deep analysis reports
+│   │   │   ├── TimelineTab.tsx            ← Analysis waterfall with sub-second precision
+│   │   │   ├── MetricsPanel.tsx           ← Tabular per-agent confidence grid
+│   │   │   ├── ArbiterTab.tsx             ← Verdict and cryptographic verification
+│   │   │   └── AgentFindingSubComponents.tsx ← Tool-level cards and findings
+│   │   ├── evidence/
+│   │   │   ├── HeaderSection.tsx          ← Keyboard-accessible logo nav header
+│   │   │   ├── FileUploadSection.tsx      ← Drag-and-drop file upload with MIME validation
+│   │   │   ├── AgentCard.tsx              ← Live 3x2 forensic intelligence grid
+│   │   │   ├── AgentProgressDisplay.tsx   ← WebSocket-driven progress orchestrator
+│   │   │   ├── ErrorDisplay.tsx           ← Error state display with retry
+│   │   │   ├── HITLCheckpointModal.tsx    ← Accessible human-review decision modal
+│   │   │   └── index.ts                   ← Re-exports
 │   │   └── DevErrorOverlay.tsx            ← Dev-only error boundary overlay
 │   ├── hooks/
-│   │   ├── useSimulation.ts               ← WebSocket consumer: auth, message queue, resume
-│   │   ├── useForensicData.ts             ← Session history, report mapping, sessionStorage
-│   │   ├── useSound.ts                    ← Web Audio API subtle feedback sounds
+│   │   ├── useInvestigation.ts            ← Pipeline state, WebSocket, and HITL logic
+│   │   ├── useResult.ts                   ← Report fetching, mapping, and polling logic
+│   │   ├── useSimulation.ts               ← WebSocket protocol handler
+│   │   ├── useSound.ts                    ← Web Audio API feedback sounds
 │   │   ├── use-mobile.ts                  ← Mobile viewport detection
 │   │   └── use-toast.ts                   ← Toast notification hook
 │   ├── lib/

@@ -21,9 +21,8 @@ COPY package.json package-lock.json ./
 
 # Use npm ci with legacy-peer-deps for reproducible builds.
 # React 19 introduces stricter peer dependency enforcement. Several transitive
-# dependencies (e.g. older Radix UI packages, lightswind) have not yet published
-# React 19-compatible peer ranges. Once upstream releases resolve these conflicts,
-# remove --legacy-peer-deps. Tracked: check `npm ls react react-dom` periodically.
+# dependencies (e.g. Radix UI primitives) may not yet have published updated
+# peer ranges. Once upstream releases resolve these, remove --legacy-peer-deps.
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --legacy-peer-deps --prefer-offline --no-audit --no-fund && \
     npm cache clean --force && \

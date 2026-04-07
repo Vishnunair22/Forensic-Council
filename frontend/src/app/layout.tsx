@@ -4,7 +4,6 @@ import { GlobalNavbar } from "@/components/ui/GlobalNavbar";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { GlassBackground } from "@/components/ui/GlassBackground";
 import { RouteExperience } from "@/components/ui/RouteExperience";
-import { DevErrorProvider } from "@/components/DevErrorOverlay";
 import { Toaster } from "@/components/ui/Toaster";
 import "./globals.css";
 
@@ -54,7 +53,7 @@ export default function RootLayout({
         </a>
         {/* Main content takes up available space */}
         <div className="flex-1 relative z-10" id="main-content">
-          <DevErrorProvider>{children}</DevErrorProvider>
+          {children}
         </div>
 
         {/* Global Footer anchors to the bottom of the layout */}

@@ -133,9 +133,9 @@ class AgentFactory:
             "challenge_context": challenge_context,
         }
 
-    def _get_agent_class(self, agent_id: str) -> type:
+    def _get_agent_class(self, agent_id: str) -> type[Agent1Image | Agent2Audio | Agent3Object | Agent4Video | Agent5Metadata]:
         """Get the agent class for a given agent ID."""
-        agent_map = {
+        agent_map: dict[str, type[Agent1Image | Agent2Audio | Agent3Object | Agent4Video | Agent5Metadata]] = {
             "Agent1": Agent1Image,
             "Agent2": Agent2Audio,
             "Agent3": Agent3Object,
@@ -324,24 +324,6 @@ class ForensicCouncilPipeline:
     ) -> ForensicReport:
         """
         Run a complete forensic investigation on evidence.
-
-        Steps:
-        1. Ingest evidence → EvidenceArtifact (with hash)
-        2. Create session_id UUID (use provided if available)
-        3. Instantiate all 5 agents with shared evidence artifact and session
-        4. Run agents concurrently (asyncio.gather) — each runs full ReAct loop
-        5. Collect all AgentLoopResults
-        6. Pass to CouncilArbiter.deliberate()
-        7. Return signed ForensicReport
-
-        Args:
-            evidence_file_path: Path to the evidence file
-            case_id: Case identifier
-            investigator_id: ID of the investigator running this analysis
-            session_id: Optional existing session_id to use (for continued sessions)
-
-        Returns:
-            Signed ForensicReport with all findings
         """
         logger.info(
             "Starting forensic investigation",
@@ -350,25 +332,40 @@ class ForensicCouncilPipeline:
             evidence_path=evidence_file_path,
         )
 
-        with _tracer.start_as_current_span("pipeline.run_investigation") as span:
-            span.set_attribute("case_id", case_id)
-            span.set_attribute("investigator_id", investigator_id)
-            span.set_attribute("evidence_path", evidence_file_path)
-
         # Step 1 & 2: Create session and ingest evidence
-        # Use provided session_id if available, otherwise create new one
-        if session_id is None:
-            session_id = uuid4()
+        session_id = session_id or uuid4()
         self._case_id = case_id
         self._started_at = datetime.now(timezone.utc).isoformat()
-        self._degradation_flags: list[str] = []
-        # Issue 6.1: Use asyncio monotonic clock consistently for all deadline
-        # arithmetic so clock adjustments (NTP slew) cannot skew the budget.
+        self._degradation_flags = []
+        
         loop = asyncio.get_event_loop()
-        self._investigation_deadline = (
-            loop.time() + self.config.investigation_timeout
-        )
+        self._investigation_deadline = loop.time() + self.config.investigation_timeout
 
+        try:
+            await self._run_investigation_core(
+                evidence_file_path, case_id, investigator_id, original_filename, session_id
+            )
+            if self._error:
+                raise RuntimeError(self._error)
+            
+            if self._final_report is None:
+                raise RuntimeError("Investigation finished but no report was generated")
+                
+            return self._final_report
+
+        finally:
+            # Ensure working memory is cleared even on failure
+            await self._clear_working_memory_for_session(session_id)
+
+    async def _run_investigation_core(
+        self,
+        evidence_file_path: str,
+        case_id: str,
+        investigator_id: str,
+        original_filename: str | None,
+        session_id: UUID,
+    ) -> None:
+        """Core logic for the investigation pipeline."""
         await self._initialize_components(session_id)
 
         # Create evidence artifact
@@ -379,11 +376,9 @@ class ForensicCouncilPipeline:
             original_filename=original_filename,
         )
 
-        # Set evidence artifact in agent factory for challenge loops
+        # Set evidence artifact in factory and bus
         if hasattr(self, "agent_factory"):
             self.agent_factory.set_evidence_artifact(evidence_artifact)
-
-        # Set evidence artifact in inter-agent bus for on-demand agent creation
         if hasattr(self, "inter_agent_bus"):
             self.inter_agent_bus._evidence_artifact = evidence_artifact
             self.inter_agent_bus._session_id = session_id
@@ -396,13 +391,13 @@ class ForensicCouncilPipeline:
             agent_ids=["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"],
         )
 
-        # Step 3 & 4: Instantiate and run all agents concurrently
+        # Run agents concurrently
         agent_results = await self._run_agents_concurrent(
             evidence_artifact=evidence_artifact,
             session_id=session_id,
         )
 
-        # Step 5: Mark all agents as completed
+        # Mark all agents as completed
         for aid in ["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"]:
             await self.session_manager.update_agent_status(
                 session_id=session_id,
@@ -410,14 +405,38 @@ class ForensicCouncilPipeline:
                 status=SessionStatus.COMPLETED,
             )
 
-        # Step 6: Run arbiter deliberation
-        logger.info("Running council arbiter deliberation")
+        # Deliberate and sign report
+        arbiter_results = self._normalize_agent_results(agent_results)
+        report = await self._run_deliberation(arbiter_results, case_id, session_id)
+        
+        # Enrich and sign report
+        await self._enrich_report(report, session_id, evidence_artifact, agent_results)
+        self._final_report = await self.arbiter.sign_report(report)
 
-        # Build agent results dict for arbiter
+        # Finalize session
+        await self.session_manager.set_final_report(
+            session_id=session_id,
+            report_id=self._final_report.report_id,
+        )
+
+        if self.custody_logger:
+            await self.custody_logger.log_entry(
+                entry_type=EntryType.REPORT_SIGNED,
+                agent_id="Arbiter",
+                session_id=session_id,
+                content={
+                    "report_id": str(self._final_report.report_id),
+                    "total_findings": sum(
+                        len(f) for f in self._final_report.per_agent_findings.values()
+                    ),
+                },
+            )
+
+    def _normalize_agent_results(self, agent_results: list[AgentLoopResult]) -> dict[str, Any]:
+        """Normalize agent findings for the arbiter."""
         arbiter_results = {}
         for result in agent_results:
             if result.error is None:
-                # Normalize findings to dictionaries to prevent AttributeError in arbiter
                 normalized_findings = []
                 for f in result.findings:
                     if hasattr(f, "model_dump"):
@@ -432,121 +451,64 @@ class ForensicCouncilPipeline:
                     "reflection_report": result.reflection_report,
                     "react_chain": result.react_chain,
                 }
+        return arbiter_results
 
-        # Run deliberation with a hard 90-second ceiling so the pipeline never
-        # hangs indefinitely if Groq is down. If it times out, regenerate the
-        # report without LLM synthesis (template fallback path in the arbiter).
-        with _tracer.start_as_current_span("pipeline.arbiter_deliberation") as span:
-            span.set_attribute("case_id", case_id)
-            span.set_attribute("agent_count", len(arbiter_results))
-            _arbiter_start = time.perf_counter()
-            try:
-                report = await asyncio.wait_for(
-                    self.arbiter.deliberate(arbiter_results, case_id=case_id),
-                    timeout=90.0,
-                )
-                span.set_attribute("verdict", str(report.overall_verdict))
-            except asyncio.TimeoutError:
-                logger.warning(
-                    "arbiter.deliberate() exceeded 90 s — regenerating with LLM disabled",
-                    session_id=str(session_id),
-                )
-                self._degradation_flags.append(
-                    "Arbiter LLM synthesis timed out after 90 s — report narrative generated "
-                    "from templates, not AI synthesis. Verdict and findings are unaffected."
-                )
-                report = await asyncio.wait_for(
-                    self.arbiter.deliberate(
-                        arbiter_results, case_id=case_id, use_llm=False
-                    ),
-                    timeout=30.0,
-                )
-                span.set_attribute("verdict", str(report.overall_verdict))
-                span.set_attribute("timeout", True)
-
-        _arbiter_elapsed = time.perf_counter() - _arbiter_start
+    async def _run_deliberation(
+        self, arbiter_results: dict[str, Any], case_id: str, session_id: UUID
+    ) -> ForensicReport:
+        """Run council arbiter deliberation with timeout and fallback."""
+        logger.info("Running council arbiter deliberation")
+        _start = time.perf_counter()
+        try:
+            report = await asyncio.wait_for(
+                self.arbiter.deliberate(arbiter_results, case_id=case_id),
+                timeout=90.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("arbiter.deliberate() timed out - falling back to template")
+            self._degradation_flags.append(
+                "Arbiter LLM synthesis timed out - report generated from templates."
+            )
+            report = await asyncio.wait_for(
+                self.arbiter.deliberate(arbiter_results, case_id=case_id, use_llm=False),
+                timeout=30.0,
+            )
+        
         logger.info(
             "Arbiter deliberation complete",
             session_id=str(session_id),
-            elapsed_seconds=round(_arbiter_elapsed, 2),
+            elapsed_seconds=round(time.perf_counter() - _start, 2),
             verdict=report.overall_verdict,
-            findings_count=sum(len(f) for f in report.per_agent_findings.values()),
         )
-        if _arbiter_elapsed > 120:
-            logger.warning(
-                "Arbiter deliberation took unusually long",
-                elapsed_seconds=round(_arbiter_elapsed, 2),
-                session_id=str(session_id),
-            )
+        return report
 
-        # ── Detect Gemini degradation ────────────────────────────────────────
-        # If Gemini is configured but all gemini_vision findings are errors,
-        # or no gemini_vision findings appear at all, flag degradation.
-        gemini_key = self.config.gemini_api_key
-        is_gemini_configured = bool(gemini_key) and "your_gemini_key" not in (
-            gemini_key or ""
-        )
-        if is_gemini_configured:
-            gemini_findings = report.gemini_vision_findings
-            if not gemini_findings:
-                self._degradation_flags.append(
-                    "Gemini vision API was configured but produced no findings — "
-                    "deep-pass agents (1, 3, 5) fell back to local OpenCV analysis. "
-                    "Possible causes: invalid API key, model quota exceeded, network error."
-                )
-            else:
-                # Check if ALL Gemini findings are errors (none succeeded)
-                all_gemini_errored = all(
-                    isinstance(gf, dict)
-                    and (
-                        gf.get("error")
-                        or gf.get("metadata", {}).get("error")
-                        or gf.get("status") == "INCOMPLETE"
-                    )
-                    for gf in gemini_findings
-                )
-                if all_gemini_errored:
-                    error_msgs = [
-                        gf.get("error")
-                        or gf.get("metadata", {}).get("error", "unknown")
-                        for gf in gemini_findings
-                        if isinstance(gf, dict)
-                    ]
-                    first_err = str(error_msgs[0])[:200] if error_msgs else "unknown"
-                    self._degradation_flags.append(
-                        f"Gemini vision API returned errors for all {len(gemini_findings)} analysis(es): "
-                        f"{first_err}. Deep-pass agents used local OpenCV fallback."
-                    )
+    async def _enrich_report(
+        self,
+        report: ForensicReport,
+        session_id: UUID,
+        artifact: EvidenceArtifact,
+        agent_results: list[AgentLoopResult],
+    ) -> None:
+        """Enrich the report with metadata, logs, and degradation flags."""
+        # 1. Gemini degradation detection
+        self._detect_gemini_degradation(report)
 
-        # Add additional fields to report (each capped at 15 s to prevent hangs
-        # when external infra is slow or unreachable after the arbiter finishes).
-        try:
-            report.case_linking_flags = await asyncio.wait_for(
-                self._collect_case_linking_flags(session_id, evidence_artifact),
-                timeout=15.0,
-            )
-        except asyncio.TimeoutError:
-            logger.warning("Case linking flags collection timed out")
-            report.case_linking_flags = []
+        # 2. Collect metadata and logs with 15s timeouts
+        tasks = [
+            self._collect_case_linking_flags(session_id, artifact),
+            self._get_custody_log(session_id),
+            self._get_version_trees(artifact.artifact_id),
+        ]
+        results = await asyncio.gather(*[asyncio.wait_for(t, timeout=15.0) for t in tasks], return_exceptions=True)
+        
+        report.case_linking_flags = results[0] if not isinstance(results[0], (Exception, asyncio.TimeoutError)) else []
+        report.chain_of_custody_log = results[1] if not isinstance(results[1], (Exception, asyncio.TimeoutError)) else []
+        report.evidence_version_trees = results[2] if not isinstance(results[2], (Exception, asyncio.TimeoutError)) else []
 
-        try:
-            report.chain_of_custody_log = await asyncio.wait_for(
-                self._get_custody_log(session_id),
-                timeout=15.0,
-            )
-        except asyncio.TimeoutError:
-            logger.warning("Custody log fetch timed out")
-            report.chain_of_custody_log = []
+        if any(isinstance(r, (Exception, asyncio.TimeoutError)) for r in results):
+            logger.warning("One or more enrichment tasks failed or timed out")
 
-        try:
-            report.evidence_version_trees = await asyncio.wait_for(
-                self._get_version_trees(evidence_artifact.artifact_id),
-                timeout=15.0,
-            )
-        except asyncio.TimeoutError:
-            logger.warning("Version trees fetch timed out")
-            report.evidence_version_trees = []
-
+        # 3. Add agent-specific fields
         report.react_chains = {
             r.agent_id: r.react_chain for r in agent_results if r.error is None
         }
@@ -554,94 +516,55 @@ class ForensicCouncilPipeline:
             r.agent_id: r.reflection_report for r in agent_results if r.error is None
         }
 
-        # Verify chain-of-custody integrity before signing the report.
-        # A broken chain means an entry was tampered with after being written —
-        # this is a critical integrity failure that must be disclosed.
-        if self.custody_logger and self.custody_logger._postgres is not None:
-            try:
-                chain_report = await asyncio.wait_for(
-                    self.custody_logger.verify_chain(session_id),
-                    timeout=15.0,
-                )
-                if not chain_report.valid:
-                    logger.error(
-                        "Chain-of-custody integrity check FAILED before report signing",
-                        session_id=str(session_id),
-                        broken_at=str(chain_report.broken_at),
-                        reason=chain_report.broken_reason,
-                    )
-                    self._degradation_flags.append(
-                        f"CRITICAL: Chain-of-custody integrity verification FAILED "
-                        f"(entry {chain_report.broken_at}: {chain_report.broken_reason}). "
-                        "This report's evidential chain may have been tampered with."
-                    )
-                else:
-                    logger.info(
-                        "Chain-of-custody integrity verified",
-                        session_id=str(session_id),
-                        total_entries=chain_report.total_entries,
-                    )
-            except Exception as _verify_err:
-                logger.warning(
-                    "Chain-of-custody verification raised an exception",
-                    error=str(_verify_err),
-                    session_id=str(session_id),
-                )
-                self._degradation_flags.append(
-                    f"Chain-of-custody verification could not complete: {_verify_err}"
-                )
-        else:
-            self._degradation_flags.append(
-                "Chain-of-custody verification skipped — PostgreSQL unavailable."
-            )
+        # 4. Chain-of-custody verification
+        await self._verify_custody_integrity(session_id)
 
-        # Propagate all pipeline-level degradation flags into the report BEFORE signing
-        # so they are covered by the cryptographic signature.
+        # 5. Apply degradation flags
         if self._degradation_flags:
             report.degradation_flags.extend(self._degradation_flags)
-            logger.warning(
-                "Report contains degradation flags",
-                session_id=str(session_id),
-                flag_count=len(self._degradation_flags),
-                flags=self._degradation_flags,
+
+    def _detect_gemini_degradation(self, report: ForensicReport) -> None:
+        """Detect and flag Gemini API degradation."""
+        gemini_key = self.config.gemini_api_key
+        if not gemini_key or "your_gemini_key" in gemini_key:
+            return
+
+        gemini_findings = report.gemini_vision_findings
+        if not gemini_findings:
+            self._degradation_flags.append(
+                "Gemini vision API produced no findings - deep-pass agents fell back to local analysis."
+            )
+        elif all(self._is_gemini_error(f) for f in gemini_findings):
+            self._degradation_flags.append(
+                "Gemini vision API returned errors for all analyses - deep-pass agents used local fallback."
             )
 
-        # Resign report after adding all fields — broadcast final step if hook set
-        _sign_step_hook = getattr(self.arbiter, "_step_hook", None)
-        if _sign_step_hook is not None:
-            try:
-                await _sign_step_hook("Signing cryptographic hash…")
-            except Exception as e:
-                logger.debug("Sign step hook failed", error=str(e))
-        report = await self.arbiter.sign_report(report)
-
-        # Step 7: Return signed report
-        await self.session_manager.set_final_report(
-            session_id=session_id,
-            report_id=report.report_id,
+    @staticmethod
+    def _is_gemini_error(finding: Any) -> bool:
+        """Helper to determine if a Gemini finding is an error."""
+        if not isinstance(finding, dict):
+            return False
+        return bool(
+            finding.get("error")
+            or finding.get("metadata", {}).get("error")
+            or finding.get("status") == "INCOMPLETE"
         )
 
-        # Log completion
-        if self.custody_logger:
-            await self.custody_logger.log_entry(
-                entry_type=EntryType.REPORT_SIGNED,
-                agent_id="Arbiter",
-                session_id=session_id,
-                content={
-                    "report_id": str(report.report_id),
-                    "total_findings": sum(
-                        len(f) for f in report.per_agent_findings.values()
-                    ),
-                },
-            )
+    async def _verify_custody_integrity(self, session_id: UUID) -> None:
+        """Verify chain-of-custody integrity."""
+        if not (self.custody_logger and self.custody_logger._postgres):
+            self._degradation_flags.append("Chain-of-custody verification skipped - DB unavailable.")
+            return
 
-        logger.info(
-            "Investigation complete",
-            report_id=str(report.report_id),
-            session_id=str(session_id),
-        )
-
-        return report
+        try:
+            chain_report = await asyncio.wait_for(self.custody_logger.verify_chain(session_id), timeout=15.0)
+            if not chain_report.valid:
+                self._degradation_flags.append(
+                    f"CRITICAL: Custody integrity FAILED (entry {chain_report.broken_at}). Report may be tampered."
+                )
+        except Exception as e:
+            logger.warning("Custody verification failed", error=str(e))
+            self._degradation_flags.append(f"Custody verification could not complete: {e}")
 
     async def _clear_working_memory_for_session(self, session_id: UUID) -> None:
         """Issue 14.3: Clean up working memory (Redis + WAL) for all agents after session ends."""

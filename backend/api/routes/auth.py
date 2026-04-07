@@ -402,8 +402,6 @@ async def logout(
             # Get token expiry to set blacklist TTL
             token_data = await decode_token(token)
             if token_data.exp:
-                import time
-
                 expires_in = int(token_data.exp.timestamp() - time.time())
                 if expires_in > 0:
                     await blacklist_token(token, expires_in)

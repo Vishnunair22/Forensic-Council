@@ -2,7 +2,8 @@
 
 import { useState, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { clsx } from "clsx";
 
 export function GlobalNavbar() {
   const router = useRouter();
@@ -29,42 +30,37 @@ export function GlobalNavbar() {
   return (
     <nav
       aria-label="Main navigation"
-      className="fixed top-0 left-0 right-0 z-[200] flex items-center justify-between px-6 py-3 border-b border-white/[0.05] bg-[#080C14]/95"
-      style={{ backdropFilter: "blur(20px)" }}
+      className="fixed top-0 left-0 right-0 z-[200] flex items-center justify-between px-10 py-6 border-b border-white/[0.03] bg-background/40 backdrop-blur-3xl transition-all duration-500"
     >
       <button
         type="button"
-        className="flex items-center gap-3 cursor-pointer"
+        className="flex items-center gap-5 cursor-pointer focus-visible:outline-none group"
         onClick={handleLogoClick}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         aria-label="Return to Forensic Council home"
       >
         <motion.div
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white"
+          className="w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-black text-black shadow-[0_0_30px_rgba(34,211,238,0.2)]"
           style={{
-            background: "linear-gradient(135deg, #0891b2 0%, #22d3ee 100%)",
+            background: "linear-gradient(135deg, #22d3ee 0%, #0891b2 100%)",
           }}
-          animate={
-            isHovered
-              ? { scale: [1, 1.08, 1], rotate: [0, -3, 3, 0] }
-              : { scale: 1, rotate: 0 }
-          }
+          whileHover={{ scale: 1.05, rotate: 5 }}
+          whileTap={{ scale: 0.95 }}
           transition={{ duration: 0.4, ease: "easeOut" }}
           aria-hidden="true"
         >
           FC
         </motion.div>
 
-        <div className="flex flex-col items-start overflow-hidden">
-          <span className="text-[14px] font-bold uppercase tracking-[0.15em] text-white">
-            Forensic Council
-          </span>
-        </div>
+        <span className="text-[14px] font-black uppercase tracking-[0.4em] text-white group-hover:text-cyan-400 transition-colors duration-500">
+          Forensic Council
+        </span>
       </button>
 
-      {/* Navbar empty on the right as per "nothing else" requirement */}
-      <div className="flex items-center gap-3" />
+      <div className="flex items-center gap-6">
+        {/* Navigation could go here later */}
+      </div>
     </nav>
   );
 }
