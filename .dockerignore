@@ -50,17 +50,6 @@ playwright/.cache/
 Thumbs.db
 
 # IDE / Editor
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Kilo
-.kilo/
-.opencode/
-.kilocode/
-
 # Storage
 storage/evidence/
 storage/keys/

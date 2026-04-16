@@ -6,18 +6,19 @@ import { X, UploadCloud, FileImage, FileVideo, FileAudio, FileText } from "lucid
 
 const overlayVariants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.25 } },
+  visible: { opacity: 1, transition: { duration: 0.2 } },
   exit: { opacity: 0, transition: { duration: 0.2 } },
 };
 
 const scaleIn = {
-  hidden: { opacity: 0, scale: 0.85 },
+  hidden: { opacity: 0, scale: 0.95, y: -10 },
   visible: {
     opacity: 1,
     scale: 1,
-    transition: { duration: 0.3, ease: [0.34, 1.56, 0.64, 1] as const },
+    y: 0,
+    transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] as const },
   },
-  exit: { opacity: 0, scale: 0.85, transition: { duration: 0.2 } },
+  exit: { opacity: 0, scale: 0.95, y: -10, transition: { duration: 0.2 } },
 };
 
 interface UploadModalProps {
@@ -79,8 +80,8 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
 
   return (
     <motion.div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(12px)" }}
+      className="fixed top-0 left-0 w-full h-full z-[9999] flex items-center justify-center p-4 backdrop-blur-2xl"
+      style={{ background: "rgba(0,0,0,0.75)" }}
       variants={overlayVariants}
       initial="hidden"
       animate="visible"
@@ -99,57 +100,48 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
         exit="exit"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="rounded-3xl overflow-hidden glass-panel">
-          {/* Header accent bar */}
-          <div
-            className="relative w-full h-20 origin-top"
-            style={{
-              background:
-                "linear-gradient(135deg, rgba(34,211,238,0.15) 0%, rgba(79,70,229,0.12) 100%)",
-              clipPath: "polygon(0 0, 50% 100%, 100% 0)",
-              transform: "rotateX(180deg)",
-            }}
-          />
-
-          <div className="relative p-10 pt-6 -mt-2">
-            <div className="absolute -top-24 -right-24 w-48 h-48 bg-cyan-500/10 blur-[80px] pointer-events-none" />
+        <div className="rounded-2xl overflow-hidden glass-panel shadow-2xl relative">
+          <div className="scan-line-overlay opacity-30 pointer-events-none" />
+          <div className="relative p-10 z-20">
             <button
               onClick={onClose}
-              className="absolute top-6 right-6 p-2 rounded-xl cursor-pointer hover:bg-white/5 transition-colors border border-white/5"
+              className="absolute top-8 right-8 p-2 rounded-xl cursor-pointer hover:bg-white/[0.05] transition-colors border border-white/[0.05] z-30"
               aria-label="Close upload modal"
             >
-              <X className="w-5 h-5 text-white/40" />
+              <X className="w-5 h-5 text-white/30" />
             </button>
 
             <motion.div
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15, duration: 0.35 }}
+              transition={{ delay: 0.1, duration: 0.4 }}
             >
-              <div className="mb-8">
-                <h3 id="upload-modal-title" className="text-2xl font-bold text-white tracking-tight">
-                  Upload Evidence
+              <div className="mb-10 text-center flex flex-col items-center">
+                <h3 id="upload-modal-title" className="text-3xl font-black text-white tracking-tight font-heading">
+                  Ingestion Gateway
                 </h3>
+                <p className="text-sky-400/50 text-[11px] font-mono font-bold uppercase tracking-[0.25em] mt-2 text-center">
+                  Secure Forensic Intake
+                </p>
               </div>
 
               <motion.div
                 role="button"
                 tabIndex={0}
                 aria-label="Upload evidence — click or press Enter to browse, or drag and drop a file"
-                className="group relative rounded-2xl border-2 border-dashed p-12 text-center cursor-pointer overflow-hidden"
+                className="group relative rounded-3xl border p-14 text-center cursor-pointer overflow-hidden transition-all duration-500"
                 style={{
                   borderColor: isDragging
-                    ? "rgba(34,211,238,0.5)"
-                    : "rgba(255,255,255,0.08)",
+                    ? "rgba(34,211,238,0.4)"
+                    : "rgba(255,255,255,0.03)",
                   background: isDragging
-                    ? "rgba(34,211,238,0.05)"
-                    : "rgba(255,255,255,0.02)",
+                    ? "rgba(34,211,238,0.03)"
+                    : "rgba(255,255,255,0.01)",
                 }}
                 whileHover={{
-                  borderColor: "rgba(34,211,238,0.3)",
-                  background: "rgba(34,211,238,0.03)",
+                  borderColor: "rgba(34,211,238,0.25)",
+                  background: "rgba(34,211,238,0.02)",
                 }}
-                transition={{ duration: 0.2 }}
                 onDragOver={(e) => {
                   e.preventDefault();
                   setIsDragging(true);
@@ -169,22 +161,22 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
                   }
                 }}
               >
-                <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none duration-700" />
                 <div className="relative z-10">
                   <motion.div
-                    className="w-16 h-16 rounded-2xl bg-cyan-500/10 flex items-center justify-center mx-auto mb-5 border border-cyan-500/20"
-                    whileHover={{ scale: 1.1 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                    className="w-20 h-20 rounded-2xl bg-cyan-500/[0.03] flex items-center justify-center mx-auto mb-6 border border-cyan-500/10"
+                    whileHover={{ scale: 1.1, rotate: 5 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 10 }}
                   >
-                    <UploadCloud className="w-8 h-8 text-cyan-400" />
+                    <UploadCloud className="w-10 h-10 text-cyan-400/50" />
                   </motion.div>
-                  <p className="text-lg font-semibold text-white mb-2">
-                    Drop file here or{" "}
-                    <span className="text-cyan-400 underline underline-offset-4 decoration-cyan-400/30">
+                  <p className="text-xl font-bold text-white/90 mb-3 tracking-tight">
+                    Drop evidence here or{" "}
+                    <span className="text-cyan-400/80 underline underline-offset-8 decoration-cyan-400/20 hover:text-cyan-400 transition-colors">
                       browse
                     </span>
                   </p>
-                  <div className="flex items-center justify-center gap-3 opacity-40">
+                  <div className="flex items-center justify-center gap-4 opacity-20 group-hover:opacity-40 transition-opacity duration-700">
                     <FileImage className="w-4 h-4" />
                     <FileVideo className="w-4 h-4" />
                     <FileAudio className="w-4 h-4" />
@@ -204,16 +196,16 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
                 />
               </motion.div>
 
-              <div className="mt-8 flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-500" />
-                  <p className="text-sm font-medium text-white/60">
-                    Supported: Image, Video, Audio, Document
+              <div className="mt-10 flex flex-col items-center gap-3 px-2 text-center">
+                <div className="flex items-center justify-center gap-3">
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 shadow-[0_0_8px_rgba(34,211,238,0.5)]" />
+                  <p className="text-[11px] font-mono font-bold text-white/40 uppercase tracking-widest">
+                    Supported: IMG, VID, AUD, DOC
                   </p>
                 </div>
-                <p className="text-xs text-white/30 ml-3.5">
+                <p className="text-[10px] text-white/20 font-mono tracking-tight leading-relaxed max-w-[280px] mx-auto">
                   Maximum file size: 50 MB &middot; SHA-256 integrity check
-                  performed automatically.
+                  performed automatically on ingestion.
                 </p>
               </div>
             </motion.div>

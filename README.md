@@ -73,6 +73,16 @@ docker compose -f infra/docker-compose.yml --env-file .env up --build
 
 ## Changelog
 
+**v1.3.0 (2026-04-09)** — Production Hardening & Structural Cleanup:
+- **Bug fix**: Corrected `from infra.logging import get_logger` → `from core.structured_logging import get_logger` in `Agent2Audio` and `Agent4Video` (caused `ImportError` at runtime).
+- **Bug fix**: Initialized `redis = None` before the try block in `hitl.py` to prevent `NameError` on Redis failure.
+- **Infra**: Fixed `CALIBRATION_MODELS_PATH` in docker-compose — now correctly points to `/app/storage/calibration_models` (COPYd path) instead of the empty named volume.
+- **Storage**: Merged all 8 agent calibration models into `backend/storage/calibration_models/` (deep agent models were missing). Removed redundant root-level `storage/` directory.
+- **Cleanup**: Relocated `AGENTS.md` to `docs/` and version files to sub-folders. Purged all AI tool metadata (`.cursor`, `.claude`, `.agent`) from the root directory.
+- **Configuration**: Synchronized `.env.example` with modern variables and optimized CI/CD workflow to use file-based versioning.
+- **Frontend**: Removed redundant Google Fonts `@import url(...)` from `globals.css` (fonts loaded via `next/font/google` in `layout.tsx`).
+- **Version**: Bumped `pyproject.toml`, `package.json`, and FastAPI app version to v1.3.0.
+
 **v1.3.0 (2026-04-07)** — "Forensic OS" Modernization & Semantic Grounding:
 - **Core**: Implemented the **Initial vs Deep Analysis** pipeline across all agents for tiered forensic screening.
 - **ML Tools**: Integrated 2026-era detectors: `diffusion_artifact_detector`, `interframe_forgery_detector`, and `c2pa_validator` (JUMBF).

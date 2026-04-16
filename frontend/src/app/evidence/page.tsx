@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useRef } from "react";
+import React from "react";
+import { AnimatePresence } from "framer-motion";
 import { PageTransition } from "@/components/ui/PageTransition";
 import { useSound } from "@/hooks/useSound";
 import { useInvestigation } from "@/hooks/useInvestigation";
@@ -16,7 +17,6 @@ import {
 
 export default function EvidencePage() {
   const { playSound } = useSound();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
     file, setFile,
@@ -26,7 +26,7 @@ export default function EvidencePage() {
     uploadPhaseText,
     showLoadingOverlay, setShowLoadingOverlay,
     arbiterLiveText,
-    autoStartBlocking, setAutoStartBlocking,
+    setAutoStartBlocking,
     phase,
     isSubmittingHITL,
     isNavigating,
@@ -72,21 +72,13 @@ export default function EvidencePage() {
     <div className="min-h-screen text-foreground p-6 pb-20 overflow-x-hidden relative font-sans selection:bg-cyan-500/30">
       {showLoadingOverlay && (
         <LoadingOverlay
-          liveText={uploadPhaseText || pipelineMessage || pipelineThinking || progressText || ""}
+          liveText={uploadPhaseText || "Initializing secure workspace..."}
         />
       )}
 
-      {showArbiterOverlay && (
-        <ForensicProgressOverlay
-          variant="council"
-          title="Council deliberation"
-          liveText={arbiterLiveText || pipelineMessage || pipelineThinking || ""}
-          telemetryLabel="Arbiter telemetry"
-          showElapsed
-        />
-      )}
+      {/* Council Overlay removed: Now integrated into AgentProgressDisplay Header */}
 
-      <main className="max-w-6xl mx-auto relative z-10" id="main-content">
+      <main className="max-w-[1400px] mx-auto relative z-10 w-full">
         <PageTransition>
           <>
             {showUploadForm && (
@@ -125,6 +117,7 @@ export default function EvidencePage() {
                 onViewResults={handleViewResults}
                 playSound={playSound}
                 isNavigating={isNavigating}
+                mimeType={sessionStorage.getItem("forensic_mime_type") ?? undefined}
               />
             )}
 
@@ -164,6 +157,18 @@ export default function EvidencePage() {
           </>
         </PageTransition>
       </main>
+
+      <AnimatePresence>
+        {isNavigating && (
+          <ForensicProgressOverlay
+            variant="stream"
+            title="Arbiter Deliberation"
+            liveText={arbiterLiveText || "Synthesizing final verdict..."}
+            telemetryLabel="Council Protocol"
+            showElapsed
+          />
+        )}
+      </AnimatePresence>
 
       <HITLCheckpointModal
         checkpoint={hitlCheckpoint}

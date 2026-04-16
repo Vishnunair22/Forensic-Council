@@ -10,7 +10,7 @@ import {
   CheckCircle,
   Scale,
 } from "lucide-react";
-import { AGENTS_DATA } from "@/lib/constants";
+import { AGENTS as AGENTS_DATA } from "@/lib/constants";
 
 interface AgentIconProps {
   role?: string;

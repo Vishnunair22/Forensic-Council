@@ -71,8 +71,6 @@ export const AGENTS = [
   },
 ] as const;
 
-export const AGENTS_DATA = AGENTS;
-
 export const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -144,4 +142,15 @@ export const TAB_ICONS: Record<ReportTab, typeof FileImage> = {
   Video: FileVideo,
 };
 
+// ── Polling Intervals ─────────────────────────────────────────────────────────
+// Arbiter status polling on the result page. 2.5 s balances server load vs.
+// perceived responsiveness for analyses that typically complete in 15–90 s.
+export const ARBITER_POLL_INTERVAL_MS = 2_500;
 
+// Maximum arbiter polling attempts before declaring a timeout.
+// 720 × 2.5 s = 30 minutes — enough headroom for deep video analysis.
+export const ARBITER_POLL_MAX_ATTEMPTS = 720;
+
+// Per-request timeout for backend API calls during investigation.
+// 8 s is generous for LAN/Docker; longer than necessary increases perceived hang time.
+export const INVESTIGATION_REQUEST_TIMEOUT_MS = 8_000;

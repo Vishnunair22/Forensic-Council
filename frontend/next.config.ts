@@ -7,12 +7,12 @@ import path from "path";
  * each segment except the Windows drive prefix.
  */
 function devtoolModulePathForChrome(absoluteResourcePath: string): string {
+  if (!absoluteResourcePath) return "";
   const forward = absoluteResourcePath.replace(/\\/g, "/");
   return forward
     .split("/")
     .map((segment) => {
-      if (segment === "") return segment;
-      if (/^[a-zA-Z]:$/.test(segment)) return segment;
+      if (segment === "" || /^[a-zA-Z]:$/.test(segment)) return segment;
       return encodeURIComponent(segment);
     })
     .join("/");
@@ -29,9 +29,8 @@ const nextConfig: NextConfig = {
   // Enabling both causes double-compression (wasted CPU, slightly larger output).
   compress: false,
 
-  // ── TypeScript ────────────────────────────────────────────────────────
-  typescript: { ignoreBuildErrors: false },
-  transpilePackages: ["simplex-noise", "class-variance-authority"],
+  // ── TypeScript & ESLint ───────────────────────────────────────────────
+  transpilePackages: ["class-variance-authority"],
 
   // ── Turbopack (Next.js 15 default build engine) ───────────────────────────
   // Turbopack is the default bundler in Next.js 15. Declaring an explicit
@@ -41,7 +40,6 @@ const nextConfig: NextConfig = {
   turbopack: {
     resolveExtensions: ['.tsx', '.ts', '.jsx', '.js', '.json'],
     resolveAlias: {
-      'simplex-noise': path.resolve(process.cwd(), 'node_modules/simplex-noise'),
       'class-variance-authority': path.resolve(process.cwd(), 'node_modules/class-variance-authority'),
     },
   },
@@ -55,8 +53,6 @@ const nextConfig: NextConfig = {
       "framer-motion",
       "@radix-ui/react-dialog",
       "class-variance-authority",
-      // "three",
-      // "simplex-noise",
     ],
     // Inline small CSS into JS bundle (saves one HTTP round-trip on first load).
     // Disabled in dev mode to improve stability.
@@ -67,11 +63,9 @@ const nextConfig: NextConfig = {
   // Used only when running `next dev --webpack`. On Windows bind mounts,
   // inotify events are not forwarded into the container so switching to
   // polling restores reliable HMR. No effect on Turbopack builds.
-  webpack: (config, { dev, isServer }) => {
-    // Force 'three' to resolve to the local node_modules path
+  webpack: (config: Record<string, unknown> & { resolve: { alias: Record<string, string> }; watchOptions?: unknown; output?: Record<string, unknown> }, { dev }: { dev: boolean }) => {
     config.resolve.alias = {
       ...config.resolve.alias,
-      'simplex-noise': path.resolve(process.cwd(), 'node_modules/simplex-noise'),
       'class-variance-authority': path.resolve(process.cwd(), 'node_modules/class-variance-authority'),
     };
 

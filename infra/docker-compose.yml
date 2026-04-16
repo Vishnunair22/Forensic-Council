@@ -149,6 +149,12 @@ services:
       - "4318:4318"   # OTLP HTTP
     environment:
       - COLLECTOR_OTLP_ENABLED=true
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:14269/ > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     deploy:
       resources:
         limits:
@@ -176,8 +182,8 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-forensic_council}
       - SIGNING_KEY=${SIGNING_KEY}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - BOOTSTRAP_ADMIN_PASSWORD=${BOOTSTRAP_ADMIN_PASSWORD}
-      - BOOTSTRAP_INVESTIGATOR_PASSWORD=${BOOTSTRAP_INVESTIGATOR_PASSWORD}
+      - BOOTSTRAP_ADMIN_PASSWORD=${BOOTSTRAP_ADMIN_PASSWORD:-bootstrap_admin_dev_secret}
+      - BOOTSTRAP_INVESTIGATOR_PASSWORD=${BOOTSTRAP_INVESTIGATOR_PASSWORD:-bootstrap_investigator_dev_secret}
       - SKIP_MODEL_DOWNLOAD=1
       - SKIP_CACHE_CHECK=1
     depends_on:
@@ -239,7 +245,7 @@ services:
       - GEMINI_FALLBACK_MODELS=${GEMINI_FALLBACK_MODELS:-gemini-1.5-flash}
       - GEMINI_TIMEOUT=${GEMINI_TIMEOUT:-55.0}
       - EVIDENCE_STORAGE_PATH=/app/storage/evidence
-      - CALIBRATION_MODELS_PATH=/app/cache/calibration_models
+      - CALIBRATION_MODELS_PATH=/app/storage/calibration_models
       - NUMBA_DISABLE_JIT=1
       - OTEL_ENABLED=true
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
@@ -283,7 +289,7 @@ services:
       - easyocr_cache:/app/cache/easyocr:rw
       - numba_cache:/app/cache/numba_cache:rw
       - yolo_cache:/app/cache/ultralytics:rw
-      - calibration_models_cache:/app/cache/calibration_models:rw
+      - calibration_models_cache:/app/storage/calibration_models:rw
     # SECURITY: Connect to infrastructure net (redis, postgres, qdrant) and backend net (frontend, caddy)
     networks:
       - infra_net
@@ -326,7 +332,7 @@ services:
       - GEMINI_FALLBACK_MODELS=${GEMINI_FALLBACK_MODELS:-gemini-1.5-flash}
       - GEMINI_TIMEOUT=${GEMINI_TIMEOUT:-55.0}
       - EVIDENCE_STORAGE_PATH=/app/storage/evidence
-      - CALIBRATION_MODELS_PATH=/app/cache/calibration_models
+      - CALIBRATION_MODELS_PATH=/app/storage/calibration_models
       - NUMBA_DISABLE_JIT=1
       - OTEL_ENABLED=true
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
@@ -362,7 +368,7 @@ services:
       - easyocr_cache:/app/cache/easyocr:rw
       - numba_cache:/app/cache/numba_cache:rw
       - yolo_cache:/app/cache/ultralytics:rw
-      - calibration_models_cache:/app/cache/calibration_models:rw
+      - calibration_models_cache:/app/storage/calibration_models:rw
     networks:
       - infra_net
 
@@ -456,7 +462,7 @@ services:
       # INTERNAL_API_URL: used by Next.js server-side API routes (e.g. /api/auth/demo).
       # Inside Docker, the frontend container CANNOT reach "localhost:8000" — it must
       # use the Docker-internal service name "forensic_api".
-      - INTERNAL_API_URL=http://forensic_api:8000
+      - INTERNAL_API_URL=http://backend:8000
     depends_on:
       backend:
         condition: service_healthy

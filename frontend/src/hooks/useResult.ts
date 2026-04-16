@@ -2,15 +2,16 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { 
-  getArbiterStatus, 
-  getReport, 
-  type ReportDTO 
+import {
+  getArbiterStatus,
+  getReport,
+  type ReportDTO
 } from "@/lib/api";
+import { ARBITER_POLL_INTERVAL_MS, ARBITER_POLL_MAX_ATTEMPTS } from "@/lib/constants";
 import { useForensicData, mapReportDtoToReport } from "@/hooks/useForensicData";
 import { useSound } from "@/hooks/useSound";
 import { type HistoryItem } from "@/components/ui/HistoryDrawer";
-import { type AgentResult } from "@/types";
+import type { AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
 
 export type Tab = "analysis" | "history";
 export type PageState = "arbiter" | "ready" | "error" | "empty";
@@ -40,7 +41,7 @@ export function useResult() {
   const [thumbnail] = useState(() => getInitial("forensic_thumbnail"));
   const [mimeType] = useState(() => getInitial("forensic_mime_type"));
   const [pipelineStartAt] = useState(() => getInitial("forensic_pipeline_start"));
-  const [agentTimeline] = useState<AgentResult[]>(() => {
+  const [agentTimeline] = useState<AgentUpdate[]>(() => {
     try {
       const isDeep = getInitial("forensic_is_deep") === "true";
       const key = isDeep ? "forensic_deep_agents" : "forensic_initial_agents";
@@ -70,20 +71,20 @@ export function useResult() {
     }
 
     let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     let attempts = 0;
-    const MAX_ATTEMPTS = 720; // 30 minutes (720 * 2.5s) for high-fidelity Deep Video analysis
-    const POLL_INTERVAL = 2500; // Slightly slower polling for better thread breathing
 
     async function poll() {
       if (cancelled) return;
+      if (!sessionId) return; // redundant but safe
+      
       attempts++;
       try {
-        const s = await getArbiterStatus(sessionId!);
+        const s = await getArbiterStatus(sessionId);
         if (cancelled) return;
 
         if (s.status === "complete") {
-          const res = await getReport(sessionId!);
+          const res = await getReport(sessionId);
           if (!cancelled && res.status === "complete" && res.report) {
             handleComplete(res.report);
             return;
@@ -99,8 +100,8 @@ export function useResult() {
         dbg.error("Polling error", e);
       }
 
-      if (!cancelled && attempts < MAX_ATTEMPTS) {
-        timer = setTimeout(poll, POLL_INTERVAL);
+      if (!cancelled && attempts < ARBITER_POLL_MAX_ATTEMPTS) {
+        timer = setTimeout(poll, ARBITER_POLL_INTERVAL_MS);
       } else if (!cancelled) {
         setErrorMsg("Arbiter timed out. Session expired.");
         setState("error");
@@ -122,7 +123,7 @@ export function useResult() {
     poll();
     return () => {
       cancelled = true;
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
     };
   }, [mounted, addToHistory]);
 

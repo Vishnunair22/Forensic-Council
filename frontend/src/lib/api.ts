@@ -135,6 +135,36 @@ export async function getMutationHeaders(init?: HeadersInit): Promise<Headers> {
   return headers;
 }
 
+/**
+ * Check backend health and readiness.
+ * Handles "Protocol Warming Up" states gracefully.
+ */
+export async function checkBackendHealth(): Promise<{
+  ok: boolean;
+  warmingUp: boolean;
+  message: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/health`, {
+      method: "GET",
+      signal: AbortSignal.timeout(5_000),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, warmingUp: false, message: data.status || "Healthy" };
+    }
+
+    if (res.status === 503) {
+      return { ok: false, warmingUp: true, message: "Protocol warming up — system dependencies initializing" };
+    }
+
+    return { ok: false, warmingUp: false, message: `Status: ${res.status}` };
+  } catch (err) {
+    return { ok: false, warmingUp: false, message: err instanceof Error ? err.message : "Network error" };
+  }
+}
+
 export const API_TIMEOUT = 30000;
 
 export function withTimeout<T>(
@@ -396,46 +426,44 @@ export async function autoLoginAsInvestigator(): Promise<TokenResponse> {
   if (_pendingAuth) return _pendingAuth;
 
   _pendingAuth = (async () => {
-    try {
-      const response = await fetch("/api/auth/demo", {
-        method: "POST",
-        signal: AbortSignal.timeout(12_000),
-      });
+    let lastError: unknown;
+    const maxRetries = 3;
 
-      if (!response.ok) {
-        const error = await response
-          .json()
-          .catch(() => ({ error: "Demo auth failed" }));
-        throw new Error(error.error || "Authentication failed");
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch("/api/auth/demo", {
+          method: "POST",
+          signal: AbortSignal.timeout(15_000),
+        });
+
+        if (!response.ok) {
+          if (response.status === 503 && attempt < maxRetries) {
+             throw new Error("Warming up");
+          }
+          const error = await response.json().catch(() => ({ error: "Demo auth failed" }));
+          throw new Error(error.error || "Authentication failed");
+        }
+
+        const data: TokenResponse = await response.json();
+        if (data.access_token && typeof data.expires_in === "number") {
+          setAuthToken(data.access_token, data.expires_in);
+        }
+        return data;
+      } catch (err) {
+        lastError = err;
+        if (attempt < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt), 5000);
+          dbg.warn(`Auto-login retry ${attempt + 1}/${maxRetries} in ${delay}ms...`);
+          await new Promise((r) => setTimeout(r, delay));
+          continue;
+        }
       }
-
-      const data: TokenResponse = await response.json();
-
-      // CRITICAL: Store the token in sessionStorage so that createLiveSocket can
-      // include it in the WebSocket subprotocol (`token.<JWT>`).
-      //
-      // Why this is necessary:
-      //   - In dev, WS connects directly to ws://localhost:8000 (not through the
-      //     Next.js proxy on :3000). The auth cookie is set by the Next.js demo
-      //     route on the :3000 origin and is HttpOnly (invisible to JS).
-      //   - Same-site=strict / cross-origin rules mean the :3000 cookie is NEVER
-      //     sent to the :8000 WebSocket endpoint.
-      //   - The backend WS handler falls back to the `token.<JWT>` subprotocol,
-      //     but only if the token was passed in — which requires it to be readable
-      //     by JS (sessionStorage is the correct place here).
-      if (data.access_token && typeof data.expires_in === "number") {
-        setAuthToken(data.access_token, data.expires_in);
-      }
-
-      return data;
-    } finally {
-      // Clear the lock after a small delay to allow subsequent legitimate calls
-      // but block immediate rapid-fire bursts from a React render loop.
-      setTimeout(() => {
-        _pendingAuth = null;
-      }, 500);
     }
-  })();
+    throw lastError;
+  })().finally(() => {
+    // Lock reset after safety margin
+    setTimeout(() => { _pendingAuth = null; }, 500);
+  });
 
   return _pendingAuth;
 }
@@ -888,11 +916,16 @@ export async function pollForReport(
     let finished = false;
     let attempts = 0;
 
+    const cleanup = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+
     const poll = async () => {
       if (finished) return;
       attempts++;
       if (attempts > maxAttempts) {
         finished = true;
+        cleanup();
         reject(new Error("Polling timeout — investigation took too long"));
         return;
       }
@@ -901,6 +934,7 @@ export async function pollForReport(
         const result = await getReport(sessionId);
         if (result.status === "complete" && result.report) {
           finished = true;
+          cleanup();
           resolve(result.report);
         } else {
           onProgress("in_progress");

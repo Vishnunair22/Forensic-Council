@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useSimulation } from "./useSimulation";
@@ -8,15 +10,16 @@ import {
   DuplicateInvestigationError, 
   getArbiterStatus, 
   getReport,
-  type InvestigationResponse 
+  type HITLCheckpoint,
+  type ArbiterStatusResponse,
+  type HITLDecision
 } from "@/lib/api";
 import { toast } from "./use-toast";
-import { AGENTS_DATA, ALLOWED_MIME_TYPES } from "@/lib/constants";
+import { AGENTS as AGENTS_DATA, ALLOWED_MIME_TYPES, INVESTIGATION_REQUEST_TIMEOUT_MS } from "@/lib/constants";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
-import { type AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
 import { type SoundType } from "@/hooks/useSound";
+import { type AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
 
-const POLL_REQUEST_MS = 8_000;
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -47,8 +50,9 @@ async function waitForFinalReport(
     try {
       const st = await withTimeout(
         getArbiterStatus(sessionId),
-        POLL_REQUEST_MS,
-      );
+        INVESTIGATION_REQUEST_TIMEOUT_MS,
+      ) as ArbiterStatusResponse;
+      
       if (st.message) onLiveMessage(st.message);
       if (st.status === "error") {
         throw new Error(st.message || "Council synthesis failed.");
@@ -103,10 +107,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const [phase, setPhase] = useState<"initial" | "deep">("initial");
   const [isSubmittingHITL, setIsSubmittingHITL] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
-  const [showArbiterOverlay, setShowArbiterOverlay] = useState(false);
+  const [showArbiterOverlay] = useState(false);
   const analysisCompleteSoundedRef = useRef(false);
   const autoStartFiredRef = useRef(false);
-  const pollAbortRef = useRef<AbortController | null>(null);
+  const investigationInFlightRef = useRef(false);
 
   const {
     status,
@@ -121,8 +125,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     hitlCheckpoint,
     errorMessage,
     dismissCheckpoint,
-    clearCompletedAgents,
-    restoreSimulationState,
   } = useSimulation({
     playSound,
     onComplete: () => {},
@@ -139,19 +141,13 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     }
   }, []);
 
-  const authReadyRef = useRef<Promise<any>>(
+  const authReadyRef = useRef<Promise<void>>(
     typeof document !== "undefined" &&
       (document.cookie.includes("access_token") ||
         sessionStorage.getItem("forensic_auth_ok") === "1")
       ? Promise.resolve()
-      : autoLoginAsInvestigator().catch(() => {})
+      : autoLoginAsInvestigator().then(() => {}).catch(() => {})
   );
-
-  useEffect(() => {
-    return () => {
-      pollAbortRef.current?.abort();
-    };
-  }, []);
 
   const filePreviewUrl = useMemo(() => {
     if (!file) return null;
@@ -177,6 +173,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const triggerAnalysis = useCallback(
     async (targetFile: File) => {
       if (!targetFile) return;
+      // Synchronous ref guard — prevents concurrent submissions from rapid clicks
+      // or retry button spam before React re-renders with isUploading=true.
+      if (investigationInFlightRef.current) return;
+      investigationInFlightRef.current = true;
+
       playSound("upload");
       setIsUploading(true);
       setValidationError(null);
@@ -197,24 +198,32 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       try {
         const investigationRes = await startInvestigation(targetFile, caseId, investigatorId);
         sessionIdToUse = investigationRes.session_id;
-      } catch (err: any) {
+      } catch (err) {
         if (err instanceof DuplicateInvestigationError) {
           const sid = err.existingSessionId;
           sessionStorage.setItem("forensic_session_id", sid);
           sessionIdToUse = sid;
+          toast.default({
+            title: "Resuming Existing Session",
+            description: "This file was already submitted. Connecting to the active investigation.",
+          });
         } else {
-          let errorMsg = err instanceof Error ? err.message : "Failed to start investigation";
+          const errorMsg = err instanceof Error ? err.message : "Failed to start investigation";
           setValidationError(errorMsg);
           setIsUploading(false);
           setShowLoadingOverlay(false);
           resetSimulation();
           playSound("error");
           toast.destructive({ title: "Investigation Failed", description: errorMsg });
+          investigationInFlightRef.current = false;
           return;
         }
       }
 
-      if (!sessionIdToUse) return;
+      if (!sessionIdToUse) {
+        investigationInFlightRef.current = false;
+        return;
+      }
 
       sessionStorage.setItem("forensic_session_id", sessionIdToUse);
       sessionStorage.setItem("forensic_file_name", targetFile.name);
@@ -231,11 +240,14 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           setAnalysisStreamReady(true);
           setUploadPhaseText("Agents dispatching…");
         })
-        .catch((wsErr: any) => {
+        .catch((wsErr: unknown) => {
           const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
           setValidationError(wsErrMsg);
           setShowLoadingOverlay(false);
           resetSimulation();
+        })
+        .finally(() => {
+          investigationInFlightRef.current = false;
         });
     },
     [playSound, startSimulation, connectWebSocket, resetSimulation]
@@ -271,7 +283,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     playSound("success");
   };
 
-  const handleHITLDecision = async (decision: any, note?: string) => {
+  const handleHITLDecision = async (decision: HITLDecision, note?: string) => {
     if (!hitlCheckpoint) return;
     setIsSubmittingHITL(true);
     try {
@@ -284,7 +296,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       });
       dismissCheckpoint();
       playSound("success");
-    } catch (err) {
+    } catch {
       toast.destructive({ title: "Decision Failed", description: "Could not submit decision." });
     } finally {
       setIsSubmittingHITL(false);
@@ -297,13 +309,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     sessionStorage.setItem("forensic_is_deep", "false");
     sessionStorage.setItem("forensic_initial_agents", JSON.stringify(completedAgents));
     setIsNavigating(true);
-    setShowArbiterOverlay(true);
     try {
       await resumeInvestigation(false);
       router.push("/result", { scroll: true });
-    } catch (err) {
+    } catch {
       setIsNavigating(false);
-      setShowArbiterOverlay(false);
     }
   }, [playSound, resumeInvestigation, router, isNavigating, completedAgents]);
 
@@ -311,14 +321,13 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     playSound("think");
     sessionStorage.setItem("forensic_is_deep", "true");
     analysisCompleteSoundedRef.current = false;
-    clearCompletedAgents();
     setPhase("deep");
     try {
       await resumeInvestigation(true);
-    } catch (err) {
+    } catch {
       playSound("error");
     }
-  }, [playSound, resumeInvestigation, clearCompletedAgents]);
+  }, [playSound, resumeInvestigation]);
 
   const handleNewUpload = useCallback(() => {
     playSound("click");
@@ -332,19 +341,17 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     playSound("arbiter_start");
     sessionStorage.setItem("forensic_deep_agents", JSON.stringify(completedAgents));
     setIsNavigating(true);
-    setShowArbiterOverlay(true);
     const sid = sessionStorage.getItem("forensic_session_id");
     try {
       if (sid) await waitForFinalReport(sid, setArbiterLiveText, 120_000);
       router.push("/result", { scroll: true });
     } finally {
-      setShowArbiterOverlay(false);
       setIsNavigating(false);
     }
   }, [playSound, router, isNavigating, completedAgents]);
 
   const validAgentsData = AGENTS_DATA.filter((a) => a.name !== "Council Arbiter");
-  const validCompletedAgents = completedAgents.filter((c: any) =>
+  const validCompletedAgents = completedAgents.filter((c: AgentUpdate) =>
     validAgentsData.some((v) => v.id === c.agent_id)
   );
   
@@ -389,7 +396,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     validCompletedAgents,
     pipelineMessage,
     pipelineThinking,
-    hitlCheckpoint,
+    hitlCheckpoint: hitlCheckpoint as HITLCheckpoint | null,
     errorMessage,
     dismissCheckpoint,
     handleFile,

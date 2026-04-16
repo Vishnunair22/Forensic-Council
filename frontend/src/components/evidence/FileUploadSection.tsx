@@ -1,17 +1,16 @@
 "use client";
 
 import { useRef, useMemo, useEffect } from "react";
+import Image from "next/image";
 import { 
   RotateCcw, 
   ArrowRight, 
   UploadCloud, 
   FileAudio, 
-  File, 
   ShieldAlert, 
   ScanLine 
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useSound } from "@/hooks/useSound";
 import { clsx } from "clsx";
 
 interface FileUploadSectionProps {
@@ -40,7 +39,6 @@ export function FileUploadSection({
   onClear,
 }: FileUploadSectionProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { playSound } = useSound();
 
   const filePreviewUrl = useMemo(() => {
     if (!file) return null;
@@ -64,12 +62,12 @@ export function FileUploadSection({
         animate={{ opacity: 1, y: 0 }}
         className="text-center mb-12"
       >
-        <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full mb-8 bg-cyan-500/5 border border-cyan-500/10">
+        <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full mb-8 bg-[#14b8a6]/5 border border-[#14b8a6]/10">
           <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-60" />
-            <span className="relative inline-flex rounded-full h-full w-full bg-cyan-400" />
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#14b8a6] opacity-60" />
+            <span className="relative inline-flex rounded-full h-full w-full bg-[#14b8a6]" />
           </span>
-          <span className="uppercase tracking-[0.4em] font-black text-[9px] text-cyan-400/80 font-mono">
+          <span className="uppercase tracking-[0.4em] font-black text-[9px] text-[#14b8a6]/80 font-mono">
             Evidence Intake Portal
           </span>
         </div>
@@ -95,12 +93,16 @@ export function FileUploadSection({
           >
             {/* Preview Viewport */}
             <div className="relative w-full aspect-video bg-black/40 overflow-hidden">
-              {file.type.startsWith("image/") && (
-                <img
-                  src={filePreviewUrl ?? ""}
-                  alt={file.name}
-                  className="w-full h-full object-contain"
-                />
+              {file.type.startsWith("image/") && filePreviewUrl && (
+                <div className="relative w-full h-full">
+                  <Image
+                    src={filePreviewUrl}
+                    alt={file.name}
+                    fill
+                    className="object-contain"
+                    unoptimized={true} // Local Blob URLs require unoptimized flag in some Next.js configs
+                  />
+                </div>
               )}
               {file.type.startsWith("video/") && (
                 <video
@@ -112,13 +114,13 @@ export function FileUploadSection({
               {!file.type.startsWith("image/") && !file.type.startsWith("video/") && (
                 <div className="flex flex-col items-center justify-center h-full gap-4">
                   <div className="w-20 h-20 rounded-2xl flex items-center justify-center bg-white/5 border border-white/10">
-                    <FileAudio className="w-10 h-10 text-cyan-400" />
+                    <FileAudio className="w-10 h-10 text-[#14b8a6]" />
                   </div>
                 </div>
               )}
 
               {/* Overlay Metadata */}
-              <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-black/80 to-transparent">
+              <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-black/80 to-transparent z-10">
                 <div className="flex items-center justify-between">
                   <div className="flex flex-col">
                     <span className="text-xs font-bold text-white font-mono truncate max-w-xs">{file.name}</span>
@@ -143,7 +145,7 @@ export function FileUploadSection({
               <button
                 onClick={() => onUpload(file)}
                 disabled={isUploading}
-                className="btn-pill-primary py-4 text-[10px] gap-3 active:scale-95 shadow-[0_0_40px_rgba(34,211,238,0.2)]"
+                className="btn-pill-primary py-4 text-[10px] gap-3 active:scale-95"
               >
                 {isUploading ? (
                   <>

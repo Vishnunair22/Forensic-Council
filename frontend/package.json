@@ -1,6 +1,6 @@
 {
   "name": "forensic-council-frontend",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "description": "Multi-Agent Forensic Evidence Analysis System — Frontend UI",
   "license": "MIT",
@@ -14,8 +14,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "dev:turbopack": "next dev",
-    "dev:webpack": "next dev",
+    "dev:webpack": "next dev --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint src --max-warnings 0",
@@ -34,12 +33,12 @@
     "next": "^15.5.14",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "simplex-noise": "^4.0.3",
     "tailwind-merge": "^3.5.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4.2.2",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
@@ -54,6 +53,7 @@
     "jest": "^30.3.0",
     "jest-axe": "^10.0.0",
     "jest-environment-jsdom": "^30.3.0",
+    "playwright": "^1.59.1",
     "tailwindcss": "^4.2.2",
     "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",

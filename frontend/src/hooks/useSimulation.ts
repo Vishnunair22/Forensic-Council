@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { AGENTS_DATA } from "@/lib/constants";
+import { AGENTS as AGENTS_DATA } from "@/lib/constants";
 
 /** Dev-only logger — silenced in production builds */
 const isDev = process.env.NODE_ENV !== "production";
@@ -248,15 +248,15 @@ export const useSimulation = ({
                           typeof findings_count === "number"
                             ? findings_count
                             : 1,
-                        error: typeof error === "string" ? error : null,
+                        error: typeof error === "string" ? error : undefined,
                         deep_analysis_pending:
                           typeof deep_analysis_pending === "boolean"
                             ? deep_analysis_pending
                             : undefined,
                         agent_verdict:
-                          (typeof agent_verdict === "string"
+                          typeof agent_verdict === "string"
                             ? (agent_verdict as AgentUpdate["agent_verdict"])
-                            : null) ?? null,
+                            : undefined,
                         tool_error_rate:
                           typeof tool_error_rate === "number"
                             ? tool_error_rate

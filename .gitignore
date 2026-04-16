@@ -26,6 +26,7 @@ tracked_files.txt
 
 # ── Python ──────────────────────────────────────────────────────────────────
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *.sqlite
 *.sqlite3
@@ -47,6 +48,7 @@ coverage.xml
 
 # ── Node / Next.js ───────────────────────────────────────────────────────────
 node_modules/
+**/node_modules/
 frontend/.next/
 frontend/out/
 frontend/.npm
@@ -91,6 +93,4 @@ tests/fixtures/*.jpeg
 .vscode/
 *.swp
 *.swo
-.cursor/
-.kilo/
 

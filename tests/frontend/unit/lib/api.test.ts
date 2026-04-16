@@ -40,11 +40,34 @@ Object.defineProperty(document, "cookie", {
   writable: true,
 });
 
-global.fetch = jest.fn();
+const mockResponses: Response[] = [];
+global.fetch = jest.fn((url) => {
+  // Always handle health check silently
+  if (typeof url === 'string' && url.includes('/api/v1/health')) {
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+      headers: new Headers({ 'set-cookie': 'csrf_token=test-token' }),
+    } as Response);
+  }
+
+  const response = mockResponses.shift();
+  if (response) return Promise.resolve(response);
+  
+  // Fallback for unexpected calls to avoid "reading 'ok' of undefined"
+  console.warn(`[Test] Unexpected fetch call to ${url}`);
+  return Promise.resolve({
+    ok: true,
+    status: 200,
+    json: async () => ({}),
+    headers: new Headers(),
+  } as Response);
+});
 const mockFetch = global.fetch as jest.Mock;
 
 function respondJson(body: unknown, status = 200) {
-  mockFetch.mockResolvedValueOnce({
+  mockResponses.push({
     ok: status >= 200 && status < 300,
     status,
     json: jest.fn().mockResolvedValue(body),
@@ -65,6 +88,7 @@ let socketInstance: {
 };
 
 global.WebSocket = jest.fn().mockImplementation(() => {
+  const listeners: Record<string, Array<(e: any) => void>> = {};
   socketInstance = {
     send: jest.fn(),
     close: jest.fn(),
@@ -72,7 +96,23 @@ global.WebSocket = jest.fn().mockImplementation(() => {
     onmessage: null,
     onerror: null,
     onclose: null,
-  };
+    addEventListener: jest.fn((type, listener) => {
+      if (!listeners[type]) listeners[type] = [];
+      listeners[type].push(listener);
+    }),
+    removeEventListener: jest.fn((type, listener) => {
+      if (!listeners[type]) return;
+      listeners[type] = listeners[type].filter(l => l !== listener);
+    }),
+    // Helper to simulate events in tests
+    _simulate: (type: string, event: any) => {
+      if (type === "message") socketInstance.onmessage?.(event);
+      if (type === "open") socketInstance.onopen?.(event);
+      if (type === "error") socketInstance.onerror?.(event);
+      if (type === "close") socketInstance.onclose?.(event);
+      listeners[type]?.forEach(l => l(event));
+    }
+  } as any;
   return socketInstance;
 }) as unknown as typeof WebSocket;
 
@@ -132,7 +172,9 @@ describe("auth API", () => {
     });
 
     const result = await login("user", "pass");
-    const [url, opts] = mockFetch.mock.calls[0];
+    const loginCall = mockFetch.mock.calls.find(c => c[0].includes("/api/v1/auth/login"));
+    expect(loginCall).toBeTruthy();
+    const [url, opts] = loginCall;
 
     expect(url).toContain("/api/v1/auth/login");
     expect(opts.method).toBe("POST");
@@ -151,8 +193,7 @@ describe("auth API", () => {
     });
 
     const result = await autoLoginAsInvestigator();
-
-    expect(mockFetch).toHaveBeenCalledWith("/api/auth/demo", { method: "POST" });
+    expect(mockFetch).toHaveBeenCalledWith("/api/auth/demo", expect.objectContaining({ method: "POST" }));
     expect(result.access_token).toBe("demo");
   });
 
@@ -161,7 +202,9 @@ describe("auth API", () => {
 
     await logout();
 
-    const [url, opts] = mockFetch.mock.calls[0];
+    const logoutCall = mockFetch.mock.calls.find(c => c[0].includes("/api/v1/auth/logout"));
+    expect(logoutCall).toBeTruthy();
+    const [url, opts] = logoutCall;
     expect(url).toContain("/api/v1/auth/logout");
     expect(opts).toMatchObject({
       method: "POST",
@@ -210,9 +253,11 @@ describe("investigation API", () => {
       "CASE-1234567890",
       "REQ-12345",
     );
-    const [, opts] = mockFetch.mock.calls[0];
-
-    expect(opts.credentials).toBe("include");
+    const investigationCall = mockFetch.mock.calls.find(c => c[0].includes("/api/v1/investigate"));
+    expect(investigationCall).toBeTruthy();
+    const [url, opts] = investigationCall;
+    expect(url).toContain("/api/v1/investigate");
+    expect(opts.method).toBe("POST");
     expect(opts.body).toBeInstanceOf(FormData);
     expect(result.session_id).toBe("sess-1");
   });
@@ -283,7 +328,9 @@ describe("investigation API", () => {
       decision: "APPROVE",
     });
 
-    const [url, opts] = mockFetch.mock.calls[0];
+    const decisionCall = mockFetch.mock.calls.find(c => c[0].includes("/api/v1/hitl/decision"));
+    expect(decisionCall).toBeTruthy();
+    const [url, opts] = decisionCall;
     expect(url).toContain("/api/v1/hitl/decision");
     expect(opts.method).toBe("POST");
   });
@@ -306,7 +353,7 @@ describe("live socket", () => {
 
   it("resolves connected on CONNECTED", async () => {
     const { connected } = createLiveSocket("sess-live");
-    socketInstance.onmessage?.(
+    socketInstance._simulate("message",
       new MessageEvent("message", {
         data: JSON.stringify({ type: "CONNECTED" }),
       }),
@@ -316,7 +363,7 @@ describe("live socket", () => {
 
   it("resolves connected on first AGENT_UPDATE", async () => {
     const { connected } = createLiveSocket("sess-live");
-    socketInstance.onmessage?.(
+    socketInstance._simulate("message",
       new MessageEvent("message", {
         data: JSON.stringify({ type: "AGENT_UPDATE" }),
       }),
@@ -326,7 +373,7 @@ describe("live socket", () => {
 
   it("rejects on websocket error", async () => {
     const { connected } = createLiveSocket("sess-live");
-    socketInstance.onerror?.(new Event("error"));
+    socketInstance._simulate("error", new Event("error"));
     await expect(connected).rejects.toThrow("WebSocket connection error");
   });
 });

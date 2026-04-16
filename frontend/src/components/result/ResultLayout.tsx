@@ -2,15 +2,12 @@
 
 import React, { useMemo, memo } from "react";
 import { 
-  RotateCcw, 
   Home as HomeIcon, 
-  FileText, 
   XCircle, 
-  Download, 
-  AlertCircle, 
   Activity, 
   History as HistoryIcon, 
-  Search 
+  Search,
+  Download
 } from "lucide-react";
 import clsx from "clsx";
 import { type Tab, useResult } from "@/hooks/useResult";
@@ -22,6 +19,13 @@ import { AgentAnalysisTab } from "./AgentAnalysisTab";
 import { TimelineTab } from "./TimelineTab";
 import { MetricsPanel } from "./MetricsPanel";
 import { ReportFooter } from "./ReportFooter";
+
+// We import the finding types to eliminate 'any' casts
+interface BaseFinding {
+  finding_type?: string;
+  reasoning_summary?: string;
+  [key: string]: unknown;
+}
 
 const MemoizedResultHeader = memo(ResultHeader);
 const MemoizedAgentAnalysisTab = memo(AgentAnalysisTab);
@@ -36,8 +40,8 @@ export function ResultLayout() {
   const activeAgentIds = useMemo(() => {
     const SKIP_TYPES = new Set(["file type not applicable", "format not supported"]);
     return Object.keys(rs.report?.per_agent_findings ?? {}).filter((id) => {
-      const flist = rs.report?.per_agent_findings[id] ?? [];
-      return flist.length > 0 && !flist.every((f: any) => SKIP_TYPES.has(String(f.finding_type).toLowerCase()));
+      const flist = (rs.report?.per_agent_findings[id] ?? []) as unknown as BaseFinding[];
+      return flist.length > 0 && !flist.every((f) => SKIP_TYPES.has(String(f.finding_type).toLowerCase()));
     });
   }, [rs.report]);
 
@@ -45,7 +49,7 @@ export function ResultLayout() {
     if (rs.report?.key_findings && rs.report.key_findings.length > 0) return rs.report.key_findings;
     const summaries: string[] = [];
     for (const id of activeAgentIds) {
-      const findings = rs.report?.per_agent_findings[id] ?? [];
+      const findings = (rs.report?.per_agent_findings[id] ?? []) as unknown as BaseFinding[];
       for (const f of findings) {
         const s = f.reasoning_summary?.trim();
         if (s && s.length > 10 && !summaries.includes(s)) summaries.push(s);
@@ -76,13 +80,13 @@ export function ResultLayout() {
           <div className="flex items-center gap-4">
             <button 
               onClick={rs.handleExport}
-              className="flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-cyan-400 hover:bg-cyan-400/5 hover:border-cyan-400/20 border border-white/5 transition-all"
+              className="flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-[#14b8a6] hover:bg-transparent border border-white/5 hover:border-[#14b8a6] transition-all"
             >
               <Download className="w-3 h-3" /> Export
             </button>
             <div className={clsx(
               "px-3 py-1 rounded-full border text-[9px] font-mono font-black uppercase tracking-widest",
-              rs.isDeepPhase ? "text-violet-400 border-violet-500/20 bg-violet-500/5" : "text-cyan-400 border-cyan-500/20 bg-cyan-500/5"
+              rs.isDeepPhase ? "text-violet-400 border-violet-500/20 bg-violet-500/5" : "text-[#14b8a6] border-[#14b8a6]/20 bg-[#14b8a6]/5"
             )}>
               {rs.isDeepPhase ? "Deep Analysis" : "Initial Scan"}
             </div>
@@ -98,7 +102,7 @@ export function ResultLayout() {
                 className={clsx(
                   "px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-2",
                   rs.activeTab === tab 
-                    ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 shadow-[0_0_15px_rgba(34,211,238,0.1)]" 
+                    ? "bg-[#14b8a6]/10 text-[#14b8a6] border border-[#14b8a6]/30 shadow-[0_0_15px_rgba(20,184,166,0.1)]" 
                     : "text-white/20 hover:text-white/40 hover:bg-white/[0.02]"
                 )}
               >
@@ -123,7 +127,7 @@ export function ResultLayout() {
             )}
             {rs.state === "arbiter" && (
               <div className="flex flex-col items-center justify-center py-32 gap-6 opacity-40">
-                <Activity className="w-8 h-8 text-cyan-400 animate-pulse" />
+                <Activity className="w-8 h-8 text-[#14b8a6] animate-pulse" />
                 <p className="font-mono text-xs font-bold uppercase tracking-widest">Awaiting Arbiter Consensus...</p>
               </div>
             )}
@@ -156,7 +160,7 @@ export function ResultLayout() {
                 {rs.isDeepPhase && <MemoizedDeepModelTelemetry report={rs.report} />}
 
                 <MemoizedAgentAnalysisTab report={rs.report} activeAgentIds={activeAgentIds} isDeepPhase={rs.isDeepPhase} />
-                <MemoizedTimelineTab report={rs.report} activeAgentIds={activeAgentIds} agentTimeline={rs.agentTimeline as any} pipelineStartAt={rs.pipelineStartAt} />
+                <MemoizedTimelineTab report={rs.report} activeAgentIds={activeAgentIds} agentTimeline={rs.agentTimeline} pipelineStartAt={rs.pipelineStartAt} />
                 <MemoizedMetricsPanel report={rs.report} activeAgentIds={activeAgentIds} keyFindings={keyFindings} />
                 
                 <MemoizedReportFooter handleNew={rs.handleNew} handleHome={rs.handleHome} />

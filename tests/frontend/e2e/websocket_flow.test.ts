@@ -10,6 +10,8 @@ class MockWS {
   onerror: ((e: Event) => void) | null = null;
   onclose: ((e: CloseEvent) => void) | null = null;
 
+  private listeners: Record<string, Array<(e: any) => void>> = {};
+
   constructor(
     public url: string,
     public protocols?: string | string[],
@@ -17,22 +19,36 @@ class MockWS {
     wsInstance = this;
   }
 
+  addEventListener(type: string, listener: (e: any) => void) {
+    if (!this.listeners[type]) this.listeners[type] = [];
+    this.listeners[type].push(listener);
+  }
+
+  removeEventListener(type: string, listener: (e: any) => void) {
+    if (!this.listeners[type]) return;
+    this.listeners[type] = this.listeners[type].filter(l => l !== listener);
+  }
+
   simulateOpen() {
     this.onopen?.(new Event("open"));
+    this.listeners["open"]?.forEach(l => l(new Event("open")));
   }
 
   simulateMessage(data: unknown) {
-    this.onmessage?.(
-      new MessageEvent("message", { data: JSON.stringify(data) }),
-    );
+    const event = new MessageEvent("message", { data: JSON.stringify(data) });
+    this.onmessage?.(event);
+    this.listeners["message"]?.forEach(l => l(event));
   }
 
   simulateError() {
     this.onerror?.(new Event("error"));
+    this.listeners["error"]?.forEach(l => l(new Event("error")));
   }
 
   simulateClose(code = 1000, reason = "") {
+    const event = new CloseEvent("close", { code, reason });
     this.onclose?.(new CloseEvent("close", { code, reason }));
+    this.listeners["close"]?.forEach(l => l(event));
   }
 }
 
@@ -70,7 +86,7 @@ describe("WebSocket lifecycle", () => {
     wsInstance.simulateMessage({
       type: "AGENT_UPDATE",
       session_id: "sess-race",
-      data: { agent_id: "Agent1" },
+      data: { completed: [{ agent_id: "AGT-01", agent_name: "Image Forensics" }] },
     });
     await expect(connected).resolves.toBeUndefined();
   });
@@ -122,5 +138,6 @@ describe("report polling contract", () => {
     const result = await getReport("sess-ready");
     expect(result.status).toBe("complete");
     expect(result.report?.report_id).toBe("r1");
+    expect(screen.getByText(/Image Forensics/i)).toBeInTheDocument();
   });
 });

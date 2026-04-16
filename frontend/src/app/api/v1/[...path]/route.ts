@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const RETRYABLE_STATUSES = new Set([502, 503, 504]);
 // 30 s for regular requests; long-poll / upload endpoints get more time via streaming
-const PROXY_TIMEOUT_MS = 30_000;
+// const PROXY_TIMEOUT_MS = 30_000;
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
   "content-length",
@@ -44,8 +44,11 @@ function copyResponseHeaders(response: Response) {
 
   // Specifically handle multiple Set-Cookie headers correctly via getSetCookie()
   // if the environment supports it (Next.js 15 / Node 20.x+)
-  if (typeof (response.headers as any).getSetCookie === "function") {
-    const cookies = (response.headers as any).getSetCookie();
+  const responseHeaders = response.headers as unknown as {
+    getSetCookie?: () => string[];
+  };
+  if (typeof responseHeaders.getSetCookie === "function") {
+    const cookies = responseHeaders.getSetCookie();
     cookies.forEach((c: string) => headers.append("Set-Cookie", c));
   } else {
     // Fallback: headers.get('set-cookie') might return multiple cookies
@@ -91,7 +94,7 @@ async function proxyRequest(
         method: request.method,
         headers: requestHeaders,
         body: streamBody,
-        // @ts-ignore: 'duplex' is required when body is a stream in some environments
+        // @ts-expect-error: 'duplex' is required when body is a stream in some environments
         duplex: streamBody ? 'half' : undefined,
         redirect: "manual",
         signal: AbortSignal.timeout(timeoutMs),

@@ -19,9 +19,10 @@ import {
   Globe,
   Binary,
   Clock,
+  type LucideIcon
 } from "lucide-react";
 
-export const TOOL_ICONS: Record<string, any> = {
+export const TOOL_ICONS: Record<string, LucideIcon> = {
   ela_full_image: ImageIcon,
   ela_anomaly_classify: Scan,
   jpeg_ghost_detect: Eye,
@@ -68,6 +69,6 @@ export const TOOL_ICONS: Record<string, any> = {
   av_file_identity: Activity,
 };
 
-export function getToolIcon(toolName: string) {
+export function getToolIcon(toolName: string): LucideIcon {
   return TOOL_ICONS[toolName] || Cpu;
 }

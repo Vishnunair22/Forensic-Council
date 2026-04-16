@@ -31,15 +31,15 @@ export async function POST() {
 
     for (const baseUrl of backendBaseUrls) {
       lastBackendUrl = baseUrl;
-
       try {
+        // High-speed reachability check (5s)
         const response = await fetch(
           backendUrlFor("/api/v1/auth/login", baseUrl),
           {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: formData.toString(),
-            signal: AbortSignal.timeout(8_000),
+            signal: AbortSignal.timeout(5000), 
           },
         );
 
@@ -86,13 +86,17 @@ export async function POST() {
         }
 
         return nextResponse;
-      } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : "Unknown error";
-        const isTimeout = msg.includes("timeout") || msg.includes("abort");
-        lastError = isTimeout ? "timeout" : `${msg} via ${baseUrl}`;
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : "Unknown error";
+          const isTimeout = msg.includes("timeout") || msg.includes("abort");
+          
+          // CRITICAL: Log diagnostic info to server console (visible in docker logs)
+          console.error(`[AUTH_HANDSHAKE] Connection failed to ${baseUrl}: ${msg}`);
+          
+          lastError = isTimeout ? "timeout" : `${msg} via ${baseUrl}`;
+        }
       }
     }
-  }
 
   const isTimeout = lastError === "timeout";
   return NextResponse.json(

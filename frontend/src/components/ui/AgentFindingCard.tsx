@@ -1,24 +1,26 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { 
-  ChevronDown, 
-  Clock, 
-  Activity, 
-  Cpu, 
-  ShieldCheck, 
-  ShieldAlert, 
-  Shield, 
+import {
+  ChevronDown,
+  Clock,
+  Activity,
+  Cpu,
+  ShieldCheck,
+  ShieldAlert,
+  Shield,
   ShieldX,
-  Plus
+  AlertTriangle,
+  CheckCircle2,
+  Info,
+  type LucideIcon
 } from "lucide-react";
 import { clsx } from "clsx";
 import { Badge } from "@/components/ui/Badge";
 import { AgentFindingDTO, AgentMetricsDTO } from "@/lib/api";
-import { 
-  ConfidenceBar, 
-  ToolRow, 
-  MoreFindingsToggle 
+import {
+  ConfidenceBar,
+  ToolRow
 } from "@/components/result/AgentFindingSubComponents";
 
 export interface AgentFindingCardProps {
@@ -31,7 +33,7 @@ export interface AgentFindingCardProps {
   defaultOpen?: boolean;
 }
 
-const AGENT_META: Record<string, { name: string; role: string; color: string; icon: any }> = {
+const AGENT_META: Record<string, { name: string; role: string; color: string; icon: LucideIcon }> = {
   Agent1: { name: "Agent 01", role: "Visual Integrity", color: "cyan", icon: ShieldCheck },
   Agent2: { name: "Agent 02", role: "Acoustic Forensic", color: "blue", icon: Activity },
   Agent3: { name: "Agent 03", role: "Contextual Analysis", color: "amber", icon: Shield },
@@ -46,6 +48,120 @@ const COLOR_MAP: Record<string, { bg: string; border: string; text: string; glow
   teal: { bg: "bg-teal-500/5", border: "border-teal-500/20", text: "text-teal-400", glow: "shadow-[0_0_30px_rgba(45,212,191,0.1)]" },
   violet: { bg: "bg-violet-500/5", border: "border-violet-500/20", text: "text-violet-400", glow: "shadow-[0_0_30px_rgba(139,92,246,0.1)]" },
 };
+
+const FLAG_CONFIG = {
+  bad: { color: "text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/20", icon: AlertTriangle, label: "Anomaly Detected" },
+  warn: { color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20", icon: AlertTriangle, label: "Warning" },
+  ok: { color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20", icon: CheckCircle2, label: "Clean" },
+  info: { color: "text-white/40", bg: "bg-white/5", border: "border-white/10", icon: Info, label: "Info" },
+};
+
+interface Section {
+  id: string;
+  label: string;
+  flag: string;
+  keySignal: string;
+  analysis: string;
+  findings: AgentFindingDTO[];
+}
+
+function groupFindingsBySection(findings: AgentFindingDTO[]): Section[] {
+  const groupMap = new Map<string, Section>();
+
+  for (const f of findings) {
+    const sectionId = (f.metadata?.section_id as string) || "other";
+    const sectionLabel = (f.metadata?.section_label as string) || "Other Analysis";
+    const sectionFlag = (f.metadata?.section_flag as string) || "info";
+    const keySignal = (f.metadata?.section_key_signal as string) || "";
+    const analysis = (f.metadata?.llm_synthesis as string) || "";
+
+    let group = groupMap.get(sectionId);
+    if (!group) {
+      group = {
+        id: sectionId,
+        label: sectionLabel,
+        flag: sectionFlag,
+        keySignal,
+        analysis,
+        findings: [],
+      };
+      groupMap.set(sectionId, group);
+    }
+    group.findings.push(f);
+  }
+
+  // Sort: bad → warn → ok → info → other
+  const flagOrder: Record<string, number> = { bad: 0, warn: 1, ok: 2, info: 3 };
+  return Array.from(groupMap.values()).sort(
+    (a, b) => (flagOrder[a.flag] ?? 4) - (flagOrder[b.flag] ?? 4)
+  );
+}
+
+function SectionGroup({ section }: { section: Section }) {
+  const [open, setOpen] = useState(section.flag === "bad" || section.flag === "warn");
+  const [showAnalysis, setShowAnalysis] = useState(false);
+  const flagCfg = FLAG_CONFIG[section.flag as keyof typeof FLAG_CONFIG] ?? FLAG_CONFIG.info;
+  const FlagIcon = flagCfg.icon;
+
+  return (
+    <div className={clsx("rounded-2xl border overflow-hidden transition-all", flagCfg.border, flagCfg.bg)}>
+      {/* Section Header */}
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/[0.02] transition-all"
+        aria-expanded={open}
+      >
+        <FlagIcon className={clsx("w-3.5 h-3.5 shrink-0", flagCfg.color)} />
+        <span className={clsx("flex-1 text-[10px] font-black uppercase tracking-widest", flagCfg.color)}>
+          {section.label}
+        </span>
+        <span className="text-[9px] font-mono text-white/20 mr-2">
+          {section.findings.length} tool{section.findings.length !== 1 ? "s" : ""}
+        </span>
+        {section.keySignal && (
+          <span className="hidden sm:block text-[9px] font-mono text-white/30 truncate max-w-[200px] mr-2">
+            {section.keySignal}
+          </span>
+        )}
+        <ChevronDown className={clsx("w-3 h-3 text-white/20 transition-transform duration-300 shrink-0", open && "rotate-180")} />
+      </button>
+
+      {/* Tools in this section */}
+      {open && (
+        <div className="border-t border-white/[0.04]">
+          <div className="bg-[#000]/10">
+            {section.findings.map((f, i) => (
+              <ToolRow key={i} finding={f} isLast={i === section.findings.length - 1} />
+            ))}
+          </div>
+
+          {/* Section-level LLM analysis (collapsed by default) */}
+          {section.analysis && section.analysis.length > 20 && (
+            <div className="border-t border-white/[0.03]">
+              <button
+                onClick={() => setShowAnalysis(!showAnalysis)}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-white/[0.02] transition-all"
+              >
+                <Activity className="w-3 h-3 text-cyan-400/40 shrink-0" />
+                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/20 flex-1">
+                  Section Analysis
+                </span>
+                <ChevronDown className={clsx("w-3 h-3 text-white/15 transition-transform duration-300", showAnalysis && "rotate-180")} />
+              </button>
+              {showAnalysis && (
+                <div className="px-4 pb-4 animate-in fade-in duration-200">
+                  <p className="text-[12px] text-white/50 leading-relaxed font-medium italic border-l-2 border-white/10 pl-3">
+                    {section.analysis}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function AgentFindingCard({
   agentId,
@@ -66,10 +182,18 @@ export function AgentFindingCard({
 
   const isSkipped = realFindings.length === 0 && findings.some(f => SKIP_TYPES.has(String(f.finding_type).toLowerCase()));
   const confidence = metrics?.confidence_score ?? 0;
-  
+
   const totalTimingMs = useMemo(() => {
     return realFindings.reduce((acc, f) => acc + ((f.metadata?.execution_time_ms as number) || 0), 0);
   }, [realFindings]);
+
+  const sections = useMemo(() => groupFindingsBySection(realFindings), [realFindings]);
+
+  // Count anomalies for the header badge
+  const anomalyCount = useMemo(
+    () => realFindings.filter(f => f.status === "FLAGGED" || (f.metadata?.section_flag as string) === "bad").length,
+    [realFindings]
+  );
 
   if (isSkipped) {
     return (
@@ -112,19 +236,26 @@ export function AgentFindingCard({
               <meta.icon className="w-7 h-7" />
             </div>
             <div className="space-y-1">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-sm font-black text-white uppercase font-heading tracking-tight">{meta.name}</h3>
-                <span className="text-[10px] text-white/20 font-bold uppercase tracking-widest truncate max-w-[120px]">{meta.role}</span>
+                <span className="text-[10px] text-white/20 font-bold uppercase tracking-widest">{meta.role}</span>
+                {anomalyCount > 0 && (
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[9px] font-black">
+                    <AlertTriangle className="w-2.5 h-2.5" /> {anomalyCount} Flag{anomalyCount !== 1 ? "s" : ""}
+                  </span>
+                )}
               </div>
-              <p className="text-[11px] font-mono font-bold text-white/30 truncate flex items-center gap-2">
-                {realFindings.length} Active Probe{realFindings.length > 1 ? 's' : ''} 
+              <p className="text-[11px] font-mono font-bold text-white/30 flex items-center gap-2">
+                {sections.length} section{sections.length !== 1 ? "s" : ""}
                 <span className="text-white/10">·</span>
-                <Clock className="w-3 h-3" /> {totalTimingMs >= 1000 ? `${(totalTimingMs/1000).toFixed(1)}s` : `${totalTimingMs}ms`}
+                {realFindings.length} tool{realFindings.length !== 1 ? "s" : ""}
+                <span className="text-white/10">·</span>
+                <Clock className="w-3 h-3" /> {totalTimingMs >= 1000 ? `${(totalTimingMs / 1000).toFixed(1)}s` : `${totalTimingMs}ms`}
               </p>
             </div>
           </div>
 
-          <div className="flex flex-col items-end gap-3 text-right">
+          <div className="flex flex-col items-end gap-3 text-right shrink-0">
             <ConfidenceBar value={confidence} />
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest border-white/5 px-3 py-0">
@@ -142,7 +273,7 @@ export function AgentFindingCard({
       </button>
 
       {/* Expandable Content */}
-      <div 
+      <div
         id={`agent-content-${agentId}`}
         className={clsx(
           "grid transition-all duration-500 ease-in-out",
@@ -150,38 +281,37 @@ export function AgentFindingCard({
         )}
       >
         <div className="overflow-hidden">
-          <div className="p-8 pt-2 space-y-8 animate-in fade-in slide-in-from-top-4 duration-700">
-            {/* Narrative Summary */}
+          <div className="p-6 pt-3 space-y-6 animate-in fade-in slide-in-from-top-4 duration-700">
+
+            {/* Agent narrative (court_notes / reliability note) — concise, not primary */}
             {narrative && (
-              <div className="relative p-6 rounded-2xl bg-[#000]/30 border border-white/5 group">
-                <div className="flex items-center gap-2 mb-4">
-                  <Activity className="w-3.5 h-3.5 text-cyan-400/50" />
-                  <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/20">Agent Synthesis Report</span>
+              <div className="relative p-4 rounded-2xl bg-[#000]/30 border border-white/5">
+                <div className="flex items-center gap-2 mb-2">
+                  <Activity className="w-3 h-3 text-cyan-400/50" />
+                  <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/20">Agent Synthesis</span>
                 </div>
-                <p className="text-[13px] text-white/80 leading-relaxed font-medium">
-                  "{narrative}"
+                <p className="text-[12px] text-white/60 leading-relaxed font-medium">
+                  {narrative}
                 </p>
               </div>
             )}
 
-            {/* Findings List */}
-            <div className="space-y-4">
+            {/* Sections — one per tool group */}
+            <div className="space-y-3">
               <div className="flex items-center justify-between border-b border-white/5 pb-2">
                 <div className="flex items-center gap-2">
                   <Cpu className="w-3 h-3 text-white/20" />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-white/20">Signal Timeline</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white/20">Tool Results by Section</span>
                 </div>
-                <span className="text-[9px] font-mono text-white/10 uppercase font-black">{realFindings.length} Total Signals</span>
+                <span className="text-[9px] font-mono text-white/10 uppercase font-black">
+                  {realFindings.length} tool{realFindings.length !== 1 ? "s" : ""} · {sections.length} group{sections.length !== 1 ? "s" : ""}
+                </span>
               </div>
-              
-              <div className="rounded-2xl border border-white/[0.04] bg-white/[0.01] overflow-hidden">
-                {realFindings.slice(0, 4).map((f, i) => (
-                  <ToolRow key={i} finding={f} isLast={i === realFindings.length - 1 || i === 3} />
+
+              <div className="space-y-2">
+                {sections.map(section => (
+                  <SectionGroup key={section.id} section={section} />
                 ))}
-                
-                {realFindings.length > 4 && (
-                  <MoreFindingsToggle findings={realFindings.slice(4)} count={realFindings.length - 4} />
-                )}
               </div>
             </div>
           </div>

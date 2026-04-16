@@ -115,16 +115,33 @@ export function ToolRow({
       {expanded && (
         <div id={`tool-content-${toolName}`} className="px-6 pb-6 pt-2">
           <div className="p-5 rounded-2xl bg-[#000]/20 border border-white/5 space-y-4">
+            {/* Per-tool specific signal — raw output from the tool */}
             <div className="space-y-1">
-              <h5 className="text-[9px] font-black text-white/20 uppercase tracking-[0.2em]">Forensic Signal</h5>
-              <p className="text-[13px] text-white/60 leading-relaxed font-medium italic">
-                "{finding.reasoning_summary || "No specific signal summary provided by agent."}"
+              <h5 className="text-[9px] font-black text-white/20 uppercase tracking-[0.2em]">Tool Output</h5>
+              <p className="text-[13px] text-white/70 leading-relaxed font-medium font-mono">
+                {(finding.metadata?.raw_tool_summary as string) || finding.reasoning_summary || "No output recorded."}
               </p>
             </div>
-            
+
+            {/* Section key signal (quick one-liner verdict) */}
+            {(finding.metadata?.section_key_signal as string) && (
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-white/30 mt-0.5 shrink-0" />
+                <p className="text-[11px] text-white/40 leading-relaxed italic">
+                  {finding.metadata?.section_key_signal as string}
+                </p>
+              </div>
+            )}
+
             {finding.status === "ERROR" && (
               <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-500/5 border border-rose-500/10 text-rose-400 text-[10px] font-bold uppercase tracking-widest">
                 <XCircle className="w-3.5 h-3.5" /> Analysis Protocol Error
+              </div>
+            )}
+
+            {finding.status === "INCOMPLETE" && (
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-amber-400 text-[10px] font-bold uppercase tracking-widest">
+                <AlertTriangle className="w-3.5 h-3.5" /> No Matching Tool — Task Not Executed
               </div>
             )}
           </div>

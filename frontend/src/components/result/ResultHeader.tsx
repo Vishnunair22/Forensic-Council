@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Lock, Fingerprint, ShieldCheck, ShieldAlert, Shield } from "lucide-react";
+import { Lock, Fingerprint, ShieldCheck, ShieldAlert, Shield, type LucideIcon } from "lucide-react";
 import type { ReportDTO } from "@/lib/api";
 import type { VerdictConfig } from "@/lib/verdict";
 import { ArcGauge } from "./ArcGauge";
@@ -22,7 +22,7 @@ interface ResultHeaderProps {
   pipelineDuration: string | null;
 }
 
-const VERDICT_THEMES: Record<string, { border: string; glow: string; text: string; bg: string; icon: any }> = {
+const VERDICT_THEMES: Record<string, { border: string; glow: string; text: string; bg: string; icon: LucideIcon }> = {
   emerald: { 
     border: "border-emerald-500/20", 
     glow: "shadow-[0_0_40px_rgba(16,185,129,0.05)]", 
@@ -110,7 +110,7 @@ export function ResultHeader({
               <div className="relative p-5 rounded-2xl bg-white/[0.01] border border-white/5">
                 <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-cyan-500/20 rounded-full" />
                 <p className="text-[13px] text-white/60 leading-relaxed italic font-medium">
-                  "{report.verdict_sentence}"
+                  &ldquo;{report.verdict_sentence}&rdquo;
                 </p>
               </div>
             )}

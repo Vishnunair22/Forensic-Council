@@ -9,8 +9,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { AlertTriangle, CheckCircle2, Loader2, ShieldAlert, ArrowRight } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { CheckCircle2, Loader2, ShieldAlert, ArrowRight } from "lucide-react";
+import { motion } from "framer-motion";
 import { clsx } from "clsx";
 
 interface HITLCheckpoint {
@@ -73,8 +73,7 @@ export function HITLCheckpointModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onDismiss}>
-      <DialogContent className="sm:max-w-xl bg-[#06090F] border-white/10 p-0 overflow-hidden rounded-3xl shadow-[0_32px_64px_rgba(0,0,0,0.6)]">
-        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-500/50 via-amber-400 to-amber-500/50" />
+      <DialogContent className="sm:max-w-xl glass-panel border-white/10 p-0 overflow-hidden rounded-3xl shadow-[0_32px_64px_rgba(0,0,0,0.8)] border-t border-t-white/10">
         
         {checkpoint ? (
           <div className="p-8 space-y-6">
@@ -178,14 +177,14 @@ export function HITLCheckpointModal({
               <button
                 onClick={onDismiss}
                 disabled={isSubmitting}
-                className="btn-pill-secondary px-8 py-3 bg-transparent border-none text-white/30 hover:text-white/50"
+                className="btn-pill-secondary px-8"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={!selectedDecision || isSubmitting}
-                className="btn-pill-primary px-10 py-3 gap-3 shadow-[0_0_30px_rgba(34,211,238,0.2)]"
+                className="btn-pill-primary px-10 gap-3"
               >
                 {isSubmitting ? (
                   <>

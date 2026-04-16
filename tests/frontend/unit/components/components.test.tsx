@@ -13,6 +13,17 @@ import userEvent from "@testing-library/user-event";
 import { FileUploadSection } from "@/components/evidence/FileUploadSection";
 import { AgentProgressDisplay } from "@/components/evidence/AgentProgressDisplay";
 
+// Mock URL.createObjectURL
+if (typeof window !== "undefined") {
+  window.URL.createObjectURL = jest.fn(() => "mock-url");
+  window.URL.revokeObjectURL = jest.fn();
+}
+
+jest.mock("next/image", () => ({
+  __esModule: true,
+  default: (props: any) => <img {...props} />,
+}));
+
 // ── Silence framer-motion animations ─────────────────────────────────────────
 
 jest.mock("framer-motion", () => ({
@@ -24,6 +35,15 @@ jest.mock("framer-motion", () => ({
   AnimatePresence: ({ children }: React.PropsWithChildren<object>) => <>{children}</>,
   useAnimation: () => ({ start: jest.fn() }),
   useInView: () => true,
+}));
+
+jest.mock("@/components/ui/AnimatedWave", () => ({
+  __esModule: true,
+  default: () => <div data-testid="animated-wave" />,
+}));
+
+jest.mock("@/components/ui/AgentIcon", () => ({
+  AgentIcon: () => <div data-testid="agent-icon" />,
 }));
 
 // ── FileUploadSection helpers ─────────────────────────────────────────────────
@@ -100,18 +120,18 @@ describe("FileUploadSection", () => {
     });
     it("renders clear/reset button", () => {
       render(<FileUploadSection {...uploadDefaults} file={file} />);
-      expect(screen.getByRole("button", { name: /clear|reset|remove/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /clear|reset|remove|discard/i })).toBeInTheDocument();
     });
     it("calls onUpload with file when upload clicked", () => {
       const onUpload = jest.fn();
       render(<FileUploadSection {...uploadDefaults} file={file} onUpload={onUpload} />);
-      fireEvent.click(screen.getByRole("button", { name: /begin|analyse|start/i }));
+      fireEvent.click(screen.getByRole("button", { name: /begin|analyse|start|investigate/i }));
       expect(onUpload).toHaveBeenCalledWith(file);
     });
     it("calls onClear when clear clicked", () => {
       const onClear = jest.fn();
       render(<FileUploadSection {...uploadDefaults} file={file} onClear={onClear} />);
-      fireEvent.click(screen.getByRole("button", { name: /clear|reset|remove/i }));
+      fireEvent.click(screen.getByRole("button", { name: /clear|reset|remove|discard/i }));
       expect(onClear).toHaveBeenCalled();
     });
   });
@@ -179,8 +199,13 @@ describe("FileUploadSection", () => {
 describe("AgentProgressDisplay", () => {
   describe("default rendering", () => {
     it("renders without crashing", () => {
-      const { container } = render(<AgentProgressDisplay {...progressDefaults} />);
-      expect(container.firstChild).toBeTruthy();
+      try {
+        const { container } = render(<AgentProgressDisplay {...progressDefaults} />);
+        expect(container.firstChild).toBeTruthy();
+      } catch (e) {
+        console.error("AgentProgressDisplay render failed:", e);
+        throw e;
+      }
     });
     it("shows progressText", () => {
       render(<AgentProgressDisplay {...progressDefaults} progressText="Running agent 1…" />);
@@ -202,9 +227,12 @@ describe("AgentProgressDisplay", () => {
       render(<AgentProgressDisplay {...awaitProps} />);
       expect(screen.getByRole("button", { name: /deep/i })).toBeInTheDocument();
     });
-    it("shows New Upload button", () => {
-      render(<AgentProgressDisplay {...awaitProps} />);
-      expect(screen.getByRole("button", { name: /new|upload/i })).toBeInTheDocument();
+    it("shows New Analysis button only after deep phase", () => {
+      const { rerender } = render(<AgentProgressDisplay {...awaitProps} phase="initial" />);
+      expect(screen.queryByRole("button", { name: /new analysis/i })).not.toBeInTheDocument();
+      
+      rerender(<AgentProgressDisplay {...awaitProps} phase="deep" />);
+      expect(screen.getByRole("button", { name: /new analysis/i })).toBeInTheDocument();
     });
     it("calls onAcceptAnalysis on click", () => {
       const onAccept = jest.fn();
@@ -218,10 +246,10 @@ describe("AgentProgressDisplay", () => {
       fireEvent.click(screen.getByRole("button", { name: /deep/i }));
       expect(onDeep).toHaveBeenCalled();
     });
-    it("calls onNewUpload on click", () => {
+    it("calls onNewUpload on click when in deep complete state", () => {
       const onNew = jest.fn();
-      render(<AgentProgressDisplay {...awaitProps} onNewUpload={onNew} />);
-      fireEvent.click(screen.getByRole("button", { name: /new|upload/i }));
+      render(<AgentProgressDisplay {...awaitProps} phase="deep" onNewUpload={onNew} />);
+      fireEvent.click(screen.getByRole("button", { name: /new analysis/i }));
       expect(onNew).toHaveBeenCalled();
     });
   });
@@ -233,9 +261,9 @@ describe("AgentProgressDisplay", () => {
       const btns = screen.getAllByRole("button");
       expect(btns.some(b => b.hasAttribute("disabled"))).toBe(true);
     });
-    it("shows loading/compiling text when isNavigating", () => {
+    it("shows navigation status label when in decision phase", () => {
       render(<AgentProgressDisplay {...navProps} />);
-      expect(screen.getByText(/compiling|loading/i)).toBeInTheDocument();
+      expect(screen.getByText(/Investigation Status/i)).toBeInTheDocument();
     });
     it("onAcceptAnalysis not called when disabled and clicking", () => {
       const onAccept = jest.fn();
@@ -248,13 +276,13 @@ describe("AgentProgressDisplay", () => {
 
   describe("completed agents display", () => {
     const completed = [{
-      agent_id: "Agent1", agent_name: "Image Integrity Expert",
+      agent_id: "AGT-01", agent_name: "Image Forensics",
       message: "Analysis complete", status: "complete" as const,
       confidence: 0.95, findings_count: 3,
     }];
     it("shows agent name", () => {
       render(<AgentProgressDisplay {...progressDefaults} completedAgents={completed} />);
-      expect(screen.getByText(/Image Integrity Expert/i)).toBeInTheDocument();
+      expect(screen.getByText(/Image Forensics/i)).toBeInTheDocument();
     });
   });
 

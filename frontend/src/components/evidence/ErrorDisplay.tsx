@@ -2,7 +2,6 @@
 
 import { AlertCircle, RotateCcw, X } from "lucide-react";
 import { motion } from "framer-motion";
-import { clsx } from "clsx";
 
 interface ErrorDisplayProps {
   message: string;
