@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v5.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -9,26 +9,41 @@ repos:
       - id: check-merge-conflict
       - id: detect-private-key
 
-  - repo: https://github.com/psf/black
-    rev: 24.4.2
-    hooks:
-      - id: black
-        language_version: python3.12
-
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.4
+    rev: v0.11.7
     hooks:
       - id: ruff
         args: [--fix]
+      - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.10.0
+    rev: v1.15.0
     hooks:
       - id: mypy
         additional_dependencies: [types-all]
 
+  - repo: local
+    hooks:
+      - id: pyright-tools
+        name: pyright tools/
+        language: system
+        entry: bash -c 'cd apps/api && uv run pyright tools/'
+        pass_filenames: false
+        files: ^apps/api/tools/.*\.py$
+        types: [python]
+
   - repo: https://github.com/hadialqattan/pycln
-    rev: v2.4.0
+    rev: v2.5.0
     hooks:
       - id: pycln
         args: [--all]
+
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v9.22.0
+    hooks:
+      - id: eslint
+        files: \.(tsx?|jsx?)$
+        additional_dependencies:
+          - eslint@9
+          - eslint-config-next@15
+          - "@eslint/eslintrc@3"

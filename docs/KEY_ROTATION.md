@@ -1,4 +1,4 @@
-# SIGNING_KEY Rotation Policy
+﻿# SIGNING_KEY Rotation Policy
 
 ## Policy
 
@@ -37,7 +37,7 @@ curl -s http://localhost:8000/health | python -m json.tool
 
 ### 5. Re-sign existing reports (optional but recommended)
 
-All reports signed with the old key remain valid — the signature is verified against the key that was active at signing time. However, for maximum audit integrity, re-sign critical reports:
+All reports signed with the old key remain valid â€” the signature is verified against the key that was active at signing time. However, for maximum audit integrity, re-sign critical reports:
 
 ```bash
 # List reports signed with old key
@@ -64,7 +64,7 @@ Authorized by: <admin_name>
 
 If you suspect the `SIGNING_KEY` has been leaked:
 
-1. Rotate immediately — do not wait for the annual schedule
+1. Rotate immediately â€” do not wait for the annual schedule
 2. Invalidate all active JWT tokens: `redis-cli FLUSHDB` (if Redis stores blacklists)
 3. Audit all reports signed since the suspected compromise date
 4. Notify stakeholders that reports signed between dates X and Y may need re-verification
@@ -77,7 +77,7 @@ Add to your CI/CD or cron to check key age:
 
 ```bash
 #!/bin/bash
-# check_key_age.sh — run monthly via cron
+# check_key_age.sh â€” run monthly via cron
 KEY_FILE="/path/to/.env"
 LAST_MODIFIED=$(stat -c %Y "$KEY_FILE" 2>/dev/null || stat -f %m "$KEY_FILE")
 NOW=$(date +%s)
@@ -88,3 +88,4 @@ if [ "$AGE_DAYS" -gt 365 ]; then
   # Send alert to your notification system
 fi
 ```
+

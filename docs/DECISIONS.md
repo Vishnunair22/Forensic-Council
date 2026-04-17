@@ -1,5 +1,8 @@
 # Architecture Decision Records (ADRs)
 
+> **Superseded by** [`adr/`](./adr/) — new ADRs should be filed there.
+> This file is retained for historical reference only.
+
 ## ADR 1: Custom AsyncIO ReAct Loop over LangGraph
 
 - **Date:** 2026-02-15 (revised 2026-03-16)
@@ -43,7 +46,7 @@
 - **Date:** 2026-03-11
 - **Context:** No automated gate existed; tests were never run on push.
 - **Decision:** Add `.github/workflows/ci.yml` with backend + frontend lint/type-check/build/test jobs, dependency audits, and an integration smoke test gated to `main` pushes.
-- **Rationale:** Forensic evidence tooling has a high correctness bar. Catching regressions in the signing pipeline, resume URL routing, or auth layer before merge is non-negotiable. The smoke test runs the full Docker stack against a live backend to verify `/health` and auth rejection without requiring real ML models (`LLM_PROVIDER=none`). CI runs from the project root using `pytest tests/backend/ tests/infrastructure/ tests/docker/` — not from `backend/` where only empty stubs exist.
+- **Rationale:** Forensic evidence tooling has a high correctness bar. Catching regressions in the signing pipeline, resume URL routing, or auth layer before merge is non-negotiable. The smoke test runs the full Docker stack against a live backend to verify `/health` and auth rejection without requiring real ML models (`LLM_PROVIDER=none`). CI runs from the project root using `cd apps/api && uv run pytest tests && pytest ../../tests/infra ../../tests/docker` — not from `apps/api/` where only empty stubs exist.
 
 ---
 
@@ -82,3 +85,5 @@
 - **Context:** When an investigation fails, `update_session_status()` attempted `INSERT INTO session_reports` with empty strings for `case_id` and `investigator_id` (both `NOT NULL`). The error handler itself crashed with a PostgreSQL constraint violation.
 - **Decision:** Change the error path to `UPDATE session_reports ... WHERE session_id = $1` — only update if a row already exists; never insert.
 - **Rationale:** The `session_reports` row is created by `save_report()` at investigation completion. If the investigation never completed, no row exists, and there is nothing to update — which is the correct behaviour. Attempting to insert a row with empty required fields was both logically wrong and operationally dangerous (it crashed the error handler, preventing the failure from being persisted at all).
+
+

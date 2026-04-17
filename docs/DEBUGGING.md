@@ -1,4 +1,4 @@
-# Debugging Guide
+﻿# Debugging Guide
 
 ## Enable Debug Logging
 
@@ -18,14 +18,14 @@ docker compose up --build
 
 ```bash
 # 1. Check if tool has syntax errors
-python -m py_compile backend/tools/ml_tools/splicing_detector.py
+python -m py_compile apps/api/tools/ml_tools/splicing_detector.py
 
 # 2. Run tool directly with test image
-python backend/tools/ml_tools/splicing_detector.py \
+python apps/api/tools/ml_tools/splicing_detector.py \
   --input tests/fixtures/test_image.jpg
 
 # 3. Test warmup
-python backend/tools/ml_tools/splicing_detector.py --warmup
+python apps/api/tools/ml_tools/splicing_detector.py --warmup
 
 # 4. Check logs
 docker compose logs backend | grep splicing_detector
@@ -80,3 +80,4 @@ SELECT name, applied_at FROM migrations ORDER BY applied_at DESC;
 | WebSocket disconnects immediately | Invalid or expired JWT | Check auth header and token expiry |
 | Agents hang indefinitely | ML process deadlock | Restart worker service |
 | Report generation fails | Postgres connection pool exhausted | Increase `postgres_max_pool_size` |
+

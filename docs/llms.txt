@@ -1,0 +1,41 @@
+﻿# Forensic Council
+
+Multi-Agent Forensic Evidence Analysis System for court-grade digital evidence verification.
+
+## Key Architecture
+
+- 5 Specialist Agents: Image (Agent1), Audio (Agent2), Object (Agent3), Video (Agent4), Metadata (Agent5)
+- Two-phase ReAct loop: Initial Analysis then Deep Analysis
+- CouncilArbiter: cross-agent synthesis, contradiction challenge loops, reliability weighting
+- Gemini 2.5 Flash: vision deep analysis for Agents 1, 3, 5
+- Groq Llama 3.3 70B: narrative synthesis for final report
+- ECDSA P-256: cryptographic report signing via CustodyLogger
+
+## Stack
+
+- Backend: Python 3.12, FastAPI, asyncio, uv, asyncpg
+- Frontend: Next.js 15, React 19, TailwindCSS 4.x, TypeScript 5.8
+- Infrastructure: Docker, Caddy 2, Redis 7, Qdrant, PostgreSQL 17, Jaeger
+- ML: PyTorch (CPU), HuggingFace Transformers, ultralytics (YOLO), pyannote.audio, speechbrain
+
+## Key Docs
+
+- Architecture: docs/ARCHITECTURE.md
+- Agent capabilities: docs/AGENTS.md
+- API reference: docs/API.md
+- Setup: docs/DEVELOPMENT_SETUP.md
+- Docker build: infra/DOCKER_BUILD.md
+
+## Quick Start
+
+```bash
+cp .env.example .env    # Fill in LLM_API_KEY and GEMINI_API_KEY
+docker compose -f infra/docker-compose.yml --env-file .env up --build
+```
+
+## Dev Mode (Hot Reload)
+
+```bash
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up --build
+```
+

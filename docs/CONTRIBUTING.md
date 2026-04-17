@@ -1,4 +1,4 @@
-# Contributing to the Forensic Council
+﻿# Contributing to the Forensic Council
 
 Thank you for your interest in contributing to the Forensic Council system! This document outlines our standard workflow for branching, committing, testing, and reviewing code.
 
@@ -21,11 +21,11 @@ Commit messages should be precise. We loosely follow Conventional Commits.
 *   `chore: update .env.example with CHANGE_ME placeholders`
 
 **Scope prefixes** (optional but encouraged):
-- `api:` — API route or middleware changes
-- `agent:` — Agent logic changes
-- `ui:` — Frontend component changes
-- `infra:` — Docker, compose, or infrastructure changes
-- `security:` — Auth, signing, or security-related changes
+- `api:` â€” API route or middleware changes
+- `agent:` â€” Agent logic changes
+- `ui:` â€” Frontend component changes
+- `infra:` â€” Docker, compose, or infrastructure changes
+- `security:` â€” Auth, signing, or security-related changes
 
 ## 3. Pull Request Process
 
@@ -65,44 +65,21 @@ Before requesting review, verify:
 - [ ] No `CHANGE_ME` placeholders left in `.env` (if adding new secrets)
 - [ ] Documentation updated for user-facing changes
 - [ ] Security implications considered (auth, data exposure, injection)
-
-**For security-sensitive changes** (auth, signing, data handling):
-- [ ] Threat model documented in PR description
-- [ ] Security review requested from team lead
-- [ ] Regression tests added for security boundaries
-
-Before requesting review, verify:
-
-- [ ] All tests pass locally (`pytest` for backend, `npm test` for frontend)
-- [ ] Linting passes (`ruff check .` for backend, `npm run lint` for frontend)
-- [ ] TypeScript compiles without errors (`npx tsc --noEmit`)
-- [ ] Docker builds succeed (`docker compose build`)
-- [ ] No `CHANGE_ME` placeholders left in `.env` (if adding new secrets)
-- [ ] Documentation updated for user-facing changes
-- [ ] Security implications considered (auth, data exposure, injection)
-
-**For security-sensitive changes** (auth, signing, data handling):
-- [ ] Threat model documented in PR description
-- [ ] Security review requested from team lead
-- [ ] Regression tests added for security boundaries
-
-Before submitting a PR, verify every item:
-
-- [ ] Code follows project style (`ruff check .`, `npm run lint`)
-- [ ] All tests pass (`pytest tests/`, `npm test -- --watchAll=false`)
-- [ ] TypeScript compiles cleanly (`npm run type-check`)
-- [ ] No secrets in code (`SIGNING_KEY`, API keys, `.env` values)
-- [ ] `docs/Development-Status.md` updated with your changes
 - [ ] New `.env` vars documented in `.env.example`
 - [ ] Database schema changes include migration scripts
 - [ ] Screenshots/video attached for UI changes
-- [ ] Security-sensitive changes reviewed by 2 senior maintainers
 
-## 5. Setting up the Development Environment
+**For security-sensitive changes** (auth, signing, data handling):
+- [ ] Threat model documented in PR description
+- [ ] Security review requested from team lead
+- [ ] Regression tests added for security boundaries
+- [ ] Reviewed by 2 senior maintainers
 
-Please consult the root [`README.md`](../README.md) and [`infra/DOCKER_BUILD.md`](docker/DOCKER_BUILD.md) to spin up the local Docker environment.
+## 6. Setting up the Development Environment
 
-**Linux / macOS** — use the provided shell script:
+Please consult the root [`README.md`](../README.md) and [`docs/DEVELOPMENT_SETUP.md`](DEVELOPMENT_SETUP.md) to spin up the local Docker environment.
+
+**Linux / macOS** â€” use the provided shell script:
 ```bash
 ./manage.sh dev      # hot-reload dev stack
 ./manage.sh logs     # tail all container logs
@@ -117,3 +94,4 @@ Please consult the root [`README.md`](../README.md) and [`infra/DOCKER_BUILD.md`
 ```
 
 Both scripts are functionally identical. See the root `README.md` for the full command reference.
+

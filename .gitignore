@@ -49,22 +49,28 @@ coverage.xml
 # ── Node / Next.js ───────────────────────────────────────────────────────────
 node_modules/
 **/node_modules/
-frontend/.next/
-frontend/out/
-frontend/.npm
-frontend/.cache
+apps/web/.next/
+apps/web/out/
+apps/web/.npm
+apps/web/.cache
+apps/web/coverage/
+apps/web/tsconfig.tsbuildinfo
+apps/web/lint_output*.txt
 *.tsbuildinfo
 .pnpm-store/
 
 # ── Docker build artefacts ───────────────────────────────────────────────────
-/backend/storage/evidence/*
-!/backend/storage/evidence/.gitkeep
-/backend/storage/keys/*
-!/backend/storage/keys/.gitkeep
+/apps/api/storage/evidence/*
+!/apps/api/storage/evidence/.gitkeep
+/apps/api/storage/keys/*
+!/apps/api/storage/keys/.gitkeep
+/apps/api/reports/*.json
+/apps/api/reports/*.jsonl
+apps/web/.swc/
 
 # ── ML model caches (large binary files) ─────────────────────────────────────
-/backend/cache/
-/storage/calibration_models/
+/apps/api/cache/
+/apps/api/storage/calibration_models/
 *.pt
 *.pth
 *.onnx
@@ -81,16 +87,28 @@ Thumbs.db
 desktop.ini
 nul
 
-# ── Test fixtures (binary, not for version control) ──────────────────────────
-tests/fixtures/*.webp
-tests/fixtures/*.png
-tests/fixtures/*.jpg
-tests/fixtures/*.jpeg
-!tests/fixtures/.gitkeep
+# ── Pytest shard / temp dirs (prevent root pollution) ───────────────────────
+pytest-cache-files-*
+tmp_*
+%LOCALAPPDATA%/
+
+# ── Test fixtures ─────────────────────────────────────────────────────────────
+# Small fixture images are committed for CI reproducibility.
+# Large or generated fixtures remain excluded:
+tests/fixtures/*.mp4
+tests/fixtures/*.wav
+tests/fixtures/*.avi
+
+# ── Designated Junk/Temp Dirs (Rules in AGENTS.md) ───────────────────────────
+/apps/api/scratch/*
+!/apps/api/scratch/.gitkeep
+/apps/web/public/temp/*
+!/apps/web/public/temp/.gitkeep
 
 # ── IDE / Editor ─────────────────────────────────────────────────────────────
 .idea/
 .vscode/
 *.swp
 *.swo
+.planning/
 

@@ -1,14 +1,14 @@
-# Forensic Council — Error Log
+﻿# Forensic Council â€” Error Log
 
 All production bugs and their resolutions, ordered chronologically.
 
 ---
 
-## 2026-03-16 — Session 5: Full Runtime Audit (v1.0.4)
+## 2026-03-16 â€” Session 5: Full Runtime Audit (v1.0.4)
 
 ### Error: Report 404 After Investigation Completes (Race Window)
 
-**Symptom:** Result page polls `/arbiter-status` → gets `"complete"` → fetches `/report` → 404. Intermittent — depends on timing.
+**Symptom:** Result page polls `/arbiter-status` â†’ gets `"complete"` â†’ fetches `/report` â†’ 404. Intermittent â€” depends on timing.
 
 **Root Cause:** `run_investigation_task()` set `pipeline._final_report = report` but the `finally` block immediately removed the pipeline from `_active_pipelines`. The in-memory `_final_reports` cache was never populated, so between pipeline eviction and DB persistence completing, the report endpoint had no source to read from.
 
@@ -18,11 +18,11 @@ All production bugs and their resolutions, ordered chronologically.
 
 ### Error: AttributeError: `_custody_logger` in Inter-Agent Calls
 
-**Symptom:** Agents 2, 3, and 4 crash when making collaborative inter-agent calls (e.g. Agent2 → Agent4 for A/V sync).
+**Symptom:** Agents 2, 3, and 4 crash when making collaborative inter-agent calls (e.g. Agent2 â†’ Agent4 for A/V sync).
 
 **Root Cause:** Inter-agent call handlers referenced `self._custody_logger` (underscore prefix), but `ForensicAgent.__init__()` stores the logger as `self.custody_logger` (no underscore).
 
-**Fix:** Changed `self._custody_logger` → `self.custody_logger` in `agent2_audio.py`, `agent3_object.py`, `agent4_video.py`.
+**Fix:** Changed `self._custody_logger` â†’ `self.custody_logger` in `agent2_audio.py`, `agent3_object.py`, `agent4_video.py`.
 
 ---
 
@@ -60,7 +60,7 @@ All production bugs and their resolutions, ordered chronologically.
 
 **Symptom:** Fresh Docker deployment with no LLM_MODEL in .env defaults to `gpt-4o` instead of `llama-3.3-70b-versatile`.
 
-**Fix:** Changed `LLM_MODEL=${LLM_MODEL:-gpt-4o}` → `LLM_MODEL=${LLM_MODEL:-llama-3.3-70b-versatile}` in `docker-compose.yml`.
+**Fix:** Changed `LLM_MODEL=${LLM_MODEL:-gpt-4o}` â†’ `LLM_MODEL=${LLM_MODEL:-llama-3.3-70b-versatile}` in `docker-compose.yml`.
 
 ---
 
@@ -72,15 +72,15 @@ All production bugs and their resolutions, ordered chronologically.
 
 ---
 
-## 2026-03-16 — Session 4: Backend Deep Audit
+## 2026-03-16 â€” Session 4: Backend Deep Audit
 
 ### Error: 404 on Every Resume (Accept/Deep Analysis Buttons Non-Functional)
 
-**Symptom:** Frontend calls `POST /api/v1/sessions/{id}/resume` after `PIPELINE_PAUSED` message. Every call returns 404. Neither "Accept Analysis" nor "Deep Analysis" works — pipeline never progresses.
+**Symptom:** Frontend calls `POST /api/v1/sessions/{id}/resume` after `PIPELINE_PAUSED` message. Every call returns 404. Neither "Accept Analysis" nor "Deep Analysis" works â€” pipeline never progresses.
 
 **Root Cause:** The resume endpoint lived in `investigation.py` (router prefix `/api/v1`) at route `/{session_id}/resume`, making its full path `POST /api/v1/{session_id}/resume`. The frontend called `/api/v1/sessions/{session_id}/resume`. These never matched.
 
-**Fix:** Added `POST /{session_id}/resume` to `sessions.py` (router prefix `/api/v1/sessions`), making the full path `POST /api/v1/sessions/{session_id}/resume` — matching the frontend exactly.
+**Fix:** Added `POST /{session_id}/resume` to `sessions.py` (router prefix `/api/v1/sessions`), making the full path `POST /api/v1/sessions/{session_id}/resume` â€” matching the frontend exactly.
 
 ---
 
@@ -100,7 +100,7 @@ All production bugs and their resolutions, ordered chronologically.
 
 **Root Cause:** `update_session_status()` in `session_persistence.py` ran `INSERT INTO session_reports` with empty strings `""` for `case_id` and `investigator_id` (both `NOT NULL`).
 
-**Fix:** Changed to `UPDATE session_reports ... WHERE session_id = $1` — updates only if a row already exists (created by `save_report()` at investigation start).
+**Fix:** Changed to `UPDATE session_reports ... WHERE session_id = $1` â€” updates only if a row already exists (created by `save_report()` at investigation start).
 
 ---
 
@@ -128,29 +128,29 @@ All production bugs and their resolutions, ordered chronologically.
 
 **Symptom:** CI showed green but no backend tests were actually executed. All test jobs passed with "no tests ran" or only collected from empty stubs.
 
-**Root Cause:** The CI `backend-test` job ran `pytest tests/unit/` from `working-directory: backend`. The `backend/tests/` directory contains only empty `__init__.py` stubs; the actual test files with substance are at `tests/backend/` in the project root.
+**Root Cause:** The CI `backend-test` job ran `pytest tests/unit/` from `working-directory: backend`. The `apps/api/tests/` directory contains only empty `__init__.py` stubs; the actual test files with substance are at `tests/apps/api/` in the project root.
 
-**Fix:** Changed CI to run from project root: `pytest tests/backend/ tests/infrastructure/ tests/docker/`.
+**Fix:** Changed CI to run from project root: `pytest tests/apps/api/ tests/infrastructure/ tests/docker/`.
 
 ---
 
 ### Error: `ImportError: No module named 'core'` / `ModuleNotFoundError: No module named 'backend'`
 
-**Symptom:** Running `pytest tests/backend/` from project root fails immediately. `test_auth.py` crashes with `ImportError: No module named 'core'`. `test_config_signing_schemas.py` crashes with `ModuleNotFoundError: No module named 'backend'`.
+**Symptom:** Running `pytest tests/apps/api/` from project root fails immediately. `test_auth.py` crashes with `ImportError: No module named 'core'`. `test_config_signing_schemas.py` crashes with `ModuleNotFoundError: No module named 'backend'`.
 
 **Root Cause:** Two issues:
-1. Root `setup.cfg` lacked `pythonpath` — Python couldn't find `core`, `infra`, etc.
-2. `backend/` had no `__init__.py` — `from backend.core.config import ...` always failed.
+1. Root `setup.cfg` lacked `pythonpath` â€” Python couldn't find `core`, `infra`, etc.
+2. `apps/api/` had no `__init__.py` â€” `from backend.core.config import ...` always failed.
 
-**Fix:** Added `pythonpath = . backend` to root `setup.cfg` and created `backend/__init__.py`.
+**Fix:** Added `pythonpath = . backend` to root `setup.cfg` and created `apps/api/__init__.py`.
 
 ---
 
-## 2026-03-16 — Session 1: Frontend Audit
+## 2026-03-16 â€” Session 1: Frontend Audit
 
-### Error: TypeError — `visibleAgents[0].id` on Empty Array
+### Error: TypeError â€” `visibleAgents[0].id` on Empty Array
 
-**File:** `frontend/src/components/evidence/AgentProgressDisplay.tsx`
+**File:** `apps/web/src/components/evidence/AgentProgressDisplay.tsx`
 
 **Root Cause:** `visibleAgents[0].id` accessed without null check when `visibleAgents` was empty.
 
@@ -160,15 +160,15 @@ All production bugs and their resolutions, ordered chronologically.
 
 ### Error: `as unknown as string` Double Cast
 
-**File:** `frontend/src/app/evidence/page.tsx`
+**File:** `apps/web/src/app/evidence/page.tsx`
 
-**Root Cause:** `investigatorIdRef.current as unknown as string` — the ref was already typed `useRef<string>`.
+**Root Cause:** `investigatorIdRef.current as unknown as string` â€” the ref was already typed `useRef<string>`.
 
 **Fix:** Removed the unnecessary double cast.
 
 ---
 
-### Error: Jest Fails to Install — `jest-util@^30.2.0` Incompatible
+### Error: Jest Fails to Install â€” `jest-util@^30.2.0` Incompatible
 
 **Symptom:** `npm install` fails; `jest-util@^30.x` is incompatible with `jest@29.x`.
 
@@ -176,19 +176,19 @@ All production bugs and their resolutions, ordered chronologically.
 
 ---
 
-### Error: WCAG 2.1 — Logo Not Keyboard Navigable
+### Error: WCAG 2.1 â€” Logo Not Keyboard Navigable
 
-**File:** `frontend/src/components/evidence/HeaderSection.tsx`
+**File:** `apps/web/src/components/evidence/HeaderSection.tsx`
 
-**Root Cause:** Logo rendered as a plain `<div onClick>` — not focusable, no keyboard handler, no ARIA role.
+**Root Cause:** Logo rendered as a plain `<div onClick>` â€” not focusable, no keyboard handler, no ARIA role.
 
 **Fix:** Added `role="button"`, `tabIndex={0}`, `onKeyDown` (Enter/Space), `aria-label="Return to Forensic Council home"`.
 
 ---
 
-### Error: WCAG 2.1 — Textarea Missing Label Association
+### Error: WCAG 2.1 â€” Textarea Missing Label Association
 
-**File:** `frontend/src/components/evidence/HITLCheckpointModal.tsx`
+**File:** `apps/web/src/components/evidence/HITLCheckpointModal.tsx`
 
 **Root Cause:** `<label>` and `<textarea>` had no linking `id`/`htmlFor` attributes.
 
@@ -196,14 +196,22 @@ All production bugs and their resolutions, ordered chronologically.
 
 ---
 
-## 2026-03-24 — Phase 1–5: Production Hardening & Cleanup (v1.0.4)
+---
 
-### Audit: Multi-Agent Pipeline & Instrumentation
-- **Verified**: `ForensicCouncilPipeline` orchestration logic correctly handles cross-agent context injection (Agent 1 Gemini findings → Agents 3 & 5).
-- **Verified**: WebSocket broadcasting correctly instrumented in `investigation.py` to prevent race conditions during UI state transitions.
-- **Verified**: PostgreSQL session persistence (`session_persistence.py`) robustly handles backend restart resilience for all `ReportDTO` fields.
+## 2026-04-11 â€” Forensic OS 2026 Hardening (v1.3.0)
 
-### Structural Cleanup
-- **Purged**: Removed all backend root scratch files (`master.py`, `out.txt`) and dev-only test scripts.
-- **Consolidated**: Documentation synchronized across root, `docs/`, and `frontend/` to ensure v1.0.4 parity.
-- **Hardened**: Verified Docker health-checks, volume permissions (non-root `appuser`), and ML model cache persistence.
+### Audit: Documentation & Root Hygiene
+- **Verified**: Full audit of `docs/` directory completed. All architectural specs, API references, and security policies synchronized with v1.3.0 code.
+- **Improved**: Relocated `apps/api/test_initial_analysis.py` to `tests/integration/` to maintain root cleanliness.
+- **Improved**: Consolidated agent diagnostic tools into `docs/agent_capabilities.md` with "Court Defensible" status verification.
+
+### Hardening: Multi-Agent Parallelism & Grounding
+- **Verified**: Hybrid sequential/concurrent agent execution flow correctly handles Agent 1 (Initial) â†’ Agent 3/5 (Deep) context injection.
+- **Verified**: ECDSA P-256 deterministic key derivation (HMAC-SHA-256) robustly separate agent-level signing authorities.
+- **Updated**: Metadata Agent (Agent 5) now includes **C2PA JUMBF Validation** and hardware provenance cross-correlation.
+
+### Infrastructure & Resilience
+- **Hardened**: Redis-backed rate limiter and session state store confirmed to handle OOM degradation gracefully via Lua atomicity.
+- **Hardened**: PostgreSQL immutable forensic ledger verified for tamper-evident sequential hashing.
+- **Warning**: Added hardware peak load warnings (15GB RAM) to `ARCHITECTURE.md` to prevent deployment OOMs in Deep Analysis phase.
+

@@ -1,6 +1,6 @@
 # Forensic Council — Project Context
 
-**Version:** v1.1.1 | **Audited:** 2026-03-31
+**Version:** v1.3.0 | **Audited:** 2026-04-12
 
 ---
 
@@ -18,7 +18,7 @@ Forensic Council is a **multi-agent AI forensic evidence analysis system**. User
 |-------|-----------|
 | Frontend | Next.js 15, React 19, Tailwind 4, Framer Motion |
 | Backend API | FastAPI, Pydantic v2, asyncpg |
-| LLM Reasoning | Groq (Llama 3.3 70B primary), Gemini (vision, deep pass) |
+| LLM Reasoning | Groq (Llama 3.3 70B primary), Gemini 2.5 Flash (vision, deep pass) |
 | ML Models | YOLOv8, Wav2Vec2, CLIP, DeepFace, pyannote.audio, EasyOCR |
 | Image Analysis | PIL, NumPy, SciPy, OpenCV, scikit-image |
 | Audio Analysis | librosa, SpeechBrain, praat-parselmouth |
@@ -35,7 +35,7 @@ Forensic Council is a **multi-agent AI forensic evidence analysis system**. User
 
 ```
 d:/Forensic Council/
-├── backend/
+├── apps/api/
 │   ├── agents/           # 5 specialist agents + arbiter
 │   │   ├── base_agent.py        # Base class, self-reflection, memory
 │   │   ├── agent1_image.py      # ELA, splice, PRNU, EXIF, frequency
@@ -79,7 +79,7 @@ d:/Forensic Council/
 │   └── reports/
 │       └── report_renderer.py   # HTML/JSON serialization, signature verification
 │
-├── frontend/src/
+├── apps/web/src/
 │   ├── app/                     # Next.js App Router
 │   │   ├── page.tsx             # Landing page, file upload, agent showcase
 │   │   ├── evidence/page.tsx    # Investigation progress, WebSocket stream
@@ -94,7 +94,7 @@ d:/Forensic Council/
 │
 ├── tests/                       # Pytest (unit, integration, security, connectivity, infra)
 ├── docs/                        # Docker configs, monitoring, runbooks
-├── setup.cfg                    # Pytest config, pythonpath = . backend
+├── apps/api/tests/             # Backend-local pytest suite
 └── .kilo/                       # Kilo agent config, plans
 ```
 
@@ -279,8 +279,7 @@ Pattern: `THOUGHT → ACTION → OBSERVATION` (driven by Groq LLM or hardcoded t
 | `LLM_API_KEY` | Groq key from console.groq.com/keys |
 | `LLM_MODEL` | `llama-3.3-70b-versatile` (Groq default) |
 | `GEMINI_API_KEY` | Enables vision analysis (Agents 1, 3, 5 deep pass) |
-| `GEMINI_MODEL` | `gemini-1.5-pro` (fallbacks: 1.5-flash) |
-| `HF_TOKEN` | HuggingFace token (needed for pyannote diarization) |
+| `GEMINI_MODEL` | `gemini-2.5-flash` (fallbacks: `gemini-2.0-flash`, `gemini-2.0-flash-lite`) |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Initial admin password (must set before prod deploy) |
 | `NEXT_PUBLIC_API_URL` | Browser-reachable backend URL |
 | `DOMAIN` | DNS domain for Caddy auto-TLS |
@@ -291,7 +290,7 @@ Pattern: `THOUGHT → ACTION → OBSERVATION` (driven by Groq LLM or hardcoded t
 
 ```
 tests/
-├── backend/
+├── apps/api/
 │   ├── conftest.py                 # DB, Redis, config fixtures
 │   ├── unit/core/                  # JWT, config, signing tests
 │   ├── integration/                # API routes, e2e pipeline
@@ -318,3 +317,5 @@ docker compose -f infra/docker-compose.yml \
 **Production:** Set `APP_ENV=production`, strong passwords, real `SIGNING_KEY`, `DOMAIN` for Caddy TLS.
 
 ML models download on first run (~10-15 GB, 15-60 min). Subsequent starts use Docker named volume cache.
+
+

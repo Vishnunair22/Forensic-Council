@@ -1,10 +1,10 @@
-# Component Guide
+﻿# Component Guide
 
 ## Overview
 
 Quick reference for all frontend components, their purposes, and usage examples.
 
-**Version:** v1.1.1
+**Version:** v1.3.0
 
 ## Table of Contents
 
@@ -21,7 +21,7 @@ Quick reference for all frontend components, their purposes, and usage examples.
 
 ### Landing Page
 **File:** `app/page.tsx`
-**Purpose:** Main entry point — hero, how-it-works, agent showcase, example report, file upload modals.
+**Purpose:** Main entry point â€” hero, how-it-works, agent showcase, example report, file upload modals.
 
 ### Evidence Page
 **File:** `app/evidence/page.tsx`
@@ -29,7 +29,7 @@ Quick reference for all frontend components, their purposes, and usage examples.
 
 ### Result Page
 **File:** `app/result/page.tsx`
-**Purpose:** Signed forensic report display — per-agent findings, confidence scores, verdict, cryptographic proof, chain of custody, export.
+**Purpose:** Signed forensic report display â€” per-agent findings, confidence scores, verdict, cryptographic proof, chain of custody, export.
 
 ### Session Expired Page
 **File:** `app/session-expired/page.tsx`
@@ -79,12 +79,12 @@ Drag-and-drop upload area with file preview for images/videos/audio. MIME valida
 ### AgentProgressDisplay
 **File:** `components/evidence/AgentProgressDisplay.tsx`
 
-The main analysis view. Renders a 3×2 grid of glass agent cards with live thinking text, tool progress bars, staggered reveal animation, decision buttons (Compile Ledger / Deep Scan Protocol), skipped-agent accordion, and animated Three.js wave background.
+The main analysis view. Renders a 3Ã—2 grid of glass agent cards with live thinking text, tool progress bars, staggered reveal animation, decision buttons (Compile Ledger / Deep Scan Protocol), skipped-agent accordion, and animated Three.js wave background.
 
 **Key internals:**
-- `LiveThinkingText` — debounced text display with animated dots and trailing previous-thought
-- `humaniseThinking()` — translates raw backend task strings into user-friendly action sentences with emoji prefixes
-- Agent status determination: `waiting` → `checking` → `running` → `complete`/`unsupported`/`error`
+- `LiveThinkingText` â€” debounced text display with animated dots and trailing previous-thought
+- `humaniseThinking()` â€” translates raw backend task strings into user-friendly action sentences with emoji prefixes
+- Agent status determination: `waiting` â†’ `checking` â†’ `running` â†’ `complete`/`unsupported`/`error`
 
 **Props:**
 ```typescript
@@ -140,7 +140,7 @@ Located in `components/ui/`.
 
 ### AgentIcon
 **File:** `components/ui/AgentIcon.tsx`
-Resolves per-agent Lucide icon by role string (e.g. "Image Integrity" → Shield, "Audio" → Mic2).
+Resolves per-agent Lucide icon by role string (e.g. "Image Integrity" â†’ Shield, "Audio" â†’ Mic2).
 
 ### AgentResponseText
 **File:** `components/ui/AgentResponseText.tsx`
@@ -182,14 +182,6 @@ Three.js animated wireframe wave background. Accepts speed, amplitude, opacity, 
 
 ---
 
-## Dev Components
-
-### DevErrorOverlay
-**File:** `components/DevErrorOverlay.tsx`
-Development-only error boundary. Classifies errors into categories (REACT_CRASH, NETWORK_ERROR, WEBSOCKET_ERROR, API_ERROR, NULL_REFERENCE, MODULE_ERROR) with fix guides, smart stack traces, and component tree. Stripped in production builds.
-
----
-
 ## Import Patterns
 
 ### Evidence Components (barrel export)
@@ -216,3 +208,4 @@ import {
   DialogContent,
 } from "@/components/ui";
 ```
+

@@ -1,10 +1,10 @@
-# Production Incident Runbook
+﻿# Production Incident Runbook
 
 ## Triage Checklist
 
 When an alert fires or a user reports an issue:
 
-1. Check `GET /health` — is the API responding?
+1. Check `GET /health` â€” is the API responding?
 2. Check Docker container status: `docker compose ps`
 3. Check logs: `docker compose logs --tail=100 backend worker`
 4. Check resource usage: `docker stats --no-stream`
@@ -88,7 +88,7 @@ docker compose logs backend | grep "Agent.*error\|Agent.*failed"
 
 # 2. Common causes per agent:
 #    Agent 1 (Image): EasyOCR model download failure, Gemini API key invalid
-#    Agent 2 (Audio): Missing HF_TOKEN, pyannote model download failure
+#    Agent 2 (Audio): pyannote model download failure, librosa fallback active
 #    Agent 3 (Object): YOLO model corruption, GPU unavailable
 #    Agent 4 (Video): FFmpeg not installed, codec unsupported
 #    Agent 5 (Metadata): exiftool not found, hachoir import error
@@ -146,6 +146,133 @@ grep JWT_ACCESS_TOKEN_EXPIRE_MINUTES .env
 
 ---
 
+## Gemini API Downtime
+
+When the Gemini API is unreachable or rate-limited, Agents 1, 3, and 5 downgrade
+to local-only analysis. Investigations still complete but the `degradation_flags`
+field in the report will be non-empty.
+
+```bash
+# 1. Confirm Gemini is the issue
+docker compose logs backend | grep -i "gemini\|circuit.*open\|GEMINI_DEGRADED"
+
+# 2. Check which circuit state the breaker is in
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/metrics/raw \
+  | grep circuit_breaker
+
+# 3. Check current API quota (free tier = 10 RPM, 1500 RPD)
+#    Open: https://aistudio.google.com/apikey → Usage tab
+
+# 4. If the key is valid but quota exhausted, wait for the daily reset (midnight PT).
+#    Investigations running during the outage will carry the degradation flag:
+#    "gemini_unavailable: deep analysis ran without Gemini context"
+
+# 5. To force the circuit breaker to attempt recovery immediately (HALF_OPEN):
+#    Restart only the backend container (keeps Redis/Postgres intact):
+docker compose -f infra/docker-compose.yml restart backend
+
+# 6. To switch permanently to local-only mode (no Gemini):
+#    Remove GEMINI_API_KEY from .env and restart.
+#    All reports will carry the degradation flag — communicate this to investigators.
+```
+
+**Impact on report quality**: Without Gemini, cross-modal semantic grounding is
+disabled. The manipulation_probability score is still computed from local tools,
+but court_statement values will be less detailed. Mark any reports generated
+during an outage with the `analysis_coverage_note` field in the report footer.
+
+---
+
+## Redis Restart and Working Memory Recovery
+
+Redis holds in-flight investigation state (tool results, agent progress, HITL
+checkpoints). A Redis restart during an active investigation will cause those
+investigations to lose their working memory.
+
+```bash
+# 1. Check Redis health
+docker compose exec redis redis-cli ping
+docker compose exec redis redis-cli INFO memory | grep used_memory_human
+
+# 2. Check active investigation keys before restart
+docker compose exec redis redis-cli KEYS "investigation:*" | wc -l
+docker compose exec redis redis-cli KEYS "session:*" | wc -l
+
+# 3. Safe restart path:
+#    a. Wait for active investigations to complete (check /api/v1/metrics for
+#       active_investigations count = 0), OR
+#    b. Accept that in-flight investigations will orphan and be cleaned up
+#       by the orphaned-session recovery at next backend startup.
+
+# 4. Restart Redis
+docker compose -f infra/docker-compose.yml restart redis
+
+# 5. Verify recovery
+docker compose exec redis redis-cli ping  # → PONG
+curl -s http://localhost:8000/health | python -m json.tool  # redis: "healthy"
+
+# 6. Orphaned sessions are auto-recovered at backend startup.
+#    To trigger manually without restart:
+curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" \
+  http://localhost:8000/api/v1/admin/recover-sessions
+```
+
+**Data loss scope**: Only in-progress tool results are lost. PostgreSQL custody
+logs are written per-tool and are durable. Completed investigations are unaffected.
+
+---
+
+## Evidence File Cleanup
+
+Evidence files are retained for `EVIDENCE_RETENTION_DAYS` (default 7) days.
+There is no automated scheduler — cleanup must be triggered manually until a
+cron job is added.
+
+```bash
+# 1. Check current evidence storage size
+docker compose exec backend du -sh /app/storage/evidence/
+
+# 2. Preview what would be deleted (dry run) — files older than retention period
+docker compose exec backend python scripts/cleanup_storage.py --dry-run
+
+# 3. Run cleanup
+docker compose exec backend python scripts/cleanup_storage.py
+
+# 4. Verify disk freed
+docker compose exec backend du -sh /app/storage/evidence/
+```
+
+**GDPR note**: Evidence files belonging to EU subjects must be deleted on request
+within 30 days (Article 17). Use the session_id to locate and delete specific files:
+```bash
+docker compose exec backend python scripts/cleanup_storage.py --session-id <uuid>
+```
+
+---
+
+## Graceful Shutdown Behaviour
+
+The backend waits up to 120 seconds for active investigations to complete before
+shutting down (`stop_grace_period: 130s` in docker-compose.yml). During this window:
+
+- New investigation submissions are rejected (503)
+- Active investigations continue running
+- WebSocket clients receive a `PIPELINE_PAUSED` or completion event
+
+```bash
+# Monitor shutdown progress
+docker compose logs -f backend | grep -i "shutdown\|graceful\|investigation"
+
+# If an investigation is stuck and shutdown is blocking:
+# 1. Wait the full 130-second grace period
+# 2. After SIGKILL, orphaned sessions are recovered at next startup
+# 3. Check custody logs for completeness of the orphaned session
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8000/api/v1/sessions/<session_id>/verify
+```
+
+---
+
 ## Rollback Procedure
 
 If a deployment breaks production:
@@ -168,9 +295,9 @@ docker compose exec postgres pg_restore -U forensic_user -d forensic_council /ba
 ## Escalation Path
 
 1. **On-call engineer** investigates using this runbook
-2. If unresolved in 30 minutes → **Team lead** notified
-3. If data integrity suspected → **Security team** engaged
-4. If legal/compliance impact → **Legal counsel** notified
+2. If unresolved in 30 minutes â†’ **Team lead** notified
+3. If data integrity suspected â†’ **Security team** engaged
+4. If legal/compliance impact â†’ **Legal counsel** notified
 
 ---
 
@@ -181,4 +308,5 @@ After resolving any P0 or P1 incident:
 1. Write a brief post-mortem (what happened, root cause, fix, prevention)
 2. Update this runbook if a new failure mode was discovered
 3. Add a test case to prevent regression
-4. Update `docs/Development-Status.md` if a code fix was deployed
+4. Update `docs/ERROR_LOG.md` with a new entry if a previously unknown failure mode was encountered
+

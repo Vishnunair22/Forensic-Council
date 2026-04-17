@@ -1,0 +1,23 @@
+{
+  "name": "forensic-council-monorepo",
+  "version": "1.4.0",
+  "description": "Multi-Agent Forensic Evidence Analysis System",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "cd apps/api && uv run python scripts/run_api.py",
+    "dev:web": "cd apps/web && npm run dev",
+    "build:web": "cd apps/web && npm run build",
+    "lint": "npm run lint:api && npm run lint:web",
+    "lint:api": "cd apps/api && uv run ruff check .",
+    "lint:web": "cd apps/web && npm run lint",
+    "test": "npm run test:api && npm run test:web",
+    "test:api": "cd apps/api && uv run pytest",
+    "test:web": "cd apps/web && npm test",
+    "docker:up": "docker compose -f infra/docker-compose.yml up --build",
+    "docker:dev": "docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml up --build"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

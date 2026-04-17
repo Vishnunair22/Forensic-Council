@@ -23,9 +23,9 @@ coverage.xml
 node_modules/
 npm-debug.log
 yarn-error.log
-frontend/.next/
-frontend/out/
-frontend/.turbo/
+apps/web/.next/
+apps/web/out/
+apps/web/.turbo/
 
 # Build artifacts
 dist/
@@ -50,12 +50,17 @@ playwright/.cache/
 Thumbs.db
 
 # IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
 # Storage
 storage/evidence/
 storage/keys/
 
 # ML Caches
-backend/cache/
+apps/api/cache/
 *.pt
 *.pth
 *.onnx

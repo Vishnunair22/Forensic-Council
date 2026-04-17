@@ -84,11 +84,12 @@
     header {
         Strict-Transport-Security  "max-age=31536000; includeSubDomains; preload"
         X-Content-Type-Options     "nosniff"
+        X-Robots-Tag               "none"
         X-XSS-Protection           "0"
         X-Frame-Options            "DENY"
         Referrer-Policy            "strict-origin-when-cross-origin"
         Permissions-Policy         "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
-        Content-Security-Policy    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss: ws:; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+        Content-Security-Policy    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' fonts.gstatic.com data:; connect-src 'self' wss: ws: https://generativelanguage.googleapis.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;"
         -Server
         -X-Powered-By
     }

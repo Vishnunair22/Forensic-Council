@@ -3,7 +3,7 @@
 # ============================================================================
 #
 # Quick start:
-#   cp .env.example .env   # then fill in LLM_API_KEY etc.
+#   copy .env.example .env   # then fill in LLM_API_KEY etc.
 #   docker compose -f infra/docker-compose.yml --env-file .env up --build
 #
 # BuildKit is enabled by default in Docker 23+ and Docker Desktop.
@@ -22,6 +22,41 @@
 # always use the same named volume pool. Without this, Docker would prefix volumes
 # differently based on the working directory, causing separate model downloads.
 name: forensic-council
+
+x-backend-env: &backend-env
+  APP_ENV: ${APP_ENV:-development}
+  DEBUG: ${DEBUG:-false}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-forensic_redis_dev_password}
+  QDRANT_HOST: qdrant
+  QDRANT_PORT: 6333
+  QDRANT_GRPC_PORT: 6334
+  POSTGRES_HOST: postgres
+  POSTGRES_USER: ${POSTGRES_USER:-forensic_user}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forensic_pass}
+  POSTGRES_DB: ${POSTGRES_DB:-forensic_council}
+  SIGNING_KEY: ${SIGNING_KEY}
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+  LLM_PROVIDER: ${LLM_PROVIDER:-none}
+  LLM_API_KEY: ${LLM_API_KEY:-}
+  LLM_MODEL: ${LLM_MODEL:-llama-3.3-70b-versatile}
+  LLM_ENABLE_REACT_REASONING: ${LLM_ENABLE_REACT_REASONING:-true}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+  GEMINI_FALLBACK_MODELS: ${GEMINI_FALLBACK_MODELS:-gemini-2.0-flash,gemini-2.0-flash-lite}
+  GEMINI_TIMEOUT: ${GEMINI_TIMEOUT:-55.0}
+  GEMINI_API_KEY_POLICY_OK: ${GEMINI_API_KEY_POLICY_OK:-true}
+  DAILY_COST_QUOTA_USD: ${DAILY_COST_QUOTA_USD:-50.0}
+  DAILY_COST_QUOTA_ADMIN_USD: ${DAILY_COST_QUOTA_ADMIN_USD:-500.0}
+  RATE_LIMIT_AUTHENTICATED: ${RATE_LIMIT_AUTHENTICATED:-60}
+  RATE_LIMIT_ANONYMOUS: ${RATE_LIMIT_ANONYMOUS:-10}
+  RATE_LIMIT_INVESTIGATION_PER_5MIN: ${RATE_LIMIT_INVESTIGATION_PER_5MIN:-5}
+  EVIDENCE_STORAGE_PATH: /app/storage/evidence
+  CALIBRATION_MODELS_PATH: /app/storage/calibration_models
+  NUMBA_DISABLE_JIT: ${NUMBA_DISABLE_JIT:-1}
+  OTEL_ENABLED: ${OTEL_ENABLED:-true}
 
 services:
   # --------------------------------------------------------------------------
@@ -144,9 +179,7 @@ services:
     container_name: forensic_jaeger
     restart: unless-stopped
     ports:
-      - "16686:16686" # UI
-      - "4317:4317"   # OTLP gRPC
-      - "4318:4318"   # OTLP HTTP
+      - "16686:16686"
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     healthcheck:
@@ -160,13 +193,17 @@ services:
         limits:
           memory: 512M
           cpus: "0.5"
+        reservations:
+          memory: 64M
+          cpus: "0.1"
     networks:
       - infra_net
 
   migration:
     build:
-      context: ../backend
+      context: ../apps/api
       dockerfile: Dockerfile
+      target: migration
     container_name: forensic_migration
     restart: "no"
     command: ["python", "scripts/init_db.py"]
@@ -177,6 +214,7 @@ services:
       - ALL
     environment:
       - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-forensic_user}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-forensic_pass}
       - POSTGRES_DB=${POSTGRES_DB:-forensic_council}
@@ -205,51 +243,23 @@ services:
   # --------------------------------------------------------------------------
   backend:
     build:
-      context: ../backend
+      context: ../apps/api
       dockerfile: Dockerfile
     container_name: forensic_api
     restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
-      - APP_NAME=forensic_council
-      - APP_ENV=${APP_ENV:-development}
-      - DEBUG=${DEBUG:-false}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-forensic_redis_dev_password}
-      - QDRANT_HOST=qdrant
-      - QDRANT_PORT=6333
-      - QDRANT_GRPC_PORT=6334
-      - POSTGRES_HOST=postgres
-      - POSTGRES_USER=${POSTGRES_USER:-forensic_user}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-forensic_pass}
-      - POSTGRES_DB=${POSTGRES_DB:-forensic_council}
-      - BOOTSTRAP_INVESTIGATOR_PASSWORD=${BOOTSTRAP_INVESTIGATOR_PASSWORD}
-      - BOOTSTRAP_ADMIN_PASSWORD=${BOOTSTRAP_ADMIN_PASSWORD}
-      - SIGNING_KEY=${SIGNING_KEY}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
-      # When DOMAIN is set, CORS allows only that origin; otherwise dev defaults.
-      # Comma-separated list — parsed by config.py into a Python list.
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-["http://localhost:3000","http://127.0.0.1:3000"]}
-      - HF_TOKEN=${HF_TOKEN:-}
-      - LLM_PROVIDER=${LLM_PROVIDER:-none}
-      - LLM_API_KEY=${LLM_API_KEY:-}
-      - LLM_MODEL=${LLM_MODEL:-llama-3.3-70b-versatile}
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-pro}
-      - GEMINI_FALLBACK_MODELS=${GEMINI_FALLBACK_MODELS:-gemini-1.5-flash}
-      - GEMINI_TIMEOUT=${GEMINI_TIMEOUT:-55.0}
-      - EVIDENCE_STORAGE_PATH=/app/storage/evidence
-      - CALIBRATION_MODELS_PATH=/app/storage/calibration_models
-      - NUMBA_DISABLE_JIT=1
-      - OTEL_ENABLED=true
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-      - OTEL_SERVICE_NAME=forensic_api
+      <<: *backend-env
+      APP_NAME: forensic_council
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      BOOTSTRAP_INVESTIGATOR_PASSWORD: ${BOOTSTRAP_INVESTIGATOR_PASSWORD}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-["http://localhost:3000","http://127.0.0.1:3000"]}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_SERVICE_NAME: forensic_api
     depends_on:
       postgres:
         condition: service_healthy
@@ -283,13 +293,16 @@ services:
       - /tmp:nosuid,size=512m
     volumes:
       - evidence_data:/app/storage/evidence:rw
-      - ../backend/storage/keys:/app/storage/keys:ro
+      - signing_keys:/app/storage/keys:rw
       - hf_cache:/app/cache/huggingface:rw
       - torch_cache:/app/cache/torch:rw
       - easyocr_cache:/app/cache/easyocr:rw
       - numba_cache:/app/cache/numba_cache:rw
       - yolo_cache:/app/cache/ultralytics:rw
       - calibration_models_cache:/app/storage/calibration_models:rw
+    # Allow enough time for the graceful 120-second investigation shutdown in main.py
+    # to complete before Docker forcibly kills the container (SIGKILL).
+    stop_grace_period: 130s
     # SECURITY: Connect to infrastructure net (redis, postgres, qdrant) and backend net (frontend, caddy)
     networks:
       - infra_net
@@ -300,43 +313,16 @@ services:
   # --------------------------------------------------------------------------
   worker:
     build:
-      context: ../backend
+      context: ../apps/api
       dockerfile: Dockerfile
     container_name: forensic_worker
     restart: unless-stopped
-    command: worker
+    command: ["sh", "scripts/docker_entrypoint.sh", "worker"]
     environment:
-      - APP_NAME=forensic_worker
-      - APP_ENV=${APP_ENV:-development}
-      - DEBUG=${DEBUG:-false}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-forensic_redis_dev_password}
-      - QDRANT_HOST=qdrant
-      - QDRANT_PORT=6333
-      - QDRANT_GRPC_PORT=6334
-      - POSTGRES_HOST=postgres
-      - POSTGRES_USER=${POSTGRES_USER:-forensic_user}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-forensic_pass}
-      - POSTGRES_DB=${POSTGRES_DB:-forensic_council}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-["http://localhost:3000","http://127.0.0.1:3000"]}
-      - SIGNING_KEY=${SIGNING_KEY}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - HF_TOKEN=${HF_TOKEN:-}
-      - LLM_PROVIDER=${LLM_PROVIDER:-none}
-      - LLM_API_KEY=${LLM_API_KEY:-}
-      - LLM_MODEL=${LLM_MODEL:-llama-3.3-70b-versatile}
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-pro}
-      - GEMINI_FALLBACK_MODELS=${GEMINI_FALLBACK_MODELS:-gemini-1.5-flash}
-      - GEMINI_TIMEOUT=${GEMINI_TIMEOUT:-55.0}
-      - EVIDENCE_STORAGE_PATH=/app/storage/evidence
-      - CALIBRATION_MODELS_PATH=/app/storage/calibration_models
-      - NUMBA_DISABLE_JIT=1
-      - OTEL_ENABLED=true
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-      - OTEL_SERVICE_NAME=forensic_worker
+      <<: *backend-env
+      APP_NAME: forensic_worker
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_SERVICE_NAME: forensic_worker
     depends_on:
       postgres:
         condition: service_healthy
@@ -362,7 +348,7 @@ services:
       - /tmp:nosuid,size=512m
     volumes:
       - evidence_data:/app/storage/evidence:rw
-      - ../backend/storage/keys:/app/storage/keys:ro
+      - signing_keys:/app/storage/keys:rw
       - hf_cache:/app/cache/huggingface:rw
       - torch_cache:/app/cache/torch:rw
       - easyocr_cache:/app/cache/easyocr:rw
@@ -433,7 +419,7 @@ services:
   # --------------------------------------------------------------------------
   frontend:
     build:
-      context: ../frontend
+      context: ../apps/web
       dockerfile: Dockerfile
       args:
         # NEXT_PUBLIC_* vars are baked into the JS bundle at build time.
@@ -441,7 +427,7 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
         # INTERNAL_API_URL is used by next.config.ts rewrites() at build time
         # so /api/v1/* proxies to the backend via Docker-internal hostname.
-        INTERNAL_API_URL: "http://forensic_api:8000"
+        INTERNAL_API_URL: "http://backend:8000"
     container_name: forensic_ui
     restart: unless-stopped
     ports:
@@ -455,8 +441,8 @@ services:
       - PORT=3000
       # NEXT_PUBLIC_API_URL below is redundant (baked at build), but kept for clarity.
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
-      - NEXT_PUBLIC_DEMO_PASSWORD=${NEXT_PUBLIC_DEMO_PASSWORD:-demo_dev_only_not_for_production}
-      # DEMO_PASSWORD: server-side alias used by /api/auth/demo Next.js API route.
+      # DEMO_PASSWORD: server-side only — used by /api/auth/demo Next.js API route.
+      # Do NOT use NEXT_PUBLIC_DEMO_PASSWORD — it bakes secrets into the client JS bundle.
       - DEMO_PASSWORD=${DEMO_PASSWORD:-demo_dev_only_not_for_production}
       - BOOTSTRAP_INVESTIGATOR_PASSWORD=${BOOTSTRAP_INVESTIGATOR_PASSWORD:-}
       # INTERNAL_API_URL: used by Next.js server-side API routes (e.g. /api/auth/demo).
@@ -492,11 +478,44 @@ services:
       - frontend_net
       - backend_net
 
+  # --------------------------------------------------------------------------
+  # Observability — Prometheus metrics scraping
+  # --------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: forensic_prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 128M
+          cpus: "0.1"
+    networks:
+      - infra_net
+
 volumes:
   redis_data:
   qdrant_data:
   postgres_data:
   evidence_data:
+  signing_keys:
   hf_cache:
   torch_cache:
   easyocr_cache:
@@ -506,6 +525,7 @@ volumes:
   caddy_data:
   caddy_config:
   caddy_logs:
+  prometheus_data:
 
 # ── Network Segmentation ───────────────────────────────────────────────────────
 # SECURITY: Separate networks to isolate services

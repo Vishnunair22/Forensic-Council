@@ -1,4 +1,4 @@
-# Pre-Deployment Checklist
+﻿# Pre-Deployment Checklist
 
 ## 48 Hours Before Deployment
 
@@ -10,7 +10,7 @@
 ## 24 Hours Before Deployment
 
 - [ ] Full test suite passes (unit + integration + E2E)
-- [ ] Code coverage ≥ 80%
+- [ ] Code coverage â‰¥ 80%
 - [ ] No high-severity security warnings
 - [ ] Performance baseline established
 - [ ] Staging deployment tested
@@ -18,11 +18,11 @@
 ## 4 Hours Before Deployment (Pre-flight)
 
 ### Code Quality
-- [ ] `pytest tests/ --cov` — ≥80% coverage
-- [ ] `ruff check backend/` — No violations
-- [ ] `black --check backend/` — Code formatted
-- [ ] `npm run lint` (frontend) — No ESLint errors
-- [ ] `npm run test:coverage` (frontend) — ≥70% coverage
+- [ ] `pytest tests/ --cov` â€” â‰¥80% coverage
+- [ ] `ruff check apps/api/` â€” No violations
+- [ ] `ruff format --check apps/api/` â€” Code formatted
+- [ ] `npm run lint` (frontend) â€” No ESLint errors
+- [ ] `npm run test:coverage` (frontend) â€” â‰¥70% coverage
 
 ### Configuration
 - [ ] `.env.prod` created with all required vars
@@ -82,3 +82,4 @@ curl -F "file=@test_image.jpg" -H "Authorization: Bearer $TOKEN" \
 - [ ] Check performance metrics
 - [ ] Update status page if applicable
 - [ ] Document any issues encountered
+

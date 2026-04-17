@@ -1,5 +1,8 @@
 # Troubleshooting Guide
 
+> **Merged from:** `DEBUGGING.md`, `KNOWN_ISSUES.md`, and `ERROR_LOG.md`.
+> The historical error log is preserved in `ERROR_LOG.md` for reference.
+
 ## WebSocket Connection Failures
 
 ### Symptom: "WebSocket connection failed (code 4001)"
@@ -31,7 +34,7 @@
 **Cause**: Models downloading in background
 
 **Fix**:
-- Pre-download models: `python backend/scripts/model_pre_download.py`
+- Pre-download models: `python apps/api/scripts/model_pre_download.py`
 - Check `/tmp/model_download.log`
 - Increase Docker memory limit to 8GB
 - Verify internet connectivity from container
@@ -41,7 +44,7 @@
 **Fix**:
 ```bash
 # Check model cache
-docker exec forensic_api ls -la /tmp/ml_models/
+docker exec forensic_api ls -la /app/cache/
 
 # Force re-download
 docker exec forensic_api python -c "from core.ml_subprocess import warmup_all_tools; import asyncio; asyncio.run(warmup_all_tools(force=True))"
@@ -59,7 +62,7 @@ docker exec forensic_api python -c "from core.ml_subprocess import warmup_all_to
 docker exec forensic_api python scripts/init_db.py
 
 # Check migration status
-docker exec forensic_api python backend/core/migrations.py status
+docker exec forensic_api python apps/api/core/migrations.py status
 
 # Force re-run migrations
 docker exec forensic_api python -c "from core.migrations import run_migrations; import asyncio; asyncio.run(run_migrations())"
@@ -100,14 +103,6 @@ docker exec forensic_api python -c "from core.migrations import run_migrations; 
 - Clear cookies and re-login
 - Verify Redis is storing session tokens
 
-### Symptom: "CSRF token missing or invalid"
-
-**Fix**:
-- Ensure frontend sends `X-CSRF-Token` header
-- Check cookie domain matches your site
-- Verify `credentials: 'include'` in fetch calls
-- Clear browser cookies
-
 ---
 
 ## File Upload Failures
@@ -115,12 +110,9 @@ docker exec forensic_api python -c "from core.migrations import run_migrations; 
 ### Symptom: "413 Request Entity Too Large"
 
 **Fix**:
-- Increase upload limit in `.env`:
-  ```bash
-  MAX_UPLOAD_SIZE_MB=100
-  ```
-- Update nginx/proxy settings if behind reverse proxy
-- Check Docker memory limits
+- The 50 MB file size limit is enforced in the backend middleware. To increase it, update the `MAX_UPLOAD_SIZE_BYTES` constant in `apps/api/api/main.py` and rebuild.
+- If behind a reverse proxy, also update the proxy's client_max_body_size (nginx) or request_buffering limit.
+- Check Docker memory limits.
 
 ### Symptom: "415 Unsupported Media Type"
 
@@ -137,7 +129,7 @@ docker exec forensic_api python -c "from core.migrations import run_migrations; 
 ### Symptom: "API response time > 5s"
 
 **Fix**:
-- Check database connection pool: `GET /api/v1/metrics/pool-status`
+- Check database connection pool: `GET /api/v1/metrics` (includes `active_sessions` and error counts)
 - Monitor Redis latency: `redis-cli --latency`
 - Check for slow queries in PostgreSQL:
   ```sql
@@ -149,10 +141,13 @@ docker exec forensic_api python -c "from core.migrations import run_migrations; 
 
 **Fix**:
 ```bash
-cd frontend
-npm run build -- --analyze
-# Check for oversized dependencies
-npx webpack-bundle-analyzer .next/stats.json
+cd apps/web
+# Install the Next.js bundle analyzer
+npm install --save-dev @next/bundle-analyzer
+
+# Add to next.config.ts: const withBundleAnalyzer = require('@next/bundle-analyzer')({ enabled: true })
+ANALYZE=true npm run build
+# Bundle report opens in browser automatically
 ```
 
 ---
@@ -299,3 +294,114 @@ If OpenTelemetry is configured:
    - Steps to reproduce
    - Environment details (`docker compose version`)
    - Relevant logs
+
+---
+
+## Debug Workflows
+
+### Enable Debug Logging
+
+```bash
+# Set in .env
+APP_ENV=development
+DEBUG=true
+LOG_LEVEL=DEBUG
+
+# Rebuild and restart
+docker compose up --build
+```
+
+### Debug ML Tool Failure
+
+```bash
+# 1. Check if tool has syntax errors
+python -m py_compile apps/api/tools/ml_tools/splicing_detector.py
+
+# 2. Run tool directly with test image
+python apps/api/tools/ml_tools/splicing_detector.py \
+  --input tests/fixtures/test_image.jpg
+
+# 3. Test warmup
+python apps/api/tools/ml_tools/splicing_detector.py --warmup
+
+# 4. Check logs
+docker compose logs backend | grep splicing_detector
+```
+
+### Debug WebSocket Issues
+
+```bash
+# 1. Check if WebSocket endpoint responds
+curl -i -N -H "Connection: Upgrade" \
+  -H "Upgrade: websocket" \
+  http://localhost:8000/api/v1/sessions/SESSION_ID/live
+
+# 2. Check logs for connection/disconnect
+docker compose logs backend | grep "WebSocket\|ws:"
+
+# 3. Monitor message flow
+docker compose logs backend | grep "AGENT_UPDATE\|PIPELINE"
+```
+
+### Debug Database Issues
+
+```bash
+# 1. Check if Postgres is running
+docker compose exec postgres pg_isready
+
+# 2. Connect to database
+docker compose exec postgres psql -U forensic_user -d forensic_council
+
+# 3. Check tables
+\dt  # List tables
+
+# 4. Check migrations status
+SELECT name, applied_at FROM migrations ORDER BY applied_at DESC;
+```
+
+### Log Levels
+
+| Level | Usage |
+|-------|-------|
+| DEBUG | Detailed debugging information (development only) |
+| INFO | Normal operational messages |
+| WARNING | Unexpected but non-breaking conditions |
+| ERROR | Errors that prevent specific operations |
+| CRITICAL | System-level failures requiring immediate attention |
+
+### Common Issues Quick Reference
+
+| Symptom | Root Cause | Resolution |
+|---------|------------|------------|
+| ML tools return `available: false` | Missing dependencies or weights | Run tool with `--warmup` flag |
+| WebSocket disconnects immediately | Invalid or expired JWT | Check auth header and token expiry |
+| Agents hang indefinitely | ML process deadlock | Restart worker service |
+| Report generation fails | Postgres connection pool exhausted | Increase `postgres_max_pool_size` |
+
+---
+
+## Known Issues & Limitations
+
+### Tool Fallbacks
+
+Several forensic tools use simplified fallback implementations when ML models are unavailable. Findings produced by fallbacks are marked with `"degraded": true` and `"fallback_reason"` in their metadata. The DegradationBanner in the frontend displays these flags.
+
+Affected tools:
+- ELA anomaly classifier (falls back to local heuristic)
+- PRNU noise fingerprint (falls back to pixel-domain variance check)
+- Speaker diarization (falls back to energy-based VAD)
+- All audio tools with scipy-based inline fallbacks
+
+### Compression Penalty
+
+Social media and messaging app compression degrades pixel-level forensic signals (ELA, JPEG ghost, copy-move). The arbiter applies a compression penalty to affected tools when metadata indicates a known platform (WhatsApp, Instagram, Telegram). See `arbiter.py` `_FRAGILE_TOOLS` for the full list.
+
+### Gemini API Rate Limits
+
+The free Gemini API tier has rate limits that may cause 429 errors during concurrent deep analysis of multiple agents. The system uses an ordered fallback chain (`gemini-2.5-flash` → `gemini-2.0-flash` → `gemini-2.0-flash-lite`) and skips backoff on 404/429 to fail fast.
+
+### Session State Volatility
+
+Active investigation sessions are held in process memory. If the API server restarts, in-progress investigations are lost. Completed reports are persisted to PostgreSQL and survive restarts.
+
+

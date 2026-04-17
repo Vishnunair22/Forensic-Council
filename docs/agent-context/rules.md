@@ -7,7 +7,7 @@ These rules exist to protect the legal defensibility of investigations and the i
 ## Non-Negotiable Rules
 
 ### 1. Never Bypass the Custody Logger
-Every forensic analysis step, tool call, agent decision, and HITL action MUST be logged through `CustodyLogger` (backend/core/custody_logger.py). This creates the court-admissible chain of custody. Adding analysis logic outside the custody chain makes findings legally indefensible.
+Every forensic analysis step, tool call, agent decision, and HITL action MUST be logged through `CustodyLogger` (apps/api/core/custody_logger.py). This creates the court-admissible chain of custody. Adding analysis logic outside the custody chain makes findings legally indefensible.
 
 ### 2. Never Weaken Cryptographic Signing
 - All custody entries must be ECDSA P-256 signed
@@ -64,31 +64,31 @@ Frontend auth tokens and session data use `sessionStorage` (clears on browser cl
 
 ### New Agent Tools
 When adding a new forensic tool:
-1. Implement in `backend/tools/` (or `backend/tools/ml_tools/` for ML-based tools)
+1. Implement in `apps/api/tools/` (or `apps/api/tools/ml_tools/` for ML-based tools)
 2. Register in the agent's `_build_tool_registry()` method
 3. Add custody logging for tool execution and result
-4. Add unit tests in `tests/backend/unit/`
+4. Add unit tests in `apps/api/tests/unit/`
 5. Document the tool's output schema in a docstring
 
 ### New API Endpoints
 When adding a new route:
-1. Create Pydantic models in `backend/api/schemas.py` for request/response
-2. Add to the appropriate router in `backend/api/routes/`
+1. Create Pydantic models in `apps/api/api/schemas.py` for request/response
+2. Add to the appropriate router in `apps/api/api/routes/`
 3. Add JWT auth dependency unless the endpoint is explicitly public
-4. Add integration test in `tests/backend/integration/test_api_routes.py`
-5. Update the API surface table in `claude/project_context.md`
+4. Add integration test in `apps/api/tests/integration/test_api_routes.py`
+5. Update the API surface table in `agent-context/project_context.md`
 
 ### New Agent Types
 If adding a 6th agent or specialization:
-1. Inherit from `BaseAgent` (backend/agents/base_agent.py)
+1. Inherit from `BaseAgent` (apps/api/agents/base_agent.py)
 2. Implement `task_decomposition()` and `deep_task_decomposition()`
 3. Register with the pipeline in `orchestration/pipeline.py`
 4. Add to the arbiter's agent list in `agents/arbiter.py`
 5. Add frontend card in landing page agent showcase (`app/page.tsx`)
-6. Add agent ID to constants (`frontend/src/lib/constants.ts`)
+6. Add agent ID to constants (`apps/web/src/lib/constants.ts`)
 
 ### Database Schema Changes
-- Add migrations to `backend/core/migrations.py`
+- Add migrations to `apps/api/core/migrations.py`
 - Never drop or rename columns in existing tables (break chain of custody queries)
 - New columns should be nullable or have defaults (don't break existing rows)
 - Test schema changes with `scripts/init_db.py`
@@ -101,9 +101,9 @@ If adding a 6th agent or specialization:
 ## Testing Rules
 
 ### Required Before Merging
-- New Python code: unit test in `tests/backend/unit/`
-- New API route: integration test in `tests/backend/integration/`
-- New security-relevant code: test in `tests/backend/security/`
+- New Python code: unit test in `apps/api/tests/unit/`
+- New API route: integration test in `apps/api/tests/integration/`
+- New security-relevant code: test in `apps/api/tests/security/`
 - New frontend hook/utility: Jest test
 
 ### Test Commands
@@ -112,10 +112,10 @@ If adding a 6th agent or specialization:
 pytest tests/ --ignore=tests/connectivity -v
 
 # Backend (specific)
-pytest tests/backend/unit/ -v
+pytest apps/api/tests/unit/ -v
 
 # Frontend
-cd frontend && npm test -- --watchAll=false
+cd apps/web && npm test -- --watchAll=false
 
 # Connectivity (requires running Docker stack)
 pytest tests/connectivity/ -v
@@ -128,20 +128,20 @@ Use real PostgreSQL and Redis in integration tests (provided via conftest.py fix
 
 ## When Modifying These Context Files
 
-Update `claude/project_context.md` when:
+Update `agent-context/project_context.md` when:
 - Adding new agents
 - Adding new API endpoints
 - Changing the tech stack
 - Adding new environment variables
 - Changing the deployment process
 
-Update `claude/memory.md` when:
+Update `agent-context/memory.md` when:
 - An architectural decision is made (document the "why")
 - A bug is fixed that involved a non-obvious root cause
 - A pattern is established or changed
 - A known issue is discovered or resolved
 
-Update `claude/rules.md` when:
+Update `agent-context/rules.md` when:
 - A new constraint is established (new security requirement, legal requirement)
 - A rule is changed or relaxed with explicit justification
 - A new category of code is added that needs rules
@@ -156,3 +156,9 @@ Update `claude/rules.md` when:
 - Don't force-push to `main`
 - Don't commit `.env` files, API keys, or any credentials
 - Run `pytest tests/ --ignore=tests/connectivity -v` before opening a PR
+
+
+
+
+
+

@@ -1,4 +1,4 @@
-# Model Caching Architecture
+﻿# Model Caching Architecture
 
 ## Overview
 
@@ -11,9 +11,6 @@ The Forensic Council system uses persistent Docker volumes to cache ML models ac
   - Used by: Agents 1, 3 for zero-shot image classification
 - **SpeechBrain**: `hub/models--speechbrain--spkrec-ecapa-voxceleb/blobs/` (~80 MB)
   - Used by: Agent 2 for speaker verification
-- **pyannote**: `hub/models--pyannote--speaker-diarization-3.1/blobs/` (~250+ MB)
-  - Used by: Agent 2 for speaker diarization (requires HF_TOKEN)
-
 ### YOLO Cache (`/app/cache/ultralytics/`)
 - `yolov8n.pt` (~6 MB)
   - Used by: Agent 3 for object detection
@@ -33,29 +30,29 @@ The Forensic Council system uses persistent Docker volumes to cache ML models ac
 ## First Run Flow
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ FIRST CONTAINER START (volumes empty)                           │
-├─────────────────────────────────────────────────────────────────┤
-│ 1. docker_entrypoint.sh                                         │
-│    ├─ Seeds calibration models into volume                       │
-│    ├─ Checks if HF_FILES & YOLO_FILES exist                      │
-│    ├─ If NOT: spawns model_pre_download.py in background         │
-│    └─ model_cache_check.py reports cache status (~1s)           │
-│ 2. model_pre_download.py (background)                           │
-│    ├─ YOLO (YOLOv8n weights) → /app/cache/ultralytics           │
-│    ├─ EasyOCR (English models) → /app/cache/easyocr             │
-│    ├─ OpenCLIP (ViT-B-32) → /app/cache/huggingface              │
-│    ├─ ResNet50 → /app/cache/torch                               │
-│    ├─ SpeechBrain (ECAPA-TDNN) → /app/cache/huggingface         │
-│    └─ pyannote (speaker diarization) → /app/cache/huggingface   │
-│ 3. run_api.py starts immediately (during download)              │
-│    ├─ Configures cache paths from core/config.py               │
-│    ├─ warmup_all_tools() on startup (lifespan)                 │
-│    └─ Each tool warmed up in parallel                           │
-│ 4. ML tools run with persistent workers                         │
-│    ├─ First call: load model from cache                         │
-│    └─ Subsequent calls: reuse in-process worker pool            │
-└─────────────────────────────────────────────────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚ FIRST CONTAINER START (volumes empty)                           â”‚
+â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+â”‚ 1. docker_entrypoint.sh                                         â”‚
+â”‚    â”œâ”€ Seeds calibration models into volume                       â”‚
+â”‚    â”œâ”€ Checks if HF_FILES & YOLO_FILES exist                      â”‚
+â”‚    â”œâ”€ If NOT: spawns model_pre_download.py in background         â”‚
+â”‚    â””â”€ model_cache_check.py reports cache status (~1s)           â”‚
+â”‚ 2. model_pre_download.py (background)                           â”‚
+â”‚    â”œâ”€ YOLO (YOLOv8n weights) â†’ /app/cache/ultralytics           â”‚
+â”‚    â”œâ”€ EasyOCR (English models) â†’ /app/cache/easyocr             â”‚
+â”‚    â”œâ”€ OpenCLIP (ViT-B-32) â†’ /app/cache/huggingface              â”‚
+â”‚    â”œâ”€ ResNet50 â†’ /app/cache/torch                               â”‚
+â”‚    â”œâ”€ SpeechBrain (ECAPA-TDNN) â†’ /app/cache/huggingface         â”‚
+â”‚    â””â”€ pyannote (speaker diarization) â†’ /app/cache/huggingface   â”‚
+â”‚ 3. run_api.py starts immediately (during download)              â”‚
+â”‚    â”œâ”€ Configures cache paths from core/config.py               â”‚
+â”‚    â”œâ”€ warmup_all_tools() on startup (lifespan)                 â”‚
+â”‚    â””â”€ Each tool warmed up in parallel                           â”‚
+â”‚ 4. ML tools run with persistent workers                         â”‚
+â”‚    â”œâ”€ First call: load model from cache                         â”‚
+â”‚    â””â”€ Subsequent calls: reuse in-process worker pool            â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 **Total Download Size**: ~1.2 GB (first run only)  
@@ -66,20 +63,20 @@ The Forensic Council system uses persistent Docker volumes to cache ML models ac
 ## Subsequent Runs Flow
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ SUBSEQUENT STARTS (volumes populated)                           │
-├─────────────────────────────────────────────────────────────────┤
-│ 1. docker_entrypoint.sh                                         │
-│    ├─ Checks HF_HUBS & YOLO_WEIGHTS ✓ (found)                   │
-│    ├─ Skips model_pre_download.py                                │
-│    └─ model_cache_check.py reports cache ready (~<1s)           │
-│ 2. run_api.py starts                                            │
-│    ├─ warmup_all_tools() ← LOADS MODELS FROM CACHE              │
-│    └─ 30-60s for all models to load into memory                 │
-│ 3. ML tools use persistent workers                              │
-│    ├─ Models already loaded                                     │
-│    └─ Tool calls complete in <1-5s                              │
-└─────────────────────────────────────────────────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚ SUBSEQUENT STARTS (volumes populated)                           â”‚
+â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+â”‚ 1. docker_entrypoint.sh                                         â”‚
+â”‚    â”œâ”€ Checks HF_HUBS & YOLO_WEIGHTS âœ“ (found)                   â”‚
+â”‚    â”œâ”€ Skips model_pre_download.py                                â”‚
+â”‚    â””â”€ model_cache_check.py reports cache ready (~<1s)           â”‚
+â”‚ 2. run_api.py starts                                            â”‚
+â”‚    â”œâ”€ warmup_all_tools() â† LOADS MODELS FROM CACHE              â”‚
+â”‚    â””â”€ 30-60s for all models to load into memory                 â”‚
+â”‚ 3. ML tools use persistent workers                              â”‚
+â”‚    â”œâ”€ Models already loaded                                     â”‚
+â”‚    â””â”€ Tool calls complete in <1-5s                              â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 **Startup Time**: 30-60 seconds (warm-up)  
@@ -213,4 +210,4 @@ docker compose restart backend
 2. **Monitor warm-up status**: Check `/api/v1/health/ml-tools` before accepting traffic
 3. **Don't clear cache volumes**: `docker volume rm` will force re-download
 4. **Use SKIP_MODEL_DOWNLOAD=1**: For testing without model downloads
-5. **Set HF_TOKEN**: Required for pyannote speaker diarization
+

@@ -1,6 +1,6 @@
 # Testing Guide — Forensic Council
 
-**Version:** v1.0.4 | Complete testing reference.
+**Version:** v1.3.0 | Complete testing reference.
 
 ---
 
@@ -16,7 +16,7 @@ tests/
 │   ├── invoice_ela_test.png
 │   ├── sample_evidence.png
 │   └── whatsapp_context_test.png
-├── frontend/
+├── apps/web/
 │   ├── unit/
 │   │   ├── lib/api.test.ts              ← API client: tokens, auth, investigation, WS, polling
 │   │   ├── lib/schemas_utils.test.ts    ← Zod schemas, cn() utility
@@ -28,7 +28,7 @@ tests/
 │   │   └── page_flows.test.tsx          ← Session flow, dedup, WS message types, auth lifecycle
 │   └── e2e/
 │       └── websocket_flow.test.ts       ← Full WS lifecycle, arbiter fix, deep analysis
-├── backend/
+├── apps/api/
 │   ├── conftest.py                      ← Shared fixtures: mocked Redis/Postgres/Qdrant, auth
 │   ├── unit/core/
 │   │   ├── test_auth.py                 ← bcrypt, JWT creation/validation, RBAC
@@ -53,7 +53,7 @@ tests/
 ### Frontend — Jest
 
 ```bash
-cd frontend
+cd apps/web
 
 # All tests (watch mode — default)
 npm test
@@ -62,7 +62,7 @@ npm test
 npm test -- --watchAll=false
 
 # Specific test file
-npm test -- tests/frontend/unit/lib/api.test.ts --watchAll=false
+npm test -- tests/unit/lib/api.test.ts --watchAll=false
 
 # With coverage
 npm run test:coverage
@@ -80,20 +80,20 @@ npm test -- --testPathPattern="accessibility" --watchAll=false
 pip install pytest pytest-asyncio httpx pyyaml
 
 # Run all non-connectivity tests from PROJECT ROOT
-pytest tests/ --ignore=tests/frontend --ignore=tests/connectivity -v
+pytest tests apps/api/tests --ignore=tests/connectivity -v
 
 # Individual categories
-pytest tests/backend/unit/      -v        # Unit tests (no infra needed)
-pytest tests/backend/integration/ -v     # API routes (mocked infra)
-pytest tests/backend/security/    -v     # Security checks
-pytest tests/infra/               -v     # Static config analysis
+cd apps/api && uv run pytest tests/unit -v        # Unit tests (no infra needed)
+cd apps/api && uv run pytest tests/integration -v # API routes (mocked infra)
+cd apps/api && uv run pytest tests/security -v   # Security checks
+pytest tests/infra -v                          # Static config analysis
 
 # With coverage
 pip install pytest-cov
-pytest tests/backend/ --cov=backend --cov-report=html
+cd apps/api && uv run pytest tests --cov=. --cov-report=html
 ```
 
-> **Critical:** Run from the **project root** directory. The root `setup.cfg` sets `pythonpath = . backend`. This is required for both `from core.auth` (direct) and `from backend.core.config` (prefixed) imports to work.
+> **Critical:** Run backend tests from `apps/api` and frontend tests from `apps/web` so commands match the current monorepo layout.
 
 ### Connectivity Tests (requires running stack)
 
@@ -220,7 +220,7 @@ pytest tests/ --ignore=tests/connectivity -m "not requires_docker" -v
 - docker-compose: all 6 services, project name, ML volumes defined, `depends_on` + `service_healthy`, restart policies, security hardening (`read_only`, tmpfs, requirepass, memory limits, no `latest` tags)
 - Frontend Dockerfile: `node-alpine`, multi-stage, `HOSTNAME=0.0.0.0`, wget healthcheck, standalone output
 - Backend Dockerfile: `python:3.12`, multi-stage, dev+prod targets, uv, BuildKit cache mounts, port 8000
-- `.env.example`: all required vars, `COMPOSE_PROJECT_NAME`, JWT 60-min, Groq docs, `HF_TOKEN`, `DOMAIN`
+- `.env.example`: all required vars, `COMPOSE_PROJECT_NAME`, JWT 60-min, Groq docs, `DOMAIN`
 - CI/CD: jobs, push/PR triggers, backend+frontend+docker jobs, correct test paths
 - `pyproject.toml`, `package.json`, `jest.config.ts`
 
@@ -256,7 +256,7 @@ pytest tests/ --ignore=tests/connectivity -m "not requires_docker" -v
 Tests run automatically on push and pull requests via `.github/workflows/ci.yml`:
 
 ```
-backend-test    → ruff lint + format + pyright + pytest tests/backend/ tests/infrastructure/ tests/docker/
+backend-test    → ruff lint + format + pyright + pytest tests/apps/api/ tests/infrastructure/ tests/docker/
 backend-docker  → docker build backend (production target)
 frontend-test   → npm lint + tsc + build + npm test
 frontend-docker → docker build frontend (runner target)
@@ -265,3 +265,14 @@ integration-smoke → docker compose up + /health check + auth rejection check (
 ```
 
 Connectivity tests are excluded from CI (require a running stack with real infra).
+
+
+
+
+
+
+
+
+
+
+

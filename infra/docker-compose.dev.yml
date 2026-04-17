@@ -13,7 +13,7 @@ services:
       - APP_ENV=development
       - DEBUG=true
     volumes:
-      - ../backend:/app:rw
+      - ../apps/api:/app:rw
       # Protect the container's venv from being overwritten by local (potentially incompatible) .venv
       - /app/.venv
       # Protect model cache volumes: the bind-mount above puts the host's
@@ -27,7 +27,24 @@ services:
       - easyocr_cache:/app/cache/easyocr:rw
       - numba_cache:/app/cache/numba_cache:rw
       - yolo_cache:/app/cache/ultralytics:rw
-      - calibration_models_cache:/app/cache/calibration_models:rw
+      - calibration_models_cache:/app/storage/calibration_models:rw
+
+  worker:
+    build:
+      target: development
+    environment:
+      - RELOAD=true
+      - APP_ENV=development
+      - DEBUG=true
+    volumes:
+      - ../apps/api:/app:rw
+      - /app/.venv
+      - hf_cache:/app/cache/huggingface:rw
+      - torch_cache:/app/cache/torch:rw
+      - easyocr_cache:/app/cache/easyocr:rw
+      - numba_cache:/app/cache/numba_cache:rw
+      - yolo_cache:/app/cache/ultralytics:rw
+      - calibration_models_cache:/app/storage/calibration_models:rw
 
   frontend:
     build:
@@ -38,7 +55,7 @@ services:
       - CHOKIDAR_USEPOLLING=true
       - NEXT_WEBPACK_USEPOLLING=1
     volumes:
-      - ../frontend:/app:rw
+      - ../apps/web:/app:rw
       # Protect node_modules from host overrides
       - /app/node_modules
       # Named volume so the Next.js build cache persists across container restarts.

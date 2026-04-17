@@ -1,4 +1,4 @@
-# Code Style Guide
+﻿# Code Style Guide
 
 ## Python Docstrings
 
@@ -57,8 +57,7 @@ def validate_input(data: Dict[str, Any]) -> Tuple[bool, List[str]]:
 
 ## Linting Rules
 
-- Ruff: All rules enabled except explicitly disabled
-- Black: Auto-formatting on all Python files
+- Ruff: All rules enabled except explicitly disabled (linting + formatting via `ruff-format`)
 - Mypy: Strict type checking enabled
 - No unused imports or variables
 - No print statements in production code (use logger instead)
@@ -76,3 +75,4 @@ footer
 ```
 
 Types: feat, fix, docs, style, refactor, test, chore
+

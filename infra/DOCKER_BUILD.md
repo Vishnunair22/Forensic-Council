@@ -1,6 +1,6 @@
 # Forensic Council — Docker Build & Caching Guide
 
-> **Version:** v1.0.4 | **Last Updated:** 2026-03-16
+> **Version:** v1.5.0 | **Last Updated:** 2026-04-16
 >
 > This is the definitive reference for building, rebuilding, and managing
 > Docker layer and ML model caches for Forensic Council.
@@ -26,7 +26,7 @@
 9. [ML Model Cache Management](#ml-model-cache-management)
 10. [BuildKit Cache Mounts](#buildkit-cache-mounts)
 11. [Layer Cache Invalidation Reference](#layer-cache-invalidation-reference)
-12. [PowerShell Quick Reference](#powershell-quick-reference)
+12. [Quick Reference](#quick-reference)
 13. [Troubleshooting Stale Builds](#troubleshooting-stale-builds)
 
 ---
@@ -49,7 +49,7 @@ Forensic Council uses **three distinct cache systems**, each operating independe
 ## Shared Model Volumes — Dev & Prod
 
 **All compose variants share the exact same named volumes.** Dev and production builds
-read from and write to the same pool. Switching from `.\manage.ps1 dev` to `.\manage.ps1 up` (or back)
+read from and write to the same pool. Switching from dev to production mode (or back)
 never triggers a model re-download.
 
 This is enforced via two mechanisms:
@@ -83,20 +83,19 @@ This is a belt-and-suspenders backup. If the compose file is invoked without the
 # List all volumes for the forensic-council project
 docker volume ls | grep forensic-council
 
-# Expected output — all 7 model volumes use the same prefix:
+# Expected output — all 6 model volumes use the same prefix:
 # DRIVER    VOLUME NAME
 # local     forensic-council_hf_cache
 # local     forensic-council_torch_cache
 # local     forensic-council_easyocr_cache
 # local     forensic-council_yolo_cache
-# local     forensic-council_deepface_cache
 # local     forensic-council_numba_cache
 # local     forensic-council_calibration_models
 ```
 
 ```bash
-# Or use the PowerShell shortcut:
-.\manage.ps1 cache-status
+# Quick check:
+docker system df -v | grep forensic
 ```
 
 ---
@@ -152,8 +151,9 @@ Use this when setting up from scratch. All layers and ML model volumes will be c
 
 ```bash
 # 1. Copy and fill in your environment variables
-cp .env.example .env
-# Edit .env — at minimum set NEXT_PUBLIC_DEMO_PASSWORD
+# Windows PowerShell: Copy-Item .env.example .env
+# Linux/macOS:        cp .env.example .env
+# Edit .env — at minimum set LLM_API_KEY and GEMINI_API_KEY
 
 # 2. Build and start all services
 docker compose -f infra/docker-compose.yml --env-file .env up --build -d
@@ -298,9 +298,8 @@ docker system df -v | grep forensic
 | `torch_cache` | PyTorch hub models | 500 MB – 2 GB |
 | `easyocr_cache` | EasyOCR text recognition models | ~100 MB |
 | `yolo_cache` | YOLOv8 object detection weights | ~50 MB |
-| `deepface_cache` | DeepFace face analysis models | ~500 MB |
 | `numba_cache` | Numba JIT compiled kernels | ~100 MB |
-| `calibration_models` | Platt scaling calibration checkpoints | ~10 MB |
+| `calibration_models_cache` | Platt scaling calibration checkpoints | ~10 MB |
 
 ### Force re-download of a specific model cache
 
@@ -318,8 +317,8 @@ docker compose -f infra/docker-compose.yml --env-file .env up -d backend
 # This DELETES ALL volumes including postgres, redis, and all ML models
 docker compose -f infra/docker-compose.yml --env-file .env down -v
 
-# Or use the PowerShell target which includes a warning
-.\manage.ps1 down-clean
+# Or stop and remove volumes explicitly:
+docker compose -f infra/docker-compose.yml --env-file .env down -v
 ```
 
 ---
@@ -393,7 +392,7 @@ The frontend uses a multi-stage Dockerfile with three named targets:
 Layer 1  → FROM node:22-alpine (never invalidates)
 Layer 2  → npm ci (invalidates if package-lock.json changes)
 
-# development target (manage.ps1 dev)
+# development target (dev mode)
 Layer 3  → COPY source files (invalidates if any .ts/.tsx/.css changes)
 
 # builder stage (production only)
@@ -409,8 +408,8 @@ Layer 4  → npm run build (always runs, but Next.js uses .next/cache internally
 | Edit a `.ts/.tsx` file | No change | Layer 3+4 (~30-60s) |
 | Add a Python package | Layer 3+4 (~2-8min) | No change |
 | Add a Node package | No change | Layer 2+3+4 (~2-5min) |
-| Edit `backend/Dockerfile` | All layers | No change |
-| Edit `frontend/Dockerfile` | No change | All layers |
+| Edit `apps/api/Dockerfile` | All layers | No change |
+| Edit `apps/web/Dockerfile` | No change | All layers |
 | Edit `.env` values | No rebuild needed | `NEXT_PUBLIC_*` requires frontend rebuild |
 
 > **Important:** `NEXT_PUBLIC_*` environment variables are baked into the JS bundle at
@@ -422,19 +421,17 @@ Layer 4  → npm run build (always runs, but Next.js uses .next/cache internally
 
 ---
 
-## PowerShell Quick Reference
+## Quick Reference
 
-All `manage.ps1` targets use `infra/docker-compose.yml` and `.env` automatically. If your system blocks powershell scripts, use the raw Docker commands below.
-
-| Action | Manager Command | Raw Docker Equivalent |
-|---|---|---|
-| Start all | `.\manage.ps1 up` | `docker compose -f infra/docker-compose.yml --env-file .env up -d --build` |
-| Start Hot-Reload | `.\manage.ps1 dev` | `docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up -d --build` |
-| Build only | `.\manage.ps1 build` | `docker compose -f infra/docker-compose.yml --env-file .env build` |
-| Stop (keep volumes)| `.\manage.ps1 down` | `docker compose -f infra/docker-compose.yml --env-file .env down` |
-| Stop (wipe volumes)| `.\manage.ps1 down-clean`| `docker compose -f infra/docker-compose.yml --env-file .env down -v` |
-| View Logs | `.\manage.ps1 logs` | `docker compose -f infra/docker-compose.yml --env-file .env logs -f` |
-| Production Mode | `.\manage.ps1 prod` | `docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file .env up -d --build` |
+| Action | Command |
+|---|---|
+| Start all | `docker compose -f infra/docker-compose.yml --env-file .env up -d --build` |
+| Start Hot-Reload | `docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up -d --build` |
+| Build only | `docker compose -f infra/docker-compose.yml --env-file .env build` |
+| Stop (keep volumes) | `docker compose -f infra/docker-compose.yml --env-file .env down` |
+| Stop (wipe volumes) | `docker compose -f infra/docker-compose.yml --env-file .env down -v` |
+| View Logs | `docker compose -f infra/docker-compose.yml --env-file .env logs -f` |
+| Production Mode | `docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file .env up -d --build` |
 
 ---
 
@@ -462,7 +459,7 @@ docker compose -f infra/docker-compose.yml --env-file .env up -d --no-deps front
 The `uv.lock` file may be out of sync. Run locally (requires uv):
 
 ```bash
-cd backend && uv lock
+cd apps/api && uv lock
 # Then rebuild
 docker compose -f infra/docker-compose.yml --env-file .env build --no-cache backend
 ```
@@ -483,9 +480,9 @@ DOCKER_BUILDKIT=1 docker compose -f infra/docker-compose.yml --env-file .env up 
 The `docker-compose.yml` uses `:?` guard for this variable:
 
 ```bash
-# Copy the example and fill in the required fields
-cp .env.example .env
-# Ensure NEXT_PUBLIC_DEMO_PASSWORD is set (not commented out)
+# Windows PowerShell: Copy-Item .env.example .env
+# Linux/macOS:        cp .env.example .env
+# Ensure DEMO_PASSWORD is set (not commented out)
 ```
 
 ### Symptom: Models re-downloading after every rebuild
@@ -495,3 +492,5 @@ Check with: `docker volume ls | grep forensic`
 
 If volumes are missing, they will be re-created and models will re-download on next start.
 This is normal and only happens once.
+
+

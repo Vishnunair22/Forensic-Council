@@ -1,6 +1,6 @@
 # Docker Build Guide — Forensic Council
 
-**Version:** v1.2.0 | **Last updated:** 2026-03-25
+> **Version:** v1.5.0 | **Last Updated:** 2026-04-16
 
 Complete reference for building, running, and managing the Forensic Council Docker stack from scratch.
 
@@ -12,8 +12,7 @@ Complete reference for building, running, and managing the Forensic Council Dock
 2. [Step 1 — Create `.env` File](#step-1--create-env-file)
 3. [Step 2 — API Key Setup (Required)](#step-2--api-key-setup-required)
 4. [Step 3 — Gemini Vision API Key (Recommended)](#step-3--gemini-vision-api-key-recommended)
-5. [Step 4 — HuggingFace Token (Optional)](#step-4--huggingface-token-optional)
-6. [Step 5 — Build and Start](#step-5--build-and-start)
+5. [Step 4 — Build and Start](#step-5--build-and-start)
    - [Development Mode](#development-mode)
    - [Production Mode](#production-mode)
 7. [First Run — ML Model Downloads](#first-run--ml-model-downloads)
@@ -62,9 +61,9 @@ LLM_API_KEY=gsk_your_key_here
 GEMINI_API_KEY=AIza_your_key_here
 
 # ─── RECOMMENDED: Change demo passwords for any shared environment ───────
-NEXT_PUBLIC_DEMO_PASSWORD=inv123!
 BOOTSTRAP_INVESTIGATOR_PASSWORD=inv123!
 BOOTSTRAP_ADMIN_PASSWORD=admin123!
+DEMO_PASSWORD=inv123!
 
 # ─── RECOMMENDED: Generate a unique signing key ──────────────────────────
 # Run: python -c "import secrets; print(secrets.token_hex(32))"
@@ -91,7 +90,11 @@ and the Arbiter's executive summary synthesis. You need a Groq API key.
    LLM_MODEL=llama-3.3-70b-versatile
    ```
 
-Groq's free tier is sufficient for development and moderate usage. The `llama-3.3-70b-versatile` model provides strong reasoning for forensic analysis at ~700 tokens/second.
+- **Verification Scripts:** `validate_production_readiness.sh`.
+- **Primary Vision Model:** `gemini-2.5-flash`
+- **Orchestration Model:** `llama-3.3-70b-versatile`
+- **Package Manager:** `uv 0.6.5`
+ model provides strong reasoning for forensic analysis at ~700 tokens/second.
 
 ### OpenAI (Alternative)
 
@@ -132,39 +135,18 @@ finding's `caveat` field.
 2. Sign in with a Google account and generate a free API key
 3. In `.env`:
    ```dotenv
-   GEMINI_API_KEY=AIzaSy_your_gemini_key_here
-   GEMINI_MODEL=gemini-1.5-pro                              # Primary model (highest accuracy + thinking)
-   GEMINI_FALLBACK_MODELS=gemini-1.5-flash  # Ordered fallback chain
-   GEMINI_TIMEOUT=55.0                                                  # API timeout in seconds
+   GEMINI_MODEL=gemini-2.5-flash                            # Primary model (stable free-tier)
+   GEMINI_FALLBACK_MODELS=gemini-2.0-flash,gemini-2.0-flash-lite  # Ordered fallback chain
+   GEMINI_TIMEOUT=55.0                                            # API timeout in seconds
    ```
 
    The client automatically cascades through the fallback chain if the primary model is unavailable (404) or rate-limited after retries. Each fallback is tried in order; the first successful response wins.
 
-> **Free tier:** Google AI Studio's free tier supports ~15 requests/minute on
-> `gemini-1.5-pro` — sufficient for development. For higher throughput use
-> `gemini-1.5-flash` as primary or obtain a paid API key via Google Cloud.
+> **Free tier:** Google AI Studio's free tier supports the Gemini 2.5 and 2.0 series. `gemini-2.5-flash` is verified as the most stable primary for v1.3.0.
 
 ---
 
-## Step 4 — HuggingFace Token (Optional)
-
-A HuggingFace token is **only required** if you want Agent 2 (Audio Forensics) to use `pyannote.audio` for speaker diarization. This model is gated and requires accepting its terms.
-
-**Without the token:** Agent 2 still runs spectral analysis and codec detection — speaker diarization is skipped with a warning.
-
-**To enable speaker diarization:**
-
-1. Create a free account at [huggingface.co](https://huggingface.co)
-2. Go to [hf.co/settings/tokens](https://hf.co/settings/tokens) and create a read token
-3. Accept the pyannote model terms at [hf.co/pyannote/speaker-diarization-3.1](https://hf.co/pyannote/speaker-diarization-3.1)
-4. In `.env`:
-   ```dotenv
-   HF_TOKEN=hf_your_token_here
-   ```
-
----
-
-## Step 5 — Build and Start
+## Step 4 — Build and Start
 
 ### Development Mode
 
@@ -231,7 +213,6 @@ On first start, each ML model downloads automatically from its provider. This is
 |-------|----------|------|----------------|
 | `llama-3.3-70b` via Groq API | Remote API | — | On first investigation |
 | Wav2Vec2 | HuggingFace | ~1.2 GB | Agent 2 first run |
-| pyannote/speaker-diarization | HuggingFace (gated) | ~800 MB | Agent 2 first run (needs HF_TOKEN) |
 | CLIP ViT-L/14 | HuggingFace | ~890 MB | Agent 3 first run |
 | YOLOv8n | Ultralytics | ~6 MB | Agent 3 first run |
 | DeepFace models | GitHub releases | ~500 MB | Agent 3 first run |
@@ -272,9 +253,8 @@ ML model weights are stored in **Docker named volumes**, not inside the image. T
 | `forensic-council_torch_cache` | PyTorch hub checkpoints | 500 MB – 2 GB |
 | `forensic-council_easyocr_cache` | EasyOCR text recognition weights | ~120 MB |
 | `forensic-council_yolo_cache` | YOLOv8 object detection weights | ~50 MB |
-| `forensic-council_deepface_cache` | DeepFace face analysis models | ~500 MB |
 | `forensic-council_numba_cache` | Numba JIT compiled kernels | ~100 MB |
-| `forensic-council_calibration_models` | Platt scaling calibration checkpoints | ~10 MB |
+| `forensic-council_calibration_models_cache` | Platt scaling calibration checkpoints | ~10 MB |
 
 ### Check current volume sizes
 
@@ -368,19 +348,19 @@ DOCKER_BUILDKIT=1 docker compose -f infra/docker-compose.yml --env-file .env up 
 ### `uv sync` fails during backend build
 
 1. Check internet access to PyPI
-2. Ensure `uv.lock` is not corrupted: `cd backend && uv lock`
+2. Ensure `uv.lock` is not corrupted: `cd apps/api && uv lock`
 3. Try BuildKit prune: `docker builder prune -f` then rebuild
 
 ### `npm ci` fails with `eslint-config-next` version error
 
 Next.js 15 uses Webpack for production builds; ESLint runs during `next build`. Ensure `eslint` and `eslint-config-next` are on matching major versions (both `^9` / `^15` respectively).
 
-### `NEXT_PUBLIC_DEMO_PASSWORD not set` error
+### `DEMO_PASSWORD not set` error
 
 The compose file uses `:?` guards. Ensure `.env` has this variable uncommented:
 ```bash
-grep NEXT_PUBLIC_DEMO_PASSWORD .env
-# Should show: NEXT_PUBLIC_DEMO_PASSWORD=inv123!
+grep DEMO_PASSWORD .env
+# Should show: DEMO_PASSWORD=inv123!
 ```
 
 ### Old code running after rebuild
@@ -407,7 +387,7 @@ tmpfs:
   - /tmp:nosuid,size=512m
 volumes:
   - evidence_data:/app/storage/evidence:rw
-  - cache_scratch:/app/cache:rw
+  - hf_cache:/app/cache/huggingface:rw
 ```
 `/tmp` is the only tmpfs mount. All other writable paths (`/app/storage/evidence`, `/app/cache`, and the individual model sub-caches) are backed by named volumes defined in the `volumes:` block.
 
@@ -439,10 +419,8 @@ docker compose -f infra/docker-compose.yml --env-file .env up -d backend
 
 ### HuggingFace download stuck at 0%
 
-1. Check `HF_TOKEN` is set for gated models
-2. Verify internet access inside container: `docker exec forensic-council-backend-1 curl -I https://huggingface.co`
-3. HuggingFace may be rate-limiting. Wait and retry.
-4. For gated models, ensure you have accepted the model license at huggingface.co
+1. Verify internet access inside container: `docker exec forensic-council-backend-1 curl -I https://huggingface.co`
+2. HuggingFace may be rate-limiting. Wait and retry.
 
 ### Model cache not shared between dev and prod
 
@@ -502,3 +480,5 @@ Caddy handles TLS automatically via Let's Encrypt when a public domain is config
 Caddy will automatically obtain and renew the Let's Encrypt certificate.
 
 > ⚠️ Without a domain configured, Caddy serves on port 80 with a self-signed certificate. Never run with plain HTTP in production — JWT tokens and evidence files are transmitted in cleartext without TLS.
+
+

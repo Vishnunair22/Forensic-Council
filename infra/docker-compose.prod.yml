@@ -38,6 +38,16 @@ services:
         max-size: "50m"
         max-file: "5"
 
+  worker:
+    restart: always
+    build:
+      target: production
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
   caddy:
     restart: always
     logging:
