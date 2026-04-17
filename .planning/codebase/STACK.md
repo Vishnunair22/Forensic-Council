@@ -1,6 +1,6 @@
 # Technology Stack
 
-**Analysis Date:** 2026-04-16
+**Analysis Date:** 2026-04-17 (Post-Audit Refresh)
 
 ## Languages
 
@@ -9,7 +9,7 @@
 - TypeScript 5.8.3 - Next.js frontend (`apps/web/`)
 
 **Secondary:**
-- CSS / Tailwind CSS 4.x - UI styling (`apps/web/src/app/globals.css`)
+- CSS / Vanilla CSS + Tailwind CSS 4.x - UI styling (`apps/web/src/app/globals.css`)
 
 ## Runtime
 
@@ -60,7 +60,7 @@
 
 **AI / ML (Backend core extras - `pyproject.toml [ml]`):**
 - `groq >=0.28` - Groq API client for Llama 3.3 70B inference (`apps/api/core/llm_client.py`)
-- `google-generativeai >=0.8` - Google Gemini 2.5 Flash/Pro vision API (`apps/api/core/gemini_client.py`)
+- `google-generativeai >=0.8` - Google Gemini 2.0 Flash/Pro vision API (`apps/api/core/gemini_client.py`)
 - `torch >=2.7` (CPU-only via pytorch-cpu index) + `torchvision >=0.22` + `torchaudio >=2.7`
 - `ultralytics >=8.3` - YOLOv8/YOLO11 object detection (model: `yolo11m.pt`)
 - `open-clip-torch >=2.30` - CLIP image embedding
@@ -148,4 +148,4 @@
 
 ---
 
-*Stack analysis: 2026-04-16*
+*Stack analysis: 2026-04-17*

@@ -1,6 +1,6 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-04-16
+**Analysis Date:** 2026-04-17 (Post-Audit Refresh)
 
 ## Naming Patterns
 
@@ -120,6 +120,7 @@ sessionOnlyStorage.setItem("session_key", value);
 **Python:**
 - All custom exceptions inherit from `ForensicCouncilBaseException` (defined in `apps/api/core/exceptions.py`)
 - Exception hierarchy: `ForensicCouncilBaseException` → domain base (e.g. `InfrastructureError`) → specific (e.g. `DatabaseConnectionError`)
+- **Explicit Exception Handling:** Avoid bare `except:` blocks. Always use `except Exception:` (or more specific) and log the error context to prevent swallowing system signals.
 - `ToolUnavailableError` must never crash the system — catch it and log an `INCOMPLETE` finding
 - Exceptions carry `message`, `error_code`, and `details` dict; serializable via `.to_dict()`
 - FastAPI route handlers raise `HTTPException` with explicit status codes; never let raw exceptions propagate
@@ -200,4 +201,4 @@ logger.error("Production validation failed", error=str(e))
 
 ---
 
-*Convention analysis: 2026-04-16*
+*Convention analysis: 2026-04-17*
