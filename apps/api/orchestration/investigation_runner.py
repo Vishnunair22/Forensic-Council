@@ -346,8 +346,10 @@ async def _wrap_pipeline_with_broadcasts(
             try:
                 _agent_session_id = session_id or evidence_artifact.artifact_id
                 if isinstance(_agent_session_id, str):
-                    try: _agent_session_id = UUID(_agent_session_id)
-                    except: pass
+                    try:
+                        _agent_session_id = UUID(_agent_session_id)
+                    except Exception:
+                        pass
 
                 agent_kwargs = {
                     "agent_id": agent_id, "session_id": _agent_session_id, "evidence_artifact": evidence_artifact,
@@ -365,8 +367,10 @@ async def _wrap_pipeline_with_broadcasts(
                     findings = await asyncio.wait_for(agent.run_investigation(), timeout=agent_timeout)
                 finally:
                     heartbeat_done.set()
-                    try: await asyncio.wait_for(heartbeat_task, timeout=2.0)
-                    except: heartbeat_task.cancel()
+                    try:
+                        await asyncio.wait_for(heartbeat_task, timeout=2.0)
+                    except Exception:
+                        heartbeat_task.cancel()
 
                 if pipeline.config.llm_enable_post_synthesis and pipeline.config.llm_api_key and pipeline.config.llm_provider != "none" and findings:
                     await broadcast_update(ws_session_id, BriefUpdate(
@@ -496,7 +500,7 @@ async def _wrap_pipeline_with_broadcasts(
         t_done.set()
         try:
             await asyncio.wait_for(t_task, timeout=1.0)
-        except:
+        except Exception:
             t_task.cancel()
 
         results, deep_pass_coroutines = [], []
@@ -533,7 +537,7 @@ async def _wrap_pipeline_with_broadcasts(
                     d_done.set()
                     try:
                         await asyncio.wait_for(d_task, timeout=2.0)
-                    except:
+                    except Exception:
                         d_task.cancel()
                 df_serial = [(f.model_dump(mode="json") if hasattr(f, "model_dump") else f) for f in df_raw]
                 ires.findings = [(f.model_dump(mode="json") if hasattr(f, "model_dump") else f) for f in ainst._findings]
@@ -632,11 +636,14 @@ async def run_investigation_task(
     finally:
         if error_msg:
             pipeline._error = error_msg
-            try: await set_active_pipeline_metadata(session_id, {"status": "error", "brief": error_msg, "case_id": case_id, "investigator_id": investigator_id, "file_path": evidence_file_path, "original_filename": original_filename, "error": error_msg})
-            except: pass
+            try:
+                await set_active_pipeline_metadata(session_id, {"status": "error", "brief": error_msg, "case_id": case_id, "investigator_id": investigator_id, "file_path": evidence_file_path, "original_filename": original_filename, "error": error_msg})
+            except Exception:
+                pass
         try:
             if os.path.exists(evidence_file_path): os.unlink(evidence_file_path)
-        except: pass
+        except Exception:
+            pass
         _active_pipelines.pop(session_id, None); clear_session_websockets(session_id)
         cutoff = datetime.now(UTC).timestamp() - 86_400
         stale = [sid for sid, (_, cat) in list(_final_reports.items()) if cat.timestamp() < cutoff]

@@ -168,7 +168,8 @@ async def start_investigation(
                 from core.session_persistence import get_session_persistence
                 p = await get_session_persistence()
                 await p.save_session_state(session_id=session_id, case_id=case_id, investigator_id=investigator_id, pipeline_state={"status": "running"}, status="running")
-            except: pass
+            except Exception:
+                pass
         asyncio.create_task(_register())
 
         return InvestigationResponse(

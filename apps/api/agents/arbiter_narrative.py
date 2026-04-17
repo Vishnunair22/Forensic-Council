@@ -760,7 +760,7 @@ Rules:
                         llm_enabled = False
                     else:
                         self._synthesis_client = _client
-                except:
+                except Exception:
                     llm_enabled = False
 
         if not llm_enabled:
@@ -792,7 +792,8 @@ Rules:
                                 timeout=40.0
                             )
                             return aid, narr or ""
-                        except: return aid, ""
+                        except Exception:
+                            return aid, ""
                 pairs = await asyncio.gather(*[_one(aid, res) for aid, res in active_agent_results.items()])
                 return {p[0]: p[1] for p in pairs if isinstance(p, tuple) and p[1]}
 
@@ -808,12 +809,14 @@ Rules:
                             overall_verdict=overall_verdict
                         ), timeout=45.0
                     )
-                except: return self._template_executive_summary(len(active_agent_results), len(all_findings), cross_modal_confirmed_count, len(contested_findings), all_findings)
+                except Exception:
+                    return self._template_executive_summary(len(active_agent_results), len(all_findings), cross_modal_confirmed_count, len(contested_findings), all_findings)
 
             async def t_uncertainty():
                 try:
                     return await asyncio.wait_for(self._generate_uncertainty_statement(len(incomplete_findings), len(contested_findings), overall_error_rate), timeout=30.0)
-                except: return self._template_uncertainty_statement(len(incomplete_findings), len(contested_findings), overall_error_rate)
+                except Exception:
+                    return self._template_uncertainty_statement(len(incomplete_findings), len(contested_findings), overall_error_rate)
 
             (v_sent, kf_list, r_note), p_anal, exec_sum, unc_stmt = await asyncio.gather(t_structured(), t_narratives(), t_executive(), t_uncertainty())
 

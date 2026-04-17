@@ -90,7 +90,6 @@ nul
 # ── Pytest shard / temp dirs (prevent root pollution) ───────────────────────
 pytest-cache-files-*
 tmp_*
-%LOCALAPPDATA%/
 
 # ── Test fixtures ─────────────────────────────────────────────────────────────
 # Small fixture images are committed for CI reproducibility.

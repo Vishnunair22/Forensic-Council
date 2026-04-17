@@ -10,7 +10,7 @@ Welcome, AI Assistant. This file provides essential context for working on the F
 
 - **Frontend**: Next.js 15 (App Router), TypeScript, TailwindCSS, Framer Motion
 - **Backend**: FastAPI (Python 3.12), asyncio, ReAct Agent Loops
-- **AI/ML**: Groq (Llama 3.3 70B), Google Gemini 2.5 Pro/Flash (Vision), YOLOv8 (Object Detection)
+- **AI/ML**: Groq (Llama 3.3 70B), Google Gemini 2.0 Pro/Flash (Vision), YOLOv8 (Object Detection)
 - **Infrastructure**: Redis (Working Memory), PostgreSQL 17 (Custody Ledger), Qdrant (Episodic Memory), Docker, Caddy 2
 
 ### Monorepo Structure
@@ -88,7 +88,7 @@ docker compose -f infra/docker-compose.yml logs -f
 
 1. **Initial Pass**: High-recall screening using classical ML (ELA, JPEG Ghost, SIFT, CLIP)
 2. **Deep Pass**: High-precision investigation using 2026-era detectors (Diffusion Artifacts, Inter-frame Forgery, C2PA JUMBF)
-3. **Semantic Grounding**: Suspicious findings are grounded via Gemini 2.5 Vision
+3. **Semantic Grounding**: Suspicious findings are grounded via Gemini 2.0 Flash Vision
 
 ### HITL (Human-in-the-Loop)
 

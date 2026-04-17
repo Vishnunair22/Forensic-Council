@@ -1,10 +1,10 @@
 # Forensic OS (2026 Edition)
 
-Upload digital evidence. Five specialized AI agents analyze it. Get a cryptographically signed forensic report verified by **Gemini 2.5 Pro/Flash Semantic Grounding**.
+Upload digital evidence. Five specialized AI agents analyze it. Get a cryptographically signed forensic report verified by **Gemini 2.0 Flash Semantic Grounding**.
 
 [![Version](https://img.shields.io/badge/version-v1.4.0-blue.svg)](#) [![Status](https://img.shields.io/badge/status-stable-green.svg)](#) [![License](https://img.shields.io/badge/license-MIT-green.svg)](#) [![Python](https://img.shields.io/badge/python-3.12-blue.svg)](#) [![Next.js](https://img.shields.io/badge/next.js-15-black.svg)](#)
 
-*A High-Fidelity Multi-Agent Forensic OS with Multimodal Semantic Grounding via Gemini 2.0 SOTA*
+*A High-Fidelity Multi-Agent Forensic OS with Multimodal Semantic Grounding via Gemini 2.0 Flash*
 
 ---
 
@@ -30,7 +30,7 @@ Forensic OS (2026 Edition) is a premium, modular platform for digital media veri
 
 1. **Initial Pass**: High-recall screening using classical ML (ELA, JPEG Ghost, SIFT, CLIP).
 2. **Deep Pass**: High-precision investigation using 2026-era detectors (Diffusion Artifacts, Inter-frame Forgery, C2PA JUMBF).
-3. **Semantic Grounding**: Suspicious findings are "grounded" via **Gemini 2.5 Vision**, which cross-verifies ML anomalies against the visual scene context to confirm editing artifacts or generative hallmarks.
+3. **Semantic Grounding**: Suspicious findings are "grounded" via **Gemini 2.0 Flash Vision**, which cross-verifies ML anomalies against the visual scene context to confirm editing artifacts or generative hallmarks.
 
 Every step — from initial telemetry to the multimodal verdict — is recorded in a court-defensible ECDSA-signed ledger.
 
@@ -114,7 +114,7 @@ Frontend (Next.js 15) → FastAPI Backend → 5 2026 Agents → Council Arbiter 
 | `QDRANT_URL` | Yes | Qdrant server URL |
 | `GROQ_API_KEY` | Yes | Groq API for LLM synthesis |
 | `GEMINI_API_KEY` | Yes | Google Gemini for vision analysis |
-| `GEMINI_MODEL` | No | Gemini model version (default: gemini-2.5-flash) |
+| `GEMINI_MODEL` | No | Gemini model version (default: gemini-2.0-flash) |
 | `SECRET_KEY` | Yes | Application secret for signing |
 | `LLM_PROVIDER` | No | LLM provider (default: groq) |
 | `LLM_MODEL` | No | LLM model name |
@@ -133,7 +133,7 @@ For production key generation, see `infra/generate_production_keys.sh`.
 ```bash
 # 1. Configure 2026 Standards
 copy .env.example .env
-# Edit .env: set GEMINI_MODEL=gemini-2.5-flash
+# Edit .env: set GEMINI_MODEL=gemini-2.0-flash
 
 # 2. Deploy
 docker compose -f infra/docker-compose.yml --env-file .env up --build
@@ -144,34 +144,26 @@ docker compose -f infra/docker-compose.yml --env-file .env up --build
 ## Changelog
 
 **v1.4.0 (2026-04-14)** — Multi-Agent Tribunal Audit & Structural Hardening:
-- **Orchestration**: Finalized the 5-Agent Tribunal sequentially (Project Orchestrator, Frontend Designer, Backend/AI, Testing/DevOps, Runner Up).
+- **Orchestration**: Finalized the 5-Agent Tribunal sequentially.
 - **Backend/AI**: Hardened the 24-hour "Dead Man's Switch" (TTL) in WorkingMemory for GDPR/Privacy compliance.
-- **Backend/AI**: Implemented high-fidelity SignalBus synchronization in the Council Arbiter to prevent premature report synthesis.
+- **Backend/AI**: Implemented high-fidelity SignalBus synchronization in the Council Arbiter.
 - **Frontend**: Standardized UI typography for forensic Title Case; implemented procedurally generated SVG grain for premium aesthetics.
-- **Frontend**: Migrated investigation state from `sessionStorage` to `localStorage` for cross-tab persistence and crash recovery.
-- **DevOps**: Hardened WebSocket connection logic for developer environment stability (localhost context-awareness).
+- **Frontend**: Migrated investigation state from `sessionStorage` to `localStorage` for cross-tab persistence.
+- **DevOps**: Hardened WebSocket connection logic for developer environment stability.
 - **Quality**: Verified 2026 SOTA model configuration (Gemini 2.0 Flash) across the entire monorepo.
 
-**v1.3.0 (2026-04-09)** — Production Hardening & Structural Cleanup:
-- **Bug fix**: Corrected `from infra.logging import get_logger` → `from core.structured_logging import get_logger` in `Agent2Audio` and `Agent4Video` (caused `ImportError` at runtime).
-- **Bug fix**: Initialized `redis = None` before the try block in `hitl.py` to prevent `NameError` on Redis failure.
-- **Infra**: Fixed `CALIBRATION_MODELS_PATH` in docker-compose — now correctly points to `/app/storage/calibration_models` (COPYd path) instead of the empty named volume.
-- **Storage**: Merged all 8 agent calibration models into `apps/api/storage/calibration_models/` (deep agent models were missing). Removed redundant root-level `storage/` directory.
-- **Cleanup**: Relocated `AGENTS.md` to `docs/` and version files to sub-folders. Purged all AI tool metadata (`.cursor`, `.claude`, `.agent`) from the root directory.
-- **Configuration**: Synchronized `.env.example` with modern variables and optimized CI/CD workflow to use file-based versioning.
-- **Frontend**: Removed redundant Google Fonts `@import url(...)` from `globals.css` (fonts loaded via `next/font/google` in `layout.tsx`).
-- **Version**: Bumped `pyproject.toml`, `package.json`, and FastAPI app version to v1.3.0.
-
-**v1.3.0 (2026-04-07)** — "Forensic OS" Modernization & Semantic Grounding:
+**v1.3.0 (2026-04-09)** — Production Hardening & Modernization:
 - **Core**: Implemented the **Initial vs Deep Analysis** pipeline across all agents for tiered forensic screening.
-- **ML Tools**: Integrated 2026-era detectors: `diffusion_artifact_detector`, `interframe_forgery_detector`, and `c2pa_validator` (JUMBF).
-- **Grounding**: Developed **Semantic Grounding (Flag & Verify)** — Gemini 2.5 now cross-validates suspicious ML findings using ROI coordinates.
-- **Infrastructure**: Optimized Docker caching layer; added dedicated volumes for `calibration_models` and `numba_cache`.
-- **Cleanup**: Removed legacy `DevErrorOverlay.tsx` and development-only error providers for production hardening.
-- **Standardization**: Updated default models to **Gemini 2.5 Pro Preview** in configuration and documentation.
+- **ML Tools**: Integrated 2026-era detectors: `diffusion_artifact_detector`, `interframe_forgery_detector`, and `c2pa_validator`.
+- **Grounding**: Developed **Semantic Grounding (Flag & Verify)** — Gemini 2.0 Flash now cross-validates findings.
+- **Bug fix**: Corrected `from infra.logging` → `from core.structured_logging` imports.
+- **Bug fix**: Initialized `redis = None` before try blocks in `hitl.py`.
+- **Infra**: Fixed `CALIBRATION_MODELS_PATH` in docker-compose.
+- **Cleanup**: Purged AI tool metadata (`.cursor`, `.claude`) from root; merged calibration models.
+- **Standardization**: Updated default models to **Gemini 2.0 Flash** in configuration.
 
-**v1.2.2 (2026-04-07)** — "Forensic OS" 2026 Edition & Infrastructure Audit:
-- **Models**: Native support for **Gemini 2.5 Pro** and **Gemini 2.5 Flash**.
+**v1.2.2 (2026-04-07)** — "Forensic OS" 2026 Edition:
+- **Models**: Native support for **Gemini 2.0 Flash**.
 - **UI/UX**: Premium high-fidelity dashboard redesign with glassmorphism and performance-optimized `AnimatedWave`.
 - **A11y**: Standardized WCAG 2.1 AA compliance with refined ARIA landmarks.
 

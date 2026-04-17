@@ -10,7 +10,7 @@ repos:
       - id: detect-private-key
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.7
+    rev: v0.9.9
     hooks:
       - id: ruff
         args: [--fix]
@@ -27,7 +27,7 @@ repos:
       - id: pyright-tools
         name: pyright tools/
         language: system
-        entry: bash -c 'cd apps/api && uv run pyright tools/'
+        entry: python -c "import os, subprocess; os.chdir('apps/api'); subprocess.run(['uv', 'run', 'pyright', 'tools/'], check=True)"
         pass_filenames: false
         files: ^apps/api/tools/.*\.py$
         types: [python]
@@ -39,7 +39,7 @@ repos:
         args: [--all]
 
   - repo: https://github.com/pre-commit/mirrors-eslint
-    rev: v9.22.0
+    rev: v9.2.0
     hooks:
       - id: eslint
         files: \.(tsx?|jsx?)$

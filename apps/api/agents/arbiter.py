@@ -142,8 +142,11 @@ class CouncilArbiter(ArbiterNarrativeMixin):
 
         # ── 5. Case Finalisation ───────────────────────────────────────────
         _fusion = {}
-        try: _fusion_res = cross_modal_fuse(active_results); _fusion = _fusion_res.model_dump(mode="json")
-        except: pass
+        try:
+            _fusion_res = cross_modal_fuse(active_results)
+            _fusion = _fusion_res.model_dump(mode="json")
+        except Exception:
+            pass
 
         report = ForensicReport(
             session_id=self.session_id, case_id=case_id or f"case_{self.session_id}",
