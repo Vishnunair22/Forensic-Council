@@ -273,7 +273,11 @@ class CircuitBreaker:
 
     @property
     def state(self) -> str:
-        """Get current circuit state (read-only — no side effects)."""
+        """
+        Get current circuit state.
+        Triggers a lazy transition from OPEN to HALF_OPEN if the recovery timeout has expired.
+        """
+        self._check_and_maybe_half_open()
         return self._state
 
     def _check_and_maybe_half_open(self) -> str:

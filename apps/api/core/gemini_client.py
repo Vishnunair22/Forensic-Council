@@ -623,15 +623,7 @@ class GeminiVisionClient:
     ) -> GeminiVisionFinding:
         """Encode file and call Gemini generateContent, parse structured result."""
         # Check circuit breaker before attempting API call
-        try:
-            state = self._circuit_breaker.state
-        except AttributeError as e:
-            logger.debug("Gemini circuit breaker state inaccessible", error=str(e))
-            state = "CLOSED"
-        except Exception as e:
-            logger.warning("Gemini circuit breaker state check failed", error=str(e))
-            state = "CLOSED"
-        if state == "OPEN":
+        if self._circuit_breaker.state == "OPEN":
             logger.warning(
                 f"Gemini circuit breaker is OPEN — falling back to local analysis for {analysis_type}"
             )

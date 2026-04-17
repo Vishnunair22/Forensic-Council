@@ -10,7 +10,10 @@ environment-aware configuration.
 import asyncio
 import concurrent.futures
 import hashlib
+import json
+import os
 import secrets
+import shutil
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -31,7 +34,11 @@ from api.routes.metrics import (
 )
 from core.config import get_settings, validate_production_settings
 from core.observability import setup_observability
-from core.persistence.redis_client import get_redis_client
+from core.persistence.postgres_client import get_postgres_client
+from core.persistence.qdrant_client import get_qdrant_client
+from core.persistence.redis_client import get_redis_client, close_redis_client
+from core.persistence.postgres_client import close_postgres_client
+from core.persistence.qdrant_client import close_qdrant_client
 from core.monitoring import start_monitoring
 from core.structured_logging import get_logger, request_id_ctx
 
@@ -54,7 +61,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
 
     # IMPV-03: Initialize Managed ProcessPool for CPU-bound forensic analysis (ELA, FFT, etc.)
-    import os
     max_workers = min(16, os.cpu_count() or 4)
     app.state.process_pool = concurrent.futures.ProcessPoolExecutor(
         max_workers=max_workers
@@ -75,7 +81,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
 
     # Pre-startup dependency validation
-    import shutil
     REQUIRED_BINARIES = ["tesseract", "exiftool", "ffmpeg"]
     missing_bins = [b for b in REQUIRED_BINARIES if not shutil.which(b)]
     if missing_bins:
@@ -90,8 +95,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Validate that migrations have been run in production before accepting requests.
     app.state.migrations_ok = False
     try:
-        from core.persistence.postgres_client import get_postgres_client
-
         pg = await get_postgres_client()
         # Check for critical tables that migrations create
         table_exists = await pg.fetch_val(
@@ -130,8 +133,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Bootstrap default users (idempotent — skips if users already exist)
     try:
-        from core.persistence.postgres_client import get_postgres_client
-        from scripts.init_db import bootstrap_users
+        from scripts.init_db import bootstrap_users  # deferred: scripts may import api modules
 
         pg = await get_postgres_client()
         await bootstrap_users(pg)
@@ -174,12 +176,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # as active in the sessions list and prevents WebSocket clients from waiting
     # indefinitely for progress that will never arrive.
     try:
-        import json as _json
+        from api.routes._session_state import SESSION_METADATA_KEY_PREFIX  # deferred: avoids circular import at module load
 
-        from api.routes._session_state import SESSION_METADATA_KEY_PREFIX
-        from core.persistence.redis_client import get_redis_client as _get_redis
-
-        _redis = await _get_redis()
+        _redis = await get_redis_client()
         _orphan_keys = await _redis.keys(f"{SESSION_METADATA_KEY_PREFIX}*")
         _interrupted_count = 0
         for _key in _orphan_keys:
@@ -188,7 +187,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 if not _raw:
                     continue
                 try:
-                    _meta = _json.loads(_raw)
+                    _meta = json.loads(_raw)
                 except (ValueError, TypeError):
                     continue
                 if isinstance(_meta, dict) and _meta.get("status") == "running":
@@ -196,7 +195,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     _meta["interrupted_at"] = datetime.now(UTC).isoformat()
                     _ttl = await _redis.ttl(_key)
                     _ex = _ttl if _ttl > 0 else None
-                    await _redis.set(_key, _json.dumps(_meta), ex=_ex)
+                    await _redis.set(_key, json.dumps(_meta), ex=_ex)
                     _interrupted_count += 1
             except Exception as _key_err:
                 logger.warning("Failed to update orphaned session key", key=_key, error=str(_key_err))
@@ -210,9 +209,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as e:
         logger.warning("Orphan session cleanup skipped", error=str(e))
 
-    # Issue 1.2: Start periodic SQLite blacklist cleanup (runs every hour)
+    # Start periodic blacklist cache cleanup (runs every hour)
     try:
-        from core.auth import start_blacklist_cleanup_task
+        from core.auth import start_blacklist_cleanup_task  # deferred: avoids circular import
         start_blacklist_cleanup_task()
     except Exception as e:
         logger.warning("Blacklist cleanup task failed to start", error=str(e))
@@ -345,24 +344,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # 5. Close database and cache connections
     try:
-        from core.persistence.postgres_client import close_postgres_client
-
         await close_postgres_client()
         logger.info("PostgreSQL connection closed")
     except Exception as e:
         logger.warning("PostgreSQL shutdown error", error=str(e))
 
     try:
-        from core.persistence.redis_client import close_redis_client
-
         await close_redis_client()
         logger.info("Redis connection closed")
     except Exception as e:
         logger.warning("Redis shutdown error", error=str(e))
 
     try:
-        from core.persistence.qdrant_client import close_qdrant_client
-
         await close_qdrant_client()
         logger.info("Qdrant connection closed")
     except Exception as e:
@@ -690,12 +683,10 @@ async def global_exception_handler(request: Request, exc: Exception):
     honour the original status code instead of blindly returning 500 so that
     4xx errors are not silently promoted to 5xx.
     """
-    from fastapi import HTTPException as _HTTPException
-
     logger.error("Global exception caught", error=str(exc), exc_info=True)
 
     # If an HTTPException somehow leaked here, preserve its status code and detail.
-    if isinstance(exc, _HTTPException):
+    if isinstance(exc, HTTPException):
         content: dict = {"detail": exc.detail}
         if settings.app_env != "production":
             content["message"] = str(exc)
@@ -744,8 +735,6 @@ async def health_check():
 
     # ── PostgreSQL ────────────────────────────────────────────────────────────
     try:
-        from core.persistence.postgres_client import get_postgres_client
-
         pg = await get_postgres_client()
         await pg.fetch_val("SELECT 1")
         checks["postgres"] = "ok"
@@ -759,8 +748,6 @@ async def health_check():
 
     # ── Redis ─────────────────────────────────────────────────────────────────
     try:
-        from core.persistence.redis_client import get_redis_client
-
         redis = await get_redis_client()
         await redis.ping()
         checks["redis"] = "ok"
@@ -774,8 +761,6 @@ async def health_check():
 
     # ── Qdrant ────────────────────────────────────────────────────────────────
     try:
-        from core.persistence.qdrant_client import get_qdrant_client
-
         qdrant = await get_qdrant_client()
         # Use health_check() method instead of direct API call
         await qdrant.health_check()

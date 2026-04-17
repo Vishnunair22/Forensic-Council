@@ -598,6 +598,97 @@ class ReActLoopEngine:
     # Accessed via property so the YAML is loaded lazily on first use.
     _TASK_TOOL_OVERRIDES_CACHE: dict[str, str] | None = None
 
+    _AGENT_ID_TO_NAME: dict[str, str] = {
+        "Agent1": "Image Forensics",
+        "Agent2": "Audio Forensics",
+        "Agent3": "Object Detection",
+        "Agent4": "Video Forensics",
+        "Agent5": "Metadata Forensics",
+        "Agent1_deep": "Image Forensics",
+        "Agent2_deep": "Audio Forensics",
+        "Agent3_deep": "Object Detection",
+        "Agent4_deep": "Video Forensics",
+        "Agent5_deep": "Metadata Forensics",
+    }
+
+    _TOOL_LABELS: dict[str, str] = {
+        "ela_full_image": "ELA — Image Manipulation",
+        "ela_anomaly_classify": "ELA Anomaly Classification",
+        "jpeg_ghost_detect": "JPEG Ghost Detection",
+        "frequency_domain_analysis": "Frequency Domain Analysis",
+        "deepfake_frequency_check": "GAN/Deepfake Frequency Check",
+        "noise_fingerprint": "PRNU Noise Fingerprint",
+        "copy_move_detect": "Copy-Move Forgery Detection",
+        "extract_evidence_text": "OCR Text Extraction",
+        "extract_text_from_image": "OCR Text Extraction",
+        "analyze_image_content": "Semantic Image Analysis",
+        "perceptual_hash": "Perceptual Hash (pHash)",
+        "file_hash_verify": "File Hash Verification",
+        "splicing_detect": "Splicing Detection",
+        "image_splice_check": "Image Splice Check",
+        "roi_extract": "Region of Interest Extraction",
+        "speaker_diarize": "Speaker Diarization",
+        "anti_spoofing_detect": "Anti-Spoofing Detection",
+        "prosody_analyze": "Prosody Analysis",
+        "audio_splice_detect": "Audio Splice Detection",
+        "background_noise_analysis": "Background Noise Consistency",
+        "codec_fingerprinting": "Codec Fingerprinting",
+        "audio_visual_sync": "Audio-Visual Sync Check",
+        "object_detection": "Object Detection (YOLO)",
+        "lighting_consistency": "Lighting & Shadow Consistency",
+        "scene_incongruence": "Scene Incongruence (CLIP)",
+        "secondary_classification": "Secondary Object Classification",
+        "scale_validation": "Scale & Proportion Validation",
+        "contraband_database": "Contraband / Weapons CLIP Analysis",
+        "optical_flow_analysis": "Optical Flow Analysis",
+        "optical_flow_analyze": "Optical Flow Analysis",
+        "frame_extraction": "Frame Window Extraction",
+        "frame_window_extract": "Frame Window Extraction",
+        "frame_consistency_analysis": "Frame Consistency Analysis",
+        "face_swap_detection": "Face-Swap Detection",
+        "video_metadata": "Video Metadata Extraction",
+        "video_metadata_extract": "Video Metadata Extraction",
+        "anomaly_classification": "Anomaly Classification",
+        "rolling_shutter_validation": "Rolling Shutter Validation",
+        "mediainfo_profile": "MediaInfo Container Profile",
+        "av_file_identity": "AV File Identity Pre-Screen",
+        "exif_extract": "EXIF Metadata Extraction",
+        "metadata_anomaly_score": "Metadata Anomaly Score (ML)",
+        "gps_timezone_validate": "GPS-Timezone Validation",
+        "steganography_scan": "Steganography Scan",
+        "file_structure_analysis": "File Structure Analysis",
+        "hex_signature_scan": "Hex Signature Scan",
+        "timestamp_analysis": "Timestamp Consistency Analysis",
+        "extract_deep_metadata": "Deep Metadata Extraction",
+        "get_physical_address": "GPS Reverse Geocoding",
+        "astronomical_api": "Astronomical Timestamp Validation",
+        "reverse_image_search": "Reverse Image Search (pHash)",
+        "device_fingerprint_db": "Device Fingerprint Analysis",
+        "adversarial_robustness_check": "Adversarial Robustness Check",
+        "neural_ela": "Neural ELA — ViT Manipulation Detection",
+        "noiseprint_cluster": "Noiseprint++ Sensor Clustering",
+        "neural_fingerprint": "SigLIP2 Neural Perceptual Fingerprint",
+        "neural_splicing": "TruFor ViT Splicing Detection",
+        "neural_copy_move": "BusterNet Dual-Branch Copy-Move",
+        "anomaly_tracer": "ManTra-Net Universal Anomaly Tracer",
+        "f3_net_frequency": "F3-Net Frequency Artifact Analysis",
+        "diffusion_artifact_detector": "Diffusion/AI-Generation Artifact Detection",
+        "gemini_identify_content": "Gemini Vision — Content Identification",
+        "gemini_cross_validate_manipulation": "Gemini Vision — Manipulation Cross-Validation",
+        "gemini_object_scene_analysis": "Gemini Vision — Object & Scene Analysis",
+        "gemini_metadata_visual_consistency": "Gemini Vision — Metadata Consistency Check",
+        "gemini_deep_forensic": "Gemini Deep Forensic Analysis",
+        "prnu_analysis": "PRNU Camera Sensor Fingerprint",
+        "cfa_demosaicing": "CFA Demosaicing Pattern Analysis",
+        "voice_clone_detect": "Voice Clone Detection",
+        "enf_analysis": "ENF Frequency Analysis",
+        "object_text_ocr": "Object Region OCR",
+        "document_authenticity": "Document Authenticity Check",
+        "c2pa_verify": "C2PA Content Credentials",
+        "thumbnail_mismatch": "Thumbnail Mismatch Detection",
+        "sensor_db_query": "Camera Sensor DB Query",
+    }
+
     @classmethod
     def _get_task_tool_overrides(cls) -> dict[str, str]:
         """Load task→tool overrides from YAML config (cached)."""
@@ -645,6 +736,187 @@ class ReActLoopEngine:
         self._resume_event: asyncio.Event | None = None
         self._pending_decision: HumanDecision | None = None
         self._thought_buffer: list[str] = []  # M1: Captures multiple thoughts before an action
+
+    def _extract_confidence(self, output: Any, tool_name: str) -> tuple[float, bool]:
+        """Extract a 0-1 confidence score from tool output. Returns (confidence, from_fallback)."""
+        raw_conf: float | None = None
+        if isinstance(output, dict):
+            raw_conf = output.get("confidence")
+            if raw_conf is None and "confidence" in output:
+                raw_conf = 0.50
+            if raw_conf is None:
+                for key in ("anomaly_score", "tampering_score", "synthetic_probability",
+                            "forgery_score", "diffusion_probability"):
+                    val = output.get(key)
+                    if isinstance(val, (int, float)):
+                        raw_conf = 1.0 - max(0.0, min(1.0, float(val)))
+                        break
+            if raw_conf is None:
+                for key in ("noise_consistency_score", "consistency_score",
+                            "overall_consistency", "avg_confidence", "confidence_score"):
+                    val = output.get(key)
+                    if isinstance(val, (int, float)):
+                        raw_conf = max(0.0, min(1.0, float(val)))
+                        break
+            if raw_conf is None:
+                if "detections" in output:
+                    raw_conf = 0.60 if len(output.get("detections") or []) > 0 else 0.40
+                elif "objects_detected" in output:
+                    raw_conf = 0.55 if len(output.get("objects_detected") or []) > 0 else 0.40
+                elif output.get("hash_matches") is True:
+                    raw_conf = 1.0
+                elif output.get("hash_matches") is False:
+                    raw_conf = 0.30
+                elif output.get("scale_consistent") is True:
+                    raw_conf = 0.85
+                elif output.get("scale_consistent") is False:
+                    raw_conf = 0.40
+                elif "verdict" in output:
+                    v = str(output.get("verdict", "")).upper()
+                    if v in ("CONSISTENT", "AUTHENTIC", "CLEAN", "NATURAL_OR_CLEAN",
+                             "LIKELY_AUTHENTIC", "LIKELY_GENUINE", "CONTENT_CREDENTIALS_PRESENT",
+                             "NO_CONTENT_CREDENTIALS"):
+                        raw_conf = 0.85
+                    elif v in ("INCONSISTENT", "SUSPICIOUS", "TAMPERED"):
+                        raw_conf = 0.40
+                    elif v in ("INCONCLUSIVE", "ERROR"):
+                        raw_conf = 0.50
+                    elif v == "NOT_APPLICABLE":
+                        raw_conf = 0.0
+                elif output.get("ai_probability") is not None:
+                    raw_conf = round(max(0.10, 1.0 - float(output["ai_probability"])), 3)
+                elif output.get("synthetic_probability") is not None:
+                    raw_conf = round(max(0.10, 1.0 - float(output["synthetic_probability"])), 3)
+                elif output.get("spoof_probability") is not None:
+                    raw_conf = round(max(0.10, 1.0 - float(output["spoof_probability"])), 3)
+                elif output.get("num_anomaly_regions") is not None:
+                    raw_conf = 0.85 if int(output["num_anomaly_regions"]) == 0 else 0.40
+                elif output.get("anomaly_detected") is True or output.get("inconsistency_detected") is True:
+                    raw_conf = 0.40
+                elif output.get("anomaly_detected") is False or output.get("inconsistency_detected") is False:
+                    raw_conf = 0.85
+                elif output.get("header_valid") is not None:
+                    anomalies = output.get("anomalies", [])
+                    raw_conf = 0.85 if isinstance(anomalies, list) and len(anomalies) == 0 else 0.40
+                elif output.get("editing_software_detected") is True:
+                    raw_conf = 0.30
+                elif output.get("editing_software_detected") is False:
+                    raw_conf = 0.90
+                elif "present_fields" in output and "absent_fields" in output:
+                    present = len(output.get("present_fields") or [])
+                    absent = len(output.get("absent_fields") or [])
+                    total = present + absent
+                    raw_conf = max(0.40, min(0.90, present / total)) if total > 0 else 0.50
+                elif "plausible" in output:
+                    p = output.get("plausible")
+                    raw_conf = 0.80 if p is True else (0.40 if p is False else 0.50)
+
+        from_fallback = raw_conf is None
+        try:
+            confidence = float(raw_conf) if raw_conf is not None else 0.50
+        except (TypeError, ValueError):
+            confidence = 0.50
+            from_fallback = True
+
+        if from_fallback:
+            logger.warning(
+                "Unrecognised tool output format — confidence fallback to 0.50",
+                tool=tool_name,
+                agent_id=self.agent_id,
+                output_keys=list(output.keys()) if isinstance(output, dict) else type(output).__name__,
+            )
+        return confidence, from_fallback
+
+    async def _handle_hitl_pause(
+        self, checkpoint: "HITLCheckpointState", hitl_reason: "HITLCheckpointReason"
+    ) -> bool:
+        """Wait for human decision at a HITL checkpoint. Returns True if loop should terminate."""
+        self._resume_event = asyncio.Event()
+
+        if self._pending_decision is None:
+            try:
+                await asyncio.wait_for(self._resume_event.wait(), timeout=self.hitl_timeout)
+            except TimeoutError:
+                try:
+                    if self.custody_logger is not None:
+                        await self.custody_logger.log(
+                            entry_type="SYSTEM_EVENT",
+                            agent_id=self.agent_id,
+                            session_id=str(self.session_id),
+                            content={
+                                "event": "HITL_TIMEOUT",
+                                "checkpoint_id": str(checkpoint.checkpoint_id),
+                                "reason": hitl_reason.value,
+                                "timeout_seconds": self.hitl_timeout,
+                                "iteration": self._current_iteration,
+                            },
+                        )
+                except Exception:
+                    pass
+                self._terminated = True
+                return True
+
+        if self._pending_decision is not None:
+            await self.resume_from_hitl(checkpoint.checkpoint_id, self._pending_decision)
+            self._pending_decision = None
+            self._resume_event.clear()
+
+        return self._terminated
+
+    async def _update_task_complete(self, step: "ReActStep") -> None:
+        """Mark the working-memory task associated with a completed tool call as COMPLETE."""
+        from core.working_memory import TaskStatus as _TS
+
+        _task_id_str = (step.tool_input or {}).get("_task_id")
+        _wm_updated = False
+
+        if _task_id_str:
+            try:
+                from uuid import UUID as _UUID
+                await self.working_memory.update_task(
+                    session_id=self.session_id,
+                    agent_id=self.agent_id,
+                    task_id=_UUID(_task_id_str),
+                    status=_TS.COMPLETE,
+                    result_ref=step.tool_name,
+                )
+                _wm_updated = True
+            except Exception as err:
+                logger.warning(f"Direct task COMPLETE failed for {_task_id_str}: {err}",
+                               agent_id=self.agent_id)
+
+        if not _wm_updated:
+            try:
+                fresh_state = await self.working_memory.get_state(
+                    session_id=self.session_id, agent_id=self.agent_id)
+                if fresh_state:
+                    for task in fresh_state.tasks:
+                        if task.status == _TS.IN_PROGRESS:
+                            await self.working_memory.update_task(
+                                session_id=self.session_id,
+                                agent_id=self.agent_id,
+                                task_id=task.task_id,
+                                status=_TS.COMPLETE,
+                                result_ref=step.tool_name,
+                            )
+                            _wm_updated = True
+                            break
+            except Exception as err:
+                logger.warning(f"WM scan task COMPLETE failed: {err}", agent_id=self.agent_id)
+
+        if not _wm_updated:
+            try:
+                cache_state = await self.working_memory.get_state(
+                    session_id=self.session_id, agent_id=self.agent_id)
+                if cache_state:
+                    for task in cache_state.tasks:
+                        if task.status == _TS.IN_PROGRESS:
+                            task.status = _TS.COMPLETE
+                            task.result_ref = step.tool_name
+                    key = self.working_memory._get_key(self.session_id, self.agent_id)
+                    self.working_memory._local_cache[key] = cache_state.model_dump_json()
+            except Exception:
+                pass
 
     async def run(
         self,
@@ -716,50 +988,7 @@ class ReActLoopEngine:
                     brief=f"Paused at iteration {self._current_iteration} due to {hitl_reason.value}",
                 )
                 self._hitl_checkpoints.append(checkpoint)
-
-                # Issue 5.1: Create a FRESH Event for every checkpoint so a stale
-                # resume_from_hitl call from a previous checkpoint cannot accidentally
-                # unblock a new one.
-                self._resume_event = asyncio.Event()
-
-                # In test mode, we might have a pending decision already
-                if self._pending_decision is None:
-                    # Wait for external resume (with timeout for safety)
-                    try:
-                        await asyncio.wait_for(
-                            self._resume_event.wait(), timeout=self.hitl_timeout
-                        )
-                    except TimeoutError:
-                        # Issue 5.2: Log timeout to chain of custody before terminating
-                        try:
-                            if self.custody_logger is not None:
-                                await self.custody_logger.log(
-                                    entry_type="SYSTEM_EVENT",
-                                    agent_id=self.agent_id,
-                                    session_id=str(self.session_id),
-                                    content={
-                                        "event": "HITL_TIMEOUT",
-                                        "checkpoint_id": str(checkpoint.checkpoint_id),
-                                        "reason": hitl_reason.value,
-                                        "timeout_seconds": self.hitl_timeout,
-                                        "iteration": self._current_iteration,
-                                    },
-                                )
-                        except Exception:
-                            pass  # best-effort; never block termination
-                        self._terminated = True
-                        break
-
-                # Process the decision
-                if self._pending_decision is not None:
-                    await self.resume_from_hitl(
-                        checkpoint.checkpoint_id, self._pending_decision
-                    )
-                    self._pending_decision = None
-                    self._resume_event.clear()
-
-                # Check if terminated after HITL
-                if self._terminated:
+                if await self._handle_hitl_pause(checkpoint, hitl_reason):
                     break
 
             # Get next step from LLM or built-in task driver
@@ -827,178 +1056,21 @@ class ReActLoopEngine:
                 # --- Generate AgentFinding from Tool Result ---
                 if tool_result.success:
                     output = tool_result.output or {}
-                    # Parse confidence: try "confidence" first, then domain-specific keys,
-                    # then derive from anomaly/consistency scores, finally fall back to 0.75.
-                    raw_conf = (
-                        output.get("confidence") if isinstance(output, dict) else None
+                    confidence, _conf_from_fallback = self._extract_confidence(
+                        output, next_step.tool_name
                     )
-                    # Explicit None means "no confidence available" — use 0.50 (uncertain)
-                    if (
-                        raw_conf is None
-                        and isinstance(output, dict)
-                        and "confidence" in output
-                    ):
-                        raw_conf = 0.50
-                    if raw_conf is None and isinstance(output, dict):
-                        # Map domain-specific keys to a 0-1 confidence score
-                        for key in (
-                            "anomaly_score",
-                            "tampering_score",
-                            "synthetic_probability",
-                            "forgery_score",
-                            "diffusion_probability",
-                        ):
-                            val = output.get(key)
-                            if isinstance(val, (int, float)):
-                                raw_conf = 1.0 - max(0.0, min(1.0, float(val)))
-                                break
-                        if raw_conf is None:
-                            for key in (
-                                "noise_consistency_score",
-                                "consistency_score",
-                                "overall_consistency",
-                                "avg_confidence",
-                                "confidence_score",
-                            ):
-                                val = output.get(key)
-                                if isinstance(val, (int, float)):
-                                    raw_conf = max(0.0, min(1.0, float(val)))
-                                    break
-                        if raw_conf is None:
-                            # Derive from object detection results (YOLO and OpenCV fallback)
-                            if "detections" in output:
-                                det_count = len(output.get("detections") or [])
-                                # YOLO detections: 0 objects = no meaningful signal, >0 = high confidence in detection
-                                raw_conf = 0.60 if det_count > 0 else 0.40
-                            elif "objects_detected" in output:
-                                det_count = len(output.get("objects_detected") or [])
-                                # OpenCV contour fallback: contours ≠ objects, low confidence either way
-                                raw_conf = 0.55 if det_count > 0 else 0.40
-                            # Derive from hash match
-                            elif output.get("hash_matches") is True:
-                                raw_conf = 1.0
-                            elif output.get("hash_matches") is False:
-                                raw_conf = 0.30
-                            # Derive from scale_consistent
-                            elif output.get("scale_consistent") is True:
-                                raw_conf = 0.85
-                            elif output.get("scale_consistent") is False:
-                                raw_conf = 0.40
-                            # Derive from verdict field
-                            elif "verdict" in output:
-                                v = str(output.get("verdict", "")).upper()
-                                if v in (
-                                    "CONSISTENT",
-                                    "AUTHENTIC",
-                                    "CLEAN",
-                                    "NATURAL_OR_CLEAN",
-                                    "LIKELY_AUTHENTIC",
-                                    "LIKELY_GENUINE",
-                                    "CONTENT_CREDENTIALS_PRESENT",
-                                    "NO_CONTENT_CREDENTIALS",
-                                ):
-                                    raw_conf = 0.85
-                                elif v in ("INCONSISTENT", "SUSPICIOUS", "TAMPERED"):
-                                    raw_conf = 0.40
-                                elif v in ("INCONCLUSIVE", "ERROR"):
-                                    raw_conf = 0.50
-                                elif v == "NOT_APPLICABLE":
-                                    raw_conf = (
-                                        0.0  # excluded from confidence calculations
-                                    )
-                            # Derive from ai_probability (diffusion/GAN detectors)
-                            elif output.get("ai_probability") is not None:
-                                ai_prob = float(output["ai_probability"])
-                                raw_conf = round(max(0.10, 1.0 - ai_prob), 3)
-                            # Derive from synthetic_probability / spoof_probability
-                            elif output.get("synthetic_probability") is not None:
-                                sp = float(output["synthetic_probability"])
-                                raw_conf = round(max(0.10, 1.0 - sp), 3)
-                            elif output.get("spoof_probability") is not None:
-                                sp = float(output["spoof_probability"])
-                                raw_conf = round(max(0.10, 1.0 - sp), 3)
-                            # Derive from ELA anomaly region count
-                            elif output.get("num_anomaly_regions") is not None:
-                                n = int(output["num_anomaly_regions"])
-                                raw_conf = 0.85 if n == 0 else 0.40
-                            # Derive from anomaly_detected OR inconsistency_detected
-                            elif (
-                                output.get("anomaly_detected") is True
-                                or output.get("inconsistency_detected") is True
-                            ):
-                                raw_conf = 0.40
-                            elif (
-                                output.get("anomaly_detected") is False
-                                or output.get("inconsistency_detected") is False
-                            ):
-                                raw_conf = 0.85
-                            # Derive from file structure analysis
-                            elif output.get("header_valid") is not None:
-                                anomalies = output.get("anomalies", [])
-                                raw_conf = (
-                                    0.85
-                                    if (
-                                        isinstance(anomalies, list)
-                                        and len(anomalies) == 0
-                                    )
-                                    else 0.40
-                                )
-                            # Derive from editing software detection
-                            elif output.get("editing_software_detected") is True:
-                                raw_conf = 0.30
-                            elif output.get("editing_software_detected") is False:
-                                raw_conf = 0.90
-                            # Derive from EXIF field presence (more fields = higher confidence)
-                            elif (
-                                "present_fields" in output and "absent_fields" in output
-                            ):
-                                present = len(output.get("present_fields") or [])
-                                absent = len(output.get("absent_fields") or [])
-                                total = present + absent
-                                raw_conf = (
-                                    max(0.40, min(0.90, present / total))
-                                    if total > 0
-                                    else 0.50
-                                )
-                            # Derive from GPS plausibility
-                            elif "plausible" in output:
-                                p = output.get("plausible")
-                                raw_conf = (
-                                    0.80
-                                    if p is True
-                                    else (0.40 if p is False else 0.50)
-                                )
-                    _conf_from_fallback = raw_conf is None
-                    try:
-                        confidence = float(raw_conf) if raw_conf is not None else 0.50
-                    except (TypeError, ValueError):
-                        confidence = 0.50
-                        _conf_from_fallback = True
                     status_val = (
                         str(output.get("status", "CONFIRMED")).upper()
                         if isinstance(output, dict)
                         else "CONFIRMED"
                     )
-                    if status_val not in (
-                        "CONFIRMED",
-                        "CONTESTED",
-                        "INCONCLUSIVE",
-                        "INCOMPLETE",
-                    ):
+                    if status_val not in ("CONFIRMED", "CONTESTED", "INCONCLUSIVE", "INCOMPLETE"):
                         status_val = "CONFIRMED"
-
                     is_stub = isinstance(output, dict) and (
                         output.get("status") == "stub"
                         or output.get("court_defensible") is False
                         or _conf_from_fallback
                     )
-                    if _conf_from_fallback:
-                        logger.warning(
-                            "Unrecognised tool output format — confidence fallback to 0.50",
-                            tool=next_step.tool_name,
-                            agent_id=self.agent_id,
-                            output_keys=list(output.keys()) if isinstance(output, dict) else type(output).__name__,
-                        )
                     calibrated_prob = None
 
                     cal_status_str = "UNCALIBRATED"
@@ -1024,104 +1096,7 @@ class ReActLoopEngine:
                             agent_id=self.agent_id,
                             exc_info=True,
                         )
-                    _AGENT_ID_TO_NAME = {
-                        "Agent1": "Image Forensics",
-                        "Agent2": "Audio Forensics",
-                        "Agent3": "Object Detection",
-                        "Agent4": "Video Forensics",
-                        "Agent5": "Metadata Forensics",
-                        # Deep pass IDs (suffixed with _deep)
-                        "Agent1_deep": "Image Forensics",
-                        "Agent2_deep": "Audio Forensics",
-                        "Agent3_deep": "Object Detection",
-                        "Agent4_deep": "Video Forensics",
-                        "Agent5_deep": "Metadata Forensics",
-                    }
-
-                    # Build a clean, human-readable finding type.
-                    # Priority: tool label > task description > tool name.
-                    # We avoid using raw LLM THOUGHT text (which can be 80+
-                    # chars of verbose reasoning) as the finding_type label.
-                    _TOOL_LABELS = {
-                        "ela_full_image": "ELA — Image Manipulation",
-                        "ela_anomaly_classify": "ELA Anomaly Classification",
-                        "jpeg_ghost_detect": "JPEG Ghost Detection",
-                        "frequency_domain_analysis": "Frequency Domain Analysis",
-                        "deepfake_frequency_check": "GAN/Deepfake Frequency Check",
-                        "noise_fingerprint": "PRNU Noise Fingerprint",
-                        "copy_move_detect": "Copy-Move Forgery Detection",
-                        "extract_evidence_text": "OCR Text Extraction",
-                        "extract_text_from_image": "OCR Text Extraction",
-                        "analyze_image_content": "Semantic Image Analysis",
-                        "perceptual_hash": "Perceptual Hash (pHash)",
-                        "file_hash_verify": "File Hash Verification",
-                        "splicing_detect": "Splicing Detection",
-                        "image_splice_check": "Image Splice Check",
-                        "roi_extract": "Region of Interest Extraction",
-                        "speaker_diarize": "Speaker Diarization",
-                        "anti_spoofing_detect": "Anti-Spoofing Detection",
-                        "prosody_analyze": "Prosody Analysis",
-                        "audio_splice_detect": "Audio Splice Detection",
-                        "background_noise_analysis": "Background Noise Consistency",
-                        "codec_fingerprinting": "Codec Fingerprinting",
-                        "audio_visual_sync": "Audio-Visual Sync Check",
-                        "object_detection": "Object Detection (YOLO)",
-                        "lighting_consistency": "Lighting & Shadow Consistency",
-                        "scene_incongruence": "Scene Incongruence (CLIP)",
-                        "secondary_classification": "Secondary Object Classification",
-                        "scale_validation": "Scale & Proportion Validation",
-                        "contraband_database": "Contraband / Weapons CLIP Analysis",
-                        "optical_flow_analysis": "Optical Flow Analysis",
-                        "optical_flow_analyze": "Optical Flow Analysis",
-                        "frame_extraction": "Frame Window Extraction",
-                        "frame_window_extract": "Frame Window Extraction",
-                        "frame_consistency_analysis": "Frame Consistency Analysis",
-                        "face_swap_detection": "Face-Swap Detection",
-                        "video_metadata": "Video Metadata Extraction",
-                        "video_metadata_extract": "Video Metadata Extraction",
-                        "anomaly_classification": "Anomaly Classification",
-                        "rolling_shutter_validation": "Rolling Shutter Validation",
-                        "mediainfo_profile": "MediaInfo Container Profile",
-                        "av_file_identity": "AV File Identity Pre-Screen",
-                        "exif_extract": "EXIF Metadata Extraction",
-                        "metadata_anomaly_score": "Metadata Anomaly Score (ML)",
-                        "gps_timezone_validate": "GPS-Timezone Validation",
-                        "steganography_scan": "Steganography Scan",
-                        "file_structure_analysis": "File Structure Analysis",
-                        "hex_signature_scan": "Hex Signature Scan",
-                        "timestamp_analysis": "Timestamp Consistency Analysis",
-                        "extract_deep_metadata": "Deep Metadata Extraction",
-                        "get_physical_address": "GPS Reverse Geocoding",
-                        "astronomical_api": "Astronomical Timestamp Validation",
-                        "reverse_image_search": "Reverse Image Search (pHash)",
-                        "device_fingerprint_db": "Device Fingerprint Analysis",
-                        "adversarial_robustness_check": "Adversarial Robustness Check",
-                        # Phase 1/2 neural image tools
-                        "neural_ela": "Neural ELA — ViT Manipulation Detection",
-                        "noiseprint_cluster": "Noiseprint++ Sensor Clustering",
-                        "neural_fingerprint": "SigLIP2 Neural Perceptual Fingerprint",
-                        "neural_splicing": "TruFor ViT Splicing Detection",
-                        "neural_copy_move": "BusterNet Dual-Branch Copy-Move",
-                        "anomaly_tracer": "ManTra-Net Universal Anomaly Tracer",
-                        "f3_net_frequency": "F3-Net Frequency Artifact Analysis",
-                        "diffusion_artifact_detector": "Diffusion/AI-Generation Artifact Detection",
-                        # Gemini vision tools
-                        "gemini_identify_content": "Gemini Vision — Content Identification",
-                        "gemini_cross_validate_manipulation": "Gemini Vision — Manipulation Cross-Validation",
-                        "gemini_object_scene_analysis": "Gemini Vision — Object & Scene Analysis",
-                        "gemini_metadata_visual_consistency": "Gemini Vision — Metadata Consistency Check",
-                        "gemini_deep_forensic": "Gemini Deep Forensic Analysis",
-                        "prnu_analysis": "PRNU Camera Sensor Fingerprint",
-                        "cfa_demosaicing": "CFA Demosaicing Pattern Analysis",
-                        "voice_clone_detect": "Voice Clone Detection",
-                        "enf_analysis": "ENF Frequency Analysis",
-                        "object_text_ocr": "Object Region OCR",
-                        "document_authenticity": "Document Authenticity Check",
-                        "c2pa_verify": "C2PA Content Credentials",
-                        "thumbnail_mismatch": "Thumbnail Mismatch Detection",
-                        "sensor_db_query": "Camera Sensor DB Query",
-                    }
-                    tool_label = _TOOL_LABELS.get(
+                    tool_label = self._TOOL_LABELS.get(
                         next_step.tool_name,
                         next_step.tool_name.replace("_", " ").title(),
                     )
@@ -1136,7 +1111,7 @@ class ReActLoopEngine:
 
                     finding = AgentFinding(
                         agent_id=self.agent_id,
-                        agent_name=_AGENT_ID_TO_NAME.get(self.agent_id, self.agent_id),
+                        agent_name=self._AGENT_ID_TO_NAME.get(self.agent_id, self.agent_id),
                         finding_type=task_desc,
                         confidence_raw=confidence,
                         raw_confidence_score=calibrated_prob,
@@ -1222,73 +1197,7 @@ class ReActLoopEngine:
                         pass
 
                 # Mark the IN_PROGRESS task as COMPLETE now that the tool has run.
-                # Use the task_id stored in tool_input by _default_step_generator
-                # instead of scanning WM for IN_PROGRESS tasks.
-                from core.working_memory import TaskStatus as _TS
-
-                _task_id_str = (next_step.tool_input or {}).get("_task_id")
-                _wm_updated = False
-                if _task_id_str:
-                    try:
-                        from uuid import UUID as _UUID
-
-                        await self.working_memory.update_task(
-                            session_id=self.session_id,
-                            agent_id=self.agent_id,
-                            task_id=_UUID(_task_id_str),
-                            status=_TS.COMPLETE,
-                            result_ref=next_step.tool_name,
-                        )
-                        _wm_updated = True
-                    except Exception as _wm_direct_err:
-                        logger.warning(
-                            f"Direct task COMPLETE failed for {_task_id_str}: {_wm_direct_err}",
-                            agent_id=self.agent_id,
-                        )
-                # Fallback: scan WM for IN_PROGRESS tasks
-                if not _wm_updated:
-                    try:
-                        fresh_state = await self.working_memory.get_state(
-                            session_id=self.session_id,
-                            agent_id=self.agent_id,
-                        )
-                        if fresh_state:
-                            for task in fresh_state.tasks:
-                                if task.status == _TS.IN_PROGRESS:
-                                    await self.working_memory.update_task(
-                                        session_id=self.session_id,
-                                        agent_id=self.agent_id,
-                                        task_id=task.task_id,
-                                        status=_TS.COMPLETE,
-                                        result_ref=next_step.tool_name,
-                                    )
-                                    _wm_updated = True
-                                    break
-                    except Exception as _wm_scan_err:
-                        logger.warning(
-                            f"WM scan task COMPLETE failed: {_wm_scan_err}",
-                            agent_id=self.agent_id,
-                        )
-                # Last resort: force-write to local cache
-                if not _wm_updated:
-                    try:
-                        cache_state = await self.working_memory.get_state(
-                            session_id=self.session_id,
-                            agent_id=self.agent_id,
-                        )
-                        if cache_state:
-                            for task in cache_state.tasks:
-                                if task.status == _TS.IN_PROGRESS:
-                                    task.status = _TS.COMPLETE
-                                    task.result_ref = next_step.tool_name
-                            key = self.working_memory._get_key(
-                                self.session_id, self.agent_id
-                            )
-                            self.working_memory._local_cache[key] = (
-                                cache_state.model_dump_json()
-                            )
-                    except Exception:
-                        pass
+                await self._update_task_complete(next_step)
 
                 # Check for tool unavailability HITL trigger
                 if tool_result.unavailable:

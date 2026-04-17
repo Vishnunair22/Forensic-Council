@@ -11,12 +11,11 @@ import warnings
 from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+import jwt as _jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 
@@ -150,7 +149,7 @@ def create_access_token(
         "type": "access",
     }
 
-    encoded_jwt = jwt.encode(
+    encoded_jwt = _jwt.encode(
         to_encode, _settings.jwt_signing_key, algorithm=_settings.jwt_algorithm
     )
     logger.info(
@@ -186,12 +185,11 @@ async def decode_token(token: str) -> TokenData:
     try:
         _settings = get_settings()
         # Issue 1.5: Validate the 'aud' (audience) claim to prevent cross-service token reuse.
-        payload = jwt.decode(
+        payload = _jwt.decode(
             token,
             _settings.jwt_verification_key,
             algorithms=[_settings.jwt_algorithm],
             audience=_settings.app_name,
-            options={"verify_aud": True},
         )
         user_id = payload.get("sub")
         username = payload.get("username", user_id)
@@ -215,7 +213,7 @@ async def decode_token(token: str) -> TokenData:
             exp=exp_datetime,
         )
 
-    except JWTError as e:
+    except _jwt.PyJWTError as e:
         logger.warning("JWT decode error", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -236,116 +234,14 @@ _LOCAL_BLACKLIST_MAX_SIZE = 10000  # prevent unbounded memory growth
 # Background cleanup task handle (set during lifespan startup)
 _cleanup_task: object | None = None
 
-# Persistent SQLite cache for token blacklist (survives Redis outages and container restarts)
-_blacklist_db_path: str | None = None
-
-
-def _get_blacklist_db_path() -> str:
-    """Get path to SQLite blacklist database."""
-    global _blacklist_db_path
-    if _blacklist_db_path is None:
-        from core.config import get_settings
-        settings = get_settings()
-        # Fallback to project-local storage rather than /tmp for security (Ruff S108)
-        storage_dir = Path(getattr(settings, "storage_dir", "./storage/forensic_storage"))
-        storage_dir.mkdir(parents=True, exist_ok=True)
-        _blacklist_db_path = str(storage_dir / "token_blacklist.db")
-    return _blacklist_db_path
-
-
-def _init_blacklist_db() -> str:
-    """Ensure the SQLite blacklist database and schema exist. Returns the db path."""
-    import sqlite3
-
-    db_path = _get_blacklist_db_path()
-    # Issue 1.1: Enable WAL journal mode and busy-timeout to prevent
-    # 'database is locked' errors under concurrent logout traffic.
-    with sqlite3.connect(db_path, timeout=5.0) as conn:
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA busy_timeout=5000")
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS blacklisted_tokens (
-                token_hash TEXT PRIMARY KEY,
-                expires_at REAL NOT NULL,
-                created_at REAL NOT NULL DEFAULT (strftime('%s', 'now'))
-            )
-        """)
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_expires ON blacklisted_tokens(expires_at)"
-        )
-        conn.commit()
-    return db_path
-
-
-def _add_to_persistent_blacklist(token_hash: str, expires_at: float) -> None:
-    """Add token hash to persistent SQLite blacklist."""
-    import sqlite3
-
-    try:
-        db_path = _init_blacklist_db()
-        with sqlite3.connect(db_path) as conn:
-            conn.execute(
-                "INSERT OR REPLACE INTO blacklisted_tokens (token_hash, expires_at) VALUES (?, ?)",
-                (token_hash, expires_at),
-            )
-            conn.commit()
-    except Exception as e:
-        logger.warning("Failed to persist token blacklist entry", error=str(e))
-
-
-def _is_in_persistent_blacklist(token_hash: str) -> bool:
-    """Check if token hash is in persistent SQLite blacklist."""
-    import sqlite3
-    import time
-
-    try:
-        db_path = _init_blacklist_db()
-        with sqlite3.connect(db_path) as conn:
-            cursor = conn.execute(
-                "SELECT expires_at FROM blacklisted_tokens WHERE token_hash = ?",
-                (token_hash,),
-            )
-            row = cursor.fetchone()
-            if row:
-                expires_at = row[0]
-                if time.time() < expires_at:
-                    return True
-                # Expired — prune it
-                conn.execute(
-                    "DELETE FROM blacklisted_tokens WHERE token_hash = ?", (token_hash,)
-                )
-                conn.commit()
-        return False
-    except Exception as e:
-        logger.warning("Failed to check persistent blacklist", error=str(e))
-        return False
-
-
-def _cleanup_expired_blacklist_entries() -> None:
-    """Remove expired entries from persistent blacklist."""
-    import sqlite3
-    import time
-
-    try:
-        db_path = _init_blacklist_db()
-        with sqlite3.connect(db_path, timeout=5.0) as conn:
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA busy_timeout=5000")
-            conn.execute("DELETE FROM blacklisted_tokens WHERE expires_at < ?", (time.time(),))
-            conn.commit()
-        logger.debug("Cleaned up expired blacklist entries")
-    except Exception as e:
-        logger.warning("Failed to cleanup expired blacklist entries", error=str(e))
-
 
 async def _periodic_blacklist_cleanup(interval_seconds: int = 3600) -> None:
-    """Issue 1.2: Background task that periodically purges expired SQLite blacklist entries."""
+    """Background task that periodically purges expired local blacklist cache entries."""
     import asyncio
 
     while True:
         try:
             await asyncio.sleep(interval_seconds)
-            _cleanup_expired_blacklist_entries()
             _cleanup_local_blacklist()
         except asyncio.CancelledError:
             break
@@ -465,12 +361,6 @@ async def is_token_blacklisted(token: str) -> bool:
         if token_hash in _recently_blacklisted:
             return True
 
-        # Check persistent SQLite blacklist as second fallback
-        if _is_in_persistent_blacklist(token_hash):
-            # Also add to local cache for faster future lookups
-            _recently_blacklisted[token_hash] = time.time() + _LOCAL_BLACKLIST_MAX_AGE
-            return True
-
         # Fail-secure in production - reject tokens we can't verify
         if get_settings().app_env == "production":
             logger.error(
@@ -507,9 +397,6 @@ async def blacklist_token(token: str, expires_in_seconds: int) -> None:
     # Populate local in-memory cache so the fast-path check in
     # is_token_blacklisted catches this token immediately.
     _recently_blacklisted[token_hash] = expires_at
-
-    # Populate SQLite persistent fallback so the token survives Redis outages.
-    _add_to_persistent_blacklist(token_hash, expires_at)
 
     try:
         from core.persistence.redis_client import get_redis_client

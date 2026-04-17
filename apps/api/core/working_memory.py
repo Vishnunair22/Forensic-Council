@@ -496,9 +496,8 @@ class WorkingMemory:
             state_dict = data
         elif isinstance(data, bytes):
             state_dict = json.loads(data.decode("utf-8"))
-        elif isinstance(data, str):
-            state_dict = json.loads(data)
         else:
+            # Fallback for str or other types
             state_dict = json.loads(data)
 
         state = WorkingMemoryState.from_dict(state_dict)

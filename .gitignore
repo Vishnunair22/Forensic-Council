@@ -112,3 +112,5 @@ tests/fixtures/*.avi
 *.swo
 .planning/
 
+# Added by code-review-graph
+.code-review-graph/
