@@ -61,6 +61,11 @@ class LLMClient:
         self.provider = config.llm_provider.lower()
         self.api_key = config.llm_api_key
         self.model = config.llm_model
+        self.fallback_models = [
+            model.strip()
+            for model in getattr(config, "llm_fallback_models", "").split(",")
+            if model.strip()
+        ]
         self.temperature = config.llm_temperature
         self.max_tokens = config.llm_max_tokens
         self.timeout = config.llm_timeout
@@ -316,6 +321,14 @@ class LLMClient:
             last_response.raise_for_status()
         raise RuntimeError(f"LLM API failed after {_MAX_RETRIES} attempts")
 
+    def _groq_model_candidates(self) -> list[str]:
+        """Return primary Groq model followed by de-duplicated fallbacks."""
+        candidates: list[str] = []
+        for model in [self.model, *self.fallback_models]:
+            if model and model not in candidates:
+                candidates.append(model)
+        return candidates
+
     async def _call_groq(
         self,
         messages: list[dict[str, str]],
@@ -337,22 +350,38 @@ class LLMClient:
             "Content-Type": "application/json",
         }
         tools = self._tools_to_openai_format(available_tools)
-        payload: dict[str, Any] = {
-            "model": self.model,
+        base_payload: dict[str, Any] = {
             "messages": messages,
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
         }
         if tools:
-            payload["tools"] = tools
-            payload["tool_choice"] = "auto"
+            base_payload["tools"] = tools
+            base_payload["tool_choice"] = "auto"
 
         client = await self._get_client()
-        response = await self._with_retry(
-            lambda: client.post(url, headers=headers, json=payload)
-        )
-        response.raise_for_status()
-        return self._parse_openai_response(response.json())
+        last_exc: Exception | None = None
+        for model in self._groq_model_candidates():
+            payload = {**base_payload, "model": model}
+            try:
+                response = await self._with_retry(
+                    lambda payload=payload: client.post(
+                        url, headers=headers, json=payload
+                    )
+                )
+                response.raise_for_status()
+                if model != self.model:
+                    logger.warning(
+                        "Groq primary model failed; using fallback model",
+                        primary_model=self.model,
+                        fallback_model=model,
+                    )
+                return self._parse_openai_response(response.json())
+            except Exception as exc:
+                last_exc = exc
+                logger.warning("Groq model call failed", model=model, error=str(exc))
+
+        raise RuntimeError("All configured Groq models failed") from last_exc
 
     async def _call_gemini(
         self,
@@ -412,7 +441,7 @@ class LLMClient:
             return LLMResponse(content=content, tool_call=tool_call)
         except (KeyError, IndexError) as e:
             logger.error(f"Failed to parse Gemini response: {data}")
-            raise RuntimeError(f"Invalid Gemini response: {e}")
+            raise RuntimeError(f"Invalid Gemini response: {e}") from e
 
     async def _call_openai(
         self,
@@ -606,13 +635,38 @@ class LLMClient:
                         else min(self.timeout, 12.0)
                     )
                     client = await self._get_client(timeout_override=_synth_timeout)
-                    resp = await self._with_retry(
-                        lambda: client.post(url, headers=headers, json=payload)
+                    models = (
+                        self._groq_model_candidates()
+                        if self.provider == "groq"
+                        else [self.model]
                     )
-                    resp.raise_for_status()
-                    return (
-                        resp.json()["choices"][0]["message"].get("content", "").strip()
-                    )
+                    last_exc: Exception | None = None
+                    for model in models:
+                        payload["model"] = model
+                        try:
+                            resp = await self._with_retry(
+                                lambda: client.post(url, headers=headers, json=payload)
+                            )
+                            resp.raise_for_status()
+                            if model != self.model:
+                                logger.warning(
+                                    "LLM synthesis used fallback model",
+                                    primary_model=self.model,
+                                    fallback_model=model,
+                                )
+                            return (
+                                resp.json()["choices"][0]["message"]
+                                .get("content", "")
+                                .strip()
+                            )
+                        except Exception as exc:
+                            last_exc = exc
+                            logger.warning(
+                                "LLM synthesis model failed",
+                                model=model,
+                                error=str(exc),
+                            )
+                    raise RuntimeError("All configured LLM synthesis models failed") from last_exc
 
                 elif self.provider == "anthropic":
                     url = "https://api.anthropic.com/v1/messages"

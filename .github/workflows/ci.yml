@@ -1,4 +1,4 @@
-name: CI/CD
+name: CI
 
 on:
   push:
@@ -6,31 +6,46 @@ on:
   pull_request:
     branches: [main, develop]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend-lint:
+    name: Backend lint and types
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
-          python-version-file: 'apps/api/.python-version'
+          python-version-file: apps/api/.python-version
+          cache: pip
+
       - name: Install dependencies
-        # Only install dev extras — ML packages (~3 GB) are not needed for linting
         run: |
-          pip install uv
-          cd apps/api && uv sync --extra dev
+          python -m pip install --upgrade pip uv
+          cd apps/api
+          uv sync --extra dev
+
       - name: Lint with ruff
         run: cd apps/api && uv run ruff check .
+
       - name: Type check with pyright
         run: cd apps/api && uv run pyright core/ agents/ api/ tools/
 
   backend-test:
+    name: Backend tests
     runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:17
         env:
           POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
         ports:
           - 5432:5432
         options: >-
@@ -38,6 +53,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+
       redis:
         image: redis:7-alpine
         ports:
@@ -47,29 +63,40 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
-          python-version-file: 'apps/api/.python-version'
+          python-version-file: apps/api/.python-version
+          cache: pip
+
       - name: Install dependencies
-        # Only install dev extras — ML packages (~3 GB) are not needed for unit tests
         run: |
-          pip install uv
-          cd apps/api && uv sync --extra dev
+          python -m pip install --upgrade pip uv
+          cd apps/api
+          uv sync --extra dev
+
       - name: Run tests with coverage
         env:
+          APP_ENV: testing
           DATABASE_URL: postgresql://postgres:test@localhost/test
           REDIS_URL: redis://localhost:6379
-        # --cov-fail-under enforces the minimum coverage floor.
-        # Increase the threshold toward 80% as test coverage improves.
+          QDRANT_URL: http://localhost:6333
+          SIGNING_KEY: test-signing-key-abcdefghijklmnopqrstuvwxyz123456
+          JWT_SECRET_KEY: test-jwt-key-abcdefghijklmnopqrstuvwxyz123456
+          LLM_API_KEY: test-key
+          GEMINI_API_KEY: test-key
         run: |
-          cd apps/api && uv run pytest tests/ -v --tb=short \
+          cd apps/api
+          uv run pytest tests/ -v --tb=short \
             --cov=. \
             --cov-omit="tests/*,**/__pycache__/*" \
             --cov-report=xml:coverage.xml \
             --cov-report=term-missing \
             --cov-fail-under=75
+
       - name: Upload coverage report
         if: always()
         uses: codecov/codecov-action@v4
@@ -79,72 +106,89 @@ jobs:
           fail_ci_if_error: false
 
   frontend-lint:
+    name: Frontend lint and types
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version-file: 'apps/web/.node-version'
+          node-version-file: apps/web/.node-version
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
+
       - name: Install dependencies
         run: cd apps/web && npm ci
+
       - name: Lint
         run: cd apps/web && npm run lint
+
       - name: Type check
         run: cd apps/web && npm run type-check
 
   frontend-build:
+    name: Frontend build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version-file: 'apps/web/.node-version'
+          node-version-file: apps/web/.node-version
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
+
       - name: Install dependencies
         run: cd apps/web && npm ci
+
       - name: Build
         run: cd apps/web && npm run build
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000
-          # NEXT_PUBLIC_DEMO_PASSWORD is intentionally NOT set here.
-          # Baking it into CI build artifacts would expose it in the client JS bundle.
-          # The demo login route reads DEMO_PASSWORD at runtime (server-side only).
 
   security-scan:
+    name: Security scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Run Trivy vulnerability scanner
-        # Pinned to a specific release tag — avoid @master which can silently pull
-        # breaking changes or malicious updates into CI
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          scan-type: "fs"
-          scan-ref: "."
-          format: "table"
-          severity: "CRITICAL,HIGH"
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: CRITICAL,HIGH
 
   docker-build:
+    name: Docker build
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [backend-lint, frontend-lint, frontend-build, security-scan]
+    needs:
+      - backend-lint
+      - backend-test
+      - frontend-lint
+      - frontend-build
+      - security-scan
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Build backend image (production target)
+
+      - name: Build backend image
         run: docker buildx build --target production -t forensic-council-backend:test apps/api/
-      - name: Build backend migration image (migration target)
+
+      - name: Build backend migration image
         run: docker buildx build --target migration -t forensic-council-migration:test apps/api/
+
       - name: Build frontend image
         run: >
           docker buildx build
           --build-arg INTERNAL_API_URL=http://localhost:8000
           -t forensic-council-frontend:test
           apps/web/
+
       - name: Verify images exist
         run: |
           docker image inspect forensic-council-backend:test

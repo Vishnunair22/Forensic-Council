@@ -3,6 +3,7 @@ import { backendUrlFor, getBackendBaseUrls } from "@/lib/backendTargets";
 
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = [500, 1500];
+const BACKEND_AUTH_TIMEOUT_MS = 8_000;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -31,14 +32,13 @@ export async function POST() {
     for (const baseUrl of backendBaseUrls) {
       lastBackendUrl = baseUrl;
       try {
-        // High-speed reachability check (5s)
         const response = await fetch(
           backendUrlFor("/api/v1/auth/login", baseUrl),
           {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: formData.toString(),
-            signal: AbortSignal.timeout(5000), 
+            signal: AbortSignal.timeout(BACKEND_AUTH_TIMEOUT_MS),
           },
         );
 
@@ -85,17 +85,17 @@ export async function POST() {
         }
 
         return nextResponse;
-        } catch (error: unknown) {
-          const msg = error instanceof Error ? error.message : "Unknown error";
-          const isTimeout = msg.includes("timeout") || msg.includes("abort");
-          
-          // CRITICAL: Log diagnostic info to server console (visible in docker logs)
-          console.error(`[AUTH_HANDSHAKE] Connection failed to ${baseUrl}: ${msg}`);
-          
-          lastError = isTimeout ? "timeout" : `${msg} via ${baseUrl}`;
-        }
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : "Unknown error";
+        const isTimeout = msg.includes("timeout") || msg.includes("abort");
+
+        // Visible in docker logs when the Next.js route cannot reach the API.
+        console.error(`[AUTH_HANDSHAKE] Connection failed to ${baseUrl}: ${msg}`);
+
+        lastError = isTimeout ? "timeout" : `${msg} via ${baseUrl}`;
       }
     }
+  }
 
   const isTimeout = lastError === "timeout";
   return NextResponse.json(

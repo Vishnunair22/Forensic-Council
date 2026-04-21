@@ -188,7 +188,7 @@ class SessionPersistence:
                 case_id,
                 investigator_id,
                 "completed",
-                json.dumps(report_data, default=str),
+                report_data,
             )
 
             logger.debug("Report saved", session_id=session_id)
@@ -225,6 +225,16 @@ class SessionPersistence:
             )
 
             if result:
+                report_data = result["report_data"]
+                if isinstance(report_data, str):
+                    try:
+                        report_data = json.loads(report_data)
+                    except json.JSONDecodeError:
+                        logger.warning(
+                            "Stored report_data was not valid JSON",
+                            session_id=session_id,
+                        )
+                        report_data = {}
                 return {
                     "session_id": str(result["session_id"]),
                     "case_id": result["case_id"],
@@ -233,7 +243,7 @@ class SessionPersistence:
                     "completed_at": result["completed_at"].isoformat()
                     if result["completed_at"]
                     else None,
-                    "report_data": result["report_data"],
+                    "report_data": report_data,
                     "error_message": result["error_message"],
                 }
             return None

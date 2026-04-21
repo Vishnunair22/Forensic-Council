@@ -201,8 +201,8 @@ class Settings(BaseSettings):
         description="YOLO model weight filename (e.g., yolo11m.pt)",
     )
     siglip_model_name: str = Field(
-        default="google/siglip-base-patch16-224",
-        description="SigLIP 2 model name for vision-language analysis",
+        default="ViT-B-32",
+        description="OpenCLIP model name for vision-language analysis",
     )
     aasist_model_name: str = Field(
         default="speechbrain/anti-spoof-aasist",
@@ -407,6 +407,14 @@ class Settings(BaseSettings):
         default="llama-3.3-70b-versatile",
         description="LLM model. Groq: llama-3.3-70b-versatile. OpenAI: gpt-4o. Anthropic: claude-3-5-sonnet-20241022",
     )
+    llm_fallback_models: str = Field(
+        default="openai/gpt-oss-20b,llama-3.1-8b-instant",
+        description=(
+            "Comma-separated fallback models for the configured LLM provider. "
+            "For Groq, these are tried after LLM_MODEL when the primary model "
+            "fails or is unavailable."
+        ),
+    )
     llm_temperature: float = Field(
         default=0.1, description="Temperature for LLM sampling (0.0-1.0)"
     )
@@ -441,17 +449,18 @@ class Settings(BaseSettings):
         description=(
             "Primary Gemini model for vision analysis. "
             "gemini-2.5-flash: high-fidelity multimodal reasoning, 1M context. "
-            "gemini-2.0-flash: ultra-fast stable fallback."
+            "gemini-2.5-flash-lite: fastest stable 2.5 fallback."
         ),
     )
     gemini_fallback_models: str = Field(
-        default="gemini-2.0-flash,gemini-2.0-flash-lite",
+        default="gemini-2.5-flash-lite,gemini-2.0-flash,gemini-2.0-flash-lite",
         description=(
             "Comma-separated ordered fallback chain tried when the primary model "
             "is unavailable or fails. Each model is attempted in order; the first "
             "successful response is used. 404/429/model-not-found triggers an "
             "immediate skip to the next model (no backoff). "
-            "Default: gemini-2.5-flash → gemini-2.0-flash → gemini-2.0-flash-lite."
+            "Default: gemini-2.5-flash -> gemini-2.5-flash-lite -> "
+            "gemini-2.0-flash -> gemini-2.0-flash-lite."
         ),
     )
     gemini_timeout: float = Field(

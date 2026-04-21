@@ -159,7 +159,7 @@ class AgentFactory:
                 if hasattr(agent, "_reflection_report") and agent._reflection_report
                 else {}
             ),
-            "react_chain": getattr(agent, "_react_chain", []),
+            "react_chain": _serialize_react_chain(getattr(agent, "_react_chain", [])),
             "challenge_context": challenge_context,
         }
 
@@ -196,6 +196,19 @@ class AgentLoopResult:
         )
 
 
+def _serialize_react_chain(react_chain: list[Any]) -> list[dict[str, Any]]:
+    """Convert ReActStep objects to JSON-safe dicts before storing in reports."""
+    serialized: list[dict[str, Any]] = []
+    for step in react_chain:
+        if isinstance(step, dict):
+            serialized.append(step)
+        elif hasattr(step, "model_dump"):
+            serialized.append(step.model_dump(mode="json"))
+        else:
+            serialized.append({"content": str(step)})
+    return serialized
+
+
 class ForensicCouncilPipeline:
     """
     End-to-end pipeline for forensic evidence analysis.
@@ -218,11 +231,11 @@ class ForensicCouncilPipeline:
 
         self._degradation_flags: list[str] = []
 
-        # Report and error state — set by the investigation task
+        # Report and error state, set by the investigation task.
         self._final_report: ForensicReport | None = None
         self._error: str | None = None
 
-        # Deep analysis pause/resume — set by the investigation wrapper
+        # Deep analysis pause/resume, set by the investigation wrapper.
         # when the initial analysis completes and the user must decide.
         self.deep_analysis_decision_event: asyncio.Event = asyncio.Event()
         self.run_deep_analysis_flag: bool = False
@@ -243,7 +256,7 @@ class ForensicCouncilPipeline:
         self.signal_bus: SignalBus | None = None
 
     def _setup_infrastructure(self) -> None:
-        """Set up infrastructure slot placeholders — actual connections are
+        """Set up infrastructure slot placeholders; actual connections are
         acquired lazily in _initialize_components using the global singletons."""
         self._redis = None
         self._qdrant = None
@@ -263,7 +276,7 @@ class ForensicCouncilPipeline:
                 logger.warning("Failed to connect to Redis", error=str(e))
                 self._redis = None
                 self._degradation_flags.append(
-                    "Redis unavailable — working memory fell back to in-process dict; "
+                    "Redis unavailable; working memory fell back to in-process dict. "
                     "rate limiting and token blacklisting may be degraded."
                 )
 
@@ -274,7 +287,7 @@ class ForensicCouncilPipeline:
                 logger.warning("Failed to connect to Qdrant", error=str(e))
                 self._qdrant = None
                 self._degradation_flags.append(
-                    "Qdrant unavailable — episodic memory and historical case-linking disabled."
+                    "Qdrant unavailable; episodic memory and historical case-linking disabled."
                 )
 
         if self._postgres is None:
@@ -288,6 +301,45 @@ class ForensicCouncilPipeline:
         self.custody_logger = CustodyLogger(
             postgres_client=self._postgres,
         )
+
+        # Native event broadcast.
+        try:
+            from api.routes._session_state import AGENT_NAMES, broadcast_update
+            from api.schemas import BriefUpdate
+
+            ws_session_id = str(session_id)
+            original_log_entry = self.custody_logger.log_entry
+
+            async def broadcast_log_entry(**kwargs):
+                result = await original_log_entry(**kwargs)
+                try:
+                    entry_type = kwargs.get("entry_type")
+                    content = kwargs.get("content", {})
+                    raw_agent_id = kwargs.get("agent_id")
+                    agent_id = raw_agent_id if isinstance(raw_agent_id, str) else "system"
+                    type_val = getattr(entry_type, "value", str(entry_type))
+
+                    if type_val == "HITL_CHECKPOINT" and isinstance(content, dict):
+                        agent_name = AGENT_NAMES.get(agent_id, agent_id)
+                        await broadcast_update(ws_session_id, BriefUpdate(
+                            type="HITL_CHECKPOINT", session_id=ws_session_id, agent_id=agent_id, agent_name=agent_name,
+                            message=f"HITL checkpoint: {content.get('reason', 'Review required')}",
+                            data={"status": "paused", "checkpoint": {"id": content.get("checkpoint_id"), "agent_id": agent_id, "reason": content.get("reason"), "brief": content.get("brief")}}
+                        ))
+                    elif type_val in ("THOUGHT", "ACTION") and isinstance(content, dict):
+                        if content.get("action") == "session_start": return result
+                        agent_name = AGENT_NAMES.get(agent_id, agent_id)
+                        thinking_text = f"Calling {content['tool_name'].replace('_', ' ').title()}..." if type_val == "ACTION" and content.get("tool_name") else content.get("content", "Analyzing...")
+                        await broadcast_update(ws_session_id, BriefUpdate(
+                            type="AGENT_UPDATE", session_id=ws_session_id, agent_id=agent_id, agent_name=agent_name, message=thinking_text, data={"status": "running", "thinking": thinking_text}
+                        ))
+                except Exception as e:
+                    logger.debug("Broadcast failed", error=str(e))
+                return result
+
+            self.custody_logger.log_entry = broadcast_log_entry
+        except ImportError:
+            pass  # Ignore if not running in an environment with FastAPI schemas.
 
         from core.persistence.evidence_store import EvidenceStore
         from core.persistence.storage import LocalStorageBackend
@@ -313,7 +365,7 @@ class ForensicCouncilPipeline:
             custody_logger=self.custody_logger,
         )
 
-        # Initialize inter-agent bus — pass all available components so the
+        # Initialize inter-agent bus; pass all available components so the
         # _create_agent() fallback works if any agent fails to register itself.
         # evidence_artifact is set later (post-ingestion) via direct assignment.
         self.inter_agent_bus = InterAgentBus(
@@ -513,16 +565,20 @@ class ForensicCouncilPipeline:
         """Run council arbiter deliberation with timeout and fallback."""
         logger.info("Running council arbiter deliberation")
         _start = time.perf_counter()
+        use_llm = bool(self.config.llm_enable_post_synthesis)
         try:
             report = await asyncio.wait_for(
-                self.arbiter.deliberate(arbiter_results, case_id=case_id),
+                self.arbiter.deliberate(
+                    arbiter_results, case_id=case_id, use_llm=use_llm
+                ),
                 timeout=90.0,
             )
         except TimeoutError:
             logger.warning("arbiter.deliberate() timed out - falling back to template")
-            self._degradation_flags.append(
-                "Arbiter LLM synthesis timed out - report generated from templates."
-            )
+            if use_llm:
+                self._degradation_flags.append(
+                    "Arbiter LLM synthesis timed out - report generated from templates."
+                )
             report = await asyncio.wait_for(
                 self.arbiter.deliberate(arbiter_results, case_id=case_id, use_llm=False),
                 timeout=30.0,
@@ -652,7 +708,7 @@ class ForensicCouncilPipeline:
             span.set_attribute("session_id", str(session_id))
             file_path_obj = Path(file_path)
 
-            # Store in evidence store — inside span so the full ingest is traced
+            # Store in evidence store inside the span so the full ingest is traced.
             stored_artifact = await self.evidence_store.ingest(
                 file_path=file_path,
                 session_id=session_id,
@@ -776,7 +832,7 @@ class ForensicCouncilPipeline:
                             if getattr(agent, "_reflection_report", None)
                             else {}
                         ),
-                        react_chain=getattr(agent, "_react_chain", []),
+                        react_chain=_serialize_react_chain(getattr(agent, "_react_chain", [])),
                         agent_active=True,
                         supports_file_type=True,
                         deep_findings_count=max(0, deep_count),
@@ -789,7 +845,7 @@ class ForensicCouncilPipeline:
                         agent_id=agent_id,
                         findings=[f.model_dump(mode="json") for f in initial_findings],
                         reflection_report={},
-                        react_chain=getattr(agent, "_react_chain", []),
+                        react_chain=_serialize_react_chain(getattr(agent, "_react_chain", [])),
                         agent_active=True,
                         supports_file_type=True,
                         error=str(e),
@@ -804,8 +860,41 @@ class ForensicCouncilPipeline:
                 extra = {"inter_agent_bus": self.inter_agent_bus}
             agent_def_list.append((registry.get_agent_class(aid), aid, extra))
 
+        async def _broadcast_agent_status(aid: str, status: str, message: str, findings=None, error=None):
+            try:
+                from api.routes._session_state import AGENT_NAMES, broadcast_update
+                from api.schemas import BriefUpdate
+                from core.severity import assign_severity_tier
+
+                aname = AGENT_NAMES.get(aid, aid)
+                preview = []
+                if findings:
+                    for f in findings:
+                        m = f.metadata if hasattr(f, "metadata") else f.get("metadata", {}) if isinstance(f, dict) else {}
+                        tool = m.get("tool_name") or (f.finding_type if hasattr(f, "finding_type") else f.get("finding_type"))
+                        s = f.reasoning_summary if hasattr(f, "reasoning_summary") else f.get("reasoning_summary", "")
+                        if not s: continue
+                        sev = assign_severity_tier(f)
+                        tv = "ERROR" if m.get("court_defensible") is False else "FLAGGED" if sev in ("CRITICAL", "HIGH", "MEDIUM") else "CLEAN"
+                        preview.append({"tool": tool, "summary": s[:320], "severity": sev, "verdict": tv})
+
+                await broadcast_update(str(session_id), BriefUpdate(
+                    type="AGENT_COMPLETE" if status in ("complete", "error", "skipped") else "AGENT_UPDATE",
+                    session_id=str(session_id), agent_id=aid, agent_name=aname, message=message,
+                    data={"status": status, "findings_count": len(findings) if findings else 0, "error": error, "findings_preview": preview}
+                ))
+            except Exception:
+                pass
+
+        async def run_agent_initial_with_status(cls, aid, ex):
+            await _broadcast_agent_status(aid, "running", f"Running {aid} initial pass...")
+            agent, initial_findings, ok = await run_agent_initial_only(cls, aid, ex)
+            if not ok:
+                await _broadcast_agent_status(aid, "skipped", f"{aid} skipped.")
+            return agent, initial_findings, ok
+
         raw_initial = await asyncio.gather(
-            *[run_agent_initial_only(cls, aid, ex) for cls, aid, ex in agent_def_list],
+            *[run_agent_initial_with_status(cls, aid, ex) for cls, aid, ex in agent_def_list],
             return_exceptions=True,
         )
 
@@ -867,8 +956,17 @@ class ForensicCouncilPipeline:
         async def _run_deep_with_fallback(aid: str) -> AgentLoopResult:
             a_inst, a_init, a_ok = agent_map[aid]
 
+            if not a_ok:
+                return AgentLoopResult(agent_id=aid, findings=[], reflection_report={}, react_chain=[], agent_active=False)
+
+            await _broadcast_agent_status(aid, "running", f"Running {aid} deep pass...")
             # Start the deep pass
             result = await run_agent_deep_only(a_inst, aid, a_init, a_ok)
+
+            if result.error:
+                await _broadcast_agent_status(aid, "error", f"{aid} error: {result.error}", error=result.error)
+            else:
+                await _broadcast_agent_status(aid, "complete", f"{aid} analysis complete.", findings=result.findings)
 
             # Fallback for producers: if early signal didn't fire, ensure event is set
             if aid == producer_id:
@@ -1088,11 +1186,11 @@ class ForensicCouncilPipeline:
         Falls back to extension-based mapping if libmagic is unavailable.
         """
         try:
-            import magic  # python-magic — already a project dependency
+            import magic  # python-magic is already a project dependency.
 
             return magic.from_file(file_path, mime=True)
         except Exception:
-            # Extension-based fallback — kept for robustness
+            # Extension-based fallback kept for robustness.
             ext = Path(file_path).suffix.lower()
             mime_types = {
                 ".jpg": "image/jpeg",

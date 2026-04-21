@@ -15,11 +15,28 @@
 
 services:
   backend:
+    ports: !reset []
     deploy:
       replicas: 0
   frontend:
+    ports: !reset []
     deploy:
       replicas: 0
   caddy:
+    ports: !reset []
+    deploy:
+      replicas: 0
+  worker:
+    deploy:
+      replicas: 0
+  migration:
+    deploy:
+      replicas: 0
+  jaeger:
+    ports: !reset []
+    deploy:
+      replicas: 0
+  prometheus:
+    ports: !reset []
     deploy:
       replicas: 0

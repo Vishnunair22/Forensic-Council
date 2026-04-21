@@ -6,7 +6,9 @@ Provides tamper-evident logging for all forensic operations.
 Every entry is cryptographically signed and linked to prior entries.
 """
 
+import asyncio
 import json
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -22,6 +24,7 @@ logger = get_logger(__name__)
 
 # Module-level metrics for observability
 _custody_write_failures: int = 0
+_session_chain_locks: defaultdict[UUID, asyncio.Lock] = defaultdict(asyncio.Lock)
 
 
 async def get_custody_metrics() -> dict[str, int]:
@@ -206,6 +209,22 @@ class CustodyLogger:
         return None
 
     async def log_entry(
+        self,
+        agent_id: str,
+        session_id: UUID,
+        entry_type: EntryType,
+        content: dict[str, Any],
+    ) -> UUID | None:
+        """Log a signed entry with per-session serialization."""
+        async with _session_chain_locks[session_id]:
+            return await self._log_entry_unlocked(
+                agent_id=agent_id,
+                session_id=session_id,
+                entry_type=entry_type,
+                content=content,
+            )
+
+    async def _log_entry_unlocked(
         self,
         agent_id: str,
         session_id: UUID,

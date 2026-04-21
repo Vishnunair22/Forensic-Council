@@ -80,6 +80,24 @@ class TestLLMClientInit:
         client = LLMClient(_settings())
         assert client._circuit_breaker is not None
 
+    def test_groq_fallback_models_are_deduplicated(self):
+        client = LLMClient(
+            _settings(
+                llm_provider="groq",
+                llm_api_key="gsk_realkey_abcdefgh123",
+                llm_model="llama-3.3-70b-versatile",
+                llm_fallback_models=(
+                    "openai/gpt-oss-20b,llama-3.3-70b-versatile,"
+                    "llama-3.1-8b-instant"
+                ),
+            )
+        )
+        assert client._groq_model_candidates() == [
+            "llama-3.3-70b-versatile",
+            "openai/gpt-oss-20b",
+            "llama-3.1-8b-instant",
+        ]
+
 
 def _make_client_direct(provider: str = "none", api_key: str | None = None) -> LLMClient:
     """Build LLMClient by directly setting attributes (bypasses Settings validation)."""
@@ -217,3 +235,36 @@ class TestGenerateReasoningStep:
             available_tools=[],
         )
         assert isinstance(result, LLMResponse)
+
+    @pytest.mark.asyncio
+    async def test_groq_call_uses_configured_fallback_model(self):
+        client = LLMClient(
+            _settings(
+                llm_provider="groq",
+                llm_api_key="gsk_realkey_abcdefgh123",
+                llm_model="primary-model",
+                llm_fallback_models="fallback-model",
+            )
+        )
+        mock_http = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "choices": [{"message": {"content": "ok"}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+        }
+        mock_with_retry = AsyncMock(
+            side_effect=[RuntimeError("primary down"), mock_response]
+        )
+
+        with (
+            patch.object(client, "_get_client", AsyncMock(return_value=mock_http)),
+            patch.object(client, "_with_retry", mock_with_retry),
+        ):
+            result = await client._call_groq(
+                messages=[{"role": "user", "content": "test"}],
+                available_tools=[],
+            )
+
+        assert result.content == "ok"
+        assert mock_with_retry.await_count == 2

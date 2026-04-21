@@ -9,9 +9,9 @@ services:
     build:
       target: development
     environment:
-      - RELOAD=true
-      - APP_ENV=development
-      - DEBUG=true
+      RELOAD: "true"
+      APP_ENV: development
+      DEBUG: "true"
     volumes:
       - ../apps/api:/app:rw
       # Protect the container's venv from being overwritten by local (potentially incompatible) .venv
@@ -33,9 +33,9 @@ services:
     build:
       target: development
     environment:
-      - RELOAD=true
-      - APP_ENV=development
-      - DEBUG=true
+      RELOAD: "true"
+      APP_ENV: development
+      DEBUG: "true"
     volumes:
       - ../apps/api:/app:rw
       - /app/.venv
@@ -50,10 +50,17 @@ services:
     build:
       target: development
     environment:
-      - NODE_ENV=development
-      - WATCHPACK_POLLING=true
-      - CHOKIDAR_USEPOLLING=true
-      - NEXT_WEBPACK_USEPOLLING=1
+      NODE_ENV: development
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+      NEXT_WEBPACK_USEPOLLING: "1"
+      # CRITICAL: Next.js server-side routes (e.g. /api/auth/demo) run inside
+      # the container and cannot reach "localhost:8000". They must use the
+      # Docker-internal service name. This is the same var set in the base
+      # docker-compose.yml for production — it must be repeated here so the
+      # dev override doesn't lose it.
+      INTERNAL_API_URL: "http://backend:8000"
+
     volumes:
       - ../apps/web:/app:rw
       # Protect node_modules from host overrides

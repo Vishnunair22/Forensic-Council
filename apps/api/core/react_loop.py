@@ -273,6 +273,7 @@ def create_llm_step_generator(
                 content=parsed["content"],
                 tool_name=parsed.get("tool_name"),
                 tool_input=parsed.get("tool_input"),
+                iteration=len(react_chain) + 1,
             )
 
             logger.info(
@@ -1020,7 +1021,7 @@ class ReActLoopEngine:
                     _tool_span.set_attribute("tool_name", next_step.tool_name)
                     _tool_span.set_attribute("agent_id", self.agent_id)
                     _tool_span.set_attribute("iteration", self._current_iteration)
-                    
+
                     # Forensic Trace (IMPV-05) - persistent audit of tool call
                     trace = PipelineTrace(
                         session_id=self.session_id,
@@ -1042,7 +1043,7 @@ class ReActLoopEngine:
 
                         # Complete forensic trace
                         if tool_result.success:
-                            await trace.complete({"result_summary": str(tool_result.data)[:200]})
+                            await trace.complete({"result_summary": str(tool_result.output)[:200]})
                         else:
                             await trace.fail(tool_result.error or "Unknown tool error")
 

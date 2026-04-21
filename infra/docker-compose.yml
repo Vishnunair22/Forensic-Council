@@ -25,7 +25,7 @@ name: forensic-council
 
 x-backend-env: &backend-env
   APP_ENV: ${APP_ENV:-development}
-  DEBUG: ${DEBUG:-false}
+  DEBUG: "false"
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   REDIS_HOST: redis
   REDIS_PORT: 6379
@@ -39,13 +39,17 @@ x-backend-env: &backend-env
   POSTGRES_DB: ${POSTGRES_DB:-forensic_council}
   SIGNING_KEY: ${SIGNING_KEY}
   JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+  JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
   LLM_PROVIDER: ${LLM_PROVIDER:-none}
   LLM_API_KEY: ${LLM_API_KEY:-}
   LLM_MODEL: ${LLM_MODEL:-llama-3.3-70b-versatile}
-  LLM_ENABLE_REACT_REASONING: ${LLM_ENABLE_REACT_REASONING:-true}
+  LLM_FALLBACK_MODELS: ${LLM_FALLBACK_MODELS:-openai/gpt-oss-20b,llama-3.1-8b-instant}
+  LLM_ENABLE_REACT_REASONING: ${LLM_ENABLE_REACT_REASONING:-false}
+  LLM_ENABLE_POST_SYNTHESIS: ${LLM_ENABLE_POST_SYNTHESIS:-false}
+  USE_REDIS_WORKER: ${USE_REDIS_WORKER:-true}
   GEMINI_API_KEY: ${GEMINI_API_KEY:-}
   GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
-  GEMINI_FALLBACK_MODELS: ${GEMINI_FALLBACK_MODELS:-gemini-2.0-flash,gemini-2.0-flash-lite}
+  GEMINI_FALLBACK_MODELS: ${GEMINI_FALLBACK_MODELS:-gemini-2.5-flash-lite,gemini-2.0-flash,gemini-2.0-flash-lite}
   GEMINI_TIMEOUT: ${GEMINI_TIMEOUT:-55.0}
   GEMINI_API_KEY_POLICY_OK: ${GEMINI_API_KEY_POLICY_OK:-true}
   DAILY_COST_QUOTA_USD: ${DAILY_COST_QUOTA_USD:-50.0}
@@ -57,6 +61,7 @@ x-backend-env: &backend-env
   CALIBRATION_MODELS_PATH: /app/storage/calibration_models
   NUMBA_DISABLE_JIT: ${NUMBA_DISABLE_JIT:-1}
   OTEL_ENABLED: ${OTEL_ENABLED:-true}
+  METRICS_SCRAPE_TOKEN: ${METRICS_SCRAPE_TOKEN:-}
 
 services:
   # --------------------------------------------------------------------------
@@ -317,7 +322,7 @@ services:
       dockerfile: Dockerfile
     container_name: forensic_worker
     restart: unless-stopped
-    command: ["sh", "scripts/docker_entrypoint.sh", "worker"]
+    command: ["worker"]
     environment:
       <<: *backend-env
       APP_NAME: forensic_worker
@@ -389,7 +394,7 @@ services:
       # nc TCP probes confirm Caddy is listening on both ports without triggering
       # TLS handshake or redirect logic (wget/curl would follow the 301 on prod domains
       # and hit a self-signed cert on localhost, both causing false negatives).
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:80 && wget -q --spider --no-check-certificate https://localhost:443 || exit 1"]
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:80 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -447,7 +452,7 @@ services:
       - BOOTSTRAP_INVESTIGATOR_PASSWORD=${BOOTSTRAP_INVESTIGATOR_PASSWORD:-}
       # INTERNAL_API_URL: used by Next.js server-side API routes (e.g. /api/auth/demo).
       # Inside Docker, the frontend container CANNOT reach "localhost:8000" — it must
-      # use the Docker-internal service name "forensic_api".
+      # use the Docker-internal service name "backend".
       - INTERNAL_API_URL=http://backend:8000
     depends_on:
       backend:
@@ -455,7 +460,7 @@ services:
     healthcheck:
       # wget is available in node:22-alpine. Increased start-period to allow
       # the Next.js standalone server enough time to fully boot before checks begin.
-      test: ["CMD-SHELL", "wget -qO- http://0.0.0.0:3000/ > /dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ > /dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -493,6 +498,9 @@ services:
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
+    secrets:
+      - source: metrics_scrape_token
+        target: metrics_scrape_token
     ports:
       - "9090:9090"
     security_opt:
@@ -541,3 +549,7 @@ networks:
     driver: bridge
   backend_net:
     driver: bridge
+
+secrets:
+  metrics_scrape_token:
+    environment: METRICS_SCRAPE_TOKEN

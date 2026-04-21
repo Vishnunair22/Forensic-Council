@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { X, UploadCloud, FileImage, FileVideo, FileAudio, FileText } from "lucide-react";
 
@@ -31,6 +32,11 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
  const fileInputRef = useRef<HTMLInputElement>(null);
  const modalRef = useRef<HTMLDivElement>(null);
  const previousFocusRef = useRef<HTMLElement | null>(null);
+ const [mounted, setMounted] = useState(false);
+
+ useEffect(() => {
+  setMounted(true);
+ }, []);
 
  const handleFile = useCallback(
   (f: File) => {
@@ -40,6 +46,10 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
  );
 
  useEffect(() => {
+  const originalBodyOverflow = document.body.style.overflow;
+  const originalHtmlOverflow = document.documentElement.style.overflow;
+  document.body.style.overflow = "hidden";
+  document.documentElement.style.overflow = "hidden";
   previousFocusRef.current = document.activeElement as HTMLElement;
   if (modalRef.current) {
    const focusable = modalRef.current.querySelector<HTMLElement>(
@@ -73,15 +83,17 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
   };
   document.addEventListener("keydown", handleKeyDown);
   return () => {
+   document.body.style.overflow = originalBodyOverflow || "unset";
+   document.documentElement.style.overflow = originalHtmlOverflow || "auto";
    document.removeEventListener("keydown", handleKeyDown);
    previousFocusRef.current?.focus();
   };
  }, [onClose]);
 
- return (
+ const modalContent = (
   <motion.div
-   className="fixed top-0 left-0 w-full h-full z-[9999] flex items-center justify-center p-4 backdrop-blur-2xl"
-   style={{ background: "rgba(0,0,0,0.75)" }}
+   className="fixed top-0 left-0 w-full h-full z-[9999] flex items-center justify-center p-4 backdrop-blur-2xl touch-none"
+   style={{ background: "rgba(0,0,0,0.85)" }}
    variants={overlayVariants}
    initial="hidden"
    animate="visible"
@@ -153,13 +165,6 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
          const f = e.dataTransfer.files[0];
          if (f) handleFile(f);
         }}
-        onClick={() => fileInputRef.current?.click()}
-        onKeyDown={(e) => {
-         if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          fileInputRef.current?.click();
-         }
-        }}
        >
         <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none duration-700" />
         <div className="relative z-10">
@@ -215,4 +220,8 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
    </motion.div>
   </motion.div>
  );
+
+ if (!mounted) return null;
+
+ return createPortal(modalContent, document.body);
 }

@@ -4,10 +4,7 @@ global:
   external_labels:
     project: forensic-council
 
-# ── Scrape Configurations ──────────────────────────────────────────────────────
 scrape_configs:
-  # Backend FastAPI metrics (prometheus-fastapi-instrumentator)
-  # Endpoint requires METRICS_SCRAPE_TOKEN set in .env.
   - job_name: forensic_api
     metrics_path: /api/v1/metrics/raw
     bearer_token_file: /run/secrets/metrics_scrape_token
@@ -19,12 +16,12 @@ scrape_configs:
         target_label: instance
         replacement: forensic_api
 
-  # Redis exporter — if redis_exporter sidecar is added later
+  # Enable when a redis_exporter sidecar is added.
   # - job_name: redis
   #   static_configs:
-  #     - targets: ['redis_exporter:9121']
+  #     - targets:
+  #         - redis_exporter:9121
 
-  # Prometheus self-monitoring
   - job_name: prometheus
     static_configs:
       - targets:

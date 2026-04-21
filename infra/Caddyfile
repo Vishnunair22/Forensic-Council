@@ -1,22 +1,17 @@
-# ============================================================================
-# Forensic Council - Caddy Reverse Proxy Configuration
-# ============================================================================
-# Usage:
-#   Development (localhost self-signed): DOMAIN not set or DOMAIN=localhost
-#   Production (Let's Encrypt):          DOMAIN=forensic.yourdomain.com
+# Forensic Council - Caddy Reverse Proxy
 #
-# Caddy automatically obtains and renews TLS certificates from Let's Encrypt
-# when a real domain is configured.  No manual cert management required.
+# Development:
+#   DOMAIN=localhost
 #
-# The {$DOMAIN} placeholder is replaced at runtime by the DOMAIN env var
-# (set in docker-compose.yml → environment → DOMAIN).
-# ============================================================================
+# Production:
+#   DOMAIN=forensic.yourdomain.com
+#
+# Caddy obtains and renews Let's Encrypt certificates automatically when DOMAIN
+# is a real public hostname. The DOMAIN value is provided by docker-compose.yml.
 
 {
-    # Disable admin API in production to reduce attack surface
     admin off
 
-    # Structured JSON access log
     log {
         output file /var/log/caddy/access.log {
             roll_size 10MB
@@ -27,15 +22,14 @@
     }
 }
 
-# HTTP → HTTPS redirect for non-localhost domains
 :80 {
-    # For localhost development, serve HTTP directly without redirect.
-    # Only redirect to HTTPS when DOMAIN is a real production domain.
     @production_domain not host localhost 127.0.0.1
     redir @production_domain https://{host}{uri}
 
-    # Localhost HTTP: same path-based routing as the HTTPS block below.
-    # /api/v1/* → FastAPI backend; everything else → Next.js frontend.
+    request_body {
+        max_size 55MB
+    }
+
     handle /api/v1/* {
         reverse_proxy backend:8000 {
             header_up Host              {host}
@@ -44,17 +38,13 @@
             header_up X-Forwarded-Proto {scheme}
             header_up Upgrade           {http_upgrade}
             header_up Connection        "{http_connection}"
-            # flush_interval -1: disable buffering for WebSocket and SSE streams
             flush_interval -1
+
             transport http {
                 response_header_timeout 620s
                 dial_timeout            10s
             }
         }
-    }
-
-    request_body {
-        max_size 55MB
     }
 
     handle {
@@ -63,6 +53,7 @@
             header_up X-Real-IP         {remote_host}
             header_up X-Forwarded-For   {remote_host}
             header_up X-Forwarded-Proto {scheme}
+
             transport http {
                 response_header_timeout 300s
                 dial_timeout            10s
@@ -71,16 +62,9 @@
     }
 }
 
-# Main site block
-# {$DOMAIN} is set from the DOMAIN env var (see docker-compose.yml).
-# When DOMAIN=localhost → self-signed cert.
-# When DOMAIN=forensic.yourdomain.com → auto Let's Encrypt.
 {$DOMAIN:localhost} {
-
-    # Compress all responses (Caddy handles this; Next.js compress is disabled)
     encode zstd gzip
 
-    # Security headers applied to every response
     header {
         Strict-Transport-Security  "max-age=31536000; includeSubDomains; preload"
         X-Content-Type-Options     "nosniff"
@@ -94,14 +78,12 @@
         -X-Powered-By
     }
 
-    # Global upload limit enforcement at the proxy level
     request_body {
         max_size 55MB
     }
 
-    # Backend API + WebSocket (only /api/v1/* goes to FastAPI backend).
-    # Next.js API routes live under /api/auth/* and must reach the frontend
-    # container — do NOT widen this rule to /api/* or those routes break.
+    # Backend API and WebSocket/SSE streams. Next.js API routes under /api/auth/*
+    # must remain routed to the frontend, so keep this matcher scoped to /api/v1/*.
     handle /api/v1/* {
         reverse_proxy backend:8000 {
             header_up Host              {host}
@@ -115,7 +97,6 @@
             health_interval 10s
             health_timeout  5s
 
-            # flush_interval -1: disable buffering for WebSocket and SSE streams
             flush_interval -1
 
             transport http {
@@ -127,7 +108,6 @@
         }
     }
 
-    # Frontend (Next.js) — catch-all
     handle {
         reverse_proxy frontend:3000 {
             header_up Host              {host}
@@ -136,10 +116,6 @@
             header_up X-Forwarded-Proto {scheme}
 
             transport http {
-                # 300 s covers Next.js dev-mode on-demand compilation.  First-load
-                # compilation measured at 70–130 s on typical hardware; 300 s gives
-                # generous headroom.  Production builds respond in < 1 s so this is
-                # effectively a no-op in prod.
                 response_header_timeout 300s
                 dial_timeout            10s
             }

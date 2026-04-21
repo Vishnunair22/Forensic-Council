@@ -1,6 +1,6 @@
-﻿#!/bin/sh
+#!/bin/sh
 # ============================================================================
-# Forensic Council â€” Docker Entrypoint
+# Forensic Council - Docker Entrypoint
 # ============================================================================
 # Runs at container startup BEFORE the API server.
 # 1. On FIRST ever start (volumes empty): pre-downloads ML models IN BACKGROUND
@@ -21,23 +21,23 @@ fi
 
 echo "Starting Forensic Council entrypoint as user: $(id -u)"
 
-# â”€â”€ 1a. Seed calibration models into volume on first start â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ------ 1a. Seed calibration models into volume on first start ---------------------------------------------------------
 # Calibration model JSON files are baked into the image at /app/storage/calibration_models.
 # CALIBRATION_MODELS_PATH points to /app/cache/calibration_models (a named Docker volume)
 # so models can be updated at runtime without rebuilding the image.
-# On first start the volume is empty â€” copy the baked-in models in so agents find them.
+# On first start the volume is empty - copy the baked-in models in so agents find them.
 CAL_SRC="/app/storage/calibration_models"
 CAL_DST="${CALIBRATION_MODELS_PATH:-/app/cache/calibration_models}"
 if [ -d "$CAL_SRC" ] && [ -d "$CAL_DST" ]; then
     CAL_COUNT=$(find "$CAL_DST" -type f -name "*.json" 2>/dev/null | wc -l || echo 0)
     if [ "${CAL_COUNT:-0}" -lt 1 ]; then
-        echo "  Seeding calibration models into volume: $CAL_SRC â†’ $CAL_DST"
+        echo "  Seeding calibration models into volume: $CAL_SRC -> $CAL_DST"
         cp -r "$CAL_SRC/." "$CAL_DST/" 2>/dev/null || true
         echo "  Calibration model seed complete."
     fi
 fi
 
-# â”€â”€ 1b. First-run ML model pre-download (background) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ------ 1b. First-run ML model pre-download (background) ---------------------------------------------------------------------------
 # Check the HuggingFace and YOLO cache dirs. If they are empty this is the
 # first time the container has started against these volumes.
 # Download models in a background process so the API server starts immediately.
@@ -47,47 +47,47 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
     YOLO_DIR="${YOLO_CONFIG_DIR:-/app/cache/ultralytics}"
 
     # More robust cache detection:
-    # For HuggingFace â€” check for model hub directories (not just individual files)
+    # For HuggingFace - check for model hub directories (not just individual files)
     # Valid models create hub/models--* directories with blobs/ subdirectories
     HF_HUBS=$(find "$HF_DIR/hub" -type d -name "models--*" 2>/dev/null | wc -l || echo 0)
     HF_BLOBS=$(find "$HF_DIR/hub" -type d -name "blobs" 2>/dev/null | wc -l || echo 0)
     
-    # For YOLO â€” check for actual .pt weight files (not config/settings.json)
+    # For YOLO - check for actual .pt weight files (not config/settings.json)
     YOLO_WEIGHTS=$(find "$YOLO_DIR" -maxdepth 1 -type f -name "*.pt" 2>/dev/null | wc -l || echo 0)
 
     # Need at least 2 model hubs (OpenCLIP + SpeechBrain) and 1 YOLO weight
     if [ "${HF_HUBS:-0}" -lt 2 ] || [ "${HF_BLOBS:-0}" -lt 2 ] || [ "${YOLO_WEIGHTS:-0}" -lt 1 ]; then
         echo ""
         echo "============================================================"
-        echo "  FIRST RUN â€” pre-downloading ML models into persistent volumes"
+        echo "  FIRST RUN - pre-downloading ML models into persistent volumes"
         echo "  This runs once; all future starts will be instant."
         echo "  API server will start in parallel and be ready in ~30s."
         echo "============================================================"
         # Run in background (&) so the API starts immediately
         python scripts/model_pre_download.py > /tmp/model_download.log 2>&1 &
         MODEL_DL_PID=$!
-        echo "  Model download started (PID $MODEL_DL_PID) â€” tail /tmp/model_download.log for progress"
+        echo "  Model download started (PID $MODEL_DL_PID) - tail /tmp/model_download.log for progress"
     else
-        echo "  ML model volumes already populated â€” skipping download."
+        echo "  ML model volumes already populated - skipping download."
         echo "  Found: $HF_HUBS model hubs, $HF_BLOBS blob dirs, $YOLO_WEIGHTS YOLO weights"
     fi
 fi
 
-# â”€â”€ 2. Cache status check + Python import verification â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ------ 2. Cache status check + Python import verification ---------------------------------------------------------------------
 if [ "${SKIP_CACHE_CHECK:-0}" != "1" ]; then
     echo "  Verifying model cache and imports..."
     python scripts/model_cache_check.py
 fi
 
-# â”€â”€ 3. Start process (API by default, or Worker via CMD) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ------ 3. Start process (API by default, or Worker via CMD) ------------------------------------------------------------------
 # Default to scripts/run_api.py if no arguments provided
 CMD_TO_RUN="${1:-scripts/run_api.py}"
 
 if [ "$CMD_TO_RUN" = "worker" ]; then
-    echo "  Mode: Forensic Worker â€” consuming tasks from Redis"
+    echo "  Mode: Forensic Worker - consuming tasks from Redis"
     exec python scripts/run_worker.py
 else
-    echo "  Mode: Custom Script / API â€” serving requests"
+    echo "  Mode: Custom Script / API - serving requests"
     # Decide if we need to wrap $CMD_TO_RUN in python
     case "$CMD_TO_RUN" in
         *.py) ACTUAL_CMD="python $CMD_TO_RUN" ;;
@@ -99,4 +99,3 @@ else
     # Direct 'exec "$ACTUAL_CMD"' would treat the whole string as the binary name.
     exec sh -c "$ACTUAL_CMD"
 fi
-

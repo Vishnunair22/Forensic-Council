@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { RefreshCw, ArrowRight, FileImage, FileAudio, FileVideo, FileText } from "lucide-react";
 import { useSound } from "@/hooks/useSound";
@@ -38,6 +39,11 @@ export function UploadSuccessModal({
  const modalRef = useRef<HTMLDivElement>(null);
  const previousFocusRef = useRef<HTMLElement | null>(null);
  const { playSound } = useSound();
+ const [mounted, setMounted] = useState(false);
+
+ useEffect(() => {
+  setMounted(true);
+ }, []);
 
  useEffect(() => {
   playSound("success");
@@ -48,21 +54,29 @@ export function UploadSuccessModal({
    setPreviewUrl(null);
    return;
   }
+
   const isMedia =
    file.type.startsWith("image/") ||
    file.type.startsWith("video/") ||
    /\.(jpe?g|png|gif|bmp|webp|jfif|mp4|webm|mov|ogg)$/i.test(file.name);
+
   if (isMedia) {
-   const reader = new FileReader();
-   reader.onloadend = () => setPreviewUrl(reader.result as string);
-   reader.onerror = () => setHasError(true);
-   reader.readAsDataURL(file);
+   const url = URL.createObjectURL(file);
+   setPreviewUrl(url);
+   setHasError(false);
+   return () => {
+    URL.revokeObjectURL(url);
+   };
   } else {
    setPreviewUrl(null);
   }
  }, [file]);
 
  useEffect(() => {
+  const originalBodyOverflow = document.body.style.overflow;
+  const originalHtmlOverflow = document.documentElement.style.overflow;
+  document.body.style.overflow = "hidden";
+  document.documentElement.style.overflow = "hidden";
   previousFocusRef.current = document.activeElement as HTMLElement;
   if (modalRef.current) {
    const focusable = modalRef.current.querySelector<HTMLElement>(
@@ -96,6 +110,8 @@ export function UploadSuccessModal({
   };
   document.addEventListener("keydown", handleKeyDown);
   return () => {
+   document.body.style.overflow = originalBodyOverflow || "unset";
+   document.documentElement.style.overflow = originalHtmlOverflow || "auto";
    document.removeEventListener("keydown", handleKeyDown);
    previousFocusRef.current?.focus();
   };
@@ -111,10 +127,10 @@ export function UploadSuccessModal({
     ? FileVideo
     : FileText;
 
- return (
+ const modalContent = (
   <motion.div
-   className="fixed top-0 left-0 w-full h-full z-[9999] flex items-center justify-center p-4 backdrop-blur-2xl"
-   style={{ background: "rgba(0,0,0,0.75)" }}
+   className="fixed top-0 left-0 w-full h-full z-[9999] flex items-center justify-center p-4 backdrop-blur-2xl touch-none"
+   style={{ background: "rgba(0,0,0,0.85)" }}
    variants={overlayVariants}
    initial="hidden"
    animate="visible"
@@ -145,7 +161,7 @@ export function UploadSuccessModal({
        <video
         key={previewUrl}
         src={previewUrl}
-        className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+        className="w-full h-full object-cover transition-opacity duration-500"
         muted
         loop
         autoPlay
@@ -159,7 +175,7 @@ export function UploadSuccessModal({
         key={previewUrl}
         src={previewUrl}
         alt={`Evidence preview: ${file.name}`}
-        className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+        className="w-full h-full object-cover transition-opacity duration-500"
         onError={() => setHasError(true)}
        />
       )
@@ -219,4 +235,8 @@ export function UploadSuccessModal({
    </motion.div>
   </motion.div>
  );
+
+ if (!mounted) return null;
+
+ return createPortal(modalContent, document.body);
 }

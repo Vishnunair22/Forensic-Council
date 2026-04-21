@@ -1,173 +1,199 @@
-# Forensic OS (2026 Edition)
+# Forensic Council
 
-Upload digital evidence. Five specialized AI agents analyze it. Get a cryptographically signed forensic report verified by **Gemini 2.0 Flash Semantic Grounding**.
+Forensic Council is a multi-agent forensic analysis platform for digital media verification. It accepts evidence uploads, runs five specialist agents through an initial and deep analysis pipeline, and returns a cryptographically signed forensic report.
 
-[![Version](https://img.shields.io/badge/version-v1.4.0-blue.svg)](#) [![Status](https://img.shields.io/badge/status-stable-green.svg)](#) [![License](https://img.shields.io/badge/license-MIT-green.svg)](#) [![Python](https://img.shields.io/badge/python-3.12-blue.svg)](#) [![Next.js](https://img.shields.io/badge/next.js-15-black.svg)](#)
+[![Version](https://img.shields.io/badge/version-v1.4.0-blue.svg)](#)
+[![Status](https://img.shields.io/badge/status-production_hardening-yellow.svg)](#)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.12-blue.svg)](#)
+[![Next.js](https://img.shields.io/badge/next.js-15-black.svg)](#)
 
-*A High-Fidelity Multi-Agent Forensic OS with Multimodal Semantic Grounding via Gemini 2.0 Flash*
+## What It Does
 
----
+The system helps investigators assess whether an image, audio clip, video, or related media artifact appears authentic, manipulated, AI-generated, or inconclusive.
 
-## Documentation Index
-- 🏗️ **[Architecture](docs/ARCHITECTURE.md)** — Hybrid pipeline, memory systems, and hardware requirements.
-- 🔌 **[API Reference](docs/API.md)** — Authentication, investigation endpoints, and WebSocket events.
-- 🤖 **[Agent Capabilities](docs/agent_capabilities.md)** — Definitive tool list for all 5 forensic agents.
-- 🔐 **[Security Policy](docs/SECURITY.md)** — Cryptographic signing, chain-of-custody, and legal admissibility.
-- 🛠️ **[Maintenance Guide](docs/MAINTENANCE.md)** — Cleanup services, log rotation, and ML tool warming.
-- 🚀 **[Development Setup](docs/DEVELOPMENT_SETUP.md)** — Prerequisites and local environment configuration.
+The investigation flow is:
 
-## Project Management
-- 📊 **[Current State](docs/STATE.md)** — Active tasks, logic fixes, and sprint progress.
-- 🗺️ **[Roadmap](docs/ROADMAP.md)** — Phase 5 goals and long-term vision.
-- 📝 **[Project Overview](docs/PROJECT.md)** — Tech stack and forensic guardrails.
-- 📜 **[Changelog](docs/CHANGELOG.md)** — Version history and audit logs.
-- ⚖️ **[AI Context](docs/AI_ASSISTANT_CONTEXT.md)** — Specialized guidelines for AI pair programming.
----
+```text
+Browser upload
+  -> FastAPI evidence ingestion
+  -> SHA-256 hashing and custody logging
+  -> five specialist forensic agents
+  -> optional human-in-the-loop checkpoint
+  -> deep multimodal analysis
+  -> Council Arbiter verdict
+  -> ECDSA-signed forensic report
+```
 
-## What it does
-
-Forensic OS (2026 Edition) is a premium, modular platform for digital media verification. Five autonomous AI agents perform a tiered **Initial vs Deep Analysis** pipeline. 
-
-1. **Initial Pass**: High-recall screening using classical ML (ELA, JPEG Ghost, SIFT, CLIP).
-2. **Deep Pass**: High-precision investigation using 2026-era detectors (Diffusion Artifacts, Inter-frame Forgery, C2PA JUMBF).
-3. **Semantic Grounding**: Suspicious findings are "grounded" via **Gemini 2.0 Flash Vision**, which cross-verifies ML anomalies against the visual scene context to confirm editing artifacts or generative hallmarks.
-
-Every step — from initial telemetry to the multimodal verdict — is recorded in a court-defensible ECDSA-signed ledger.
-
----
+Every significant action is written to the chain-of-custody ledger, and final verdicts are computed deterministically from structured findings rather than being assigned by an LLM.
 
 ## Architecture
 
+```text
+Next.js frontend
+  -> FastAPI backend
+  -> ForensicCouncilPipeline
+  -> Image, Audio, Object, Video, and Metadata agents
+  -> Council Arbiter
+  -> Signed report
+
+Supporting services:
+  Redis      working memory, rate limiting, live state
+  Postgres   evidence ledger, reports, custody records
+  Qdrant     episodic vector memory
+  Caddy      production TLS/reverse proxy
 ```
-Frontend (Next.js 15) → FastAPI Backend → 5 2026 Agents → Council Arbiter → Signed Report
-                                        ↳         ↳          ↳
-                                     Redis    Postgres    Qdrant
+
+The pipeline uses two analysis phases:
+
+1. **Initial Pass**: fast, high-recall screening with classical and lightweight ML tools.
+2. **Deep Pass**: heavier forensic checks, multimodal Gemini grounding, and cross-agent context sharing.
+
+Agent 1 performs image and vision grounding first during deep analysis, then injects context into the object and metadata agents before the remaining deep checks complete.
+
+## Agents
+
+| Agent | Focus | Examples |
+| --- | --- | --- |
+| Image | visual manipulation and generation signals | ELA, splicing, diffusion artifacts, noise residuals |
+| Audio | speech and signal integrity | diarization, splice detection, voice synthesis signals |
+| Object | scene and physical consistency | YOLO detection, lighting, object coherence |
+| Video | temporal integrity | frame consistency, rolling shutter, inter-frame forgery |
+| Metadata | provenance and container evidence | EXIF, GPS, C2PA/JUMBF, container metadata |
+
+The Council Arbiter deduplicates findings, weighs evidence reliability, computes `manipulation_probability`, selects the verdict, and signs the report.
+
+## Repository Layout
+
+```text
+apps/
+  api/      FastAPI backend, agents, orchestration, tools, tests
+  web/      Next.js frontend, UI components, hooks, API client, tests
+docs/       architecture, API, security, runbooks, project state
+infra/      Docker Compose, Caddy, deployment and validation scripts
 ```
 
-**Infrastructure:**
-- **Redis** — Working memory, task queue, and WebSocket pub/sub.
-- **PostgreSQL 17** — Immutable Evidence Ledger (ACID).
-- **Qdrant** — Vector storage for forensic pattern correlation.
-- **Caddy 2** — Zero-config TLS/HTTPS.
-- **ML Cache** — Dedicated Docker volumes for HuggingFace, Torch, and YOLO weights.
+## Requirements
 
----
-
-## The Agents (2026 Spec)
-
-| Agent | Pass 1: Classical | Pass 2: 2026 Forensic | Semantic Grounding |
-|-------|------------------|----------------------|--------------------|
-| **Image** | ELA, Splicing | **Diffusion Artifacts** | ROI-aware Vision |
-| **Audio** | Speaker Diarization | **Voice Synthesis Det.** | Contextual Intent |
-| **Object** | YOLO Detection | **Scene Coherence** | Physical Consistency |
-| **Video** | Frame consistency | **Inter-frame Forgery** | Temporal Flow |
-| **Metadata** | EXIF/GPS | **C2PA JUMBF (2026)** | Hardware Provenance |
-
----
-
-## Prerequisites
-
-- Docker Desktop 23+ (BuildKit enabled)
-- **Groq API key** (Arbiter/Reasoning) — [console.groq.com](https://console.groq.com/keys)
-- **Google Gemini API key** (Vision/Grounding) — [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
-- 15 GB disk for ML model volumes (downloads once, persists permanently)
-
----
-
-## Configuration Reference
-
-### Docker Volumes
-
-| Volume Name | Purpose |
-|-------------|---------|
-| `fc_postgres_data` | PostgreSQL 17 database files |
-| `fc_redis_data` | Redis working memory state |
-| `fc_qdrant_data` | Qdrant vector store for episodic memory |
-| `fc_evidence` | Uploaded evidence files |
-| `fc_storage` | General application storage |
-| `fc_ml_cache` | HuggingFace/Torch model cache |
-| `fc_calibration_models` | Agent calibration models |
-| `fc_numba_cache` | Numba JIT compilation cache |
-| `fc_yolo_weights` | YOLOv8 object detection weights |
-| `fc_clip_model` | CLIP vision-language model |
-| `fc_transformers` | HuggingFace transformers cache |
-| `fc_speechbrain` | SpeechBrain audio models |
-| `fc_torch_cache` | PyTorch model cache |
-| `fc_logs` | Application logs |
-| `fc_caddy_data` | Caddy reverse proxy data |
-| `fc_caddy_config` | Caddy configuration |
-
-### Docker Networks
-
-| Network | Purpose |
-|---------|---------|
-| `fc_internal` | Internal communication between services |
-| `fc_frontend` | Frontend to backend communication |
-| `fc_monitoring` | Monitoring and observability |
-
-### Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `REDIS_URL` | Yes | Redis connection string |
-| `QDRANT_URL` | Yes | Qdrant server URL |
-| `GROQ_API_KEY` | Yes | Groq API for LLM synthesis |
-| `GEMINI_API_KEY` | Yes | Google Gemini for vision analysis |
-| `GEMINI_MODEL` | No | Gemini model version (default: gemini-2.0-flash) |
-| `SECRET_KEY` | Yes | Application secret for signing |
-| `LLM_PROVIDER` | No | LLM provider (default: groq) |
-| `LLM_MODEL` | No | LLM model name |
-| `LLM_ENABLE_REACT_REASONING` | No | Enable LLM reasoning in ReAct loop |
-| `LLM_ENABLE_POST_SYNTHESIS` | No | Enable post-analysis LLM synthesis |
-| `INTERNAL_API_URL` | No | Backend API URL for server-side |
-| `NEXT_PUBLIC_API_URL` | No | Public API URL for frontend |
-| `NEXT_PUBLIC_WS_URL` | No | WebSocket URL |
-
-For production key generation, see `infra/generate_production_keys.sh`.
-
----
+- Docker Desktop 23+ for full-stack local deployment.
+- Python 3.12 for backend development.
+- Node.js 22+ for frontend development.
+- A Groq-compatible `LLM_API_KEY` when LLM reasoning or synthesis is enabled.
+- A `GEMINI_API_KEY` for multimodal Gemini grounding.
+- Enough disk space for ML model caches. A first full run can download many GB of model files.
 
 ## Quick Start
 
-```bash
-# 1. Configure 2026 Standards
-copy .env.example .env
-# Edit .env: set GEMINI_MODEL=gemini-2.0-flash
+Create an environment file:
 
-# 2. Deploy
+```powershell
+Copy-Item .env.example .env
+```
+
+Edit `.env` and set at least:
+
+```text
+SIGNING_KEY=<strong unique value, 32+ chars>
+JWT_SECRET_KEY=<strong unique value, 32+ chars>
+POSTGRES_PASSWORD=<strong password>
+REDIS_PASSWORD=<strong password>
+LLM_API_KEY=<Groq API key or compatible provider key>
+GEMINI_API_KEY=<Google Gemini API key>
+```
+
+Start the full stack:
+
+```powershell
 docker compose -f infra/docker-compose.yml --env-file .env up --build
 ```
 
----
+For local development without Docker:
 
-## Changelog
+```powershell
+# Backend
+cd apps/api
+uv sync
+uv run python scripts/run_api.py
 
-**v1.4.0 (2026-04-14)** — Multi-Agent Tribunal Audit & Structural Hardening:
-- **Orchestration**: Finalized the 5-Agent Tribunal sequentially.
-- **Backend/AI**: Hardened the 24-hour "Dead Man's Switch" (TTL) in WorkingMemory for GDPR/Privacy compliance.
-- **Backend/AI**: Implemented high-fidelity SignalBus synchronization in the Council Arbiter.
-- **Frontend**: Standardized UI typography for forensic Title Case; implemented procedurally generated SVG grain for premium aesthetics.
-- **Frontend**: Migrated investigation state from `sessionStorage` to `localStorage` for cross-tab persistence.
-- **DevOps**: Hardened WebSocket connection logic for developer environment stability.
-- **Quality**: Verified 2026 SOTA model configuration (Gemini 2.0 Flash) across the entire monorepo.
+# Frontend, in another shell
+cd apps/web
+npm install
+npm run dev
+```
 
-**v1.3.0 (2026-04-09)** — Production Hardening & Modernization:
-- **Core**: Implemented the **Initial vs Deep Analysis** pipeline across all agents for tiered forensic screening.
-- **ML Tools**: Integrated 2026-era detectors: `diffusion_artifact_detector`, `interframe_forgery_detector`, and `c2pa_validator`.
-- **Grounding**: Developed **Semantic Grounding (Flag & Verify)** — Gemini 2.0 Flash now cross-validates findings.
-- **Bug fix**: Corrected `from infra.logging` → `from core.structured_logging` imports.
-- **Bug fix**: Initialized `redis = None` before try blocks in `hitl.py`.
-- **Infra**: Fixed `CALIBRATION_MODELS_PATH` in docker-compose.
-- **Cleanup**: Purged AI tool metadata (`.cursor`, `.claude`) from root; merged calibration models.
-- **Standardization**: Updated default models to **Gemini 2.0 Flash** in configuration.
+## Common Commands
 
-**v1.2.2 (2026-04-07)** — "Forensic OS" 2026 Edition:
-- **Models**: Native support for **Gemini 2.0 Flash**.
-- **UI/UX**: Premium high-fidelity dashboard redesign with glassmorphism and performance-optimized `AnimatedWave`.
-- **A11y**: Standardized WCAG 2.1 AA compliance with refined ARIA landmarks.
+From the repository root:
 
----
+```powershell
+npm run dev        # backend and frontend development servers
+npm run lint       # backend ruff + frontend eslint
+npm run test       # backend pytest + frontend jest
+npm run build:web  # frontend production build
+npm run docker:up  # full Docker stack
+```
 
-[MIT License](LICENSE)
+Backend-only:
 
+```powershell
+cd apps/api
+uv run ruff check .
+uv run pyright core/ agents/ api/ tools/
+uv run pytest tests/ -v
+```
+
+Frontend-only:
+
+```powershell
+cd apps/web
+npm run lint
+npm run type-check
+npm test
+```
+
+## Configuration
+
+The canonical environment template is [.env.example](.env.example). Important variables include:
+
+| Variable | Purpose |
+| --- | --- |
+| `APP_ENV` | Runtime mode, commonly `production`, `development`, or `testing` |
+| `SIGNING_KEY` | Root secret used for forensic signing key derivation |
+| `JWT_SECRET_KEY` | Separate secret for JWT/session signing |
+| `POSTGRES_PASSWORD` | PostgreSQL password used by the Docker stack |
+| `REDIS_PASSWORD` | Redis password required in production |
+| `LLM_PROVIDER` | LLM provider name, defaulting to `groq` |
+| `LLM_API_KEY` | API key for Groq or the configured LLM provider |
+| `GEMINI_API_KEY` | API key for Gemini multimodal analysis |
+| `GEMINI_MODEL` | Gemini model name, defaulting to `gemini-2.5-flash` |
+| `GEMINI_FALLBACK_MODELS` | ordered Gemini fallback cascade for deep analysis |
+| `NEXT_PUBLIC_API_URL` | Browser-visible backend API URL |
+| `INTERNAL_API_URL` | Container/server-side backend API URL |
+| `CORS_ALLOWED_ORIGINS` | Explicit browser origins allowed to call the API |
+
+Never commit `.env` or real secrets.
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [API Reference](docs/API.md)
+- [Agent Capabilities](docs/agent_capabilities.md)
+- [Chain of Custody](docs/CHAIN_OF_CUSTODY.md)
+- [Security](docs/SECURITY.md)
+- [Testing](docs/TESTING.md)
+- [Runbook](docs/RUNBOOK.md)
+- [Current State](docs/STATE.md)
+- [Development Setup](docs/DEVELOPMENT_SETUP.md)
+
+## Development Guardrails
+
+- Keep verdict logic deterministic. LLMs may summarize findings, but they must not set verdicts.
+- Be careful around Arbiter scoring and reliability weights.
+- Use `core.*` backend imports rather than legacy `infra.*` imports.
+- Use `@/lib/storage` for non-auth frontend storage.
+- Keep auth tokens in session-scoped storage or HttpOnly cookies.
+- Preserve chain-of-custody logging for significant forensic actions.
+
+## License
+
+Forensic Council is released under the [MIT License](LICENSE).

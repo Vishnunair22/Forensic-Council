@@ -110,6 +110,13 @@ tests/fixtures/*.avi
 *.swp
 *.swo
 .planning/
+.claude/
+.cursor/
+.uv-cache/
+.mcp.json
+.opencode.json
+CLAUDE.md
+MASTER_FIX_*.md
 
 # Added by code-review-graph
 .code-review-graph/

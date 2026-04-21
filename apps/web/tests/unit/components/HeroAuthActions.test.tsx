@@ -2,7 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { HeroAuthActions } from "@/components/ui/HeroAuthActions";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
-import { storage } from "@/lib/storage";
+import { sessionOnlyStorage, storage } from "@/lib/storage";
 import { ProtocolWarmingError } from "@/lib/api";
 
 const mockPush = jest.fn();
@@ -79,6 +79,8 @@ describe("HeroAuthActions", () => {
     storage.removeItem("forensic_auto_start");
     storage.removeItem("fc_show_loading");
     storage.removeItem("forensic_auth_ok");
+    sessionOnlyStorage.removeItem("forensic_auto_start");
+    sessionOnlyStorage.removeItem("fc_show_loading");
   });
 
   it("opens the upload modal when the CTA is clicked", () => {
@@ -107,8 +109,8 @@ describe("HeroAuthActions", () => {
     });
 
     expect(__pendingFileStore.file?.name).toBe("evidence.jpg");
-    expect(storage.getItem("forensic_auto_start")).toBe("true");
-    expect(storage.getItem("fc_show_loading")).toBe("true");
+    expect(sessionOnlyStorage.getItem("forensic_auto_start")).toBe("true");
+    expect(sessionOnlyStorage.getItem("fc_show_loading")).toBe("true");
     expect(storage.getItem("forensic_auth_ok")).toBe("1");
   });
 

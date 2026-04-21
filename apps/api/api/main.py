@@ -216,50 +216,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as e:
         logger.warning("Blacklist cleanup task failed to start", error=str(e))
 
-    # Warm up ML tool models before accepting requests (blocking in production,
-    # non-blocking in development). This eliminates 30-60s cold-start on the
-    # first investigation.
-    try:
-        from core.ml_subprocess import warmup_all_tools
 
-        if settings.app_env == "production":
-            # Production: Block until warmup completes (max 120s)
-            logger.info("Pre-warming ML tools in production (blocking)...")
-            warmup_results = await asyncio.wait_for(
-                warmup_all_tools(timeout_per_tool=120.0),
-                timeout=180.0  # Total timeout for all tools
-            )
-
-            succeeded = sum(1 for v in warmup_results.values() if v)
-            total = len(warmup_results)
-
-            if succeeded < total:
-                logger.warning(
-                    f"Only {succeeded}/{total} ML tools warmed up — investigations may be slow",
-                    failed_tools=[k for k, v in warmup_results.items() if not v]
-                )
-            else:
-                logger.info(f"All {total} ML tools warmed up successfully")
-        else:
-            # Development: Start warmup in background (non-blocking)
-            warmup_task = asyncio.create_task(warmup_all_tools(timeout_per_tool=60.0))
-            app.state.warmup_task = warmup_task
-            warmup_task.add_done_callback(
-                lambda t: (
-                    logger.info(
-                        "ML tool warmup finished",
-                        succeeded=sum(1 for v in t.result().values() if v)
-                        if not t.cancelled() and not t.exception()
-                        else 0,
-                        total=len(t.result()) if not t.cancelled() and not t.exception() else 0,
-                    )
-                    if not t.cancelled() and not t.exception()
-                    else None
-                )
-            )
-            logger.info("ML tool warmup started in background (non-blocking)")
-    except Exception as e:
-        logger.warning("ML warmup not started", error=str(e))
 
     yield
 
@@ -284,17 +241,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as e:
         logger.warning("Failed to shutdown process pool", error=str(e))
 
-    # 0. Cancel warmup task if still running
-    try:
-        warmup_t = getattr(app.state, "warmup_task", None)
-        if warmup_t and not warmup_t.done():
-            warmup_t.cancel()
-            try:
-                await warmup_t
-            except asyncio.CancelledError:
-                pass
-    except Exception as e:
-        logger.warning("Failed to cancel warmup task", error=str(e))
+
 
     # 1. Stop accepting new investigations
     app.state.accepting_requests = False
@@ -773,31 +720,10 @@ async def health_check():
         )
         overall_healthy = False
 
-    # ── ML Tools Warm-Up Status ───────────────────────────────────────────────
-    try:
-        from core.ml_subprocess import get_warmup_status
-
-        warmup_status = get_warmup_status()
-        tools_ready = sum(1 for v in warmup_status.values() if v)
-        tools_total = len(warmup_status)
-
-        checks["ml_tools"] = {
-            "status": "ready" if tools_ready == tools_total else "warming_up",
-            "tools_ready": tools_ready,
-            "tools_total": tools_total,
-            "details": warmup_status,
-        }
-
-        # Don't mark overall as unhealthy if still warming up, just note it
-        if tools_ready < tools_total:
-            logger.info(
-                f"ML tools still warming up: {tools_ready}/{tools_total} ready"
-            )
-    except Exception as e:
-        checks["ml_tools"] = {
-            "status": "error",
-            "error": str(e)[:60],
-        }
+    # ── ML Tools Warm-Up Status (Decoupled to Worker) ─────────────────────────
+    checks["ml_tools"] = {
+        "status": "managed_by_worker",
+    }
         # ML tools not ready doesn't make the whole system unhealthy
 
     status_code = 200 if overall_healthy else 503

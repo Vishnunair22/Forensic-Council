@@ -2,8 +2,6 @@
  * Forensic Council — API Utilities
  */
 
-import { TokenResponse } from "./types";
-
 const _TOKEN_KEY = "forensic_auth_token";
 const _TOKEN_EXPIRY_KEY = "forensic_auth_token_expiry";
 

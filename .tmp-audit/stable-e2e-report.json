@@ -1,0 +1,1744 @@
+{
+    "report_id":  "802a0997-bb83-4b1f-a408-a24027a723e9",
+    "session_id":  "6521cc35-da59-43ba-a2dd-85a296555bc0",
+    "case_id":  "CASE-STABLE-E2E-20260420-221446",
+    "executive_summary":  "This report presents findings from a multi-agent forensic analysis conducted by 3 specialized agents, resulting in 31 individual findings. Key findings include: Frequency Domain Analysis: Frequency domain analysis yielded anomaly score 0.000 (high-freq ratio: 0.000, frequency distribution appears natural). Adversarial Robustness Check: Adversarial robustness: Findings are stable under perturbation ‚?? robust. Method: ELA perturbation stability. The full analysis chain is preserved in the chain of custody log and ReAct chains sections of this report.",
+    "per_agent_findings":  {
+                               "Agent1":  [
+                                              {
+                                                  "finding_id":  "c07a6b00-6257-4c46-af94-dbbfa8df4c96",
+                                                  "agent_id":  "Agent1",
+                                                  "agent_name":  "Image Forensics",
+                                                  "finding_type":  "Semantic Image Analysis",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.0858,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  0.6960165119895596,
+                                                  "raw_confidence_score":  0.6960165119895596,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Analyze Image Content: CLIP semantic analysis: image identified as \u0027a product or commercial image\u0027 at 9% confidence ‚?? context: Commercial image - possible manipulation for marketing.No concern flags raised.",
+                                                  "metadata":  {
+                                                                   "error":  null,
+                                                                   "method":  "CLIP ViT-B-32 zero-shot classification",
+                                                                   "status":  "real",
+                                                                   "available":  true,
+                                                                   "tool_name":  "analyze_image_content",
+                                                                   "confidence":  0.0858,
+                                                                   "image_type":  "a product or commercial image",
+                                                                   "uncertainty":  {
+                                                                                       "should_escalate":  false,
+                                                                                       "escalation_reason":  null,
+                                                                                       "total_uncertainty":  0.1745,
+                                                                                       "epistemic_fraction":  0.705,
+                                                                                       "aleatoric_uncertainty":  0.1716,
+                                                                                       "epistemic_uncertainty":  0.123
+                                                                                   },
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "Starting image integrity analysis for \u0027e2d02fd5-8403-483b-b7d8-46d28d058b12.bin\u0027. Phase 1 (fast): CLIP semantic classification, Tesseract OCR, SigLIP2 neural fingerprint, SHA-256 integrity check, FFT frequency scan, and Noiseprint++ sensor clustering. Phase 2 (deep, background): TruFor splicing, BusterNet copy-move, diffusion artifact detection, F3-Net frequency, ManTra-Net anomaly tracing, and Gemini 1.5 Pro visual forensic synthesis.",
+                                                                   "analysis_phase":  "initial",
+                                                                   "court_defensible":  true,
+                                                                   "semantic_context":  "Commercial image - possible manipulation for marketing",
+                                                                   "all_classifications":  [
+                                                                                               {
+                                                                                                   "score":  0.0858,
+                                                                                                   "category":  "a product or commercial image"
+                                                                                               },
+                                                                                               {
+                                                                                                   "score":  0.0849,
+                                                                                                   "category":  "a social media post"
+                                                                                               },
+                                                                                               {
+                                                                                                   "score":  0.0842,
+                                                                                                   "category":  "a forensic evidence photograph"
+                                                                                               },
+                                                                                               {
+                                                                                                   "score":  0.0839,
+                                                                                                   "category":  "a digitally generated or AI image"
+                                                                                               },
+                                                                                               {
+                                                                                                   "score":  0.0839,
+                                                                                                   "category":  "a passport or identification document"
+                                                                                               },
+                                                                                               {
+                                                                                                   "score":  0.0839,
+                                                                                                   "category":  "a surveillance camera frame"
+                                                                                               },
+                                                                                               {
+                                                                                                   "score":  0.0837,
+                                                                                                   "category":  "a screenshot of a chat conversation"
+                                                                                               },
+                                                                                               {
+                                                                                                   "score":  0.0834,
+                                                                                                   "category":  "a screenshot of a document"
+                                                                                               },
+                                                                                               {
+                                                                                                   "score":  0.0827,
+                                                                                                   "category":  "an indoor photograph"
+                                                                                               },
+                                                                                               {
+                                                                                                   "score":  0.0826,
+                                                                                                   "category":  "a news article image"
+                                                                                               },
+                                                                                               {
+                                                                                                   "score":  0.0806,
+                                                                                                   "category":  "an outdoor photograph"
+                                                                                               },
+                                                                                               {
+                                                                                                   "score":  0.0804,
+                                                                                                   "category":  "a scanned photograph"
+                                                                                               }
+                                                                                           ],
+                                                                   "confidence_interval":  {
+                                                                                               "lower":  0.6045,
+                                                                                               "upper":  0.779,
+                                                                                               "method":  "parametric_bootstrap_platt"
+                                                                                           }
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "1baa8ea1-36ed-4cca-b186-56b10777506d",
+                                                  "agent_id":  "Agent1",
+                                                  "agent_name":  "Image Forensics",
+                                                  "finding_type":  "OCR Text Extraction",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.0,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  0.7310585786300049,
+                                                  "raw_confidence_score":  0.7310585786300049,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Extract Text From Image: Tesseract OCR extracted 0 word(s). Preview: \u0027¬©)\n...\u0027",
+                                                  "metadata":  {
+                                                                   "lines":  [
+                                                                                 "¬©)"
+                                                                             ],
+                                                                   "method":  "tesseract_fallback",
+                                                                   "has_text":  false,
+                                                                   "full_text":  "¬©)\n",
+                                                                   "tool_name":  "extract_text_from_image",
+                                                                   "word_count":  0,
+                                                                   "uncertainty":  {
+                                                                                       "should_escalate":  false,
+                                                                                       "escalation_reason":  null,
+                                                                                       "total_uncertainty":  0.1439,
+                                                                                       "epistemic_fraction":  1.0,
+                                                                                       "aleatoric_uncertainty":  0.0,
+                                                                                       "epistemic_uncertainty":  0.1439
+                                                                                   },
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "",
+                                                                   "analysis_phase":  "initial",
+                                                                   "avg_confidence":  0.0,
+                                                                   "court_defensible":  true,
+                                                                   "confidence_interval":  {
+                                                                                               "lower":  0.654,
+                                                                                               "upper":  0.7979,
+                                                                                               "method":  "parametric_bootstrap_platt"
+                                                                                           },
+                                                                   "tesseract_available":  true
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "2a093488-fba6-45b1-bb9c-f2b1100d6c47",
+                                                  "agent_id":  "Agent1",
+                                                  "agent_name":  "Image Forensics",
+                                                  "finding_type":  "SigLIP2 Neural Perceptual Fingerprint",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.85,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  0.3318122278318339,
+                                                  "raw_confidence_score":  0.3318122278318339,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Neural Fingerprint: phash: e993876c1a316dc6; ahash: ffe7c38181c3e7ff; dhash: 200c971f17170e00; whash: ffc381818181c3ff (+4 more).",
+                                                  "metadata":  {
+                                                                   "note":  "Hash computed. No reference hash available ‚?? similarity requires a second image.",
+                                                                   "ahash":  "ffe7c38181c3e7ff",
+                                                                   "dhash":  "200c971f17170e00",
+                                                                   "phash":  "e993876c1a316dc6",
+                                                                   "whash":  "ffc381818181c3ff",
+                                                                   "available":  true,
+                                                                   "tool_name":  "neural_fingerprint",
+                                                                   "confidence":  0.85,
+                                                                   "uncertainty":  {
+                                                                                       "should_escalate":  true,
+                                                                                       "escalation_reason":  "UNCALIBRATED model with high total uncertainty (0.330). Epistemic fraction: 72.7%. Calibration parameters are engineering defaults ‚?? confidence is unreliable. Human review recommended before proceeding.",
+                                                                                       "total_uncertainty":  0.33,
+                                                                                       "epistemic_fraction":  0.7273,
+                                                                                       "aleatoric_uncertainty":  0.3,
+                                                                                       "epistemic_uncertainty":  0.24
+                                                                                   },
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "",
+                                                                   "analysis_phase":  "initial",
+                                                                   "court_defensible":  true,
+                                                                   "confidence_interval":  {
+                                                                                               "lower":  0.1849,
+                                                                                               "upper":  0.5149,
+                                                                                               "method":  "parametric_bootstrap_platt"
+                                                                                           }
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "56983717-b6d5-4995-98e5-e8abf99afe97",
+                                                  "agent_id":  "Agent1",
+                                                  "agent_name":  "Image Forensics",
+                                                  "finding_type":  "File Hash Verification",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.5,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  null,
+                                                  "raw_confidence_score":  null,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "File Hash Verify: Hash verification: SHA-256 = ... WARNING: hash mismatch ‚?? file may have been modified after ingestion.",
+                                                  "metadata":  {
+                                                                   "available":  true,
+                                                                   "tool_name":  "file_hash_verify",
+                                                                   "hash_match":  true,
+                                                                   "stored_hash":  "091cc780dcb05c768fb88f17dbcf9b5f2de869b0e16a76a7f62331b2128d7cae",
+                                                                   "uncertainty":  null,
+                                                                   "stub_warning":  null,
+                                                                   "computed_hash":  "091cc780dcb05c768fb88f17dbcf9b5f2de869b0e16a76a7f62331b2128d7cae",
+                                                                   "llm_reasoning":  "",
+                                                                   "analysis_phase":  "initial",
+                                                                   "court_defensible":  false,
+                                                                   "confidence_interval":  null
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "7c315389-cdef-4860-badf-5208d80df24d",
+                                                  "agent_id":  "Agent1",
+                                                  "agent_name":  "Image Forensics",
+                                                  "finding_type":  "Frequency Domain Analysis",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  1.0,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  null,
+                                                  "raw_confidence_score":  null,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Frequency Domain Analysis: Frequency domain analysis yielded anomaly score 0.000 (high-freq ratio: 0.000, frequency distribution appears natural).",
+                                                  "metadata":  {
+                                                                   "available":  true,
+                                                                   "tool_name":  "frequency_domain_analysis",
+                                                                   "uncertainty":  null,
+                                                                   "stub_warning":  null,
+                                                                   "anomaly_score":  0.0,
+                                                                   "llm_reasoning":  "",
+                                                                   "analysis_phase":  "initial",
+                                                                   "low_freq_ratio":  0.9996,
+                                                                   "high_freq_ratio":  0.0004,
+                                                                   "limitation_note":  "Basic DFT high-frequency ratio ‚?? supporting signal only, not a standalone manipulation indicator.",
+                                                                   "court_defensible":  false,
+                                                                   "confidence_interval":  null
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "b659ec47-98e6-4659-abed-5dafdac502c0",
+                                                  "agent_id":  "Agent1",
+                                                  "agent_name":  "Image Forensics",
+                                                  "finding_type":  "Noiseprint++ Sensor Clustering",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.0,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  null,
+                                                  "raw_confidence_score":  null,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Noiseprint Cluster: manipulation detected: no; confidence 0.000; source cluster count 1; noise consistency score 1.000 (+8 more).",
+                                                  "metadata":  {
+                                                                   "note":  "Image too small for sensor clustering",
+                                                                   "verdict":  "INCONCLUSIVE",
+                                                                   "available":  true,
+                                                                   "elapsed_s":  1.84,
+                                                                   "tool_name":  "noiseprint_clustering",
+                                                                   "confidence":  0.0,
+                                                                   "uncertainty":  null,
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "",
+                                                                   "model_version":  "noiseprint_clustering_v1",
+                                                                   "total_regions":  0,
+                                                                   "analysis_phase":  "initial",
+                                                                   "court_defensible":  false,
+                                                                   "confidence_interval":  null,
+                                                                   "inconsistent_regions":  [
+
+                                                                                            ],
+                                                                   "outlier_region_count":  0,
+                                                                   "source_cluster_count":  1,
+                                                                   "manipulation_detected":  false,
+                                                                   "noise_consistency_score":  1.0
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "37640c7e-ed68-402d-b7c8-6560de084461",
+                                                  "agent_id":  "Agent1",
+                                                  "agent_name":  "Image Forensics",
+                                                  "finding_type":  "TruFor ViT Splicing Detection",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.618,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  0.4412723220423236,
+                                                  "raw_confidence_score":  0.4412723220423236,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Neural Splicing: splicing detected: yes; confidence 0.618; forgery regions: {\u0027x\u0027: 16, \u0027y\u0027: 16, \u0027w\u0027: 16, \u0027h\u0027: 16}, {\u0027x\u0027: 16, \u0027y\u0027: 32, \u0027w\u0027: 16, \u0027h\u0027: 16}, {\u0027x\u0027: 32, \u0027y\u0027: 32, \u0027w\u0027: 16, \u0027h\u0027: 16}, {\u0027x\u0027: 32, \u0027y\u0027: 48, \u0027w\u0027: 16, \u0027h\u0027: 16}; integrity score 0.889 (+9 more).",
+                                                  "metadata":  {
+                                                                   "verdict":  "SPLICED",
+                                                                   "available":  true,
+                                                                   "elapsed_s":  2.48,
+                                                                   "tool_name":  "trufor_analyzer",
+                                                                   "confidence":  0.618,
+                                                                   "uncertainty":  {
+                                                                                       "should_escalate":  false,
+                                                                                       "escalation_reason":  null,
+                                                                                       "total_uncertainty":  0.293,
+                                                                                       "epistemic_fraction":  0.2177,
+                                                                                       "aleatoric_uncertainty":  0.764,
+                                                                                       "epistemic_uncertainty":  0.0638
+                                                                                   },
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "DEEP ANALYSIS PASS ‚?? Agent1_ImageIntegrity. Running 5 tools.",
+                                                                   "model_version":  "trufor_srm_v1",
+                                                                   "analysis_phase":  "deep",
+                                                                   "forgery_regions":  [
+                                                                                           {
+                                                                                               "h":  16,
+                                                                                               "w":  16,
+                                                                                               "x":  16,
+                                                                                               "y":  16
+                                                                                           },
+                                                                                           {
+                                                                                               "h":  16,
+                                                                                               "w":  16,
+                                                                                               "x":  16,
+                                                                                               "y":  32
+                                                                                           },
+                                                                                           {
+                                                                                               "h":  16,
+                                                                                               "w":  16,
+                                                                                               "x":  32,
+                                                                                               "y":  32
+                                                                                           },
+                                                                                           {
+                                                                                               "h":  16,
+                                                                                               "w":  16,
+                                                                                               "x":  32,
+                                                                                               "y":  48
+                                                                                           }
+                                                                                       ],
+                                                                   "integrity_score":  0.889,
+                                                                   "boundary_anomaly":  true,
+                                                                   "court_defensible":  true,
+                                                                   "splicing_detected":  true,
+                                                                   "total_block_count":  36,
+                                                                   "anomaly_block_count":  4,
+                                                                   "confidence_interval":  {
+                                                                                               "lower":  0.3004,
+                                                                                               "upper":  0.5934,
+                                                                                               "method":  "parametric_bootstrap_platt"
+                                                                                           },
+                                                                   "srm_residual_variance":  131.0756
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "4a672375-1bf3-4c9d-9de8-fb283e86d222",
+                                                  "agent_id":  "Agent1",
+                                                  "agent_name":  "Image Forensics",
+                                                  "finding_type":  "BusterNet Dual-Branch Copy-Move",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.0,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  0.7310585786300049,
+                                                  "raw_confidence_score":  0.7310585786300049,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Neural Copy Move: copy move detected: no; confidence 0.000; matched pairs 0; homography inliers 0 (+6 more).",
+                                                  "metadata":  {
+                                                                   "available":  true,
+                                                                   "elapsed_s":  1.74,
+                                                                   "tool_name":  "busternet_v2",
+                                                                   "top_pairs":  [
+
+                                                                                 ],
+                                                                   "confidence":  0.0,
+                                                                   "uncertainty":  {
+                                                                                       "should_escalate":  false,
+                                                                                       "escalation_reason":  null,
+                                                                                       "total_uncertainty":  0.1466,
+                                                                                       "epistemic_fraction":  1.0,
+                                                                                       "aleatoric_uncertainty":  0.0,
+                                                                                       "epistemic_uncertainty":  0.1466
+                                                                                   },
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "",
+                                                                   "matched_pairs":  0,
+                                                                   "model_version":  "busternet_v2",
+                                                                   "analysis_phase":  "deep",
+                                                                   "branch_agreement":  "NEITHER",
+                                                                   "court_defensible":  true,
+                                                                   "copy_move_detected":  false,
+                                                                   "homography_inliers":  0,
+                                                                   "confidence_interval":  {
+                                                                                               "lower":  0.6481,
+                                                                                               "upper":  0.7947,
+                                                                                               "method":  "parametric_bootstrap_platt"
+                                                                                           },
+                                                                   "noise_correlation_signal":  0.0
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "1f821215-cd95-4460-9959-a2de4cadfacd",
+                                                  "agent_id":  "Agent1",
+                                                  "agent_name":  "Image Forensics",
+                                                  "finding_type":  "Diffusion/AI-Generation Artifact Detection",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.85,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  0.3318122278318339,
+                                                  "raw_confidence_score":  0.3318122278318339,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Diffusion Artifact Detector: diffusion probability 0.150; verdict: NATURAL_OR_CLEAN; spectral spike ratio 1.410; noise variance cv 0.398 (+7 more).",
+                                                  "metadata":  {
+                                                                   "verdict":  "NATURAL_OR_CLEAN",
+                                                                   "anomalies":  [
+                                                                                     "Low texture variance consistency"
+                                                                                 ],
+                                                                   "available":  true,
+                                                                   "elapsed_s":  0.44,
+                                                                   "tool_name":  "diffusion_artifact_detector",
+                                                                   "uncertainty":  {
+                                                                                       "should_escalate":  true,
+                                                                                       "escalation_reason":  "UNCALIBRATED model with high total uncertainty (0.340). Epistemic fraction: 73.5%. Calibration parameters are engineering defaults ‚?? confidence is unreliable. Human review recommended before proceeding.",
+                                                                                       "total_uncertainty":  0.3399,
+                                                                                       "epistemic_fraction":  0.7352,
+                                                                                       "aleatoric_uncertainty":  0.3,
+                                                                                       "epistemic_uncertainty":  0.2499
+                                                                                   },
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "",
+                                                                   "model_version":  "2026.1-latentsig",
+                                                                   "analysis_phase":  "deep",
+                                                                   "is_ai_generated":  false,
+                                                                   "court_defensible":  true,
+                                                                   "noise_variance_cv":  0.398,
+                                                                   "diffusion_detected":  false,
+                                                                   "confidence_interval":  {
+                                                                                               "lower":  0.186,
+                                                                                               "upper":  0.5259,
+                                                                                               "method":  "parametric_bootstrap_platt"
+                                                                                           },
+                                                                   "spectral_spike_ratio":  1.41,
+                                                                   "diffusion_probability":  0.15
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "e981525a-3627-464c-ac68-14a7c18483f2",
+                                                  "agent_id":  "Agent1",
+                                                  "agent_name":  "Image Forensics",
+                                                  "finding_type":  "F3-Net Frequency Artifact Analysis",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.07,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  0.7026606543447315,
+                                                  "raw_confidence_score":  0.7026606543447315,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "F3 Net Frequency: gan artifact detected: no; confidence 0.070; frequency anomaly: yes; artifact type: NATURAL (+7 more).",
+                                                  "metadata":  {
+                                                                   "available":  true,
+                                                                   "elapsed_s":  0.7,
+                                                                   "tool_name":  "f3net_freq",
+                                                                   "confidence":  0.07,
+                                                                   "uncertainty":  {
+                                                                                       "should_escalate":  false,
+                                                                                       "escalation_reason":  null,
+                                                                                       "total_uncertainty":  0.1557,
+                                                                                       "epistemic_fraction":  0.7303,
+                                                                                       "aleatoric_uncertainty":  0.14,
+                                                                                       "epistemic_uncertainty":  0.1137
+                                                                                   },
+                                                                   "lfs_variance":  0.0,
+                                                                   "stub_warning":  null,
+                                                                   "artifact_type":  "NATURAL",
+                                                                   "llm_reasoning":  "",
+                                                                   "model_version":  "f3net_freq_v1",
+                                                                   "analysis_phase":  "deep",
+                                                                   "branch_signals":  {
+                                                                                          "fad":  false,
+                                                                                          "lfs":  false,
+                                                                                          "phase":  true
+                                                                                      },
+                                                                   "frequency_bands":  {
+                                                                                           "HH":  {
+                                                                                                      "energy":  0.0005,
+                                                                                                      "anomalous":  false
+                                                                                                  },
+                                                                                           "HL":  {
+                                                                                                      "energy":  0.0014,
+                                                                                                      "anomalous":  false
+                                                                                                  },
+                                                                                           "LH":  {
+                                                                                                      "energy":  0.0016,
+                                                                                                      "anomalous":  false
+                                                                                                  },
+                                                                                           "LL":  {
+                                                                                                      "energy":  0.9965,
+                                                                                                      "anomalous":  false
+                                                                                                  }
+                                                                                       },
+                                                                   "court_defensible":  true,
+                                                                   "wavelet_hh_spike":  0.0005,
+                                                                   "frequency_anomaly":  true,
+                                                                   "confidence_interval":  {
+                                                                                               "lower":  0.6187,
+                                                                                               "upper":  0.7744,
+                                                                                               "method":  "parametric_bootstrap_platt"
+                                                                                           },
+                                                                   "phase_inconsistency":  0.3278,
+                                                                   "gan_artifact_detected":  false
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "942c339b-232f-4b03-85e6-90e49e3e33ed",
+                                                  "agent_id":  "Agent1",
+                                                  "agent_name":  "Image Forensics",
+                                                  "finding_type":  "Gemini Deep Forensic Analysis",
+                                                  "status":  "INCOMPLETE",
+                                                  "confidence_raw":  0.5,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  null,
+                                                  "raw_confidence_score":  null,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Gemini Deep Forensic: Gemini deep forensic complete. Content: unidentified content. Scene: Visual analysis complete.. No specific objects identified. No text found in image. No manipulation signals detected.",
+                                                  "metadata":  {
+                                                                   "caveat":  "[Fallback: gemini-2.5-flash-lite ‚?? primary gemini-2.5-flash unavailable] Gemini vision analysis ‚?? LLM-derived, requires corroboration with deterministic tools.",
+                                                                   "status":  "INCOMPLETE",
+                                                                   "agent_id":  "Agent1",
+                                                                   "metadata":  {
+                                                                                    "tool_name":  "gemini_deep_forensic",
+                                                                                    "latency_ms":  6173.2,
+                                                                                    "model_used":  "gemini-2.5-flash-lite",
+                                                                                    "analysis_type":  "deep_forensic_analysis",
+                                                                                    "analysis_phase":  "deep",
+                                                                                    "extracted_text":  [
+                                                                                                           "¬©)\n"
+                                                                                                       ],
+                                                                                    "analysis_source":  "gemini_vision",
+                                                                                    "detected_objects":  [
+                                                                                                             "Visual content is not available for analysis."
+                                                                                                         ],
+                                                                                    "deepfake_detected":  false,
+                                                                                    "authenticity_verdict":  "CANNOT_DETERMINE",
+                                                                                    "contextual_anomalies":  [
+
+                                                                                                             ],
+                                                                                    "contextual_narrative":  "The file\u0027s content cannot be determined due to the absence of visual data. The available metadata suggests a potential manipulation signal related to splicing, but without the visual context, its significance or the nature of the file remains unknown. The file hash has been verified, indicating data integrity at the file level.",
+                                                                                    "file_type_assessment":  "Undetermined: MIME type is generic (application/octet-stream) and visual content is not provided for analysis.",
+                                                                                    "manipulation_signals":  [
+                                                                                                                 "Neural splicing detected (confidence: 0.618)",
+                                                                                                                 "Splicing detected (confidence: 0.618)"
+                                                                                                             ],
+                                                                                    "manipulation_detected":  false,
+                                                                                    "interface_identification":  "Visual content is not available for analysis.",
+                                                                                    "metadata_visual_consistency":  "No visual content provided for cross-validation against metadata claims."
+                                                                                },
+                                                                   "tool_name":  "gemini_deep_forensic",
+                                                                   "stub_result":  false,
+                                                                   "uncertainty":  null,
+                                                                   "finding_type":  "gemini_vision_deep_forensic_analysis",
+                                                                   "stub_warning":  null,
+                                                                   "evidence_refs":  [
+
+                                                                                     ],
+                                                                   "llm_reasoning":  "",
+                                                                   "analysis_phase":  "deep",
+                                                                   "confidence_raw":  0.1,
+                                                                   "analysis_source":  "gemini_vision",
+                                                                   "court_defensible":  true,
+                                                                   "reasoning_summary":  "Interface: Visual content is not available for analysis. | Visual content is not available for analysis. The provided metadata indicates minimal extracted text, consisting only of a copyright symbol and a closing parenthesis. | The file\u0027s content cannot be determined due to the absence of visual data. The available metadata suggests a potential manipulation signal related to splicing, but without the visual context, its significance or the nature of the file remains unknown. The file hash has been verified, indicating data integrity at the file level. | Manipulation signals: Neural splicing detected (confidence: 0.618); Splicing detected (confidence: 0.618)",
+                                                                   "confidence_interval":  null
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              }
+                                          ],
+                               "Agent2":  [
+
+                                          ],
+                               "Agent3":  [
+                                              {
+                                                  "finding_id":  "b84907ce-d14d-4ff4-a05f-924ab0daf9fa",
+                                                  "agent_id":  "Agent3",
+                                                  "agent_name":  "Object Detection",
+                                                  "finding_type":  "Object Detection (YOLO)",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.0,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  null,
+                                                  "raw_confidence_score":  null,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Object Detection: YOLO object detection: 0 object(s) detected (none). No weapons detected.",
+                                                  "metadata":  {
+                                                                   "error":  "‚ù?  Download failure for https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo11m.pt. Retry limit reached. Curl return value 23",
+                                                                   "degraded":  true,
+                                                                   "available":  false,
+                                                                   "tool_name":  "object_detection",
+                                                                   "confidence":  0.0,
+                                                                   "detections":  [
+
+                                                                                  ],
+                                                                   "uncertainty":  null,
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "Starting object and weapon analysis for e2d02fd5-8403-483b-b7d8-46d28d058b12. I will perform scene-wide object detection, lighting consistency checks, and search for any prohibited items or contextual anomalies.",
+                                                                   "analysis_phase":  "initial",
+                                                                   "detection_count":  0,
+                                                                   "fallback_reason":  "YOLO inference failed: ‚ù?  Download failure for https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo11m.pt. Retry limit reached. Curl return value 23",
+                                                                   "court_defensible":  false,
+                                                                   "confidence_interval":  null
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "45a3cb58-28b5-4671-af4a-86982fea486d",
+                                                  "agent_id":  "Agent3",
+                                                  "agent_name":  "Object Detection",
+                                                  "finding_type":  "Vector Contraband Search",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.0544,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  0.7091377483519988,
+                                                  "raw_confidence_score":  0.7091377483519988,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Vector Contraband Search: top match: a product or commercial image; confidence 0.054; concern flag: no; available: yes (+1 more).",
+                                                  "metadata":  {
+                                                                   "available":  true,
+                                                                   "tool_name":  "vector_contraband_search",
+                                                                   "top_match":  "a product or commercial image",
+                                                                   "confidence":  0.0544,
+                                                                   "uncertainty":  {
+                                                                                       "should_escalate":  false,
+                                                                                       "escalation_reason":  null,
+                                                                                       "total_uncertainty":  0.1595,
+                                                                                       "epistemic_fraction":  0.7954,
+                                                                                       "aleatoric_uncertainty":  0.1088,
+                                                                                       "epistemic_uncertainty":  0.1269
+                                                                                   },
+                                                                   "concern_flag":  false,
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "",
+                                                                   "analysis_phase":  "initial",
+                                                                   "court_defensible":  true,
+                                                                   "confidence_interval":  {
+                                                                                               "lower":  0.6208,
+                                                                                               "upper":  0.7803,
+                                                                                               "method":  "parametric_bootstrap_platt"
+                                                                                           }
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "bb5b9b16-3c27-4733-9bc2-4cd92a04c095",
+                                                  "agent_id":  "Agent3",
+                                                  "agent_name":  "Object Detection",
+                                                  "finding_type":  "Lighting Correlation Initial",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.16,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  0.6637386974043527,
+                                                  "raw_confidence_score":  0.6637386974043527,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Lighting Correlation Initial: lighting consistent: no; shadow angle std deg 61.250; dominant shadow angles deg: -87.0, -48.0, 68.0; highlight direction: -0.021, -0.021 (+3 more).",
+                                                  "metadata":  {
+                                                                   "available":  true,
+                                                                   "elapsed_s":  1.16,
+                                                                   "tool_name":  "lighting_analyzer",
+                                                                   "confidence":  0.16,
+                                                                   "uncertainty":  {
+                                                                                       "should_escalate":  false,
+                                                                                       "escalation_reason":  null,
+                                                                                       "total_uncertainty":  0.178,
+                                                                                       "epistemic_fraction":  0.4607,
+                                                                                       "aleatoric_uncertainty":  0.32,
+                                                                                       "epistemic_uncertainty":  0.082
+                                                                                   },
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "",
+                                                                   "analysis_phase":  "initial",
+                                                                   "court_defensible":  true,
+                                                                   "confidence_interval":  {
+                                                                                               "lower":  0.5692,
+                                                                                               "upper":  0.7472,
+                                                                                               "method":  "parametric_bootstrap_platt"
+                                                                                           },
+                                                                   "highlight_direction":  [
+                                                                                               -0.021,
+                                                                                               -0.021
+                                                                                           ],
+                                                                   "lighting_consistent":  false,
+                                                                   "shadow_angle_std_deg":  61.25,
+                                                                   "dominant_shadow_angles_deg":  [
+                                                                                                      -87.0,
+                                                                                                      -48.0,
+                                                                                                      68.0
+                                                                                                  ]
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "372d7041-63ed-49b8-9de3-b0616e63b7e8",
+                                                  "agent_id":  "Agent3",
+                                                  "agent_name":  "Object Detection",
+                                                  "finding_type":  "Scene Incongruence (CLIP)",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.55,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  null,
+                                                  "raw_confidence_score":  null,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Scene Incongruence: Scene noise coherence: 0 anomalous region(s) detected. Noise std across quadrants: 0.0 (mean: 0.0). ",
+                                                  "metadata":  {
+                                                                   "backend":  "heuristic-colour-grid",
+                                                                   "available":  true,
+                                                                   "tool_name":  "scene_incongruence",
+                                                                   "confidence":  0.55,
+                                                                   "uncertainty":  null,
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "",
+                                                                   "analysis_phase":  "initial",
+                                                                   "colour_variance":  0.0,
+                                                                   "court_defensible":  false,
+                                                                   "scene_incongruent":  false,
+                                                                   "confidence_interval":  null,
+                                                                   "grid_cells_analysed":  9
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "c0c205a2-97b8-45f1-8e3a-e9e0ead47982",
+                                                  "agent_id":  "Agent3",
+                                                  "agent_name":  "Object Detection",
+                                                  "finding_type":  "Secondary Object Classification",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.0858,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  0.6960165119895596,
+                                                  "raw_confidence_score":  0.6960165119895596,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Secondary Classification: Secondary CLIP classification of \u0027object\u0027: top match = \u0027unknown\u0027 (0%). No concern flag.",
+                                                  "metadata":  {
+                                                                   "available":  true,
+                                                                   "tool_name":  "secondary_classification",
+                                                                   "top_match":  "a product or commercial image",
+                                                                   "confidence":  0.0858,
+                                                                   "uncertainty":  {
+                                                                                       "should_escalate":  false,
+                                                                                       "escalation_reason":  null,
+                                                                                       "total_uncertainty":  0.1651,
+                                                                                       "epistemic_fraction":  0.6882,
+                                                                                       "aleatoric_uncertainty":  0.1716,
+                                                                                       "epistemic_uncertainty":  0.1136
+                                                                                   },
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "DEEP ANALYSIS PASS ‚?? Agent3_ObjectWeapon. Running 5 tools.",
+                                                                   "analysis_phase":  "deep",
+                                                                   "is_roi_specific":  false,
+                                                                   "court_defensible":  true,
+                                                                   "confidence_interval":  {
+                                                                                               "lower":  0.6047,
+                                                                                               "upper":  0.7698,
+                                                                                               "method":  "parametric_bootstrap_platt"
+                                                                                           }
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "7d3c0042-b86e-40dc-b6e8-81cae9450725",
+                                                  "agent_id":  "Agent3",
+                                                  "agent_name":  "Object Detection",
+                                                  "finding_type":  "Scale \u0026 Proportion Validation",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.4,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  0.5498339973124778,
+                                                  "raw_confidence_score":  0.5498339973124778,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Scale Validation: Scale/proportion analysis: consistent perspective angles. Line angle std: 0.0¬∞ across 0 lines.",
+                                                  "metadata":  {
+                                                                   "backend":  "heuristic-bbox-area",
+                                                                   "available":  true,
+                                                                   "tool_name":  "scale_validation",
+                                                                   "confidence":  0.4,
+                                                                   "uncertainty":  {
+                                                                                       "should_escalate":  false,
+                                                                                       "escalation_reason":  null,
+                                                                                       "total_uncertainty":  0.2375,
+                                                                                       "epistemic_fraction":  0.0,
+                                                                                       "aleatoric_uncertainty":  0.8,
+                                                                                       "epistemic_uncertainty":  0.0
+                                                                                   },
+                                                                   "stub_warning":  null,
+                                                                   "anomaly_count":  0,
+                                                                   "llm_reasoning":  "",
+                                                                   "analysis_phase":  "deep",
+                                                                   "objects_checked":  0,
+                                                                   "scale_anomalies":  [
+
+                                                                                       ],
+                                                                   "court_defensible":  true,
+                                                                   "scale_consistent":  true,
+                                                                   "confidence_interval":  {
+                                                                                               "lower":  0.4254,
+                                                                                               "upper":  0.6629,
+                                                                                               "method":  "parametric_bootstrap_platt"
+                                                                                           }
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "43a6c799-1fc9-4844-b4c2-a153791b9323",
+                                                  "agent_id":  "Agent3",
+                                                  "agent_name":  "Object Detection",
+                                                  "finding_type":  "Lighting \u0026 Shadow Consistency",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.16,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  0.6637386974043527,
+                                                  "raw_confidence_score":  0.6637386974043527,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Lighting Consistency: Lighting/shadow consistency: consistent across scene. ",
+                                                  "metadata":  {
+                                                                   "available":  true,
+                                                                   "elapsed_s":  0.01,
+                                                                   "tool_name":  "lighting_analyzer",
+                                                                   "confidence":  0.16,
+                                                                   "uncertainty":  {
+                                                                                       "should_escalate":  false,
+                                                                                       "escalation_reason":  null,
+                                                                                       "total_uncertainty":  0.1826,
+                                                                                       "epistemic_fraction":  0.4743,
+                                                                                       "aleatoric_uncertainty":  0.32,
+                                                                                       "epistemic_uncertainty":  0.0866
+                                                                                   },
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "",
+                                                                   "analysis_phase":  "deep",
+                                                                   "court_defensible":  true,
+                                                                   "confidence_interval":  {
+                                                                                               "lower":  0.562,
+                                                                                               "upper":  0.7446,
+                                                                                               "method":  "parametric_bootstrap_platt"
+                                                                                           },
+                                                                   "highlight_direction":  [
+                                                                                               -0.021,
+                                                                                               -0.021
+                                                                                           ],
+                                                                   "lighting_consistent":  false,
+                                                                   "shadow_angle_std_deg":  61.25,
+                                                                   "dominant_shadow_angles_deg":  [
+                                                                                                      -87.0,
+                                                                                                      -48.0,
+                                                                                                      68.0
+                                                                                                  ]
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "d1978eb8-f57c-4516-87e9-f1c224c99bd2",
+                                                  "agent_id":  "Agent3",
+                                                  "agent_name":  "Object Detection",
+                                                  "finding_type":  "Adversarial Robustness Check",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.882,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  0.3177784535993239,
+                                                  "raw_confidence_score":  0.3177784535993239,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Adversarial Robustness Check: Adversarial robustness: Findings are stable under perturbation ‚?? robust. Method: ELA perturbation stability.",
+                                                  "metadata":  {
+                                                                   "note":  "Stable ELA response confirms findings are robust.",
+                                                                   "method":  "ELA perturbation stability",
+                                                                   "status":  "real",
+                                                                   "tool_name":  "adversarial_robustness_check",
+                                                                   "confidence":  0.882,
+                                                                   "uncertainty":  {
+                                                                                       "should_escalate":  true,
+                                                                                       "escalation_reason":  "UNCALIBRATED model with high total uncertainty (0.340). Epistemic fraction: 79.2%. Calibration parameters are engineering defaults ‚?? confidence is unreliable. Human review recommended before proceeding.",
+                                                                                       "total_uncertainty":  0.3401,
+                                                                                       "epistemic_fraction":  0.7918,
+                                                                                       "aleatoric_uncertainty":  0.236,
+                                                                                       "epistemic_uncertainty":  0.2693
+                                                                                   },
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "",
+                                                                   "analysis_phase":  "deep",
+                                                                   "court_defensible":  true,
+                                                                   "evasion_threshold":  4.0,
+                                                                   "original_ela_mean":  2.2669,
+                                                                   "confidence_interval":  {
+                                                                                               "lower":  0.171,
+                                                                                               "upper":  0.5111,
+                                                                                               "method":  "parametric_bootstrap_platt"
+                                                                                           },
+                                                                   "perturbation_deltas":  {
+                                                                                               "double_jpeg":  0.8308,
+                                                                                               "colour_jitter":  1.0929,
+                                                                                               "gaussian_noise":  1.0685
+                                                                                           },
+                                                                   "adversarial_pattern_detected":  false
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "61245df1-3dd3-4392-933a-533748c9ad33",
+                                                  "agent_id":  "Agent3",
+                                                  "agent_name":  "Object Detection",
+                                                  "finding_type":  "Gemini Deep Forensic Analysis",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.5,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  null,
+                                                  "raw_confidence_score":  null,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Gemini Deep Forensic: Gemini deep forensic complete. Content: unidentified content. Scene: Visual analysis complete.. No specific objects identified. No text found in image. No manipulation signals detected.",
+                                                  "metadata":  {
+                                                                   "caveat":  "Gemini vision analysis ‚?? LLM-derived, requires corroboration with deterministic tools.",
+                                                                   "status":  "CONFIRMED",
+                                                                   "agent_id":  "Agent3",
+                                                                   "metadata":  {
+                                                                                    "tool_name":  "gemini_deep_forensic",
+                                                                                    "latency_ms":  14528.8,
+                                                                                    "model_used":  "gemini-2.5-flash",
+                                                                                    "analysis_type":  "deep_forensic_analysis",
+                                                                                    "analysis_phase":  "deep",
+                                                                                    "extracted_text":  [
+
+                                                                                                       ],
+                                                                                    "analysis_source":  "gemini_vision",
+                                                                                    "detected_objects":  [
+
+                                                                                                         ],
+                                                                                    "deepfake_detected":  false,
+                                                                                    "authenticity_verdict":  "CANNOT_DETERMINE",
+                                                                                    "contextual_anomalies":  [
+
+                                                                                                             ],
+                                                                                    "contextual_narrative":  "This file is identified as a generic binary stream (application/octet-stream) and contains no visual data. Consequently, its content, purpose, or any depicted event cannot be determined through visual analysis. While some automated tools report potential manipulation signals related to lighting and splicing, these claims cannot be visually verified due to the absence of visual content, rendering their significance unknown.",
+                                                                                    "file_type_assessment":  "Generic binary file (application/octet-stream). No visual content is present for specific classification.",
+                                                                                    "manipulation_signals":  [
+                                                                                                                 "The \u0027lighting_correlation_initial\u0027 and \u0027lighting_consistency\u0027 tools report \u0027lighting_consistent: false\u0027 with a high shadow angle standard deviation (61.25 deg), suggesting inconsistent lighting. However, these findings cannot be visually confirmed as no visual content is present.",
+                                                                                                                 "The \u0027gemini_deep_forensic\u0027 tool reports \u0027Neural splicing detected (confidence: 0.618)\u0027 and \u0027Splicing detected (confidence: 0.618)\u0027. These manipulation signals cannot be visually confirmed as no visual content is present."
+                                                                                                             ],
+                                                                                    "manipulation_detected":  false,
+                                                                                    "interface_identification":  "No visual content is present in this file. Therefore, no interface can be identified.",
+                                                                                    "metadata_visual_consistency":  "No visual content provided for cross-validation against metadata claims."
+                                                                                },
+                                                                   "tool_name":  "gemini_deep_forensic",
+                                                                   "stub_result":  false,
+                                                                   "uncertainty":  null,
+                                                                   "finding_type":  "gemini_vision_deep_forensic_analysis",
+                                                                   "stub_warning":  null,
+                                                                   "evidence_refs":  [
+
+                                                                                     ],
+                                                                   "llm_reasoning":  "",
+                                                                   "analysis_phase":  "deep",
+                                                                   "confidence_raw":  0.95,
+                                                                   "court_defensible":  true,
+                                                                   "reasoning_summary":  "Interface: No visual content is present in this file. Therefore, no interface can be identified. | No visual content is present in this file. Therefore, no scene can be described. | This file is identified as a generic binary stream (application/octet-stream) and contains no visual data. Consequently, its content, purpose, or any depicted event cannot be determined through visual analysis. While some automated tools report potential manipulation signals related to lighting and splicing, these claims cannot be visually verified due to the absence of visual content, rendering their significance unknown. | Manipulation signals: The \u0027lighting_correlation_initial\u0027 and \u0027lighting_consistency\u0027 tools report \u0027lighting_consistent: false\u0027 with a high shadow angle standard deviation (61.25 deg), suggesting inconsistent lighting. However, these findings cannot be visually confirmed as no visual content is present.; The \u0027gemini_deep_forensic\u0027 tool reports \u0027Neural splicing detected (confidence: 0.618)\u0027 and \u0027Splicing detected (confidence: 0.618)\u0027. These manipulation signals cannot be visually confirmed as no visual content is present.",
+                                                                   "confidence_interval":  null
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              }
+                                          ],
+                               "Agent4":  [
+
+                                          ],
+                               "Agent5":  [
+                                              {
+                                                  "finding_id":  "7c8bb0e3-3bc2-450a-9253-41563017126b",
+                                                  "agent_id":  "Agent5",
+                                                  "agent_name":  "Metadata Forensics",
+                                                  "finding_type":  "Provenance Chain Verify",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.5,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  null,
+                                                  "raw_confidence_score":  null,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Provenance Chain Verify: available: yes; provenance found: no; chain intact: no; anomalies: No C2PA or cryptographic provenance chain found in file metadata.",
+                                                  "metadata":  {
+                                                                   "issuer":  null,
+                                                                   "anomalies":  [
+                                                                                     "No C2PA or cryptographic provenance chain found in file metadata"
+                                                                                 ],
+                                                                   "available":  true,
+                                                                   "tool_name":  "provenance_chain_verify",
+                                                                   "uncertainty":  null,
+                                                                   "chain_intact":  false,
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "Starting metadata and context analysis for e2d02fd5-8403-483b-b7d8-46d28d058b12. I will extract all available EXIF data, validate GPS-timestamp consistency, and analyze the file structure for any signs of fabrication or steganography.",
+                                                                   "analysis_phase":  "initial",
+                                                                   "signature_valid":  null,
+                                                                   "court_defensible":  false,
+                                                                   "provenance_found":  false,
+                                                                   "confidence_interval":  null
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "c994b3a9-bf58-41f9-9cfd-e809c8fdb773",
+                                                  "agent_id":  "Agent5",
+                                                  "agent_name":  "Metadata Forensics",
+                                                  "finding_type":  "EXIF Metadata Extraction",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.4,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  0.5498339973124778,
+                                                  "raw_confidence_score":  0.5498339973124778,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Exif Extract: File: unknown () ¬∑ . Device: not recorded. Capture time: not in EXIF. GPS: Absent. 0 EXIF field(s) extracted. All mandatory EXIF fields present.",
+                                                  "metadata":  {
+                                                                   "has_exif":  true,
+                                                                   "tool_name":  "exif_extract",
+                                                                   "uncertainty":  {
+                                                                                       "should_escalate":  false,
+                                                                                       "escalation_reason":  null,
+                                                                                       "total_uncertainty":  0.2391,
+                                                                                       "epistemic_fraction":  0.0,
+                                                                                       "aleatoric_uncertainty":  0.8,
+                                                                                       "epistemic_uncertainty":  0.0
+                                                                                   },
+                                                                   "device_model":  null,
+                                                                   "stub_warning":  null,
+                                                                   "absent_fields":  [
+                                                                                         "ImageDescription",
+                                                                                         "Orientation",
+                                                                                         "XResolution",
+                                                                                         "YResolution",
+                                                                                         "ResolutionUnit",
+                                                                                         "DateTime",
+                                                                                         "YCbCrPositioning",
+                                                                                         "ExposureTime",
+                                                                                         "FNumber",
+                                                                                         "ExposureProgram",
+                                                                                         "ISOSpeedRatings",
+                                                                                         "ExifVersion",
+                                                                                         "DateTimeDigitized",
+                                                                                         "ComponentsConfiguration",
+                                                                                         "ShutterSpeedValue",
+                                                                                         "ApertureValue",
+                                                                                         "BrightnessValue",
+                                                                                         "ExposureBiasValue",
+                                                                                         "MaxApertureValue",
+                                                                                         "MeteringMode",
+                                                                                         "LightSource",
+                                                                                         "Flash",
+                                                                                         "FocalLength",
+                                                                                         "GPSLatitudeRef",
+                                                                                         "GPSLatitude",
+                                                                                         "GPSLongitudeRef",
+                                                                                         "GPSLongitude",
+                                                                                         "GPSAltitudeRef",
+                                                                                         "GPSAltitude",
+                                                                                         "GPSTimeStamp",
+                                                                                         "GPSDateStamp",
+                                                                                         "ColorSpace",
+                                                                                         "SensingMethod",
+                                                                                         "SceneCaptureType",
+                                                                                         "WhiteBalance",
+                                                                                         "DigitalZoomRatio",
+                                                                                         "FocalLengthIn35mmFilm",
+                                                                                         "Contrast",
+                                                                                         "Saturation",
+                                                                                         "Sharpness"
+                                                                                     ],
+                                                                   "llm_reasoning":  "",
+                                                                   "analysis_phase":  "initial",
+                                                                   "present_fields":  {
+                                                                                          "Make":  "Generic",
+                                                                                          "Model":  "Stripped Device",
+                                                                                          "Software":  "OS File System",
+                                                                                          "ExifImageWidth":  96,
+                                                                                          "ExifImageHeight":  96,
+                                                                                          "DateTimeOriginal":  "2026:04:20 16:44:49"
+                                                                                      },
+                                                                   "gps_coordinates":  null,
+                                                                   "total_exif_tags":  9,
+                                                                   "court_defensible":  true,
+                                                                   "confidence_interval":  {
+                                                                                               "lower":  0.4262,
+                                                                                               "upper":  0.6653,
+                                                                                               "method":  "parametric_bootstrap_platt"
+                                                                                           }
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "b63f5fc4-1037-4c93-9916-3241e42a7c73",
+                                                  "agent_id":  "Agent5",
+                                                  "agent_name":  "Metadata Forensics",
+                                                  "finding_type":  "Compression Risk Audit",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.5,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  null,
+                                                  "raw_confidence_score":  null,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Compression Risk Audit: available: yes; compression risk 0.000; compression penalty 1.000; forensic reliability impact: NONE.",
+                                                  "metadata":  {
+                                                                   "available":  true,
+                                                                   "tool_name":  "compression_risk_audit",
+                                                                   "uncertainty":  null,
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "",
+                                                                   "analysis_phase":  "initial",
+                                                                   "compression_risk":  0.0,
+                                                                   "court_defensible":  false,
+                                                                   "detected_platform":  null,
+                                                                   "compression_penalty":  1.0,
+                                                                   "confidence_interval":  null,
+                                                                   "forensic_reliability_impact":  "NONE"
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "9cb91a27-f3a2-485d-903a-47e4315c5c4c",
+                                                  "agent_id":  "Agent5",
+                                                  "agent_name":  "Metadata Forensics",
+                                                  "finding_type":  "Exif Isolation Forest",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.8,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  0.35434369377420455,
+                                                  "raw_confidence_score":  0.35434369377420455,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Exif Isolation Forest: tampering score 0.200; rule violations: No EXIF data present ‚?? stripped or never written; field anomaly score 0.150; verdict: SUSPICIOUS (+4 more).",
+                                                  "metadata":  {
+                                                                   "verdict":  "SUSPICIOUS",
+                                                                   "available":  true,
+                                                                   "elapsed_s":  0.08,
+                                                                   "tool_name":  "metadata_anomaly_scorer",
+                                                                   "field_count":  0,
+                                                                   "uncertainty":  {
+                                                                                       "should_escalate":  true,
+                                                                                       "escalation_reason":  "UNCALIBRATED model with high total uncertainty (0.336). Epistemic fraction: 64.3%. Calibration parameters are engineering defaults ‚?? confidence is unreliable. Human review recommended before proceeding.",
+                                                                                       "total_uncertainty":  0.3358,
+                                                                                       "epistemic_fraction":  0.6426,
+                                                                                       "aleatoric_uncertainty":  0.4,
+                                                                                       "epistemic_uncertainty":  0.2158
+                                                                                   },
+                                                                   "exif_present":  false,
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "",
+                                                                   "analysis_phase":  "initial",
+                                                                   "rule_violations":  [
+                                                                                           "No EXIF data present ‚?? stripped or never written"
+                                                                                       ],
+                                                                   "tampering_score":  0.2,
+                                                                   "court_defensible":  true,
+                                                                   "software_detected":  [
+
+                                                                                         ],
+                                                                   "confidence_interval":  {
+                                                                                               "lower":  0.2069,
+                                                                                               "upper":  0.5427,
+                                                                                               "method":  "parametric_bootstrap_platt"
+                                                                                           },
+                                                                   "field_anomaly_score":  0.15
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "b5624bad-6a27-4de8-9067-1111dbb6d89b",
+                                                  "agent_id":  "Agent5",
+                                                  "agent_name":  "Metadata Forensics",
+                                                  "finding_type":  "Astro Grounding",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.5,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  null,
+                                                  "raw_confidence_score":  null,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Astro Grounding: available: no; note: Astro grounding requires valid GPS and Timestamp in EXIF..",
+                                                  "metadata":  {
+                                                                   "note":  "Astro grounding requires valid GPS and Timestamp in EXIF.",
+                                                                   "available":  false,
+                                                                   "tool_name":  "astro_grounding",
+                                                                   "uncertainty":  null,
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "",
+                                                                   "analysis_phase":  "initial",
+                                                                   "court_defensible":  false,
+                                                                   "confidence_interval":  null
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "50ed54de-5b7e-4fa5-850c-3cc83652d177",
+                                                  "agent_id":  "Agent5",
+                                                  "agent_name":  "Metadata Forensics",
+                                                  "finding_type":  "GPS-Timezone Validation",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.5,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  null,
+                                                  "raw_confidence_score":  null,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Gps Timezone Validate: GPS-timestamp timezone cross-validation passed. Timezone: N/A.",
+                                                  "metadata":  {
+                                                                   "available":  false,
+                                                                   "tool_name":  "gps_timezone_validate",
+                                                                   "uncertainty":  null,
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "",
+                                                                   "analysis_phase":  "initial",
+                                                                   "court_defensible":  false,
+                                                                   "confidence_interval":  null
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "f5afd779-f866-4cab-a11b-1f5ae9fea58d",
+                                                  "agent_id":  "Agent5",
+                                                  "agent_name":  "Metadata Forensics",
+                                                  "finding_type":  "Timestamp Consistency Analysis",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.5,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  null,
+                                                  "raw_confidence_score":  null,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Timestamp Analysis: Timestamp cross-check found 0 inconsistency(ies). All timestamps are consistent.",
+                                                  "metadata":  {
+                                                                   "tool_name":  "timestamp_analysis",
+                                                                   "uncertainty":  null,
+                                                                   "file_created":  "2026-04-20T16:44:49.021183+00:00",
+                                                                   "stub_warning":  null,
+                                                                   "file_modified":  "2026-04-20T16:44:49.021183+00:00",
+                                                                   "llm_reasoning":  "",
+                                                                   "analysis_phase":  "initial",
+                                                                   "exif_timestamps":  {
+
+                                                                                       },
+                                                                   "inconsistencies":  [
+
+                                                                                       ],
+                                                                   "court_defensible":  false,
+                                                                   "confidence_interval":  null
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "2d25559b-1731-49e7-b8df-a7dca048b8ec",
+                                                  "agent_id":  "Agent5",
+                                                  "agent_name":  "Metadata Forensics",
+                                                  "finding_type":  "Steganography Scan",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.0,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  0.7310585786300049,
+                                                  "raw_confidence_score":  0.7310585786300049,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Steganography Scan: LSB steganography scan: no hidden data found. LSB deviation from random: 0.1987.",
+                                                  "metadata":  {
+                                                                   "method":  "LSB_statistical_analysis",
+                                                                   "tool_name":  "steganography_scan",
+                                                                   "confidence":  0.0,
+                                                                   "uncertainty":  {
+                                                                                       "should_escalate":  true,
+                                                                                       "escalation_reason":  "High epistemic uncertainty (0.154, 100.0% of total). Model uncertainty dominates ‚?? the detector lacks sufficient information. Escalating to human-in-the-loop review per \u0027Don\u0027t Guess, Escalate\u0027 protocol.",
+                                                                                       "total_uncertainty":  0.1537,
+                                                                                       "epistemic_fraction":  1.0,
+                                                                                       "aleatoric_uncertainty":  0.0,
+                                                                                       "epistemic_uncertainty":  0.1537
+                                                                                   },
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "",
+                                                                   "analysis_phase":  "deep",
+                                                                   "lsb_statistics":  {
+                                                                                          "proportion_ones":  {
+                                                                                                                  "red":  0.6970486111111112,
+                                                                                                                  "blue":  0.6998697916666666,
+                                                                                                                  "green":  0.69921875
+                                                                                                              },
+                                                                                          "transition_ratio":  0.018494152046783625,
+                                                                                          "average_deviation":  0.19871238425925927,
+                                                                                          "deviation_from_random":  {
+                                                                                                                        "red":  0.19704861111111116,
+                                                                                                                        "blue":  0.19986979166666663,
+                                                                                                                        "green":  0.19921875
+                                                                                                                    }
+                                                                                      },
+                                                                   "skipped_reason":  "LSB steganography analysis not applicable to lossless/digital images ‚?? naturally non-random pixel patterns produce unreliable results.",
+                                                                   "stego_suspected":  false,
+                                                                   "court_defensible":  true,
+                                                                   "confidence_interval":  {
+                                                                                               "lower":  0.6497,
+                                                                                               "upper":  0.8034,
+                                                                                               "method":  "parametric_bootstrap_platt"
+                                                                                           }
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "5df5e663-b872-4337-8671-2fb3c53d0d45",
+                                                  "agent_id":  "Agent5",
+                                                  "agent_name":  "Metadata Forensics",
+                                                  "finding_type":  "Metadata Anomaly Score (ML)",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.8,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  0.35434369377420455,
+                                                  "raw_confidence_score":  0.35434369377420455,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Metadata Anomaly Score: ML anomaly score: 0.000 (within normal range). ",
+                                                  "metadata":  {
+                                                                   "verdict":  "SUSPICIOUS",
+                                                                   "available":  true,
+                                                                   "elapsed_s":  0.0,
+                                                                   "tool_name":  "metadata_anomaly_scorer",
+                                                                   "field_count":  0,
+                                                                   "uncertainty":  {
+                                                                                       "should_escalate":  true,
+                                                                                       "escalation_reason":  "UNCALIBRATED model with high total uncertainty (0.334). Epistemic fraction: 64.1%. Calibration parameters are engineering defaults ‚?? confidence is unreliable. Human review recommended before proceeding.",
+                                                                                       "total_uncertainty":  0.3341,
+                                                                                       "epistemic_fraction":  0.6408,
+                                                                                       "aleatoric_uncertainty":  0.4,
+                                                                                       "epistemic_uncertainty":  0.2141
+                                                                                   },
+                                                                   "exif_present":  false,
+                                                                   "stub_warning":  null,
+                                                                   "llm_reasoning":  "",
+                                                                   "analysis_phase":  "deep",
+                                                                   "rule_violations":  [
+                                                                                           "No EXIF data present ‚?? stripped or never written"
+                                                                                       ],
+                                                                   "tampering_score":  0.2,
+                                                                   "court_defensible":  true,
+                                                                   "software_detected":  [
+
+                                                                                         ],
+                                                                   "confidence_interval":  {
+                                                                                               "lower":  0.205,
+                                                                                               "upper":  0.5391,
+                                                                                               "method":  "parametric_bootstrap_platt"
+                                                                                           },
+                                                                   "field_anomaly_score":  0.15
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "6a2b9687-f5b7-4aba-b3c3-a7ef0d099e0b",
+                                                  "agent_id":  "Agent5",
+                                                  "agent_name":  "",
+                                                  "finding_type":  "Unmatched Task: Run device_fingerprint_db against claimed device model",
+                                                  "status":  "INCOMPLETE",
+                                                  "confidence_raw":  0.0,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  null,
+                                                  "raw_confidence_score":  null,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "No forensic tool is registered for this task: \u0027Run device_fingerprint_db against claimed device model\u0027. Ensure the tool is registered in build_tool_registry() and mapped in task_tool_overrides.yaml.",
+                                                  "metadata":  {
+                                                                   "tool_name":  "no_matching_tool",
+                                                                   "analysis_phase":  "deep",
+                                                                   "court_defensible":  false,
+                                                                   "task_description":  "Run device_fingerprint_db against claimed device model"
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              },
+                                              {
+                                                  "finding_id":  "56a3e474-2a08-457d-849a-370e803c4c74",
+                                                  "agent_id":  "Agent5",
+                                                  "agent_name":  "Metadata Forensics",
+                                                  "finding_type":  "Gemini Deep Forensic Analysis",
+                                                  "status":  "CONFIRMED",
+                                                  "confidence_raw":  0.5,
+                                                  "calibrated":  false,
+                                                  "calibrated_probability":  null,
+                                                  "raw_confidence_score":  null,
+                                                  "calibration_status":  "UNCALIBRATED",
+                                                  "court_statement":  null,
+                                                  "robustness_caveat":  false,
+                                                  "robustness_caveat_detail":  null,
+                                                  "reasoning_summary":  "Gemini Deep Forensic: Gemini deep forensic complete. Content: unidentified content. Scene: Visual analysis complete.. No specific objects identified. No text found in image. No manipulation signals detected.",
+                                                  "metadata":  {
+                                                                   "caveat":  "[Fallback: gemini-2.5-flash-lite ‚?? primary gemini-2.5-flash unavailable] Gemini vision analysis ‚?? LLM-derived, requires corroboration with deterministic tools.",
+                                                                   "status":  "CONFIRMED",
+                                                                   "agent_id":  "Agent5",
+                                                                   "metadata":  {
+                                                                                    "tool_name":  "gemini_deep_forensic",
+                                                                                    "latency_ms":  6628.5,
+                                                                                    "model_used":  "gemini-2.5-flash-lite",
+                                                                                    "analysis_type":  "deep_forensic_analysis",
+                                                                                    "analysis_phase":  "deep",
+                                                                                    "extracted_text":  [
+                                                                                                           "¬©)\n"
+                                                                                                       ],
+                                                                                    "analysis_source":  "gemini_vision",
+                                                                                    "detected_objects":  [
+                                                                                                             "Visual content is not available for analysis."
+                                                                                                         ],
+                                                                                    "deepfake_detected":  false,
+                                                                                    "authenticity_verdict":  "CANNOT_DETERMINE",
+                                                                                    "contextual_anomalies":  [
+
+                                                                                                             ],
+                                                                                    "contextual_narrative":  "The file\u0027s content and nature cannot be determined due to the complete absence of visual data. While some metadata suggests potential manipulation signals (splicing), this cannot be verified without the actual visual content. The lack of EXIF data further complicates any forensic assessment.",
+                                                                                    "file_type_assessment":  "Undetermined: No visual content provided for analysis.",
+                                                                                    "manipulation_signals":  [
+                                                                                                                 "No C2PA or cryptographic provenance chain found in file metadata",
+                                                                                                                 "No EXIF data present ‚?? stripped or never written",
+                                                                                                                 "Neural splicing detected (confidence: 0.618)",
+                                                                                                                 "Splicing detected (confidence: 0.618)"
+                                                                                                             ],
+                                                                                    "manipulation_detected":  false,
+                                                                                    "interface_identification":  "Visual content is not available for analysis.",
+                                                                                    "metadata_visual_consistency":  "No visual content provided for cross-validation against metadata claims."
+                                                                                },
+                                                                   "tool_name":  "gemini_deep_forensic",
+                                                                   "stub_result":  false,
+                                                                   "uncertainty":  null,
+                                                                   "finding_type":  "gemini_vision_deep_forensic_analysis",
+                                                                   "stub_warning":  null,
+                                                                   "evidence_refs":  [
+
+                                                                                     ],
+                                                                   "llm_reasoning":  "Task \u0027Run device_fingerprint_db against claimed device model\u0027 has no matching tool. Recorded as INCOMPLETE finding and moving on.",
+                                                                   "analysis_phase":  "deep",
+                                                                   "confidence_raw":  0.98,
+                                                                   "analysis_source":  "gemini_vision",
+                                                                   "court_defensible":  true,
+                                                                   "reasoning_summary":  "Interface: Visual content is not available for analysis. | No visual content is available for analysis. The file is described as a non-visual file with a generic MIME type of application/octet-stream. | The file\u0027s content and nature cannot be determined due to the complete absence of visual data. While some metadata suggests potential manipulation signals (splicing), this cannot be verified without the actual visual content. The lack of EXIF data further complicates any forensic assessment. | Manipulation signals: No C2PA or cryptographic provenance chain found in file metadata; No EXIF data present ‚?? stripped or never written; Neural splicing detected (confidence: 0.618)",
+                                                                   "confidence_interval":  null
+                                                               },
+                                                  "severity_tier":  "LOW"
+                                              }
+                                          ]
+                           },
+    "per_agent_metrics":  {
+                              "Agent1":  {
+                                             "skipped":  false,
+                                             "agent_id":  "Agent1",
+                                             "agent_name":  "Image Forensics",
+                                             "error_rate":  0.364,
+                                             "tools_failed":  4,
+                                             "finding_count":  11,
+                                             "tools_succeeded":  7,
+                                             "confidence_score":  0.562,
+                                             "deep_finding_count":  0,
+                                             "total_tools_called":  11,
+                                             "tools_not_applicable":  0
+                                         },
+                              "Agent2":  {
+                                             "skipped":  true,
+                                             "agent_id":  "Agent2",
+                                             "agent_name":  "Audio Forensics",
+                                             "error_rate":  0.0,
+                                             "tools_failed":  0,
+                                             "finding_count":  0,
+                                             "tools_succeeded":  0,
+                                             "confidence_score":  0.0,
+                                             "deep_finding_count":  0,
+                                             "total_tools_called":  0,
+                                             "tools_not_applicable":  0
+                                         },
+                              "Agent3":  {
+                                             "skipped":  false,
+                                             "agent_id":  "Agent3",
+                                             "agent_name":  "Object Detection",
+                                             "error_rate":  0.222,
+                                             "tools_failed":  2,
+                                             "finding_count":  9,
+                                             "tools_succeeded":  7,
+                                             "confidence_score":  0.32,
+                                             "deep_finding_count":  0,
+                                             "total_tools_called":  9,
+                                             "tools_not_applicable":  0
+                                         },
+                              "Agent4":  {
+                                             "skipped":  true,
+                                             "agent_id":  "Agent4",
+                                             "agent_name":  "Video Forensics",
+                                             "error_rate":  0.0,
+                                             "tools_failed":  0,
+                                             "finding_count":  0,
+                                             "tools_succeeded":  0,
+                                             "confidence_score":  0.0,
+                                             "deep_finding_count":  0,
+                                             "total_tools_called":  0,
+                                             "tools_not_applicable":  0
+                                         },
+                              "Agent5":  {
+                                             "skipped":  false,
+                                             "agent_id":  "Agent5",
+                                             "agent_name":  "Metadata Forensics",
+                                             "error_rate":  0.545,
+                                             "tools_failed":  6,
+                                             "finding_count":  11,
+                                             "tools_succeeded":  5,
+                                             "confidence_score":  0.646,
+                                             "deep_finding_count":  0,
+                                             "total_tools_called":  11,
+                                             "tools_not_applicable":  0
+                                         }
+                          },
+    "per_agent_analysis":  {
+
+                           },
+    "overall_confidence":  0.495,
+    "overall_error_rate":  0.387,
+    "overall_verdict":  "INCONCLUSIVE",
+    "cross_modal_confirmed":  [
+
+                              ],
+    "contested_findings":  [
+
+                           ],
+    "tribunal_resolved":  [
+
+                          ],
+    "incomplete_findings":  [
+                                {
+                                    "finding_id":  "942c339b-232f-4b03-85e6-90e49e3e33ed",
+                                    "agent_id":  "Agent1",
+                                    "agent_name":  "Image Forensics",
+                                    "finding_type":  "Gemini Deep Forensic Analysis",
+                                    "status":  "INCOMPLETE",
+                                    "confidence_raw":  0.5,
+                                    "calibrated":  false,
+                                    "calibrated_probability":  null,
+                                    "raw_confidence_score":  null,
+                                    "calibration_status":  "UNCALIBRATED",
+                                    "court_statement":  null,
+                                    "robustness_caveat":  false,
+                                    "robustness_caveat_detail":  null,
+                                    "reasoning_summary":  "Gemini Deep Forensic: Gemini deep forensic complete. Content: unidentified content. Scene: Visual analysis complete.. No specific objects identified. No text found in image. No manipulation signals detected.",
+                                    "metadata":  {
+                                                     "caveat":  "[Fallback: gemini-2.5-flash-lite ‚?? primary gemini-2.5-flash unavailable] Gemini vision analysis ‚?? LLM-derived, requires corroboration with deterministic tools.",
+                                                     "status":  "INCOMPLETE",
+                                                     "agent_id":  "Agent1",
+                                                     "metadata":  {
+                                                                      "tool_name":  "gemini_deep_forensic",
+                                                                      "latency_ms":  6173.2,
+                                                                      "model_used":  "gemini-2.5-flash-lite",
+                                                                      "analysis_type":  "deep_forensic_analysis",
+                                                                      "analysis_phase":  "deep",
+                                                                      "extracted_text":  [
+                                                                                             "¬©)\n"
+                                                                                         ],
+                                                                      "analysis_source":  "gemini_vision",
+                                                                      "detected_objects":  [
+                                                                                               "Visual content is not available for analysis."
+                                                                                           ],
+                                                                      "deepfake_detected":  false,
+                                                                      "authenticity_verdict":  "CANNOT_DETERMINE",
+                                                                      "contextual_anomalies":  [
+
+                                                                                               ],
+                                                                      "contextual_narrative":  "The file\u0027s content cannot be determined due to the absence of visual data. The available metadata suggests a potential manipulation signal related to splicing, but without the visual context, its significance or the nature of the file remains unknown. The file hash has been verified, indicating data integrity at the file level.",
+                                                                      "file_type_assessment":  "Undetermined: MIME type is generic (application/octet-stream) and visual content is not provided for analysis.",
+                                                                      "manipulation_signals":  [
+                                                                                                   "Neural splicing detected (confidence: 0.618)",
+                                                                                                   "Splicing detected (confidence: 0.618)"
+                                                                                               ],
+                                                                      "manipulation_detected":  false,
+                                                                      "interface_identification":  "Visual content is not available for analysis.",
+                                                                      "metadata_visual_consistency":  "No visual content provided for cross-validation against metadata claims."
+                                                                  },
+                                                     "tool_name":  "gemini_deep_forensic",
+                                                     "stub_result":  false,
+                                                     "uncertainty":  null,
+                                                     "finding_type":  "gemini_vision_deep_forensic_analysis",
+                                                     "stub_warning":  null,
+                                                     "evidence_refs":  [
+
+                                                                       ],
+                                                     "llm_reasoning":  "",
+                                                     "analysis_phase":  "deep",
+                                                     "confidence_raw":  0.1,
+                                                     "analysis_source":  "gemini_vision",
+                                                     "court_defensible":  true,
+                                                     "reasoning_summary":  "Interface: Visual content is not available for analysis. | Visual content is not available for analysis. The provided metadata indicates minimal extracted text, consisting only of a copyright symbol and a closing parenthesis. | The file\u0027s content cannot be determined due to the absence of visual data. The available metadata suggests a potential manipulation signal related to splicing, but without the visual context, its significance or the nature of the file remains unknown. The file hash has been verified, indicating data integrity at the file level. | Manipulation signals: Neural splicing detected (confidence: 0.618); Splicing detected (confidence: 0.618)",
+                                                     "confidence_interval":  null
+                                                 },
+                                    "severity_tier":  "LOW"
+                                },
+                                {
+                                    "finding_id":  "6a2b9687-f5b7-4aba-b3c3-a7ef0d099e0b",
+                                    "agent_id":  "Agent5",
+                                    "agent_name":  "",
+                                    "finding_type":  "Unmatched Task: Run device_fingerprint_db against claimed device model",
+                                    "status":  "INCOMPLETE",
+                                    "confidence_raw":  0.0,
+                                    "calibrated":  false,
+                                    "calibrated_probability":  null,
+                                    "raw_confidence_score":  null,
+                                    "calibration_status":  "UNCALIBRATED",
+                                    "court_statement":  null,
+                                    "robustness_caveat":  false,
+                                    "robustness_caveat_detail":  null,
+                                    "reasoning_summary":  "No forensic tool is registered for this task: \u0027Run device_fingerprint_db against claimed device model\u0027. Ensure the tool is registered in build_tool_registry() and mapped in task_tool_overrides.yaml.",
+                                    "metadata":  {
+                                                     "tool_name":  "no_matching_tool",
+                                                     "analysis_phase":  "deep",
+                                                     "court_defensible":  false,
+                                                     "task_description":  "Run device_fingerprint_db against claimed device model"
+                                                 },
+                                    "severity_tier":  "LOW"
+                                }
+                            ],
+    "uncertainty_statement":  "The evidential value of this report is limited by incomplete findings in 2 instances, where unavailable tools or insufficient evidence precluded definitive conclusions. Additionally, an overall tool error rate of 38.7% across active agents introduces a degree of uncertainty, potentially impacting the reliability of the results. This uncertainty may affect the weight afforded to the report\u0027s findings in subsequent proceedings.",
+    "cryptographic_signature":  "3045022064ad25917620f2fdfb59ddaf15a77b76d2b82ee9f0d29969d9c175295d26c39c0221008c59ba2c1ae7520e90c8e2530f4aca6a6faaffd4daf8e11db3897d7286cdfcc2",
+    "report_hash":  "6c954b6d786f3b8148214e50c275b24a498d98c3044ed5e6be0d92a0416c62e0",
+    "signed_utc":  "2026-04-20T16:46:30.286923Z",
+    "verdict_sentence":  "Inconclusive due to low confidence",
+    "key_findings":  [
+                         "Frequency domain analysis showed no anomalies",
+                         "Adversarial robustness check found stable results",
+                         "Diffusion artifact detection indicated natural origin"
+                     ],
+    "reliability_note":  "50% confidence, 39% error rate",
+    "manipulation_probability":  0.287,
+    "confidence_min":  0.32,
+    "confidence_max":  0.646,
+    "confidence_std_dev":  0.13820114165793118,
+    "applicable_agent_count":  3,
+    "skipped_agents":  {
+
+                       },
+    "analysis_coverage_note":  "12 of 31 tools failed; 1 tools used simplified fallbacks",
+    "per_agent_summary":  {
+                              "Agent1":  {
+                                             "skipped":  false,
+                                             "verdict":  "INCONCLUSIVE",
+                                             "agent_name":  "Image Forensics",
+                                             "confidence_pct":  56,
+                                             "error_rate_pct":  36
+                                         },
+                              "Agent2":  {
+                                             "skipped":  true,
+                                             "verdict":  "NOT_APPLICABLE",
+                                             "agent_name":  "Audio Forensics",
+                                             "confidence_pct":  0,
+                                             "error_rate_pct":  0
+                                         },
+                              "Agent3":  {
+                                             "skipped":  false,
+                                             "verdict":  "INCONCLUSIVE",
+                                             "agent_name":  "Object Detection",
+                                             "confidence_pct":  32,
+                                             "error_rate_pct":  22
+                                         },
+                              "Agent4":  {
+                                             "skipped":  true,
+                                             "verdict":  "NOT_APPLICABLE",
+                                             "agent_name":  "Video Forensics",
+                                             "confidence_pct":  0,
+                                             "error_rate_pct":  0
+                                         },
+                              "Agent5":  {
+                                             "skipped":  false,
+                                             "verdict":  "INCONCLUSIVE",
+                                             "agent_name":  "Metadata Forensics",
+                                             "confidence_pct":  65,
+                                             "error_rate_pct":  55
+                                         }
+                          },
+    "degradation_flags":  [
+
+                          ]
+}

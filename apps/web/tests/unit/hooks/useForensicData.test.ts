@@ -81,6 +81,7 @@ const emptyReport = { id: "r0", fileName: "F0", timestamp: "T", summary: "S", ag
 beforeEach(() => {
   jest.clearAllMocks();
   Object.keys(store).forEach(k => delete store[k]);
+  window.localStorage.clear();
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -170,23 +171,23 @@ describe("useForensicData — initial state", () => {
 
 describe("useForensicData — sessionStorage loading", () => {
   it("loads valid history from sessionStorage on mount", () => {
-    store["fc_history"] = JSON.stringify([emptyReport]);
+    window.localStorage.setItem("fc_history", JSON.stringify([emptyReport]));
     const { result } = renderHook(() => useForensicData());
     expect(result.current.history).toHaveLength(1);
     expect(result.current.history[0].id).toBe("r0");
   });
   it("ignores invalid JSON in fc_history", () => {
-    store["fc_history"] = "{{bad json{{";
+    window.localStorage.setItem("fc_history", "{{bad json{{");
     const { result } = renderHook(() => useForensicData());
     expect(result.current.history).toEqual([]);
   });
   it("ignores invalid schema in fc_history", () => {
-    store["fc_history"] = JSON.stringify([{ bad: true }]);
+    window.localStorage.setItem("fc_history", JSON.stringify([{ bad: true }]));
     const { result } = renderHook(() => useForensicData());
     expect(result.current.history).toEqual([]);
   });
   it("loads currentReport from fc_current_report", () => {
-    store["fc_current_report"] = JSON.stringify(emptyReport);
+    window.localStorage.setItem("fc_current_report", JSON.stringify(emptyReport));
     const { result } = renderHook(() => useForensicData());
     expect(result.current.currentReport?.id).toBe("r0");
   });
@@ -197,7 +198,7 @@ describe("useForensicData — history operations", () => {
     const { result } = renderHook(() => useForensicData());
     act(() => { result.current.addToHistory(emptyReport); });
     expect(result.current.history).toHaveLength(1);
-    expect(window.sessionStorage.setItem).toHaveBeenCalledWith("fc_history", expect.stringContaining("r0"));
+    expect(window.localStorage.getItem("fc_history")).toEqual(expect.stringContaining("r0"));
   });
   it("addToHistory prepends (newest first)", () => {
     const r1 = { ...emptyReport, id: "r1" };
@@ -213,18 +214,18 @@ describe("useForensicData — history operations", () => {
     expect(result.current.history).toHaveLength(1);
   });
   it("deleteFromHistory removes correct entry", () => {
-    store["fc_history"] = JSON.stringify([emptyReport, { ...emptyReport, id: "r2" }]);
+    window.localStorage.setItem("fc_history", JSON.stringify([emptyReport, { ...emptyReport, id: "r2" }]));
     const { result } = renderHook(() => useForensicData());
     act(() => { result.current.deleteFromHistory("r0"); });
     expect(result.current.history).toHaveLength(1);
     expect(result.current.history[0].id).toBe("r2");
   });
   it("clearHistory empties history and removes sessionStorage key", () => {
-    store["fc_history"] = JSON.stringify([emptyReport]);
+    window.localStorage.setItem("fc_history", JSON.stringify([emptyReport]));
     const { result } = renderHook(() => useForensicData());
     act(() => { result.current.clearHistory(); });
     expect(result.current.history).toHaveLength(0);
-    expect(window.sessionStorage.removeItem).toHaveBeenCalledWith("fc_history");
+    expect(window.localStorage.getItem("fc_history")).toBeNull();
   });
 });
 
@@ -237,7 +238,7 @@ describe("useForensicData — saveCurrentReport", () => {
   it("persists to sessionStorage", () => {
     const { result } = renderHook(() => useForensicData());
     act(() => { result.current.saveCurrentReport(emptyReport); });
-    expect(window.sessionStorage.setItem).toHaveBeenCalledWith("fc_current_report", expect.stringContaining("r0"));
+    expect(window.localStorage.getItem("fc_current_report")).toEqual(expect.stringContaining("r0"));
   });
 });
 

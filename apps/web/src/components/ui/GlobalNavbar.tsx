@@ -33,7 +33,7 @@ export function GlobalNavbar() {
   return (
     <nav
       aria-label="Main navigation"
-      className="sticky top-0 left-0 right-0 z-[200] flex items-center justify-between px-10 py-6 transition-all duration-500 bg-black/60 backdrop-blur-xl border-b border-white/[0.03]"
+      className="absolute top-0 left-0 right-0 z-[200] flex items-center justify-between px-10 py-6 transition-all duration-500 bg-black/60 backdrop-blur-xl border-b border-white/[0.03]"
     >
       <AnimatePresence>
         {isResetting && <ForensicResetOverlay />}
@@ -41,13 +41,13 @@ export function GlobalNavbar() {
 
       <button
         type="button"
-        className="flex items-center gap-4 cursor-pointer focus-visible:outline-none group bg-transparent border-none"
+        className="flex items-center gap-2.5 cursor-pointer focus-visible:outline-none group bg-transparent border-none"
         onClick={handleLogoClick}
         aria-label="Return to Forensic Council home"
         aria-current={pathname === "/" ? "page" : undefined}
       >
         <motion.div
-          className="w-10 h-10 rounded-xl flex items-center justify-center text-[11px] font-black text-black shadow-[0_0_20px_rgba(6,182,212,0.1)] ring-1 ring-white/5"
+          className="w-6 h-6 aspect-square shrink-0 rounded flex items-center justify-center text-[8px] font-black text-black shadow-[0_0_20px_rgba(6,182,212,0.1)] ring-1 ring-white/5"
           style={{
             background: "linear-gradient(135deg, #0891b2 0%, #06b6d4 100%)",
           }}
@@ -59,7 +59,7 @@ export function GlobalNavbar() {
           FC
         </motion.div>
 
-        <span className="text-[12px] font-bold tracking-widest text-white/40 group-hover:text-cyan-400 transition-colors duration-300">
+        <span className="text-[14px] font-semibold tracking-wide text-white/90 group-hover:text-white transition-colors duration-300">
           Forensic Council
         </span>
       </button>

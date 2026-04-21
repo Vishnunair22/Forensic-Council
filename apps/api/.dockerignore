@@ -1,5 +1,5 @@
 # ============================================================================
-# Backend .dockerignore — Keep build context lean
+# Backend .dockerignore - Keep build context lean
 # ============================================================================
 
 # Python bytecode
@@ -68,7 +68,7 @@ tmp/
 temp/
 scratch/
 
-# Tests — not needed inside the container (run in CI, not during docker build)
+# Tests - not needed inside the container (run in CI, not during docker build)
 tests/
 test_*
 

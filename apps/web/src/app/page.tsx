@@ -15,11 +15,11 @@ export default function Home() {
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
         <div className="absolute left-0 right-0 top-0 -z-10 m-auto h-[310px] w-[310px] rounded-full bg-cyan-500 opacity-20 blur-[100px]"></div>
 
-        <div className="flex flex-col items-center justify-center text-center px-6 relative z-10 pointer-events-auto">
+        <div className="flex flex-col items-center justify-center text-center px-6 relative z-10 pointer-events-auto gap-8">
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-4xl md:text-7xl font-bold max-w-5xl mb-6 tracking-tighter text-white pb-2 font-heading"
+            className="text-4xl md:text-7xl font-bold max-w-5xl tracking-tighter text-white font-heading"
           >
             Multi-Agent Forensic <br/>
             <span className="text-cyan-400">Evidence Analysis System</span>
@@ -28,11 +28,11 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2 }}
-            className="mt-4 text-base leading-7 text-neutral-400 max-w-2xl mx-auto"
+            className="text-lg md:text-xl leading-relaxed text-neutral-400 max-w-2xl mx-auto"
           >
-            Multi-agent AI-based application that uses multiple customized agents to analyse digital forensic evidence and create a cohesive, court-defensible report.
+            Forensic Council is a Multi Agent AI based application, that uses multiple customized agents to analyse digital forensic evidance to create a cohesive and effective report.
           </motion.p>
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.4 }} className="flex flex-col items-center gap-4">
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.4 }} className="flex flex-col items-center mt-2">
             <HeroAuthActions />
           </motion.div>
         </div>

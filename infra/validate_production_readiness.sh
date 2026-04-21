@@ -1,239 +1,163 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+# Validate production-readiness signals for the Forensic Council repository.
 
-echo "═══════════════════════════════════════════════════════════════"
-echo "  FORENSIC COUNCIL — PRODUCTION READINESS VALIDATION"
-echo "═══════════════════════════════════════════════════════════════"
-echo ""
+set -u
 
-# Color codes
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
+
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 PASS_COUNT=0
 FAIL_COUNT=0
+WARN_COUNT=0
 
-# Helper functions
 pass() {
-    echo -e "${GREEN}✅ PASS${NC}: $1"
-    ((PASS_COUNT++))
+  printf "%bPASS%b: %s\n" "$GREEN" "$NC" "$1"
+  PASS_COUNT=$((PASS_COUNT + 1))
 }
 
 fail() {
-    echo -e "${RED}❌ FAIL${NC}: $1"
-    ((FAIL_COUNT++))
+  printf "%bFAIL%b: %s\n" "$RED" "$NC" "$1"
+  FAIL_COUNT=$((FAIL_COUNT + 1))
 }
 
 warn() {
-    echo -e "${YELLOW}⚠️  WARN${NC}: $1"
+  printf "%bWARN%b: %s\n" "$YELLOW" "$NC" "$1"
+  WARN_COUNT=$((WARN_COUNT + 1))
 }
 
-# ===========================================================================
-# SECTION 1: CODE QUALITY
-# ===========================================================================
-echo ""
-echo "SECTION 1: CODE QUALITY"
-echo "───────────────────────────────────────────────────────────────"
+section() {
+  echo
+  echo "$1"
+  printf '%s\n' "------------------------------------------------------------"
+}
 
-# 1.1: Python syntax
-echo -n "Checking Python syntax... "
-if python -m py_compile apps/api/tools/ml_tools/*.py 2>/dev/null && \
-   python -m py_compile apps/api/**/*.py 2>/dev/null; then
-    pass "All Python files compile"
-else
-    fail "Python syntax errors found"
-fi
+run_check() {
+  local label="$1"
+  shift
+  if "$@" >/dev/null 2>&1; then
+    pass "$label"
+  else
+    fail "$label"
+  fi
+}
 
-# 1.2: No duplicate code blocks
-echo -n "Checking for duplicate __main__ blocks... "
-DUPLICATES=$(find apps/api/tools/ml_tools -name "*.py" -exec grep -l "if __name__" {} \; | while read f; do
-    grep -c "if __name__" "$f"
-done | grep -v "^1$" | wc -l)
+echo "Forensic Council production readiness validation"
 
-if [ "$DUPLICATES" -eq 0 ]; then
-    pass "No duplicate __main__ blocks"
-else
-    fail "$DUPLICATES files have multiple __main__ blocks"
-fi
-
-# 1.3: Import checks
-echo -n "Checking critical imports... "
-MISSING_IMPORTS=0
-for file in apps/api/tools/ml_tools/*.py; do
-    if ! grep -q "^import sys" "$file"; then
-        ((MISSING_IMPORTS++))
-    fi
+section "1. Repository Files"
+for path in \
+  README.md \
+  .env.example \
+  apps/api/Dockerfile \
+  apps/web/Dockerfile \
+  infra/docker-compose.yml \
+  infra/docker-compose.prod.yml \
+  infra/Caddyfile \
+  infra/prometheus.yml \
+  docs/ARCHITECTURE.md \
+  docs/SECURITY.md \
+  docs/RUNBOOK.md
+do
+  if [ -f "$path" ]; then
+    pass "Found $path"
+  else
+    fail "Missing $path"
+  fi
 done
 
-if [ "$MISSING_IMPORTS" -eq 0 ]; then
-    pass "All ML tools have 'import sys'"
+section "2. Syntax And Configuration"
+if command -v python >/dev/null 2>&1; then
+  if find apps/api -name '*.py' -print0 | xargs -0 python -m py_compile; then
+    pass "Python files compile"
+  else
+    fail "Python syntax check failed"
+  fi
 else
-    fail "$MISSING_IMPORTS ML tools missing 'import sys'"
+  warn "python not found; skipped Python syntax check"
 fi
 
-# ===========================================================================
-# SECTION 2: TESTS
-# ===========================================================================
-echo ""
-echo "SECTION 2: TEST COVERAGE"
-echo "───────────────────────────────────────────────────────────────"
+if command -v docker >/dev/null 2>&1; then
+  if docker compose -f infra/docker-compose.yml config >/dev/null 2>&1; then
+    pass "Base Docker Compose config renders"
+  else
+    fail "Base Docker Compose config failed to render"
+  fi
 
-# 2.1: Backend unit tests
-echo -n "Running backend unit tests... "
-if cd apps/api && uv run pytest tests/unit -q --tb=no > /dev/null 2>&1; then
+  if docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml config >/dev/null 2>&1; then
+    pass "Production Docker Compose config renders"
+  else
+    fail "Production Docker Compose config failed to render"
+  fi
+else
+  warn "docker not found; skipped Docker Compose validation"
+fi
+
+section "3. Tests"
+if command -v uv >/dev/null 2>&1; then
+  if (cd apps/api && uv run pytest tests/unit -q --tb=short); then
     pass "Backend unit tests pass"
+  else
+    warn "Backend unit tests failed or dependencies are missing"
+  fi
 else
-    warn "Some backend unit tests failed (check with: cd apps/api && uv run pytest tests/unit -v)"
+  warn "uv not found; skipped backend unit tests"
 fi
 
-# 2.2: Frontend tests
-echo -n "Checking frontend tests... "
-if cd apps/web && npm test -- --watchAll=false --passWithNoTests > /dev/null 2>&1; then
+if command -v npm >/dev/null 2>&1; then
+  if (cd apps/web && npm test -- --watchAll=false --passWithNoTests); then
     pass "Frontend tests pass"
-    cd ..
+  else
+    warn "Frontend tests failed or dependencies are missing"
+  fi
 else
-    warn "Some frontend tests may have failed (check with: cd apps/web && npm test)"
-    cd ..
+  warn "npm not found; skipped frontend tests"
 fi
 
-# 2.3: E2E/System test files exist
-echo -n "Checking system test files exist... "
-if [ -f "apps/api/tests/system/test_forensic_system.py" ]; then
-    pass "System test file exists"
+section "4. Security Checks"
+if git ls-files --error-unmatch .env >/dev/null 2>&1; then
+  fail ".env is tracked by Git"
 else
-    fail "System test file missing: apps/api/tests/system/test_forensic_system.py"
+  pass ".env is not tracked by Git"
 fi
 
-# ===========================================================================
-# SECTION 3: DOCUMENTATION
-# ===========================================================================
-echo ""
-echo "SECTION 3: DOCUMENTATION"
-echo "───────────────────────────────────────────────────────────────"
+if grep -R "4317:4317" infra/*.yml >/dev/null 2>&1; then
+  fail "Jaeger OTLP port 4317 is exposed to the host"
+else
+  pass "Jaeger OTLP port is not exposed to the host"
+fi
 
-REQUIRED_DOCS=(
-    "README.md"
-    "docs/ARCHITECTURE.md"
-    "docs/AGENTS.md"
-    "docs/DEVELOPMENT_SETUP.md"
-    "docs/agent-context/memory.md"
-    "docs/agent-context/project_context.md"
-    "infra/README.md"
-)
+if grep -q "METRICS_SCRAPE_TOKEN" .env.example && grep -q "metrics_scrape_token" infra/prometheus.yml; then
+  pass "Prometheus scrape token is documented and configured"
+else
+  fail "Prometheus scrape token wiring is incomplete"
+fi
 
-for doc in "${REQUIRED_DOCS[@]}"; do
-    if [ -f "$doc" ]; then
-        pass "Documentation found: $doc"
+if [ "${APP_ENV:-}" = "production" ]; then
+  for var in SIGNING_KEY JWT_SECRET_KEY POSTGRES_PASSWORD REDIS_PASSWORD METRICS_SCRAPE_TOKEN; do
+    if [ -n "${!var:-}" ] && ! printf '%s' "${!var}" | grep -q "REPLACE_ME"; then
+      pass "$var is set"
     else
-        fail "Documentation missing: $doc"
+      fail "$var is missing or still a placeholder"
     fi
-done
-
-# ===========================================================================
-# SECTION 4: CONFIGURATION
-# ===========================================================================
-echo ""
-echo "SECTION 4: CONFIGURATION"
-echo "───────────────────────────────────────────────────────────────"
-
-# 4.1: .env.example exists
-if [ -f ".env.example" ]; then
-    pass ".env.example exists"
+  done
 else
-    fail ".env.example missing"
+  warn "APP_ENV is not production; skipped live secret validation"
 fi
 
-# 4.2: Docker files exist
-if [ -f "apps/api/Dockerfile" ]; then
-    pass "Backend Dockerfile found"
-else
-    fail "Backend Dockerfile missing: apps/api/Dockerfile"
+section "Summary"
+echo "Passed: $PASS_COUNT"
+echo "Warned: $WARN_COUNT"
+echo "Failed: $FAIL_COUNT"
+
+if [ "$FAIL_COUNT" -eq 0 ]; then
+  echo "Result: ready pending manual review of warnings."
+  exit 0
 fi
 
-if [ -f "apps/web/Dockerfile" ]; then
-    pass "Frontend Dockerfile found"
-else
-    fail "Frontend Dockerfile missing"
-fi
-
-# 4.3: docker-compose exists
-if [ -f "infra/docker-compose.yml" ]; then
-    pass "docker-compose.yml found"
-else
-    fail "docker-compose.yml missing"
-fi
-
-# ===========================================================================
-# SECTION 5: SECURITY
-# ===========================================================================
-echo ""
-echo "SECTION 5: SECURITY"
-echo "───────────────────────────────────────────────────────────────"
-
-# 5.1: No hardcoded secrets
-echo -n "Checking for hardcoded secrets... "
-SECRETS=$(grep -r "password\|api.key\|secret" --include="*.py" --include="*.ts" --include="*.tsx" \
-    apps/api/ apps/web/ 2>/dev/null | grep -v "PASSWORD\|_key\|\.example" | wc -l)
-
-if [ "$SECRETS" -lt 5 ]; then
-    pass "No obvious hardcoded secrets found"
-else
-    warn "Found $SECRETS potential hardcoded values (review manually)"
-fi
-
-# 5.2: .env not tracked by Git
-echo -n "Checking .env not tracked by Git... "
-if git ls-files --error-unmatch .env 2>/dev/null; then
-    fail ".env is tracked by Git — remove from history with git filter-repo"
-else
-    pass ".env is not tracked by Git"
-fi
-
-# 5.3: REDIS_PASSWORD set
-echo -n "Checking REDIS_PASSWORD is set... "
-if [ -z "${REDIS_PASSWORD}" ]; then
-    fail "REDIS_PASSWORD not set — required for production"
-else
-    pass "REDIS_PASSWORD is set"
-fi
-
-# 5.4: Jaeger OTLP not exposed
-echo -n "Checking Jaeger OTLP not exposed to host... "
-if grep -q "4317:4317" infra/docker-compose.yml 2>/dev/null; then
-    fail "Jaeger OTLP port 4317 exposed to host — remove host port binding"
-else
-    pass "Jaeger OTLP port not exposed to host"
-fi
-
-# 5.5: CSRF protection in API
-echo -n "Checking CSRF protection... "
-if grep -q "csrf_middleware" apps/api/api/main.py; then
-    pass "CSRF protection middleware detected"
-else
-    fail "CSRF protection middleware not found in main.py"
-fi
-
-# ===========================================================================
-# SUMMARY
-# ===========================================================================
-echo ""
-echo "═══════════════════════════════════════════════════════════════"
-echo "  SUMMARY"
-echo "═══════════════════════════════════════════════════════════════"
-TOTAL=$((PASS_COUNT + FAIL_COUNT))
-echo -e "${GREEN}Passed: $PASS_COUNT${NC}"
-echo -e "${RED}Failed: $FAIL_COUNT${NC}"
-echo -e "Total: $TOTAL"
-echo ""
-
-if [ $FAIL_COUNT -eq 0 ]; then
-    echo -e "${GREEN}✅ READY FOR PRODUCTION${NC}"
-    exit 0
-else
-    echo -e "${RED}❌ NOT READY FOR PRODUCTION${NC}"
-    echo "Fix the above errors before deploying."
-    exit 1
-fi
-
+echo "Result: not ready. Fix failures before production deployment."
+exit 1

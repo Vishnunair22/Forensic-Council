@@ -10,10 +10,19 @@ export function HowWorksSection() {
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
-        className="text-3xl md:text-5xl font-black text-white mb-24 tracking-tighter"
+        className="text-3xl md:text-5xl font-black text-white mb-4 tracking-tighter"
       >
         How Forensic Council Works
       </motion.h2>
+      <motion.p
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ delay: 0.1 }}
+        className="text-slate-400 text-lg max-w-2xl mx-auto mb-20"
+      >
+        A transparent, multi-step process ensuring every piece of digital evidence is thoroughly vetted and cryptographically secured.
+      </motion.p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
         {HOW_IT_WORKS.map((item, i) => (
@@ -28,12 +37,23 @@ export function HowWorksSection() {
             {/* Icon Container */}
             <div className="relative mb-10">
                <div className="absolute inset-0 bg-cyan-500/10 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" aria-hidden="true" />
-               <div className="relative p-6 bg-white/[0.03] border border-white/5 rounded-3xl group-hover:border-cyan-500/30 transition-colors duration-300">
+               <motion.div 
+                  animate={{ 
+                    y: [0, -10, 0],
+                  }}
+                  transition={{
+                    duration: 4,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    delay: i * 0.2
+                  }}
+                  className="relative p-6 bg-white/[0.03] border border-white/5 rounded-3xl group-hover:border-cyan-500/30 transition-colors duration-300"
+                >
                   <item.icon className="w-12 h-12 text-cyan-500 group-hover:scale-110 transition-transform duration-500" aria-hidden="true" />
                   <span className="absolute bottom-2 right-2 text-xs font-mono font-black text-cyan-500/40 px-1.5 py-0.5 bg-black/40 border border-white/5 rounded-md group-hover:text-cyan-400 group-hover:border-cyan-500/20 transition-colors duration-300">
                     {item.step}
                   </span>
-               </div>
+               </motion.div>
             </div>
 
             <div className="text-center">

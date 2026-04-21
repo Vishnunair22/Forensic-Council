@@ -85,20 +85,18 @@ export const useForensicData = () => {
     if (typeof window === "undefined") return;
 
     try {
-      const savedHistory = storage.getItem<string>(HISTORY_KEY, true);
-      const savedCurrent = storage.getItem<string>(CURRENT_REPORT_KEY, true);
+      const savedHistory = storage.getItem<unknown>(HISTORY_KEY, true);
+      const savedCurrent = storage.getItem<unknown>(CURRENT_REPORT_KEY, true);
 
       if (savedHistory) {
-        const parsed = JSON.parse(savedHistory);
-        const validated = HistorySchema.safeParse(parsed);
+        const validated = HistorySchema.safeParse(savedHistory);
         if (validated.success) {
           setHistory(validated.data);
         }
       }
 
       if (savedCurrent) {
-        const parsed = JSON.parse(savedCurrent);
-        const validated = ReportSchema.safeParse(parsed);
+        const validated = ReportSchema.safeParse(savedCurrent);
         if (validated.success) {
           setCurrentReport(validated.data);
         }

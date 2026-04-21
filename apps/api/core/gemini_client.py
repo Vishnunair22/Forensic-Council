@@ -10,17 +10,18 @@ Agent 5 (Metadata/Context) during their deep analysis pass to:
   - Validate consistency between visual content and claimed metadata
   - Detect objects, weapons, documents, and contextual anomalies
 
-Provider routing (cascade — first available wins):
-  1. gemini-2.5-flash → default primary, 1M context, best free-tier model
-  2. gemini-2.0-flash → fast stable fallback
-  3. gemini-2.0-flash-lite → ultra-fast lightweight model
+Provider routing (cascade - first available wins):
+  1. gemini-2.5-flash -> default primary, 1M context, best price-performance
+  2. gemini-2.5-flash-lite -> fastest stable 2.5 fallback
+  3. gemini-2.0-flash -> previous-generation stable fallback
+  4. gemini-2.0-flash-lite -> ultra-fast previous-generation fallback
 
 Auto-cascade: 404 / 429 (quota) / "model not found" responses skip immediately to
 the next model; other errors retry with backoff then cascade forward.
 The chain is fully configurable via GEMINI_MODEL + GEMINI_FALLBACK_MODELS.
 
-NOTE: gemini-2.5-* and gemini-2.0-* are the verified production standards.
-      gemini-3.1-pro-preview is supported but may requires specific quota/plans.
+NOTE: Stable gemini-2.5-* and gemini-2.0-* models are the verified production
+      standards. Preview models may have tighter quotas and deprecation windows.
 
 Vision input:
   - Images: base64-encoded inline (JPEG, PNG, WEBP, GIF, BMP)
@@ -54,11 +55,12 @@ _BASE_BACKOFF = 2.0
 
 _DEFAULT_MODEL = "gemini-2.5-flash"
 
-_DEFAULT_FALLBACK_CHAIN = "gemini-2.0-flash,gemini-2.0-flash-lite"
+_DEFAULT_FALLBACK_CHAIN = (
+    "gemini-2.5-flash-lite,gemini-2.0-flash,gemini-2.0-flash-lite"
+)
 
 _THINKING_MODEL_PREFIXES = (
-    "gemini-2.5-flash-thinking",
-    "gemini-3.1-pro-thinking",
+    "gemini-2.5",
 )
 
 
@@ -461,6 +463,7 @@ class GeminiVisionClient:
         file_path: str,
         exif_summary: dict[str, Any] | None = None,
         model_hint: str | None = None,
+        signal_callback: Any | None = None,
     ) -> GeminiVisionFinding:
         """
         Comprehensive deep forensic analysis — single call covering everything.
@@ -482,6 +485,11 @@ class GeminiVisionClient:
         """
         if not self._enabled:
             return await self._local_forensic_fallback(file_path, exif_summary)
+
+        if signal_callback:
+            maybe_awaitable = signal_callback("Gemini deep forensic analysis started.")
+            if hasattr(maybe_awaitable, "__await__"):
+                await maybe_awaitable
 
         meta_section = ""
         if exif_summary:
@@ -721,7 +729,11 @@ class GeminiVisionClient:
                 try:
                     m_t0 = time.monotonic()
                     raw_text = await asyncio.wait_for(
-                        self._post_with_retry(attempt_url, attempt_payload),
+                        self._post_with_retry(
+                            attempt_url,
+                            attempt_payload,
+                            model_name=attempt_model,
+                        ),
                         timeout=self.timeout + 5,
                     )
                     m_latency = (time.monotonic() - m_t0) * 1000
@@ -763,9 +775,15 @@ class GeminiVisionClient:
             latency_ms=latency_ms,
         )
 
-    async def _post_with_retry(self, url: str, payload: dict) -> str:
+    async def _post_with_retry(
+        self,
+        url: str,
+        payload: dict,
+        model_name: str | None = None,
+    ) -> str:
         """POST to Gemini API with exponential-backoff retry."""
         headers = {"x-goog-api-key": self.api_key}
+        active_model = model_name or self.model
         for attempt in range(_MAX_RETRIES):
             try:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -792,6 +810,14 @@ class GeminiVisionClient:
                         ):
                             raise _ModelUnavailableError(
                                 f"Model unavailable (400): {error_detail[:300]}"
+                            )
+                        if resp.status_code == 503:
+                            logger.warning(
+                                f"Gemini model {active_model} unavailable (503) - cascading to next model. "
+                                f"Detail: {error_detail[:200]}"
+                            )
+                            raise _ModelUnavailableError(
+                                f"Model unavailable (503): {error_detail[:300]}"
                             )
                         if resp.status_code == 429:
                             # Quota exhausted for this model — cascade to next model

@@ -9,7 +9,7 @@ import { ForensicProgressOverlay } from "@/components/ui/ForensicProgressOverlay
 import { autoLoginAsInvestigator, checkBackendHealth, ProtocolWarmingError } from "@/lib/api";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { useSound } from "@/hooks/useSound";
-import { storage } from "@/lib/storage";
+import { storage, sessionOnlyStorage } from "@/lib/storage";
 
 import { UploadModal } from "@/components/evidence/UploadModal";
 import { UploadSuccessModal } from "@/components/evidence/UploadSuccessModal";
@@ -65,8 +65,8 @@ export function HeroAuthActions() {
     }
 
     __pendingFileStore.file = selectedFile;
-    storage.setItem("forensic_auto_start", "true");
-    storage.setItem("fc_show_loading", "true");
+    sessionOnlyStorage.setItem("forensic_auto_start", "true");
+    sessionOnlyStorage.setItem("fc_show_loading", "true");
     setIsNavigating(true);
     router.push("/evidence", { scroll: true });
   }, [router, selectedFile]);
@@ -82,7 +82,7 @@ export function HeroAuthActions() {
         aria-label={isAuthenticating ? "Initializing..." : authError ? authError : "Upload a file to begin analysis"}
       >
         <span className="relative z-10 flex items-center">
-          {isAuthenticating ? "Initializing..." : authError ? authError : "Upload & Analyze"}
+          {isAuthenticating ? "Initializing..." : authError ? authError : "Begin Analysis"}
           {!isAuthenticating && !authError && <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" aria-hidden="true" />}
         </span>
       </button>

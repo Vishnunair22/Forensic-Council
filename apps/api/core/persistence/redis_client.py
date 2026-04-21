@@ -332,6 +332,32 @@ class RedisClient:
         """Delete fields from a hash."""
         return await self.client.hdel(name, *keys)
 
+    async def eval(
+        self,
+        script: str,
+        keys: list[str] | None = None,
+        args: list[Any] | None = None,
+    ) -> Any:
+        """
+        Execute a Lua script atomically in Redis.
+
+        The rate-limiter in main.py uses a Lua script for atomic
+        sliding-window counting. This method proxies the call to
+        the underlying redis-py client with the correct positional
+        argument convention: eval(script, num_keys, *keys, *args).
+
+        Args:
+            script: Lua script string
+            keys:   KEYS[] table for the script
+            args:   ARGV[] table for the script
+
+        Returns:
+            Result from the Lua script
+        """
+        num_keys = len(keys) if keys else 0
+        all_args = list(keys or []) + list(args or [])
+        return await self.client.eval(script, num_keys, *all_args)
+
 
 # Singleton instance — protected by a lock to prevent concurrent init races
 _redis_client: RedisClient | None = None

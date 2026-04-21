@@ -32,6 +32,7 @@ import hmac as _hmac
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from decimal import Decimal, ROUND_DOWN
 from typing import Any, cast
 
 from cryptography.exceptions import InvalidSignature
@@ -476,7 +477,7 @@ def compute_content_hash(content: dict[str, Any]) -> str:
     # float precision changes breaking hash verification.
     def _normalize(obj: Any) -> Any:
         if isinstance(obj, float):
-            return round(obj, 10)
+            return float(Decimal(str(obj)).quantize(Decimal("0.0000000001"), rounding=ROUND_DOWN))
         if isinstance(obj, dict):
             return {k: _normalize(v) for k, v in obj.items()}
         if isinstance(obj, list):

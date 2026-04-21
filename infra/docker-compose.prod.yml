@@ -13,11 +13,11 @@ services:
     # Suppress the host-facing 8000 port — in production all traffic must flow
     # through Caddy. Direct port exposure bypasses TLS, rate limiting, and
     # security headers.
-    ports: []
+    ports: !reset []
     environment:
-      - RELOAD=false
-      - APP_ENV=production
-      - DEBUG=false
+      RELOAD: "false"
+      APP_ENV: production
+      DEBUG: "false"
     logging:
       driver: "json-file"
       options:
@@ -29,9 +29,9 @@ services:
     build:
       target: runner
     # Suppress direct port access — all traffic via Caddy in production
-    ports: []
+    ports: !reset []
     environment:
-      - NODE_ENV=production
+      NODE_ENV: production
     logging:
       driver: "json-file"
       options:
@@ -42,6 +42,10 @@ services:
     restart: always
     build:
       target: production
+    environment:
+      RELOAD: "false"
+      APP_ENV: production
+      DEBUG: "false"
     logging:
       driver: "json-file"
       options:
@@ -58,3 +62,9 @@ services:
 
   migration:
     restart: "no"
+
+  jaeger:
+    ports: !reset []
+
+  prometheus:
+    ports: !reset []

@@ -80,8 +80,8 @@ class CLIPImageAnalyzer:
         self._preprocess = None
         self._tokenizer = None
         self._device = None
-        self._model_name = "SigLIP-base-patch16-224"
-        self._pretrained = "webli"
+        self._model_name = "ViT-B-32"
+        self._pretrained = "openai"
 
     def _load_model(self) -> bool:
         """

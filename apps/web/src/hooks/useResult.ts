@@ -85,7 +85,10 @@ export function useResult() {
     error: reportQueryError,
   } = useQuery({
     queryKey: ["report", sessionId],
-    queryFn: () => getReport(sessionId!),
+    queryFn: () => {
+      if (!sessionId) throw new Error("Missing session ID");
+      return getReport(sessionId);
+    },
     enabled: !!sessionId && arbiterComplete,
     staleTime: Infinity,      // A signed forensic report never goes stale
     retry: 2,
@@ -130,12 +133,14 @@ export function useResult() {
     let attempts = 0;
     let pollInterval = ARBITER_POLL_INTERVAL_MS;
 
+    const activeSessionId = sessionId;
+
     async function poll() {
       if (cancelled) return;
 
       attempts++;
       try {
-        const s = await getArbiterStatus(sessionId!);
+        const s = await getArbiterStatus(activeSessionId);
         if (cancelled) return;
 
         if (s.status === "complete") {

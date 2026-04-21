@@ -1,6 +1,6 @@
-﻿#!/bin/bash
+-#!/bin/bash
 # ============================================================================
-# Forensic Council â€” Smoke Test
+# Forensic Council - Smoke Test
 # ============================================================================
 # Run from the apps/api/ directory:
 #   bash scripts/smoke_test.sh
@@ -38,7 +38,7 @@ fi
 echo -e "\n${YELLOW}[2/7] Running unit tests...${NC}"
 cd "$PROJECT_DIR"
 uv run pytest apps/api/tests/unit/ -q --tb=short && echo -e "${GREEN}Unit tests passed${NC}" \
-  || echo -e "${YELLOW}Some unit tests failed â€” check output above${NC}"
+  || echo -e "${YELLOW}Some unit tests failed - check output above${NC}"
 
 # 3. Integration tests
 echo -e "\n${YELLOW}[3/7] Running integration tests...${NC}"
@@ -72,14 +72,14 @@ AUTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
 if [ "$AUTH_STATUS" = "200" ]; then
   echo -e "${GREEN}Auth endpoint working (HTTP $AUTH_STATUS)${NC}"
 else
-  echo -e "${YELLOW}Auth returned HTTP $AUTH_STATUS â€” users may not be bootstrapped yet${NC}"
+  echo -e "${YELLOW}Auth returned HTTP $AUTH_STATUS - users may not be bootstrapped yet${NC}"
 fi
 
 # 7. Frontend build check
 echo -e "\n${YELLOW}[7/7] Verifying frontend build...${NC}"
 cd "$PROJECT_DIR/apps/web"
 npm run build 2>&1 | tail -5 && echo -e "${GREEN}Frontend build passed${NC}" \
-  || echo -e "${YELLOW}Frontend build had warnings â€” check output above${NC}"
+  || echo -e "${YELLOW}Frontend build had warnings - check output above${NC}"
 
 # Cleanup
 kill "$API_PID" 2>/dev/null || true

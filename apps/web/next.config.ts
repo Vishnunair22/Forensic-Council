@@ -2,20 +2,26 @@ import type { NextConfig } from "next";
 import path from "path";
 
 /**
- * Chrome DevTools maps stack frames using source-map `sources` paths. Unescaped
- * spaces (e.g. `D:/Forensic Council/...`) are rejected as "illegal path"; encode
- * each segment except the Windows drive prefix.
+ * Chrome DevTools maps stack frames using source-map `sources` paths. Bare
+ * Windows paths with spaces can be rejected as "illegal path"; keep dev-source
+ * paths virtual and URL-encoded so Chrome does not treat them as host files.
  */
-function devtoolModulePathForChrome(absoluteResourcePath: string): string {
-  if (!absoluteResourcePath) return "";
-  const forward = absoluteResourcePath.replace(/\\/g, "/");
-  return forward
+function devtoolModulePathForChrome(resourcePath: string): string {
+  if (!resourcePath) return "webpack://forensic-council/unknown";
+  // Strip webpack loader prefixes (e.g. 'next-swc-loader!src/api.ts' -> 'src/api.ts')
+  const cleanPath = (resourcePath.split("!").pop() || resourcePath).replace(/\\/g, "/");
+  const cwd = process.cwd().replace(/\\/g, "/");
+  const withoutCwd = cleanPath.startsWith(`${cwd}/`)
+    ? cleanPath.slice(cwd.length + 1)
+    : cleanPath.replace(/^[A-Za-z]:\//, "");
+
+  const encodedPath = withoutCwd
     .split("/")
-    .map((segment) => {
-      if (segment === "" || /^[a-zA-Z]:$/.test(segment)) return segment;
-      return encodeURIComponent(segment);
-    })
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
     .join("/");
+
+  return `webpack://forensic-council/${encodedPath || "unknown"}`;
 }
 
 const nextConfig: NextConfig = {
@@ -32,11 +38,12 @@ const nextConfig: NextConfig = {
   // ── TypeScript & ESLint ───────────────────────────────────────────────
   transpilePackages: ["class-variance-authority"],
 
+
   // ── Turbopack (Next.js 15 default build engine) ───────────────────────────
-  // Turbopack is the default bundler in Next.js 15. Declaring an explicit
-  // turbopack config suppresses the "webpack config + no turbopack config"
-  // warning. The webpack config below is retained for `next dev --webpack`
-  // on Windows Docker bind mounts; it has no effect on Turbopack builds.
+  // Declaring an explicit Turbopack config suppresses the
+  // "webpack config + no turbopack config" warning when Turbopack is enabled.
+  // The webpack config below is retained for the default Next.js dev server on
+  // Windows Docker bind mounts.
   turbopack: {
     resolveExtensions: ['.tsx', '.ts', '.jsx', '.js', '.json'],
     resolveAlias: {
@@ -60,9 +67,9 @@ const nextConfig: NextConfig = {
   },
 
   // ── Dev-mode file watcher (Windows + Docker fallback) ────────────────────
-  // Used only when running `next dev --webpack`. On Windows bind mounts,
-  // inotify events are not forwarded into the container so switching to
-  // polling restores reliable HMR. No effect on Turbopack builds.
+  // On Windows bind mounts, inotify events are not forwarded into the container
+  // reliably, so polling restores HMR. The custom source-map template also
+  // avoids Chrome "illegal path" errors for host paths with spaces.
   webpack: (config: Record<string, unknown> & { resolve: { alias: Record<string, string> }; watchOptions?: unknown; output?: Record<string, unknown> }, { dev }: { dev: boolean }) => {
     config.resolve.alias = {
       ...config.resolve.alias,
@@ -74,14 +81,12 @@ const nextConfig: NextConfig = {
         poll: 800,
         aggregateTimeout: 300,
       };
-      // Normalise Windows paths for Chrome source-map workspace: forward slashes
-      // plus URL-encoded segments (spaces in folders like "Forensic Council" break
-      // DevTools otherwise). Only applies to `next dev --webpack` (not Turbopack).
+      // Use relative, URL-encoded paths for source maps to avoid "illegal path"
+      // errors with Windows absolute paths containing spaces.
       config.output = {
         ...config.output,
-        devtoolModuleFilenameTemplate: (info: {
-          absoluteResourcePath: string;
-        }) => devtoolModulePathForChrome(info.absoluteResourcePath),
+        devtoolModuleFilenameTemplate: (info: { resourcePath: string }) =>
+          devtoolModulePathForChrome(info.resourcePath),
       };
     }
     return config;

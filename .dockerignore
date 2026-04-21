@@ -4,6 +4,16 @@
 .github
 .gitattributes
 
+# Assistant / local tool metadata
+.claude/
+.cursor/
+.planning/
+.uv-cache/
+.mcp.json
+.opencode.json
+CLAUDE.md
+MASTER_FIX_*.md
+
 # Python
 __pycache__/
 *.pyc
@@ -56,8 +66,8 @@ Thumbs.db
 *.swo
 
 # Storage
-storage/evidence/
-storage/keys/
+apps/api/storage/evidence/
+apps/api/storage/keys/
 
 # ML Caches
 apps/api/cache/

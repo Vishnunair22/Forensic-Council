@@ -2,8 +2,7 @@
 name = "forensic_council"
 version = "1.4.0"
 description = "Multi-Agent Forensic Evidence Analysis System"
-# Upper bound: qdrant-client 1.14.1–1.16.1 force numpy>=2.1 on py3.13+, conflicting
-# with moviepy 1.x which requires numpy<2.0. Docker image uses Python 3.12.
+# Docker and CI run Python 3.12. The broader range is kept in sync with uv.lock.
 requires-python = ">=3.11,<3.15"
 license = { text = "MIT" }
 authors = [
@@ -14,8 +13,8 @@ dependencies = [
     # Core
     "redis>=5.3",                          # async support built-in via redis.asyncio (extra removed in 5.x)
     # qdrant==1.16.2 is the last pre-1.17 release that only requires numpy>=2.3 on
-    # Python 3.14+ (not 3.13+). Combined with requires-python<3.13 this is safe with numpy<2.0.
-    # [async] extra removed in 1.10+ — async support (httpx) is built-in.
+    # Python 3.14+ (not 3.13+). The Python 3.12 runtime avoids that resolver path.
+    # [async] extra removed in 1.10+ - async support (httpx) is built-in.
     "qdrant-client==1.16.2",
     "asyncpg>=0.30",
     "pydantic>=2.11",
@@ -36,7 +35,7 @@ dependencies = [
     "bcrypt>=4.0.1,<5.0",
     # Image processing tools
     "Pillow>=11.2",
-    "numpy>=1.26,<3.0",  # relaxed upper bound — scipy 1.17+ requires numpy>=2.0
+    "numpy>=1.26,<3.0",  # relaxed upper bound - scipy 1.17+ requires numpy>=2.0
     "scipy>=1.15",
     "piexif>=1.1",
     "imagehash>=4.3",
@@ -57,7 +56,7 @@ dependencies = [
     "moviepy>=1.0,<2.0",             # AV sync via video+audio correlation
     # ML tools (lightweight)
     "scikit-learn>=1.7",
-    # File type detection — python-magic-bin bundles libmagic for Windows
+    # File type detection - python-magic-bin bundles libmagic for Windows
     "python-magic>=0.4.27;sys_platform!='win32'",
     "python-magic-bin>=0.4.14;sys_platform=='win32'",
     # OCR & document extraction (three-tier pipeline: PyMuPDF -> EasyOCR -> Tesseract)
@@ -69,22 +68,22 @@ dependencies = [
 
 [project.optional-dependencies]
 ml = [
-    # ── PyTorch (CPU-only) ──────────────────────────────────────────────────
+    # -- PyTorch (CPU-only) --------------------------------------------------
     # Sources below route these to download.pytorch.org/whl/cpu so only
     # CPU wheels are resolved. This avoids ~5 GB of nvidia/triton/cuda CUDA
     # packages that default PyPI torch pulls in on Linux (torch+cu128).
     "torch>=2.7",
     "torchvision>=0.22",
     "torchaudio>=2.7",
-    # ── Vision / Object detection ───────────────────────────────────────────
+    # -- Vision / Object detection -------------------------------------------
     "ultralytics>=8.3",
     "open-clip-torch>=2.30",
-    # ── NLP / Vision transformers ───────────────────────────────────────────
+    # -- NLP / Vision transformers -------------------------------------------
     "transformers>=4.52",
     "accelerate>=1.7",
-    # ── Audio / Speech Forensics ────────────────────────────────────────────
+    # -- Audio / Speech Forensics --------------------------------------------
     "speechbrain>=1.0",
-    # NOTE: deepface intentionally excluded — it hard-requires tensorflow (1.8 GB
+    # NOTE: deepface intentionally excluded - it hard-requires tensorflow (1.8 GB
     # CUDA) + opencv-python (conflicts with opencv-contrib-python) + Flask/gunicorn
     # (unused web servers). Face-swap detection in video_tools.py has a graceful
     # fallback when deepface is absent.
@@ -161,7 +160,7 @@ exclude_lines = [
 [tool.hatch.build.targets.wheel]
 packages = ["core", "agents", "tools", "orchestration", "reports", "api"]
 
-# ── Ruff configuration ─────────────────────────────────────────────────────
+# -- Ruff configuration -----------------------------------------------------
 [tool.ruff]
 line-length = 100
 target-version = "py312"
@@ -170,20 +169,20 @@ target-version = "py312"
 select = ["E", "F", "W", "I", "N", "UP", "S", "B", "A", "C4", "PT"]
 ignore = ["E501", "S101"]
 
-# ── Pyright configuration ──────────────────────────────────────────────────
+# -- Pyright configuration --------------------------------------------------
 [tool.pyright]
 include = ["core", "api", "agents", "tools", "orchestration"]
 exclude = ["**/__pycache__", "**/.pytest_cache"]
 typeCheckingMode = "basic"
 strict = ["core/auth.py", "core/signing.py", "core/circuit_breaker.py"]  # Critical security modules
 
-# ── isort configuration ────────────────────────────────────────────────────
+# -- isort configuration ----------------------------------------------------
 [tool.isort]
 profile = "black"
 line_length = 100
 multi_line_output = 3
 
-# ── uv source overrides ────────────────────────────────────────────────────
+# -- uv source overrides ----------------------------------------------------
 # Route torch/torchvision/torchaudio to the official CPU-only PyTorch index.
 # This prevents uv from resolving the default GPU wheels from PyPI which
 # include ~5 GB of CUDA runtime packages (nvidia-*, triton, cuda-*).

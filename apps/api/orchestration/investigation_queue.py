@@ -185,7 +185,7 @@ class InvestigationWorker:
                     )
 
                     task.status = InvestigationStatus.COMPLETED
-                    task.result = result.model_dump() if hasattr(result, "model_dump") else result
+                    task.result = result.model_dump(mode="json") if hasattr(result, "model_dump") else result
                     task.completed_at = time.time()
                 except Exception as e:
                     task.status = InvestigationStatus.FAILED

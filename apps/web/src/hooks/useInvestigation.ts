@@ -60,7 +60,7 @@ async function waitForFinalReport(
       }
       if (st.status === "complete") {
         try {
-          const res = await withTimeout(getReport(sessionId, 30_000), 30_000);
+          const res = await withTimeout(getReport(sessionId), 30_000);
           if (res.status === "complete" && res.report) return true;
         } catch {
           /* in progress */
@@ -264,6 +264,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         }
       }
 
+      startSimulation();
+
       // Write all investigation context atomically under one key so
       // the result page always sees a consistent snapshot, then write
       // individual keys for backward-compatible reads elsewhere.
@@ -284,7 +286,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       storage.setItem("forensic_investigator_id", investigatorId);
       storage.setItem("forensic_mime_type", targetFile.type);
 
-      startSimulation();
       storage.setItem("forensic_pipeline_start", pipelineStart);
       setIsUploading(false);
       setUploadPhaseText("Connecting to analysis stream…");

@@ -9,6 +9,7 @@ All logs are formatted as JSON for easy parsing and analysis.
 import contextvars
 import json
 import logging
+import re
 import sys
 from datetime import UTC, datetime
 from typing import Any
@@ -33,6 +34,24 @@ class StructuredFormatter(logging.Formatter):
     SENSITIVE_KEYS = {
         "password", "secret", "key", "token", "auth", "credential", "private", "signing"
     }
+    SENSITIVE_VALUE_PATTERNS = (
+        re.compile(
+            r"(?P<prefix>[?&](?:api[_-]?key|key|token|access[_-]?token|password|secret)=)"
+            r"(?P<value>[^&\s\"']+)",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"(?P<prefix>\bBearer\s+)(?P<value>[A-Za-z0-9._~+/=-]+)",
+            re.IGNORECASE,
+        ),
+    )
+
+    def _mask_sensitive_text(self, value: str) -> str:
+        """Mask secrets embedded in free-form log messages."""
+        masked = value
+        for pattern in self.SENSITIVE_VALUE_PATTERNS:
+            masked = pattern.sub(r"\g<prefix>********", masked)
+        return masked
 
     def _mask_sensitive(self, data: Any) -> Any:
         """Recursively mask sensitive keys in log data."""
@@ -47,6 +66,8 @@ class StructuredFormatter(logging.Formatter):
             }
         elif isinstance(data, list):
             return [self._mask_sensitive(i) for i in data]
+        elif isinstance(data, str):
+            return self._mask_sensitive_text(data)
         return data
 
     def format(self, record: logging.LogRecord) -> str:
@@ -55,7 +76,7 @@ class StructuredFormatter(logging.Formatter):
             "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
-            "message": record.getMessage(),
+            "message": self._mask_sensitive_text(record.getMessage()),
         }
 
         # Add location info
@@ -189,3 +210,8 @@ def configure_root_logger(level: str = "INFO") -> None:
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(StructuredFormatter())
     root_logger.addHandler(handler)
+
+    # Third-party HTTP clients log full request URLs at INFO. Keep them quiet so
+    # upstream query-string credentials never reach production logs.
+    for noisy_logger in ("httpx", "httpcore"):
+        logging.getLogger(noisy_logger).setLevel(logging.WARNING)
