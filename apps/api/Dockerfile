@@ -177,6 +177,12 @@ RUN mkdir -p \
 # UV_COMPILE_BYTECODE=1 compiled venv packages; this handles app source code.
 RUN python -m compileall -q api/ core/ orchestration/ agents/ tools/ scripts/ reports/ 2>/dev/null || true
 
+# Create a dedicated non-root user. All writable paths are chown'd here;
+# volume mounts in docker-compose inherit these permissions.
+RUN addgroup --system --gid 1001 appgroup \
+ && adduser  --system --uid  1001 --ingroup appgroup --no-create-home appuser \
+ && chown -R appuser:appgroup /app/cache /app/storage
+
 RUN chmod +x scripts/docker_entrypoint.sh
 
 # -- Stage 5: development - hot-reload server ---------------------------------
@@ -195,16 +201,12 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
     CMD curl -f -s http://localhost:8000/health || exit 1
 
-CMD ["sh", "scripts/docker_entrypoint.sh"]
+USER root
+ENTRYPOINT ["sh", "scripts/docker_entrypoint.sh"]
 
-# -- Stage 6: production - hardened, non-root ---------------------------------
+
+# Stage 6: production - hardened, non-root
 FROM app AS production
-
-# Create a dedicated non-root user. All writable paths are chown'd here;
-# volume mounts in docker-compose inherit these permissions.
-RUN addgroup --system --gid 1001 appgroup \
- && adduser  --system --uid  1001 --ingroup appgroup --no-create-home appuser \
- && chown -R appuser:appgroup /app/cache /app/storage
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
     CMD curl -f -s http://localhost:8000/health || exit 1

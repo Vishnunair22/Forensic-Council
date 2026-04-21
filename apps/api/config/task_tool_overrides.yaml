@@ -30,9 +30,9 @@ specific:
   "remote ppg biometric liveness": "rppg_liveness_check"
   "run audio_visual_sync verification": "audio_visual_sync"
   "audio_visual_sync verification": "audio_visual_sync"
-  "run c2pa_validator": "c2pa_validator"
-  "c2pa_validator": "c2pa_validator"
-  "digital provenance manifests": "c2pa_validator"
+  "run c2pa_validator": "provenance_chain_verify"
+  "c2pa_validator": "provenance_chain_verify"
+  "digital provenance manifests": "provenance_chain_verify"
   "run interframe_forgery_detector": "interframe_forgery_detector"
   "interframe_forgery_detector": "interframe_forgery_detector"
   "motion ghosting and ssim variance": "interframe_forgery_detector"
@@ -113,7 +113,7 @@ general:
   "ml metadata anomaly": "metadata_anomaly_score"
   "astronomical api": "astronomical_api"
   "reverse image search": "reverse_image_search"
-  "device fingerprint database": "device_fingerprint_db"
+  "device fingerprint database": "camera_profile_match"
   "inter-agent call": "inter_agent_call"
   "ml-based image splicing": "image_splice_check"
   "camera noise fingerprint analysis": "noise_fingerprint"
@@ -209,8 +209,8 @@ deep_agent1:
 agent2_initial:
   "run speaker_diarize to establish voice count baseline": "speaker_diarize"
   "voice count baseline": "speaker_diarize"
-  "run neural_prosody across full audio track for affective incongruence": "neural_prosody"
-  "affective incongruence": "neural_prosody"
+  "run neural_prosody across full audio track for acoustic artifact screening": "neural_prosody"
+  "acoustic artifact screening": "neural_prosody"
   "neural prosody": "neural_prosody"
   "run audio_gen_signature to identify spectral tts fingerprints": "audio_gen_signature"
   "spectral tts fingerprints": "audio_gen_signature"
@@ -218,6 +218,7 @@ agent2_initial:
   "run codec_fingerprinting for re-encoding event detection": "codec_fingerprinting"
   "re-encoding event detection": "codec_fingerprinting"
   "run audio_visual_sync verification if video file": "audio_visual_sync"
+  "run audio_visual_sync verification for video audio track": "audio_visual_sync"
 
 # --- Agent 3: Phase 1 Tools ---
 agent3_initial:
@@ -236,6 +237,17 @@ deep_agent2:
   "voice clone detection": "voice_clone_detect"
   "deep ensemble on flagged speaker": "anti_spoofing_detect"
   "deep ensemble on low-confidence": "anti_spoofing_detect"
+  "run voice_clone_deep_ensemble": "voice_clone_deep_ensemble"
+  "run anti_spoofing_deep_ensemble": "anti_spoofing_deep_ensemble"
+
+# --- Deep Pass Tools (Agent 5) ---
+deep_agent5:
+  "run metadata_anomaly_score": "metadata_anomaly_score"
+  "probabilistic fabrication detection": "metadata_anomaly_score"
+  "run provenance_chain_verify": "provenance_chain_verify"
+  "c2pa and digital provenance manifests": "provenance_chain_verify"
+  "run camera_profile_match": "camera_profile_match"
+  "claimed device model": "camera_profile_match"
 
 # --- Deep Pass Tools (Agent 4) ---
 deep_agent4:

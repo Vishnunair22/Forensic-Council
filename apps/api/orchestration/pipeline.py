@@ -746,6 +746,7 @@ class ForensicCouncilPipeline:
             extra_kwargs: dict = None,
         ) -> tuple:
             """Run only the initial investigation pass. Returns (agent_instance, initial_findings)."""
+            agent = None
             with _tracer.start_as_current_span(
                 f"agent.{agent_id}.initial_pass"
             ) as span:
@@ -767,23 +768,49 @@ class ForensicCouncilPipeline:
                     if self.inter_agent_bus is not None:
                         self.inter_agent_bus.register_agent(agent_id, agent)
                     if not agent.supports_uploaded_file:
-                        return agent, [], False
+                        return agent, [], "unsupported"
                     logger.info(f"Running {agent_id} initial investigation")
                     initial_findings = await asyncio.wait_for(
                         agent.run_investigation(),
-                        timeout=self.config.investigation_timeout,
+                        timeout=min(float(self.config.investigation_timeout), 150.0),
                     )
                     span.set_attribute("finding_count", len(initial_findings))
                     # Signal the bus for early deliberation unblocking
                     if self.signal_bus:
                         self.signal_bus.signal_ready(agent_id, initial_findings)
 
-                    return agent, initial_findings, True
+                    return agent, initial_findings, "complete"
                 except Exception as e:
                     logger.error(
                         f"{agent_id} initial pass failed", error=str(e), exc_info=True
                     )
-                    return None, [], False
+                    findings = list(getattr(agent, "_findings", []) or []) if agent is not None else []
+                    try:
+                        from core.react_loop import AgentFinding
+
+                        findings.append(
+                            AgentFinding(
+                                agent_id=agent_id,
+                                agent_name=getattr(agent, "agent_name", agent_id),
+                                finding_type="Initial Analysis Incomplete",
+                                confidence_raw=0.0,
+                                raw_confidence_score=0.0,
+                                status="INCOMPLETE",
+                                evidence_verdict="ERROR",
+                                reasoning_summary=(
+                                    f"{agent_id} did not finish inside the initial-analysis guardrail: {e}. "
+                                    "Partial tool findings were preserved and the analyst may continue instead of being blocked."
+                                ),
+                                metadata={
+                                    "tool_name": "initial_analysis_guardrail",
+                                    "court_defensible": False,
+                                    "tool_error": str(e),
+                                },
+                            )
+                        )
+                    except Exception:
+                        pass
+                    return agent, findings, "error"
 
         async def run_agent_deep_only(
             agent,
@@ -869,15 +896,6 @@ class ForensicCouncilPipeline:
                 aname = AGENT_NAMES.get(aid, aid)
                 preview = []
                 synthesis = getattr(agent_inst, "_agent_synthesis", None) if agent_inst is not None else None
-                if isinstance(synthesis, dict):
-                    summary = str(synthesis.get("narrative_summary") or "").strip()
-                    if summary:
-                        preview.append({
-                            "tool": "agent_synthesis",
-                            "summary": summary[:420],
-                            "severity": "LOW",
-                            "verdict": str(synthesis.get("verdict") or "INCONCLUSIVE"),
-                        })
                 if findings:
                     for f in findings:
                         m = f.metadata if hasattr(f, "metadata") else f.get("metadata", {}) if isinstance(f, dict) else {}
@@ -886,8 +904,42 @@ class ForensicCouncilPipeline:
                         if not s:
                             continue
                         sev = assign_severity_tier(f)
-                        tv = "ERROR" if m.get("court_defensible") is False else "FLAGGED" if sev in ("CRITICAL", "HIGH", "MEDIUM") else "CLEAN"
-                        preview.append({"tool": tool, "summary": s[:320], "severity": sev, "verdict": tv})
+                        evidence_verdict = str(
+                            getattr(f, "evidence_verdict", "")
+                            if hasattr(f, "evidence_verdict")
+                            else f.get("evidence_verdict", "")
+                        ).upper()
+                        finding_status = str(
+                            getattr(f, "status", "")
+                            if hasattr(f, "status")
+                            else f.get("status", "")
+                        ).upper()
+                        if evidence_verdict == "ERROR" or finding_status == "INCOMPLETE":
+                            tv = "NEEDS_REVIEW"
+                        elif evidence_verdict in ("POSITIVE", "TAMPERED", "SUSPICIOUS", "MANIPULATED") or sev in ("CRITICAL", "HIGH", "MEDIUM"):
+                            tv = "FLAGGED"
+                        elif evidence_verdict == "NOT_APPLICABLE" or finding_status == "NOT_APPLICABLE":
+                            tv = "NOT_APPLICABLE"
+                        else:
+                            tv = "CLEAN"
+                        preview.append({
+                            "tool": tool,
+                            "summary": s[:320],
+                            "severity": sev,
+                            "verdict": tv,
+                            "key_signal": m.get("section_key_signal") or m.get("raw_tool_summary") or "",
+                            "confidence": getattr(f, "confidence_raw", None) if hasattr(f, "confidence_raw") else f.get("confidence_raw"),
+                            "section": m.get("section") or "",
+                        })
+                if isinstance(synthesis, dict) and not preview:
+                    summary = str(synthesis.get("narrative_summary") or "").strip()
+                    if summary:
+                        preview.append({
+                            "tool": "agent_synthesis",
+                            "summary": summary[:420],
+                            "severity": "LOW",
+                            "verdict": str(synthesis.get("verdict") or "INCONCLUSIVE"),
+                        })
 
                 await broadcast_update(str(session_id), BriefUpdate(
                     type="AGENT_COMPLETE" if status in ("complete", "error", "skipped") else "AGENT_UPDATE",
@@ -907,8 +959,8 @@ class ForensicCouncilPipeline:
 
         async def run_agent_initial_with_status(cls, aid, ex):
             await _broadcast_agent_status(aid, "running", f"Running {aid} initial pass...")
-            agent, initial_findings, ok = await run_agent_initial_only(cls, aid, ex)
-            if not ok:
+            agent, initial_findings, result_status = await run_agent_initial_only(cls, aid, ex)
+            if result_status == "unsupported":
                 await _broadcast_agent_status(
                     aid,
                     "skipped",
@@ -917,8 +969,20 @@ class ForensicCouncilPipeline:
                     agent_inst=agent,
                 )
             else:
-                await _broadcast_agent_status(aid, "complete", f"{aid} initial analysis complete.", findings=initial_findings, agent_inst=agent)
-            return agent, initial_findings, ok
+                message = (
+                    f"{aid} initial analysis completed with partial findings."
+                    if result_status == "error"
+                    else f"{aid} initial analysis complete."
+                )
+                await _broadcast_agent_status(
+                    aid,
+                    "complete",
+                    message,
+                    findings=initial_findings,
+                    error=None,
+                    agent_inst=agent,
+                )
+            return agent, initial_findings, result_status
 
         raw_initial = await asyncio.gather(
             *[run_agent_initial_with_status(cls, aid, ex) for cls, aid, ex in agent_def_list],
@@ -928,7 +992,7 @@ class ForensicCouncilPipeline:
         # Mapping results back to instances (index-aligned with registry order)
         agent_map = {}
         for i, aid in enumerate(registry.get_all_agent_ids()):
-            res = raw_initial[i] if not isinstance(raw_initial[i], BaseException) else (None, [], False)
+            res = raw_initial[i] if not isinstance(raw_initial[i], BaseException) else (None, [], "error")
             agent_map[aid] = res
 
         agent1, a1_init, a1_ok = agent_map["Agent1"]
@@ -947,10 +1011,10 @@ class ForensicCouncilPipeline:
                     else {}
                 ),
                 react_chain=_serialize_react_chain(getattr(agent, "_react_chain", [])),
-                agent_active=ok,
-                supports_file_type=ok,
+                agent_active=status != "unsupported",
+                supports_file_type=status != "unsupported",
             )
-            for aid, (agent, findings, ok) in agent_map.items()
+            for aid, (agent, findings, status) in agent_map.items()
         ]
 
         async def _await_deep_analysis_decision() -> bool:
@@ -1045,7 +1109,7 @@ class ForensicCouncilPipeline:
 
         # Configure producers and consumers
         producer_id = "Agent1" # Primary vision producer
-        producer_inst = agent_map.get(producer_id, (None, None, False))[0]
+        producer_inst = agent_map.get(producer_id, (None, None, "error"))[0]
 
         if producer_inst:
             producer_inst._gemini_signal_callback = _broadcast_context
@@ -1056,14 +1120,22 @@ class ForensicCouncilPipeline:
                 agent_inst._agent1_context_event = context_event
 
         async def _run_deep_with_fallback(aid: str) -> AgentLoopResult:
-            a_inst, a_init, a_ok = agent_map[aid]
+            a_inst, a_init, a_status = agent_map[aid]
+            a_supported = a_status != "unsupported"
 
-            if not a_ok:
-                return AgentLoopResult(agent_id=aid, findings=[], reflection_report={}, react_chain=[], agent_active=False)
+            if not a_supported:
+                return AgentLoopResult(
+                    agent_id=aid,
+                    findings=[],
+                    reflection_report={},
+                    react_chain=[],
+                    agent_active=False,
+                    supports_file_type=False,
+                )
 
             await _broadcast_agent_status(aid, "running", f"Running {aid} deep pass...")
             # Start the deep pass
-            result = await run_agent_deep_only(a_inst, aid, a_init, a_ok)
+            result = await run_agent_deep_only(a_inst, aid, a_init, a_supported)
 
             if result.error:
                 await _broadcast_agent_status(aid, "error", f"{aid} error: {result.error}", error=result.error, agent_inst=a_inst)
@@ -1145,11 +1217,11 @@ class ForensicCouncilPipeline:
         key = f"forensic:checkpoint:{session_id}:{agent_id}"
         ttl = self.config.session_ttl_hours * 3600
         try:
-            serialisable = [
+            serializable = [
                 f.model_dump(mode="json") if hasattr(f, "model_dump") else f
                 for f in findings
             ]
-            await self._redis.set(key, _json.dumps(serialisable), ex=ttl)
+            await self._redis.set(key, _json.dumps(serializable), ex=ttl)
             logger.debug(
                 "Checkpointed agent findings to Redis",
                 agent_id=agent_id,

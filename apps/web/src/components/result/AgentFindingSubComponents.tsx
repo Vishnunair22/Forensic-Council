@@ -9,7 +9,6 @@ import {
  XCircle 
 } from "lucide-react";
 import { clsx } from "clsx";
-import { Badge } from "@/components/ui/Badge";
 import { fmtTool } from "@/lib/fmtTool";
 import { getToolIcon } from "@/lib/tool-icons";
 import type { AgentFindingDTO } from "@/lib/api";
@@ -17,20 +16,19 @@ import type { AgentFindingDTO } from "@/lib/api";
 // ─── Confidence Bar Component ───
 export function ConfidenceBar({ value }: { value: number }) {
  const filled = Math.round(value * 5);
- const color = value >= 0.75 ? "bg-emerald-400" : value >= 0.5 ? "bg-amber-400" : "bg-rose-400";
- const textColor = value >= 0.75 ? "text-emerald-400" : value >= 0.5 ? "text-amber-400" : "text-rose-400";
+ const color = value >= 0.75 ? "bg-primary" : value >= 0.5 ? "bg-warning" : "bg-danger";
+ const textColor = value >= 0.75 ? "text-primary" : value >= 0.5 ? "text-warning" : "text-danger";
 
  return (
   <div className="flex items-center gap-3">
-   <div className="flex gap-1">
+   <div className="flex gap-1.5">
     {Array.from({ length: 5 }).map((_, i) => (
      <div
       key={i}
       className={clsx(
-       "h-[2px] rounded-full transition-all duration-500",
+       "h-1 rounded-full transition-all duration-700",
        i < filled ? color : "bg-white/5",
-       i < filled ? "w-6" : "w-1.5",
-       i < filled && (value >= 0.75 ? "shadow-[0_0_10px_rgba(16,185,129,0.8)]" : value >= 0.5 ? "shadow-[0_0_10px_rgba(245,158,11,0.8)]" : "shadow-[0_0_10px_rgba(244,63,94,0.8)]")
+       i < filled ? "w-6 shadow-[0_0_10px_rgba(34,211,238,0.5)]" : "w-1.5"
       )}
      />
     ))}
@@ -72,16 +70,16 @@ export function ToolRow({
     aria-controls={`tool-content-${toolName}`}
    >
     <div className={clsx(
-     "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border",
-     status === "success" ? "bg-emerald-500/5 border-emerald-500/20 text-emerald-400" :
-     status === "warning" ? "bg-amber-500/5 border-amber-500/20 text-amber-400" :
-     status === "error" ? "bg-rose-500/5 border-rose-500/20 text-rose-400" :
-     "bg-white/5 border-white/10 text-white/20"
+     "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border shadow-md",
+     status === "success" ? "bg-primary/10 border-primary/20 text-primary" :
+     status === "warning" ? "bg-warning/10 border-warning/20 text-warning" :
+     status === "error" ? "bg-danger/10 border-danger/20 text-danger" :
+     "bg-surface-1 border-border-subtle text-white/20"
     )}>
      <Icon className="w-4 h-4" />
     </div>
 
-    <span className="flex-1 text-[11px] font-black tracking-widest text-white/70 group-hover:text-white transition-colors">
+    <span className="flex-1 text-[10px] font-black tracking-[0.2em] text-white/60 group-hover:text-white transition-colors uppercase">
      {fmtTool(toolName)}
     </span>
 
@@ -92,17 +90,20 @@ export function ToolRow({
       </span>
      )}
      
-     <Badge 
-      variant={status === "success" ? "success" : (status === "error" ? "destructive" : (status === "na" ? "secondary" : "warning"))}
-      className="text-[10px] font-black tracking-widest px-2 py-0"
-     >
-      {status.toUpperCase()}
-     </Badge>
+     <div className={clsx(
+      "px-3 py-1 rounded-full border text-[9px] font-black tracking-[0.2em] uppercase",
+      status === "success" ? "bg-primary/10 border-primary/20 text-primary" : 
+      status === "error" ? "bg-danger/10 border-danger/20 text-danger" : 
+      status === "na" ? "bg-surface-1 border-border-subtle text-white/20" : 
+      "bg-warning/10 border-warning/20 text-warning"
+     )}>
+      {status === "success" ? "Valid" : status === "warning" ? "Flagged" : status.toUpperCase()}
+     </div>
 
      {!na && (
       <span className={clsx(
-       "text-[10px] font-black font-mono w-8 text-right",
-       confidence >= 0.75 ? "text-emerald-400" : confidence >= 0.5 ? "text-amber-400" : "text-rose-400"
+       "text-[10px] font-black font-mono w-10 text-right tabular-nums",
+       confidence >= 0.75 ? "text-primary" : confidence >= 0.5 ? "text-warning" : "text-danger"
       )}>
        {Math.round(confidence * 100)}%
       </span>
@@ -114,12 +115,12 @@ export function ToolRow({
 
    {expanded && (
     <div id={`tool-content-${toolName}`} className="px-6 pb-6 pt-2">
-     <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-4">
+     <div className="p-6 rounded-[1.5rem] premium-card space-y-5 shadow-inner">
       {/* Per-tool specific signal — raw output from the tool */}
-      <div className="space-y-1">
-       <h5 className="text-[10px] font-black text-white/20 tracking-[0.2em]">Tool Output</h5>
-       <p className="text-[13px] text-white/70 leading-relaxed font-medium font-mono">
-        {(finding.metadata?.raw_tool_summary as string) || finding.reasoning_summary || "No output recorded."}
+      <div className="space-y-2">
+       <h5 className="text-[9px] font-black text-white/20 tracking-[0.3em] uppercase">Diagnostic Intelligence</h5>
+       <p className="text-[13px] text-white/70 leading-relaxed font-medium font-mono uppercase tracking-tight">
+        {(finding.metadata?.raw_tool_summary as string) || finding.reasoning_summary || "No diagnostic output."}
        </p>
       </div>
 

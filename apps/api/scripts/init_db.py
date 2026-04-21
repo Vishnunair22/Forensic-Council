@@ -73,11 +73,11 @@ async def init_database() -> bool:
             applied=status["applied_count"],
         )
 
-        logger.info("Database initialisation complete")
+        logger.info("Database initialization complete")
         return True
 
     except Exception as e:
-        logger.error("Failed to initialise database", error=str(e))
+        logger.error("Failed to initialize database", error=str(e))
         return False
     finally:
         await manager.disconnect()

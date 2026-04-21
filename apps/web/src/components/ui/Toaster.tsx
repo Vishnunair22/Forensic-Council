@@ -18,32 +18,37 @@ const ICON_MAP = {
   info: Info,
 } as const;
 
-const STYLE_MAP: Record<string, { bg: string; border: string; text: string }> =
+const STYLE_MAP: Record<string, { bg: string; border: string; text: string; stripe: string }> =
   {
     default: {
-      bg: "bg-slate-800/90",
-      border: "border-slate-600/40",
-      text: "text-slate-200",
+      bg: "bg-surface-2/80",
+      border: "border-border-subtle",
+      text: "text-white/80",
+      stripe: "bg-primary/40",
     },
     success: {
-      bg: "bg-emerald-900/30",
-      border: "border-emerald-500/30",
-      text: "text-emerald-300",
+      bg: "bg-surface-2/90",
+      border: "border-primary/20",
+      text: "text-primary",
+      stripe: "bg-primary",
     },
     destructive: {
-      bg: "bg-red-900/30",
-      border: "border-red-500/30",
-      text: "text-red-300",
+      bg: "bg-surface-2/90",
+      border: "border-danger/20",
+      text: "text-danger",
+      stripe: "bg-danger",
     },
     warning: {
-      bg: "bg-amber-900/30",
-      border: "border-amber-500/30",
-      text: "text-amber-300",
+      bg: "bg-surface-2/90",
+      border: "border-warning/20",
+      text: "text-warning",
+      stripe: "bg-warning",
     },
     info: {
-      bg: "bg-cyan-900/20",
-      border: "border-cyan-500/20",
-      text: "text-cyan-300",
+      bg: "bg-surface-2/90",
+      border: "border-primary/20",
+      text: "text-primary",
+      stripe: "bg-primary",
     },
   };
 
@@ -61,31 +66,36 @@ function ToastCard({
   return (
     <div
       className={clsx(
-        "flex items-start gap-3 p-3.5 rounded-xl border backdrop-blur-lg shadow-lg",
-        "animate-in slide-in-from-right-full fade-in duration-200",
+        "relative flex items-start gap-4 p-4 rounded-2xl border backdrop-blur-2xl shadow-2xl overflow-hidden",
+        "animate-in slide-in-from-right-full fade-in duration-300",
         style.bg,
         style.border,
       )}
-      style={{ minWidth: 280, maxWidth: 420 }}
+      style={{ minWidth: 320, maxWidth: 440 }}
       role="alert"
       aria-live="assertive"
     >
-      <Icon className={clsx("w-4 h-4 shrink-0 mt-0.5", style.text)} />
+      <div className={clsx("absolute left-0 top-0 bottom-0 w-1", style.stripe)} />
+      
+      <div className={clsx("w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-surface-1 border border-border-subtle shadow-inner", style.text)}>
+        <Icon className="w-4 h-4" />
+      </div>
+
       <div className="flex-1 min-w-0">
         {t.title && (
-          <p className={clsx("text-xs font-bold leading-tight", style.text)}>
+          <p className={clsx("text-xs font-black uppercase tracking-widest leading-tight", style.text)}>
             {t.title}
           </p>
         )}
         {t.description && (
-          <p className="text-[11px] text-foreground/60 leading-relaxed mt-0.5">
+          <p className="text-[11px] font-mono font-medium text-white/40 leading-relaxed mt-1 uppercase tracking-tight">
             {t.description}
           </p>
         )}
       </div>
       <button
         onClick={onDismiss}
-        className="p-1 rounded-md hover:bg-white/10 text-foreground/30 hover:text-foreground/60 transition-colors shrink-0"
+        className="p-1 rounded-md hover:bg-white/10 text-white/20 hover:text-white transition-colors shrink-0"
         aria-label="Dismiss"
       >
         <X className="w-3.5 h-3.5" />
@@ -101,11 +111,11 @@ export function Toaster() {
 
   return (
     <div
-      className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none"
+      className="fixed top-8 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-2 pointer-events-none w-full max-w-md px-4"
       aria-label="Notifications"
     >
       {toasts.map((t) => (
-        <div key={t.id} className="pointer-events-auto">
+        <div key={t.id} className="pointer-events-auto flex justify-center">
           <ToastCard t={t} onDismiss={() => dismiss(t.id)} />
         </div>
       ))}

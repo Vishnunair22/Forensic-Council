@@ -11,39 +11,39 @@ export function GlobalBackground() {
       aria-hidden="true"
       style={{ background: "#020617" }}
     >
-      {/* Top Center Ambient Glow (Cyan) */}
+      {/* Top Center Ambient Glow (Primary Cyan) */}
       <div
         className="absolute inset-0"
         style={{
           background:
-            "radial-gradient(ellipse 70% 50% at 50% -10%, rgba(6, 182, 212, 0.08) 0%, transparent 70%)",
+            "radial-gradient(ellipse 70% 60% at 50% -15%, rgba(34, 211, 238, 0.15) 0%, transparent 80%)",
         }}
       />
 
-      {/* Bottom Right Subtle Resolve (Emerald) */}
+      {/* Bottom Right Ambient Glow (Accent Violet) */}
       <div
         className="absolute inset-0"
         style={{
           background:
-            "radial-gradient(ellipse 60% 40% at 90% 110%, rgba(16, 185, 129, 0.04) 0%, transparent 60%)",
+            "radial-gradient(ellipse 60% 50% at 85% 115%, rgba(139, 92, 246, 0.12) 0%, transparent 70%)",
         }}
       />
 
-      {/* Tactile Dot Grid Substrate */}
+      {/* High-Density Tactile Dot Grid */}
       <div
-        className="absolute inset-0 opacity-[0.15]"
+        className="absolute inset-0 opacity-[0.2]"
         style={{
           backgroundImage:
-            "radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px)",
-          backgroundSize: "40px 40px",
+            "radial-gradient(rgba(34, 211, 238, 0.15) 1px, transparent 1px)",
+          backgroundSize: "32px 32px",
         }}
       />
 
-      {/* Center Soft Focal Point */}
+      {/* Center Cinematic Focal Point */}
       <div
         className="absolute inset-0"
         style={{
-          background: "radial-gradient(circle at 50% 50%, rgba(6, 182, 212, 0.02) 0%, transparent 50%)"
+          background: "radial-gradient(circle at 50% 50%, rgba(34, 211, 238, 0.05) 0%, transparent 60%)"
         }}
       />
 

@@ -17,13 +17,13 @@ export function ResultStateView({ type, message, onNew, onHome }: ResultStateVie
       icon: Activity,
       title: "Loading Report",
       desc: "Accessing secure forensic ledger...",
-      color: "text-cyan-400",
+      color: "text-primary",
     },
     error: {
       icon: XCircle,
       title: "Analysis Error",
       desc: message || "Something went wrong during report synthesis.",
-      color: "text-rose-500",
+      color: "text-danger",
     },
     empty: {
       icon: Search,
@@ -37,27 +37,27 @@ export function ResultStateView({ type, message, onNew, onHome }: ResultStateVie
 
   return (
     <div className="min-h-[70vh] flex flex-col items-center justify-center text-center px-6">
-      <div className="w-20 h-20 rounded-[2rem] bg-white/[0.02] border border-white/5 flex items-center justify-center mb-8">
+      <div className="w-24 h-24 rounded-[2.5rem] premium-glass border-border-subtle flex items-center justify-center mb-10 shadow-2xl transition-transform hover:scale-110 duration-500">
         <Icon
-          className={clsx("w-10 h-10", c.color, type === "loading" && "animate-pulse")}
+          className={clsx("w-12 h-12", c.color, type === "loading" && "animate-pulse")}
           aria-hidden="true"
         />
       </div>
-      <h2 className="text-3xl font-bold text-white tracking-tight mb-3 font-heading">
+      <h2 className="text-4xl font-black text-white tracking-tighter mb-4">
         {c.title}
       </h2>
-      <p className="text-sm font-medium text-white/50 max-w-sm mb-10">{c.desc}</p>
+      <p className="text-sm font-black text-white/30 max-w-sm mb-12 tracking-widest">{c.desc}</p>
 
       {(onNew || onHome) && (
         <div className="flex gap-4 flex-wrap justify-center">
           {onNew && (
-            <button onClick={onNew} className="btn-pill-primary px-8">
+            <button onClick={onNew} className="btn-premium px-10 py-4 tracking-[0.2em]">
               New Investigation
             </button>
           )}
           {onHome && (
-            <button onClick={onHome} className="btn-pill-secondary px-8">
-              <HomeIcon className="w-4 h-4" /> Home
+            <button onClick={onHome} className="btn-outline px-10 py-4 tracking-[0.2em]">
+              <HomeIcon className="w-4 h-4" /> Hub
             </button>
           )}
         </div>

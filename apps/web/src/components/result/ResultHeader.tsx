@@ -24,24 +24,24 @@ interface ResultHeaderProps {
 
 const VERDICT_THEMES: Record<string, { border: string; glow: string; text: string; bg: string; icon: LucideIcon }> = {
  emerald: { 
-  border: "border-emerald-500/20", 
-  glow: "shadow-[0_0_40px_rgba(16,185,129,0.05)]", 
-  text: "text-emerald-400", 
-  bg: "bg-emerald-500/5",
+  border: "border-primary/20", 
+  glow: "shadow-[0_0_40px_rgba(34,211,238,0.1)]", 
+  text: "text-primary", 
+  bg: "bg-primary/5",
   icon: ShieldCheck 
  },
  red: { 
-  border: "border-rose-500/20", 
-  glow: "shadow-[0_0_40px_rgba(244,63,94,0.05)]", 
-  text: "text-rose-400", 
-  bg: "bg-rose-500/5",
+  border: "border-danger/20", 
+  glow: "shadow-[0_0_40px_rgba(244,63,94,0.1)]", 
+  text: "text-danger", 
+  bg: "bg-danger/5",
   icon: ShieldAlert 
  },
  amber: { 
-  border: "border-amber-500/20", 
-  glow: "shadow-[0_0_40px_rgba(245,158,11,0.05)]", 
-  text: "text-amber-400", 
-  bg: "bg-amber-500/5",
+  border: "border-warning/20", 
+  glow: "shadow-[0_0_40px_rgba(245,158,11,0.1)]", 
+  text: "text-warning", 
+  bg: "bg-warning/5",
   icon: Shield 
  },
 };
@@ -68,7 +68,7 @@ export function ResultHeader({
   <section 
    aria-label="Forensic Verdict Summary"
    className={clsx(
-    "rounded-[2.5rem] border overflow-hidden glass-panel transition-all duration-700",
+    "rounded-[2.5rem] border overflow-hidden premium-glass transition-all duration-700",
     theme.border,
     theme.glow
    )}
@@ -99,30 +99,30 @@ export function ResultHeader({
        <h2 className="text-lg font-bold text-white/50 truncate tracking-tight">{fileName}</h2>
       </div>
 
-      <div className="flex flex-col items-center gap-4">
-       <div className={clsx("w-16 h-16 rounded-3xl flex items-center justify-center shrink-0 border transition-transform hover:scale-105 duration-500", theme.bg, theme.border)}>
-        <theme.icon className={clsx("w-8 h-8", theme.text)} />
+      <div className="flex flex-col items-center gap-5">
+       <div className={clsx("w-20 h-20 rounded-[2rem] flex items-center justify-center shrink-0 border shadow-2xl transition-transform hover:scale-110 duration-500", theme.bg, theme.border)}>
+        <theme.icon className={clsx("w-10 h-10", theme.text)} />
        </div>
-       <div className="space-y-2">
-        <p className={clsx("text-4xl sm:text-5xl font-bold tracking-tight leading-none font-heading", theme.text)}>
+       <div className="space-y-3">
+        <p className={clsx("text-5xl sm:text-7xl font-black tracking-tighter leading-none uppercase text-glow-cyan", theme.text)}>
          {vc.label}
         </p>
-        <p className="text-[12px] font-semibold text-white/50 tracking-wide">{vc.desc}</p>
+        <p className="text-sm font-black text-white/50 tracking-[0.3em] uppercase">{vc.desc}</p>
        </div>
       </div>
 
       <div className="flex flex-wrap gap-4 items-center justify-center pt-2">
        <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.02] border border-white/[0.05] text-[10px] font-bold text-white/40 transition-colors hover:bg-white/[0.04]">
         <Lock className="w-3.5 h-3.5 text-cyan-500/40" />
-        <span>{activeAgentIds.length} Verified Nodes</span>
+        <span>{activeAgentIds.length} Applicable Agents</span>
        </div>
        <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.02] border border-white/[0.05] text-[10px] font-bold text-white/40 transition-colors hover:bg-white/[0.04]">
         <Fingerprint className="w-3.5 h-3.5 text-cyan-500/40" />
         <span>Pipeline: {pipelineDuration || "N/A"}</span>
        </div>
         <div className={clsx(
-         "px-4 py-1.5 rounded-full border text-[10px] font-bold transition-all",
-         isDeepPhase ? "bg-violet-500/10 border-violet-500/20 text-violet-400" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+         "px-5 py-2 rounded-full border text-[10px] font-black tracking-[0.2em] transition-all uppercase",
+         isDeepPhase ? "bg-accent/10 border-accent/20 text-accent" : "bg-primary/10 border-primary/20 text-primary"
         )}>
          {isDeepPhase ? "Deep Analysis Active" : "Initial Intake Scan"}
         </div>
@@ -152,7 +152,7 @@ export function ResultHeader({
      {/* Neural Discord — consensus vs disagreement */}
      <div className="flex flex-col items-center justify-center gap-4 p-6 rounded-3xl bg-white/[0.01] border border-white/5 hover:bg-white/[0.02] transition-colors">
        <div className="space-y-1 text-center">
-        <span className="text-[10px] font-bold tracking-widest text-white/20">Neural Discord</span>
+        <span className="text-[10px] font-bold tracking-widest text-white/20">Confidence Spread</span>
         <div className={clsx(
          "text-3xl font-bold font-mono",
          discordPct > 30 ? "text-rose-400" : discordPct > 15 ? "text-amber-400" : "text-emerald-400"
@@ -185,24 +185,16 @@ export function ResultHeader({
         style={{ width: `${manipPct}%` }}
        />
       </div>
-      <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-       <div
-        className={clsx("h-full rounded-full transition-all duration-1000",
-         manipPct > 60 ? "bg-rose-500" : manipPct > 30 ? "bg-amber-500" : "bg-emerald-500"
-        )}
-        style={{ width: `${manipPct}%` }}
-       />
-      </div>
      </div>
 
      {/* Error rate */}
-     <div className="flex flex-col justify-center items-center gap-2 p-6 rounded-3xl bg-white/[0.01] border border-white/5 hover:bg-white/[0.02] transition-colors">
-      <span className="text-[10px] font-bold tracking-widest text-white/20 ">Tool Noise</span>
+      <div className="flex flex-col justify-center items-center gap-2 p-6 premium-card rounded-3xl">
+      <span className="text-[10px] font-black tracking-widest text-white/20 uppercase">System Noise</span>
       <span className={clsx(
-       "text-3xl font-bold font-mono",
-       errPct > 20 ? "text-rose-400" : "text-emerald-400"
+       "text-3xl font-black font-mono",
+       errPct > 20 ? "text-danger" : "text-primary"
       )}>{errPct}%</span>
-      <p className="text-[10px] font-bold text-white/10 tracking-widest">Error Rate</p>
+      <p className="text-[10px] font-black text-white/10 tracking-[0.2em] uppercase">Error Rate</p>
      </div>
     </div>
 

@@ -187,7 +187,7 @@ class KeyStore:
         self._init_fernet()
 
     def _init_fernet(self) -> None:
-        """Initialise Fernet cipher from SIGNING_KEY for encrypting private keys at rest.
+        """Initialize Fernet cipher from SIGNING_KEY for encrypting private keys at rest.
 
         Issue 2.2: Use HKDF (proper KDF with domain separation) instead of a
         single-round SHA-256, which provides no salt or iteration count.
@@ -207,7 +207,7 @@ class KeyStore:
             self._fernet = Fernet(fernet_key)
         except Exception as e:
             logger.warning(
-                "Failed to initialise Fernet cipher for key encryption", error=str(e)
+                "Failed to initialize Fernet cipher for key encryption", error=str(e)
             )
             self._fernet = None
 
@@ -290,7 +290,7 @@ class KeyStore:
         logger.critical(
             "Issue 2.3: All DB key-load attempts failed — falling back to deterministic "
             "key derivation from SIGNING_KEY. Key independence is REDUCED until the DB "
-            "connection is restored and the key store is re-initialised.",
+            "connection is restored and the key store is re-initialized.",
             error=str(last_error),
         )
         self._db_available = False
@@ -348,7 +348,7 @@ class KeyStore:
 
     async def initialize(self) -> None:
         """
-        Initialise the key store — attempt DB load first, generate keys as needed.
+        Initialize the key store — attempt DB load first, generate keys as needed.
 
         Call this once at application startup.
         """

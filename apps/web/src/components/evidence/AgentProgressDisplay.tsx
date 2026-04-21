@@ -18,12 +18,12 @@ import { SoundType } from "@/hooks/useSound";
 export interface FindingPreview {
  tool: string;
  summary: string;
- confidence: number;
- flag: string;
- severity: string;
- verdict: string;
- key_signal: string;
- section: string;
+ confidence?: number | null;
+ flag?: string;
+ severity?: string;
+ verdict?: string;
+ key_signal?: string;
+ section?: string;
  elapsed_s?: number | null;
  degraded?: boolean | null;
  fallback_reason?: string | null;
@@ -78,7 +78,15 @@ const ForensicTimeline = dynamic(
   { ssr: false },
 );
 
-const allValidAgents = AGENTS_DATA;
+const allValidAgents = AGENTS_DATA.filter((agent) => agent.id !== "AGT-06");
+
+function unsupportedAgentIdsForMime(mimeType?: string): string[] {
+ if (!mimeType) return [];
+ if (mimeType.startsWith("image/")) return ["Agent2", "Agent4"];
+ if (mimeType.startsWith("audio/")) return ["Agent1", "Agent3", "Agent4"];
+ if (mimeType.startsWith("video/")) return ["Agent1", "Agent2"];
+ return [];
+}
 
 export function AgentProgressDisplay({
  agentUpdates,
@@ -100,6 +108,18 @@ export function AgentProgressDisplay({
  const [hiddenAgentIds, setHiddenAgentIds] = useState<Set<string>>(new Set());
  const [skippedAgentIds, setSkippedAgentIds] = useState<Set<string>>(new Set());
  const [showTimeline, setShowTimeline] = useState(false);
+
+ useEffect(() => {
+  const unsupportedIds = unsupportedAgentIdsForMime(mimeType);
+  if (unsupportedIds.length === 0) return;
+
+  setSkippedAgentIds((prev) => new Set([...prev, ...unsupportedIds]));
+  const timer = setTimeout(() => {
+   setHiddenAgentIds((prev) => new Set([...prev, ...unsupportedIds]));
+  }, 10000);
+
+  return () => clearTimeout(timer);
+ }, [mimeType]);
 
  // Track which agents are unsupported
  useEffect(() => {
@@ -181,56 +201,57 @@ export function AgentProgressDisplay({
  const alertCount = totalFlagged;
 
  return (
-  <div className="flex flex-col w-full max-w-[1400px] mx-auto pt-8 gap-10 pb-32">
+  <div className="flex flex-col w-full max-w-[1560px] mx-auto gap-6 pb-36">
 
-   {/* ── Cinematic Header ────────────────────────────────────────────────── */}
-   <div className="flex flex-col md:flex-row items-end justify-between gap-8 px-6 w-full max-w-6xl mx-auto">
-    <div className="flex flex-col">
-      <motion.h1
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="text-4xl md:text-5xl font-bold text-white tracking-tight"
-     >
-      Evidence Analysis
-     </motion.h1>
-     <p className="text-xs text-white/40 font-bold tracking-widest mt-2 flex items-center gap-2">
-      <span className="text-cyan-500/40 font-mono">Stage 01</span>
-      <span>{pipelineMessage || progressText}</span>
-     </p>
-    </div>
+    {/* ── Cinematic Header ────────────────────────────────────────────────── */}
+    <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 w-full">
+     <div className="flex flex-col">
+       <motion.h1
+       initial={{ opacity: 0, x: -20 }}
+       animate={{ opacity: 1, x: 0 }}
+       className="text-3xl sm:text-4xl md:text-5xl font-black text-white uppercase leading-none"
+      >
+       Evidence <span className="text-primary">Analysis</span>
+      </motion.h1>
+      <div className="flex flex-wrap items-center gap-3 mt-3">
+        <span className="text-[10px] font-black text-primary/90 font-mono px-2 py-1 bg-primary/10 border border-primary/20 rounded">
+          {phase === "initial" ? "PHASE_01: SCREENING" : "PHASE_02: INVESTIGATION"}
+        </span>
+        <p className="text-xs text-white/50 font-semibold flex items-center gap-2">
+          {pipelineMessage || progressText}
+        </p>
+      </div>
+     </div>
 
     <motion.div
      initial={{ opacity: 0, y: 10 }}
      animate={{ opacity: 1, y: 0 }}
      transition={{ delay: 0.2 }}
-     className="flex flex-col items-end gap-3"
+     className="flex items-stretch gap-3 w-full lg:w-auto"
     >
-     <div className="flex items-center gap-10 py-2">
-      <div className="flex flex-col items-end">
-       <span className="text-[10px] font-bold text-white/20 tracking-[0.1em] mb-1">Pipeline Progress</span>
-       <span className="text-2xl font-bold text-white leading-none">
-        {allAgentsDone ? "100%" : `${Math.round((finishedCount / allValidAgents.length) * 100)}%`}
-       </span>
-      </div>
-      <div className="w-px h-8 bg-white/5" />
-      <div className="flex flex-col items-end">
-        <span className="text-[10px] font-bold text-white/20 tracking-[0.1em] mb-1">Nodes Online</span>
-        <span className="text-2xl font-bold text-cyan-400 leading-none">
-         {runningCount}
+       <div className="min-w-32 rounded-lg border border-border-subtle bg-white/[0.02] px-4 py-3">
+        <span className="text-[10px] font-black text-white/35 tracking-widest uppercase block mb-1">System Load</span>
+        <span className="text-2xl font-black text-white leading-none font-mono">
+         {allAgentsDone ? "100%" : `${Math.round((finishedCount / allValidAgents.length) * 100)}%`}
         </span>
-      </div>
-     </div>
+       </div>
+       <div className="min-w-32 rounded-lg border border-border-subtle bg-white/[0.02] px-4 py-3">
+         <span className="text-[10px] font-black text-white/35 tracking-widest uppercase block mb-1">Active Threads</span>
+         <span className="text-2xl font-black text-primary leading-none font-mono">
+          {runningCount}
+         </span>
+       </div>
     </motion.div>
    </div>
 
    {/* ── Agent Cards Grid ──────────────────────────────────────────────── */}
-   <div className="w-full max-w-7xl mx-auto px-6">
+   <div className="w-full">
     <motion.div 
      layout
      variants={containerVariants}
      initial="hidden"
      animate="show"
-     className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+     className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"
     >
      <AnimatePresence mode="popLayout">
       {visibleAgents.map((agent) => (
@@ -258,23 +279,23 @@ export function AgentProgressDisplay({
 
 
    {/* ── Status Row + View Ledger ──────────────────────────────────────── */}
-   <div className="flex flex-col sm:flex-row items-center justify-between gap-6 px-6 w-full max-w-6xl mx-auto">
-    <div className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between glass-panel p-6 px-10 rounded-[2rem] relative overflow-hidden forensic-border gap-4 border border-white/5 bg-white/[0.01]">
-     <div className="absolute inset-0 bg-white/[0.02]" />
-     
-     <div className="grid grid-cols-2 sm:flex sm:items-center gap-x-12 gap-y-3 relative z-10 w-full sm:w-auto">
-      {[
-       { label: "Active Nodes",  value: runningCount, color: "text-cyan-400" },
-       { label: "Verified Labs", value: finishedCount, color: "text-emerald-400" },
-       { label: "Phase Skips", value: skippedCount, color: "text-white/20" },
-       { label: "Risk Flags",  value: alertCount,  color: alertCount > 0 ? "text-rose-400" : "text-white/10" },
-      ].map((s) => (
-       <div key={s.label} className="flex flex-col items-start gap-0.5">
-        <span className="text-[10px] font-bold text-white/50 leading-none mb-1">{s.label}</span>
-        <span className={clsx("text-xl font-bold font-mono tracking-tight", s.color)}>{s.value}</span>
-       </div>
-      ))}
-     </div>
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-5 w-full">
+     <div className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between premium-glass p-4 sm:px-5 rounded-xl relative overflow-hidden gap-4 border border-border-subtle">
+      <div className="absolute inset-0 bg-primary/5 opacity-50" />
+      
+      <div className="grid grid-cols-2 sm:flex sm:items-center gap-x-12 gap-y-3 relative z-10 w-full sm:w-auto">
+       {[
+        { label: "Active Threads",  value: runningCount, color: "text-primary" },
+        { label: "Verified Labs", value: finishedCount, color: "text-primary" },
+        { label: "Phase Skips", value: skippedCount, color: "text-white/20" },
+        { label: "Findings",  value: alertCount,  color: alertCount > 0 ? "text-primary" : "text-white/10" },
+       ].map((s) => (
+        <div key={s.label} className="flex flex-col items-start gap-0.5">
+         <span className="text-[10px] font-black text-white/30 tracking-widest uppercase leading-none mb-1">{s.label}</span>
+         <span className={clsx("text-xl font-black font-mono tracking-tight", s.color)}>{s.value}</span>
+        </div>
+       ))}
+      </div>
 
      <div className="flex items-center gap-6 relative z-10 shrink-0 w-full sm:w-auto justify-end sm:justify-start">
       {hiddenAgentIds.size > 0 && (
@@ -296,7 +317,7 @@ export function AgentProgressDisplay({
          : "bg-white/[0.02] border-white/10 text-white/40 hover:border-white/20 hover:text-white"
        )}
       >
-       <FileText className="w-3.5 h-3.5" />
+       <FileText className="w-3.5 h-3.5" aria-hidden="true" />
        <span>{showTimeline ? "Close Ledger" : "View Ledger"}</span>
       </button>
      </div>
@@ -350,7 +371,7 @@ export function AgentProgressDisplay({
           <button
            onClick={onAcceptAnalysis}
            disabled={isNavigating}
-           className="btn-pill-secondary px-8 font-bold text-[11px]"
+           className="btn-outline px-8"
           >
            {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="w-4 h-4" aria-hidden="true" />}
            Accept Results
@@ -358,7 +379,7 @@ export function AgentProgressDisplay({
           <button
            onClick={onDeepAnalysis}
            disabled={isNavigating}
-           className="btn-pill-primary group px-8 font-bold text-[11px]"
+           className="btn-premium group px-8"
           >
            <Microscope className="w-4 h-4" aria-hidden="true" />
            Deep Analysis
@@ -369,15 +390,15 @@ export function AgentProgressDisplay({
          <>
           <button
            onClick={onNewUpload}
-           className="btn-pill-secondary px-8 font-bold text-[11px]"
+           className="btn-outline px-8"
           >
            <RotateCcw className="w-4 h-4" aria-hidden="true" />
-           New Investigation
+           New Analysis
           </button>
           <button
            onClick={onViewResults}
            disabled={isNavigating}
-           className="btn-pill-primary group px-8 font-bold text-[11px]"
+           className="btn-premium group px-8"
           >
            {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <FileText className="w-4 h-4" aria-hidden="true" />}
            View Final Report

@@ -40,16 +40,21 @@ export function mapReportDtoToReport(dto: ReportDTO): Report {
 
       const isDuplicate = seenKeys.has(dedupKey) && phase === "deep";
       seenKeys.add(dedupKey);
+      const evidenceVerdict = finding.evidence_verdict ?? "INCONCLUSIVE";
+      const confidence =
+        evidenceVerdict === "NOT_APPLICABLE" || evidenceVerdict === "ERROR"
+          ? 0
+          : (finding.raw_confidence_score ??
+            finding.calibrated_probability ??
+            finding.confidence_raw ??
+            0);
 
       agentResults.push({
         id: agentId,
         name: finding.agent_name,
         role: finding.agent_name,
         result: finding.court_statement || finding.reasoning_summary,
-        confidence:
-          finding.raw_confidence_score ??
-          finding.calibrated_probability ??
-          (finding.confidence_raw || 1.0),
+        confidence,
         thinking: finding.reasoning_summary,
         metadata: {
           ...finding.metadata,

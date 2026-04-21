@@ -95,7 +95,7 @@ describe("Keyboard Navigation", () => {
     const file = new File(["x"], "t.jpg", { type: "image/jpeg" });
     const onUpload = jest.fn();
     render(<FileUploadSection {...baseUpload} file={file} onUpload={onUpload} />);
-    const btn = screen.getByRole("button", { name: /begin|analyse|start/i });
+    const btn = screen.getByRole("button", { name: /begin|analyze|start/i });
     btn.focus();
     expect(document.activeElement).toBe(btn);
     fireEvent.click(btn); // Simulates Enter on focused button

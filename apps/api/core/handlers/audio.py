@@ -47,7 +47,7 @@ from tools.audio_tools import (
     speaker_diarize as real_speaker_diarize,
 )
 from tools.ml_tools.audio_splice_detector import detect_audio_splices  # sync
-from tools.ml_tools.enf_analysis import analyse_enf  # sync
+from tools.ml_tools.enf_analysis import analyze_enf  # sync
 
 # voice_clone_detect is run via ml_subprocess (subprocess isolation, correct async boundary)
 
@@ -237,6 +237,6 @@ class AudioHandlers(BaseToolHandler):
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         loop = asyncio.get_running_loop()
         await self.agent.update_sub_task("Analyzing electrical network frequency grid...")
-        result = await loop.run_in_executor(None, analyse_enf, artifact.file_path)
+        result = await loop.run_in_executor(None, analyze_enf, artifact.file_path)
         await self.agent._record_tool_result("enf_analysis", result)
         return result

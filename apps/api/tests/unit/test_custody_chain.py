@@ -1,4 +1,4 @@
-﻿"""
+"""
 Unit tests for the chain-of-custody logger.
 
 All tests are fully self-contained â€” no real PostgreSQL connection required.
@@ -12,7 +12,7 @@ from uuid import uuid4
 
 import pytest
 
-# â”€â”€ Minimal env so config initialises without a .env file â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Minimal env so config initializes without a .env file ────────────────────
 os.environ.setdefault("APP_ENV", "testing")
 os.environ.setdefault("SIGNING_KEY", "test-signing-key-" + "x" * 32)
 os.environ.setdefault("POSTGRES_USER", "test")

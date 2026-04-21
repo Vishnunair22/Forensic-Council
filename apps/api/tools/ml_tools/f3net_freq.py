@@ -15,7 +15,7 @@ detection using two frequency-domain branches:
 This implementation applies both concepts image-wide (not face-specific):
 
   Branch 1 — FAD: Discrete Wavelet Transform (DWT) sub-band energy analysis.
-    The LL/LH/HL/HH wavelet sub-bands are analysed for anomalous energy
+    The LL/LH/HL/HH wavelet sub-bands are analyzed for anomalous energy
     distributions.  GAN outputs show characteristic HH spike patterns from
     transpose-convolution checkerboard artefacts.
 

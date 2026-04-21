@@ -284,7 +284,7 @@ test.describe('Forensic Analyst Journey', () => {
     await page.goto('/');
 
     // 1. Verify landing page aesthetics
-    await expect(page.locator('h1')).toContainText(/Multi-Agent Forensic/i);
+    await expect(page.locator('h1')).toContainText(/Multi Agent Forensic/i);
     const beginBtn = page.getByRole('button', { name: /Begin Analysis/i });
     await expect(beginBtn).toBeVisible();
 
@@ -302,9 +302,9 @@ test.describe('Forensic Analyst Journey', () => {
     await expect(page.getByText('test-evidence.png')).toBeVisible();
 
     // 3. Trigger Analysis
-    const analyseBtn = page.getByRole('button', { name: /Analyze/i });
-    await expect(analyseBtn).toBeVisible();
-    await analyseBtn.click();
+    const analyzeBtn = page.getByRole('button', { name: /Analyze/i });
+    await expect(analyzeBtn).toBeVisible();
+    await analyzeBtn.click();
 
     // 4. Verify Transition to Progress
     // The ProgressDisplay should appear
@@ -333,7 +333,7 @@ test.describe('Forensic Analyst Journey', () => {
     await installJourneyMocks(page);
     await page.goto('/');
 
-    await expect(page.locator('h1')).toContainText(/Multi-Agent Forensic/i);
+    await expect(page.locator('h1')).toContainText(/Multi Agent Forensic/i);
     await page.getByRole('button', { name: /upload a file to begin analysis/i }).click();
 
     const png1x1 = Buffer.from(

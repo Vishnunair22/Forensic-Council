@@ -97,7 +97,7 @@ describe("FileUploadSection", () => {
     });
     it("does not render upload action button when no file", () => {
       render(<FileUploadSection {...uploadDefaults} />);
-      expect(screen.queryByRole("button", { name: /begin|analyse|start investigation/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /begin|analyze|start investigation/i })).not.toBeInTheDocument();
     });
   });
 
@@ -109,7 +109,7 @@ describe("FileUploadSection", () => {
     });
     it("renders upload action button", () => {
       render(<FileUploadSection {...uploadDefaults} file={file} />);
-      expect(screen.getByRole("button", { name: /begin|analyse|start/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /begin|analyze|start/i })).toBeInTheDocument();
     });
     it("renders clear/reset button", () => {
       render(<FileUploadSection {...uploadDefaults} file={file} />);
@@ -118,7 +118,7 @@ describe("FileUploadSection", () => {
     it("calls onUpload with file when upload clicked", () => {
       const onUpload = jest.fn();
       render(<FileUploadSection {...uploadDefaults} file={file} onUpload={onUpload} />);
-      fireEvent.click(screen.getByRole("button", { name: /begin|analyse|start|investigate/i }));
+      fireEvent.click(screen.getByRole("button", { name: /begin|analyze|start|investigate/i }));
       expect(onUpload).toHaveBeenCalledWith(file);
     });
     it("calls onClear when clear clicked", () => {

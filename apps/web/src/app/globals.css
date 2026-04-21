@@ -11,44 +11,44 @@
 
 /* ── Theme Variables ──────────────────────────────────────────────────────── */
 @theme {
-  /* ── Core Branding (Synced with Design Mock) ── */
-  --color-primary: #0891b2;       /* Cyan-600 — Deep, technical cyan */
-  --color-primary-rgb: 8, 145, 178;
+  /* ── Core Branding (Argus Core Aesthetic) ── */
+  --color-primary: #22d3ee;       /* Cyan-400 — Electric, technical cyan */
+  --color-primary-rgb: 34, 211, 238;
 
-  --color-accent: #06b6d4;        /* Cyan-500 — Vibrant highlights */
-  --color-accent-rgb: 6, 182, 212;
+  --color-accent: #8b5cf6;        /* Violet-500 — Deep pass investigation highlights */
+  --color-accent-rgb: 139, 92, 246;
 
-  --color-success: #10b981;       /* Emerald-500 */
-  --color-success-rgb: 16, 185, 129;
+  --color-success: #22d3ee;       /* Authentic — synced with primary cyan */
+  --color-success-rgb: 34, 211, 238;
 
-  --color-danger: #f43f5e;        /* Rose-500 */
+  --color-danger: #f43f5e;        /* Rose-500 — Manipulation indicators */
   --color-danger-rgb: 244, 63, 94;
 
-  --color-warning: #f59e0b;       /* Amber-500 */
+  --color-warning: #f59e0b;       /* Amber-500 — Alerts/Diagnostic */
   --color-warning-rgb: 245, 158, 11;
 
   --color-info: #3b82f6;          /* Blue-500 */
   --color-info-rgb: 59, 130, 246;
 
-  --color-background: #000000;    /* Pure black for high-contrast design match */
-  --color-foreground: #ededed;    /* Near-white */
+  --color-background: #020617;    /* Deep Obsidian */
+  --color-foreground: #f8fafc;    /* Slate-50 — High contrast foreground */
 
-  /* ── Surface Elevations (3 tiers) ── */
-  --color-surface-1: rgba(255, 255, 255, 0.02);
-  --color-surface-2: rgba(255, 255, 255, 0.04);
-  --color-surface-3: rgba(255, 255, 255, 0.07);
+  /* ── Surface Elevations (Argus Glassmorphism) ── */
+  --color-surface-1: rgba(15, 23, 42, 0.4);
+  --color-surface-2: rgba(15, 23, 42, 0.6);
+  --color-surface-3: rgba(15, 23, 42, 0.8);
 
-  --color-surface-low:  #0a0a0a;
-  --color-surface-mid:  #111111;
-  --color-surface-high: #171717;
+  --color-surface-low:  #020617;
+  --color-surface-mid:  #0f172a;
+  --color-surface-high: #1e293b;
 
-  --color-border-subtle: rgba(255, 255, 255, 0.05);
-  --color-border-bold:   rgba(255, 255, 255, 0.1);
+  --color-border-subtle: rgba(34, 211, 238, 0.1);
+  --color-border-bold:   rgba(34, 211, 238, 0.2);
 
-  /* ── Typography ── */
-  --font-sans:    var(--font-poppins), var(--font-geist), system-ui, sans-serif;
-  --font-mono:    var(--font-geist-mono), monospace;
-  --font-heading: var(--font-poppins), var(--font-geist), sans-serif;
+  /* ── Typography (Premium Technical) ── */
+  --font-sans:    "Inter", system-ui, sans-serif;
+  --font-mono:    "JetBrains Mono", monospace;
+  --font-heading: "Inter", sans-serif;
 
   /* ── Type Scale ── */
   --text-2xs: 0.625rem;   /* 10px */
@@ -62,10 +62,11 @@
   --text-4xl: 2.25rem;    /* 36px */
   --text-5xl: 3rem;       /* 48px */
 
-  /* ── Border Radius (3 tiers) ── */
-  --radius-sm: 0.75rem;   /* 12px — buttons, badges */
-  --radius-md: 1rem;      /* 16px — cards, inputs */
-  --radius-lg: 1.5rem;    /* 24px — panels, overlays */
+  /* ── Border Radius (Refined) ── */
+  --radius-sm: 0.5rem;    /* 8px */
+  --radius-md: 0.75rem;   /* 12px */
+  --radius-lg: 1rem;      /* 16px */
+  --radius-full: 9999px;
 }
 
 /* ── Base Reset ───────────────────────────────────────────────────────────── */
@@ -129,16 +130,24 @@
 /* ── Glass Surface ────────────────────────────────────────────────────────── */
 /* Blur reduced to 20px — enough for depth without soup. Use sparingly:
    max 2 glass surfaces visible at once per page. */
-.glass-panel {
-  background: linear-gradient(
-    135deg,
-    rgba(23, 23, 23, 0.4) 0%,
-    rgba(10, 10, 10, 0.6) 100%
-  );
-  backdrop-filter: blur(24px) saturate(120%);
-  -webkit-backdrop-filter: blur(24px) saturate(120%);
+.premium-glass {
+  background: var(--color-surface-2);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--color-border-subtle);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+.premium-card {
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border-subtle);
+  transition: all 0.3s ease;
+}
+
+.premium-card:hover {
+  background: var(--color-surface-2);
+  border-color: var(--color-border-bold);
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.05);
 }
 
 .glass-dock {
@@ -206,61 +215,53 @@
 
 /* Shared button base — cursor + transition applied once */
 /* Min 44×44px touch target per WCAG 2.5.5 */
-.btn-primary,
-.btn-secondary,
-.btn-pill-primary,
-.btn-pill-secondary {
+/* Premium Gradient Button */
+.btn-premium {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.75rem 1.75rem;
+  padding: 0.75rem 2rem;
   min-height: 44px;
-  border-radius: 9999px;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease, transform 100ms ease;
+  border-radius: var(--radius-full);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  transition: all 0.3s ease;
+  box-shadow: 0 0 15px rgba(34, 211, 238, 0.2);
 }
 
-/* Primary — solid fill → transparent ghost on hover */
-.btn-primary,
-.btn-pill-primary {
-  color: #fff;
-  background: var(--color-primary);
-  border: 1px solid var(--color-primary);
+.btn-premium:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 25px rgba(34, 211, 238, 0.4);
+  filter: brightness(1.1);
 }
 
-.btn-primary:hover,
-.btn-pill-primary:hover {
+.btn-premium:active {
+  transform: translateY(0);
+}
+
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.73rem 1.98rem;
+  min-height: 44px;
+  border-radius: var(--radius-full);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-primary);
   background: transparent;
-  color: var(--color-accent);
-  border-color: var(--color-accent);
+  border: 1.5px solid var(--color-border-bold);
+  transition: all 0.3s ease;
 }
 
-.btn-primary:active,
-.btn-pill-primary:active {
-  transform: scale(0.97);
-}
-
-/* Secondary — ghost border → fully transparent + brighter border on hover */
-.btn-secondary,
-.btn-pill-secondary {
-  color: var(--color-foreground);
-  background: transparent;
-  border: 1px solid rgba(6, 182, 212, 0.2);
-}
-
-.btn-secondary:hover,
-.btn-pill-secondary:hover {
-  background: transparent;
-  color: var(--color-accent);
-  border-color: rgba(6, 182, 212, 0.5);
-}
-
-.btn-secondary:active,
-.btn-pill-secondary:active {
-  transform: scale(0.97);
+.btn-outline:hover {
+  background: rgba(34, 211, 238, 0.05);
+  border-color: var(--color-primary);
+  color: white;
 }
 
 /* ── Typography ───────────────────────────────────────────────────────────── */

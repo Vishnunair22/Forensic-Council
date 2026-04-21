@@ -318,7 +318,7 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
         )
     ),
     "face_swap_detection": lambda o: (
-        f"Face-swap: {o.get('faces_detected', 0)} face(s) analysed. "
+        f"Face-swap: {o.get('faces_detected', 0)} face(s) analyzed. "
         + (
             "Face-swap event detected."
             if o.get("face_swap_detected")
@@ -452,7 +452,7 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
         f"Grid standard: {o.get('grid_standard', 'unknown')} ({o.get('enf_frequency_hz', '?')} Hz). "
         f"Consistency score: {o.get('enf_consistency_score', 0):.4f}. "
         f"Splice candidate points: {o.get('splice_candidate_points', 0)}. "
-        f"Duration analysed: {o.get('duration_analyzed_s', '?')}s."
+        f"Duration analyzed: {o.get('duration_analyzed_s', '?')}s."
         if o.get("enf_detected")
         else f"ENF analysis: {o.get('verdict', 'NO_ENF_SIGNAL')}. "
         + (o.get("note", "No ENF signal present."))
@@ -603,7 +603,7 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
     ),
     "frame_consistency_analysis": lambda o: (
         f"Frame consistency: {o.get('inconsistent_frame_count', 0)} inconsistent frame(s) "
-        f"out of {o.get('total_frames', '?')} analysed. "
+        f"out of {o.get('total_frames', '?')} analyzed. "
         + (
             "Frame inconsistency detected — possible splice or compositing."
             if o.get("inconsistency_detected")
@@ -654,3 +654,120 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
         )
     ),
 }
+
+
+def _flag_list(o: dict[str, Any]) -> str:
+    flags = o.get("flags") or o.get("anomalies") or o.get("software_signatures") or []
+    if not flags:
+        return "No specific flags reported."
+    return "Flags: " + "; ".join(str(x) for x in flags[:6]) + "."
+
+
+_TOOL_INTERPRETERS.update(
+    {
+        # Agent 1 neural image tools.
+        "neural_ela": _TOOL_INTERPRETERS["ela_full_image"],
+        "noiseprint_cluster": _TOOL_INTERPRETERS["noise_fingerprint"],
+        "neural_splicing": lambda o: (
+            f"Neural splicing analysis {'found localized composition evidence' if o.get('splicing_detected') or o.get('manipulation_detected') else 'found no localized splice evidence'}. "
+            f"Regions flagged: {len(o.get('forgery_regions', o.get('anomaly_regions', [])))}. "
+            f"Score: {o.get('confidence', o.get('anomaly_score', 0)):.3f}."
+        ),
+        "neural_copy_move": lambda o: (
+            f"Copy-move neural ensemble {'found duplicated image content' if o.get('copy_move_detected') else 'found no duplicated regions above threshold'}. "
+            f"Candidate matches: {o.get('match_count', o.get('num_matches', len(o.get('matches', []))))}. "
+            f"Score: {o.get('confidence', 0):.3f}."
+        ),
+        "diffusion_artifact_detector": lambda o: (
+            f"Diffusion/synthetic-media detector {'flagged AI-generation artifacts' if o.get('is_ai_generated') or o.get('diffusion_detected') else 'did not find a strong AI-generation signature'}. "
+            f"Probability/score: {o.get('diffusion_probability', o.get('ai_probability', o.get('confidence', 0))):.3f}. "
+            + _flag_list(o)
+        ),
+        "f3_net_frequency": _TOOL_INTERPRETERS["deepfake_frequency_check"],
+        "anomaly_tracer": lambda o: (
+            f"Universal anomaly tracing {'localized suspicious manipulation regions' if o.get('manipulation_detected') or o.get('anomaly_regions') else 'found no stable localized anomaly map'}. "
+            f"Regions: {len(o.get('anomaly_regions', []))}; score: {o.get('confidence', o.get('anomaly_score', 0)):.3f}."
+        ),
+        "neural_fingerprint": lambda o: (
+            f"Neural perceptual fingerprint generated for provenance comparison. "
+            f"Top similarity: {o.get('top_similarity', o.get('similarity', o.get('confidence', 0))):.3f}. "
+            f"{'Similar prior media was found.' if o.get('match_found') else 'No high-confidence prior match was reported.'}"
+        ),
+
+        # Agent 2 refined audio tools.
+        "neural_prosody": lambda o: (
+            f"Neural prosody screen {'found acoustic irregularities consistent with synthetic or edited speech' if o.get('prosody_anomaly_detected') or o.get('anomaly_detected') else 'found no strong acoustic prosody irregularity'}. "
+            f"Score: {o.get('confidence', o.get('anomaly_score', 0)):.3f}. "
+            + _flag_list(o)
+        ),
+        "audio_gen_signature": lambda o: (
+            f"Generative-audio signature scan {'flagged TTS/vocoder-like spectral traces' if o.get('synthetic_detected') or o.get('is_synthetic') or o.get('anomaly_detected') else 'found no strong TTS/vocoder signature'}. "
+            f"Score: {o.get('confidence', o.get('synthetic_probability', o.get('anomaly_score', 0))):.3f}. "
+            + _flag_list(o)
+        ),
+        "voice_clone_deep_ensemble": _TOOL_INTERPRETERS["voice_clone_detect"],
+        "anti_spoofing_deep_ensemble": _TOOL_INTERPRETERS["anti_spoofing_detect"],
+
+        # Agent 3 object/context tools.
+        "vector_contraband_search": lambda o: (
+            f"Threat/contraband vector search top match: {o.get('top_match', 'none')} "
+            f"({o.get('confidence', o.get('top_confidence', 0)):.0%}). "
+            + ("Potential threat item flagged." if o.get("concern_flag") else "No threat/contraband match above concern threshold.")
+        ),
+        "lighting_correlation_initial": lambda o: (
+            f"Initial lighting correlation {'flagged possible compositing' if o.get('inconsistency_detected') or o.get('lighting_consistent') is False else 'did not find a stable lighting mismatch'}. "
+            f"Score: {o.get('confidence', o.get('consistency_score', 0)):.3f}. "
+            + (str(o.get("note", ""))[:160] if o.get("note") else "")
+        ),
+
+        # Agent 4 video tools.
+        "vfi_error_map": lambda o: (
+            f"Video interpolation/motion error map {'flagged synthetic or interpolated motion' if o.get('vfi_artifact_detected') or o.get('inconsistency_detected') else 'found no strong interpolation artifact'}. "
+            f"Frames/regions flagged: {o.get('flagged_frame_count', o.get('inconsistent_frame_count', 0))}. "
+            f"Score: {o.get('confidence', o.get('anomaly_score', 0)):.3f}."
+        ),
+        "thumbnail_coherence": lambda o: (
+            f"Embedded thumbnail coherence {'flagged a preview/content mismatch' if o.get('thumbnail_mismatch') or o.get('mismatch_detected') else 'found no preview/content mismatch'}. "
+            + (str(o.get("note", ""))[:180] if o.get("note") else "")
+        ),
+        "interframe_forgery_detector": lambda o: (
+            f"Inter-frame forgery detector {'found temporal edit/discontinuity candidates' if o.get('forgery_detected') or o.get('inconsistency_detected') else 'found no strong temporal edit signature'}. "
+            f"Candidate frames: {o.get('candidate_count', o.get('anomaly_frame_count', 0))}. "
+            f"Score: {o.get('confidence', o.get('anomaly_score', 0)):.3f}."
+        ),
+        "compression_artifact_analysis": lambda o: (
+            f"Video compression audit measured frame-size variation CV={o.get('coefficient_of_variation', 0):.4f} "
+            f"across {o.get('frames_analyzed', 0)} sampled frames. "
+            + ("Compression pattern is irregular." if o.get("inconsistency_detected") else "No strong codec discontinuity was detected.")
+        ),
+
+        # Agent 5 metadata/provenance tools.
+        "compression_risk_audit": lambda o: (
+            f"Compression/platform audit: {o.get('detected_platform') or 'no social/chat platform footprint detected'}. "
+            f"Reliability impact: {o.get('forensic_reliability_impact', 'NONE')}. "
+            f"Penalty factor: {o.get('compression_penalty', 1.0):.2f}."
+        ),
+        "exif_isolation_forest": lambda o: (
+            f"EXIF outlier screen score {o.get('anomaly_score', 0):.3f}. "
+            + ("Metadata fields are statistically unusual. " if o.get("is_anomalous") else "Metadata fields are within expected range. ")
+            + _flag_list(o)
+        ),
+        "astro_grounding": lambda o: (
+            f"Astronomical grounding {'found a sun/shadow/time mismatch' if o.get('inconsistency_detected') or o.get('plausible') is False else 'did not find a verifiable sun/shadow mismatch'}. "
+            + (str(o.get("note", ""))[:180] if o.get("note") else "")
+        ),
+        "provenance_chain_verify": lambda o: (
+            f"C2PA/provenance check: {o.get('verdict', 'NO_CONTENT_CREDENTIALS')}. "
+            + ("Signed provenance was found. " if o.get("c2pa_present") or o.get("content_credentials_present") else "No signed content credentials were found; absence alone is not suspicious. ")
+            + _flag_list(o)
+        ),
+        "c2pa_validator": lambda o: _TOOL_INTERPRETERS["provenance_chain_verify"](o),
+        "camera_profile_match": lambda o: (
+            f"Camera/device profile: {o.get('camera_make', o.get('make', 'Unknown'))} {o.get('camera_model', o.get('model', ''))}. "
+            + ("Declared device profile is inconsistent with metadata. " if o.get("exif_fingerprint_suspicious") or o.get("profile_mismatch") else "No device-profile contradiction was detected. ")
+            + _flag_list(o)
+        ),
+        "device_fingerprint_db": lambda o: _TOOL_INTERPRETERS["camera_profile_match"](o),
+        "metadata_anomaly_scorer": lambda o: _TOOL_INTERPRETERS["metadata_anomaly_score"](o),
+    }
+)

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Smoke tests for the Council Arbiter.
 
 All tests run without a live LLM API key: when llm_api_key is None the arbiter
@@ -14,7 +14,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-# â”€â”€ Minimal env so config initialises without a .env file â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Minimal env so config initializes without a .env file ────────────────────
 os.environ.setdefault("APP_ENV", "testing")
 os.environ.setdefault("SIGNING_KEY", "test-signing-key-" + "x" * 32)
 os.environ.setdefault("POSTGRES_USER", "test")

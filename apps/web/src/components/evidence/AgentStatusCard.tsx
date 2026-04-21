@@ -50,6 +50,29 @@ const FORENSIC_STAGES = [
   { id: "report",  label: "Synthesizing Report",    icon: FileText, color: "text-purple-500" },
 ];
 
+const ALERT_VERDICTS = new Set(["FLAGGED", "SUSPICIOUS", "LIKELY_MANIPULATED", "LIKELY_AI_GENERATED", "LIKELY_SPOOFED"]);
+
+function normalizeVerdict(verdict?: string) {
+  const value = (verdict || "INCONCLUSIVE").replace(/_/g, " ").toUpperCase();
+  if (value === "ERROR") return "NEEDS REVIEW";
+  if (value === "CLEAN") return "CLEAN";
+  return value;
+}
+
+function isAlertFinding(finding: FindingPreview) {
+  return ALERT_VERDICTS.has(finding.verdict ?? "") || ["CRITICAL", "HIGH", "MEDIUM"].includes(finding.severity ?? "");
+}
+
+function cleanFindingSummary(summary?: string) {
+  const cleaned = (summary || "No diagnostic summary was returned.")
+    .replace(/\bObjectWeapon\b/g, "object/weapon")
+    .replace(/\bobjectWeapon\b/g, "object/weapon")
+    .replace(/\bEXIF\b/g, "metadata")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned.length > 280 ? `${cleaned.slice(0, 277).trim()}...` : cleaned;
+}
+
 export function AgentStatusCard({
   agentId,
   name,
@@ -106,9 +129,7 @@ export function AgentStatusCard({
   }, [thinking, status]);
 
   const findings: FindingPreview[] = completedData?.findings_preview || [];
-  const flaggedCount = findings.filter(
-    (f) => f.verdict === "FLAGGED" || f.severity === "CRITICAL" || f.severity === "HIGH"
-  ).length;
+  const flaggedCount = findings.filter(isAlertFinding).length;
 
   const toggleFinding = (idx: number) => {
     const next = new Set(expandedFindings);
@@ -125,23 +146,23 @@ export function AgentStatusCard({
       layout
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{
-        opacity: isFadingOut ? 0 : isRevealed ? (status === "waiting" ? 0.2 : 1) : 0,
+        opacity: isFadingOut ? 0 : isRevealed ? (status === "waiting" ? 0.45 : 1) : 0,
         scale: isFadingOut ? 0.85 : 1,
       }}
       exit={{ opacity: 0, scale: 0.85 }}
       transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
       className={clsx(
-        "relative flex flex-col rounded-[2rem] transition-all duration-500 overflow-hidden w-full border border-white/5",
-        status === "running" && "border-cyan-500/20 shadow-[0_0_40px_rgba(6,182,212,0.1)]",
-        status === "complete" && flaggedCount > 0 && "border-rose-500/20 shadow-[0_0_40px_rgba(244,63,94,0.1)]",
-        isSkipped && "opacity-40 grayscale",
+        "relative flex flex-col premium-glass rounded-xl transition-all duration-500 overflow-hidden w-full min-h-[360px]",
+        status === "running" && "border-primary/30 shadow-[0_0_40px_rgba(34,211,238,0.1)] ring-1 ring-primary/10",
+        status === "complete" && flaggedCount > 0 && "border-danger/30 shadow-[0_0_40px_rgba(244,63,94,0.1)]",
+        isSkipped && "opacity-60 grayscale",
       )}
     >
       {/* ── Header Area ────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-4 px-6 py-5 border-b border-white/5">
+      <div className="flex items-center gap-4 px-5 py-4 border-b border-white/5">
         <div className={clsx(
-          "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border transition-all duration-500",
-          status === "running" ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-400" : "bg-white/[0.03] border-white/10 text-white/40"
+          "w-11 h-11 rounded-lg flex items-center justify-center shrink-0 border transition-all duration-500",
+          status === "running" ? "bg-primary/10 border-primary/30 text-primary shadow-[0_0_15px_rgba(34,211,238,0.2)]" : "bg-surface-1 border-border-subtle text-white/40"
         )}>
           <AgentIcon
             agentId={agentId}
@@ -150,24 +171,24 @@ export function AgentStatusCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2 mb-1">
-            <h3 className="text-sm font-black tracking-tighter text-white truncate">
+            <h3 className="text-sm font-black text-white truncate">
               {name}
             </h3>
-            <div className="flex items-center gap-1.5 bg-black/40 px-2.5 py-1 rounded-full border border-white/5">
+            <div className="flex items-center gap-1.5 bg-surface-low px-2.5 py-1 rounded-full border border-border-subtle shadow-inner">
               <div className={clsx(
                 "w-1.5 h-1.5 rounded-full",
-                status === "running" ? "bg-cyan-400 animate-pulse" : (status === "complete" ? "bg-emerald-400" : "bg-white/20")
+                status === "running" ? "bg-primary animate-pulse" : (status === "complete" ? "bg-primary" : "bg-white/20")
               )} aria-hidden="true" />
               <span className={clsx(
-                "text-[11px] font-bold tracking-widest",
-                cfg.color
+                "text-[10px] font-black tracking-widest uppercase",
+                status === "running" ? "text-primary" : (status === "complete" ? "text-primary" : "text-white/40")
               )}>
                 {cfg.label}
               </span>
             </div>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold tracking-widest text-white/50 truncate max-w-[140px]">{badge}</span>
+            <span className="text-[11px] font-semibold text-white/55 truncate max-w-[180px]">{badge}</span>
             {!isSkipped && status !== "waiting" && status !== "checking" && (
               <div className="flex items-center gap-1.5 text-white/50 shrink-0">
                  <Clock className="w-3 h-3" aria-hidden="true" />
@@ -188,11 +209,10 @@ export function AgentStatusCard({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="p-6"
+              className="p-5"
             >
-              <div className="relative rounded-2xl border border-cyan-500/10 p-5 font-mono text-[10px] leading-relaxed min-h-[160px] overflow-hidden bg-black/20">
-                {/* Tactical Scan Line overlay */}
-                <div className="absolute inset-0 pointer-events-none opacity-[0.05] bg-[linear-gradient(transparent_50%,rgba(6,182,212,0.25)_50%),linear-gradient(90deg,transparent,transparent)] bg-[length:100%_4px,4px_100%] animate-scan" />
+              <div className="relative rounded-lg border border-primary/10 p-4 font-mono text-[10px] leading-relaxed min-h-[132px] overflow-hidden bg-surface-low/50">
+                <div className="absolute inset-0 pointer-events-none opacity-[0.05] bg-[linear-gradient(transparent_50%,rgba(34,211,238,0.25)_50%)] bg-[length:100%_4px] animate-scan" />
                 
                 <div className="relative z-10 space-y-4">
                   <div className="flex items-center justify-between">
@@ -200,23 +220,23 @@ export function AgentStatusCard({
                        <AnimatePresence mode="wait">
                          <motion.div
                            key={FORENSIC_STAGES[stageIndex].id}
-                           initial={{ opacity: 0, scale: 0.8, rotate: -10 }}
-                           animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                           exit={{ opacity: 0, scale: 1.2, rotate: 10 }}
-                           className={clsx("p-1.5 rounded-lg bg-black/40 border border-white/5", FORENSIC_STAGES[stageIndex].color)}
+                           initial={{ opacity: 0, scale: 0.8 }}
+                           animate={{ opacity: 1, scale: 1 }}
+                           exit={{ opacity: 0, scale: 1.2 }}
+                           className={clsx("p-1.5 rounded-lg bg-surface-mid border border-border-subtle shadow-md", FORENSIC_STAGES[stageIndex].color)}
                          >
                            {React.createElement(FORENSIC_STAGES[stageIndex].icon, { className: "w-3.5 h-3.5" })}
                          </motion.div>
                        </AnimatePresence>
                        <div className="flex flex-col">
-                        <span className="font-black tracking-[0.2em] text-[11px] text-white/40 capitalize tracking-wide">Stage 0{stageIndex + 1}</span>
+                        <span className="font-black tracking-widest text-[9px] text-white/40 uppercase">Phase 0{stageIndex + 1}</span>
                         <AnimatePresence mode="wait">
                           <motion.span 
                             key={FORENSIC_STAGES[stageIndex].id}
                             initial={{ opacity: 0, x: -5 }}
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 5 }}
-                            className="font-bold tracking-widest text-[10px] text-cyan-400"
+                            className="font-black text-[11px] text-primary uppercase"
                           >
                             {FORENSIC_STAGES[stageIndex].label}
                           </motion.span>
@@ -225,22 +245,22 @@ export function AgentStatusCard({
                     </div>
                   </div>
 
-                  <div className="h-px bg-gradient-to-r from-cyan-500/20 to-transparent w-full" />
+                  <div className="h-px bg-gradient-to-r from-primary/30 to-transparent w-full" />
 
                   <div 
-                    className="text-cyan-400/90 break-words leading-relaxed min-h-[40px] flex flex-col gap-1"
+                    className="text-primary/90 break-words leading-relaxed min-h-[40px] flex flex-col gap-1 font-mono uppercase tracking-tight"
                     aria-live="polite"
                     aria-atomic="false"
                   >
                     <div>
-                      {thinking || "Establishing forensic baseline..."}
+                      {thinking || "Initializing..."}
                       <motion.span
                         animate={{ opacity: [0, 1, 0] }}
                         transition={{ duration: 0.8, repeat: Infinity }}
-                        className="inline-block ml-1 w-1.5 h-3 bg-cyan-500 align-middle shadow-[0_0_8px_rgba(6,182,212,0.5)]"
+                        className="inline-block ml-1 w-1.5 h-3 bg-primary align-middle shadow-[0_0_8px_rgba(34,211,238,0.5)]"
                       />
                     </div>
-                    <span className="text-cyan-500/40 text-[10px] tracking-widest">[{new Date().toLocaleTimeString([], { hour12: false })}] INF &gt;&gt; </span>
+                    <span className="text-primary/30 text-[9px] tracking-widest">[{new Date().toLocaleTimeString([], { hour12: false })}] PROTOCOL &gt;&gt; </span>
                   </div>
                 </div>
               </div>
@@ -253,43 +273,50 @@ export function AgentStatusCard({
               key="complete"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex flex-col flex-1 p-6 space-y-4"
+              className="flex flex-col flex-1 p-5 space-y-4"
             >
               <div className="space-y-3">
                 {findings.slice(0, showAllFindings ? undefined : 2).map((f, i) => {
                   const Icon = getToolIcon(f.tool);
-                  const isAlert = f.verdict === "FLAGGED" || f.severity === "CRITICAL" || f.severity === "HIGH";
+                  const isAlert = isAlertFinding(f);
                   const isExpanded = expandedFindings.has(i);
+                  const summary = cleanFindingSummary(f.summary);
+                  const keySignal = (f.key_signal || "").trim();
                   return (
                     <div key={`${f.tool}-${i}`} className={clsx(
-                        "group/row relative p-4 rounded-2xl border transition-all duration-300",
-                        isAlert ? "border-rose-500/10" : "border-white/5"
+                        "group/row relative p-3.5 rounded-lg border transition-all duration-300 bg-white/[0.015]",
+                        isAlert ? "border-rose-500/20" : "border-white/5"
                     )}>
-                      <div className="flex items-start gap-4">
+                      <div className="flex items-start gap-3">
                         <div className={clsx(
-                          "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border transition-colors",
+                          "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border transition-colors",
                           isAlert ? "bg-rose-500/10 border-rose-500/20 text-rose-500" : "bg-white/5 border-white/5 text-white/20"
                         )}>
                           <Icon className="w-4 h-4" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-[10px] font-black tracking-tighter text-white/80">{fmtTool(f.tool)}</span>
+                          <div className="flex items-start justify-between gap-2 mb-1">
+                            <span className="text-[11px] font-black text-white/85 leading-tight">{fmtTool(f.tool)}</span>
                             <span className={clsx(
-                                "text-[10px] font-black px-1.5 py-0.5 rounded",
-                                isAlert ? "bg-rose-500/10 text-rose-500" : "bg-emerald-500/10 text-emerald-500"
-                            )}>{f.verdict}</span>
+                                "text-[9px] font-black px-1.5 py-0.5 rounded shrink-0",
+                                isAlert ? "bg-rose-500/10 text-rose-300" : "bg-emerald-500/10 text-emerald-300"
+                            )}>{normalizeVerdict(f.verdict)}</span>
                           </div>
                           <p className={clsx(
-                            "text-[11px] leading-relaxed text-slate-400 font-medium",
-                            !isExpanded && "line-clamp-2"
+                            "text-xs leading-relaxed text-slate-300/90 font-medium",
+                            !isExpanded && "line-clamp-3"
                           )}>
-                            {f.summary}
+                            {summary}
                           </p>
-                          {f.summary.length > 70 && (
+                          {keySignal && (
+                            <p className="mt-2 text-[10px] leading-relaxed text-cyan-200/55 font-mono">
+                              Signal: {keySignal}
+                            </p>
+                          )}
+                          {summary.length > 120 && (
                             <button 
                               onClick={() => toggleFinding(i)}
-                              className="text-[10px] font-black tracking-[0.2em] text-cyan-500/40 hover:text-cyan-400 mt-2 flex items-center gap-1 transition-colors"
+                              className="text-[10px] font-black tracking-widest text-cyan-500/60 hover:text-cyan-300 mt-2 flex items-center gap-1 transition-colors"
                             >
                               {isExpanded ? "Show Less" : "Show More"}
                               {isExpanded ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
@@ -304,7 +331,7 @@ export function AgentStatusCard({
                 {findings.length > 2 && (
                    <button 
                     onClick={() => setShowAllFindings(!showAllFindings)}
-                    className="w-full py-3 rounded-2xl border border-white/5 hover:border-white/10 transition-all text-[10px] font-black tracking-[0.3em] text-white/20 hover:text-white/40 flex items-center justify-center gap-2"
+                    className="w-full py-2.5 rounded-lg border border-white/5 hover:border-white/10 transition-all text-[10px] font-black tracking-[0.24em] text-white/30 hover:text-white/55 flex items-center justify-center gap-2"
                    >
                      {showAllFindings ? "Show Fewer" : `${findings.length - 2} More Finding${findings.length - 2 !== 1 ? "s" : ""}`}
                      {showAllFindings ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -319,10 +346,10 @@ export function AgentStatusCard({
               key="skipped"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="p-8 flex flex-col items-center justify-center text-center gap-6 flex-1"
+              className="p-6 flex flex-col items-center justify-center text-center gap-5 flex-1"
             >
               <div className="relative">
-                <div className="w-16 h-16 rounded-3xl border border-white/5 flex items-center justify-center text-white/5">
+                <div className="w-14 h-14 rounded-xl border border-white/5 flex items-center justify-center text-white/15">
                   <Ban className="w-6 h-6" />
                 </div>
               </div>
@@ -340,7 +367,7 @@ export function AgentStatusCard({
               key="error"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="p-8 flex flex-col items-center justify-center text-center gap-5 flex-1"
+              className="p-6 flex flex-col items-center justify-center text-center gap-5 flex-1"
             >
                <div className="w-14 h-14 rounded-2xl border border-rose-500/10 flex items-center justify-center text-rose-500/40">
                   <ShieldAlert className="w-7 h-7" />
@@ -358,12 +385,12 @@ export function AgentStatusCard({
       </div>
 
       {/* ── Footer Metadata ────────────────────────────────────────────────── */}
-      <div className="mt-auto p-5 border-t border-white/5">
+      <div className="mt-auto p-4 border-t border-white/5">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-4">
             {[
               { label: "Confidence", value: completedData ? `${Math.round((completedData.confidence || 0) * 100)}%` : "—", color: "text-emerald-400" },
-              { label: "Flags",      value: completedData ? completedData.findings_count : "—", color: "text-rose-400" },
+              { label: "Findings",   value: completedData ? completedData.findings_count : "—", color: "text-cyan-400" },
               { label: "Module",     value: agentId, color: "text-cyan-400" },
             ].map((m) => (
               <div key={m.label} className="flex flex-col">

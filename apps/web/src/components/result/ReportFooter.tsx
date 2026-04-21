@@ -15,7 +15,7 @@ export function ReportFooter({ handleHome }: ReportFooterProps) {
       <button
         type="button"
         onClick={handleHome}
-        className="btn-pill-secondary text-xs flex items-center gap-2"
+        className="btn-outline px-10 py-4 tracking-[0.2em]"
         aria-label="Return to the home page"
       >
         <Home className="w-4 h-4" aria-hidden="true" />

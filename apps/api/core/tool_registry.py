@@ -22,6 +22,17 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+TOOL_TIMEOUTS: dict[str, float] = {
+    # OCR can cold-start slowly in Docker. Keep it bounded so image analysis
+    # never blocks the analyst decision gate.
+    "extract_text_from_image": 15.0,
+    "extract_evidence_text": 15.0,
+    "neural_fingerprint": 25.0,
+    "noiseprint_cluster": 30.0,
+    "neural_ela": 30.0,
+}
+
+
 class Tool(BaseModel):
     """Represents a tool available to an agent."""
 
@@ -204,18 +215,19 @@ class ToolRegistry:
             # the entire agent and timing out the full investigation.
             # 60s is generous for in-process tools; ML subprocesses have
             # their own tighter timeouts inside run_ml_tool.
-            output = await asyncio.wait_for(handler(input_data), timeout=60.0)
+            timeout_s = TOOL_TIMEOUTS.get(tool_name, 45.0)
+            output = await asyncio.wait_for(handler(input_data), timeout=timeout_s)
             result = ToolResult(tool_name=tool_name, success=True, output=output)
         except TimeoutError:
             logger.warning(
-                f"Tool '{tool_name}' timed out after 60s",
+                f"Tool '{tool_name}' timed out",
                 tool_name=tool_name,
-                timeout=60.0
+                timeout=TOOL_TIMEOUTS.get(tool_name, 45.0)
             )
             result = ToolResult(
                 tool_name=tool_name,
                 success=False,
-                error=f"Tool '{tool_name}' timed out after 60s",
+                error=f"Tool '{tool_name}' timed out after {TOOL_TIMEOUTS.get(tool_name, 45.0):.0f}s",
             )
         except (OSError, ValueError, TypeError, RuntimeError) as e:
             # Specific expected tool errors (file I/O, validation, etc.)
@@ -228,15 +240,17 @@ class ToolRegistry:
             )
             result = ToolResult(tool_name=tool_name, success=False, error=str(e))
         except Exception as e:
-            # Unexpected errors get escalated - don't silently swallow
-            logger.critical(
+            # A single broken forensic tool must not strand the agent or block
+            # analyst decisions. Preserve the diagnostic as an incomplete
+            # finding and let the rest of the plan continue.
+            logger.error(
                 f"Unexpected error in tool '{tool_name}'",
                 tool_name=tool_name,
                 error=str(e),
                 error_type=type(e).__name__,
                 exc_info=True
             )
-            raise  # Re-raise unexpected exceptions
+            result = ToolResult(tool_name=tool_name, success=False, error=str(e))
 
         # Log the tool call
         if custody_logger:

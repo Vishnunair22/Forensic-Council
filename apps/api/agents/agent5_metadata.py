@@ -64,9 +64,9 @@ class Agent5Metadata(ForensicAgent):
         return [
             "Run file_structure_analysis for binary anomalies",
             "Run hex_signature_scan on raw bytes",
-            "Run metadata_anomaly_scorer for probabilistic fabrication detection",
-            "Run c2pa_validator for digital provenance manifests",
-            "Run device_fingerprint_db against claimed device model",
+            "Run metadata_anomaly_score for probabilistic fabrication detection",
+            "Run provenance_chain_verify for C2PA and digital provenance manifests",
+            "Run camera_profile_match against claimed device model",
             "Run gemini_deep_forensic for Hardware-Grounded Provenance Verification",
         ]
 

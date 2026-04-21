@@ -140,8 +140,6 @@ export const TAB_ICONS: Record<ReportTab, typeof FileImage> = {
   Video: FileVideo,
 };
 
-// ── Polling Intervals ─────────────────────────────────────────────────────────
-// Arbiter status polling on the result page. 2.5 s balances server load vs.
 // perceived responsiveness for analyses that typically complete in 15–90 s.
 export const ARBITER_POLL_INTERVAL_MS = 2_500;
 

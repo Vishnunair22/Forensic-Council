@@ -21,6 +21,22 @@ import { type SoundType } from "@/hooks/useSound";
 import { type AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 
+function supportedAgentIdsForMime(mimeType?: string | null): Set<string> {
+  if (!mimeType) return new Set(AGENTS_DATA.filter((a) => a.id !== "AGT-06").map((a) => a.id));
+  const supported = new Set<string>(["Agent5"]);
+  if (mimeType.startsWith("image/")) {
+    supported.add("Agent1");
+    supported.add("Agent3");
+  }
+  if (mimeType.startsWith("audio/")) {
+    supported.add("Agent2");
+  }
+  if (mimeType.startsWith("video/")) {
+    supported.add("Agent3");
+    supported.add("Agent4");
+  }
+  return supported;
+}
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -392,7 +408,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setFile(null);
     setPhase("initial");
     resetSimulation();
-  }, [resetSimulation, playSound]);
+    // Route to home and trigger the upload modal opening via an event
+    router.push("/");
+    setTimeout(() => {
+      window.dispatchEvent(new Event("fc:open-upload"));
+    }, 500);
+  }, [resetSimulation, playSound, router]);
 
   const handleViewResults = useCallback(async () => {
     if (isNavigating) return;
@@ -412,11 +433,15 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const validCompletedAgents = completedAgents.filter((c: AgentUpdate) =>
     validAgentsData.some((v) => v.id === c.agent_id)
   );
+  const expectedAgentIds = supportedAgentIdsForMime(storage.getItem<string>("forensic_mime_type"));
+  const expectedCompletedCount = validCompletedAgents.filter((c: AgentUpdate) =>
+    expectedAgentIds.has(c.agent_id)
+  ).length;
   
   const awaitingDecision = status === "awaiting_decision";
   const allAgentsDone = phase === "deep" 
     ? status === "complete" 
-    : validCompletedAgents.length >= validAgentsData.length;
+    : expectedCompletedCount >= expectedAgentIds.size;
 
   useEffect(() => {
     if (awaitingDecision && !analysisCompleteSoundedRef.current) {

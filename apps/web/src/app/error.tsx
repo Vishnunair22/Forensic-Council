@@ -18,30 +18,25 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <div className="min-h-screen text-foreground flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+    <div className="min-h-screen text-foreground flex flex-col items-center justify-center p-6 text-center relative overflow-hidden bg-background">
       <motion.div
-        className="relative max-w-md w-full p-8 rounded-3xl overflow-hidden flex flex-col items-center z-10 border border-red-500/15 bg-white/[0.03]"
-        style={{
-          backdropFilter: "blur(24px)",
-          boxShadow:
-            "0 32px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04)",
-        }}
+        className="relative max-w-md w-full p-10 rounded-[2.5rem] overflow-hidden flex flex-col items-center z-10 premium-glass border-danger/20"
         initial={{ opacity: 0, scale: 0.9, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
       >
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-400/30 to-transparent rounded-t-3xl" />
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-danger/40 to-transparent" />
 
         <motion.div
-          className="w-16 h-16 bg-red-500/10 border border-red-500/25 rounded-2xl flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(239,68,68,0.15)]"
-          animate={{ scale: [1, 1.05, 1] }}
-          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+          className="w-20 h-20 bg-danger/10 border border-danger/30 rounded-[2rem] flex items-center justify-center mb-8 shadow-[0_0_40px_rgba(244,63,94,0.2)]"
+          animate={{ scale: [1, 1.05, 1], opacity: [0.8, 1, 0.8] }}
+          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
         >
-          <AlertTriangle className="w-8 h-8 text-red-400" />
+          <AlertTriangle className="w-10 h-10 text-danger" />
         </motion.div>
 
-        <h1 className="text-2xl font-bold mb-3 text-foreground">
-          Pipeline Interrupted
+        <h1 className="text-3xl font-black mb-4 text-white tracking-tighter">
+          System <span className="text-danger">Interrupted</span>
         </h1>
 
         <p className="text-slate-400 mb-8 text-sm leading-relaxed text-center">
@@ -49,18 +44,10 @@ export default function GlobalError({
           system has safely halted — no data has been lost.
         </p>
 
-        <div className="w-full space-y-3">
+        <div className="w-full space-y-4">
           <motion.button
             onClick={() => reset()}
-            className="w-full py-3.5 rounded-xl inline-flex items-center justify-center gap-2 font-bold text-white border border-cyan-400/30"
-            style={{
-              background: "linear-gradient(135deg, #0891b2 0%, #22d3ee 100%)",
-              boxShadow: "0 0 24px rgba(34,211,238,0.18)",
-            }}
-            whileHover={{
-              scale: 1.02,
-              boxShadow: "0 0 32px rgba(34,211,238,0.28)",
-            }}
+            className="btn-premium w-full py-4 tracking-[0.2em]"
             whileTap={{ scale: 0.98 }}
           >
             <RefreshCcw className="w-4 h-4" />
@@ -69,21 +56,21 @@ export default function GlobalError({
 
           <Link
             href="/"
-            className="w-full py-3.5 rounded-xl inline-flex items-center justify-center gap-2 font-semibold text-white/80 bg-white/[0.04] border border-white/[0.09] hover:bg-cyan-500/[0.07] hover:border-cyan-500/28 hover:text-cyan-400 transition-colors"
+            className="btn-outline w-full py-4 tracking-[0.2em]"
           >
             <Home className="w-4 h-4" />
-            Return to Dashboard
+            Return To Hub
           </Link>
         </div>
 
         {process.env.NODE_ENV === "development" && (
-          <div className="mt-6 p-4 bg-black/40 rounded-xl border border-red-500/20 w-full overflow-hidden text-left">
-            <p className="text-[10px] font-mono text-red-400 break-all leading-relaxed">
-              {error.message}
+          <div className="mt-8 p-5 bg-surface-low/80 rounded-2xl border border-danger/20 w-full overflow-hidden text-left shadow-inner">
+            <p className="text-[10px] font-mono text-danger/80 break-all leading-relaxed tracking-tight">
+              Diagnostic_Err: {error.message}
             </p>
             {error.digest && (
-              <p className="text-[10px] font-mono text-slate-600 mt-1">
-                Digest: {error.digest}
+              <p className="text-[10px] font-mono text-white/20 mt-2">
+                Node_Id: {error.digest}
               </p>
             )}
           </div>

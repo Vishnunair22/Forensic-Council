@@ -1,4 +1,4 @@
-﻿"""
+"""
 Unit tests for the confidence calibration layer.
 
 All tests use tmp_path for model storage so they are hermetic and leave no
@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-# â”€â”€ Minimal env so config initialises without a .env file â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Minimal env so config initializes without a .env file ────────────────────
 os.environ.setdefault("APP_ENV", "testing")
 os.environ.setdefault("SIGNING_KEY", "test-signing-key-" + "x" * 32)
 os.environ.setdefault("POSTGRES_USER", "test")

@@ -66,18 +66,33 @@ def _forensic_report_to_dto(report) -> ReportDTO:
                 meta = _json.loads(meta)
             except Exception:
                 meta = {}
+        def _opt_float(value):
+            if value is None:
+                return None
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return None
+
+        evidence_verdict = str(d.get("evidence_verdict") or meta.get("evidence_verdict") or "INCONCLUSIVE").upper()
+        if evidence_verdict not in {"POSITIVE", "NEGATIVE", "INCONCLUSIVE", "NOT_APPLICABLE", "ERROR"}:
+            evidence_verdict = "INCONCLUSIVE"
+
         dto = AgentFindingDTO(
             finding_id=str(d.get("finding_id", "")),
             agent_id=str(d.get("agent_id", "")),
             agent_name=str(d.get("agent_name", d.get("agent_id", ""))),
             finding_type=str(d.get("finding_type", "Unknown")),
             status=str(d.get("status", "CONFIRMED")),
-            confidence_raw=float(d.get("confidence_raw") or 0.0),
+            confidence_raw=_opt_float(d.get("confidence_raw")),
+            evidence_verdict=evidence_verdict,
             calibrated=bool(d.get("calibrated", False)),
-            calibrated_probability=d.get("raw_confidence_score")
-            or d.get("calibrated_probability"),
-            raw_confidence_score=d.get("raw_confidence_score")
-            or d.get("calibrated_probability"),
+            calibrated_probability=_opt_float(d.get("raw_confidence_score"))
+            if d.get("raw_confidence_score") is not None
+            else _opt_float(d.get("calibrated_probability")),
+            raw_confidence_score=_opt_float(d.get("raw_confidence_score"))
+            if d.get("raw_confidence_score") is not None
+            else _opt_float(d.get("calibrated_probability")),
             calibration_status=str(d.get("calibration_status", "UNCALIBRATED")),
             court_statement=d.get("court_statement") or meta.get("court_statement"),
             robustness_caveat=bool(d.get("robustness_caveat", False)),
@@ -194,6 +209,7 @@ def _forensic_report_to_dto(report) -> ReportDTO:
             manipulation_probability=float(
                 getattr(report, "manipulation_probability", 0.0) or 0.0
             ),
+            compression_penalty=float(getattr(report, "compression_penalty", 1.0) or 1.0),
             confidence_min=float(getattr(report, "confidence_min", 0.0) or 0.0),
             confidence_max=float(getattr(report, "confidence_max", 0.0) or 0.0),
             confidence_std_dev=float(getattr(report, "confidence_std_dev", 0.0) or 0.0),
@@ -202,6 +218,7 @@ def _forensic_report_to_dto(report) -> ReportDTO:
             analysis_coverage_note=getattr(report, "analysis_coverage_note", "") or "",
             per_agent_summary=dict(getattr(report, "per_agent_summary", {}) or {}),
             degradation_flags=list(getattr(report, "degradation_flags", []) or []),
+            cross_modal_fusion=dict(getattr(report, "cross_modal_fusion", {}) or {}),
         )
     except Exception as e:
         logger.error(
@@ -241,6 +258,8 @@ def _forensic_report_to_dto(report) -> ReportDTO:
             analysis_coverage_note="",
             per_agent_summary={},
             degradation_flags=["Report serialization failed"],
+            cross_modal_fusion={},
+            compression_penalty=1.0,
         )
 
 
@@ -694,24 +713,49 @@ async def get_session_report(
                 from api.schemas import AgentFindingDTO as _AFD
                 from api.schemas import ReportDTO as _RD
 
+                def _opt_float(value):
+                    if value is None:
+                        return None
+                    try:
+                        return float(value)
+                    except (TypeError, ValueError):
+                        return None
+
                 def _rebuild_finding(f: dict) -> _AFD:
+                    metadata = f.get("metadata") or {}
+                    evidence_verdict = str(
+                        f.get("evidence_verdict")
+                        or metadata.get("evidence_verdict")
+                        or "INCONCLUSIVE"
+                    ).upper()
+                    if evidence_verdict not in {
+                        "POSITIVE",
+                        "NEGATIVE",
+                        "INCONCLUSIVE",
+                        "NOT_APPLICABLE",
+                        "ERROR",
+                    }:
+                        evidence_verdict = "INCONCLUSIVE"
                     return _AFD(
                         finding_id=str(f.get("finding_id", "")),
                         agent_id=str(f.get("agent_id", "")),
                         agent_name=str(f.get("agent_name", "")),
                         finding_type=str(f.get("finding_type", "")),
                         status=str(f.get("status", "CONFIRMED")),
-                        confidence_raw=float(f.get("confidence_raw", 0.0)),
+                        confidence_raw=_opt_float(f.get("confidence_raw")),
+                        evidence_verdict=evidence_verdict,
                         calibrated=bool(f.get("calibrated", False)),
-                        calibrated_probability=f.get("raw_confidence_score")
-                        or f.get("calibrated_probability"),
-                        raw_confidence_score=f.get("raw_confidence_score")
-                        or f.get("calibrated_probability"),
+                        calibrated_probability=_opt_float(f.get("raw_confidence_score"))
+                        if f.get("raw_confidence_score") is not None
+                        else _opt_float(f.get("calibrated_probability")),
+                        raw_confidence_score=_opt_float(f.get("raw_confidence_score"))
+                        if f.get("raw_confidence_score") is not None
+                        else _opt_float(f.get("calibrated_probability")),
                         court_statement=f.get("court_statement"),
                         robustness_caveat=bool(f.get("robustness_caveat", False)),
                         robustness_caveat_detail=f.get("robustness_caveat_detail"),
                         reasoning_summary=str(f.get("reasoning_summary", "")),
-                        metadata=f.get("metadata"),
+                        metadata=metadata or None,
                     )
 
                 rd = db_row["report_data"]
@@ -750,6 +794,7 @@ async def get_session_report(
                     manipulation_probability=float(
                         rd.get("manipulation_probability") or 0.0
                     ),
+                    compression_penalty=float(rd.get("compression_penalty") or 1.0),
                     confidence_min=float(rd.get("confidence_min") or 0.0),
                     confidence_max=float(rd.get("confidence_max") or 0.0),
                     confidence_std_dev=float(rd.get("confidence_std_dev") or 0.0),
@@ -758,6 +803,7 @@ async def get_session_report(
                     analysis_coverage_note=rd.get("analysis_coverage_note", ""),
                     per_agent_summary=dict(rd.get("per_agent_summary") or {}),
                     degradation_flags=list(rd.get("degradation_flags") or []),
+                    cross_modal_fusion=dict(rd.get("cross_modal_fusion") or {}),
                 )
     except HTTPException:
         raise

@@ -15,8 +15,8 @@ export interface ForensicProgressOverlayProps {
 }
 
 const variantAccent = {
-  stream: { primary: "#0891b2", gradient: "from-cyan-600 to-cyan-400", glow: "rgba(8,145,178,0.15)" },
-  council: { primary: "#10b981", gradient: "from-emerald-600 to-emerald-400", glow: "rgba(16,185,129,0.15)" },
+  stream: { primary: "#22d3ee", gradient: "from-primary to-cyan-400", glow: "rgba(34,211,238,0.15)" },
+  council: { primary: "#8b5cf6", gradient: "from-accent to-violet-400", glow: "rgba(139,92,246,0.15)" },
 };
 
 function categorize(text: string) {
@@ -24,6 +24,11 @@ function categorize(text: string) {
   if (text.toLowerCase().includes("complete") || text.toLowerCase().includes("done")) return "success";
   if (text.toLowerCase().includes("error") || text.toLowerCase().includes("fail")) return "error";
   return "info";
+}
+
+function fmtDiagnosticTime(): string {
+  const d = new Date();
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
 }
 
 export function ForensicProgressOverlay({
@@ -63,17 +68,16 @@ export function ForensicProgressOverlay({
       role="dialog"
       aria-modal="true"
       tabIndex={-1}
-      onKeyDown={(e) => { if (e.key === "Escape") { /* no-op but allows focus management awareness */ } }}
       className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-6 selection:bg-transparent"
       style={{
-        background: "rgba(0, 0, 0, 0.9)",
-        backdropFilter: "blur(24px)",
-        WebkitBackdropFilter: "blur(24px)",
+        background: "rgba(2, 6, 23, 0.95)",
+        backdropFilter: "blur(40px)",
+        WebkitBackdropFilter: "blur(40px)",
       }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0, transition: { duration: 0.4, ease: "easeInOut" } }}
-      transition={{ duration: 0.12, ease: "easeOut" }}
+      exit={{ opacity: 0, transition: { duration: 0.6, ease: "easeInOut" } }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
     >
       {/* ── Ambient Underglow ──────────────────────────────────────────── */}
       <motion.div
@@ -90,15 +94,15 @@ export function ForensicProgressOverlay({
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.05, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-          className="flex items-center gap-3 mb-8"
+          className="flex items-center gap-4 mb-8"
         >
           <motion.div 
             className="w-2 h-2 rounded-full"
-            style={{ backgroundColor: accent.primary, boxShadow: `0 0 15px ${accent.primary}` }}
-            animate={reducedMotion ? { opacity: 1 } : { opacity: [1, 0.3, 1], scale: [1, 1.2, 1] }}
+            style={{ backgroundColor: accent.primary, boxShadow: `0 0 20px ${accent.primary}` }}
+            animate={reducedMotion ? { opacity: 1 } : { opacity: [1, 0.3, 1], scale: [1, 1.3, 1] }}
             transition={reducedMotion ? { duration: 0 } : { duration: 2, repeat: Infinity, ease: "easeInOut" }}
           />
-          <span className="text-[10px] font-bold tracking-widest text-white/40">
+          <span className="text-[10px] font-black tracking-[0.4em] text-white/40">
             {telemetryLabel}
           </span>
         </motion.div>
@@ -108,7 +112,7 @@ export function ForensicProgressOverlay({
           initial={{ y: 30, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.08, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-          className={`text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight leading-tight text-transparent bg-clip-text bg-gradient-to-br ${accent.gradient} drop-shadow-2xl`}
+          className={`text-4xl sm:text-5xl md:text-7xl font-black tracking-tighter leading-tight text-white drop-shadow-2xl`}
         >
           {title}
         </motion.h1>
@@ -156,7 +160,7 @@ export function ForensicProgressOverlay({
                 const opacity = isLatest ? 1 : Math.max(0, 0.6 - ageRatio * 0.5);
                 const scale = isLatest ? 1 : Math.max(0.85, 0.95 - ageRatio * 0.1);
 
-                return (
+                 return (
                   <motion.div
                     key={entry.id}
                     initial={{ opacity: 0, y: 20, scale: 0.95 }}
@@ -166,14 +170,15 @@ export function ForensicProgressOverlay({
                     className="flex flex-col items-center"
                   >
                     <span 
-                      className={`text-[12px] sm:text-[14px] font-mono leading-relaxed max-w-xl text-center px-6 ${
+                      className={`text-[12px] sm:text-[14px] font-mono leading-relaxed max-w-2xl text-center px-10 tracking-tight ${
                         isLatest
-                          ? entry.cat === "error" ? "text-rose-400 drop-shadow-md font-bold"
-                            : entry.cat === "success" ? "text-emerald-400 drop-shadow-md font-bold"
-                            : "text-white/90 drop-shadow-md font-bold"
-                          : "text-white/40 font-medium"
+                          ? entry.cat === "error" ? "text-danger drop-shadow-md font-black"
+                            : entry.cat === "success" ? "text-primary drop-shadow-md font-black"
+                            : "text-white/90 drop-shadow-md font-black"
+                          : "text-white/30 font-bold"
                       }`}
                     >
+                      <span className="text-white/10 mr-2">[{fmtDiagnosticTime()}]</span>
                       {entry.text}
                     </span>
                   </motion.div>

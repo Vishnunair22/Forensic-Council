@@ -113,11 +113,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
     onClick={(e) => e.stopPropagation()}
    >
     <div
-     className="rounded-2xl overflow-hidden glass-panel shadow-2xl relative"
-     style={{
-      background:
-       "linear-gradient(135deg, rgba(2,6,23,0.94) 0%, rgba(0,0,0,0.9) 100%)",
-     }}
+     className="rounded-[2.5rem] overflow-hidden premium-glass shadow-2xl relative"
     >
      <div className="scan-line-overlay opacity-30 pointer-events-none" />
      <div className="relative p-10 z-20">
@@ -134,12 +130,12 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
        animate={{ opacity: 1, y: 0 }}
        transition={{ delay: 0.1, duration: 0.4 }}
       >
-       <div className="mb-10 text-center flex flex-col items-center">
-        <h3 id="upload-modal-title" className="text-3xl font-black text-white tracking-tight font-heading">
-         Ingestion Gateway
+       <div className="mb-10 text-center flex flex-col items-center justify-center">
+        <h3 id="upload-modal-title" className="text-3xl font-black text-white tracking-tighter font-heading">
+          Ingestion Gateway
         </h3>
-        <p className="text-sky-400/50 text-[11px] font-mono font-bold tracking-[0.25em] mt-2 text-center">
-         Secure Forensic Intake
+        <p className="text-primary/30 text-[9px] font-mono font-black tracking-[0.4em] mt-2 text-center">
+          {"// Secure Forensic Intake //"}
         </p>
        </div>
 
@@ -181,9 +177,9 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
          >
           <UploadCloud className="w-10 h-10 text-cyan-400/50" />
          </motion.div>
-         <p className="text-xl font-bold text-white/90 mb-3 tracking-tight">
+         <p className="text-xl font-black text-white tracking-tighter mb-3">
           Drop evidence here or{" "}
-          <span className="text-cyan-400/80 underline underline-offset-8 decoration-cyan-400/20 hover:text-cyan-400 transition-colors">
+          <span className="text-primary underline underline-offset-8 decoration-primary/20 hover:text-primary/80 transition-colors">
            browse
           </span>
          </p>
@@ -208,16 +204,16 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
         />
        </motion.label>
 
-       <div className="mt-10 flex flex-col items-center gap-3 px-2 text-center">
+       <div className="mt-10 flex flex-col items-center justify-center gap-4 px-2 text-center">
         <div className="flex items-center justify-center gap-3">
-         <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 shadow-[0_0_8px_rgba(34,211,238,0.5)]" />
-         <p className="text-[11px] font-mono font-bold text-white/40 tracking-widest">
+         <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_12px_rgba(34,211,238,0.5)]" />
+         <p className="text-[9px] font-mono font-black text-white/30 tracking-[0.2em]">
           Supported: IMG, VID, AUD, DOC
          </p>
         </div>
-        <p className="text-[10px] text-white/20 font-mono tracking-tight leading-relaxed max-w-[280px] mx-auto">
-         Maximum file size: 50 MB &middot; SHA-256 integrity check
-         performed automatically on ingestion.
+        <p className="text-[9px] text-white/10 font-mono font-black tracking-tight leading-relaxed max-w-[320px] mx-auto text-center">
+          Maximum file size: 50 MB // SHA-256 integrity check
+          performed automatically on ingestion.
         </p>
        </div>
       </motion.div>

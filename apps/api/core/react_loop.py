@@ -764,9 +764,9 @@ class ReActLoopEngine:
                     raw_conf = 0.60 if len(output.get("detections") or []) > 0 else 0.40
                 elif "objects_detected" in output:
                     raw_conf = 0.55 if len(output.get("objects_detected") or []) > 0 else 0.40
-                elif output.get("hash_matches") is True:
+                elif output.get("hash_matches") is True or output.get("hash_match") is True:
                     raw_conf = 1.0
-                elif output.get("hash_matches") is False:
+                elif output.get("hash_matches") is False or output.get("hash_match") is False:
                     raw_conf = 0.30
                 elif output.get("scale_consistent") is True:
                     raw_conf = 0.85
@@ -827,6 +827,123 @@ class ReActLoopEngine:
                 output_keys=list(output.keys()) if isinstance(output, dict) else type(output).__name__,
             )
         return confidence, from_fallback
+
+    @staticmethod
+    def _has_not_applicable_marker(output: dict[str, Any]) -> bool:
+        if str(output.get("verdict", "")).upper() == "NOT_APPLICABLE":
+            return True
+        if output.get("not_applicable") is True or output.get("skipped") is True:
+            return True
+        return any(
+            bool(output.get(k))
+            for k in (
+                "ela_not_applicable",
+                "ghost_not_applicable",
+                "noise_fingerprint_not_applicable",
+                "prnu_not_applicable",
+                "gan_not_applicable",
+                "roi_skipped",
+            )
+        )
+
+    @staticmethod
+    def _looks_like_condition_skip(output: dict[str, Any]) -> bool:
+        text = " ".join(
+            str(output.get(k, ""))
+            for k in ("reason", "note", "skipped_reason", "file_format_note", "limitation_note")
+        ).lower()
+        condition_words = (
+            "not applicable",
+            "requires",
+            "no gps",
+            "no timestamp",
+            "no readable",
+            "no face",
+            "no audio",
+            "not enough",
+            "insufficient",
+            "cannot be verified from metadata",
+        )
+        return any(word in text for word in condition_words)
+
+    @staticmethod
+    def _positive_signal(output: dict[str, Any]) -> bool:
+        positive_keys = (
+            "manipulation_detected",
+            "splicing_detected",
+            "copy_move_detected",
+            "is_ai_generated",
+            "gan_artifact_detected",
+            "anomaly_detected",
+            "inconsistency_detected",
+            "contextual_anomalies_detected",
+            "scene_incongruent",
+            "concern_flag",
+            "spoofing_detected",
+            "is_spoofed",
+            "splice_detected",
+            "sync_drift_detected",
+            "desync_detected",
+            "face_swap_detected",
+            "discontinuity_detected",
+            "chimeric_signature_detected",
+            "has_appended_data",
+            "editing_software_detected",
+        )
+        if any(bool(output.get(k)) for k in positive_keys):
+            return True
+        if output.get("plausible") is False or output.get("hash_match") is False or output.get("hash_matches") is False:
+            return True
+        if int(output.get("anomaly_count", 0) or 0) > 0:
+            return True
+        verdict = str(output.get("verdict", "")).upper()
+        return verdict in {"SUSPICIOUS", "TAMPERED", "MANIPULATED", "INCONSISTENT", "ANOMALOUS"}
+
+    def _classify_tool_output(
+        self,
+        output: Any,
+        tool_name: str,
+        confidence: float,
+        conf_from_fallback: bool,
+    ) -> tuple[str, str, float | None, bool]:
+        """
+        Convert heterogeneous tool output into the strict evidence contract.
+
+        Returns (status, evidence_verdict, confidence_or_none, court_defensible).
+        """
+        if not isinstance(output, dict):
+            return "INCONCLUSIVE", "INCONCLUSIVE", confidence, False
+
+        if output.get("error"):
+            return "INCOMPLETE", "ERROR", None, False
+
+        if self._has_not_applicable_marker(output):
+            return "NOT_APPLICABLE", "NOT_APPLICABLE", None, False
+
+        if output.get("available") is False:
+            if self._looks_like_condition_skip(output):
+                return "NOT_APPLICABLE", "NOT_APPLICABLE", None, False
+            return "INCOMPLETE", "ERROR", None, False
+
+        if self._looks_like_condition_skip(output) and confidence <= 0.05:
+            return "NOT_APPLICABLE", "NOT_APPLICABLE", None, False
+
+        declared_status = str(output.get("status", "")).upper()
+        if declared_status in {"INCOMPLETE", "FAILED", "ERROR"}:
+            return "INCOMPLETE", "ERROR", None, False
+        if declared_status in {"NOT_APPLICABLE", "SKIPPED"}:
+            return "NOT_APPLICABLE", "NOT_APPLICABLE", None, False
+
+        court_defensible = bool(output.get("court_defensible", True)) and not conf_from_fallback
+        if self._positive_signal(output):
+            return "CONFIRMED", "POSITIVE", confidence, court_defensible
+
+        inconclusive_verdicts = {"INCONCLUSIVE", "UNKNOWN", "NO_ENF_SIGNAL"}
+        verdict = str(output.get("verdict", "")).upper()
+        if verdict in inconclusive_verdicts or conf_from_fallback:
+            return "INCONCLUSIVE", "INCONCLUSIVE", confidence, court_defensible
+
+        return "CONFIRMED", "NEGATIVE", confidence, court_defensible
 
     async def _handle_hitl_pause(
         self, checkpoint: "HITLCheckpointState", hitl_reason: "HITLCheckpointReason"
@@ -1060,16 +1177,17 @@ class ReActLoopEngine:
                     confidence, _conf_from_fallback = self._extract_confidence(
                         output, next_step.tool_name
                     )
-                    status_val = (
-                        str(output.get("status", "CONFIRMED")).upper()
-                        if isinstance(output, dict)
-                        else "CONFIRMED"
+                    status_val, evidence_verdict, finding_confidence, court_defensible = (
+                        self._classify_tool_output(
+                            output,
+                            next_step.tool_name,
+                            confidence,
+                            _conf_from_fallback,
+                        )
                     )
-                    if status_val not in ("CONFIRMED", "CONTESTED", "INCONCLUSIVE", "INCOMPLETE"):
-                        status_val = "CONFIRMED"
                     is_stub = isinstance(output, dict) and (
                         output.get("status") == "stub"
-                        or output.get("court_defensible") is False
+                        or not court_defensible
                         or _conf_from_fallback
                     )
                     calibrated_prob = None
@@ -1081,10 +1199,10 @@ class ReActLoopEngine:
                         from core.calibration import get_calibration_layer
 
                         calibration_layer = get_calibration_layer()
-                        if calibration_layer and not is_stub:
+                        if calibration_layer and not is_stub and finding_confidence is not None:
                             cal_result = calibration_layer.calibrate(
                                 agent_id=self.agent_id,
-                                raw_score=confidence,
+                                raw_score=finding_confidence,
                                 finding_class=next_step.tool_name,
                             )
                             calibrated_prob = cal_result.raw_confidence_score
@@ -1114,23 +1232,26 @@ class ReActLoopEngine:
                         agent_id=self.agent_id,
                         agent_name=self._AGENT_ID_TO_NAME.get(self.agent_id, self.agent_id),
                         finding_type=task_desc,
-                        confidence_raw=confidence,
+                        confidence_raw=finding_confidence,
                         raw_confidence_score=calibrated_prob,
                         calibrated=cal_status_str == "TRAINED",
                         calibration_status=cal_status_str,
+                        evidence_verdict=evidence_verdict,
                         status=status_val,
                         evidence_refs=[],
                         reasoning_summary=self._build_readable_summary(
                             next_step.tool_name,
                             task_desc,
                             tool_result,
-                            confidence,
+                            finding_confidence or 0.0,
                             status_val,
+                            evidence_verdict=evidence_verdict,
                             llm_reasoning=llm_reasoning,
                         ),
                         metadata={
                             "tool_name": next_step.tool_name,
-                            "court_defensible": not is_stub,
+                            "court_defensible": court_defensible and not is_stub,
+                            "raw_tool_status": str(output.get("status", "")) if isinstance(output, dict) else "",
                             "stub_warning": output.get("warning")
                             if isinstance(output, dict) and is_stub
                             else None,
@@ -1196,6 +1317,29 @@ class ReActLoopEngine:
                         )
                     except Exception:
                         pass
+
+                if not tool_result.success:
+                    self._findings.append(
+                        AgentFinding(
+                            agent_id=self.agent_id,
+                            agent_name=self._AGENT_ID_TO_NAME.get(self.agent_id, self.agent_id),
+                            finding_type=f"{next_step.tool_name.replace('_', ' ').title()} Incomplete",
+                            confidence_raw=None,
+                            raw_confidence_score=None,
+                            status="INCOMPLETE",
+                            evidence_verdict="ERROR",
+                            reasoning_summary=(
+                                f"{next_step.tool_name.replace('_', ' ').title()} did not complete: "
+                                f"{tool_result.error or 'tool failed without diagnostic output'}. "
+                                "The remaining tools were allowed to continue so the investigation can still reach analyst review."
+                            ),
+                            metadata={
+                                "tool_name": next_step.tool_name,
+                                "court_defensible": False,
+                                "tool_error": tool_result.error,
+                            },
+                        )
+                    )
 
                 # Mark the IN_PROGRESS task as COMPLETE now that the tool has run.
                 await self._update_task_complete(next_step)
@@ -1701,6 +1845,7 @@ class ReActLoopEngine:
         tool_result: ToolResult,
         confidence: float,
         status: str,
+        evidence_verdict: str = "INCONCLUSIVE",
         llm_reasoning: str | None = None,
     ) -> str:
         """
@@ -1738,7 +1883,11 @@ class ReActLoopEngine:
                 err_msg = "Evidence file not accessible — skipped."
             else:
                 err_msg = err[:140] + ("…" if len(err) > 140 else "")
-            return f"{tool_label}: {err_msg} Confidence adjusted to {confidence:.0%}."
+            return (
+                f"{tool_label}: Incomplete: {err_msg} "
+                "This is a tool/runtime limitation, not evidence of manipulation. "
+                "Other available checks continued."
+            )
 
         # M1 Refinement: If LLM generated specific reasoning, prepend it to the technical result
         reasoning_prefix = ""
@@ -1750,6 +1899,29 @@ class ReActLoopEngine:
             reasoning_prefix = f"[{last_thought}] "
 
         output = tool_result.output or {}
+
+        if isinstance(output, dict):
+            if self._has_not_applicable_marker(output) or (
+                output.get("available") is False and self._looks_like_condition_skip(output)
+            ):
+                reason = (
+                    output.get("reason")
+                    or output.get("note")
+                    or output.get("skipped_reason")
+                    or output.get("limitation_note")
+                    or "This tool is not applicable to the submitted evidence."
+                )
+                return (
+                    f"{tool_label}: Skipped: {str(reason)[:220]} "
+                    "This does not count as suspicious evidence."
+                )
+
+            if output.get("available") is False and not output.get("error"):
+                reason = output.get("note") or output.get("reason") or "Tool unavailable in this environment."
+                return (
+                    f"{tool_label}: Incomplete: {str(reason)[:220]} "
+                    "This is reported as a limitation, not as a forensic signal."
+                )
 
         if output.get("status") == "stub_response":
             return (
@@ -1774,7 +1946,13 @@ class ReActLoopEngine:
                 # Do not restate a hard "{confidence}% certainty" sentence here,
                 # as the UI already shows calibrated confidence and this wording
                 # can be misleading. Keep this as a plain, human-readable summary.
-                return f"{tool_label}: {interpreted_msg}"
+                return self._shape_analyst_finding(
+                    tool_label=tool_label,
+                    message=str(interpreted_msg),
+                    evidence_verdict=evidence_verdict,
+                    status=status,
+                    output=output,
+                )
             except Exception:
                 pass  # fall through to generic path
 
@@ -1819,9 +1997,58 @@ class ReActLoopEngine:
             detail = "; ".join(top)
             if len(highlights) > 4:
                 detail += f" (+{len(highlights) - 4} more)"
-            return f"{tool_label}: {detail}."
+            return self._shape_analyst_finding(
+                tool_label=tool_label,
+                message=f"{detail}.",
+                evidence_verdict=evidence_verdict,
+                status=status,
+                output=output if isinstance(output, dict) else {},
+            )
         else:
             return f"{tool_label}: analysis complete — no anomalies detected."
+
+    def _shape_analyst_finding(
+        self,
+        tool_label: str,
+        message: str,
+        evidence_verdict: str,
+        status: str,
+        output: dict[str, Any],
+    ) -> str:
+        """Turn technical tool output into a concise analyst-facing finding."""
+        verdict = (evidence_verdict or "INCONCLUSIVE").upper()
+        limitation = (
+            output.get("limitation")
+            or output.get("limitation_note")
+            or output.get("note")
+            or output.get("fallback_reason")
+            or ""
+        )
+        limitation = str(limitation).strip()
+        if len(limitation) > 180:
+            limitation = limitation[:177] + "..."
+
+        if verdict == "POSITIVE":
+            prefix = "Finding"
+            meaning = "This is a forensic signal and should be weighed with corroborating tools."
+        elif verdict == "NEGATIVE":
+            prefix = "Checked"
+            meaning = "This supports the absence of this specific anomaly."
+        elif verdict == "NOT_APPLICABLE":
+            prefix = "Skipped"
+            meaning = "This does not count for or against authenticity."
+        elif verdict == "ERROR" or status == "INCOMPLETE":
+            prefix = "Incomplete"
+            meaning = "This is a tool limitation, not evidence of manipulation."
+        else:
+            prefix = "Inconclusive"
+            meaning = "The signal is not strong enough to support a firm conclusion."
+
+        parts = [f"{tool_label}: {prefix}: {message.strip()}"]
+        if limitation and verdict in {"INCONCLUSIVE", "ERROR", "NOT_APPLICABLE"}:
+            parts.append(f"Limitation: {limitation}")
+        parts.append(meaning)
+        return " ".join(parts)
 
     def _format_tool_result(self, result: ToolResult) -> str:
         """Format a tool result for observation content."""

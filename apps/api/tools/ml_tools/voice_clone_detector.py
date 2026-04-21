@@ -252,7 +252,7 @@ def _speechbrain_detection(audio_path: str, **kwargs) -> dict[str, Any] | None:
             "synthetic_probability": round(mean_spoof_prob, 3),
             "features": {
                 "aasist_mean_score": round(mean_spoof_prob, 4),
-                "num_segments_analysed": len(spoof_probs),  # was `segments[:5]` — NameError
+                "num_segments_analyzed": len(spoof_probs),  # was `segments[:5]` — NameError
             },
             "available": True,
             "court_defensible": True,

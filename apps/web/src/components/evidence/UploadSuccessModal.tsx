@@ -139,14 +139,14 @@ export function UploadSuccessModal({
    aria-modal="true"
    aria-labelledby="upload-success-title"
   >
-   <motion.div
-    ref={modalRef}
-    className="glass-panel relative w-full max-w-sm overflow-hidden rounded-2xl p-10 shadow-2xl"
-    variants={scaleIn}
-    initial="hidden"
-    animate="visible"
-    exit="exit"
-   >
+    <motion.div
+     ref={modalRef}
+     className="premium-glass relative w-full max-w-md overflow-hidden rounded-[2.5rem] p-12 shadow-2xl"
+     variants={scaleIn}
+     initial="hidden"
+     animate="visible"
+     exit="exit"
+    >
     <div className="scan-line-overlay opacity-20" />
     <motion.div
      className="w-32 h-32 rounded-[2rem] mx-auto mb-10 overflow-hidden flex items-center justify-center relative z-10 border border-white/[0.08] bg-white/[0.02] shadow-2xl"
@@ -198,13 +198,13 @@ export function UploadSuccessModal({
      className="relative z-10"
     >
      <div className="flex flex-col items-center mb-10">
-      <div className="inline-flex items-center gap-3 mb-6 px-5 py-2 rounded-full bg-emerald-500/5 border border-emerald-500/10 backdrop-blur-sm">
+      <div className="inline-flex items-center gap-3 mb-6 px-6 py-2 rounded-full bg-primary/5 border border-primary/10 backdrop-blur-sm">
        <motion.div
-        className="w-2.5 h-2.5 rounded-full bg-emerald-400/60 shadow-[0_0_15px_rgba(52,211,153,0.3)]"
+        className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_15px_rgba(34,211,238,0.5)]"
         animate={{ opacity: [1, 0.5, 1] }}
         transition={{ duration: 3, repeat: Infinity }}
        />
-       <span className="text-[10px] font-mono font-black text-emerald-400/70 tracking-[0.2em] ">
+       <span className="text-[9px] font-mono font-black text-primary/70 tracking-[0.3em] uppercase">
         Integrity Verified
        </span>
       </div>
@@ -214,10 +214,10 @@ export function UploadSuccessModal({
       </h3>
      </div>
 
-     <div className="flex flex-col sm:flex-row gap-4 mt-6">
+     <div className="flex flex-col sm:flex-row gap-4 mt-10 w-full justify-center">
       <button
        onClick={onNewUpload}
-       className="btn-pill-secondary flex-1 !px-4"
+       className="btn-outline flex-1 !px-6 tracking-[0.2em]"
       >
        <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-700" />
        <span>Reset</span>
@@ -225,9 +225,9 @@ export function UploadSuccessModal({
 
       <button
        onClick={onStartAnalysis}
-       className="btn-pill-primary flex-[1.6] group !px-4"
+       className="btn-premium flex-[1.6] group !px-6 tracking-[0.2em]"
       >
-       <span className="text-[11px] tracking-[0.1em] font-black">Analyze</span>
+       <span>Analyze</span>
        <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition-transform duration-500" />
       </button>
      </div>

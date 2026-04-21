@@ -61,7 +61,7 @@ _MIN_ENF_SNR_DB = 3.0
 # STFT parameters — high frequency resolution needed for ENF tracking
 _STFT_WINDOW_S = 8.0       # 8-second analysis window → 0.125 Hz resolution
 _STFT_HOP_S = 2.0           # 2-second hop → one ENF sample every 2s
-_MAX_AUDIO_S = 600           # Analyse at most 10 minutes
+_MAX_AUDIO_S = 600           # Analyze at most 10 minutes
 
 # Discontinuity threshold (z-score of frame-to-frame ENF delta)
 _SPLICE_ZSCORE_THRESH = 3.0
@@ -164,14 +164,14 @@ def _detect_splice_points(
     return sorted(deduped, key=lambda x: x["timestamp_s"])
 
 
-def analyse_enf(audio_path: str, grid_hint: str = "auto") -> dict[str, Any]:
+def analyze_enf(audio_path: str, grid_hint: str = "auto") -> dict[str, Any]:
     """
     Main ENF analysis function.
 
     Parameters
     ----------
     audio_path:
-        Path to the audio file to analyse.
+        Path to the audio file to analyze.
     grid_hint:
         "50", "60", or "auto" (probe both grids and select the stronger one).
     """
@@ -300,7 +300,7 @@ def analyse_enf(audio_path: str, grid_hint: str = "auto") -> dict[str, Any]:
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="ENF audio forensics analyser")
+    parser = argparse.ArgumentParser(description="ENF audio forensics analyzer")
     parser.add_argument("--input", type=str, help="Input audio file path")
     parser.add_argument(
         "--grid", type=str, default="auto", choices=["50", "60", "auto"],
@@ -323,5 +323,5 @@ if __name__ == "__main__":
         print(json.dumps({"error": "--input is required", "available": False}))
         sys.exit(1)
 
-    result = analyse_enf(args.input, grid_hint=args.grid)
+    result = analyze_enf(args.input, grid_hint=args.grid)
     print(json.dumps(result))

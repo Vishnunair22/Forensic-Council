@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shutil
 import tempfile
 
 import cv2
@@ -60,6 +61,39 @@ class SceneHandlers(BaseToolHandler):
 
     def _is_video(self, path: str) -> bool:
         return str(path).lower().endswith((".mp4", ".avi", ".mov", ".mkv", ".webm"))
+
+    async def _extension_safe_media_path(self, file_path: str) -> tuple[str, str | None]:
+        """
+        Ultralytics rejects extensionless ingestion paths such as *.bin.
+        Create a temporary path with a media suffix while preserving bytes.
+        """
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff", ".mp4", ".mov", ".avi", ".mkv", ".webm"}:
+            return file_path, None
+
+        mime = (getattr(self.agent.evidence_artifact, "mime_type", "") or "").lower()
+        suffix = ".jpg"
+        if "png" in mime:
+            suffix = ".png"
+        elif "webp" in mime:
+            suffix = ".webp"
+        elif "bmp" in mime:
+            suffix = ".bmp"
+        elif "tiff" in mime or "tif" in mime:
+            suffix = ".tiff"
+        elif mime.startswith("video/"):
+            suffix = ".mp4"
+
+        loop = asyncio.get_running_loop()
+
+        def _copy() -> str:
+            fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+            os.close(fd)
+            shutil.copyfile(file_path, tmp_path)
+            return tmp_path
+
+        tmp_path = await loop.run_in_executor(None, _copy)
+        return tmp_path, tmp_path
 
     async def _extract_best_video_frame(self, video_path: str) -> tuple[str, str | None]:
         """
@@ -97,10 +131,13 @@ class SceneHandlers(BaseToolHandler):
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         target_path = artifact.file_path
         tmp_frame_path: str | None = None
+        tmp_media_path: str | None = None
 
         if self._is_video(target_path):
             await self.agent.update_sub_task("Extracting representative key-frame from video...")
             target_path, tmp_frame_path = await self._extract_best_video_frame(target_path)
+        else:
+            target_path, tmp_media_path = await self._extension_safe_media_path(target_path)
 
         try:
             await self.agent.update_sub_task("Initializing YOLO11 visual reasoning core...")
@@ -158,6 +195,8 @@ class SceneHandlers(BaseToolHandler):
         finally:
             if tmp_frame_path and os.path.exists(tmp_frame_path):
                 os.unlink(tmp_frame_path)
+            if tmp_media_path and os.path.exists(tmp_media_path):
+                os.unlink(tmp_media_path)
 
     # ── Phase 1: Vector Contraband Search ─────────────────────────────────────
 
@@ -451,7 +490,7 @@ class SceneHandlers(BaseToolHandler):
         return {
             "scene_incongruent":   is_incongruent,
             "colour_variance":     round(variance, 6),
-            "grid_cells_analysed": rows * cols,
+            "grid_cells_analyzed": rows * cols,
             "confidence":          0.55,
             "available":           True,
             "court_defensible":    False,

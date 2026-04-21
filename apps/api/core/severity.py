@@ -85,16 +85,23 @@ def assign_severity_tier(f: Any) -> str:
     meta = _get_metadata(f)
     conf = _get_confidence(f)
     status_str = _get_status(f)
+    evidence_verdict = ""
+    if hasattr(f, "evidence_verdict"):
+        evidence_verdict = str(getattr(f, "evidence_verdict", "")).upper()
+    elif isinstance(f, dict):
+        evidence_verdict = str(f.get("evidence_verdict", "")).upper()
 
     na = is_not_applicable(meta)
     failed = is_failed(meta, na)
 
-    if na:
+    if evidence_verdict == "NOT_APPLICABLE" or na:
         return "INFO"
     if meta.get("hash_matches") is True:
         return "INFO"
-    if failed or status_str == "INCOMPLETE":
+    if evidence_verdict == "ERROR" or failed or status_str == "INCOMPLETE":
         return "LOW"
+    if evidence_verdict == "POSITIVE":
+        return "CRITICAL" if conf >= 0.75 else "HIGH"
 
     has_manip = (
         meta.get("manipulation_detected") is True

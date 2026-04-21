@@ -8,7 +8,8 @@ export interface AgentFindingDTO {
   agent_name: string;
   finding_type: string;
   status: string;
-  confidence_raw: number;
+  confidence_raw: number | null;
+  evidence_verdict?: "POSITIVE" | "NEGATIVE" | "INCONCLUSIVE" | "NOT_APPLICABLE" | "ERROR";
   calibrated: boolean;
   calibrated_probability: number | null; // DEPRECATED
   raw_confidence_score: number | null;
@@ -77,6 +78,7 @@ export interface ReportDTO {
   >;
   degradation_flags?: string[];
   compression_penalty?: number;
+  cross_modal_fusion?: Record<string, unknown>;
 }
 
 export interface BriefUpdate {

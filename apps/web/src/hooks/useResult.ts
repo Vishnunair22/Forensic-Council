@@ -201,8 +201,12 @@ export function useResult() {
 
   const handleNew = useCallback(() => {
     playSound("click");
-    ["forensic_session_id", "forensic_file_name", "forensic_case_id", "forensic_thumbnail"].forEach(k => storage.removeItem(k));
-    router.push("/evidence");
+    ["forensic_session_id", "forensic_file_name", "forensic_case_id", "forensic_thumbnail", "forensic_is_deep", "forensic_initial_agents", "forensic_deep_agents"].forEach(k => storage.removeItem(k));
+    // Route to home and trigger the upload modal opening via an event
+    router.push("/");
+    setTimeout(() => {
+      window.dispatchEvent(new Event("fc:open-upload"));
+    }, 500);
   }, [playSound, router]);
 
   const handleHome = useCallback(() => {

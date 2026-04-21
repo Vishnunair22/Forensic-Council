@@ -25,7 +25,10 @@ export function GlobalNavbar() {
           window.location.reload(); 
         } else {
           router.push("/", { scroll: true });
-          setTimeout(() => setIsResetting(false), 200);
+          setTimeout(() => {
+            window.dispatchEvent(new Event("fc:reset-home"));
+            setIsResetting(false);
+          }, 200);
         }
     }, 400); 
   }, [pathname, router, playSound]);
@@ -33,7 +36,7 @@ export function GlobalNavbar() {
   return (
     <nav
       aria-label="Main navigation"
-      className="absolute top-0 left-0 right-0 z-[200] flex items-center justify-between px-10 py-6 transition-all duration-500 bg-black/60 backdrop-blur-xl border-b border-white/[0.03]"
+      className="fixed top-0 left-0 right-0 z-[200] flex items-center justify-between px-10 py-5 transition-all duration-500 bg-surface-2/40 backdrop-blur-2xl border-b border-border-subtle"
     >
       <AnimatePresence>
         {isResetting && <ForensicResetOverlay />}
@@ -47,9 +50,9 @@ export function GlobalNavbar() {
         aria-current={pathname === "/" ? "page" : undefined}
       >
         <motion.div
-          className="w-6 h-6 aspect-square shrink-0 rounded flex items-center justify-center text-[8px] font-black text-black shadow-[0_0_20px_rgba(6,182,212,0.1)] ring-1 ring-white/5"
+          className="w-6 h-6 aspect-square shrink-0 rounded-sm flex items-center justify-center text-[9px] font-black text-black shadow-[0_0_25px_rgba(34,211,238,0.3)]"
           style={{
-            background: "linear-gradient(135deg, #0891b2 0%, #06b6d4 100%)",
+            background: "linear-gradient(135deg, #22d3ee 0%, #8b5cf6 100%)",
           }}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
@@ -59,8 +62,8 @@ export function GlobalNavbar() {
           FC
         </motion.div>
 
-        <span className="text-[14px] font-semibold tracking-wide text-white/90 group-hover:text-white transition-colors duration-300">
-          Forensic Council
+        <span className="text-[14px] font-black tracking-tighter text-white/90 group-hover:text-white transition-colors duration-300">
+          Forensic <span className="text-primary">Council</span>
         </span>
       </button>
 

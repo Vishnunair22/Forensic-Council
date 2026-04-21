@@ -14,11 +14,11 @@ interface TimelineTabProps {
 }
 
 const AGENT_THEMES: Record<string, { dot: string; text: string; bg: string }> = {
-  Agent1: { dot: "bg-cyan-400", text: "text-cyan-400", bg: "bg-cyan-500/5" },
-  Agent2: { dot: "bg-blue-400", text: "text-blue-400", bg: "bg-blue-500/5" },
-  Agent3: { dot: "bg-amber-400", text: "text-amber-400", bg: "bg-amber-500/5" },
-  Agent4: { dot: "bg-teal-400", text: "text-teal-400", bg: "bg-teal-500/5" },
-  Agent5: { dot: "bg-violet-400", text: "text-violet-400", bg: "bg-violet-500/5" },
+  Agent1: { dot: "bg-primary", text: "text-primary", bg: "bg-primary/5" },
+  Agent2: { dot: "bg-primary", text: "text-primary", bg: "bg-primary/5" },
+  Agent3: { dot: "bg-warning", text: "text-warning", bg: "bg-warning/5" },
+  Agent4: { dot: "bg-danger", text: "text-danger", bg: "bg-danger/5" },
+  Agent5: { dot: "bg-accent", text: "text-accent", bg: "bg-accent/5" },
 };
 
 export function TimelineTab({
@@ -46,17 +46,17 @@ export function TimelineTab({
         </h2>
       </div>
 
-      <div className="rounded-[2.5rem] border border-white/5 overflow-hidden glass-panel">
+      <div className="rounded-[2.5rem] border border-border-subtle overflow-hidden premium-glass">
         {/* Timeline Header */}
-        <div className="px-10 py-8 border-b border-white/5 bg-white/[0.01] flex items-center justify-between">
+        <div className="px-10 py-8 border-b border-border-subtle bg-surface-low/50 flex items-center justify-between">
           <div className="flex flex-col gap-1">
-            <h3 className="text-lg font-bold text-white/70">
+            <h3 className="text-lg font-black text-white uppercase tracking-tighter">
               Sequence Registry
             </h3>
-            <p className="text-[11px] font-medium text-white/20 tracking-wide">Atomic tool execution and consensus deliberation</p>
+            <p className="text-[10px] font-black text-white/20 tracking-[0.3em] uppercase">Atomic tool execution and consensus deliberation</p>
           </div>
           {pipelineStartAt && report.signed_utc && (
-            <div className="px-4 py-2 rounded-full bg-white/[0.03] border border-white/10 text-[10px] font-bold text-cyan-400/60">
+            <div className="px-4 py-2 rounded-full bg-surface-1 border border-border-subtle text-[10px] font-black text-primary uppercase tracking-[0.2em] shadow-inner">
               Cycle Time: {fmtDuration(pipelineStartAt, report.signed_utc)}
             </div>
           )}
@@ -68,25 +68,25 @@ export function TimelineTab({
             {/* 1. Evidence Ingress Phase */}
             {pipelineStartAt && (
               <div className="relative group">
-                <div className="absolute -left-[49px] top-1 w-4 h-4 rounded-full border border-white/10 bg-white/5 shadow-xl transition-all group-hover:bg-cyan-500/20" />
+                <div className="absolute -left-[49px] top-1 w-4 h-4 rounded-full border border-border-subtle bg-surface-low shadow-xl transition-all group-hover:bg-primary/20" />
                 <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-cyan-500/40 tracking-widest">Phase 01</span>
-                  <h4 className="text-sm font-bold text-white/70">Evidence Ingress</h4>
+                  <span className="text-[10px] font-black text-primary/40 tracking-[0.4em] uppercase">Phase 01</span>
+                  <h4 className="text-sm font-black text-white/80 uppercase tracking-tighter">Evidence Ingress</h4>
                   <p className="text-[11px] text-white/50 font-medium leading-relaxed max-w-xl">
                     Secure intake of forensic evidence. Metadata extraction and integrity pre-check completed.
                   </p>
-                  <div className="pt-2 text-[10px] font-mono text-white/10">{fmtTime(pipelineStartAt)} {"//"} Transmission Secured</div>
+                  <div className="pt-2 text-[10px] font-mono text-white/10 uppercase tracking-tight">[{fmtTime(pipelineStartAt)}] TRANSMISSION_SECURED</div>
                 </div>
               </div>
             )}
 
             {/* 2. Tool Volley Phase */}
             <div className="relative group">
-              <div className="absolute -left-[49px] top-1 w-4 h-4 rounded-full border border-white/20 bg-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.1)]" />
+              <div className="absolute -left-[49px] top-1 w-4 h-4 rounded-full border border-primary/30 bg-primary/20 shadow-[0_0_20px_rgba(34,211,238,0.2)]" />
               <div className="space-y-6">
                 <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-emerald-500/40 tracking-widest">Phase 02</span>
-                  <h4 className="text-sm font-bold text-white/70">Tool Volley</h4>
+                  <span className="text-[10px] font-black text-primary/40 tracking-[0.4em] uppercase">Phase 02</span>
+                  <h4 className="text-sm font-black text-white/80 uppercase tracking-tighter">Tool Volley</h4>
                   <p className="text-[11px] text-white/50 font-medium leading-relaxed max-w-xl">
                     Parallel execution of deep neural probes and investigative agents.
                   </p>
@@ -99,17 +99,17 @@ export function TimelineTab({
                       // const isComplete = !!update.completed_at;
 
                       return (
-                        <div key={idx} className="flex items-center gap-4 p-4 rounded-2xl bg-white/[0.01] border border-white/5 hover:bg-white/[0.02] transition-colors">
+                        <div key={idx} className="flex items-center gap-4 p-4 rounded-2xl premium-card group transition-colors">
                           <div className={clsx("w-2 h-2 rounded-full", theme.dot)} />
                           <div className="flex-1 min-w-0">
-                            <h5 className={clsx("text-[11px] font-bold", theme.text)}>
+                            <h5 className={clsx("text-[10px] font-black uppercase tracking-widest", theme.text)}>
                               {update.agent_name || update.agent_id}
                             </h5>
-                            <p className="text-[10px] text-white/20 truncate">{update.message || "Executing investigative probe..."}</p>
+                            <p className="text-[10px] font-mono font-black text-white/20 truncate uppercase tracking-tight">{update.message || "Executing investigative probe..."}</p>
                           </div>
                           {update.completed_at && (
-                            <span className="text-[10px] font-mono text-white/10 shrink-0">
-                              {fmtTime(update.completed_at)}
+                            <span className="text-[10px] font-mono text-white/10 shrink-0 uppercase">
+                              [{fmtTime(update.completed_at)}]
                             </span>
                           )}
                         </div>
@@ -135,16 +135,16 @@ export function TimelineTab({
             {/* 3. Synthesis Phase */}
             {report.signed_utc && (
               <div className="relative group">
-                <div className="absolute -left-[49px] top-1 w-4 h-4 rounded-full border border-white/20 bg-violet-500/20 shadow-[0_0_20px_rgba(139,92,246,0.1)]" />
+                <div className="absolute -left-[49px] top-1 w-4 h-4 rounded-full border border-accent/30 bg-accent/20 shadow-[0_0_20px_rgba(139,92,246,0.2)]" />
                 <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-violet-500/40 tracking-widest">Phase 03</span>
-                  <h4 className="text-sm font-bold text-white/70">Council Synthesis</h4>
+                  <span className="text-[10px] font-black text-accent/40 tracking-[0.4em] uppercase">Phase 03</span>
+                  <h4 className="text-sm font-black text-white/80 uppercase tracking-tighter">Council Synthesis</h4>
                   <p className="text-[11px] text-white/50 font-medium leading-relaxed max-w-xl">
                     Arbiter consolidation of all agent findings. Final verdict calculation and cryptographic signing.
                   </p>
-                  <div className="pt-2 text-[10px] font-mono text-white/10">
-                    {fmtTime(report.signed_utc)} {"//"} Consensus Reached 
-                    {lastAgentTime && ` // ${fmtDuration(lastAgentTime, report.signed_utc)} deliberation`}
+                  <div className="pt-2 text-[10px] font-mono text-white/10 uppercase tracking-tight">
+                    [{fmtTime(report.signed_utc)}] CONSENSUS_REACHED 
+                    {lastAgentTime && ` // DELIBERATION: ${fmtDuration(lastAgentTime, report.signed_utc)}`}
                   </div>
                 </div>
               </div>

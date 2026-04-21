@@ -117,6 +117,10 @@ class ForensicReport(BaseModel):
     reliability_note: str = ""
     # New verdict/confidence fields
     manipulation_probability: float = 0.0
+    compression_penalty: float = Field(
+        default=1.0,
+        description="Reliability multiplier applied to fragile compression-sensitive tools.",
+    )
     # C: Confidence range across all active agent findings
     confidence_min: float = 0.0
     confidence_max: float = 0.0
@@ -238,6 +242,75 @@ SHARED_TOOLS: set[str] = {
 }
 
 
+def evidence_verdict_of(finding: dict[str, Any]) -> str:
+    """Return the normalized evidence verdict for a finding."""
+    verdict = str(finding.get("evidence_verdict") or "").upper()
+    if verdict in {"POSITIVE", "NEGATIVE", "INCONCLUSIVE", "NOT_APPLICABLE", "ERROR"}:
+        return verdict
+
+    meta = finding.get("metadata") or {}
+    meta_verdict = str(meta.get("evidence_verdict") or meta.get("verdict") or "").upper()
+    if meta_verdict in {"NOT_APPLICABLE", "ERROR"}:
+        return meta_verdict
+    if finding.get("status") == "NOT_APPLICABLE":
+        return "NOT_APPLICABLE"
+    if finding.get("status") == "INCOMPLETE" or meta.get("court_defensible") is False:
+        return "ERROR"
+    if _has_legacy_positive_signal(finding):
+        return "POSITIVE"
+    if finding.get("status") == "INCONCLUSIVE":
+        return "INCONCLUSIVE"
+    return "NEGATIVE"
+
+
+def confidence_of(finding: dict[str, Any], default: float | None = None) -> float | None:
+    """Return a usable confidence, preserving None for NA/error findings."""
+    if evidence_verdict_of(finding) in {"NOT_APPLICABLE", "ERROR"}:
+        return None
+    for key in ("raw_confidence_score", "calibrated_probability", "confidence_raw"):
+        value = finding.get(key)
+        if value is not None:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                continue
+    return default
+
+
+def _has_legacy_positive_signal(finding: dict[str, Any]) -> bool:
+    meta = finding.get("metadata") or {}
+    return (
+        meta.get("manipulation_detected") is True
+        or meta.get("deepfake_detected") is True
+        or meta.get("splicing_detected") is True
+        or meta.get("copy_move_detected") is True
+        or meta.get("mismatch_detected") is True
+        or meta.get("stego_suspected") is True
+        or meta.get("scale_consistent") is False
+        or meta.get("swap_suspect") is True
+        or meta.get("splice_detected") is True
+        or meta.get("shift_detected") is True
+        or meta.get("re_encode_suspect") is True
+        or meta.get("adversarial_pattern_detected") is True
+        or meta.get("uniformity_suspect") is True
+        or meta.get("prosody_anomaly") is True
+        or str(meta.get("verdict", "")).upper()
+        in ("LIKELY_AI_GENERATED", "LIKELY_SPOOFED", "LIKELY_SYNTHETIC")
+        or (
+            "INCONSISTENT" in str(meta.get("prnu_verdict", "")).upper()
+            and meta.get("prnu_verdict") is not None
+        )
+        or (
+            "INCONSISTENT" in str(meta.get("verdict", "")).upper()
+            and meta.get("verdict") is not None
+        )
+        or (
+            "TAMPERED" in str(meta.get("verdict", "")).upper()
+            and meta.get("verdict") is not None
+        )
+    )
+
+
 def calculate_manipulation_probability(
     all_findings: list[dict[str, Any]],
     compression_penalty: float = 1.0,
@@ -259,47 +332,13 @@ def calculate_manipulation_probability(
         if _f.get("stub_result"):
             continue
         _meta = _f.get("metadata") or {}
-        if _meta.get("court_defensible") is False:
+        _evidence_verdict = evidence_verdict_of(_f)
+        if _evidence_verdict in {"NOT_APPLICABLE", "ERROR", "NEGATIVE"}:
             continue
-
-        _is_direct_manip = (
-            _meta.get("manipulation_detected") is True
-            or _meta.get("deepfake_detected") is True
-            or _meta.get("splicing_detected") is True
-            or _meta.get("copy_move_detected") is True
-            or _meta.get("mismatch_detected") is True
-            or _meta.get("stego_suspected") is True
-            or _meta.get("scale_consistent") is False
-            or _meta.get("swap_suspect") is True
-            or _meta.get("splice_detected") is True
-            or _meta.get("shift_detected") is True
-            or _meta.get("re_encode_suspect") is True
-            or _meta.get("adversarial_pattern_detected") is True
-            or _meta.get("uniformity_suspect") is True
-            or _meta.get("prosody_anomaly") is True
-            or str(_meta.get("verdict", "")).upper()
-            in ("LIKELY_AI_GENERATED", "LIKELY_SPOOFED", "LIKELY_SYNTHETIC")
-            or (
-                "INCONSISTENT" in str(_meta.get("prnu_verdict", "")).upper()
-                and _meta.get("prnu_verdict") is not None
-            )
-            or (
-                "INCONSISTENT" in str(_meta.get("verdict", "")).upper()
-                and _meta.get("verdict") is not None
-            )
-            or (
-                "TAMPERED" in str(_meta.get("verdict", "")).upper()
-                and _meta.get("verdict") is not None
-            )
-        )
+        _is_direct_manip = _evidence_verdict == "POSITIVE" or _has_legacy_positive_signal(_f)
 
         if _is_direct_manip:
-            _c = float(
-                _f.get("raw_confidence_score")
-                or _f.get("calibrated_probability")
-                or _f.get("confidence_raw")
-                or 0.5
-            )
+            _c = confidence_of(_f, default=0.5) or 0.5
             if _c >= 0.30:
                 _tool = (
                     str(_meta.get("tool_name", _f.get("finding_type", "")))
@@ -403,7 +442,7 @@ async def cross_agent_comparison(
     for _cat_name, agent_map in category_buckets.items():
         for agent_id, flist in agent_map.items():
             if len(flist) > _MAX_FINDINGS_PER_BUCKET:
-                flist.sort(key=lambda x: x.get("confidence_raw", 0.0), reverse=True)
+                flist.sort(key=lambda x: confidence_of(x, default=0.0) or 0.0, reverse=True)
                 agent_map[agent_id] = flist[:_MAX_FINDINGS_PER_BUCKET]
         agent_ids = list(agent_map.keys())
         for i, agent_a in enumerate(agent_ids):
@@ -414,28 +453,20 @@ async def cross_agent_comparison(
                         _tool_b = str((fb.get("metadata") or {}).get("tool_name", "")).lower()
                         if _tool_a == _tool_b and _tool_a in SHARED_TOOLS:
                             continue
-                        same_status = fa.get("status", "") == fb.get("status", "")
-                        conf_a = fa.get("confidence_raw") or fa.get("raw_confidence_score") or 0.5
-                        conf_b = fb.get("confidence_raw") or fb.get("raw_confidence_score") or 0.5
-                        conf_aligned = (conf_a >= 0.5) == (conf_b >= 0.5)
-                        verdict_a = str((fa.get("metadata") or {}).get("verdict", "")).upper()
-                        verdict_b = str((fb.get("metadata") or {}).get("verdict", "")).upper()
-                        verdict_aligned = True
-                        if verdict_a and verdict_b:
-                            _suspicious = {
-                                "LIKELY_AI_GENERATED", "LIKELY_SPOOFED", "LIKELY_SYNTHETIC",
-                                "INCONSISTENT", "TAMPERED", "SUSPICIOUS"
-                            }
-                            verdict_aligned = (verdict_a in _suspicious) == (verdict_b in _suspicious)
-                        elif not verdict_a or not verdict_b:
-                            verdict_aligned = False
-                        is_agreement = same_status and conf_aligned and verdict_aligned
+                        verdict_a = evidence_verdict_of(fa)
+                        verdict_b = evidence_verdict_of(fb)
+                        if "ERROR" in {verdict_a, verdict_b} or "NOT_APPLICABLE" in {verdict_a, verdict_b}:
+                            continue
+                        conf_a = confidence_of(fa, default=0.5) or 0.5
+                        conf_b = confidence_of(fb, default=0.5) or 0.5
+                        conf_aligned = abs(conf_a - conf_b) <= 0.35
+                        is_agreement = verdict_a == verdict_b and conf_aligned
                         comparisons.append(
                             FindingComparison(
                                 finding_a=fa,
                                 finding_b=fb,
                                 verdict=FindingVerdict.AGREEMENT if is_agreement else FindingVerdict.CONTRADICTION,
-                                cross_modal_confirmed=is_agreement and same_status,
+                                cross_modal_confirmed=is_agreement,
                             )
                         )
 

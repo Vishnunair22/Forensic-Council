@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
-import { ArrowRight } from "lucide-react";
+import { UploadCloud } from "lucide-react";
 
 import { ForensicProgressOverlay } from "@/components/ui/ForensicProgressOverlay";
 import { autoLoginAsInvestigator, checkBackendHealth, ProtocolWarmingError } from "@/lib/api";
@@ -30,8 +30,20 @@ export function HeroAuthActions() {
       setIsAuthenticating(false);
       setAuthError(null);
     };
+
+    const openUpload = () => {
+      setShowUpload(true);
+      setSelectedFile(null);
+      setIsAuthenticating(false);
+      setAuthError(null);
+    };
+
     window.addEventListener("fc:reset-home", resetHome);
-    return () => window.removeEventListener("fc:reset-home", resetHome);
+    window.addEventListener("fc:open-upload", openUpload);
+    return () => {
+      window.removeEventListener("fc:reset-home", resetHome);
+      window.removeEventListener("fc:open-upload", openUpload);
+    };
   }, []);
 
   const handleStartAnalysis = useCallback(async () => {
@@ -78,12 +90,18 @@ export function HeroAuthActions() {
           playSound("hum");
           setShowUpload(true);
         }}
-        className="flex items-center justify-center gap-2 px-8 py-4 min-h-[44px] rounded-full text-[15px] font-bold text-white bg-cyan-600 border border-cyan-600 hover:bg-transparent hover:text-cyan-500 hover:border-cyan-500 transition-all duration-200 shadow-[0_10px_30px_rgba(8,145,178,0.3)] active:scale-95 group"
+        className="group relative flex items-center justify-center px-12 py-5 rounded-full font-black text-[11px] tracking-[0.3em] uppercase overflow-hidden transition-all duration-500 hover:scale-[1.02] active:scale-[0.98] shadow-[0_0_40px_rgba(34,211,238,0.15)] hover:shadow-[0_0_60px_rgba(34,211,238,0.25)] border border-primary/20 hover:border-primary/40"
         aria-label={isAuthenticating ? "Initializing..." : authError ? authError : "Upload a file to begin analysis"}
       >
-        <span className="relative z-10 flex items-center">
+        {/* Background Gradient Layer */}
+        <div className="absolute inset-0 bg-gradient-to-r from-[#22d3ee] to-[#3b82f6] opacity-90 group-hover:opacity-100 transition-opacity" />
+        
+        {/* Inner Glow/Shine Effect */}
+        <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+
+        <span className="relative z-10 flex items-center gap-3 text-black">
+          <UploadCloud className="w-4 h-4 transition-transform duration-500 group-hover:-translate-y-0.5" />
           {isAuthenticating ? "Initializing..." : authError ? authError : "Begin Analysis"}
-          {!isAuthenticating && !authError && <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" aria-hidden="true" />}
         </span>
       </button>
 

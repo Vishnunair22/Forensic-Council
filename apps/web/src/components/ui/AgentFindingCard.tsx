@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import { motion } from "framer-motion";
-import { Badge } from "@/components/ui/Badge";
 import { AgentFindingDTO, AgentMetricsDTO } from "@/lib/api";
 import {
   ConfidenceBar,
@@ -51,10 +50,10 @@ const COLOR_MAP: Record<string, { bg: string; border: string; text: string; glow
 };
 
 const FLAG_CONFIG = {
-  bad: { color: "text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/20", icon: AlertTriangle, label: "Anomaly Detected" },
-  warn: { color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20", icon: AlertTriangle, label: "Warning" },
-  ok: { color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20", icon: CheckCircle2, label: "Clean" },
-  info: { color: "text-white/40", bg: "bg-white/5", border: "border-white/10", icon: Info, label: "Info" },
+  bad: { color: "text-danger", bg: "bg-danger/10", border: "border-danger/20", icon: AlertTriangle, label: "Anomaly Detected" },
+  warn: { color: "text-warning", bg: "bg-warning/10", border: "border-warning/20", icon: AlertTriangle, label: "Warning" },
+  ok: { color: "text-primary", bg: "bg-primary/10", border: "border-primary/20", icon: CheckCircle2, label: "Clean" },
+  info: { color: "text-white/40", bg: "bg-white/5", border: "border-border-subtle", icon: Info, label: "Info" },
 };
 
 interface Section {
@@ -108,12 +107,12 @@ function SectionGroup({ section }: { section: Section }) {
     <motion.div 
       layout
       className={clsx(
-        "rounded-[1.25rem] border overflow-hidden transition-all duration-500 relative group", 
-        open && "bg-white/[0.02]",
+        "rounded-[1.25rem] border overflow-hidden transition-all duration-500 relative group premium-card", 
+        open && "bg-surface-3",
         !open && flagCfg.bg,
         flagCfg.border
       )}
-      whileHover={{ scale: 1.002, borderColor: open ? "rgba(255,255,255,0.1)" : undefined }}
+      whileHover={{ scale: 1.002, borderColor: open ? "rgba(255,255,255,0.15)" : undefined }}
     >
       <div className={clsx(
         "absolute inset-0 opacity-0 group-hover:opacity-10 pointer-events-none transition-opacity duration-700 bg-grid-small",
@@ -125,18 +124,18 @@ function SectionGroup({ section }: { section: Section }) {
         aria-expanded={open}
       >
         <FlagIcon className={clsx("w-3.5 h-3.5 shrink-0", flagCfg.color)} />
-        <span className={clsx("flex-1 text-[11px] font-bold tracking-tight", flagCfg.color)}>
+        <span className={clsx("flex-1 text-[10px] font-black tracking-widest uppercase", flagCfg.color)}>
           {section.label}
         </span>
-        <span className="text-[10px] font-mono text-white/20 mr-2">
-          {section.findings.length} Result{section.findings.length !== 1 ? "s" : ""}
+        <span className="text-[10px] font-mono font-black text-white/20 mr-2 uppercase">
+          {section.findings.length} Signals
         </span>
         {section.keySignal && (
-          <span className="hidden sm:block text-[10px] font-mono text-white/50 truncate max-w-[200px] mr-2">
+          <span className="hidden sm:block text-[9px] font-mono font-black text-white/40 truncate max-w-[200px] mr-2 uppercase">
             {section.keySignal}
           </span>
         )}
-        <ChevronDown className={clsx("w-3 h-3 text-white/20 transition-transform duration-300 shrink-0", open && "rotate-180")} />
+        <ChevronDown className={clsx("w-3.5 h-3.5 text-white/20 transition-transform duration-300 shrink-0", open && "rotate-180")} />
       </button>
 
       {/* Tools in this section */}
@@ -204,7 +203,13 @@ export function AgentFindingCard({
 
   // Count anomalies for the header badge
   const anomalyCount = useMemo(
-    () => realFindings.filter(f => f.status === "FLAGGED" || (f.metadata?.section_flag as string) === "bad").length,
+    () => realFindings.filter(f =>
+      f.evidence_verdict === "POSITIVE" ||
+      f.status === "CONTESTED" ||
+      (f.metadata?.section_flag as string) === "bad" ||
+      f.severity_tier === "HIGH" ||
+      f.severity_tier === "CRITICAL"
+    ).length,
     [realFindings]
   );
 
@@ -227,8 +232,8 @@ export function AgentFindingCard({
 
   return (
     <motion.div className={clsx(
-      "rounded-3xl overflow-hidden glass-panel border transition-all duration-500",
-      open ? "border-white/10 shadow-[0_32px_64px_rgba(0,0,0,0.4)]" : "border-white/5 shadow-none"
+      "rounded-[2rem] overflow-hidden premium-glass border transition-all duration-500",
+      open ? "border-primary/20 shadow-[0_32px_64px_rgba(0,0,0,0.5)]" : "border-border-subtle shadow-none"
     )}>
       {/* Header Button */}
       <button
@@ -244,25 +249,25 @@ export function AgentFindingCard({
         <div className="flex items-start justify-between gap-6 relative z-10">
           <div className="flex items-center gap-5">
             <div className={clsx(
-              "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border transition-transform duration-500",
-              theme.bg, theme.border, theme.text, open && "scale-105"
+              "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border transition-all duration-500",
+              theme.bg, theme.border, theme.text, open && "scale-105 shadow-[0_0_20px_rgba(34,211,238,0.1)]"
             )}>
               <meta.icon className="w-7 h-7" />
             </div>
             <div className="space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm font-bold text-white tracking-tight">{meta.name}</h3>
-                <span className="text-[10px] text-white/20 font-bold tracking-normal">{meta.role}</span>
+                <h3 className="text-sm font-black text-white uppercase tracking-tighter">{meta.name}</h3>
+                <span className="text-[10px] text-white/40 font-black tracking-widest uppercase">{meta.role}</span>
                 {anomalyCount > 0 && (
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] font-bold">
-                    <AlertTriangle className="w-2.5 h-2.5" /> {anomalyCount} Flag{anomalyCount !== 1 ? "s" : ""}
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-danger/10 border border-danger/20 text-danger text-[10px] font-black uppercase">
+                    <AlertTriangle className="w-2.5 h-2.5" /> {anomalyCount} Flags
                   </span>
                 )}
               </div>
-              <p className="text-[11px] font-mono font-bold text-white/50 flex items-center gap-2">
-                {sections.length} Section{sections.length !== 1 ? "s" : ""}
+              <p className="text-[10px] font-mono font-black text-white/40 flex items-center gap-2 uppercase tracking-tight">
+                {sections.length} Sectors
                 <span className="text-white/10">·</span>
-                {realFindings.length} Result{realFindings.length !== 1 ? "s" : ""}
+                {realFindings.length} Signals
                 <span className="text-white/10">·</span>
                 <Clock className="w-3 h-3" /> {totalTimingMs >= 1000 ? `${(totalTimingMs / 1000).toFixed(1)}s` : `${totalTimingMs}ms`}
               </p>
@@ -272,12 +277,12 @@ export function AgentFindingCard({
           <div className="flex flex-col items-end gap-3 text-right shrink-0">
             <ConfidenceBar value={confidence} />
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-[10px] font-bold tracking-widest border-white/10 px-3 py-0">
-                {phase === 'deep' ? 'Deep Pass' : 'Intake Scan'}
-              </Badge>
+              <div className="px-3 py-1 rounded-full border border-border-subtle bg-surface-1 text-[9px] font-black tracking-[0.2em] text-white/40 uppercase">
+                {phase === 'deep' ? 'Deep Analysis' : 'Intake Scan'}
+              </div>
               <div className={clsx(
                 "p-2 rounded-xl border transition-all duration-500",
-                open ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-400 rotate-180" : "bg-white/5 border-white/10 text-white/20"
+                open ? "bg-primary/10 border-primary/30 text-primary rotate-180" : "bg-surface-1 border-border-subtle text-white/20"
               )}>
                 <ChevronDown className="w-4 h-4" />
               </div>

@@ -18,9 +18,29 @@ from core.structured_logging import get_logger
 from agents.arbiter_verdict import (
     AGENT_NAMES,
     ForensicReport,
+    confidence_of,
+    evidence_verdict_of,
 )
 
 logger = get_logger(__name__)
+
+
+def _finding_importance(finding: dict[str, Any]) -> tuple[int, int, float]:
+    verdict_weight = {
+        "POSITIVE": 4,
+        "INCONCLUSIVE": 2,
+        "NEGATIVE": 1,
+        "ERROR": 0,
+        "NOT_APPLICABLE": 0,
+    }.get(evidence_verdict_of(finding), 1)
+    severity_weight = {
+        "CRITICAL": 4,
+        "HIGH": 3,
+        "MEDIUM": 2,
+        "LOW": 1,
+        "INFO": 0,
+    }.get(str(finding.get("severity_tier", "")).upper(), 1)
+    return (verdict_weight, severity_weight, confidence_of(finding, default=0.0) or 0.0)
 
 
 class ArbiterNarrativeMixin:
@@ -99,7 +119,7 @@ class ArbiterNarrativeMixin:
                     1
                     if (x.get("metadata") or {}).get("analysis_phase") == "deep"
                     else 0,
-                    x.get("confidence_raw", 0.0),
+                    _finding_importance(x),
                 ),
                 reverse=True,
             )
@@ -128,7 +148,8 @@ class ArbiterNarrativeMixin:
                         key_metrics[k] = v
                 entry = {
                     "tool": tool_name,
-                    "confidence": round(f.get("confidence_raw", 0), 3),
+                    "confidence": round(confidence_of(f, default=0.0) or 0.0, 3),
+                    "evidence_verdict": evidence_verdict_of(f),
                     "status": f.get("status", ""),
                     "applicability": "NOT_APPLICABLE"
                     if is_na
@@ -159,8 +180,10 @@ class ArbiterNarrativeMixin:
                     _comparison_pairs.append(
                         {
                             "tool": d_tool,
-                            "initial_confidence": round(mf.get("confidence_raw", 0), 3),
-                            "deep_confidence": round(df.get("confidence_raw", 0), 3),
+                            "initial_confidence": round(confidence_of(mf, default=0.0) or 0.0, 3),
+                            "deep_confidence": round(confidence_of(df, default=0.0) or 0.0, 3),
+                            "initial_evidence_verdict": evidence_verdict_of(mf),
+                            "deep_evidence_verdict": evidence_verdict_of(df),
                             "initial_verdict": (mf.get("metadata") or {}).get(
                                 "verdict", ""
                             ),
@@ -284,7 +307,7 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
                 if not f.get("stub_result")
                 and f.get("metadata", {}).get("analysis_source") != "gemini_vision"
             ],
-            key=lambda f: f.get("confidence_raw", 0),
+            key=_finding_importance,
             reverse=True,
         )[:8]
 
@@ -294,7 +317,8 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
                 {
                     "agent": f.get("agent_id", "unknown"),
                     "type": f.get("finding_type", "unknown"),
-                    "confidence": round(f.get("confidence_raw", 0), 3),
+                    "confidence": round(confidence_of(f, default=0.0) or 0.0, 3),
+                    "evidence_verdict": evidence_verdict_of(f),
                     "summary": f.get("reasoning_summary", ""),
                     "status": f.get("status", ""),
                     "cross_modal": f.get("cross_modal_confirmed", False),
@@ -309,7 +333,8 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
                     "agent": gf.get("agent_id", "unknown"),
                     "analysis_type": meta.get("analysis_type", "vision"),
                     "model": meta.get("model_used", "gemini"),
-                    "confidence": round(gf.get("confidence_raw", 0), 3),
+                    "confidence": round(confidence_of(gf, default=0.0) or 0.0, 3),
+                    "evidence_verdict": evidence_verdict_of(gf),
                     "summary": gf.get("reasoning_summary", ""),
                     "manipulation_signals": meta.get("manipulation_signals", []),
                     "detected_objects": meta.get("detected_objects", []),
@@ -413,7 +438,7 @@ Write the Executive Summary for this forensic report. Justify the {overall_verdi
             )
         if all_findings:
             top = sorted(
-                all_findings, key=lambda f: f.get("confidence_raw", 0), reverse=True
+                all_findings, key=_finding_importance, reverse=True
             )[:3]
             highlights = [
                 f.get("reasoning_summary", "")
@@ -557,12 +582,13 @@ Write 2-3 sentences only. Do not use bullet points."""
 
         top_findings = sorted(
             [f for f in all_findings if not f.get("stub_result")],
-            key=lambda f: f.get("confidence_raw", 0),
+            key=_finding_importance,
             reverse=True,
         )[:6]
         findings_brief = [
             f"{f.get('finding_type', '?')} ({f.get('agent_id', '?')}) — "
-            f"{(f.get('confidence_raw') or 0):.0%} — "
+            f"{evidence_verdict_of(f)} — "
+            f"{(confidence_of(f, default=0.0) or 0):.0%} — "
             f"{_strip_rs_prefix((f.get('reasoning_summary') or '')[:200].rsplit(' ', 1)[0])}"
             for f in top_findings
         ]
@@ -671,7 +697,7 @@ Rules:
                 for f in all_findings
                 if not f.get("stub_result") and f.get("reasoning_summary")
             ],
-            key=lambda f: f.get("confidence_raw", 0),
+            key=_finding_importance,
             reverse=True,
         )[:5]
         key_findings_list = [

@@ -36,13 +36,16 @@ class Agent2Audio(ForensicAgent):
     @property
     def task_decomposition(self) -> list[str]:
         # PHASE 1: INITIAL ANALYSIS (Neural Refined)
-        return [
+        tasks = [
             "Run speaker_diarize to establish voice count baseline",
-            "Run neural_prosody across full audio track for affective incongruence",
+            "Run neural_prosody across full audio track for acoustic artifact screening",
             "Run audio_gen_signature to identify spectral TTS fingerprints",
             "Run codec_fingerprinting for re-encoding event detection",
-            "Run audio_visual_sync verification if video file",
         ]
+        mime = getattr(self.evidence_artifact, "mime_type", "") or ""
+        if mime.startswith("video/"):
+            tasks.append("Run audio_visual_sync verification for video audio track")
+        return tasks
 
     @property
     def deep_task_decomposition(self) -> list[str]:

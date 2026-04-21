@@ -61,7 +61,7 @@ export function ForensicTimeline({
   return list.sort((a, b) => b.timestamp - a.timestamp);
  }, [completedAgents]);
 
-  const ALERT_VERDICTS = new Set(["FLAGGED", "SUSPICIOUS", "LIKELY_MANIPULATED"]);
+  const ALERT_VERDICTS = new Set(["FLAGGED", "SUSPICIOUS", "LIKELY_MANIPULATED", "NEEDS_REVIEW"]);
   const flaggedFindings = allFindings.filter(f => ALERT_VERDICTS.has(f.verdict ?? "") || f.severity === "CRITICAL" || f.severity === "HIGH");
 
  return (
@@ -127,7 +127,7 @@ export function ForensicTimeline({
       {allFindings.length > 0 ? (
        allFindings.map((finding, idx) => {
         const ToolIcon = getToolIcon(finding.tool);
-         const ALERT_VERDICTS_RENDER = new Set(["FLAGGED", "SUSPICIOUS", "LIKELY_MANIPULATED"]);
+         const ALERT_VERDICTS_RENDER = new Set(["FLAGGED", "SUSPICIOUS", "LIKELY_MANIPULATED", "NEEDS_REVIEW"]);
          const isAlert = ALERT_VERDICTS_RENDER.has(finding.verdict ?? "") || finding.severity === "CRITICAL" || finding.severity === "HIGH";
 
         return (

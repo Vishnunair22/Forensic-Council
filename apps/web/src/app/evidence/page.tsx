@@ -73,7 +73,7 @@ export default function EvidencePage() {
   }
 
   return (
-    <div className="min-h-screen text-foreground p-6 pb-20 overflow-x-hidden relative font-sans selection:bg-cyan-500/30">
+    <div className="min-h-screen text-foreground px-4 sm:px-6 pt-24 pb-24 overflow-x-hidden relative font-sans select-none">
       <AnimatePresence>
         {showLoadingOverlay && (
           <LoadingOverlay
@@ -84,7 +84,7 @@ export default function EvidencePage() {
 
       {/* Council Overlay removed: Now integrated into AgentProgressDisplay Header */}
 
-      <main className="max-w-[1400px] mx-auto relative z-10 w-full">
+      <main className="max-w-[1560px] mx-auto relative z-10 w-full">
         <PageTransition>
           <>
             {showUploadForm && (
@@ -144,7 +144,7 @@ export default function EvidencePage() {
             {!showUploadForm && !hasStartedAnalysis && !showLoadingOverlay && !validationError && (
               <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 text-center px-6">
                 <p className="text-sm text-foreground/55 max-w-md">
-                  Initialising the forensic workspace...
+                  Initializing the forensic workspace...
                 </p>
                 <button
                   type="button"

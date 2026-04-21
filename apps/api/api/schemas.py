@@ -46,7 +46,10 @@ class AgentFindingDTO(BaseModel):
     agent_name: str
     finding_type: str
     status: str
-    confidence_raw: float
+    confidence_raw: float | None = None
+    evidence_verdict: Literal[
+        "POSITIVE", "NEGATIVE", "INCONCLUSIVE", "NOT_APPLICABLE", "ERROR"
+    ] = "INCONCLUSIVE"
     calibrated: bool
     calibrated_probability: float | None = (
         None  # DEPRECATED — use raw_confidence_score
@@ -106,6 +109,7 @@ class ReportDTO(BaseModel):
     reliability_note: str = ""
     # Verdict enrichment
     manipulation_probability: float = 0.0
+    compression_penalty: float = 1.0
     # Confidence range across active agents (C)
     confidence_min: float = 0.0
     confidence_max: float = 0.0
@@ -119,6 +123,7 @@ class ReportDTO(BaseModel):
     # Degradation transparency — non-empty means analysis ran in reduced-capability mode.
     # Must be surfaced as a visible warning in any UI, printout, or court exhibit.
     degradation_flags: list[str] = Field(default_factory=list)
+    cross_modal_fusion: dict[str, Any] = Field(default_factory=dict)
 
 
 class HITLDecisionRequest(BaseModel):

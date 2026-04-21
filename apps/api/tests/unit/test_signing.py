@@ -1,4 +1,4 @@
-﻿"""
+"""
 Unit tests for the cryptographic signing module.
 
 All tests are synchronous and self-contained.  They exercise the public API of
@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-# â”€â”€ Minimal env so config initialises without a .env file â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Minimal env so config initializes without a .env file ────────────────────
 os.environ.setdefault("APP_ENV", "testing")
 os.environ.setdefault("SIGNING_KEY", "test-signing-key-" + "x" * 32)
 os.environ.setdefault("POSTGRES_USER", "test")
@@ -116,7 +116,7 @@ def test_unknown_agent_fails_verification() -> None:
 
 def test_deterministic_keys_same_signing_key() -> None:
     """
-    Two KeyStore instances initialised from the same SIGNING_KEY env variable
+    Two KeyStore instances initialized from the same SIGNING_KEY env variable
     must produce identical public keys for the same agent_id.
     """
     ks1 = KeyStore()
@@ -210,7 +210,7 @@ def test_compute_content_hash_different_for_different_content(
 def test_compute_content_hash_key_order_independent() -> None:
     """
     Hash must be the same regardless of Python dict insertion order,
-    because JSON serialisation uses sort_keys=True.
+    because JSON serialization uses sort_keys=True.
     """
     d1 = {"z": 1, "a": 2}
     d2 = {"a": 2, "z": 1}
@@ -235,7 +235,7 @@ def test_signed_entry_has_expected_fields(keystore: KeyStore) -> None:
     assert entry.timestamp_utc is not None
 
 
-def test_signed_entry_roundtrip_dict_serialisation(keystore: KeyStore) -> None:
+def test_signed_entry_roundtrip_dict_serialization(keystore: KeyStore) -> None:
     """SignedEntry.to_dict() and SignedEntry.from_dict() must roundtrip correctly."""
     content = {"payload": "roundtrip_test"}
     entry = sign_content("agent1_image", content, keystore=keystore)

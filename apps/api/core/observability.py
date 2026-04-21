@@ -37,7 +37,7 @@ except ImportError:
 
 def setup_observability(app, settings) -> None:
     """
-    Initialise OpenTelemetry tracing and instrument the FastAPI application.
+    Initialize OpenTelemetry tracing and instrument the FastAPI application.
 
     No-ops gracefully when:
     - ``opentelemetry-sdk`` / ``opentelemetry-exporter-otlp-proto-grpc``

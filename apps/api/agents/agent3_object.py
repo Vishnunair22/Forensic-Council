@@ -85,13 +85,20 @@ class Agent3Object(ForensicAgent):
 
     @property
     def deep_task_decomposition(self) -> list[str]:
-        return [
-            "Run secondary_classification on low-confidence objects",
-            "Run scale_validation on confirmed objects",
+        object_ctx = self._tool_context.get("object_detection", {})
+        detections = object_ctx.get("detections", []) if isinstance(object_ctx, dict) else []
+        tasks = []
+        if detections:
+            tasks.extend([
+                "Run secondary_classification on low-confidence objects",
+                "Run scale_validation on confirmed objects",
+            ])
+        tasks.extend([
             "Run lighting_consistency for deep shadow-angle audit",
             "Run adversarial_robustness_check against object detection evasion",
             "Run gemini_deep_forensic to identify content, detect weapons, describe context",
-        ]
+        ])
+        return tasks
 
     @property
     def iteration_ceiling(self) -> int:
