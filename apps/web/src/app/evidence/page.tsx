@@ -14,7 +14,7 @@ import {
   ErrorDisplay,
   HITLCheckpointModal,
 } from "@/components/evidence";
-import { storage } from "@/lib/storage";
+import { sessionOnlyStorage, storage } from "@/lib/storage";
 
 const FORENSIC_MIME_TYPE_KEY = "forensic_mime_type";
 const FC_SHOW_LOADING_KEY = "fc_show_loading";
@@ -151,8 +151,8 @@ export default function EvidencePage() {
                   onClick={() => {
                     setAutoStartBlocking(false);
                     setShowLoadingOverlay(false);
-                    storage.removeItem(FC_SHOW_LOADING_KEY);
-                    storage.removeItem(FORENSIC_AUTO_START_KEY);
+                    sessionOnlyStorage.removeItem(FC_SHOW_LOADING_KEY);
+                    sessionOnlyStorage.removeItem(FORENSIC_AUTO_START_KEY);
                   }}
                   className="btn-pill-secondary px-6 py-2 text-xs"
                 >

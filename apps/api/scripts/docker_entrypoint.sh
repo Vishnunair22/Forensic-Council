@@ -14,12 +14,29 @@
 # ============================================================================
 set -e
 
-# SECURITY: Ensure we're not running as root in production
-if [ "$(id -u)" = "0" ] && [ "${APP_ENV:-development}" = "production" ]; then
-    echo "WARNING: Running as root in production is not recommended" >&2
-fi
-
 echo "Starting Forensic Council entrypoint as user: $(id -u)"
+
+# Mounted Docker volumes may be created as root on first use.  The production
+# image starts as root only for this short permission repair step, then drops to
+# appuser before running the API or worker.
+if [ "$(id -u)" = "0" ]; then
+    for WRITABLE_DIR in \
+        /app/storage/evidence \
+        /app/storage/keys \
+        /app/storage/calibration_models \
+        /app/cache/huggingface \
+        /app/cache/torch \
+        /app/cache/numba_cache \
+        /app/cache/ultralytics \
+        /app/cache/easyocr
+    do
+        mkdir -p "$WRITABLE_DIR" 2>/dev/null || true
+        if ! runuser -u appuser -- test -w "$WRITABLE_DIR" 2>/dev/null; then
+            echo "  Repairing write permissions for $WRITABLE_DIR"
+            chown -R appuser:appgroup "$WRITABLE_DIR" 2>/dev/null || true
+        fi
+    done
+fi
 
 # ------ 1a. Seed calibration models into volume on first start ---------------------------------------------------------
 # Calibration model JSON files are baked into the image at /app/storage/calibration_models.
@@ -85,6 +102,9 @@ CMD_TO_RUN="${1:-scripts/run_api.py}"
 
 if [ "$CMD_TO_RUN" = "worker" ]; then
     echo "  Mode: Forensic Worker - consuming tasks from Redis"
+    if [ "$(id -u)" = "0" ]; then
+        exec runuser -u appuser -- python scripts/run_worker.py
+    fi
     exec python scripts/run_worker.py
 else
     echo "  Mode: Custom Script / API - serving requests"
@@ -97,5 +117,8 @@ else
     echo "  Executing: $ACTUAL_CMD"
     # Use 'sh -c' to correctly word-split the command string into binary + args.
     # Direct 'exec "$ACTUAL_CMD"' would treat the whole string as the binary name.
+    if [ "$(id -u)" = "0" ]; then
+        exec runuser -u appuser -- sh -c "$ACTUAL_CMD"
+    fi
     exec sh -c "$ACTUAL_CMD"
 fi

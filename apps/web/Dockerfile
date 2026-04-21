@@ -37,7 +37,7 @@ ENV NODE_ENV=development
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
-  CMD wget -qO- http://localhost:3000/ > /dev/null || exit 1
+  CMD wget -qO- http://127.0.0.1:3000/ > /dev/null || exit 1
 
 CMD ["npm", "run", "dev"]
 
@@ -91,7 +91,7 @@ USER nextjs
 # Health-check: use the root path (always served by Next.js standalone).
 # Previously used /api/health which is not a defined route and would always fail.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
-  CMD wget -qO- http://localhost:3000/ > /dev/null || exit 1
+  CMD wget -qO- http://127.0.0.1:3000/ > /dev/null || exit 1
 
 EXPOSE 3000
 

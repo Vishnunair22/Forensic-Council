@@ -45,13 +45,14 @@ class AgentContextMixin:
         self._tool_error_count: int = 0
         self._agent_confidence: float | None = None
         self._agent_error_rate: float | None = None
+        self._agent_synthesis: dict[str, Any] | None = None
         self._gemini_signal_callback: Any = None
         self._episodic_context: str = ""
 
     async def _retrieve_episodic_context(self) -> str:
         """Retrieve relevant context from episodic memory for injection."""
         try:
-            _AGENT_SIGNATURE_MAP = {
+            agent_signature_map = {
                 "Agent1": [ForensicSignatureType.MANIPULATION_SIGNATURE],
                 "Agent2": [ForensicSignatureType.AUDIO_ARTIFACT],
                 "Agent3": [ForensicSignatureType.OBJECT_DETECTION],
@@ -61,7 +62,7 @@ class AgentContextMixin:
                     ForensicSignatureType.METADATA_PATTERN,
                 ],
             }
-            sig_types = _AGENT_SIGNATURE_MAP.get(self.agent_id, [])
+            sig_types = agent_signature_map.get(self.agent_id, [])
             all_entries: list = []
             for sig_type in sig_types:
                 entries = await self.episodic_memory.retrieve_similar_cases(

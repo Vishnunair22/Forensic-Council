@@ -17,8 +17,10 @@ from pydantic import BaseModel as _BaseModel
 from api.routes._session_state import (
     _final_reports,
     get_active_pipeline,
+    get_active_pipeline_metadata,
     get_session_websockets,
     register_websocket,
+    set_active_pipeline_metadata,
     unregister_websocket,
 )
 from core.severity import assign_severity_tier as _assign_severity_tier
@@ -958,12 +960,45 @@ async def resume_investigation(
         user_id=current_user.user_id,
     )
 
+    from core.persistence.redis_client import get_redis_client
+
+    redis = await get_redis_client()
+    decision_key = f"forensic:session:resume_decision:{session_id}"
+    await redis.set(
+        decision_key,
+        {
+            "deep_analysis": request.deep_analysis,
+            "decided_by": current_user.user_id,
+            "decided_at": datetime.now(UTC).isoformat(),
+        },
+        ex=14400,
+    )
+
     pipeline = get_active_pipeline(session_id)
     if not pipeline:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No active investigation found for session {session_id}",
+        metadata = await get_active_pipeline_metadata(session_id)
+        if not metadata:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No active investigation found for session {session_id}",
+            )
+        await set_active_pipeline_metadata(
+            session_id,
+            {
+                **metadata,
+                "status": "resume_requested",
+                "deep_analysis": request.deep_analysis,
+                "resume_requested_at": datetime.now(UTC).isoformat(),
+            },
         )
+        return {
+            "status": "resumed",
+            "session_id": session_id,
+            "deep_analysis": request.deep_analysis,
+            "message": "Deep analysis started"
+            if request.deep_analysis
+            else "Proceeding to final report",
+        }
 
     # Idempotency check first: if the decision event is already set the pipeline
     # already received the signal — return gracefully regardless of whether

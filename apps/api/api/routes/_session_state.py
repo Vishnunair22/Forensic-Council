@@ -210,17 +210,13 @@ async def broadcast_update(session_id: str, update: BriefUpdate) -> None:
         for ws in dead:
             unregister_websocket(session_id, ws)
 
-    # 2. Issue 9.1: Publish to Redis only when real subscribers exist.
-    # This avoids a pointless PUBLISH RTT on every heartbeat when the
-    # Redis pub/sub channel has no listeners.
+    # 2. Publish to Redis for API/worker topologies. The worker process cannot
+    # see the API process' in-memory WebSocket registry, so checking subscriber
+    # counts here can race and drop the first forensic updates.
     try:
         redis = await _get_redis()
         channel = f"forensic:updates:{session_id}"
-        num_subscribers = await redis.client.pubsub_numsub(channel)
-        # pubsub_numsub returns a dict {channel: count}
-        subscriber_count = num_subscribers.get(channel, 0) if isinstance(num_subscribers, dict) else 0
-        if subscriber_count > 0:
-            await redis.client.publish(channel, json.dumps(update.model_dump()))
+        await redis.client.publish(channel, json.dumps(update.model_dump()))
     except Exception as e:
         logger.debug("Redis pub/sub publish skipped", error=str(e))
 

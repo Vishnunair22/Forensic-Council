@@ -860,7 +860,7 @@ class ForensicCouncilPipeline:
                 extra = {"inter_agent_bus": self.inter_agent_bus}
             agent_def_list.append((registry.get_agent_class(aid), aid, extra))
 
-        async def _broadcast_agent_status(aid: str, status: str, message: str, findings=None, error=None):
+        async def _broadcast_agent_status(aid: str, status: str, message: str, findings=None, error=None, agent_inst=None):
             try:
                 from api.routes._session_state import AGENT_NAMES, broadcast_update
                 from api.schemas import BriefUpdate
@@ -868,12 +868,23 @@ class ForensicCouncilPipeline:
 
                 aname = AGENT_NAMES.get(aid, aid)
                 preview = []
+                synthesis = getattr(agent_inst, "_agent_synthesis", None) if agent_inst is not None else None
+                if isinstance(synthesis, dict):
+                    summary = str(synthesis.get("narrative_summary") or "").strip()
+                    if summary:
+                        preview.append({
+                            "tool": "agent_synthesis",
+                            "summary": summary[:420],
+                            "severity": "LOW",
+                            "verdict": str(synthesis.get("verdict") or "INCONCLUSIVE"),
+                        })
                 if findings:
                     for f in findings:
                         m = f.metadata if hasattr(f, "metadata") else f.get("metadata", {}) if isinstance(f, dict) else {}
                         tool = m.get("tool_name") or (f.finding_type if hasattr(f, "finding_type") else f.get("finding_type"))
                         s = f.reasoning_summary if hasattr(f, "reasoning_summary") else f.get("reasoning_summary", "")
-                        if not s: continue
+                        if not s:
+                            continue
                         sev = assign_severity_tier(f)
                         tv = "ERROR" if m.get("court_defensible") is False else "FLAGGED" if sev in ("CRITICAL", "HIGH", "MEDIUM") else "CLEAN"
                         preview.append({"tool": tool, "summary": s[:320], "severity": sev, "verdict": tv})
@@ -881,16 +892,32 @@ class ForensicCouncilPipeline:
                 await broadcast_update(str(session_id), BriefUpdate(
                     type="AGENT_COMPLETE" if status in ("complete", "error", "skipped") else "AGENT_UPDATE",
                     session_id=str(session_id), agent_id=aid, agent_name=aname, message=message,
-                    data={"status": status, "findings_count": len(findings) if findings else 0, "error": error, "findings_preview": preview}
+                    data={
+                        "status": status,
+                        "findings_count": len(findings) if findings else 0,
+                        "error": error,
+                        "findings_preview": preview,
+                        "agent_verdict": synthesis.get("verdict") if isinstance(synthesis, dict) else None,
+                        "tool_error_rate": getattr(agent_inst, "_agent_error_rate", None) if agent_inst is not None else None,
+                        "section_flags": synthesis.get("sections") if isinstance(synthesis, dict) else None,
+                    }
                 ))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Agent status broadcast failed", agent_id=aid, error=str(exc))
 
         async def run_agent_initial_with_status(cls, aid, ex):
             await _broadcast_agent_status(aid, "running", f"Running {aid} initial pass...")
             agent, initial_findings, ok = await run_agent_initial_only(cls, aid, ex)
             if not ok:
-                await _broadcast_agent_status(aid, "skipped", f"{aid} skipped.")
+                await _broadcast_agent_status(
+                    aid,
+                    "skipped",
+                    f"{aid} skipped initial analysis because this file type is not supported by the agent.",
+                    error="Agent skipped initial analysis as this file type is not supported.",
+                    agent_inst=agent,
+                )
+            else:
+                await _broadcast_agent_status(aid, "complete", f"{aid} initial analysis complete.", findings=initial_findings, agent_inst=agent)
             return agent, initial_findings, ok
 
         raw_initial = await asyncio.gather(
@@ -909,6 +936,81 @@ class ForensicCouncilPipeline:
         agent3, a3_init, a3_ok = agent_map["Agent3"]
         agent4, a4_init, a4_ok = agent_map["Agent4"]
         agent5, a5_init, a5_ok = agent_map["Agent5"]
+
+        initial_results = [
+            AgentLoopResult(
+                agent_id=aid,
+                findings=[f.model_dump(mode="json") if hasattr(f, "model_dump") else f for f in findings],
+                reflection_report=(
+                    getattr(agent, "_reflection_report", None).model_dump(mode="json")
+                    if getattr(agent, "_reflection_report", None)
+                    else {}
+                ),
+                react_chain=_serialize_react_chain(getattr(agent, "_react_chain", [])),
+                agent_active=ok,
+                supports_file_type=ok,
+            )
+            for aid, (agent, findings, ok) in agent_map.items()
+        ]
+
+        async def _await_deep_analysis_decision() -> bool:
+            from api.routes._session_state import (
+                broadcast_update,
+                get_active_pipeline_metadata,
+                set_active_pipeline_metadata,
+            )
+            from api.schemas import BriefUpdate
+            from core.persistence.redis_client import get_redis_client
+
+            decision_key = f"forensic:session:resume_decision:{session_id}"
+            redis = await get_redis_client()
+            await redis.delete(decision_key)
+
+            self._awaiting_user_decision = True
+            self.deep_analysis_decision_event.clear()
+            self.run_deep_analysis_flag = False
+            existing_metadata = await get_active_pipeline_metadata(str(session_id)) or {}
+            await set_active_pipeline_metadata(
+                str(session_id),
+                {
+                    **existing_metadata,
+                    "status": "awaiting_decision",
+                    "brief": "Initial analysis complete. Awaiting analyst decision.",
+                    "awaiting_decision": True,
+                },
+            )
+            await broadcast_update(
+                str(session_id),
+                BriefUpdate(
+                    type="PIPELINE_PAUSED",
+                    session_id=str(session_id),
+                    message="Initial analysis complete. Awaiting analyst decision.",
+                    data={
+                        "status": "awaiting_decision",
+                        "initial_results_ready": True,
+                    },
+                ),
+            )
+
+            try:
+                while True:
+                    decision = await redis.get_json(decision_key)
+                    if isinstance(decision, dict):
+                        self.run_deep_analysis_flag = bool(decision.get("deep_analysis"))
+                        return self.run_deep_analysis_flag
+                    if self.deep_analysis_decision_event.is_set():
+                        return bool(self.run_deep_analysis_flag)
+                    await asyncio.sleep(0.5)
+            finally:
+                self._awaiting_user_decision = False
+                try:
+                    await redis.delete(decision_key)
+                except Exception:
+                    pass
+
+        if not await _await_deep_analysis_decision():
+            logger.info("Deep analysis skipped by analyst decision", session_id=str(session_id))
+            return initial_results
 
         # --- Phase 2: All deep passes concurrently with Early Signal Sync ---
         #
@@ -949,7 +1051,7 @@ class ForensicCouncilPipeline:
             producer_inst._gemini_signal_callback = _broadcast_context
 
         # Prepare all agents for the signal
-        for aid, (agent_inst, _, _) in agent_map.items():
+        for _aid, (agent_inst, _, _) in agent_map.items():
             if agent_inst and hasattr(agent_inst, "_agent1_context_event"):
                 agent_inst._agent1_context_event = context_event
 
@@ -964,9 +1066,9 @@ class ForensicCouncilPipeline:
             result = await run_agent_deep_only(a_inst, aid, a_init, a_ok)
 
             if result.error:
-                await _broadcast_agent_status(aid, "error", f"{aid} error: {result.error}", error=result.error)
+                await _broadcast_agent_status(aid, "error", f"{aid} error: {result.error}", error=result.error, agent_inst=a_inst)
             else:
-                await _broadcast_agent_status(aid, "complete", f"{aid} analysis complete.", findings=result.findings)
+                await _broadcast_agent_status(aid, "complete", f"{aid} analysis complete.", findings=result.findings, agent_inst=a_inst)
 
             # Fallback for producers: if early signal didn't fire, ensure event is set
             if aid == producer_id:

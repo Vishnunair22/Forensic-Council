@@ -112,7 +112,13 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
     exit="exit"
     onClick={(e) => e.stopPropagation()}
    >
-    <div className="rounded-2xl overflow-hidden glass-panel shadow-2xl relative">
+    <div
+     className="rounded-2xl overflow-hidden glass-panel shadow-2xl relative"
+     style={{
+      background:
+       "linear-gradient(135deg, rgba(2,6,23,0.94) 0%, rgba(0,0,0,0.9) 100%)",
+     }}
+    >
      <div className="scan-line-overlay opacity-30 pointer-events-none" />
      <div className="relative p-10 z-20">
       <button

@@ -211,5 +211,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
 
 EXPOSE 8000
 
-USER appuser
+# Start as root so docker_entrypoint.sh can repair mounted volume ownership,
+# then it drops privileges to appuser before running the API or worker.
+USER root
 ENTRYPOINT ["sh", "scripts/docker_entrypoint.sh"]

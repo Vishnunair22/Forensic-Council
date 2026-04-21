@@ -80,11 +80,9 @@ def setup_dirs() -> None:
 def download_yolo(force: bool = False) -> bool:
     """YOLO11 object detection — Agent 3 primary."""
     yolo_dir = CACHE_DIRS["YOLO"]
-    existing = (
-        [Path(yolo_dir) / "yolo11n.pt"]
-        if (Path(yolo_dir) / "yolo11n.pt").exists()
-        else []
-    )
+    model_name = os.getenv("YOLO_MODEL_NAME", "yolo11n.pt")
+    model_path = Path(yolo_dir) / model_name
+    existing = [model_path] if model_path.exists() else []
     if existing and not force:
         print(f"  {GREEN}[SKIP]{RESET}  YOLO11n — already cached ({existing[0]})")
         return True
@@ -96,8 +94,13 @@ def download_yolo(force: bool = False) -> bool:
         # YOLO11n is the state-of-the-art fast model for Ultralytics
         # Without this, YOLO("yolo11n.pt") saves to the CWD (/app) which is a
         # bind mount and pollutes the host project.
-        os.path.join(yolo_dir, "yolo11n.pt")
-        YOLO("yolo11n.pt")  # downloads it
+        os.environ["YOLO_CONFIG_DIR"] = yolo_dir
+        cwd = os.getcwd()
+        os.chdir(yolo_dir)
+        try:
+            YOLO(model_name)
+        finally:
+            os.chdir(cwd)
         print(f"  {GREEN}[OK  ]{RESET}  YOLO11n downloaded.")
         return True
     except Exception as exc:

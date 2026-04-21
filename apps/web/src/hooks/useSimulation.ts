@@ -78,6 +78,7 @@ export const useSimulation = ({
     maxRetries: 12,
   });
   const reconnectAttemptsRef = useRef(0);
+  const arbiterPollRef = useRef<NodeJS.Timeout | null>(null);
 
   // Store callbacks in refs to avoid triggering effect on every render
   const onAgentCompleteRef = useRef(onAgentComplete);
@@ -346,6 +347,10 @@ export const useSimulation = ({
                       return prev;
                     }
                     expectingPipelineCompleteRef.current = false;
+                    if (arbiterPollRef.current) {
+                      clearInterval(arbiterPollRef.current);
+                      arbiterPollRef.current = null;
+                    }
                     if (prev !== "complete") {
                       playSoundRef.current?.("complete");
                       onCompleteRef.current?.();
@@ -504,6 +509,10 @@ export const useSimulation = ({
   // created socket before it can connect (WebSocket closed before established).
   useEffect(() => {
     return () => {
+      if (arbiterPollRef.current) {
+        clearInterval(arbiterPollRef.current);
+        arbiterPollRef.current = null;
+      }
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
@@ -582,6 +591,21 @@ export const useSimulation = ({
     }
   }, []);
 
+  const startSimulation = useCallback(() => {
+    expectingPipelineCompleteRef.current = false;
+    setStatus("initiating");
+    setCompletedAgents([]);
+    completedAgentsRef.current = [];
+    setAgentUpdates({});
+    setHitlCheckpoint(null);
+    try { storage.removeItem(HITL_CHECKPOINT_KEY); } catch { /* ignore */ }
+    setErrorMessage(null);
+    setPipelineMessage("Preparing forensic agents...");
+    setPipelineThinking("Preparing forensic agents...");
+    setRevealQueue([]);
+    isRevealingRef.current = false;
+  }, []);
+
   // Dismiss HITL checkpoint
   const dismissCheckpoint = useCallback(() => {
     setHitlCheckpoint(null);
@@ -630,6 +654,44 @@ export const useSimulation = ({
 
       setStatus(deep ? "analyzing" : "processing");
       if (deep) playSoundRef.current?.("think");
+
+      if (arbiterPollRef.current) {
+        clearInterval(arbiterPollRef.current);
+        arbiterPollRef.current = null;
+      }
+      const startedAt = Date.now();
+      arbiterPollRef.current = setInterval(async () => {
+        try {
+          const st = await getArbiterStatus(targetId);
+          if (st.status === "complete") {
+            if (arbiterPollRef.current) {
+              clearInterval(arbiterPollRef.current);
+              arbiterPollRef.current = null;
+            }
+            expectingPipelineCompleteRef.current = false;
+            setStatus((prev: SimulationStatus) => {
+              if (prev !== "complete") {
+                playSoundRef.current?.("complete");
+                onCompleteRef.current?.();
+              }
+              return "complete";
+            });
+          } else if (st.status === "error") {
+            if (arbiterPollRef.current) {
+              clearInterval(arbiterPollRef.current);
+              arbiterPollRef.current = null;
+            }
+            expectingPipelineCompleteRef.current = false;
+            setErrorMessage(st.message || "Investigation failed");
+            setStatus("error");
+          } else if (Date.now() - startedAt > 300_000 && arbiterPollRef.current) {
+            clearInterval(arbiterPollRef.current);
+            arbiterPollRef.current = null;
+          }
+        } catch {
+          // WebSocket remains the primary path; polling is only a catch-up guard.
+        }
+      }, 3000);
     },
     [sessionId],
   );
@@ -704,7 +766,7 @@ export const useSimulation = ({
     completedAgents,
     pipelineMessage,
     pipelineThinking,
-    startSimulation: resetSimulation,
+    startSimulation,
     connectWebSocket,
     resumeInvestigation,
     resetSimulation,

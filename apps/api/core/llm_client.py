@@ -73,7 +73,7 @@ class LLMClient:
         # Fallback settings
         self.fallback_enabled = True
         self.gemini_api_key = config.gemini_api_key
-        self.gemini_model = "gemini-1.5-flash"  # Sturdy, fast fallback
+        self.gemini_model = config.gemini_model
 
         self._client: httpx.AsyncClient | None = None
 

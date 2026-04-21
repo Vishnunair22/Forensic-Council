@@ -9,8 +9,6 @@ import asyncio
 import uuid
 from typing import Any
 
-from core.episodic_memory import ForensicSignatureType
-from core.grounding import GroundingService
 from core.llm_client import LLMClient
 from core.react_loop import AgentFinding, ReActLoopEngine, create_llm_step_generator
 from core.structured_logging import get_logger
@@ -46,6 +44,38 @@ class AgentInvestigationMixin:
     async def _check_tool_availability(self) -> None: ...
     async def _retrieve_episodic_context(self) -> str: ...
     async def self_reflection_pass(self, findings: list[AgentFinding]) -> Any: ...
+
+    async def _synthesize_findings_once(
+        self,
+        findings: list[AgentFinding],
+        phase: str,
+        timeout_s: float = 15.0,
+    ) -> dict[str, Any] | None:
+        """Run one bounded post-analysis synthesis call for card/report narration."""
+        if not (self.config.llm_enable_post_synthesis and self.config.llm_api_key):
+            return None
+        try:
+            synthesis_service = SynthesisService(self.config)
+            synthesis_result = await asyncio.wait_for(
+                synthesis_service.synthesize_findings(
+                    agent_id=self.agent_id,
+                    agent_name=self.agent_name,
+                    findings=findings,
+                    evidence_artifact=self.evidence_artifact,
+                    tool_success_count=self._tool_success_count,
+                    tool_error_count=self._tool_error_count,
+                    phase=phase,
+                ),
+                timeout=timeout_s,
+            )
+            if synthesis_result:
+                self._agent_confidence = synthesis_result.get("agent_confidence")
+                self._agent_error_rate = synthesis_result.get("agent_error_rate")
+                self._agent_synthesis = synthesis_result
+                return synthesis_result
+        except Exception as e:
+            logger.warning(f"{phase.title()} synthesis failed: {e}")
+        return None
 
     async def run_investigation(self) -> list[AgentFinding]:
         """Run the full investigation workflow."""
@@ -109,29 +139,12 @@ class AgentInvestigationMixin:
         self._react_chain = loop_result.react_chain
         self._loop_result = loop_result
 
-        if self.config.llm_enable_post_synthesis and self.config.llm_api_key:
-            try:
-                synthesis_service = SynthesisService(self.config)
-                synthesis_result = await asyncio.wait_for(
-                    synthesis_service.synthesize_findings(
-                        agent_id=self.agent_id,
-                        agent_name=self.agent_name,
-                        findings=self._findings,
-                        evidence_artifact=self.evidence_artifact,
-                        tool_success_count=self._tool_success_count,
-                        tool_error_count=self._tool_error_count,
-                        phase="initial",
-                    ),
-                    timeout=15.0,
-                )
-                if synthesis_result:
-                    self._agent_confidence = synthesis_result.get("agent_confidence")
-                    self._agent_error_rate = synthesis_result.get("agent_error_rate")
-            except Exception as e:
-                logger.warning(f"Initial synthesis failed: {e}")
+        await self._synthesize_findings_once(self._findings, phase="initial", timeout_s=15.0)
 
-        if self._agent_confidence is None: self._agent_confidence = 0.0
-        if self._agent_error_rate is None: self._agent_error_rate = 1.0
+        if self._agent_confidence is None:
+            self._agent_confidence = 0.0
+        if self._agent_error_rate is None:
+            self._agent_error_rate = 1.0
 
         self._reflection_report = await self.self_reflection_pass(self._findings)
         self._signal_completion(skipped=False)
@@ -142,7 +155,8 @@ class AgentInvestigationMixin:
         """Run the deep/heavy investigation pass in background."""
         deep_tasks = self.deep_task_decomposition
         if not deep_tasks:
-            for f in self._findings: f.metadata["analysis_phase"] = "initial"
+            for f in self._findings:
+                f.metadata["analysis_phase"] = "initial"
             return self._findings
 
         deep_trace = PipelineTrace(
@@ -153,8 +167,10 @@ class AgentInvestigationMixin:
         )
         await deep_trace.start()
 
-        for f in self._findings: f.metadata["analysis_phase"] = "initial"
-        if self._tool_registry is None: self._tool_registry = await self.build_tool_registry()
+        for f in self._findings:
+            f.metadata["analysis_phase"] = "initial"
+        if self._tool_registry is None:
+            self._tool_registry = await self.build_tool_registry()
 
         deep_agent_id = f"{self.agent_id}_deep"
         self._deep_wm_namespace = deep_agent_id
@@ -178,10 +194,11 @@ class AgentInvestigationMixin:
 
         deep_findings = loop_result.findings
         for f in deep_findings:
-             f.agent_id = self.agent_id 
-             f.metadata["analysis_phase"] = "deep"
+            f.agent_id = self.agent_id
+            f.metadata["analysis_phase"] = "deep"
 
         self._findings = self._findings + deep_findings
+        await self._synthesize_findings_once(self._findings, phase="deep", timeout_s=20.0)
         self._reflection_report = await self.self_reflection_pass(self._findings)
         await deep_trace.complete({"deep_finding_count": len(deep_findings)})
         return deep_findings
@@ -222,7 +239,7 @@ class AgentInvestigationMixin:
         )
 
         llm_generator = None
-        if self.config.llm_api_key:
+        if self.config.llm_enable_react_reasoning and self.config.llm_api_key:
             llm_client = LLMClient(self.config)
             llm_generator = create_llm_step_generator(
                 llm_client=llm_client,

@@ -38,7 +38,16 @@ def _get_easyocr_reader():
         try:
             import easyocr  # noqa: PLC0415
 
-            _EASYOCR_READER = easyocr.Reader(["en"])
+            model_dir = os.getenv("EASYOCR_MODEL_DIR", "/app/cache/easyocr")
+            os.makedirs(model_dir, exist_ok=True)
+            os.environ.setdefault("HOME", model_dir)
+            _EASYOCR_READER = easyocr.Reader(
+                ["en"],
+                gpu=False,
+                model_storage_directory=model_dir,
+                user_network_directory=model_dir,
+                download_enabled=True,
+            )
         except (ImportError, Exception) as exc:
             logger.warning(f"EasyOCR initialization failed: {str(exc)}")
             return None

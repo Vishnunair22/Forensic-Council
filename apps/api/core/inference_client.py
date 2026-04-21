@@ -82,6 +82,16 @@ class InferenceClient:
                 model_name = getattr(self.settings, "yolo_model_name", "yolo11m.pt")
                 model_path = os.path.join(yolo_cache, model_name)
 
+                if not os.path.exists(model_path):
+                    fallback_path = os.path.join(yolo_cache, "yolo11n.pt")
+                    if os.path.exists(fallback_path):
+                        logger.warning(
+                            "Configured YOLO model missing; using cached fallback",
+                            configured=model_path,
+                            fallback=fallback_path,
+                        )
+                        model_path = fallback_path
+
                 logger.info(f"Loading YOLO model from {model_path}...")
                 self._models["yolo"] = YOLO(model_path)
 

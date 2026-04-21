@@ -30,7 +30,7 @@ export default function Home() {
             transition={{ delay: 0.2 }}
             className="text-lg md:text-xl leading-relaxed text-neutral-400 max-w-2xl mx-auto"
           >
-            Forensic Council is a Multi Agent AI based application, that uses multiple customized agents to analyse digital forensic evidance to create a cohesive and effective report.
+            Forensic Council uses coordinated AI agents to analyze digital evidence, cross-check findings, and produce a cohesive forensic report.
           </motion.p>
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.4 }} className="flex flex-col items-center mt-2">
             <HeroAuthActions />

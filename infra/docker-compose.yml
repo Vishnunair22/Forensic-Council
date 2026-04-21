@@ -45,7 +45,7 @@ x-backend-env: &backend-env
   LLM_MODEL: ${LLM_MODEL:-llama-3.3-70b-versatile}
   LLM_FALLBACK_MODELS: ${LLM_FALLBACK_MODELS:-openai/gpt-oss-20b,llama-3.1-8b-instant}
   LLM_ENABLE_REACT_REASONING: ${LLM_ENABLE_REACT_REASONING:-false}
-  LLM_ENABLE_POST_SYNTHESIS: ${LLM_ENABLE_POST_SYNTHESIS:-false}
+  LLM_ENABLE_POST_SYNTHESIS: ${LLM_ENABLE_POST_SYNTHESIS:-true}
   USE_REDIS_WORKER: ${USE_REDIS_WORKER:-true}
   GEMINI_API_KEY: ${GEMINI_API_KEY:-}
   GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
@@ -60,6 +60,14 @@ x-backend-env: &backend-env
   EVIDENCE_STORAGE_PATH: /app/storage/evidence
   CALIBRATION_MODELS_PATH: /app/storage/calibration_models
   NUMBA_DISABLE_JIT: ${NUMBA_DISABLE_JIT:-1}
+  HOME: /app/cache/easyocr
+  EASYOCR_MODEL_DIR: /app/cache/easyocr
+  YOLO_MODEL_DIR: /app/cache/ultralytics
+  YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-yolo11n.pt}
+  YOLO_CONFIG_DIR: /app/cache/ultralytics
+  TORCH_HOME: /app/cache/torch
+  HF_HOME: /app/cache/huggingface
+  TRANSFORMERS_CACHE: /app/cache/huggingface/transformers
   OTEL_ENABLED: ${OTEL_ENABLED:-true}
   METRICS_SCRAPE_TOKEN: ${METRICS_SCRAPE_TOKEN:-}
 
@@ -293,6 +301,9 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      - SETUID
+      - SETGID
     read_only: true
     tmpfs:
       - /tmp:nosuid,size=512m
@@ -348,6 +359,9 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      - SETUID
+      - SETGID
     read_only: true
     tmpfs:
       - /tmp:nosuid,size=512m
@@ -460,7 +474,7 @@ services:
     healthcheck:
       # wget is available in node:22-alpine. Increased start-period to allow
       # the Next.js standalone server enough time to fully boot before checks begin.
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ > /dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ > /dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5

@@ -278,7 +278,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         mime_type: targetFile.type,
         pipeline_start: pipelineStart,
       };
-      storage.setItem("forensic_investigation_ctx", investigationCtx);
+      storage.setItem("forensic_investigation_ctx", investigationCtx, true);
       // Individual keys kept for hooks that read them directly
       storage.setItem("forensic_session_id", sessionIdToUse);
       storage.setItem("forensic_file_name", targetFile.name);
@@ -314,11 +314,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       autoStartFiredRef.current = true;
       __pendingFileStore.file = null;
       setFile(pending);
-      if (sessionOnlyStorage.getItem("forensic_auto_start") === "true") {
-        sessionOnlyStorage.removeItem("forensic_auto_start");
-        setAutoStartBlocking(false);
-        triggerAnalysis(pending);
-      }
+      sessionOnlyStorage.removeItem("forensic_auto_start");
+      sessionOnlyStorage.setItem("fc_show_loading", "true");
+      setShowLoadingOverlay(true);
+      setAutoStartBlocking(false);
+      triggerAnalysis(pending);
     }
   }, [triggerAnalysis]);
 

@@ -197,8 +197,8 @@ class Settings(BaseSettings):
         description="Ultralytics/YOLO model cache",
     )
     yolo_model_name: str = Field(
-        default="yolo11m.pt",
-        description="YOLO model weight filename (e.g., yolo11m.pt)",
+        default="yolo11n.pt",
+        description="YOLO model weight filename (default yolo11n.pt for reliable local-cache inference)",
     )
     siglip_model_name: str = Field(
         default="ViT-B-32",

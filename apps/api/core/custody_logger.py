@@ -8,6 +8,7 @@ Every entry is cryptographically signed and linked to prior entries.
 
 import asyncio
 import json
+import math
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
@@ -25,6 +26,19 @@ logger = get_logger(__name__)
 # Module-level metrics for observability
 _custody_write_failures: int = 0
 _session_chain_locks: defaultdict[UUID, asyncio.Lock] = defaultdict(asyncio.Lock)
+
+
+def _json_safe(value: Any) -> Any:
+    """Return a PostgreSQL JSON-safe copy, replacing non-finite floats."""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, tuple):
+        return [_json_safe(v) for v in value]
+    return value
 
 
 async def get_custody_metrics() -> dict[str, int]:
@@ -248,6 +262,7 @@ class CustodyLogger:
         """
         # Generate entry ID immediately for consistent tracking
         entry_id = uuid4()
+        content = _json_safe(content)
 
         # Sign the content
         signed = sign_content(agent_id, content)
@@ -323,7 +338,7 @@ class CustodyLogger:
                 "signature": signed.signature,
                 "prior_entry_ref": prior_entry_ref,
             }
-            await redis.client.rpush(self._wal_key, json.dumps(payload))
+            await redis.client.rpush(self._wal_key, json.dumps(payload, allow_nan=False))
             logger.warning(f"Custody WAL: Persisted entry {entry_id} to Redis for later flush.")
         except Exception as e:
             logger.critical(f"FATAL CUSTODY GAP: Redis WAL failed for entry {entry_id} - {e}")
@@ -342,6 +357,7 @@ class CustodyLogger:
                     break
 
                 item = json.loads(item_raw)
+                item["content"] = _json_safe(item.get("content", {}))
                 try:
                     query = """
                         INSERT INTO chain_of_custody (
