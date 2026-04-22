@@ -1,6 +1,6 @@
-﻿# Forensic Council â€” API Reference
+# Forensic Council — API Reference
 
-**Version:** v1.3.0 | **Base URL:** `http://localhost:8000`
+**Version:** v1.4.0 | **Base URL:** `http://localhost:8000`
 
 All REST endpoints are prefixed with `/api/v1`. Authentication uses JWT Bearer tokens. Obtain a token via `POST /api/v1/auth/login`.
 
@@ -29,7 +29,7 @@ username=investigator&password=CHANGE_ME_dev_only_password
 }
 ```
 
-**Errors:** `401` wrong credentials Â· `429` rate limited (5 failures / 5 min per IP)
+**Errors:** `401` wrong credentials · `429` rate limited (5 failures / 5 min per IP)
 
 ---
 
@@ -64,7 +64,7 @@ Upload evidence and start a forensic investigation. **Auth required.**
 | Field | Type | Description |
 |-------|------|-------------|
 | `file` | File | Evidence file (max 50 MB) |
-| `case_id` | string | Case identifier (alphanumeric + `-_.`, 1â€“128 chars) |
+| `case_id` | string | Case identifier (alphanumeric + `-_.`, 1–128 chars) |
 | `investigator_id` | string | Investigator ID (same constraints) |
 
 **Accepted MIME types:** `image/jpeg`, `image/png`, `image/tiff`, `image/webp`, `image/gif`, `image/bmp`, `video/mp4`, `video/quicktime`, `video/x-msvideo`, `audio/wav`, `audio/x-wav`, `audio/mpeg`, `audio/mp4`, `audio/flac`
@@ -81,7 +81,7 @@ Upload evidence and start a forensic investigation. **Auth required.**
 }
 ```
 
-**Errors:** `400` invalid file type or size Â· `413` body too large (>55 MB) Â· `422` invalid case/investigator ID format Â· `429` rate limited (10 investigations / 5 min per user)
+**Errors:** `400` invalid file type or size · `413` body too large (>55 MB) · `422` invalid case/investigator ID format · `429` rate limited (10 investigations / 5 min per user)
 
 ---
 
@@ -105,9 +105,9 @@ The pipeline pauses after initial agent analysis and sends `PIPELINE_PAUSED` ove
 }
 ```
 
-Idempotent â€” if the pipeline was already resumed returns `{"status": "already_resumed", ...}`.
+Idempotent — if the pipeline was already resumed returns `{"status": "already_resumed", ...}`.
 
-**Errors:** `404` session not found Â· `400` pipeline not in paused state
+**Errors:** `404` session not found · `400` pipeline not in paused state
 
 ---
 
@@ -131,12 +131,12 @@ Live WebSocket stream of agent cognitive updates. **Auth via first message.**
 | `CONNECTED` | Auth accepted, stream open |
 | `AGENT_UPDATE` | Agent thinking/progress update |
 | `AGENT_COMPLETE` | Agent finished one phase |
-| `PIPELINE_PAUSED` | Initial analysis done â€” awaiting resume |
+| `PIPELINE_PAUSED` | Initial analysis done — awaiting resume |
 | `PIPELINE_COMPLETE` | Full investigation complete |
 | `HITL_CHECKPOINT` | Human decision required |
 | `ERROR` | Fatal error |
 
-**Close codes:** `4001` auth failure Â· `4004` session not found
+**Close codes:** `4001` auth failure · `4004` session not found
 
 ---
 
@@ -147,7 +147,7 @@ Fetch the final signed report. **Auth required.**
 
 **Response 202:** Investigation still in progress `{"status": "in_progress", ...}`
 
-**Errors:** `404` session not found Â· `500` investigation failed Â· `503` DB temporarily unavailable
+**Errors:** `404` session not found · `500` investigation failed · `503` DB temporarily unavailable
 
 ---
 
@@ -202,12 +202,12 @@ Submit a Human-in-the-Loop decision for an active checkpoint. **Auth required.**
   "checkpoint_id": "7f3c...",
   "agent_id": "Agent3",
   "decision": "APPROVE",
-  "note": "Confirmed â€” lighting analysis is accurate.",
+  "note": "Confirmed — lighting analysis is accurate.",
   "override_finding": null
 }
 ```
 
-**Decision values:** `APPROVE` Â· `REDIRECT` Â· `OVERRIDE` Â· `TERMINATE` Â· `ESCALATE`
+**Decision values:** `APPROVE` · `REDIRECT` · `OVERRIDE` · `TERMINATE` · `ESCALATE`
 
 **Response 200:** `{"status": "processed", "message": "...", "session_id": "..."}`
 

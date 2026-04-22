@@ -225,9 +225,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # -1. Stop monitoring
     try:
         monitor = getattr(app.state, "heartbeat_monitor", None)
+        monitor_task = getattr(app.state, "heartbeat_task", None)
         if monitor:
             monitor.stop()
             logger.info("Event loop monitor stopped")
+        if monitor_task:
+            monitor_task.cancel()
+            try:
+                await monitor_task
+            except asyncio.CancelledError:
+                pass
     except Exception as e:
         logger.warning("Failed to stop monitoring", error=str(e))
 

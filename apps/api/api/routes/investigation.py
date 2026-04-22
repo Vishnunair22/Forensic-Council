@@ -49,16 +49,42 @@ router = APIRouter(prefix="/api/v1", tags=["investigation"])
 
 # Allowed MIME types
 ALLOWED_MIME_TYPES = {
-    "image/jpeg", "image/png", "image/tiff", "image/webp", "image/gif", "image/bmp",
-    "video/mp4", "video/quicktime", "video/x-msvideo", "audio/wav", "audio/x-wav",
-    "audio/mpeg", "audio/mp4", "audio/flac",
+    "image/jpeg",
+    "image/png",
+    "image/tiff",
+    "image/webp",
+    "image/gif",
+    "image/bmp",
+    "video/mp4",
+    "video/quicktime",
+    "video/x-msvideo",
+    "audio/wav",
+    "audio/x-wav",
+    "audio/mpeg",
+    "audio/mp4",
+    "audio/flac",
 }
 
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
-_ALLOWED_EXTENSIONS = frozenset({
-    ".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".gif", ".bmp",
-    ".mp4", ".mov", ".avi", ".wav", ".mp3", ".m4a", ".flac",
-})
+_ALLOWED_EXTENSIONS = frozenset(
+    {
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".tiff",
+        ".tif",
+        ".webp",
+        ".gif",
+        ".bmp",
+        ".mp4",
+        ".mov",
+        ".avi",
+        ".wav",
+        ".mp3",
+        ".m4a",
+        ".flac",
+    }
+)
 
 _SAFE_ID_RE = re.compile(r"^[A-Za-z0-9_\-\.]{1,128}$")
 
@@ -110,11 +136,15 @@ async def start_investigation(
 
     raw_content_type = (file.content_type or "").split(";")[0].strip().lower()
     if raw_content_type not in ALLOWED_MIME_TYPES:
-        raise HTTPException(status_code=400, detail=f"File type '{raw_content_type}' is not allowed.")
+        raise HTTPException(
+            status_code=400, detail=f"File type '{raw_content_type}' is not allowed."
+        )
 
     raw_suffix = Path(file.filename or "").suffix.lower()
     if raw_suffix not in _ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail=f"File extension '{raw_suffix}' is not permitted.")
+        raise HTTPException(
+            status_code=400, detail=f"File extension '{raw_suffix}' is not permitted."
+        )
 
     if file.size and file.size > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="File size exceeds limit.")
@@ -148,6 +178,7 @@ async def start_investigation(
         dedup_key = f"dedup:{case_id}:{content_hash}"
         try:
             from core.persistence.redis_client import get_redis_client
+
             _redis = await get_redis_client()
             if _redis:
                 was_set = await _redis.set(
@@ -159,7 +190,9 @@ async def start_investigation(
                 if not was_set:
                     existing = await _redis.get(dedup_key)
                     tmp_path.unlink(missing_ok=True)
-                    raise HTTPException(status_code=409, detail=f"Duplicate detected: session {existing}")
+                    raise HTTPException(
+                        status_code=409, detail=f"Duplicate detected: session {existing}"
+                    )
         except HTTPException:
             raise
         except Exception as exc:
@@ -252,7 +285,9 @@ async def start_investigation(
                 )
             except Exception as exc:
                 logger.debug("Session persistence registration skipped", error=str(exc))
-        asyncio.create_task(_register())
+
+        _t = asyncio.create_task(_register())
+        _t.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
 
         return InvestigationResponse(
             session_id=session_id,

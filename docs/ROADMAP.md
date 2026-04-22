@@ -1,4 +1,4 @@
-﻿# Roadmap: Forensic Council
+# Roadmap: Forensic Council
 
 ## Phase 1: Foundation (COMPLETED)
 - [x] Initial Multi-Agent Architecture

@@ -1,4 +1,4 @@
-﻿# Contributor Covenant Code of Conduct v2.1
+# Contributor Covenant Code of Conduct v2.1
 
 ## Our Pledge
 

@@ -33,6 +33,7 @@ from core.working_memory import WorkingMemory
 
 logger = get_logger(__name__)
 
+
 class Agent5Metadata(ForensicAgent):
     """
     Agent 5 - Provenance & Metadata Agent.
@@ -40,10 +41,6 @@ class Agent5Metadata(ForensicAgent):
     Mandate (STRICT): Provenance, metadata structure, and chronology ONLY.
     This is the court-defensible provenance specialist — narrow and deep.
     """
-
-    def inject_agent1_context(self, agent1_gemini_findings: dict) -> None:
-        """Share Agent 1 Gemini vision findings with this agent instance."""
-        self._agent1_context = agent1_gemini_findings or {}
 
     def __init__(
         self,
@@ -70,6 +67,10 @@ class Agent5Metadata(ForensicAgent):
         )
         self._agent1_context: dict = {}
         self._agent1_context_event: asyncio.Event | None = None
+
+    def inject_agent1_context(self, agent1_gemini_findings: dict) -> None:
+        """Share Agent 1 Gemini vision findings with this agent instance."""
+        self._agent1_context = agent1_gemini_findings or {}
 
     @property
     def _is_digital_image(self) -> bool:
@@ -144,13 +145,39 @@ class Agent5Metadata(ForensicAgent):
         # AV Container Profiling (reusing Video domain) — only for video files
         _mime = getattr(self.evidence_artifact, "mime_type", "") or ""
         _fp = getattr(self.evidence_artifact, "file_path", "").lower()
-        _is_av = _mime.startswith("video/") or _mime.startswith("audio/") or any(
-            _fp.endswith(ext) for ext in (".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv", ".wmv", ".m4v", ".mp3", ".wav", ".flac", ".ogg", ".aac", ".m4a")
+        _is_av = (
+            _mime.startswith("video/")
+            or _mime.startswith("audio/")
+            or any(
+                _fp.endswith(ext)
+                for ext in (
+                    ".mp4",
+                    ".avi",
+                    ".mov",
+                    ".mkv",
+                    ".webm",
+                    ".flv",
+                    ".wmv",
+                    ".m4v",
+                    ".mp3",
+                    ".wav",
+                    ".flac",
+                    ".ogg",
+                    ".aac",
+                    ".m4a",
+                )
+            )
         )
         if _is_av:
             video_h = VideoHandlers(self)
-            registry.register("mediainfo_profile", video_h.mediainfo_profile_handler, "Deep AV container profiling")
-            registry.register("av_file_identity", video_h.av_file_identity_handler, "Lightweight AV pre-screen")
+            registry.register(
+                "mediainfo_profile",
+                video_h.mediainfo_profile_handler,
+                "Deep AV container profiling",
+            )
+            registry.register(
+                "av_file_identity", video_h.av_file_identity_handler, "Lightweight AV pre-screen"
+            )
 
         # Gemini deep forensic analysis
         _gemini = GeminiVisionClient(self.config)
@@ -163,7 +190,7 @@ class Agent5Metadata(ForensicAgent):
                 self.inter_agent_bus.signal_event(
                     self.session_id,
                     "agent5_initial_signal",
-                    {"progress": msg, "has_gps": bool(exif.get("gps_coordinates"))}
+                    {"progress": msg, "has_gps": bool(exif.get("gps_coordinates"))},
                 )
 
         async def gemini_deep_forensic_handler(input_data: dict) -> dict:
@@ -175,7 +202,9 @@ class Agent5Metadata(ForensicAgent):
                 try:
                     await asyncio.wait_for(asyncio.shield(_ctx_event.wait()), timeout=60.0)
                 except TimeoutError:
-                    logger.warning(f"{self.agent_id}: Agent1 context wait timed out after 60s — proceeding without image-integrity context")
+                    logger.warning(
+                        f"{self.agent_id}: Agent1 context wait timed out after 60s — proceeding without image-integrity context"
+                    )
                     await self._record_tool_error(
                         "agent1_context_sync",
                         "Agent1 Gemini context unavailable (60s timeout) — metadata provenance analysis may lack image-integrity grounding",
@@ -193,8 +222,7 @@ class Agent5Metadata(ForensicAgent):
 
                 # Extract high-value forensic keys for Gemini
                 dynamic_context[tool_name] = {
-                    k: v for k, v in result.items()
-                    if k not in ("exif_raw", "artifact", "error")
+                    k: v for k, v in result.items() if k not in ("exif_raw", "artifact", "error")
                 }
 
             # Add Agent1 context if available
@@ -206,7 +234,7 @@ class Agent5Metadata(ForensicAgent):
                 finding = await _gemini.deep_forensic_analysis(
                     file_path=artifact.file_path,
                     exif_summary=context_summary,
-                    signal_callback=_gemini_signal_callback
+                    signal_callback=_gemini_signal_callback,
                 )
             except Exception as e:
                 await self._record_tool_error("gemini_deep_forensic", str(e))
@@ -223,6 +251,8 @@ class Agent5Metadata(ForensicAgent):
             await self._record_tool_result("gemini_deep_forensic", result)
             return result
 
-        registry.register("gemini_deep_forensic", gemini_deep_forensic_handler, "Gemini deep forensic analysis")
+        registry.register(
+            "gemini_deep_forensic", gemini_deep_forensic_handler, "Gemini deep forensic analysis"
+        )
 
         return registry

@@ -1,4 +1,4 @@
-﻿# Contributing to the Forensic Council
+# Contributing to the Forensic Council
 
 Thank you for your interest in contributing to the Forensic Council system! This document outlines our standard workflow for branching, committing, testing, and reviewing code.
 
@@ -21,11 +21,11 @@ Commit messages should be precise. We loosely follow Conventional Commits.
 *   `chore: update .env.example with CHANGE_ME placeholders`
 
 **Scope prefixes** (optional but encouraged):
-- `api:` â€” API route or middleware changes
-- `agent:` â€” Agent logic changes
-- `ui:` â€” Frontend component changes
-- `infra:` â€” Docker, compose, or infrastructure changes
-- `security:` â€” Auth, signing, or security-related changes
+- `api:` — API route or middleware changes
+- `agent:` — Agent logic changes
+- `ui:` — Frontend component changes
+- `infra:` — Docker, compose, or infrastructure changes
+- `security:` — Auth, signing, or security-related changes
 
 ## 3. Pull Request Process
 
@@ -79,7 +79,7 @@ Before requesting review, verify:
 
 Please consult the root [`README.md`](../README.md) and [`docs/DEVELOPMENT_SETUP.md`](DEVELOPMENT_SETUP.md) to spin up the local Docker environment.
 
-**Linux / macOS** â€” use the provided shell script:
+**Linux / macOS** — use the provided shell script:
 ```bash
 ./manage.sh dev      # hot-reload dev stack
 ./manage.sh logs     # tail all container logs

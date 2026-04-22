@@ -1,4 +1,4 @@
-﻿# ADR-003: Groq for Narrative Synthesis
+# ADR-003: Groq for Narrative Synthesis
 
 ## Status
 

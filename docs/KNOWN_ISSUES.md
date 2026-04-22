@@ -1,4 +1,4 @@
-﻿# Known Issues
+# Known Issues
 
 Active issues and limitations in the Forensic Council system.
 
@@ -18,7 +18,7 @@ Social media and messaging app compression degrades pixel-level forensic signals
 
 ## Gemini API Rate Limits
 
-The free Gemini API tier has rate limits that may cause 429 errors during concurrent deep analysis of multiple agents. The system uses an ordered fallback chain (`gemini-2.5-flash` â†’ `gemini-2.0-flash` â†’ `gemini-2.0-flash-lite`) and skips backoff on 404/429 to fail fast.
+The free Gemini API tier has rate limits that may cause 429 errors during concurrent deep analysis of multiple agents. The system uses an ordered fallback chain (`gemini-2.5-flash` → `gemini-2.0-flash` → `gemini-2.0-flash-lite`) and skips backoff on 404/429 to fail fast.
 
 ## Session State Volatility
 

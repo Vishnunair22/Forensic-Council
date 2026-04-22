@@ -1,6 +1,6 @@
 # Testing Guide — Forensic Council
 
-**Version:** v1.3.0 | Complete testing reference.
+**Version:** v1.4.0 | Complete testing reference.
 
 ---
 

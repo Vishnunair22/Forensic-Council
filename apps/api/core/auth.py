@@ -7,7 +7,6 @@ Provides token generation, validation, and dependency injection for protected ro
 """
 
 import hashlib
-import warnings
 from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum

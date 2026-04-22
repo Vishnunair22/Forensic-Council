@@ -1,4 +1,4 @@
-﻿# Debugging Guide
+# Debugging Guide
 
 ## Enable Debug Logging
 

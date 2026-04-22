@@ -1,4 +1,4 @@
-﻿# ADR-002: Two-Phase ReAct Pipeline
+# ADR-002: Two-Phase ReAct Pipeline
 
 ## Status
 
@@ -21,7 +21,7 @@ Split the pipeline into two phases:
 ## Consequences
 
 - Users see actionable initial findings within 30-60 seconds.
-- Deep analysis is opt-in â€” users can accept initial results and skip the heavy pass.
+- Deep analysis is opt-in — users can accept initial results and skip the heavy pass.
 - Agent working memory is namespaced (`agent_id` vs `agent_id_deep`) to prevent cross-contamination.
-- Cross-agent Gemini context injection (Agent1 â†’ Agent3/Agent5) requires careful asyncio.Event coordination.
+- Cross-agent Gemini context injection (Agent1 → Agent3/Agent5) requires careful asyncio.Event coordination.
 

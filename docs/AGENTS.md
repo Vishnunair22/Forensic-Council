@@ -1,6 +1,6 @@
-﻿# Forensic OS Agents (2026 Spec)
+# Forensic OS Agents (2026 Spec)
 
-The Forensic Council (v1.3.0) utilizes five specialized autonomous agents to perform non-linear forensic investigations. Each agent follows a tiered **Initial vs Deep Analysis** pipeline, cross-verified via **Gemini 2.5 Pro/Flash Semantic Grounding**.
+The Forensic Council (v1.4.0) utilizes five specialized autonomous agents to perform non-linear forensic investigations. Each agent follows a tiered **Initial vs Deep Analysis** pipeline, cross-verified via **Gemini 2.5 Pro/Flash Semantic Grounding**.
 
 ## 1. Image Forensic Agent
 Analyzes static visual evidence for pixel-level and semantic inconsistencies.

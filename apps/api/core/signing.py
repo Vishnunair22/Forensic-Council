@@ -24,6 +24,30 @@ Key Rotation:
    Call rotate_agent_key(agent_id) to generate a new key pair and log
    a "KEY_ROTATION" custody entry signed by both old and new keys.
    The old key is retired but kept for verifying historical entries.
+
+⚠️  UPGRADE NOTICE (v1.3.0 → v1.4.0):
+    The HKDF key derivation now uses an explicit domain-separation salt.
+    This changes the Fernet encryption key used to protect DB-stored agent
+    private keys. Any keys stored under v1.3.0 cannot be decrypted after
+    upgrading.
+
+    Migration steps (run BEFORE deploying v1.4.0):
+      1. Back up the agent_signing_keys table:
+           pg_dump -t agent_signing_keys forensic_council > keys_backup.sql
+      2. After deploying, the KeyStore will fall back to deterministic derivation
+         on startup (DB keys can't be decrypted).
+      3. Force key rotation for all agents:
+           python -c "
+           import asyncio
+           from core.signing import get_keystore
+           ks = get_keystore()
+           async def rotate():
+               await ks.initialize()
+               for aid in ks._AGENT_IDS:
+                   await ks.rotate_key(aid)
+           asyncio.run(rotate())
+           "
+      4. Verify: the agent_signing_keys table now has fresh rows with is_active=true.
 """
 
 import base64

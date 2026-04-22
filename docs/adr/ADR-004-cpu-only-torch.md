@@ -1,4 +1,4 @@
-﻿# ADR-004: CPU-Only PyTorch in Docker
+# ADR-004: CPU-Only PyTorch in Docker
 
 ## Status
 

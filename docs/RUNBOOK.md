@@ -1,10 +1,10 @@
-﻿# Production Incident Runbook
+# Production Incident Runbook
 
 ## Triage Checklist
 
 When an alert fires or a user reports an issue:
 
-1. Check `GET /health` â€” is the API responding?
+1. Check `GET /health` — is the API responding?
 2. Check Docker container status: `docker compose ps`
 3. Check logs: `docker compose logs --tail=100 backend worker`
 4. Check resource usage: `docker stats --no-stream`
@@ -161,7 +161,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/metrics/raw 
   | grep circuit_breaker
 
 # 3. Check current API quota (free tier = 10 RPM, 1500 RPD)
-#    Open: https://aistudio.google.com/apikey → Usage tab
+#    Open: https://aistudio.google.com/apikey ? Usage tab
 
 # 4. If the key is valid but quota exhausted, wait for the daily reset (midnight PT).
 #    Investigations running during the outage will carry the degradation flag:
@@ -173,7 +173,7 @@ docker compose -f infra/docker-compose.yml restart backend
 
 # 6. To switch permanently to local-only mode (no Gemini):
 #    Remove GEMINI_API_KEY from .env and restart.
-#    All reports will carry the degradation flag — communicate this to investigators.
+#    All reports will carry the degradation flag � communicate this to investigators.
 ```
 
 **Impact on report quality**: Without Gemini, cross-modal semantic grounding is
@@ -208,7 +208,7 @@ docker compose exec redis redis-cli KEYS "session:*" | wc -l
 docker compose -f infra/docker-compose.yml restart redis
 
 # 5. Verify recovery
-docker compose exec redis redis-cli ping  # → PONG
+docker compose exec redis redis-cli ping  # ? PONG
 curl -s http://localhost:8000/health | python -m json.tool  # redis: "healthy"
 
 # 6. Orphaned sessions are auto-recovered at backend startup.
@@ -225,14 +225,14 @@ logs are written per-tool and are durable. Completed investigations are unaffect
 ## Evidence File Cleanup
 
 Evidence files are retained for `EVIDENCE_RETENTION_DAYS` (default 7) days.
-There is no automated scheduler — cleanup must be triggered manually until a
+There is no automated scheduler � cleanup must be triggered manually until a
 cron job is added.
 
 ```bash
 # 1. Check current evidence storage size
 docker compose exec backend du -sh /app/storage/evidence/
 
-# 2. Preview what would be deleted (dry run) — files older than retention period
+# 2. Preview what would be deleted (dry run) � files older than retention period
 docker compose exec backend python scripts/cleanup_storage.py --dry-run
 
 # 3. Run cleanup
@@ -295,9 +295,9 @@ docker compose exec postgres pg_restore -U forensic_user -d forensic_council /ba
 ## Escalation Path
 
 1. **On-call engineer** investigates using this runbook
-2. If unresolved in 30 minutes â†’ **Team lead** notified
-3. If data integrity suspected â†’ **Security team** engaged
-4. If legal/compliance impact â†’ **Legal counsel** notified
+2. If unresolved in 30 minutes → **Team lead** notified
+3. If data integrity suspected → **Security team** engaged
+4. If legal/compliance impact → **Legal counsel** notified
 
 ---
 

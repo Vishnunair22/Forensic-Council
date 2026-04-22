@@ -103,7 +103,7 @@ Another Postgres or Redis instance is running. Stop it or change ports in `.env`
 ### `GEMINI_API_KEY not set` warning
 This is normal for local development. Agents 1, 3, 5 will use local fallback analysis. Set the key in `.env` to enable Gemini vision.
 
-#### Recommended Models (v1.3.0 Standard)
+#### Recommended Models (v1.4.0 Standard)
 For optimal forensic precision, use the following in your `.env`:
 - `LLM_MODEL=llama-3.3-70b-versatile` (Groq)
 - `GEMINI_MODEL=gemini-2.5-flash` (Google AI Studio)

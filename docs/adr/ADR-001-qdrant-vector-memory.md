@@ -1,4 +1,4 @@
-﻿# ADR-001: Qdrant for Vector Memory
+# ADR-001: Qdrant for Vector Memory
 
 ## Status
 

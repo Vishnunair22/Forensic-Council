@@ -1,6 +1,6 @@
-﻿# Maintenance & Operations â€” Forensic Council
+# Maintenance & Operations — Forensic Council
 
-This guide covers the necessary procedures to maintain a production-hardened Forensic Council (v1.3.0) environment.
+This guide covers the necessary procedures to maintain a production-hardened Forensic Council (v1.4.0) environment.
 
 ---
 
@@ -24,7 +24,7 @@ docker exec -it forensic-backend python tools/maintenance_cleanup.py --age 24
 
 ## 2. ML Tool Warming
 
-Deep Analysis agents (v1.3.0) utilize heavy ML models (YOLOv11, DeepFace, Whisper). Startup time can be significant during first-run.
+Deep Analysis agents (v1.4.0) utilize heavy ML models (YOLOv11, DeepFace, Whisper). Startup time can be significant during first-run.
 
 ### Pre-warming Models
 To avoid latency spikes on the first investigation:

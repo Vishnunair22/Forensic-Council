@@ -1,6 +1,6 @@
 # Forensic Council — Project Context
 
-**Version:** v1.3.0 | **Audited:** 2026-04-12
+**Version:** v1.4.0 | **Audited:** 2026-04-12
 
 ---
 

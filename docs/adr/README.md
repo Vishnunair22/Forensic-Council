@@ -1,4 +1,4 @@
-﻿# Architecture Decision Records (ADRs)
+# Architecture Decision Records (ADRs)
 
 Index of all architectural decisions for the Forensic Council project.
 

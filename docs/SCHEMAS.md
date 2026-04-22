@@ -1,6 +1,6 @@
-﻿# Forensic Council â€” Data Schemas
+# Forensic Council — Data Schemas
 
-**Version:** v1.3.0 | Pydantic (backend) and TypeScript (frontend) models.
+**Version:** v1.4.0 | Pydantic (backend) and TypeScript (frontend) models.
 
 ---
 
@@ -18,7 +18,7 @@ Single conclusion from one of the 5 forensic agents.
   "confidence_raw": 0.94,
   "calibrated": true,
   "calibrated_probability": 0.88,
-  "court_statement": "Region at (120,400) shows quantization matrices distinct from background â€” consistent with post-capture compositing.",
+  "court_statement": "Region at (120,400) shows quantization matrices distinct from background — consistent with post-capture compositing.",
   "robustness_caveat": false,
   "robustness_caveat_detail": null,
   "reasoning_summary": "ELA anomaly map shows bright patches in the upper-right quadrant indicating a different JPEG save history from the rest of the image.",
@@ -32,12 +32,12 @@ Single conclusion from one of the 5 forensic agents.
 ```
 
 **Key fields:**
-- `confidence_raw` â€” ML tool output score (0.0â€“1.0)
-- `calibrated_probability` â€” Platt-scaled probability; `null` if not calibrated
-- `court_statement` â€” court-admissible language produced by the calibration layer
-- `metadata.analysis_phase` â€” `"initial"` or `"deep"` (deep findings include Gemini vision)
-- `metadata.analysis_source` â€” `"classical_tools"` or `"gemini_vision"`
-- `metadata.court_defensible` â€” whether the finding meets evidentiary standards
+- `confidence_raw` — ML tool output score (0.0–1.0)
+- `calibrated_probability` — Platt-scaled probability; `null` if not calibrated
+- `court_statement` — court-admissible language produced by the calibration layer
+- `metadata.analysis_phase` — `"initial"` or `"deep"` (deep findings include Gemini vision)
+- `metadata.analysis_source` — `"classical_tools"` or `"gemini_vision"`
+- `metadata.court_defensible` — whether the finding meets evidentiary standards
 
 ---
 
@@ -107,11 +107,11 @@ Full signed investigation report returned by `GET /api/v1/sessions/{id}/report`.
 **Overall verdict values:**
 | Verdict | Meaning |
 |---------|---------|
-| `CERTAIN` | â‰¥ 80% confidence, â‰¤ 10% error rate, no contested findings |
-| `LIKELY` | â‰¥ 65% confidence, â‰¤ 20% error rate |
-| `UNCERTAIN` | â‰¥ 50% confidence or â‰¤ 3 contested findings |
+| `CERTAIN` | ≥ 80% confidence, ≤ 10% error rate, no contested findings |
+| `LIKELY` | ≥ 65% confidence, ≤ 20% error rate |
+| `UNCERTAIN` | ≥ 50% confidence or ≤ 3 contested findings |
 | `INCONCLUSIVE` | < 50% confidence and > 40% error rate |
-| `MANIPULATION DETECTED` | â‰¥ 2 agents flagged manipulation/deepfake/splice keywords |
+| `MANIPULATION DETECTED` | ≥ 2 agents flagged manipulation/deepfake/splice keywords |
 | `REVIEW REQUIRED` | Default fallback |
 
 ---
@@ -146,7 +146,7 @@ Body for `POST /api/v1/hitl/decision`.
 }
 ```
 
-**Decision values:** `APPROVE` Â· `REDIRECT` Â· `OVERRIDE` Â· `TERMINATE` Â· `ESCALATE`
+**Decision values:** `APPROVE` · `REDIRECT` · `OVERRIDE` · `TERMINATE` · `ESCALATE`
 
 ---
 
@@ -160,15 +160,15 @@ All WebSocket messages share this shape.
   "session_id": "uuid",
   "agent_id": "Agent1",
   "agent_name": "Image Forensics",
-  "message": "ðŸ”¬ Running Error Level Analysis across full imageâ€¦",
+  "message": "🔬 Running Error Level Analysis across full image…",
   "data": {
     "status": "running",
-    "thinking": "ðŸ”¬ Running Error Level Analysis across full imageâ€¦"
+    "thinking": "🔬 Running Error Level Analysis across full image…"
   }
 }
 ```
 
-**Type values:** `CONNECTED` Â· `AGENT_UPDATE` Â· `AGENT_COMPLETE` Â· `PIPELINE_PAUSED` Â· `PIPELINE_COMPLETE` Â· `HITL_CHECKPOINT` Â· `ERROR`
+**Type values:** `CONNECTED` · `AGENT_UPDATE` · `AGENT_COMPLETE` · `PIPELINE_PAUSED` · `PIPELINE_COMPLETE` · `HITL_CHECKPOINT` · `ERROR`
 
 For `AGENT_COMPLETE`, `data` also includes:
 ```json

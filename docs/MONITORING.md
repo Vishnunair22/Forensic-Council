@@ -1,4 +1,4 @@
-﻿# Monitoring & Alerting â€” Forensic Council
+# Monitoring & Alerting — Forensic Council
 
 ## Health Check Endpoint
 
