@@ -127,7 +127,7 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 pythonpath = ["."]
-addopts = "-v --tb=short --cov-fail-under=75"
+addopts = "-v --tb=short --cov-fail-under=85"
 markers = [
     "regression: marks tests as regression tests (deselect with -m 'not regression')",
     "integration: marks tests as integration tests",
@@ -142,16 +142,18 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-source = ["core", "agents", "tools", "orchestration"]
+source = ["core", "agents", "tools", "orchestration", "api", "reports"]
 branch = true
 omit = [
     "tools/ml_tools/*.py",
     "*/worker.py",
     "*/model_cache.py",
+    "*/__pycache__/*",
+    "*/.venv/*",
 ]
 
 [tool.coverage.report]
-fail_under = 75
+fail_under = 85
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
@@ -159,6 +161,9 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
     "\\.\\.\\.",
+    # Exclude debug-only code
+    "if settings.DEBUG:",
+    "if os.environ.get\\('DEBUG'\\):",
 ]
 
 [tool.hatch.build.targets.wheel]

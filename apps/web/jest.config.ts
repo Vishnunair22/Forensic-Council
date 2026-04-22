@@ -24,9 +24,19 @@ const config: Config = {
   coverageProvider: 'v8',
   coverageThreshold: {
     global: {
-      lines: 60,
+      branches: 80,
+      functions: 85,
+      lines: 85,
+      statements: 85,
     },
+    // Critical modules require higher coverage
+    "./src/lib/api.ts": { branches: 90, lines: 95 },
+    "./src/hooks/useInvestigation.ts": { branches: 85, lines: 90 },
+    "./src/components/evidence/FileUploadSection.tsx": { branches: 80, lines: 85 },
+    "./src/components/result/ArbiterTab.tsx": { branches: 85, lines: 90 },
   },
+  coverageReporters: ["text", "lcov", "html", "json-summary"],
+  coverageDirectory: "coverage",
 };
 
 export default createJestConfig(config);

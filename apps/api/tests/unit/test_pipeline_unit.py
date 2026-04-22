@@ -32,6 +32,7 @@ from orchestration.pipeline import AgentFactory, ForensicCouncilPipeline, Signal
 
 def _make_config():
     from core.config import Settings
+
     return Settings(
         app_env="testing",
         signing_key="test-signing-key-" + "x" * 32,
@@ -49,6 +50,7 @@ def _make_config():
 
 
 # ── SignalBus ──────────────────────────────────────────────────────────────────
+
 
 class TestSignalBus:
     def test_instantiation(self):
@@ -103,6 +105,7 @@ class TestSignalBus:
 
 # ── AgentFactory ───────────────────────────────────────────────────────────────
 
+
 class TestAgentFactory:
     def _make_factory(self):
         config = _make_config()
@@ -136,6 +139,7 @@ class TestAgentFactory:
 
     @pytest.mark.asyncio
     async def test_reinvoke_with_artifact_and_mock_agent(self):
+        """Test agent reinvocation with proper mocking and assertions."""
         factory = self._make_factory()
         artifact = MagicMock()
         artifact.file_path = "/tmp/test.jpg"
@@ -151,15 +155,23 @@ class TestAgentFactory:
         mock_agent._loop_result.react_chain = []
 
         with patch("orchestration.pipeline.get_agent_registry") as mock_reg:
-            mock_reg.return_value.create_agent = MagicMock(return_value=mock_agent)
-            try:
-                result = await factory.reinvoke_agent("Agent1", uuid4(), {"challenge_id": str(uuid4())})
-                assert isinstance(result, dict)
-            except Exception:
-                pass  # Agent creation may fail without full infra
+            mock_registry = MagicMock()
+            mock_registry.create_agent = MagicMock(return_value=mock_agent)
+            mock_reg.return_value = mock_registry
+
+            challenge_id = uuid4()
+            result = await factory.reinvoke_agent(
+                "Agent1", uuid4(), {"challenge_id": str(challenge_id)}
+            )
+
+            # Proper assertions instead of silent pass
+            assert isinstance(result, dict)
+            mock_agent.run_investigation.assert_called_once()
+            assert mock_agent.run_investigation.call_args[0][0] == challenge_id
 
 
 # ── ForensicCouncilPipeline ────────────────────────────────────────────────────
+
 
 class TestForensicCouncilPipelineInit:
     def test_instantiation_with_config(self):
@@ -188,9 +200,18 @@ class TestForensicCouncilPipelineInitializeComponents:
         config = _make_config()
         pipeline = ForensicCouncilPipeline(config=config)
 
-        with patch("core.persistence.redis_client.get_redis_client", new=AsyncMock(side_effect=Exception("Redis down"))):
-            with patch("core.persistence.qdrant_client.get_qdrant_client", new=AsyncMock(side_effect=Exception("Qdrant down"))):
-                with patch("core.persistence.postgres_client.get_postgres_client", new=AsyncMock(side_effect=Exception("PG down"))):
+        with patch(
+            "core.persistence.redis_client.get_redis_client",
+            new=AsyncMock(side_effect=Exception("Redis down")),
+        ):
+            with patch(
+                "core.persistence.qdrant_client.get_qdrant_client",
+                new=AsyncMock(side_effect=Exception("Qdrant down")),
+            ):
+                with patch(
+                    "core.persistence.postgres_client.get_postgres_client",
+                    new=AsyncMock(side_effect=Exception("PG down")),
+                ):
                     with patch("orchestration.pipeline.SessionManager"):
                         with patch("orchestration.pipeline.InterAgentBus"):
                             with patch("orchestration.pipeline.CouncilArbiter"):
@@ -210,9 +231,17 @@ class TestForensicCouncilPipelineInitializeComponents:
         mock_qdrant = AsyncMock()
         mock_pg = AsyncMock()
 
-        with patch("core.persistence.redis_client.get_redis_client", new=AsyncMock(return_value=mock_redis)):
-            with patch("core.persistence.qdrant_client.get_qdrant_client", new=AsyncMock(return_value=mock_qdrant)):
-                with patch("core.persistence.postgres_client.get_postgres_client", new=AsyncMock(return_value=mock_pg)):
+        with patch(
+            "core.persistence.redis_client.get_redis_client", new=AsyncMock(return_value=mock_redis)
+        ):
+            with patch(
+                "core.persistence.qdrant_client.get_qdrant_client",
+                new=AsyncMock(return_value=mock_qdrant),
+            ):
+                with patch(
+                    "core.persistence.postgres_client.get_postgres_client",
+                    new=AsyncMock(return_value=mock_pg),
+                ):
                     with patch("orchestration.pipeline.SessionManager"):
                         with patch("orchestration.pipeline.InterAgentBus"):
                             with patch("orchestration.pipeline.CouncilArbiter"):
@@ -236,6 +265,7 @@ class TestNormalizeAgentResults:
         pipeline = ForensicCouncilPipeline(config=config)
         from core.react_loop import AgentFinding
         from orchestration.pipeline import AgentLoopResult
+
         f = AgentFinding(
             agent_id="Agent1",
             finding_type="ela",
@@ -258,6 +288,7 @@ class TestNormalizeAgentResults:
         pipeline = ForensicCouncilPipeline(config=config)
         from core.react_loop import AgentFinding
         from orchestration.pipeline import AgentLoopResult
+
         f = AgentFinding(
             agent_id="Agent1",
             finding_type="noise",
@@ -281,6 +312,7 @@ class TestNormalizeAgentResults:
         config = _make_config()
         pipeline = ForensicCouncilPipeline(config=config)
         from orchestration.pipeline import AgentLoopResult
+
         loop_result = AgentLoopResult(
             agent_id="Agent2",
             findings=[],
