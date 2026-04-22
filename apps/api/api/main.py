@@ -60,9 +60,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # IMPV-03: Initialize Managed ProcessPool for CPU-bound forensic analysis (ELA, FFT, etc.)
     max_workers = min(16, os.cpu_count() or 4)
-    app.state.process_pool = concurrent.futures.ProcessPoolExecutor(
-        max_workers=max_workers
-    )
+    app.state.process_pool = concurrent.futures.ProcessPoolExecutor(max_workers=max_workers)
     logger.info("Forensic ProcessPool initialized", max_workers=max_workers)
 
     # Harden production deployments — abort if demo credentials are still set
@@ -74,12 +72,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     if settings.signing_key.startswith("dev-"):
         logger.warning(
-            "SIGNING_KEY is using a development placeholder. "
-            "Never use this in production."
+            "SIGNING_KEY is using a development placeholder. Never use this in production."
         )
 
+    if settings.use_redis_worker:
+        logger.info("Worker queue mode enabled — ensure worker.py is running")
+    else:
+        logger.info("In-process investigation mode — investigations run in this process")
+
     # Pre-startup dependency validation
-    REQUIRED_BINARIES = ["tesseract", "exiftool", "ffmpeg"]
+    REQUIRED_BINARIES = ["tesseract", "exiftool", "ffmpeg", "mediainfo"]
     missing_bins = [b for b in REQUIRED_BINARIES if not shutil.which(b)]
     if missing_bins:
         msg = f"CRITICAL: Missing system dependencies: {', '.join(missing_bins)}"
@@ -106,14 +108,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 "CRITICAL: Custody log table missing — migrations have not been run. "
                 "Run 'python scripts/init_db.py' or use the init-container before starting the API."
             )
-            raise RuntimeError(
-                "Database migrations not applied — refusing to start in production"
-            )
+            raise RuntimeError("Database migrations not applied — refusing to start in production")
         else:
             # Development: auto-run migrations
-            logger.warning(
-                "Custody log table missing — attempting auto-migration in development"
-            )
+            logger.warning("Custody log table missing — attempting auto-migration in development")
             try:
                 from scripts.init_db import init_database
 
@@ -121,7 +119,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 app.state.migrations_ok = True
                 logger.info("Auto-migration completed")
             except Exception as mig_err:
-                logger.error("Auto-migration failed — API running in degraded state", error=str(mig_err))
+                logger.error(
+                    "Auto-migration failed — API running in degraded state", error=str(mig_err)
+                )
                 app.state.migrations_ok = False
     except RuntimeError:
         raise
@@ -147,10 +147,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await ks.initialize()
         logger.info("Signing key store initialized")
     except Exception as e:
-        logger.warning(
-            "Key store initialization used deterministic fallback", error=str(e)
-        )
-
+        logger.warning("Key store initialization used deterministic fallback", error=str(e))
 
     # ── Gemini model availability validation ──────────────────────────────────
     # Checks which models in the configured cascade exist on this API key using
@@ -158,6 +155,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # pruned from the cascade so investigations never hit avoidable 404s.
     try:
         from core.gemini_client import GeminiVisionClient
+
         _gemini_client = GeminiVisionClient(settings)
         # Configure process-wide quota pool before any agent is created.
         # This bounds concurrent Gemini requests across all 5 agents so the
@@ -198,7 +196,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     await _redis.set(_key, json.dumps(_meta), ex=_ex)
                     _interrupted_count += 1
             except Exception as _key_err:
-                logger.warning("Failed to update orphaned session key", key=_key, error=str(_key_err))
+                logger.warning(
+                    "Failed to update orphaned session key", key=_key, error=str(_key_err)
+                )
         if _interrupted_count:
             logger.warning(
                 "Marked orphaned sessions as interrupted (API restart recovery)",
@@ -212,11 +212,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Start periodic blacklist cache cleanup (runs every hour)
     try:
         from core.auth import start_blacklist_cleanup_task  # deferred: avoids circular import
+
         start_blacklist_cleanup_task()
     except Exception as e:
         logger.warning("Blacklist cleanup task failed to start", error=str(e))
-
-
 
     yield
 
@@ -241,8 +240,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as e:
         logger.warning("Failed to shutdown process pool", error=str(e))
 
-
-
     # 1. Stop accepting new investigations
     app.state.accepting_requests = False
 
@@ -253,24 +250,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         pending = [t for t in _active_tasks.values() if not t.done()]
         if pending:
-            logger.info(
-                f"Waiting for {len(pending)} in-flight investigation(s) to complete..."
-            )
+            logger.info(f"Waiting for {len(pending)} in-flight investigation(s) to complete...")
             try:
                 await asyncio.wait_for(asyncio.gather(*pending), timeout=GRACEFUL_SHUTDOWN_TIMEOUT)
             except TimeoutError:
                 logger.warning(
                     "Graceful shutdown timeout — checkpointing remaining investigations",
-                    count=len(pending)
+                    count=len(pending),
                 )
                 # Checkpoint remaining investigations to DB for recovery
                 from core.session_persistence import get_session_persistence
+
                 try:
                     await get_session_persistence()
                     for task in pending:
                         try:
                             # Extract session_id from task if available
-                            if hasattr(task, 'get_name'):
+                            if hasattr(task, "get_name"):
                                 task_name = task.get_name()
                                 logger.info("Checkpointing investigation", task_name=task_name)
                                 # Task will be cancelled and can be recovered from Redis/DB state
@@ -324,6 +320,7 @@ app = FastAPI(
 # Configure observability (OpenTelemetry)
 setup_observability(app, settings)
 
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Return consistent 422 JSON for Pydantic validation errors."""
@@ -331,6 +328,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         status_code=422,
         content={"detail": exc.errors(), "type": "validation_error"},
     )
+
 
 # Configure CORS — restricted methods and headers
 
@@ -364,9 +362,7 @@ async def security_headers_middleware(request: Request, call_next):
         "form-action 'self';"
     )
     if settings.app_env == "production":
-        response.headers["Strict-Transport-Security"] = (
-            "max-age=31536000; includeSubDomains"
-        )
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
 
@@ -460,10 +456,7 @@ async def rate_limit_middleware(request: Request, call_next):
         # Hash the token so the raw bearer value is never written into Redis keys or logs
         identifier = "tok:" + hashlib.sha256(auth_header.encode()).hexdigest()[:32]
     elif session_cookie:
-        identifier = (
-            "cookie:"
-            + hashlib.sha256(session_cookie.encode()).hexdigest()[:32]
-        )
+        identifier = "cookie:" + hashlib.sha256(session_cookie.encode()).hexdigest()[:32]
     else:
         identifier = f"ip:{ip}"
 
@@ -500,7 +493,7 @@ async def rate_limit_middleware(request: Request, call_next):
             return JSONResponse(
                 status_code=429,
                 content={"detail": "Too many requests. Please try again later."},
-                headers={"Retry-After": str(window)}
+                headers={"Retry-After": str(window)},
             )
     except Exception as e:
         # Don't block requests if Redis is down, just log
@@ -601,9 +594,7 @@ if settings.debug:
     @app.middleware("http")
     async def diagnostic_middleware(request: Request, call_next):
         origin = request.headers.get("origin")
-        logger.info(
-            f"Incoming {request.method} to {request.url.path} from Origin: {origin}"
-        )
+        logger.info(f"Incoming {request.method} to {request.url.path} from Origin: {origin}")
         response = await call_next(request)
         return response
 
@@ -687,9 +678,7 @@ async def health_check():
         checks["postgres"] = "ok"
     except Exception as e:
         checks["postgres"] = (
-            "error: connection failed"
-            if not settings.debug
-            else f"error: {str(e)[:60]}"
+            "error: connection failed" if not settings.debug else f"error: {str(e)[:60]}"
         )
         overall_healthy = False
 
@@ -700,9 +689,7 @@ async def health_check():
         checks["redis"] = "ok"
     except Exception as e:
         checks["redis"] = (
-            "error: connection failed"
-            if not settings.debug
-            else f"error: {str(e)[:60]}"
+            "error: connection failed" if not settings.debug else f"error: {str(e)[:60]}"
         )
         overall_healthy = False
 
@@ -714,9 +701,7 @@ async def health_check():
         checks["qdrant"] = "ok"
     except Exception as e:
         checks["qdrant"] = (
-            "error: connection failed"
-            if not settings.debug
-            else f"error: {str(e)[:60]}"
+            "error: connection failed" if not settings.debug else f"error: {str(e)[:60]}"
         )
         overall_healthy = False
 
@@ -724,7 +709,7 @@ async def health_check():
     checks["ml_tools"] = {
         "status": "managed_by_worker",
     }
-        # ML tools not ready doesn't make the whole system unhealthy
+    # ML tools not ready doesn't make the whole system unhealthy
 
     status_code = 200 if overall_healthy else 503
     return JSONResponse(
@@ -764,6 +749,5 @@ async def ml_tools_health():
             "torch": str(settings.torch_home),
             "yolo": str(settings.yolo_model_dir),
             "easyocr": str(getattr(settings, "easyocr_model_dir", "/app/cache/easyocr")),
-        }
+        },
     }
-

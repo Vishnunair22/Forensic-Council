@@ -116,9 +116,7 @@ class AgentKeyPair:
             # Using the actual group order (not 2^key_size) is required for
             # correctness and avoids the operator-precedence pitfall in the
             # original  expression.
-            _P256_ORDER = (
-                0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
-            )
+            _P256_ORDER = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
             private_value = (int.from_bytes(seed, "big") % (_P256_ORDER - 1)) + 1
             private_key = ec.derive_private_key(private_value, curve, default_backend())
         else:
@@ -199,16 +197,14 @@ class KeyStore:
             derived = HKDF(
                 algorithm=hashes.SHA256(),
                 length=32,
-                salt=None,  # HKDF internally uses a zero-salt when None
+                salt=b"forensic-council-keystore-v1-salt",  # Fixed domain-separation salt
                 info=b"forensic-council-keystore-v1",
                 backend=default_backend(),
             ).derive(raw)
             fernet_key = base64.urlsafe_b64encode(derived)
             self._fernet = Fernet(fernet_key)
         except Exception as e:
-            logger.warning(
-                "Failed to initialize Fernet cipher for key encryption", error=str(e)
-            )
+            logger.warning("Failed to initialize Fernet cipher for key encryption", error=str(e))
             self._fernet = None
 
     def _derive_seed(self, agent_id: str) -> bytes:
@@ -261,9 +257,7 @@ class KeyStore:
                                 agent_id=agent_id,
                             )
                             continue
-                        key_pair = AgentKeyPair.from_pem(
-                            agent_id, pem_bytes.decode("utf-8")
-                        )
+                        key_pair = AgentKeyPair.from_pem(agent_id, pem_bytes.decode("utf-8"))
                         self._keys[agent_id] = key_pair
                     except Exception as e:
                         logger.warning(
@@ -323,9 +317,7 @@ class KeyStore:
             )
             logger.info("Saved key to PostgreSQL", agent_id=agent_id)
         except Exception as e:
-            logger.debug(
-                "Could not save key to PostgreSQL", agent_id=agent_id, error=str(e)
-            )
+            logger.debug("Could not save key to PostgreSQL", agent_id=agent_id, error=str(e))
 
     async def _retire_key_in_db(self, agent_id: str) -> None:
         """Mark the current active key for an agent as retired (is_active=false)."""
@@ -362,9 +354,7 @@ class KeyStore:
                     key_pair = AgentKeyPair.generate(agent_id)
                     self._keys[agent_id] = key_pair
                     await self._save_key_to_db(agent_id, key_pair)
-                    logger.info(
-                        "Generated independent key pair for agent", agent_id=agent_id
-                    )
+                    logger.info("Generated independent key pair for agent", agent_id=agent_id)
                 else:
                     # Deterministic fallback
                     seed = self._derive_seed(agent_id)

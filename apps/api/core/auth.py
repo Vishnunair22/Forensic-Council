@@ -22,9 +22,6 @@ from pydantic import BaseModel
 from core.config import get_settings
 from core.structured_logging import get_logger
 
-# Suppress passlib warning about bcrypt.__version__ attribute removed in bcrypt>=4.0
-warnings.filterwarnings("ignore", ".*error reading bcrypt version.*", UserWarning)
-
 logger = get_logger(__name__)
 
 # Password hashing
@@ -135,9 +132,7 @@ def create_access_token(
     if expires_delta:
         expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.now(UTC) + timedelta(
-            minutes=_settings.jwt_access_token_expire_minutes
-        )
+        expire = datetime.now(UTC) + timedelta(minutes=_settings.jwt_access_token_expire_minutes)
 
     to_encode = {
         "sub": user_id,
@@ -271,9 +266,7 @@ def _cleanup_local_blacklist() -> None:
     # Enforce max size by dropping oldest entries if needed
     if len(_recently_blacklisted) > _LOCAL_BLACKLIST_MAX_SIZE:
         sorted_items = sorted(_recently_blacklisted.items(), key=lambda item: item[1])
-        for k, _ in sorted_items[
-            : len(_recently_blacklisted) - _LOCAL_BLACKLIST_MAX_SIZE
-        ]:
+        for k, _ in sorted_items[: len(_recently_blacklisted) - _LOCAL_BLACKLIST_MAX_SIZE]:
             _recently_blacklisted.pop(k, None)
 
 
@@ -323,9 +316,7 @@ async def is_token_blacklisted(token: str) -> bool:
             if result is not None:
                 # Also cache locally for future lookups during Redis outages
                 # Default to 1 hour if we don't know the exact expiry
-                _recently_blacklisted[token_hash] = (
-                    time.time() + _LOCAL_BLACKLIST_MAX_AGE
-                )
+                _recently_blacklisted[token_hash] = time.time() + _LOCAL_BLACKLIST_MAX_AGE
                 return True
             return False
         else:
@@ -406,7 +397,9 @@ async def blacklist_token(token: str, expires_in_seconds: int) -> None:
             await redis.set(f"blacklist:{token_hash}", "1", ex=expires_in_seconds)
             logger.info("Token blacklisted", expires_in=expires_in_seconds)
     except Exception as e:
-        logger.warning("Failed to blacklist token in Redis (local+SQLite cache still active)", error=str(e))
+        logger.warning(
+            "Failed to blacklist token in Redis (local+SQLite cache still active)", error=str(e)
+        )
 
 
 async def get_current_user(

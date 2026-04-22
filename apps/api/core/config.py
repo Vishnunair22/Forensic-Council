@@ -39,7 +39,7 @@ class Settings(BaseSettings):
         env_file=[".env", "../.env"],
         env_file_encoding="utf-8",
         case_sensitive=False,
-        env_ignore_empty=True, # Treat empty strings as "not set" to allow defaults
+        env_ignore_empty=True,  # Treat empty strings as "not set" to allow defaults
         extra="ignore",  # Ignore unknown environment variables (allow extra vars)
     )
 
@@ -105,26 +105,15 @@ class Settings(BaseSettings):
     qdrant_api_key: str | None = Field(default=None, description="Qdrant API key")
 
     # PostgreSQL Configuration
-    postgres_host: str = Field(
-        default="localhost", description="PostgreSQL server host"
-    )
+    postgres_host: str = Field(default="localhost", description="PostgreSQL server host")
     postgres_port: int = Field(default=5432, description="PostgreSQL server port")
-    postgres_user: str = Field(
-        default="forensic_user", description="PostgreSQL username"
-    )
+    postgres_user: str = Field(default="forensic_user", description="PostgreSQL username")
     postgres_password: str = Field(
-        default="dev-" + "x" * 15,
-        description="PostgreSQL database password"
+        default="dev-" + "x" * 15, description="PostgreSQL database password"
     )
-    postgres_db: str = Field(
-        default="forensic_council", description="PostgreSQL database name"
-    )
-    postgres_min_pool_size: int = Field(
-        default=2, description="Min DB connection pool size"
-    )
-    postgres_max_pool_size: int = Field(
-        default=10, description="Max DB connection pool size"
-    )
+    postgres_db: str = Field(default="forensic_council", description="PostgreSQL database name")
+    postgres_min_pool_size: int = Field(default=2, description="Min DB connection pool size")
+    postgres_max_pool_size: int = Field(default=10, description="Max DB connection pool size")
 
     @field_validator("postgres_user")
     @classmethod
@@ -152,9 +141,7 @@ class Settings(BaseSettings):
                     "Set a strong, unique password via the POSTGRES_PASSWORD environment variable."
                 )
             if len(v) < 16:
-                raise ValueError(
-                    "POSTGRES_PASSWORD must be at least 16 characters in production!"
-                )
+                raise ValueError("POSTGRES_PASSWORD must be at least 16 characters in production!")
         return v
 
     @property
@@ -220,18 +207,16 @@ class Settings(BaseSettings):
     # Security Configuration
     signing_key: str = Field(
         default="dev-" + "x" * 31,
-        description='Key for signing audit entries. Generate with: python -c "import secrets; print(secrets.token_hex(32))"'
+        description='Key for signing audit entries. Generate with: python -c "import secrets; print(secrets.token_hex(32))"',
     )
     jwt_secret_key: str = Field(
         default="dev-" + "x" * 31,
-        description='Secret key for JWT generation. Generate with: python -c "import secrets; print(secrets.token_hex(32))"'
+        description='Secret key for JWT generation. Generate with: python -c "import secrets; print(secrets.token_hex(32))"',
     )
     jwt_access_token_expire_minutes: int = Field(
         default=60, description="JWT access token expiry in minutes"
     )
-    jwt_algorithm: str = Field(
-        default="RS256", description="JWT signing algorithm"
-    )
+    jwt_algorithm: str = Field(default="RS256", description="JWT signing algorithm")
     jwt_private_key: str | None = Field(
         default=None, description="RSA Private Key (PEM) for JWT signing"
     )
@@ -350,16 +335,24 @@ class Settings(BaseSettings):
         data = info.data if hasattr(info, "data") else {}
         env = data.get("app_env", "development")
         if env == "production":
-            _forbidden = ("change", "default", "dev", "generate", "placeholder", "secret-key", "strong", "example", "production")
+            _forbidden = (
+                "change",
+                "default",
+                "dev",
+                "generate",
+                "placeholder",
+                "secret-key",
+                "strong",
+                "example",
+                "production",
+            )
             if any(word in v.lower() for word in _forbidden):
                 raise ValueError(
                     "JWT_SECRET_KEY must be changed from the placeholder for production! "
                     "Set a strong, unique key via the JWT_SECRET_KEY environment variable."
                 )
             if len(v) < 32:
-                raise ValueError(
-                    "JWT_SECRET_KEY must be at least 32 characters in production!"
-                )
+                raise ValueError("JWT_SECRET_KEY must be at least 32 characters in production!")
 
             # Entropy check - must have diversity
             has_upper = any(c.isupper() for c in v)
@@ -378,9 +371,7 @@ class Settings(BaseSettings):
     default_iteration_ceiling: int = Field(
         default=20, description="Default iteration ceiling for agent loops"
     )
-    hitl_enabled: bool = Field(
-        default=True, description="Enable Human-in-the-Loop checkpoints"
-    )
+    hitl_enabled: bool = Field(default=True, description="Enable Human-in-the-Loop checkpoints")
     investigation_timeout: int = Field(
         default=600, description="Max seconds for a single investigation"
     )
@@ -400,9 +391,7 @@ class Settings(BaseSettings):
         default="none",
         description="LLM provider: groq (recommended), openai, anthropic, or none",
     )
-    llm_api_key: str | None = Field(
-        default=None, description="API key for LLM provider"
-    )
+    llm_api_key: str | None = Field(default=None, description="API key for LLM provider")
     llm_model: str = Field(
         default="llama-3.3-70b-versatile",
         description="LLM model. Groq: llama-3.3-70b-versatile. OpenAI: gpt-4o. Anthropic: claude-3-5-sonnet-20241022",
@@ -495,16 +484,17 @@ class Settings(BaseSettings):
             warnings.warn(
                 "GEMINI_API_KEY not set. Agents 1, 3, and 5 will use local fallback analysis "
                 "instead of Gemini vision. Get a free key at https://aistudio.google.com/apikey",
-                UserWarning, stacklevel=2,
+                UserWarning,
+                stacklevel=2,
             )
         elif len(v) < 20:
             warnings.warn(
                 "GEMINI_API_KEY appears too short (< 20 chars). Agents 1, 3, and 5 may skip "
                 "Gemini vision deep analysis — verify the key at https://aistudio.google.com/apikey",
-                UserWarning, stacklevel=2,
+                UserWarning,
+                stacklevel=2,
             )
         return v
-
 
     @field_validator("llm_api_key")
     @classmethod
@@ -531,15 +521,11 @@ class Settings(BaseSettings):
         return v
 
     # Retry Configuration
-    database_retry_max: int = Field(
-        default=5, description="Max database connection retries"
-    )
+    database_retry_max: int = Field(default=5, description="Max database connection retries")
     database_retry_delay: float = Field(
         default=1.0, description="Base database retry delay (seconds)"
     )
-    external_api_retry_max: int = Field(
-        default=3, description="Max external API retries"
-    )
+    external_api_retry_max: int = Field(default=3, description="Max external API retries")
     external_api_retry_delay: float = Field(
         default=1.0, description="Base external API retry delay (seconds)"
     )
@@ -589,16 +575,24 @@ class Settings(BaseSettings):
         data = info.data if hasattr(info, "data") else {}
         env = data.get("app_env", "development")
         if env == "production":
-            _forbidden = ("change", "default", "dev", "example", "generate", "placeholder", "secret-key", "strong", "production")
+            _forbidden = (
+                "change",
+                "default",
+                "dev",
+                "example",
+                "generate",
+                "placeholder",
+                "secret-key",
+                "strong",
+                "production",
+            )
             if any(word in v.lower() for word in _forbidden):
                 raise ValueError(
                     "SIGNING_KEY must be changed from the placeholder for production! "
                     'Generate with: python -c "import secrets; print(secrets.token_hex(32))"'
                 )
             if len(v) < 32:
-                raise ValueError(
-                    "SIGNING_KEY must be at least 32 characters in production!"
-                )
+                raise ValueError("SIGNING_KEY must be at least 32 characters in production!")
         return v
 
     @model_validator(mode="after")
@@ -644,10 +638,19 @@ def validate_production_settings() -> None:
     for var in ("BOOTSTRAP_ADMIN_PASSWORD", "BOOTSTRAP_INVESTIGATOR_PASSWORD"):
         val = os.environ.get(var, "").strip()
         if not val or any(p in val.lower() for p in _insecure_patterns):
-            errors.append(
-                f"{var} must be set to a strong, unique password for production"
-            )
-    _key_forbidden = ("dev-", "change", "default", "generate", "placeholder", "secret-key", "strong", "example", "production", "your_gemini_key")
+            errors.append(f"{var} must be set to a strong, unique password for production")
+    _key_forbidden = (
+        "dev-",
+        "change",
+        "default",
+        "generate",
+        "placeholder",
+        "secret-key",
+        "strong",
+        "example",
+        "production",
+        "your_gemini_key",
+    )
     _sk = s.signing_key.lower()
     _jk = s.jwt_secret_key.lower()
     _gk = (s.gemini_api_key or "").lower()
@@ -658,7 +661,7 @@ def validate_production_settings() -> None:
         )
     if any(w in _jk for w in _key_forbidden) or len(s.jwt_secret_key) < 32:
         errors.append(
-            'JWT_SECRET_KEY must be changed from placeholder and at least 32 characters for production'
+            "JWT_SECRET_KEY must be changed from placeholder and at least 32 characters for production"
         )
     if "your_gemini_key" in _gk:
         errors.append(
@@ -677,10 +680,5 @@ def validate_production_settings() -> None:
             )
     if errors:
         raise ValueError(
-            "Production deployment validation failed:\n"
-            + "\n".join(f"  - {e}" for e in errors)
+            "Production deployment validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
         )
-
-
-# Convenience alias
-settings = get_settings()

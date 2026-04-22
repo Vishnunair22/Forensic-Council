@@ -8,7 +8,6 @@ Arbiter's overall deliberation and the per-agent summaries.
 """
 
 
-
 class ForensicPolicy:
     """
     Centralised registry for forensic criteria and reliability weights.
@@ -43,7 +42,6 @@ class ForensicPolicy:
         "splicing_detect": 0.75,
         "audio_splice_detect": 0.75,
         "rolling_shutter_validation": 0.75,
-        "rppg_liveness_check": 0.75,
         "adversarial_robustness_check": 0.70,
         "voice_clone_deep_ensemble": 0.80,
         "anti_spoofing_deep_ensemble": 0.80,
@@ -101,15 +99,9 @@ class ForensicPolicy:
     @classmethod
     def is_authentic(cls, confidence: float, error_rate: float) -> bool:
         """Check if metrics meet the AUTHENTIC threshold."""
-        return (
-            confidence >= cls.AGENT_AUTHENTIC_CONF
-            and error_rate <= cls.AGENT_AUTHENTIC_ERR
-        )
+        return confidence >= cls.AGENT_AUTHENTIC_CONF and error_rate <= cls.AGENT_AUTHENTIC_ERR
 
     @classmethod
     def is_suspicious(cls, confidence: float, error_rate: float) -> bool:
         """Check if metrics meet the SUSPICIOUS threshold."""
-        return (
-            confidence < cls.AGENT_SUSPICIOUS_CONF
-            and error_rate > cls.AGENT_SUSPICIOUS_ERR
-        )
+        return confidence < cls.AGENT_SUSPICIOUS_CONF and error_rate > cls.AGENT_SUSPICIOUS_ERR

@@ -26,8 +26,6 @@ specific:
   "anti-forensic perturbation stability": "adversarial_robustness_check"
   "run splicing_detect": "splicing_detect"
   "advanced image composition analysis": "splicing_detect"
-  "run rppg_liveness_check": "rppg_liveness_check"
-  "remote ppg biometric liveness": "rppg_liveness_check"
   "run audio_visual_sync verification": "audio_visual_sync"
   "audio_visual_sync verification": "audio_visual_sync"
   "run c2pa_validator": "provenance_chain_verify"

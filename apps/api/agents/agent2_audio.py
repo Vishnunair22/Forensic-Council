@@ -154,6 +154,7 @@ class Agent2Audio(ForensicAgent):
                 return {"error": str(e), "available": False, "deep_ensemble": True}
 
         registry.register("voice_clone_deep_ensemble", voice_clone_deep_ensemble_handler, "Deep ensemble voice clone detection")
+        registry.register("anti_spoofing_deep_ensemble", anti_spoofing_deep_ensemble_handler, "Deep ensemble audio anti-spoofing")
         # ── Gemini Vision Handler (Audio Forensic synthesis) ───────────────────
         # Note: Even for audio, Gemini Vision acts as a multi-modal synthesis engine
         # and a neural grounding signal for Agent 4 (Video).

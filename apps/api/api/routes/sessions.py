@@ -87,12 +87,9 @@ def _forensic_report_to_dto(report) -> ReportDTO:
             confidence_raw=_opt_float(d.get("confidence_raw")),
             evidence_verdict=evidence_verdict,
             calibrated=bool(d.get("calibrated", False)),
-            calibrated_probability=_opt_float(d.get("raw_confidence_score"))
-            if d.get("raw_confidence_score") is not None
-            else _opt_float(d.get("calibrated_probability")),
+            calibrated_probability=_opt_float(d.get("calibrated_probability")),
             raw_confidence_score=_opt_float(d.get("raw_confidence_score"))
-            if d.get("raw_confidence_score") is not None
-            else _opt_float(d.get("calibrated_probability")),
+            or _opt_float(d.get("confidence_raw")),
             calibration_status=str(d.get("calibration_status", "UNCALIBRATED")),
             court_statement=d.get("court_statement") or meta.get("court_statement"),
             robustness_caveat=bool(d.get("robustness_caveat", False)),
@@ -547,11 +544,8 @@ async def live_updates(websocket: WebSocket, session_id: str):
         subscriber_task.cancel()
 
         # Wait for tasks to finish
-        for task in [ping_task, idle_task, subscriber_task]:
-            try:
-                await task
-            except (asyncio.CancelledError, Exception):
-                pass
+        # BUG-11: Clean up background tasks concurrently and safely
+        await asyncio.gather(ping_task, idle_task, subscriber_task, return_exceptions=True)
 
         unregister_websocket(session_id, websocket)
 
@@ -745,12 +739,9 @@ async def get_session_report(
                         confidence_raw=_opt_float(f.get("confidence_raw")),
                         evidence_verdict=evidence_verdict,
                         calibrated=bool(f.get("calibrated", False)),
-                        calibrated_probability=_opt_float(f.get("raw_confidence_score"))
-                        if f.get("raw_confidence_score") is not None
-                        else _opt_float(f.get("calibrated_probability")),
+                        calibrated_probability=_opt_float(f.get("calibrated_probability")),
                         raw_confidence_score=_opt_float(f.get("raw_confidence_score"))
-                        if f.get("raw_confidence_score") is not None
-                        else _opt_float(f.get("calibrated_probability")),
+                        or _opt_float(f.get("confidence_raw")),
                         court_statement=f.get("court_statement"),
                         robustness_caveat=bool(f.get("robustness_caveat", False)),
                         robustness_caveat_detail=f.get("robustness_caveat_detail"),

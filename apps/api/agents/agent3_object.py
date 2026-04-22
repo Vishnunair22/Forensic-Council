@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from functools import cached_property
 from typing import Any
 
 from agents.base_agent import ForensicAgent
@@ -32,6 +33,7 @@ from core.tool_registry import ToolRegistry
 from core.working_memory import WorkingMemory
 
 logger = get_logger(__name__)
+
 
 class Agent3Object(ForensicAgent):
     """
@@ -70,7 +72,7 @@ class Agent3Object(ForensicAgent):
     def inject_agent1_context(self, agent1_gemini_findings: dict) -> None:
         self._agent1_context = agent1_gemini_findings or {}
 
-    @property
+    @cached_property
     def _is_screen_capture(self) -> bool:
         return is_screen_capture_like(self.evidence_artifact)
 
@@ -100,15 +102,19 @@ class Agent3Object(ForensicAgent):
         detections = object_ctx.get("detections", []) if isinstance(object_ctx, dict) else []
         tasks = []
         if detections:
-            tasks.extend([
-                "Run secondary_classification on low-confidence objects",
-                "Run scale_validation on confirmed objects",
-                "Run adversarial_robustness_check against object detection evasion",
-            ])
-        tasks.extend([
-            "Run lighting_consistency for deep ROI-aware shadow-angle audit",
-            "Run gemini_deep_forensic to identify content, detect weapons, describe context",
-        ])
+            tasks.extend(
+                [
+                    "Run secondary_classification on low-confidence objects",
+                    "Run scale_validation on confirmed objects",
+                    "Run adversarial_robustness_check against object detection evasion",
+                ]
+            )
+        tasks.extend(
+            [
+                "Run lighting_consistency for deep ROI-aware shadow-angle audit",
+                "Run gemini_deep_forensic to identify content, detect weapons, describe context",
+            ]
+        )
         return tasks
 
     @property
@@ -136,7 +142,11 @@ class Agent3Object(ForensicAgent):
 
         # Adversarial robustness from image domain (relevant to object detection evasion)
         image_h = ImageHandlers(self)
-        registry.register("adversarial_robustness_check", image_h.adversarial_robustness_check_handler, "Adversarial robustness check")
+        registry.register(
+            "adversarial_robustness_check",
+            image_h.adversarial_robustness_check_handler,
+            "Adversarial robustness check",
+        )
 
         # Gemini deep forensic analysis handler
         _gemini = GeminiVisionClient(self.config)
@@ -148,7 +158,12 @@ class Agent3Object(ForensicAgent):
                     self.inter_agent_bus.signal_event(
                         self.session_id,
                         "agent3_initial_signal",
-                        {"progress": msg, "object_count": self._tool_context.get("object_detection", {}).get("detection_count", 0)}
+                        {
+                            "progress": msg,
+                            "object_count": self._tool_context.get("object_detection", {}).get(
+                                "detection_count", 0
+                            ),
+                        },
                     )
             except Exception as e:
                 logger.debug(f"{self.agent_id}: Gemini signal callback failed", error=str(e))
@@ -163,7 +178,9 @@ class Agent3Object(ForensicAgent):
                     try:
                         await asyncio.wait_for(asyncio.shield(_ctx_event.wait()), timeout=60.0)
                     except TimeoutError:
-                        logger.warning(f"{self.agent_id}: Agent1 context wait timed out after 60s — proceeding without image-integrity context")
+                        logger.warning(
+                            f"{self.agent_id}: Agent1 context wait timed out after 60s — proceeding without image-integrity context"
+                        )
                         await self._record_tool_error(
                             "agent1_context_sync",
                             "Agent1 Gemini context unavailable (60s timeout) — object/scene analysis may lack image-integrity grounding",
@@ -182,7 +199,8 @@ class Agent3Object(ForensicAgent):
 
                     # Extract high-value forensic keys for Gemini
                     dynamic_context[tool_name] = {
-                        k: v for k, v in result.items()
+                        k: v
+                        for k, v in result.items()
                         if k not in ("detections", "artifact", "error", "box")
                     }
                     if tool_name == "object_detection":
@@ -206,7 +224,7 @@ class Agent3Object(ForensicAgent):
                     finding = await _gemini.deep_forensic_analysis(
                         file_path=artifact.file_path,
                         exif_summary=context_summary,
-                        signal_callback=_gemini_signal_callback
+                        signal_callback=_gemini_signal_callback,
                     )
 
                     result = finding.to_finding_dict(self.agent_id)
@@ -218,7 +236,7 @@ class Agent3Object(ForensicAgent):
                         "error": str(e),
                         "status": "FAILED",
                         "finding_type": "Gemini analysis error",
-                        "reasoning_summary": "Deep forensic analysis via Gemini LLM failed or timed out."
+                        "reasoning_summary": "Deep forensic analysis via Gemini LLM failed or timed out.",
                     }
                     await self._record_tool_error("gemini_deep_forensic", str(e))
                     return err_result
@@ -228,7 +246,7 @@ class Agent3Object(ForensicAgent):
                     "error": str(e),
                     "status": "FAILED",
                     "finding_type": "Handler error",
-                    "reasoning_summary": "Deep forensic handler encountered an unexpected error."
+                    "reasoning_summary": "Deep forensic handler encountered an unexpected error.",
                 }
 
         registry.register(

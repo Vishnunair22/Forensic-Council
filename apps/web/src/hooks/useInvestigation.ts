@@ -32,6 +32,7 @@ function supportedAgentIdsForMime(mimeType?: string | null): Set<string> {
     supported.add("Agent2");
   }
   if (mimeType.startsWith("video/")) {
+    supported.add("Agent2");
     supported.add("Agent3");
     supported.add("Agent4");
   }

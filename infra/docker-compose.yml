@@ -46,6 +46,9 @@ x-backend-env: &backend-env
   LLM_FALLBACK_MODELS: ${LLM_FALLBACK_MODELS:-openai/gpt-oss-20b,llama-3.1-8b-instant}
   LLM_ENABLE_REACT_REASONING: ${LLM_ENABLE_REACT_REASONING:-false}
   LLM_ENABLE_POST_SYNTHESIS: ${LLM_ENABLE_POST_SYNTHESIS:-true}
+  # Docker stacks use the worker queue by default (USE_REDIS_WORKER=true).
+  # Direct `uv run` uses in-process mode (USE_REDIS_WORKER=false).
+  # Ensure the `worker` service is running when USE_REDIS_WORKER=true.
   USE_REDIS_WORKER: ${USE_REDIS_WORKER:-true}
   GEMINI_API_KEY: ${GEMINI_API_KEY:-}
   GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
