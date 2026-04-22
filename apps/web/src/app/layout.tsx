@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import { Poppins, Geist, Geist_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { GlobalNavbar } from "@/components/ui/GlobalNavbar";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { RouteExperience } from "@/components/ui/RouteExperience";
@@ -9,22 +9,15 @@ import { MicroscopeBackground } from "@/components/ui/MicroscopeBackground";
 import { QueryProvider } from "@/components/ui/QueryProvider";
 import "./globals.css";
 
-const poppins = Poppins({
+const inter = Inter({
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-  variable: "--font-poppins",
+  variable: "--font-inter",
   display: "swap",
 });
 
-const geist = Geist({
+const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  variable: "--font-geist",
-  display: "swap",
-});
-
-const geistMono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-geist-mono",
+  variable: "--font-mono",
   display: "swap",
 });
 
@@ -43,7 +36,7 @@ export default function RootLayout({
   return (
     <html lang="en" dir="ltr" data-scroll-behavior="smooth" suppressHydrationWarning>
       <body
-        className={`${poppins.variable} ${geist.variable} ${geistMono.variable} font-sans text-slate-100 antialiased min-h-screen flex flex-col`}
+        className={`${inter.variable} ${jetbrainsMono.variable} font-sans text-slate-100 antialiased min-h-screen flex flex-col`}
       >
         <MicroscopeBackground />
         <Suspense fallback={null}>

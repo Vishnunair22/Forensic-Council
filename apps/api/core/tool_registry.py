@@ -25,15 +25,18 @@ logger = get_logger(__name__)
 TOOL_TIMEOUTS: dict[str, float] = {
     # OCR can cold-start slowly in Docker. Keep it bounded so image analysis
     # never blocks the analyst decision gate.
-    "extract_text_from_image": 15.0,
-    "extract_evidence_text": 15.0,
-    "neural_fingerprint": 25.0,
-    "noiseprint_cluster": 30.0,
-    "neural_ela": 30.0,
+    "extract_text_from_image": 18.0,
+    "extract_evidence_text": 18.0,
+    "neural_fingerprint": 30.0,
+    "noiseprint_cluster": 35.0,
+    "neural_ela": 35.0,
     # Gemini deep forensic includes up to 60s wait for Agent1 context
     # plus Gemini API latency. Give it headroom above the inner wait.
-    "gemini_deep_forensic": 90.0,
+    "gemini_deep_forensic": 120.0,
 }
+
+DEFAULT_TOOL_TIMEOUT = 60.0
+
 
 
 class Tool(BaseModel):
@@ -222,7 +225,8 @@ class ToolRegistry:
             # the entire agent and timing out the full investigation.
             # 60s is generous for in-process tools; ML subprocesses have
             # their own tighter timeouts inside run_ml_tool.
-            timeout_s = TOOL_TIMEOUTS.get(tool_name, 45.0)
+            timeout_s = TOOL_TIMEOUTS.get(tool_name, DEFAULT_TOOL_TIMEOUT)
+
             output = await asyncio.wait_for(handler(input_data), timeout=timeout_s)
             result = ToolResult(tool_name=tool_name, success=True, output=output)
         except TimeoutError:

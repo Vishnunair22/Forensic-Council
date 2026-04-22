@@ -25,6 +25,7 @@ from core.evidence import EvidenceArtifact
 from core.gemini_client import GeminiVisionClient
 from core.handlers.image import ImageHandlers
 from core.handlers.scene import SceneHandlers
+from core.media_kind import is_screen_capture_like
 from core.persistence.evidence_store import EvidenceStore
 from core.structured_logging import get_logger
 from core.tool_registry import ToolRegistry
@@ -70,12 +71,20 @@ class Agent3Object(ForensicAgent):
         self._agent1_context = agent1_gemini_findings or {}
 
     @property
+    def _is_screen_capture(self) -> bool:
+        return is_screen_capture_like(self.evidence_artifact)
+
+    @property
     def agent_name(self) -> str:
         return "Agent3_ObjectWeapon"
 
     @property
     def task_decomposition(self) -> list[str]:
         # PHASE 1: INITIAL ANALYSIS (Neural Refined)
+        if self._is_screen_capture:
+            return [
+                "Run screenshot_scene_applicability for screen-capture object/scene scope",
+            ]
         return [
             "Run object_detection on full scene",
             "Run vector_contraband_search for high-dimensional weapon/threat detection",
@@ -85,6 +94,8 @@ class Agent3Object(ForensicAgent):
 
     @property
     def deep_task_decomposition(self) -> list[str]:
+        if self._is_screen_capture:
+            return []
         object_ctx = self._tool_context.get("object_detection", {})
         detections = object_ctx.get("detections", []) if isinstance(object_ctx, dict) else []
         tasks = []

@@ -14,21 +14,21 @@ by staying narrow and deep.
 from __future__ import annotations
 
 import asyncio
-
-from agents.base_agent import ForensicAgent
-from core.gemini_client import GeminiVisionClient
-from core.handlers.metadata import MetadataHandlers
-from core.handlers.video import VideoHandlers
-from core.structured_logging import get_logger
-from core.tool_registry import ToolRegistry
-
 import uuid
 from typing import Any
+
+from agents.base_agent import ForensicAgent
 from core.config import Settings
 from core.custody_logger import CustodyLogger
 from core.episodic_memory import EpisodicMemory
 from core.evidence import EvidenceArtifact
+from core.gemini_client import GeminiVisionClient
+from core.handlers.metadata import MetadataHandlers
+from core.handlers.video import VideoHandlers
+from core.media_kind import is_digitally_created_image, is_screen_capture_like
 from core.persistence.evidence_store import EvidenceStore
+from core.structured_logging import get_logger
+from core.tool_registry import ToolRegistry
 from core.working_memory import WorkingMemory
 
 logger = get_logger(__name__)
@@ -72,16 +72,30 @@ class Agent5Metadata(ForensicAgent):
         self._agent1_context_event: asyncio.Event | None = None
 
     @property
+    def _is_digital_image(self) -> bool:
+        return is_digitally_created_image(self.evidence_artifact)
+
+    @property
+    def _is_screen_capture(self) -> bool:
+        return is_screen_capture_like(self.evidence_artifact)
+
+    @property
     def agent_name(self) -> str:
         return "Agent5_MetadataContext"
 
     @property
     def task_decomposition(self) -> list[str]:
         # PHASE 1: INITIAL ANALYSIS (Neural Refined)
-        return [
+        core_tasks = [
             "Run file_hash_verify against ingestion hash",
             "Run exif_extract to capture all metadata fields",
+            "Run file_structure_analysis for binary anomalies in headers and trailers",
+            "Run hex_signature_scan for raw-byte software signatures",
             "Run compression_risk_audit to check for social media footprints",
+        ]
+        if self._is_digital_image:
+            return core_tasks
+        return core_tasks + [
             "Run exif_isolation_forest for ML-based field outlier detection",
             "Run astro_grounding to verify shadow-sun-gps-time parity",
             "Run gps_timezone_validate for coordinate timeline checking",
@@ -90,9 +104,13 @@ class Agent5Metadata(ForensicAgent):
 
     @property
     def deep_task_decomposition(self) -> list[str]:
+        if self._is_screen_capture:
+            return []
+        if self._is_digital_image:
+            return [
+                "Run provenance_chain_verify for C2PA and digital provenance manifests",
+            ]
         return [
-            "Run file_structure_analysis for binary anomalies",
-            "Run hex_signature_scan on raw bytes",
             "Run metadata_anomaly_score for probabilistic fabrication detection",
             "Run provenance_chain_verify for C2PA and digital provenance manifests",
             "Run camera_profile_match against claimed device model",
@@ -105,9 +123,10 @@ class Agent5Metadata(ForensicAgent):
 
     async def build_initial_thought(self) -> str:
         return (
-            f"Starting metadata and context analysis for {self.evidence_artifact.artifact_id}. "
-            f"I will extract all available EXIF data, validate GPS-timestamp consistency, "
-            f"and analyze the file structure for any signs of fabrication or steganography."
+            f"Starting provenance and binary-integrity analysis for {self.evidence_artifact.artifact_id}. "
+            f"I will perform a deep bitstream audit to hunt for chimeric file structures, "
+            f"hidden editor signatures in the trailer, and EXIF/GPS inconsistencies. "
+            f"My goal is to determine if the file's provenance matches its claimed technical origin."
         )
 
     @property

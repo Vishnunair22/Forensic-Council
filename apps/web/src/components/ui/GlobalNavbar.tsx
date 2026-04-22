@@ -50,21 +50,35 @@ export function GlobalNavbar() {
         aria-current={pathname === "/" ? "page" : undefined}
       >
         <motion.div
-          className="w-6 h-6 aspect-square shrink-0 rounded-sm flex items-center justify-center text-[9px] font-black text-black shadow-[0_0_25px_rgba(34,211,238,0.3)]"
-          style={{
-            background: "linear-gradient(135deg, #22d3ee 0%, #8b5cf6 100%)",
-          }}
-          whileHover={{ scale: 1.05 }}
+          className="relative w-10 h-10 flex items-center justify-center rounded-xl bg-gradient-to-br from-primary to-black p-[1px] shadow-[0_0_20px_rgba(0,255,65,0.2)] group-hover:shadow-[0_0_30px_rgba(0,255,65,0.4)] transition-all duration-500"
+          whileHover={{ scale: 1.05, rotate: -5 }}
           whileTap={{ scale: 0.95 }}
-          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-          aria-hidden="true"
         >
-          FC
+          <div className="w-full h-full bg-black rounded-[11px] flex items-center justify-center overflow-hidden relative">
+            <span className="text-primary font-mono font-black text-sm tracking-tighter z-10">FC</span>
+            <motion.div 
+               className="absolute inset-0 bg-primary/10"
+               animate={{ opacity: [0.1, 0.3, 0.1] }}
+               transition={{ duration: 2, repeat: Infinity }}
+            />
+          </div>
+          
+          {/* Animated Glow Ring */}
+          <motion.div 
+            className="absolute -inset-1 border border-primary/20 rounded-2xl"
+            animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.6, 0.3] }}
+            transition={{ duration: 3, repeat: Infinity }}
+          />
         </motion.div>
 
-        <span className="text-base font-bold tracking-tight text-white/90 group-hover:text-primary transition-colors duration-300 font-heading">
-          Forensic <span className="text-primary group-hover:text-white">Council</span>
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xl font-bold tracking-tighter text-white/90 group-hover:text-white transition-colors duration-300">
+            Forensic
+          </span>
+          <span className="text-xl font-bold tracking-tighter text-primary group-hover:text-glow-green transition-all duration-300">
+            Council
+          </span>
+        </div>
       </button>
 
 

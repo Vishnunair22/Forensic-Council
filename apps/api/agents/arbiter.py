@@ -366,11 +366,13 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             err = m.get("error_rate", 0)
 
             agent_findings = findings.get(aid, [])
-            positive = sum(1 for f in agent_findings if evidence_verdict_of(f) == "POSITIVE")
+            from agents.arbiter_verdict import MIN_CONFIDENCE_THRESHOLD, confidence_of
+            positive = sum(1 for f in agent_findings if evidence_verdict_of(f) == "POSITIVE" and (confidence_of(f) or 0) >= MIN_CONFIDENCE_THRESHOLD)
             inconclusive = sum(1 for f in agent_findings if evidence_verdict_of(f) == "INCONCLUSIVE")
 
             if positive > 0:
                 v = "SUSPICIOUS"
+
             elif inconclusive > 0:
                 v = "INCONCLUSIVE"
             elif ForensicPolicy.is_authentic(conf, err):

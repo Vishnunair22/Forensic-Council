@@ -277,7 +277,17 @@ def confidence_of(finding: dict[str, Any], default: float | None = None) -> floa
     return default
 
 
+# Confidence floor for a signal to be considered "Positive" or "Strong" in
+# final report synthesis. Low-confidence semantic matches (e.g. CLIP 5%)
+# are excluded from manipulation probability and should be excluded from
+# "Suspicious" status labels to prevent false alarms.
+MIN_CONFIDENCE_THRESHOLD = 0.15
+
+
 def _has_legacy_positive_signal(finding: dict[str, Any]) -> bool:
+
+
+
     meta = finding.get("metadata") or {}
     return (
         meta.get("manipulation_detected") is True
@@ -350,7 +360,8 @@ def calculate_manipulation_probability(
 
         if _is_direct_manip:
             _c = confidence_of(_f, default=0.5) or 0.5
-            if _c >= 0.30:
+            if _c >= MIN_CONFIDENCE_THRESHOLD:
+
                 _tool = (
                     str(_meta.get("tool_name", _f.get("finding_type", "")))
                     .lower()

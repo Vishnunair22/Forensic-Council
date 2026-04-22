@@ -119,8 +119,11 @@ export function ToolRow({
       {/* Per-tool specific signal — raw output from the tool */}
       <div className="space-y-2">
        <h5 className="text-[9px] font-black text-white/20 tracking-[0.3em]">Diagnostic Intelligence</h5>
-       <p className="text-[13px] text-white/70 leading-relaxed font-medium font-mono tracking-tight">
-        {(finding.metadata?.raw_tool_summary as string) || finding.reasoning_summary || "No diagnostic output."}
+       <p className={clsx(
+        "text-[13px] text-white/70 leading-relaxed font-medium tracking-tight",
+        !finding.metadata?.llm_refined_summary && "font-mono"
+       )}>
+        {(finding.metadata?.llm_refined_summary as string) || (finding.metadata?.raw_tool_summary as string) || finding.reasoning_summary || "No diagnostic output."}
        </p>
       </div>
 

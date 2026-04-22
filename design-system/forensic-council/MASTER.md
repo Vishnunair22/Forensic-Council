@@ -7,8 +7,8 @@
 ---
 
 **Project:** Forensic Council
-**Generated:** 2026-04-22 07:47:46
-**Category:** Smart Home/IoT Dashboard
+**Generated:** 2026-04-22 15:55:29
+**Category:** Luxury/Premium Brand
 
 ---
 
@@ -18,24 +18,24 @@
 
 | Role | Hex | CSS Variable |
 |------|-----|--------------|
-| Primary | `#6366F1` | `--color-primary` |
-| Secondary | `#818CF8` | `--color-secondary` |
-| CTA/Accent | `#22C55E` | `--color-cta` |
-| Background | `#EEF2FF` | `--color-background` |
-| Text | `#312E81` | `--color-text` |
+| Primary | `#0EA5E9` | `--color-primary` |
+| Secondary | `#38BDF8` | `--color-secondary` |
+| CTA/Accent | `#F97316` | `--color-cta` |
+| Background | `#F0F9FF` | `--color-background` |
+| Text | `#0C4A6E` | `--color-text` |
 
-**Color Notes:** Digital indigo + buy green
+**Color Notes:** Sky blue trust + warm CTA
 
 ### Typography
 
-- **Heading Font:** Fira Code
-- **Body Font:** Fira Sans
-- **Mood:** dashboard, data, analytics, code, technical, precise
-- **Google Fonts:** [Fira Code + Fira Sans](https://fonts.google.com/share?selection.family=Fira+Code:wght@400;500;600;700|Fira+Sans:wght@300;400;500;600;700)
+- **Heading Font:** Inter
+- **Body Font:** Inter
+- **Mood:** spatial, legible, glass, system, clean, neutral
+- **Google Fonts:** [Inter + Inter](https://fonts.google.com/share?selection.family=Inter:wght@300;400;500;600)
 
 **CSS Import:**
 ```css
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 ```
 
 ### Spacing Variables
@@ -68,7 +68,7 @@
 ```css
 /* Primary Button */
 .btn-primary {
-  background: #22C55E;
+  background: #F97316;
   color: white;
   padding: 12px 24px;
   border-radius: 8px;
@@ -85,8 +85,8 @@
 /* Secondary Button */
 .btn-secondary {
   background: transparent;
-  color: #6366F1;
-  border: 2px solid #6366F1;
+  color: #0EA5E9;
+  border: 2px solid #0EA5E9;
   padding: 12px 24px;
   border-radius: 8px;
   font-weight: 600;
@@ -99,7 +99,7 @@
 
 ```css
 .card {
-  background: #EEF2FF;
+  background: #F0F9FF;
   border-radius: 12px;
   padding: 24px;
   box-shadow: var(--shadow-md);
@@ -125,9 +125,9 @@
 }
 
 .input:focus {
-  border-color: #6366F1;
+  border-color: #0EA5E9;
   outline: none;
-  box-shadow: 0 0 0 3px #6366F120;
+  box-shadow: 0 0 0 3px #0EA5E920;
 }
 ```
 
@@ -153,28 +153,28 @@
 
 ## Style Guidelines
 
-**Style:** Glassmorphism
+**Style:** Liquid Glass
 
-**Keywords:** Frosted glass, transparent, blurred background, layered, vibrant background, light source, depth, multi-layer
+**Keywords:** Flowing glass, morphing, smooth transitions, fluid effects, translucent, animated blur, iridescent, chromatic aberration
 
-**Best For:** Modern SaaS, financial dashboards, high-end corporate, lifestyle apps, modal overlays, navigation
+**Best For:** Premium SaaS, high-end e-commerce, creative platforms, branding experiences, luxury portfolios
 
-**Key Effects:** Backdrop blur (10-20px), subtle border (1px solid rgba white 0.2), light reflection, Z-depth
+**Key Effects:** Morphing elements (SVG/CSS), fluid animations (400-600ms curves), dynamic blur (backdrop-filter), color transitions
 
 ### Page Pattern
 
-**Pattern Name:** Video-First Hero
+**Pattern Name:** Comparison Table Focus
 
-- **Conversion Strategy:** 86% higher engagement with video. Add captions for accessibility. Compress video for performance.
-- **CTA Placement:** Overlay on video (center/bottom) + Bottom section
-- **Section Order:** 1. Hero with video background, 2. Key features overlay, 3. Benefits section, 4. CTA
+- **Conversion Strategy:** Show value vs competitors. 35% higher conversion. Be factual. Include pricing if favorable.
+- **CTA Placement:** After comparison table (highlighted row) + Bottom
+- **Section Order:** 1. Hero (problem statement), 2. Comparison matrix (you vs competitors), 3. Feature deep-dive, 4. Winner CTA
 
 ---
 
 ## Anti-Patterns (Do NOT Use)
 
-- ❌ Slow updates
-- ❌ No automation
+- ❌ Cheap visuals
+- ❌ Fast animations
 
 ### Additional Forbidden Patterns
 

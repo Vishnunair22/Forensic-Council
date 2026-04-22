@@ -12,61 +12,63 @@
 
 /* ── Theme Variables ──────────────────────────────────────────────────────── */
 @theme {
-  /* ── Core Branding (Argus Core Aesthetic) ── */
-  --color-primary: #22d3ee;       /* Cyan-400 — Electric, technical cyan */
-  --color-primary-rgb: 34, 211, 238;
+  /* ── Core Branding (Liquid Glass Aesthetic) ── */
+  --color-primary: #00FF41;       /* Matrix Green — Forensic integrity */
+  --color-primary-rgb: 0, 255, 65;
 
-  --color-accent: #8b5cf6;        /* Violet-500 — Deep pass investigation highlights */
-  --color-accent-rgb: 139, 92, 246;
+  --color-accent: #FF3333;        /* Alert Red — Critical findings */
+  --color-accent-rgb: 255, 51, 51;
 
-  --color-success: #22d3ee;       /* Authentic — synced with primary cyan */
-  --color-success-rgb: 34, 211, 238;
+  --color-success: #00FF41;       /* Authentic */
+  --color-success-rgb: 0, 255, 65;
 
-  --color-danger: #f43f5e;        /* Rose-500 — Manipulation indicators */
-  --color-danger-rgb: 244, 63, 94;
+  --color-danger: #FF3333;        /* Manipulation */
+  --color-danger-rgb: 255, 51, 51;
 
-  --color-warning: #f59e0b;       /* Amber-500 — Alerts/Diagnostic */
-  --color-warning-rgb: 245, 158, 11;
+  --color-warning: #FFD700;       /* Gold — Diagnostic */
+  --color-warning-rgb: 255, 215, 0;
 
-  --color-info: #3b82f6;          /* Blue-500 */
-  --color-info-rgb: 59, 130, 246;
+  --color-info: #00A3FF;          /* Info Blue */
+  --color-info-rgb: 0, 163, 255;
 
-  --color-background: #020617;    /* Deep Obsidian */
-  --color-foreground: #f8fafc;    /* Slate-50 — High contrast foreground */
+  --color-background: #000000;    /* Pure Obsidian */
+  --color-foreground: #E0E0E0;    /* Muted Silver */
 
-  /* ── Surface Elevations (Argus Glassmorphism) ── */
-  --color-surface-1: rgba(15, 23, 42, 0.4);
-  --color-surface-2: rgba(15, 23, 42, 0.6);
-  --color-surface-3: rgba(15, 23, 42, 0.8);
+  /* ── Surface Elevations (Liquid Glass) ── */
+  --color-surface-1: rgba(13, 13, 13, 0.4);
+  --color-surface-2: rgba(13, 13, 13, 0.6);
+  --color-surface-3: rgba(13, 13, 13, 0.8);
 
-  --color-surface-low:  #020617;
-  --color-surface-mid:  #0f172a;
-  --color-surface-high: #1e293b;
+  --color-surface-low:  #000000;
+  --color-surface-mid:  #0D0D0D;
+  --color-surface-high: #1A1A1A;
 
-  --color-border-subtle: rgba(34, 211, 238, 0.1);
-  --color-border-bold:   rgba(34, 211, 238, 0.2);
+  --color-border-subtle: rgba(0, 255, 65, 0.1);
+  --color-border-bold:   rgba(0, 255, 65, 0.2);
 
-  /* ── Typography (Premium Rounded) ── */
-  --font-sans:    "Nunito Sans", system-ui, sans-serif;
-  --font-mono:    "JetBrains Mono", monospace;
-  --font-heading: "Varela Round", sans-serif;
+  /* ── Typography (Spatial Technical) ── */
+  --font-sans:    var(--font-inter), system-ui, sans-serif;
+  --font-mono:    var(--font-mono), monospace;
+  --font-heading: var(--font-inter), sans-serif;
 
   /* ── Type Scale ── */
-  --text-2xs: 0.625rem;   /* 10px */
-  --text-xs:  0.75rem;    /* 12px */
-  --text-sm:  0.875rem;    /* 14px */
-  --text-base: 1rem;      /* 16px */
-  --text-lg:  1.125rem;   /* 18px */
-  --text-xl:  1.25rem;    /* 20px */
-  --text-2xl: 1.5rem;     /* 24px */
-  --text-3xl: 1.875rem;   /* 30px */
-  --text-4xl: 2.25rem;    /* 36px */
-  --text-5xl: 3rem;       /* 48px */
+  --text-2xs: 0.625rem;
+  --text-xs:  0.75rem;
+  --text-sm:  0.875rem;
+  --text-base: 1rem;
+  --text-lg:  1.125rem;
+  --text-xl:  1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+  --text-5xl: 3rem;
 
-  /* ── Border Radius (Refined) ── */
-  --radius-sm: 0.5rem;    /* 8px */
-  --radius-md: 0.75rem;   /* 12px */
-  --radius-lg: 1rem;      /* 16px */
+  /* ── Border Radius (Technical) ── */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2.5rem;
   --radius-full: 9999px;
 }
 
@@ -86,119 +88,85 @@
     -webkit-font-smoothing: antialiased;
     letter-spacing: -0.01em;
     line-height: 1.6;
-    /* Minimum readable body text — WCAG SC 1.4.4 */
     font-size: clamp(14px, 1vw + 0.5rem, 18px);
   }
 
-  /* Pointer cursor on all interactive elements */
-  button,
-  a,
-  [role="button"],
-  [type="button"],
-  [type="submit"],
-  [type="reset"],
-  label[for],
-  select,
-  summary {
+  button, a, [role="button"] {
     cursor: pointer;
   }
 
-  /* Accessible Focus Rings — high-contrast, works on all backgrounds */
   :focus-visible {
-    outline: 2px solid var(--color-accent);
+    outline: 2px solid var(--color-primary);
     outline-offset: 3px;
-    border-radius: 4px;
-  }
-
-  /* Disabled state — uniform across all interactive elements */
-  button:disabled,
-  [aria-disabled="true"] {
-    opacity: 0.45;
-    cursor: not-allowed;
-    pointer-events: none;
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-heading);
-    font-weight: 700;
-    letter-spacing: -0.03em;
-    line-height: 1.15;
+    font-weight: 600;
+    letter-spacing: -0.04em;
+    line-height: 1.1;
   }
-
-  small, .text-xs { font-size: max(0.75rem, 10px); }
 }
 
-/* ── Glass Surface ────────────────────────────────────────────────────────── */
-/* Blur reduced to 20px — enough for depth without soup. Use sparingly:
-   max 2 glass surfaces visible at once per page. */
-/* --- Liquid Glass Panels --- */
+/* ── Liquid Glass ─────────────────────────────────────────────────────────── */
 .glass-panel {
-  background: rgba(15, 23, 42, 0.2);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.01) 100%
+  );
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 8px 32px 0 rgba(0, 0, 0, 0.8),
+    inset 0 0 32px 0 rgba(255, 255, 255, 0.02);
+  transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .glass-panel:hover {
-  background: rgba(15, 23, 42, 0.3);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(0, 255, 65, 0.3);
+  box-shadow: 
+    0 12px 48px 0 rgba(0, 0, 0, 0.9),
+    inset 0 0 40px 0 rgba(0, 255, 65, 0.05);
 }
 
-/* Premium Frosted Glass for Agent Cards */
 .frosted-panel {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(13, 13, 13, 0.6);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 4px 24px 0 rgba(0, 0, 0, 0.5);
+  transition: all 0.4s ease;
 }
 
 .frosted-panel:hover {
-  border-color: rgba(34, 211, 238, 0.3);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-/* Premium Spinner Animation */
-@keyframes premium-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.animate-premium-spin {
-  animation: premium-spin 2s linear infinite;
-}
-
-@keyframes pulse-glow {
-  0%, 100% { opacity: 0.5; filter: blur(8px); }
-  50% { opacity: 1; filter: blur(12px); }
-}
-
-.glow-pulse {
-  animation: pulse-glow 3s ease-in-out infinite;
+  border-color: rgba(0, 255, 65, 0.4);
+  background: rgba(13, 13, 13, 0.8);
+  box-shadow: 0 8px 32px 0 rgba(0, 255, 65, 0.1);
 }
 
 .premium-glass {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 40px 0 rgba(0, 0, 0, 1);
 }
 
 .premium-card {
-  background: var(--color-surface-1);
-  border: 1px solid var(--color-border-subtle);
-  transition: all 0.3s ease;
+  background: rgba(13, 13, 13, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .premium-card:hover {
-  background: var(--color-surface-2);
-  border-color: var(--color-border-bold);
-  box-shadow: 0 0 20px rgba(34, 211, 238, 0.05);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 30px rgba(0, 255, 65, 0.1);
+  transform: translateY(-4px);
 }
+
 
 .glass-dock {
   background: rgba(8, 12, 20, 0.85);
@@ -261,137 +229,95 @@
 }
 
 /* ── Buttons ──────────────────────────────────────────────────────────────── */
-/* Three tiers: primary (solid fill), secondary (ghost border), ghost (text) */
-
-/* Shared button base — cursor + transition applied once */
-/* Min 44×44px touch target per WCAG 2.5.5 */
-/* Premium Gradient Button */
 .btn-premium {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem 2rem;
-  min-height: 44px;
+  gap: 0.6rem;
+  padding: 0.8rem 2.4rem;
+  min-height: 48px;
   border-radius: var(--radius-full);
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   font-weight: 600;
-  color: white;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
-  transition: all 0.3s ease;
-  box-shadow: 0 0 15px rgba(34, 211, 238, 0.2);
+  color: #000;
+  background: var(--color-primary);
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
+  border: 1px solid transparent;
 }
 
 .btn-premium:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 0 25px rgba(34, 211, 238, 0.4);
-  background: transparent;
-  border: 1px solid var(--color-primary);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 0 50px rgba(0, 255, 65, 0.4);
+  background: transparent !important;
   color: var(--color-primary);
-}
-
-.btn-premium:active {
-  transform: translateY(0);
+  border-color: var(--color-primary);
 }
 
 .btn-outline {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 0.73rem 1.98rem;
-  min-height: 44px;
+  gap: 0.6rem;
+  padding: 0.8rem 2.4rem;
+  min-height: 48px;
   border-radius: var(--radius-full);
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   font-weight: 600;
-  color: var(--color-primary);
-  background: transparent;
-  border: 1.5px solid var(--color-border-bold);
-  transition: all 0.3s ease;
+  color: var(--color-foreground);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.4s ease;
 }
 
 .btn-outline:hover {
-  background: rgba(34, 211, 238, 0.05);
+  background: transparent !important;
   border-color: var(--color-primary);
-  color: white;
-}
-
-/* ── Typography ───────────────────────────────────────────────────────────── */
-.text-balance {
-  text-wrap: balance;
-}
-
-[aria-live="polite"] {
-  font-weight: 500;
-}
-
-::selection {
-  background: rgba(6, 182, 212, 0.25);
-  color: #fff;
-}
-
-/* ── Subtle Text Glow ────────────────────────────────────────────────────── */
-/* Use sparingly — max one element per section (e.g. primary hero heading) */
-.text-glow {
-  text-shadow: 0 0 12px rgba(6, 182, 212, 0.2);
-}
-
-/* ── Subtle Dot Grid & Micro-Textures ───────────────────────────────────────── */
-.pixel-grid {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-  background-size: 24px 24px;
-}
-
-.bg-grid-small {
-  background-size: 20px 20px;
-  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-                    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  color: var(--color-primary);
+  box-shadow: 0 0 20px rgba(0, 255, 65, 0.15);
+  transform: translateY(-1px);
 }
 
 /* ── Glow Utilities ──────────────────────────────────────────────────────── */
-.text-glow-cyan { text-shadow: 0 0 16px rgba(6, 182, 212, 0.4); }
-.text-glow-emerald { text-shadow: 0 0 16px rgba(16, 185, 129, 0.4); }
-
-.box-glow-cyan { box-shadow: inset 0 0 40px rgba(6, 182, 212, 0.05), 0 0 20px rgba(6, 182, 212, 0.1); }
-.box-glow-emerald { box-shadow: inset 0 0 40px rgba(16, 185, 129, 0.05), 0 0 20px rgba(16, 185, 129, 0.1); }
-
-/* ── Tactical Crosshairs ─────────────────────────────────────────────────── */
-.crosshairs::before, .crosshairs::after {
-  content: "";
-  position: absolute;
-  width: 4px;
-  height: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  transition: border-color 0.3s ease;
+.text-glow {
+  text-shadow: 0 0 16px rgba(0, 255, 65, 0.3);
 }
-.crosshairs:hover::before, .crosshairs:hover::after {
-  border-color: rgba(6, 182, 212, 0.6);
+
+.text-glow-green { text-shadow: 0 0 25px rgba(0, 255, 65, 0.4), 0 0 50px rgba(0, 255, 65, 0.2); }
+.text-glow-red   { text-shadow: 0 0 25px rgba(255, 51, 51, 0.4), 0 0 50px rgba(255, 51, 51, 0.2); }
+.text-glow-teal  { text-shadow: 0 0 25px rgba(20, 184, 166, 0.4), 0 0 50px rgba(20, 184, 166, 0.2); }
+
+.box-glow-green { box-shadow: 0 0 40px rgba(0, 255, 65, 0.2), 0 0 80px rgba(0, 255, 65, 0.1); }
+.box-glow-red   { box-shadow: 0 0 40px rgba(255, 51, 51, 0.2), 0 0 80px rgba(255, 51, 51, 0.1); }
+.box-glow-teal  { box-shadow: 0 0 40px rgba(20, 184, 166, 0.2), 0 0 80px rgba(20, 184, 166, 0.1); }
+
+::selection {
+  background: rgba(0, 255, 65, 0.2);
+  color: #fff;
 }
-.crosshairs::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
-.crosshairs::after { bottom: -1px; right: -1px; border-left: none; border-top: none; }
 
 /* ── Scan-line (motion-gated) ─────────────────────────────────────────────── */
-/* Only renders when the user has not requested reduced motion. */
 @media (prefers-reduced-motion: no-preference) {
   .scan-line-overlay {
     position: absolute;
     left: 0;
     top: 0;
     width: 100%;
-    height: 1px;
-    background: linear-gradient(to right, transparent, rgba(6, 182, 212, 0.15), transparent);
+    height: 2px;
+    background: linear-gradient(to right, transparent, var(--color-primary), transparent);
+    box-shadow: 0 0 15px var(--color-primary);
     pointer-events: none;
     z-index: 10;
-    animation: scan-vertical 6s linear infinite;
+    animation: scan-vertical 8s linear infinite;
+    opacity: 0.3;
   }
 
   @keyframes scan-vertical {
-    0%   { transform: translateY(-4px); opacity: 0; }
-    5%   { opacity: 1; }
-    95%  { opacity: 1; }
-    100% { transform: translateY(100vh); opacity: 0; }
+    0%   { transform: translateY(-10vh); }
+    100% { transform: translateY(110vh); }
   }
 }
+
 
 /* Fallback: hidden when reduced motion is preferred */
 @media (prefers-reduced-motion: reduce) {

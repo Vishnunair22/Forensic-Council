@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { UploadCloud } from "lucide-react";
 
 import { AnalysisProgressOverlay } from "@/components/evidence/AnalysisProgressOverlay";
@@ -90,19 +90,23 @@ export function HeroAuthActions() {
           playSound("hum");
           setShowUpload(true);
         }}
-        className="group relative flex items-center justify-center px-12 py-5 rounded-full font-bold text-sm tracking-tight overflow-hidden transition-all duration-500 hover:scale-[1.05] active:scale-[0.95] shadow-[0_0_40px_rgba(34,211,238,0.15)] hover:shadow-[0_0_60px_rgba(34,211,238,0.25)] border border-primary/20 hover:border-primary cursor-pointer"
+        className="group px-14 py-6 text-base font-bold tracking-tighter uppercase relative overflow-hidden rounded-full bg-gradient-to-br from-[#14b8a6] to-[#0d9488] hover:bg-transparent hover:from-transparent hover:to-transparent text-white shadow-[0_0_40px_rgba(20,184,166,0.3)] transition-all duration-500 hover:scale-[1.05] hover:shadow-[0_0_60px_rgba(20,184,166,0.5)] border border-teal-400/40 hover:border-teal-400"
         aria-label={isAuthenticating ? "Initializing..." : authError ? authError : "Upload a file to begin analysis"}
       >
-        {/* Background Gradient Layer */}
-        <div className="absolute inset-0 bg-gradient-to-r from-primary to-accent opacity-90 group-hover:opacity-0 transition-opacity duration-500" />
+        {/* Scanning Line Effect within Button */}
+        <motion.div 
+          className="absolute inset-0 w-full h-[1px] bg-white/20 z-10"
+          animate={{ top: ["0%", "100%", "0%"] }}
+          transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+        />
         
-        {/* Inner Glow/Shine Effect */}
-        <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-
-        <span className="relative z-10 flex items-center gap-3 text-black group-hover:text-primary transition-colors duration-500">
-          <UploadCloud className="w-4 h-4 transition-transform duration-500 group-hover:-translate-y-0.5" />
-          {isAuthenticating ? "Initializing..." : authError ? authError : "Begin Analysis"}
+        <span className="relative z-10 flex items-center gap-4">
+          <UploadCloud className="w-5 h-5 group-hover:animate-bounce" />
+          {isAuthenticating ? "Initializing..." : authError ? authError : "Begin Investigation"}
         </span>
+
+        {/* Outer Glow on Hover */}
+        <div className="absolute inset-0 bg-teal-400 opacity-0 group-hover:opacity-20 blur-2xl transition-opacity duration-500" />
       </button>
 
       <AnimatePresence>

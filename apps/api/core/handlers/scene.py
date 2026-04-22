@@ -49,6 +49,7 @@ class SceneHandlers(BaseToolHandler):
 
     def register_tools(self, registry) -> None:
         """Register tools with the agent's ToolRegistry."""
+        registry.register("screenshot_scene_applicability", self.screenshot_scene_applicability_handler, "Screen-capture object/scene applicability check")
         registry.register("object_detection",           self.object_detection_handler,           "YOLO11 Object detection")
         registry.register("secondary_classification",   self.secondary_classification_handler,   "CLIP context check")
         registry.register("scale_validation",           self.scale_validation_handler,           "Object scale/physics check")
@@ -56,6 +57,22 @@ class SceneHandlers(BaseToolHandler):
         registry.register("scene_incongruence",         self.scene_incongruence_handler,         "Semantic scene check")
         registry.register("vector_contraband_search",   self.vector_contraband_search_handler,   "SigLIP vector search for contraband")
         registry.register("lighting_correlation_initial", self.lighting_correlation_handler,     "Initial lighting misalignment audit")
+
+    async def screenshot_scene_applicability_handler(self, input_data: dict) -> dict:
+        """Fast scope note for screenshots where physical scene tools do not apply."""
+        result = {
+            "available": True,
+            "not_applicable": True,
+            "confidence": 0.0,
+            "court_defensible": True,
+            "reason": (
+                "Submitted image appears to be a screen capture. Physical-scene "
+                "object detection, contraband search, scale validation, and lighting "
+                "correlation are not reliable first-pass evidence for this media type."
+            ),
+        }
+        await self.agent._record_tool_result("screenshot_scene_applicability", result)
+        return result
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

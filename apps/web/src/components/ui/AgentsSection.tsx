@@ -11,58 +11,68 @@ export function AgentsSection() {
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-3xl md:text-5xl font-bold text-center mb-4 tracking-tight text-white font-heading"
+          className="text-4xl md:text-6xl font-bold text-center mb-6 tracking-tighter text-white"
         >
-          Meet The <span className="text-primary">Council</span>
+          Meet The <span className="text-primary text-glow-green">Council</span>
         </motion.h2>
         <motion.p
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ delay: 0.1 }}
-          className="text-sm font-medium text-white/40 text-center max-w-2xl mx-auto mb-20 font-sans"
+          className="text-base font-medium text-white/60 text-center max-w-2xl mx-auto mb-20"
         >
-          Specialized investigative nodes optimized for multi-modal forensic consensus.
+          Autonomous neural investigative nodes optimized for multi-modal evidence consensus.
         </motion.p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {AGENTS.map((agent, i) => (
             <motion.div
               key={agent.id}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
-              className="frosted-panel p-8 rounded-[2.5rem] flex flex-col items-center text-center group cursor-pointer shadow-2xl hover:-translate-y-2 hover:shadow-[0_20px_50px_rgba(0,0,0,0.4)] hover:border-primary/30 transition-all duration-500"
+              transition={{ delay: i * 0.1, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+              className="glass-panel p-10 rounded-[3rem] flex flex-col items-center text-center group cursor-pointer"
             >
               <motion.div 
                 animate={{ 
-                  y: [0, -8, 0],
+                  y: [0, -10, 0],
+                  scale: [1, 1.05, 1],
                 }}
                 transition={{
-                  duration: 3 + i,
+                  duration: 4 + i,
                   repeat: Infinity,
                   ease: "easeInOut",
                 }}
-                className="p-6 bg-surface-1 rounded-2xl mb-8 group-hover:bg-primary/10 transition-colors shadow-inner"
+                className="relative p-7 bg-white/5 rounded-2xl mb-10 group-hover:bg-primary/10 transition-colors"
               >
+                <div className="absolute inset-0 bg-primary/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                 <agent.icon
-                  className="w-8 h-8 transition-transform group-hover:scale-110"
+                  className="relative z-10 w-10 h-10 transition-transform group-hover:scale-110"
                   style={{ color: agent.color }}
                 />
               </motion.div>
               
-              <h3 className="font-bold text-xl mb-4 text-white tracking-tight font-heading">{agent.name}</h3>
-              <p className="text-sm text-white/50 leading-relaxed font-medium tracking-tight mb-8 font-sans">
+              <h3 className="font-bold text-2xl mb-4 text-white tracking-tight">{agent.name}</h3>
+              <p className="text-sm text-white/60 leading-relaxed font-medium tracking-tight mb-10 group-hover:text-white/90 transition-colors">
                 {agent.desc}
               </p>
 
-              <div className="mt-auto pt-6 border-t border-white/5 w-full flex justify-between items-center">
-                 <span className="text-[10px] font-mono font-bold tracking-widest" style={{ color: `${agent.color}` }}>
-                    Node {agent.id}
-                 </span>
-                 <span className="text-[10px] font-mono font-bold text-white/20 tracking-wider">[{agent.badge}]</span>
+              <div className="mt-auto pt-8 border-t border-white/5 w-full flex justify-between items-center group-hover:border-primary/20 transition-colors">
+                 <div className="flex flex-col items-start">
+                   <span className="text-[10px] font-mono font-bold tracking-[0.2em] text-white/20 group-hover:text-primary transition-colors">NODE_ID</span>
+                   <span className="text-xs font-mono font-bold text-white/60">{agent.id}</span>
+                 </div>
+                 <div className="flex flex-col items-end">
+                   <span className="text-[10px] font-mono font-bold tracking-[0.2em] text-white/20 group-hover:text-primary transition-colors">STATUS</span>
+                   <span className="text-xs font-mono font-bold text-primary/80 uppercase">{agent.badge}</span>
+                 </div>
               </div>
+
+              {/* Card Decoration: Corner Lines */}
+              <div className="absolute top-6 left-6 w-4 h-4 border-t border-l border-white/10 group-hover:border-primary/40 transition-colors" />
+              <div className="absolute bottom-6 right-6 w-4 h-4 border-b border-r border-white/10 group-hover:border-primary/40 transition-colors" />
             </motion.div>
           ))}
         </div>

@@ -21,6 +21,7 @@ import fitz  # PyMuPDF
 
 from core.evidence import EvidenceArtifact
 from core.exceptions import ToolUnavailableError
+from core.media_kind import is_screen_capture_like
 
 logger = logging.getLogger(__name__)
 
@@ -328,4 +329,13 @@ async def extract_evidence_text(
         logger.info("PDF has no embedded text — falling back to OCR")
 
     # All images and scanned PDFs → EasyOCR
+    if is_screen_capture_like(artifact):
+        result = await _extract_text_tesseract_fallback(artifact)
+        result["screen_capture_fast_path"] = True
+        result.setdefault(
+            "note",
+            "Screen-capture-like image processed with fast OCR path.",
+        )
+        return result
+
     return await extract_text_easyocr(artifact)

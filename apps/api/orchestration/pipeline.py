@@ -772,7 +772,7 @@ class ForensicCouncilPipeline:
                     logger.info(f"Running {agent_id} initial investigation")
                     initial_findings = await asyncio.wait_for(
                         agent.run_investigation(),
-                        timeout=min(float(self.config.investigation_timeout), 150.0),
+                        timeout=min(float(self.config.investigation_timeout), 300.0),
                     )
                     span.set_attribute("finding_count", len(initial_findings))
                     # Signal the bus for early deliberation unblocking

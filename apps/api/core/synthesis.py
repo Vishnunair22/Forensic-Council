@@ -213,21 +213,28 @@ Agent: {agent_name} ({agent_id})
 {json.dumps(grouped_sections_data, indent=2)}
 
 [INSTRUCTIONS]
-1. For each group, provide a 1-2 sentence "Forensic Opinion" explaining what the tools collectively reveal.
+1. For each group, provide a 1-2 sentence "Forensic Opinion" that synthesizes the raw tool data.
 2. Determine an overall 'verdict' for this agent: AUTHENTIC, SUSPICIOUS, or TAMPERED.
-3. Be objective. Use terms like "Consistent with," "Anomalous signature detected," or "Fabrication suspected."
-4. If most tools failed or are inconclusive, report 'INCONCLUSIVE'.
+3. [EXECUTIVE SUMMARY]: The 'narrative_summary' must be a concise (max 35 words), high-impact forensic conclusion. It MUST mention the primary technical indicator.
+4. [USER-FRIENDLY FINDINGS]: For each tool in the group, translate the machine metrics into a 'user_friendly_summary'. Instead of "ELA 0.85 anomaly", say "Detected digital traces of editing in specific areas". Avoid jargon in these summaries.
+5. Use objective, technical language for the 'narrative_summary' and 'opinion', but accessible language for 'user_friendly_summary'.
 
 Return ONLY a JSON object in this format:
 {{
   "verdict": "AUTHENTIC|SUSPICIOUS|TAMPERED|INCONCLUSIVE",
-  "narrative_summary": "Overall 2-sentence technical summary.",
+  "narrative_summary": "Telegraphic executive summary.",
   "sections": [
     {{
       "id": "group_id",
       "label": "Group Label",
-      "opinion": "Technical forensic opinion on this group.",
-      "severity": "LOW|MEDIUM|HIGH|CRITICAL"
+      "opinion": "Synthesized technical opinion.",
+      "severity": "LOW|MEDIUM|HIGH|CRITICAL",
+      "refined_findings": [
+        {{
+          "tool": "tool_name",
+          "user_friendly_summary": "Clear, jargon-free explanation of this specific signal."
+        }}
+      ]
     }}
   ]
 }}

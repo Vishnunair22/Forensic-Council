@@ -271,7 +271,7 @@ services:
     environment:
       <<: *backend-env
       APP_NAME: forensic_council
-      RELOAD: "false"
+      RELOAD: "true"
       API_HOST: 0.0.0.0
       API_PORT: 8000
       BOOTSTRAP_INVESTIGATOR_PASSWORD: ${BOOTSTRAP_INVESTIGATOR_PASSWORD}

@@ -18,16 +18,24 @@ export function MicroscopeBackground() {
   });
 
   const lensY = useTransform(smoothYProgress, [0, 1], ["10%", "90%"]);
-  const lensScale = useTransform(smoothYProgress, [0, 0.5, 1], [1, 1.2, 1]);
-  const lensRotate = useTransform(smoothYProgress, [0, 1], [0, 360]);
+  const lensScale = useTransform(smoothYProgress, [0, 0.5, 1], [1, 1.1, 1]);
+  const lensRotate = useTransform(smoothYProgress, [0, 1], [0, 180]);
 
   return (
-    <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-[#020617]">
+    <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-black">
       {/* --- Ambient Background --- */}
-      <div className="absolute inset-0 bg-grid-small opacity-[0.1]" />
+      <div className="absolute inset-0 bg-grid-small opacity-[0.05]" />
       
-      {/* --- Floating Evidence Particles --- */}
-      <EvidenceParticles progress={smoothYProgress} />
+      {/* --- Scanning Laser --- */}
+      <motion.div 
+        style={{ top: lensY }}
+        className="absolute left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-primary/40 to-transparent z-10 shadow-[0_0_15px_rgba(0,255,65,0.3)]"
+      >
+        <div className="absolute top-0 left-0 right-0 h-[50px] bg-gradient-to-b from-primary/5 to-transparent -translate-y-full" />
+      </motion.div>
+      
+      {/* --- Digital Evidence Nodes --- */}
+      <EvidenceNodes progress={smoothYProgress} />
 
       {/* --- Microscope Lens --- */}
       <motion.div
@@ -38,46 +46,64 @@ export function MicroscopeBackground() {
           translateY: "-50%",
           scale: lensScale,
         }}
-        className="absolute w-[400px] h-[400px] md:w-[600px] md:h-[600px] z-20"
+        className="absolute w-[450px] h-[450px] md:w-[700px] md:h-[700px] z-20"
       >
-        {/* Outer Lens Frame */}
-        <div className="absolute inset-0 rounded-full border border-primary/20 bg-primary/5 backdrop-blur-[2px] shadow-[0_0_100px_rgba(34,211,238,0.1)]" />
+        {/* Outer Lens Frame (Technical) */}
+        <div className="absolute inset-0 rounded-full border-2 border-primary/20 bg-primary/5 backdrop-blur-[4px] shadow-[0_0_120px_rgba(0,255,65,0.1)]" />
+        <div className="absolute inset-[2px] rounded-full border border-white/5" />
         
         {/* Inner Lens Details (Grid + Crosshairs) */}
         <motion.div 
           style={{ rotate: lensRotate }}
-          className="absolute inset-4 rounded-full border border-primary/10 flex items-center justify-center"
+          className="absolute inset-8 rounded-full border border-primary/10 flex items-center justify-center"
         >
-          {/* Horizontal Line */}
-          <div className="w-full h-[1px] bg-primary/20" />
-          {/* Vertical Line */}
-          <div className="absolute w-[1px] h-full bg-primary/20" />
+          {/* Main Axis */}
+          <div className="w-full h-[1px] bg-primary/30" />
+          <div className="absolute w-[1px] h-full bg-primary/30" />
           
-          {/* Concentric Circles */}
-          <div className="absolute w-1/2 h-1/2 rounded-full border border-primary/10" />
-          <div className="absolute w-3/4 h-3/4 rounded-full border border-primary/10" />
+          {/* Technical Grid */}
+          <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(var(--color-primary) 0.5px, transparent 0.5px)', backgroundSize: '20px 20px' }} />
+          
+          {/* Concentric Circles with Scale Marks */}
+          {[1, 0.75, 0.5, 0.25].map((scale, i) => (
+            <div key={i} className="absolute rounded-full border border-primary/10" style={{ width: `${scale * 100}%`, height: `${scale * 100}%` }}>
+               <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full text-[8px] font-mono text-primary/40 pt-1">
+                 {Math.round(scale * 1000)}µm
+               </div>
+            </div>
+          ))}
           
           {/* Tactical Marks */}
-          {[0, 90, 180, 270].map((deg) => (
+          {Array.from({ length: 12 }).map((_, i) => (
             <div
-              key={deg}
-              className="absolute w-4 h-[2px] bg-primary/40"
-              style={{ transform: `rotate(${deg}deg) translateX(280px)` }}
+              key={i}
+              className="absolute w-6 h-[1px] bg-primary/50"
+              style={{ transform: `rotate(${i * 30}deg) translateX(320px)` }}
             />
           ))}
         </motion.div>
 
-        {/* The "Glass" Reflection/Glint */}
-        <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-transparent via-white/5 to-white/10 opacity-40" />
+        {/* The "Liquid Glass" Reflection */}
+        <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/10 via-transparent to-primary/5 opacity-60 mix-blend-overlay" />
+        <div className="absolute top-[10%] left-[10%] w-[40%] h-[40%] rounded-full bg-gradient-to-br from-white/20 to-transparent blur-2xl opacity-30" />
         
-        {/* Focal Point Glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-primary blur-sm animate-pulse" />
+        {/* Focal Point Data */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+            <div className="w-4 h-4 rounded-full bg-primary shadow-[0_0_20px_var(--color-primary)] animate-pulse" />
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="mt-4 px-2 py-1 bg-black/80 border border-primary/40 rounded text-[10px] font-mono text-primary whitespace-nowrap"
+            >
+              SCAN_COORD: [51.5074, 0.1278]
+            </motion.div>
+        </div>
       </motion.div>
 
       {/* --- Procedural Noise/Grain --- */}
-      <svg className="absolute inset-0 w-full h-full opacity-[0.04] mix-blend-overlay">
+      <svg className="absolute inset-0 w-full h-full opacity-[0.06] mix-blend-overlay">
         <filter id="microNoise">
-          <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch" />
+          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch" />
         </filter>
         <rect width="100%" height="100%" filter="url(#microNoise)" />
       </svg>
@@ -85,56 +111,53 @@ export function MicroscopeBackground() {
   );
 }
 
-interface Particle {
-  id: number;
-  x: number;
-  y: number;
-  size: number;
-  delay: number;
-  speed: number;
-}
-
-function EvidenceParticles({ progress }: { progress: import("framer-motion").MotionValue<number> }) {
-  const [particles, setParticles] = useState<Particle[]>([]);
-  const yShift = useTransform(progress, [0, 1], [0, -50]);
+function EvidenceNodes({ progress }: { progress: import("framer-motion").MotionValue<number> }) {
+  const [nodes, setNodes] = useState<{ id: number; x: number; y: number; label: string }[]>([]);
 
   useEffect(() => {
-    // Generate static particles on mount
-    const p = Array.from({ length: 20 }).map((_, i) => ({
+    const labels = ["METADATA_CORRUPT", "DIFFUSION_SIGNAL", "ELA_OUTLIER", "JPEG_GHOST", "SIFT_MATCH", "C2PA_MISSING"];
+    const n = Array.from({ length: 15 }).map((_, i) => ({
       id: i,
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      size: Math.random() * 4 + 2,
-      delay: Math.random() * 5,
-      speed: Math.random() * 2 + 1,
+      x: 10 + Math.random() * 80,
+      y: 10 + Math.random() * 80,
+      label: labels[i % labels.length],
     }));
-    setParticles(p);
+    setNodes(n);
   }, []);
 
   return (
-    <motion.div style={{ y: yShift }} className="absolute inset-0">
-      {particles.map((p) => (
-        <motion.div
-          key={p.id}
-          initial={{ opacity: 0 }}
-          animate={{ 
-            opacity: [0.1, 0.4, 0.1],
-            y: [p.y + "%", (p.y - 10) + "%", p.y + "%"]
-          }}
-          transition={{
-            duration: p.speed * 5,
-            repeat: Infinity,
-            delay: p.delay,
-            ease: "easeInOut"
-          }}
-          style={{
-            left: p.x + "%",
-            width: p.size,
-            height: p.size,
-          }}
-          className="absolute bg-primary/30 rounded-full blur-[1px]"
-        />
+    <div className="absolute inset-0">
+      {nodes.map((node) => (
+        <EvidenceNode key={node.id} node={node} progress={progress} />
       ))}
+    </div>
+  );
+}
+
+interface NodeData {
+  id: number;
+  x: number;
+  y: number;
+  label: string;
+}
+
+function EvidenceNode({ node, progress }: { node: NodeData; progress: import("framer-motion").MotionValue<number> }) {
+  const yShift = useTransform(progress, [0, 1], [0, -100]);
+  
+  return (
+    <motion.div
+      style={{
+        left: `${node.x}%`,
+        top: `${node.y}%`,
+        y: yShift,
+      }}
+      className="absolute flex flex-col items-center group"
+    >
+      <div className="w-1.5 h-1.5 bg-primary/20 rounded-full border border-primary/40 group-hover:bg-primary transition-colors" />
+      <div className="mt-2 px-1.5 py-0.5 bg-black/40 border border-white/5 rounded text-[8px] font-mono text-white/20 group-hover:text-primary/60 transition-colors">
+        {node.label}
+      </div>
     </motion.div>
   );
 }
+

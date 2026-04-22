@@ -20,15 +20,15 @@ Phase 2 (deep, neural): TruFor splicing, BusterNet copy-move, diffusion
 
 from __future__ import annotations
 
-import asyncio
 import os
+from functools import cached_property
 
 from agents.base_agent import ForensicAgent
 from core.gemini_client import GeminiVisionClient
 from core.handlers.image import ImageHandlers
 from core.handlers.metadata import MetadataHandlers
 from core.image_utils import is_lossless_image
-from functools import cached_property
+from core.media_kind import is_screen_capture_like
 from core.structured_logging import get_logger
 from core.tool_registry import ToolRegistry
 
@@ -55,6 +55,11 @@ class Agent1Image(ForensicAgent):
         mime = getattr(self.evidence_artifact, "mime_type", "") or ""
         return is_lossless_image(file_path, mime or None)
 
+    @cached_property
+    def _is_screen_capture(self) -> bool:
+        """Cached: whether the evidence looks like a screenshot/digital capture."""
+        return is_screen_capture_like(self.evidence_artifact)
+
     @property
     def iteration_ceiling(self) -> int:
         return self._compute_ceiling(len(self.task_decomposition))
@@ -69,20 +74,26 @@ class Agent1Image(ForensicAgent):
         """
         base = [
             "Run analyze_image_content for semantic image understanding",
-            "Run extract_text_from_image for visible text extraction",
-            "Run neural_fingerprint for conceptual similarity detection",
             "Run file_hash_verify for evidence integrity check",
         ]
+        if self._is_screen_capture:
+            return base + [
+                "Run frequency_domain_analysis for frequency domain analysis",
+                "Run extract_text_from_image for visible text extraction",
+            ]
+        base.insert(1, "Run neural_fingerprint for conceptual similarity detection")
         if self._is_lossless:
             # Lossless path: Frequency is useful, noiseprint preferred
             return base + [
                 "Run frequency_domain_analysis for frequency domain analysis",
-                "Run noiseprint_cluster for sensor-region source inconsistency"
+                "Run noiseprint_cluster for sensor-region source inconsistency",
+                "Run extract_text_from_image for visible text extraction",
             ]
         # Lossy path: ELA is authoritative; FFT runs first for GAN/periodicity baseline
         return base + [
             "Run frequency_domain_analysis for frequency domain analysis",
             "Run neural_ela for high-confidence manipulation detection",
+            "Run extract_text_from_image for visible text extraction",
         ]
 
     @property
@@ -94,12 +105,14 @@ class Agent1Image(ForensicAgent):
         when Phase-1 or earlier Phase-2 tools reported a tampering signal.
         """
         base = [
-            "Run neural_splicing for ViT-based region composition analysis",
-            "Run neural_copy_move for dual-branch forgery detection",
             "Run diffusion_artifact_detector for AI-generation signatures",
             "Run f3_net_frequency for AI-GAN artifact detection",
             "Run gemini_deep_forensic for cross-tool evidence aggregation and semantic grounding",
         ]
+        if self._is_screen_capture:
+            return base
+        base.insert(0, "Run neural_copy_move for dual-branch copy-move detection")
+        base.insert(0, "Run neural_splicing for ViT-based region composition analysis")
         # Only add anomaly_tracer if not lossless (as it relies heavily on JPEG noise/ghosts)
         if not self._is_lossless:
             base.insert(-1, "Run anomaly_tracer for ManTra-Net universal anomaly tracing")

@@ -230,6 +230,8 @@ agent3_initial:
   "compositing candidates": "lighting_correlation_initial"
   "lighting correlation initial": "lighting_correlation_initial"
   "run scene_incongruence for contextual anomalies": "scene_incongruence"
+  "run screenshot_scene_applicability for screen-capture object/scene scope": "screenshot_scene_applicability"
+  "screenshot_scene_applicability": "screenshot_scene_applicability"
 
 # --- Deep Pass Tools (Agent 2) ---
 deep_agent2:

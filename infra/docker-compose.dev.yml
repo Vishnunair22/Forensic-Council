@@ -28,6 +28,8 @@ services:
       - numba_cache:/app/cache/numba_cache:rw
       - yolo_cache:/app/cache/ultralytics:rw
       - calibration_models_cache:/app/storage/calibration_models:rw
+    healthcheck:
+      start_period: 600s # 10 minutes for first-run model downloads
 
   worker:
     build:
@@ -81,6 +83,8 @@ services:
         reservations:
           memory: 512M
           cpus: "0.5"
+    healthcheck:
+      start_period: 300s # 5 minutes for Next.js dev compilation
 
 volumes:
   nextjs_cache:

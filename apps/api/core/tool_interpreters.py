@@ -719,6 +719,10 @@ _TOOL_INTERPRETERS.update(
             f"Score: {o.get('confidence', o.get('consistency_score', 0)):.3f}. "
             + (str(o.get("note", ""))[:160] if o.get("note") else "")
         ),
+        "screenshot_scene_applicability": lambda o: (
+            "Screen-capture scope: physical object/scene tools were skipped for this upload. "
+            + str(o.get("reason", ""))[:220]
+        ),
 
         # Agent 4 video tools.
         "vfi_error_map": lambda o: (
