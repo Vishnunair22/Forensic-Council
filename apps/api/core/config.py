@@ -205,8 +205,8 @@ class Settings(BaseSettings):
         description="OpenCLIP model name for vision-language analysis",
     )
     aasist_model_name: str = Field(
-        default="speechbrain/anti-spoof-aasist",
-        description="AASIST anti-spoofing model for voice clone detection",
+        default="Vansh180/deepfake-audio-wav2vec2",
+        description="Audio deepfake anti-spoofing model for voice clone detection",
     )
     easyocr_model_dir: str = Field(
         default=os.getenv("EASYOCR_MODEL_DIR", "/app/cache/easyocr"),

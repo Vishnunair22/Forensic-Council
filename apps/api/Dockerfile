@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.7
 # --- Backend - Multi-Stage Build ----------------------------------------------
 # Stages:
 #   base        - system deps + uv (shared by all stages, NO Python packages yet)
@@ -188,6 +187,10 @@ RUN python scripts/validate_ml_tools.py
 # Runtime named volumes shadow /app/cache/*, so the entrypoint seeds them from
 # /opt/forensic-model-cache on first startup.
 ARG PRELOAD_MODELS=1
+ARG YOLO_MODEL_NAME=yolo11n.pt
+ARG AASIST_MODEL_NAME=Vansh180/deepfake-audio-wav2vec2
+ENV YOLO_MODEL_NAME="${YOLO_MODEL_NAME}" \
+    AASIST_MODEL_NAME="${AASIST_MODEL_NAME}"
 RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
         HF_HOME="$FORENSIC_MODEL_SEED_DIR/huggingface" \
         TRANSFORMERS_CACHE="$FORENSIC_MODEL_SEED_DIR/huggingface/transformers" \

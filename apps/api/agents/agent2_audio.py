@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 
 from agents.base_agent import ForensicAgent
+from core.gemini_client import GeminiVisionClient
 from core.handlers.audio import AudioHandlers
 from core.inter_agent_bus import InterAgentCall, InterAgentCallType
 from core.structured_logging import get_logger
@@ -153,10 +154,9 @@ class Agent2Audio(ForensicAgent):
                 return {"error": str(e), "available": False, "deep_ensemble": True}
 
         registry.register("voice_clone_deep_ensemble", voice_clone_deep_ensemble_handler, "Deep ensemble voice clone detection")
-        registry.register("anti_spoofing_deep_ensemble", anti_spoofing_deep_ensemble_handler, "Deep ensemble anti-spoofing detection")
-
-        # ── Gemini Neural Audio Audit ─────────────────────────────────────────
-        from core.gemini_client import GeminiVisionClient
+        # ── Gemini Vision Handler (Audio Forensic synthesis) ───────────────────
+        # Note: Even for audio, Gemini Vision acts as a multi-modal synthesis engine
+        # and a neural grounding signal for Agent 4 (Video).
         _gemini = GeminiVisionClient(self.config)
 
         async def gemini_deep_forensic_handler(input_data: dict) -> dict:
@@ -202,21 +202,28 @@ class Agent2Audio(ForensicAgent):
                 )
                 result = finding.to_finding_dict(self.agent_id)
                 result["analysis_source"] = "gemini_flash"
+                
+                # Inter-agent sync: Notify Agent 4 (Video) if audio authenticity
+                # has a clear verdict, to help resolve AV sync/deepfake contradictions.
+                if self.inter_agent_bus:
+                    self.inter_agent_bus.signal_event(
+                        self.session_id,
+                        "agent2_complete",
+                        {"verdict": result.get("verdict"), "confidence": result.get("confidence")},
+                    )
+
                 await self._record_tool_result("gemini_deep_forensic", result)
-
-                # Early signal — unblock the Arbiter as soon as core audio verdicts are ready.
-                if self._gemini_signal_callback:
-                    try:
-                        cb_result = self._gemini_signal_callback(result)
-                        if asyncio.iscoroutine(cb_result):
-                            await cb_result
-                    except Exception as cb_err:
-                        logger.debug(f"{self.agent_id}: Gemini signal callback failed", error=str(cb_err))
-
                 return result
             except Exception as e:
+                logger.error(f"{self.agent_id}: Gemini deep forensic failed", error=str(e))
                 await self._record_tool_error("gemini_deep_forensic", str(e))
-                return {"error": str(e), "analysis_source": "gemini_flash", "available": False}
+                return {
+                    "error": str(e),
+                    "analysis_source": "gemini_vision",
+                    "available": False,
+                    "court_defensible": False,
+                    "confidence": 0.0,
+                }
 
         registry.register("gemini_deep_forensic", gemini_deep_forensic_handler, "Gemini Flash neural audio forensic audit")
 

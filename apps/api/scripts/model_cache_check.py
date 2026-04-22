@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import os
 import sys
 import time
 from pathlib import Path
@@ -43,13 +44,19 @@ CACHE_DIRS: dict[str, str] = {
 
 # Minimum expected file count per cache dir to be considered "populated"
 MIN_FILES: dict[str, int] = {
-    "HuggingFace": 3,
+    "HuggingFace": 6,
     "PyTorch": 1,
     "EasyOCR": 2,
     "YOLO": 1,
     "Numba": 0,  # generated at runtime, may be empty
     "Calibration": 0,  # generated after first run
 }
+
+REQUIRED_HF_MODEL_DIRS = [
+    "models--timm--vit_base_patch32_clip_224.openai",
+    "models--speechbrain--spkrec-ecapa-voxceleb",
+    "models--" + settings.aasist_model_name.replace("/", "--"),
+]
 
 GREEN = "\033[0;32m"
 YELLOW = "\033[1;33m"
@@ -120,6 +127,58 @@ def check_filesystem_cache() -> tuple[int, int]:
 
     print()
     return populated, total
+
+
+def check_specific_model_assets() -> bool:
+    """Verify the exact model families the agents depend on are present."""
+    print(f"{BOLD}Verifying required model assets...{RESET}")
+    ok = True
+
+    hf_root = Path(settings.hf_home)
+    for model_dir in REQUIRED_HF_MODEL_DIRS:
+        candidate_blobs = [
+            hf_root / "hub" / model_dir / "blobs",
+            hf_root / "transformers" / model_dir / "blobs",
+        ]
+        has_blob = any(
+            blobs.exists()
+            and any(p.is_file() and p.stat().st_size > 1_000_000 for p in blobs.glob("*"))
+            for blobs in candidate_blobs
+        )
+        if has_blob:
+            print(f"  {GREEN}[OK]{RESET}  HuggingFace model cache: {model_dir}")
+        else:
+            print(f"  {RED}[MISS]{RESET}  HuggingFace model cache missing: {model_dir}")
+            ok = False
+
+    yolo_name = os.environ.get("YOLO_MODEL_NAME", settings.yolo_model_name)
+    yolo_path = Path(settings.yolo_model_dir) / yolo_name
+    if yolo_path.exists() and yolo_path.stat().st_size > 1_000_000:
+        print(f"  {GREEN}[OK]{RESET}  YOLO weights: {yolo_path}")
+    else:
+        print(f"  {RED}[MISS]{RESET}  YOLO weights missing: {yolo_path}")
+        ok = False
+
+    torch_checkpoints = Path(settings.torch_home) / "hub" / "checkpoints"
+    has_resnet = torch_checkpoints.exists() and any(
+        p.name.startswith("resnet50") and p.stat().st_size > 1_000_000
+        for p in torch_checkpoints.glob("*.pth")
+    )
+    if has_resnet:
+        print(f"  {GREEN}[OK]{RESET}  Torchvision ResNet-50 checkpoint")
+    else:
+        print(f"  {RED}[MISS]{RESET}  Torchvision ResNet-50 checkpoint missing")
+        ok = False
+
+    easyocr_files = _file_count(Path(settings.easyocr_model_dir))
+    if easyocr_files >= 2:
+        print(f"  {GREEN}[OK]{RESET}  EasyOCR model files ({easyocr_files})")
+    else:
+        print(f"  {RED}[MISS]{RESET}  EasyOCR model files missing")
+        ok = False
+
+    print()
+    return ok
 
 
 def soft_warmup() -> bool:
@@ -199,6 +258,7 @@ def main() -> None:
     print(f"{BOLD}{'━' * 55}{RESET}")
 
     populated, total = check_filesystem_cache()
+    model_assets_ok = check_specific_model_assets()
 
     if populated == total:
         print(f"{GREEN}{BOLD}  All {total} cache directories healthy.{RESET}")
@@ -215,7 +275,7 @@ def main() -> None:
         print()
         imports_ok = soft_warmup()
 
-    if args.strict and (populated != total or not imports_ok):
+    if args.strict and (populated != total or not imports_ok or not model_assets_ok):
         sys.exit(1)
 
     print(f"\n{BOLD}{'━' * 55}{RESET}")

@@ -27,6 +27,8 @@ from core.exceptions import ToolUnavailableError
 
 _speechbrain_classifier: Any = None
 _speechbrain_loaded: bool = False
+_audio_deepfake_bundle: tuple[Any, Any] | None = None
+_audio_deepfake_model_name: str | None = None
 
 
 def _get_speechbrain_classifier_class() -> Any:
@@ -41,6 +43,45 @@ def _get_speechbrain_classifier_class() -> Any:
         except Exception:
             pass
     return _speechbrain_classifier
+
+
+def _get_audio_deepfake_bundle(model_name: str, local_files_only: bool) -> tuple[Any, Any]:
+    """Load the configured Transformers audio anti-spoof model once per process."""
+    global _audio_deepfake_bundle, _audio_deepfake_model_name
+    if _audio_deepfake_bundle is None or _audio_deepfake_model_name != model_name:
+        from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
+
+        extractor = AutoFeatureExtractor.from_pretrained(
+            model_name,
+            local_files_only=local_files_only,
+        )
+        model = AutoModelForAudioClassification.from_pretrained(
+            model_name,
+            local_files_only=local_files_only,
+        )
+        model.eval()
+        _audio_deepfake_bundle = (extractor, model)
+        _audio_deepfake_model_name = model_name
+    return _audio_deepfake_bundle
+
+
+def _spoof_probability_from_logits(logits: Any, id2label: dict[int, str]) -> float:
+    import torch
+
+    if logits.shape[-1] == 1:
+        return float(torch.sigmoid(logits[0, 0]).item())
+
+    probs = torch.softmax(logits, dim=-1)[0]
+    labels = {int(idx): str(label).lower() for idx, label in id2label.items()}
+    spoof_terms = ("spoof", "fake", "synthetic", "deepfake", "generated", "ai")
+    spoof_indexes = [
+        idx for idx, label in labels.items() if any(term in label for term in spoof_terms)
+    ]
+    if spoof_indexes:
+        return float(sum(probs[idx].item() for idx in spoof_indexes))
+    if probs.numel() >= 2:
+        return float(probs[1].item())
+    return float(probs.max().item())
 
 
 @dataclass
@@ -371,62 +412,60 @@ async def anti_spoofing_detect(
         if not os.path.exists(audio_path):
             raise ToolUnavailableError(f"File not found: {audio_path}")
 
-        # ── Attempt SpeechBrain ECAPA anti-spoofing ──────────────────────────
-        EncoderClassifier = _get_speechbrain_classifier_class()
-        if EncoderClassifier is not None:
-            try:
-                import torchaudio  # type: ignore[import-untyped]
+        try:
+            import torch
 
-                from core.config import get_settings
-                settings = get_settings()
+            from core.config import get_settings
 
-                # Enforce local-only mode if configured
-                if settings.offline_mode:
-                    os.environ["HF_HUB_OFFLINE"] = "1"
-                    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+            settings = get_settings()
+            if settings.offline_mode:
+                os.environ["HF_HUB_OFFLINE"] = "1"
+                os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
-                classifier = EncoderClassifier.from_hparams(
-                    source=settings.aasist_model_name,
-                    run_opts={"device": "cpu"},
-                )
-                signal, fs = torchaudio.load(audio_path)
-                if segment:
-                    start_s = int(segment.get("start", 0) * fs)
-                    end_s = int(segment.get("end", signal.shape[1]) * fs)
-                    signal = signal[:, start_s:end_s]
+            extractor, model = _get_audio_deepfake_bundle(
+                settings.aasist_model_name,
+                local_files_only=settings.offline_mode,
+            )
+            sample_rate = int(getattr(extractor, "sampling_rate", 16000) or 16000)
+            y, sr = librosa.load(audio_path, sr=sample_rate, mono=True)
+            if segment:
+                start_sample = int(segment.get("start", 0) * sr)
+                end_sample = int(segment.get("end", len(y) / sr) * sr)
+                y = y[start_sample:end_sample]
 
-                # AASIST specific: returns scores directly for anti-spoofing
-                # If using SB's dedicated anti-spoofing classifier:
-                # Assuming segments is defined or we iterate over chunks
-                # For demonstration, we perform a single pass or chunked pass
-                if progress_callback:
-                    await progress_callback("Auditing neural spoof signatures...")
+            if progress_callback:
+                await progress_callback("Auditing neural spoof signatures...")
 
-                out_prob, score, index, text_lab = classifier.classify_batch(signal)
+            inputs = extractor(
+                y,
+                sampling_rate=sample_rate,
+                return_tensors="pt",
+                padding=True,
+            )
+            with torch.no_grad():
+                outputs = model(**inputs)
+            id2label = getattr(model.config, "id2label", {}) or {}
+            spoof_prob = _spoof_probability_from_logits(outputs.logits, id2label)
 
-                # out_prob is [BATCH, 1, 2] -> [genuine_prob, spoof_prob]
-                # In many SB configs, [0] is genuine, [1] is spoof
-                spoof_prob = float(out_prob[0, 0, 1].item())
+            return {
+                "spoof_detected": spoof_prob > 0.5,
+                "confidence": round(spoof_prob if spoof_prob > 0.5 else 1.0 - spoof_prob, 3),
+                "spoof_probability": round(spoof_prob, 4),
+                "model_version": settings.aasist_model_name,
+                "anomalies": ["Neural audio deepfake signature detected"]
+                if spoof_prob > 0.5
+                else [],
+                "analysis_source": "transformers_audio_deepfake",
+                "court_defensible": True,
+            }
+        except Exception as _model_err:
+            import warnings as _w
 
-                return {
-                    "spoof_detected": spoof_prob > 0.5,
-                    "confidence": round(spoof_prob if spoof_prob > 0.5 else 1.0 - spoof_prob, 3),
-                    "spoof_probability": round(spoof_prob, 4),
-                    "model_version": settings.aasist_model_name,
-                    "anomalies": ["AASIST neural spoof signature detected"]
-                    if spoof_prob > 0.5
-                    else [],
-                    "analysis_source": "speechbrain_aasist",
-                    "court_defensible": True,
-                }
-            except Exception as _sb_err:
-                import warnings as _w
-
-                _w.warn(
-                    f"SpeechBrain anti-spoofing failed ({_sb_err}), "
-                    "falling back to heuristic spectral analysis.",
-                    RuntimeWarning, stacklevel=2,
-                )
+            _w.warn(
+                f"Audio deepfake model failed ({_model_err}), "
+                "falling back to heuristic spectral analysis.",
+                RuntimeWarning, stacklevel=2,
+            )
         # ── Heuristic spectral fallback ───────────────────────────────────────
 
         # Load audio

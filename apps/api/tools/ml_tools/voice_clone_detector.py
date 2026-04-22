@@ -186,6 +186,25 @@ def _zcr_std(audio: np.ndarray, sr: int) -> float:
 
 # ── SpeechBrain primary path ──────────────────────────────────────────────────
 
+def _spoof_probability_from_logits(logits: Any, id2label: dict[int, str]) -> float:
+    import torch
+
+    if logits.shape[-1] == 1:
+        return float(torch.sigmoid(logits[0, 0]).item())
+
+    probs = torch.softmax(logits, dim=-1)[0]
+    labels = {int(idx): str(label).lower() for idx, label in id2label.items()}
+    spoof_terms = ("spoof", "fake", "synthetic", "deepfake", "generated", "ai")
+    spoof_indexes = [
+        idx for idx, label in labels.items() if any(term in label for term in spoof_terms)
+    ]
+    if spoof_indexes:
+        return float(sum(probs[idx].item() for idx in spoof_indexes))
+    if probs.shape[0] >= 2:
+        return float(probs[1].item())
+    return float(probs.max().item())
+
+
 def _speechbrain_detection(audio_path: str, **kwargs) -> dict[str, Any] | None:
     """
     Primary path: AASIST/ECAPA-TDNN anti-spoofing.
@@ -196,18 +215,17 @@ def _speechbrain_detection(audio_path: str, **kwargs) -> dict[str, Any] | None:
     feature-ensemble path.
     """
     try:
-        import soundfile as sf
         import torch
-        from speechbrain.pretrained import EncoderClassifier
+        import librosa
+        from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
 
-        audio, sr = sf.read(audio_path, dtype="float32", always_2d=False)
-        if audio.ndim > 1:
-            audio = audio.mean(axis=1)
+        model_name = kwargs.get("model", "Vansh180/deepfake-audio-wav2vec2")
+        extractor = AutoFeatureExtractor.from_pretrained(model_name)
+        model = AutoModelForAudioClassification.from_pretrained(model_name)
+        model.eval()
 
-        classifier = EncoderClassifier.from_hparams(
-            source=kwargs.get("model", "speechbrain/anti-spoof-aasist"),
-            run_opts={"device": kwargs.get("device", "cpu")},
-        )
+        sr = int(getattr(extractor, "sampling_rate", 16000) or 16000)
+        audio, _ = librosa.load(audio_path, sr=sr, mono=True)
 
         # Stratified sampling — 5 regions for forensic coverage of long files.
         seg_len = sr * 4
@@ -231,11 +249,17 @@ def _speechbrain_detection(audio_path: str, **kwargs) -> dict[str, Any] | None:
             seg = audio[start_idx : start_idx + seg_len]
             if len(seg) < seg_len:
                 continue
-            t = torch.tensor(seg).unsqueeze(0)
+            inputs = extractor(
+                seg,
+                sampling_rate=sr,
+                return_tensors="pt",
+                padding=True,
+            )
             with torch.no_grad():
-                out_prob, _score, _index, _text_lab = classifier.classify_batch(t)
+                outputs = model(**inputs)
                 # out_prob shape: [1, 1, 2] → [genuine, spoof]
-                spoof_probs.append(float(out_prob[0, 0, 1].item()))
+            id2label = getattr(model.config, "id2label", {}) or {}
+            spoof_probs.append(_spoof_probability_from_logits(outputs.logits, id2label))
 
         if not spoof_probs:
             return None
@@ -251,12 +275,12 @@ def _speechbrain_detection(audio_path: str, **kwargs) -> dict[str, Any] | None:
             "verdict": verdict,
             "synthetic_probability": round(mean_spoof_prob, 3),
             "features": {
-                "aasist_mean_score": round(mean_spoof_prob, 4),
+                "neural_spoof_mean_score": round(mean_spoof_prob, 4),
                 "num_segments_analyzed": len(spoof_probs),  # was `segments[:5]` — NameError
             },
             "available": True,
             "court_defensible": True,
-            "backend": "speechbrain-aasist",
+            "backend": "transformers-audio-deepfake",
         }
     except Exception:
         return None
@@ -392,7 +416,7 @@ def _run_worker() -> None:
                 print(json.dumps({"error": "Missing input path", "available": False}))
                 sys.stdout.flush()
                 continue
-            result = detect_voice_clone(input_path)
+            result = detect_voice_clone(input_path, model=req.get("model", "Vansh180/deepfake-audio-wav2vec2"))
         except Exception as exc:
             result = {"error": str(exc), "available": False}
         print(json.dumps(result))
@@ -402,7 +426,7 @@ def _run_worker() -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Voice clone / TTS detector")
     parser.add_argument("--input", type=str, help="Input audio file path")
-    parser.add_argument("--model", type=str, default="speechbrain/anti-spoof-aasist", help="SpeechBrain model name")
+    parser.add_argument("--model", type=str, default="Vansh180/deepfake-audio-wav2vec2", help="Audio deepfake model name")
     parser.add_argument("--warmup", action="store_true", help="Warmup mode — preload dependencies")
     parser.add_argument("--worker", action="store_true", help="Worker mode — persistent stdin/stdout")
     args = parser.parse_args()

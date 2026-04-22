@@ -98,6 +98,10 @@ class ToolRegistry:
         """
         handler_instance.register_tools(self)
 
+    def get_handler(self, name: str) -> ToolHandler | None:
+        """Return the callable handler for a registered tool, or None."""
+        return self._handlers.get(name)
+
     def get_tool(self, tool_name: str) -> Tool | None:
         """
         Get tool metadata by name.

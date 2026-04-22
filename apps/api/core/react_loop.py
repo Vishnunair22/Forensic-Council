@@ -474,7 +474,7 @@ def _get_available_tools_for_llm(state: WorkingMemoryState) -> list[dict[str, An
         },
         {
             "name": "anti_spoofing_detect",
-            "description": "SpeechBrain anti-spoofing — detect synthetic/replayed speech",
+            "description": "Neural audio anti-spoofing — detect synthetic/replayed speech",
         },
         {
             "name": "prosody_analyze",

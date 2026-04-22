@@ -766,6 +766,7 @@ Rules:
         if not statements:
             statements.append("No significant uncertainties remain.")
         return " ".join(statements)
+
     async def deliberate_narratives(
         self,
         overall_verdict: str,
@@ -892,11 +893,12 @@ Rules:
 
     async def sign_report(self, report: ForensicReport) -> ForensicReport:
         """Sign the forensic report with the Arbiter key."""
+        now = datetime.now(UTC)
         report_dict = report.model_dump(mode="json", exclude={"cryptographic_signature", "report_hash", "signed_utc"})
         report_json = json.dumps(report_dict, sort_keys=True)
         report_hash = hashlib.sha256(report_json.encode()).hexdigest()
-        signed_entry = sign_content(agent_id="Arbiter", content={"hash": report_hash, "timestamp": datetime.now(UTC).isoformat()})
+        signed_entry = sign_content(agent_id="Arbiter", content={"hash": report_hash, "timestamp": now.isoformat()})
         report.report_hash = report_hash
         report.cryptographic_signature = signed_entry.signature
-        report.signed_utc = datetime.now(UTC)
+        report.signed_utc = now
         return report

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import shutil
 import sys
 from pathlib import Path
 
@@ -22,12 +23,21 @@ REQUIRED_IMPORTS: dict[str, str] = {
     "PIL": "Pillow",
     "pydantic": "pydantic",
     "pymediainfo": "pymediainfo",
+    "pytesseract": "pytesseract",
     "scipy": "scipy",
     "sklearn": "scikit-learn",
+    "soundfile": "soundfile",
     "speechbrain": "speechbrain",
     "torch": "torch",
+    "torchaudio": "torchaudio",
     "torchvision": "torchvision",
     "ultralytics": "ultralytics",
+}
+
+REQUIRED_BINARIES: dict[str, str] = {
+    "exiftool": "EXIF metadata extraction",
+    "ffmpeg": "audio/video decoding",
+    "tesseract": "OCR fallback",
 }
 
 
@@ -70,6 +80,11 @@ def main() -> None:
         if importlib.util.find_spec(module_name) is None:
             failures.append(f"Missing import {module_name!r} from package {package_name!r}")
 
+    print("Validating required system binaries...")
+    for binary_name, purpose in REQUIRED_BINARIES.items():
+        if shutil.which(binary_name) is None:
+            failures.append(f"Missing system binary {binary_name!r} for {purpose}")
+
     print("Validating warm-up script registry...")
     missing_warmups = sorted(
         script_name for script_name in _WARMUP_SCRIPTS if not (ML_TOOLS_DIR / script_name).exists()
@@ -80,10 +95,10 @@ def main() -> None:
     referenced_scripts = find_referenced_ml_scripts()
     missing_referenced = sorted(referenced_scripts - existing_ml_scripts)
     if missing_referenced:
-        print("Optional ML subprocess scripts referenced but not present:")
-        for script_name in missing_referenced:
-            print(f"  - {script_name}")
-        print("Handlers for these paths include graceful fallbacks; image build will continue.")
+        failures.extend(
+            f"ML subprocess script referenced but not present: {script_name}"
+            for script_name in missing_referenced
+        )
 
     if failures:
         print("ML tool validation failed:")

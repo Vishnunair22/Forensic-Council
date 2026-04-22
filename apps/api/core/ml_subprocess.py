@@ -45,12 +45,19 @@ _WARMUP_SCRIPTS = {
     "diffusion_artifact_detector.py",
     # ── Audio / video tools ───────────────────────────────────────────────
     "audio_splice_detector.py",
+    "audio_gen_signature_scanner.py",
+    "neural_prosody_classifier.py",
     "voice_clone_detector.py",
     "enf_analysis.py",
+    "vfi_error_mapper.py",
+    "thumbnail_coherence_checker.py",
     "interframe_forgery_detector.py",
+    "lighting_correlator.py",
     "lighting_analyzer.py",
     "rolling_shutter_validator.py",
     "anomaly_classifier.py",
+    "exif_isolation_forest.py",
+    "astro_grounding_engine.py",
     "metadata_anomaly_scorer.py",
 }
 

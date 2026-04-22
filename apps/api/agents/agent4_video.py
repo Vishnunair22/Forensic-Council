@@ -128,12 +128,17 @@ class Agent4Video(ForensicAgent):
             # Collect all successful tool results to ensure no blindspots (VFI, Metadata, Codecs)
             dynamic_context = {}
             for tool_name, result in self._tool_context.items():
-                if isinstance(result, dict) and result.get("available"):
-                    # Extract high-value forensic keys for Gemini
-                    dynamic_context[tool_name] = {
-                        k: v for k, v in result.items()
-                        if k not in ("artifact", "error", "frames", "flagged_frames")
-                    }
+                if not isinstance(result, dict):
+                    continue
+                if result.get("error"):
+                    # Skip error results in temporal synthesis
+                    continue
+
+                # Extract high-value forensic keys for Gemini
+                dynamic_context[tool_name] = {
+                    k: v for k, v in result.items()
+                    if k not in ("artifact", "error", "frames", "flagged_frames")
+                }
 
             # Context from Agent 1 (Image Integrity) for cross-modal check
             agent1_context = {}
@@ -159,7 +164,13 @@ class Agent4Video(ForensicAgent):
                 return result
             except Exception as e:
                 await self._record_tool_error("gemini_deep_forensic", str(e))
-                return {"error": str(e), "analysis_source": "gemini_vision"}
+                return {
+                    "error": str(e),
+                    "analysis_source": "gemini_vision",
+                    "available": False,
+                    "court_defensible": False,
+                    "confidence": 0.0,
+                }
 
         registry.register("gemini_deep_forensic", gemini_deep_forensic_handler, "Gemini deep forensic analysis for video frames")
 

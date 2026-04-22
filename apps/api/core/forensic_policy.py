@@ -68,6 +68,7 @@ class ForensicPolicy:
     # --- Scoring Constants ---
     SINGLE_SIGNAL_DECAY: float = 0.55
     MANIP_PROBABILITY_CAP: float = 0.95
+    DEEP_ANALYSIS_BONUS: float = 1.15
 
     # --- Verdict Thresholds (Overall) ---
     MANIPULATED_PROB_THRESHOLD = 0.72

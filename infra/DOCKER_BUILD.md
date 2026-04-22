@@ -23,6 +23,13 @@ The backend Dockerfile accepts a `PRELOAD_MODELS` build argument (default: `1`).
 | `1` (default) | Downloads all ML model weights into the image during build. Clean volume starts hot. |
 | `0` | Skips model download. Models are fetched at runtime on first use and cached in named volumes. |
 
+With `PRELOAD_MODELS=1`, the backend image runs `scripts/validate_ml_tools.py`
+and `scripts/model_pre_download.py --strict`. The build fails if required Python
+ML imports, system binaries, referenced ML scripts, or required model downloads
+are missing. Current required build-time assets are YOLO, EasyOCR, OpenCLIP,
+torchvision ResNet-50, SpeechBrain ECAPA, and the configured audio deepfake
+anti-spoof model (`AASIST_MODEL_NAME`, default `Vansh180/deepfake-audio-wav2vec2`).
+
 Use `PRELOAD_MODELS=0` in CI/CD pipelines where build time matters and named volumes
 persist model caches across runs:
 

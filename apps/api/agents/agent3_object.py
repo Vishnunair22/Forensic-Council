@@ -40,9 +40,6 @@ class Agent3Object(ForensicAgent):
     plausibility ONLY. Not a second image-forensics agent.
     """
 
-    def inject_agent1_context(self, agent1_gemini_findings: dict) -> None:
-        self._agent1_context = agent1_gemini_findings or {}
-
     def __init__(
         self,
         agent_id: str,
@@ -68,6 +65,9 @@ class Agent3Object(ForensicAgent):
         )
         self._agent1_context: dict = {}
         self._agent1_context_event: Any | None = None
+
+    def inject_agent1_context(self, agent1_gemini_findings: dict) -> None:
+        self._agent1_context = agent1_gemini_findings or {}
 
     @property
     def agent_name(self) -> str:
@@ -163,24 +163,29 @@ class Agent3Object(ForensicAgent):
                 # to ensure the AI has total forensic visibility (Lighting, Contraband, Scale etc)
                 dynamic_context = {}
                 for tool_name, result in self._tool_context.items():
-                    if isinstance(result, dict) and result.get("available"):
-                        # Extract high-value forensic keys for Gemini
-                        dynamic_context[tool_name] = {
-                            k: v for k, v in result.items()
-                            if k not in ("detections", "artifact", "error", "box")
-                        }
-                        if tool_name == "object_detection":
-                            # Include summarized detections with bounding boxes so Gemini
-                            # can reason about spatial layout and compositing plausibility.
-                            dynamic_context[tool_name]["detections_summary"] = [
-                                {
-                                    "class": d["class_name"],
-                                    "confidence": d.get("confidence"),
-                                    "box": d.get("box", {}),
-                                }
-                                for d in result.get("detections", [])[:20]
-                                if "class_name" in d
-                            ]
+                    if not isinstance(result, dict):
+                        continue
+                    if result.get("error") and not result.get("detections"):
+                        # Skip pure error results; keep results that have data alongside an error
+                        continue
+
+                    # Extract high-value forensic keys for Gemini
+                    dynamic_context[tool_name] = {
+                        k: v for k, v in result.items()
+                        if k not in ("detections", "artifact", "error", "box")
+                    }
+                    if tool_name == "object_detection":
+                        # Include summarized detections with bounding boxes so Gemini
+                        # can reason about spatial layout and compositing plausibility.
+                        dynamic_context[tool_name]["detections_summary"] = [
+                            {
+                                "class": d["class_name"],
+                                "confidence": d.get("confidence"),
+                                "box": d.get("box", {}),
+                            }
+                            for d in result.get("detections", [])[:20]
+                            if "class_name" in d
+                        ]
 
                 agent1_context = self._agent1_context
                 context_summary = {"tools": dynamic_context, "agent1": agent1_context}

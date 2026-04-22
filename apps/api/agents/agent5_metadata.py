@@ -22,6 +22,15 @@ from core.handlers.video import VideoHandlers
 from core.structured_logging import get_logger
 from core.tool_registry import ToolRegistry
 
+import uuid
+from typing import Any
+from core.config import Settings
+from core.custody_logger import CustodyLogger
+from core.episodic_memory import EpisodicMemory
+from core.evidence import EvidenceArtifact
+from core.persistence.evidence_store import EvidenceStore
+from core.working_memory import WorkingMemory
+
 logger = get_logger(__name__)
 
 class Agent5Metadata(ForensicAgent):
@@ -36,8 +45,29 @@ class Agent5Metadata(ForensicAgent):
         """Share Agent 1 Gemini vision findings with this agent instance."""
         self._agent1_context = agent1_gemini_findings or {}
 
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        agent_id: str,
+        session_id: uuid.UUID,
+        evidence_artifact: EvidenceArtifact,
+        config: Settings,
+        working_memory: WorkingMemory,
+        episodic_memory: EpisodicMemory,
+        custody_logger: CustodyLogger,
+        evidence_store: EvidenceStore,
+        inter_agent_bus: Any | None = None,
+    ) -> None:
+        super().__init__(
+            agent_id=agent_id,
+            session_id=session_id,
+            evidence_artifact=evidence_artifact,
+            config=config,
+            working_memory=working_memory,
+            episodic_memory=episodic_memory,
+            custody_logger=custody_logger,
+            evidence_store=evidence_store,
+            inter_agent_bus=inter_agent_bus,
+        )
         self._agent1_context: dict = {}
         self._agent1_context_event: asyncio.Event | None = None
 
@@ -136,12 +166,17 @@ class Agent5Metadata(ForensicAgent):
             # Collect all successful tool results to ensure no blindspots (C2PA, Astro, Stego)
             dynamic_context = {}
             for tool_name, result in self._tool_context.items():
-                if isinstance(result, dict) and result.get("available"):
-                    # Extract high-value forensic keys for Gemini
-                    dynamic_context[tool_name] = {
-                        k: v for k, v in result.items()
-                        if k not in ("exif_raw", "artifact", "error")
-                    }
+                if not isinstance(result, dict):
+                    continue
+                if result.get("error"):
+                    # Skip error results in provenance synthesis
+                    continue
+
+                # Extract high-value forensic keys for Gemini
+                dynamic_context[tool_name] = {
+                    k: v for k, v in result.items()
+                    if k not in ("exif_raw", "artifact", "error")
+                }
 
             # Add Agent1 context if available
             a1 = getattr(self, "_agent1_context", {})
@@ -156,7 +191,13 @@ class Agent5Metadata(ForensicAgent):
                 )
             except Exception as e:
                 await self._record_tool_error("gemini_deep_forensic", str(e))
-                return {"error": str(e), "analysis_source": "gemini_vision"}
+                return {
+                    "error": str(e),
+                    "analysis_source": "gemini_vision",
+                    "available": False,
+                    "court_defensible": False,
+                    "confidence": 0.0,
+                }
 
             result = finding.to_finding_dict(self.agent_id)
             result["analysis_source"] = "gemini_vision"

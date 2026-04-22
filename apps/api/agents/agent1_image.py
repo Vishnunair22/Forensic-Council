@@ -28,6 +28,7 @@ from core.gemini_client import GeminiVisionClient
 from core.handlers.image import ImageHandlers
 from core.handlers.metadata import MetadataHandlers
 from core.image_utils import is_lossless_image
+from functools import cached_property
 from core.structured_logging import get_logger
 from core.tool_registry import ToolRegistry
 
@@ -47,20 +48,12 @@ class Agent1Image(ForensicAgent):
     def agent_name(self) -> str:
         return "Agent1_ImageIntegrity"
 
-    @property
+    @cached_property
     def _is_lossless(self) -> bool:
-        # Cache the result — is_lossless_image opens the file via PIL and is
-        # called 4+ times per investigation run (task_decomposition ×2,
-        # deep_task_decomposition ×1, build_initial_thought ×1).
-        # Use __dict__ directly to store the cached value without triggering
-        # the property setter and without requiring object.__setattr__.
-        cached: bool | None = self.__dict__.get("_is_lossless_cached")
-        if cached is None:
-            file_path = getattr(self.evidence_artifact, "file_path", "") or ""
-            mime = getattr(self.evidence_artifact, "mime_type", "") or ""
-            cached = is_lossless_image(file_path, mime or None)
-            self.__dict__["_is_lossless_cached"] = cached
-        return cached
+        """Cached: whether the evidence file is a lossless image format."""
+        file_path = getattr(self.evidence_artifact, "file_path", "") or ""
+        mime = getattr(self.evidence_artifact, "mime_type", "") or ""
+        return is_lossless_image(file_path, mime or None)
 
     @property
     def iteration_ceiling(self) -> int:
@@ -201,23 +194,28 @@ class Agent1Image(ForensicAgent):
                         error=str(_ctx_err),
                     )
 
+            async def _signal_cb(msg: str) -> None:
+                """Relay Gemini progress to the inter-agent bus for frontend streaming."""
+                try:
+                    if self.inter_agent_bus:
+                        self.inter_agent_bus.signal_event(
+                            self.session_id,
+                            "agent1_gemini_signal",
+                            {"progress": msg},
+                        )
+                except Exception as _e:
+                    logger.debug(f"{self.agent_id}: Gemini signal relay failed", error=str(_e))
+
             try:
                 finding = await _gemini.deep_forensic_analysis(
                     file_path=artifact.file_path,
                     exif_summary=context_summary,
+                    signal_callback=_signal_cb,
                 )
                 result = finding.to_finding_dict(self.agent_id)
                 result["analysis_source"] = "gemini_vision"
 
                 await self._record_tool_result("gemini_deep_forensic", result)
-                if self._gemini_signal_callback:
-                    try:
-                        cb_result = self._gemini_signal_callback(result)
-                        if asyncio.iscoroutine(cb_result):
-                            await cb_result
-                    except Exception as cb_err:
-                        logger.debug(f"{self.agent_id}: Gemini signal callback failed", error=str(cb_err))
-
                 return result
             except Exception as e:
                 await self._record_tool_error("gemini_deep_forensic", str(e))
@@ -235,9 +233,8 @@ class Agent1Image(ForensicAgent):
 
     async def extract_text_from_image_handler(self, input_data: dict) -> dict:
         """Compatibility proxy for ImageHandlers' OCR."""
-        # get_tool() returns a Tool metadata object — the callable lives in _handlers.
         handler = (
-            self._tool_registry._handlers.get("extract_text_from_image")
+            self._tool_registry.get_handler("extract_text_from_image")
             if self._tool_registry is not None
             else None
         )

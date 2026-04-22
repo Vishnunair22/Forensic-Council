@@ -11,7 +11,6 @@ from pydantic import BaseModel, Field
 
 from core.react_loop import AgentFinding
 
-
 class SelfReflectionReport(BaseModel):
     """
     Report from self-reflection pass.
@@ -44,12 +43,35 @@ class SelfReflectionReport(BaseModel):
     )
 
 
+# Module-level constant — list of terms that indicate forensic anomaly signals
+# in LLM reasoning steps. Used by _attach_llm_reasoning_to_findings.
+_ANOMALY_SIGNALS: tuple[str, ...] = (
+    "anomal",
+    "manipulat",
+    "inconsisten",
+    "suspicious",
+    "unusual",
+    "mismatch",
+    "artifact",
+    "synthetic",
+    "deepfake",
+    "edited",
+    "absent",
+    "missing",
+    "unexpected",
+    "flag",
+)
+
+
 def _attach_llm_reasoning_to_findings(
     findings: list[AgentFinding],
     react_chain: list[Any],
 ) -> list[AgentFinding]:
     """
     Attach LLM THOUGHT reasoning to the AgentFinding that followed it.
+
+    Mutates `findings` in-place and returns the same list for convenience.
+    Callers should use the return value; do not pass the same list twice.
 
     When the LLM drives the ReAct loop, each ACTION step is typically
     preceded by a THOUGHT step containing the LLM's interpretation of
@@ -103,24 +125,6 @@ def _attach_llm_reasoning_to_findings(
 
     # Usage counters so we consume each reasoning entry at most once per finding
     tool_usage: dict[str, int] = {}
-
-    # Anomaly signal words — thoughts containing these are especially important
-    _ANOMALY_SIGNALS = (
-        "anomal",
-        "manipulat",
-        "inconsisten",
-        "suspicious",
-        "unusual",
-        "mismatch",
-        "artifact",
-        "synthetic",
-        "deepfake",
-        "edited",
-        "absent",
-        "missing",
-        "unexpected",
-        "flag",
-    )
 
     for finding in findings:
         tool_name = (

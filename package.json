@@ -8,14 +8,18 @@
     "dev:api": "cd apps/api && uv run python scripts/run_api.py",
     "dev:web": "cd apps/web && npm run dev",
     "build:web": "cd apps/web && npm run build",
+    "type-check": "npm run type-check:api && npm run type-check:web",
+    "type-check:api": "cd apps/api && uv run pyright core/ agents/ api/ tools/",
+    "type-check:web": "cd apps/web && npm run type-check",
+    "test": "npm run test:api && npm run test:web",
+    "test:api": "cd apps/api && uv run pytest tests/",
+    "test:web": "cd apps/web && npm run test",
+    "docker:dev": "docker compose -f infra/docker-compose.yml --env-file .env up --build",
+    "docker:prod": "docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file .env up --build -d",
+    "docker:down": "docker compose -f infra/docker-compose.yml down",
     "lint": "npm run lint:api && npm run lint:web",
     "lint:api": "cd apps/api && uv run ruff check .",
-    "lint:web": "cd apps/web && npm run lint",
-    "test": "npm run test:api && npm run test:web",
-    "test:api": "cd apps/api && uv run pytest",
-    "test:web": "cd apps/web && npm test",
-    "docker:up": "docker compose -f infra/docker-compose.yml up --build",
-    "docker:dev": "docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml up --build"
+    "lint:web": "cd apps/web && npm run lint"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

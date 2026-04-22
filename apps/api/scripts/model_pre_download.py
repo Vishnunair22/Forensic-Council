@@ -22,10 +22,12 @@ surprising the first live analysis.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from core.config import get_settings
@@ -37,6 +39,12 @@ CACHE_DIRS = {
     "TORCH": settings.torch_home,
     "HF": settings.hf_home,
     "EASYOCR": settings.easyocr_model_dir,
+}
+
+HF_MODEL_DIRS = {
+    "open_clip": "models--timm--vit_base_patch32_clip_224.openai",
+    "speechbrain_ecapa": "models--speechbrain--spkrec-ecapa-voxceleb",
+    "speechbrain_aasist": "models--" + settings.aasist_model_name.replace("/", "--"),
 }
 
 GREEN = "\033[0;32m"
@@ -110,7 +118,51 @@ def download_yolo(force: bool = False) -> bool:
 
 def download_easyocr(force: bool = False) -> bool:
     easyocr_dir = CACHE_DIRS["EASYOCR"]
+    log_path = Path(easyocr_dir) / "easyocr_download.log"
     count = _file_count(easyocr_dir)
+    if count >= 2 and not force:
+        print(f"  {GREEN}[SKIP]{RESET}  EasyOCR - already cached ({count} files)")
+        return True
+
+    print(f"  {CYAN}[DOWN]{RESET}  EasyOCR English models -> {easyocr_dir}")
+    last_error: Exception | None = None
+    for attempt in range(1, 4):
+        orig_home = os.environ.get("HOME", "")
+        try:
+            os.environ["EASYOCR_MODEL_DIR"] = easyocr_dir
+            with tempfile.TemporaryDirectory(prefix="easyocr_") as temp_home, log_path.open(
+                "w", encoding="utf-8"
+            ) as log_file:
+                os.environ["HOME"] = temp_home
+                import easyocr
+
+                with contextlib.redirect_stdout(log_file), contextlib.redirect_stderr(
+                    log_file
+                ):
+                    easyocr.Reader(
+                        ["en"],
+                        gpu=False,
+                        download_enabled=True,
+                        model_storage_directory=easyocr_dir,
+                    )
+            print(f"  {GREEN}[OK  ]{RESET}  EasyOCR downloaded.")
+            return True
+        except Exception as exc:
+            last_error = exc
+            if attempt < 3:
+                print(
+                    f"  {YELLOW}[WARN]{RESET}  EasyOCR download attempt {attempt}/3 failed: {exc}; retrying..."
+                )
+                time.sleep(3 * attempt)
+        finally:
+            if orig_home:
+                os.environ["HOME"] = orig_home
+
+    print(
+        f"  {YELLOW}[WARN]{RESET}  EasyOCR download failed: {last_error} "
+        f"(details: {log_path})"
+    )
+    return False
     if count >= 2 and not force:
         print(f"  {GREEN}[SKIP]{RESET}  EasyOCR — already cached ({count} files)")
         return True
@@ -121,22 +173,30 @@ def download_easyocr(force: bool = False) -> bool:
         # EasyOCR tries to write a metadata dir under $HOME/.EasyOCR regardless
         # of model_storage_directory. Create a secure temporary directory.
         orig_home = os.environ.get("HOME", "")
-        with tempfile.TemporaryDirectory(prefix="easyocr_") as temp_home:
+        with tempfile.TemporaryDirectory(prefix="easyocr_") as temp_home, log_path.open(
+            "w", encoding="utf-8"
+        ) as log_file:
             os.environ["HOME"] = temp_home
             import easyocr
 
-            easyocr.Reader(
-                ["en"],
-                gpu=False,
-                download_enabled=True,
-                model_storage_directory=easyocr_dir,
-            )
+            with contextlib.redirect_stdout(log_file), contextlib.redirect_stderr(
+                log_file
+            ):
+                easyocr.Reader(
+                    ["en"],
+                    gpu=False,
+                    download_enabled=True,
+                    model_storage_directory=easyocr_dir,
+                )
         if orig_home:
             os.environ["HOME"] = orig_home
         print(f"  {GREEN}[OK  ]{RESET}  EasyOCR downloaded.")
         return True
     except Exception as exc:
-        print(f"  {YELLOW}[WARN]{RESET}  EasyOCR download failed: {exc}")
+        print(
+            f"  {YELLOW}[WARN]{RESET}  EasyOCR download failed: {exc} "
+            f"(details: {log_path})"
+        )
         return False
 
 
@@ -230,6 +290,39 @@ def download_speechbrain(force: bool = False) -> bool:
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 
+def download_audio_deepfake(force: bool = False) -> bool:
+    """Configured audio deepfake anti-spoofing model - Agent 2 primary."""
+    hf_dir = CACHE_DIRS["HF"]
+    model_name = settings.aasist_model_name
+    model_dirs = [
+        Path(hf_dir) / "hub" / HF_MODEL_DIRS["speechbrain_aasist"],
+        Path(hf_dir) / "transformers" / HF_MODEL_DIRS["speechbrain_aasist"],
+    ]
+    cached = (
+        [
+            p
+            for model_dir in model_dirs
+            for p in (model_dir / "blobs").glob("*")
+            if p.is_file() and p.stat().st_size > 1_000_000
+        ]
+    )
+    if cached and not force:
+        print(f"  {GREEN}[SKIP]{RESET}  Audio deepfake detector - already cached ({cached[0]})")
+        return True
+
+    print(f"  {CYAN}[DOWN]{RESET}  Audio deepfake detector ({model_name}) -> {hf_dir}")
+    try:
+        from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
+
+        AutoFeatureExtractor.from_pretrained(model_name)
+        AutoModelForAudioClassification.from_pretrained(model_name)
+        print(f"  {GREEN}[OK  ]{RESET}  Audio deepfake detector downloaded.")
+        return True
+    except Exception as exc:
+        print(f"  {YELLOW}[WARN]{RESET}  Audio deepfake detector download failed: {exc}")
+        return False
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Forensic Council — ML model pre-download (idempotent)"
@@ -280,16 +373,18 @@ def main() -> None:
     t0 = time.monotonic()
     print(f"\n{BOLD}Downloading models (skipping any already cached):{RESET}\n")
 
-    results = [
-        download_yolo(args.force),
-        download_easyocr(args.force),
-        download_open_clip(args.force),
-        download_resnet50(args.force),
-        download_speechbrain(args.force),
+    download_plan: list[tuple[str, Callable[[bool], bool]]] = [
+        ("YOLO11", download_yolo),
+        ("EasyOCR", download_easyocr),
+        ("OpenCLIP ViT-B-32", download_open_clip),
+        ("ResNet-50", download_resnet50),
+        ("SpeechBrain ECAPA", download_speechbrain),
+        ("Audio deepfake detector", download_audio_deepfake),
     ]
+    results = [(name, downloader(args.force)) for name, downloader in download_plan]
 
     elapsed = time.monotonic() - t0
-    passed = sum(results)
+    passed = sum(1 for _, ok in results if ok)
     total = len(results)
 
     print(f"\n{BOLD}{'=' * 55}{RESET}")
@@ -301,6 +396,8 @@ def main() -> None:
             f"{YELLOW}{BOLD}  {failed} model(s) failed — will retry lazily on first use.{RESET}"
         )
         print(f"  {passed}/{total} succeeded in {elapsed:.0f}s.")
+        failed_names = ", ".join(name for name, ok in results if not ok)
+        print(f"  Failed: {failed_names}")
     print(f"{BOLD}{'=' * 55}{RESET}\n")
 
     if args.strict and passed != total:

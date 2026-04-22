@@ -85,13 +85,22 @@ class AgentContextMixin:
             )
             return "\n".join(lines)
         except Exception as e:
-            logger.debug(f"Episodic context retrieval failed: {e}")
+            logger.warning(
+                "Episodic context retrieval failed — proceeding without historical calibration",
+                agent_id=self.agent_id,
+                error=str(e),
+            )
             return ""
 
     async def _record_tool_result(self, tool_name: str, result: dict) -> None:
-        """Store a successful tool result in _tool_context."""
+        """Store a tool result. If the result contains an error, route to the error counter."""
         self._tool_context[tool_name] = result
-        self._tool_success_count += 1
+        if result.get("error") and not result.get("available", True):
+            # Result is a structured failure — count as error, not success
+            if hasattr(self, "_tool_error_count"):
+                self._tool_error_count += 1
+        else:
+            self._tool_success_count += 1
 
     async def query_episodic_memory(
         self,

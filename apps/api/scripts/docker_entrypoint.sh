@@ -76,7 +76,7 @@ seed_cache_dir() {
     DST_COUNT=$(find "$DST" -type f 2>/dev/null | wc -l || echo 0)
     SRC_COUNT=$(find "$SRC" -type f 2>/dev/null | wc -l || echo 0)
 
-    if [ "${DST_COUNT:-0}" -lt "$MIN_FILES" ] && [ "${SRC_COUNT:-0}" -ge "$MIN_FILES" ]; then
+    if [ "${DST_COUNT:-0}" -lt "$SRC_COUNT" ] && [ "${SRC_COUNT:-0}" -ge "$MIN_FILES" ]; then
         echo "  Seeding $LABEL cache into volume: $SRC -> $DST"
         cp -a "$SRC/." "$DST/" 2>/dev/null || true
         if [ "$(id -u)" = "0" ]; then
@@ -103,16 +103,23 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
     # More robust cache detection:
     # For HuggingFace - check for model hub directories (not just individual files)
     # Valid models create hub/models--* directories with blobs/ subdirectories
-    HF_HUBS=$(find "$HF_DIR/hub" -type d -name "models--*" 2>/dev/null | wc -l || echo 0)
-    HF_BLOBS=$(find "$HF_DIR/hub" -type d -name "blobs" 2>/dev/null | wc -l || echo 0)
+    HF_HUBS=$(find "$HF_DIR/hub" "$HF_DIR/transformers" -type d -name "models--*" 2>/dev/null | wc -l || echo 0)
+    HF_BLOBS=$(find "$HF_DIR/hub" "$HF_DIR/transformers" -type d -name "blobs" 2>/dev/null | wc -l || echo 0)
     
     # For YOLO - check for actual .pt weight files (not config/settings.json)
     YOLO_WEIGHTS=$(find "$YOLO_DIR" -maxdepth 1 -type f -name "*.pt" 2>/dev/null | wc -l || echo 0)
     TORCH_WEIGHTS=$(find "$TORCH_DIR" -type f \( -name "*.pth" -o -name "*.pt" \) 2>/dev/null | wc -l || echo 0)
     EASYOCR_FILES=$(find "$EASYOCR_DIR" -type f 2>/dev/null | wc -l || echo 0)
 
-    # Need HF hubs (OpenCLIP + SpeechBrain), YOLO, torchvision ResNet, EasyOCR.
-    if [ "${HF_HUBS:-0}" -lt 2 ] || [ "${HF_BLOBS:-0}" -lt 2 ] || [ "${YOLO_WEIGHTS:-0}" -lt 1 ] || [ "${TORCH_WEIGHTS:-0}" -lt 1 ] || [ "${EASYOCR_FILES:-0}" -lt 2 ]; then
+    AASIST_SAFE_NAME=$(printf '%s' "${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}" | sed 's#/#--#g')
+    CLIP_READY=$(find "$HF_DIR/hub/models--timm--vit_base_patch32_clip_224.openai/blobs" -type f -size +100M 2>/dev/null | wc -l || echo 0)
+    ECAPA_READY=$(find "$HF_DIR/hub/models--speechbrain--spkrec-ecapa-voxceleb/blobs" -type f -size +1M 2>/dev/null | wc -l || echo 0)
+    AASIST_READY=$(find "$HF_DIR/hub/models--$AASIST_SAFE_NAME/blobs" "$HF_DIR/transformers/models--$AASIST_SAFE_NAME/blobs" -type f -size +1M 2>/dev/null | wc -l || echo 0)
+
+    # Need exact HF model families (OpenCLIP + SpeechBrain ECAPA + audio deepfake detector), YOLO,
+    # torchvision ResNet, and EasyOCR. Count checks alone can pass with the wrong
+    # cached model, so keep both exact and aggregate checks.
+    if [ "${HF_HUBS:-0}" -lt 3 ] || [ "${HF_BLOBS:-0}" -lt 3 ] || [ "${CLIP_READY:-0}" -lt 1 ] || [ "${ECAPA_READY:-0}" -lt 1 ] || [ "${AASIST_READY:-0}" -lt 1 ] || [ "${YOLO_WEIGHTS:-0}" -lt 1 ] || [ "${TORCH_WEIGHTS:-0}" -lt 1 ] || [ "${EASYOCR_FILES:-0}" -lt 2 ]; then
         echo ""
         echo "============================================================"
         echo "  ML cache incomplete - downloading models before startup"
@@ -127,7 +134,7 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
         echo "  Model download complete. Log: /tmp/model_download.log"
     else
         echo "  ML model volumes already populated - skipping download."
-        echo "  Found: $HF_HUBS model hubs, $HF_BLOBS blob dirs, $YOLO_WEIGHTS YOLO weights, $TORCH_WEIGHTS Torch weights, $EASYOCR_FILES EasyOCR files"
+        echo "  Found: $HF_HUBS model hubs, $HF_BLOBS blob dirs, OpenCLIP=$CLIP_READY, ECAPA=$ECAPA_READY, AASIST=$AASIST_READY, $YOLO_WEIGHTS YOLO weights, $TORCH_WEIGHTS Torch weights, $EASYOCR_FILES EasyOCR files"
     fi
 fi
 

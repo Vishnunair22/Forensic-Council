@@ -10,6 +10,10 @@ services:
     restart: always
     build:
       target: production
+      args:
+        PRELOAD_MODELS: ${PRELOAD_MODELS:-1}
+        YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-yolo11n.pt}
+        AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
     # Suppress the host-facing 8000 port — in production all traffic must flow
     # through Caddy. Direct port exposure bypasses TLS, rate limiting, and
     # security headers.
@@ -51,6 +55,10 @@ services:
     restart: always
     build:
       target: production
+      args:
+        PRELOAD_MODELS: ${PRELOAD_MODELS:-1}
+        YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-yolo11n.pt}
+        AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
     environment:
       RELOAD: "false"
       APP_ENV: production

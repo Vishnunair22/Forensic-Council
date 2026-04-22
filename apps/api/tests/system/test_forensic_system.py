@@ -20,8 +20,13 @@ import pytest
 
 pytestmark = pytest.mark.skip(reason="Standalone system test — run with Docker stack directly")
 
-ROOT = Path(__file__).resolve().parents[1]
-API_DIR = ROOT / "apps" / "api"
+# Identify API root (works for both local and Docker)
+API_DIR = Path(__file__).resolve().parents[2]
+if not (API_DIR / "api").exists():
+    # Fallback for complex layouts
+    if os.path.exists("/app/api"):
+        API_DIR = Path("/app")
+
 sys.path.insert(0, str(API_DIR))
 os.chdir(str(API_DIR))
 
@@ -160,9 +165,9 @@ async def test_agent1_initial():
         tool_names = [t.name for t in tools]
         ok(f"  Tools: {', '.join(tool_names)}")
 
-        # Check required tools
-        required = ["ela_full_image", "frequency_domain_analysis", "noise_fingerprint",
-                     "deepfake_frequency_check", "analyze_image_content", "gemini_deep_forensic"]
+        # Check required tools (Modernized Neural-First Registry)
+        required = ["neural_ela", "frequency_domain_analysis", "noiseprint_cluster",
+                     "analyze_image_content", "gemini_deep_forensic"]
         for req in required:
             if req in tool_names:
                 ok(f"  Required tool '{req}' registered")
@@ -183,7 +188,7 @@ async def test_agent1_initial():
 
         for i, f in enumerate(findings):
             fname = f.metadata.get("tool_name", f.finding_type) if hasattr(f, "metadata") else f.finding_type
-            conf = getattr(f, "confidence_raw", 0)
+            conf = getattr(f, "confidence_raw", 0) or 0
             status = getattr(f, "status", "UNKNOWN")
             ok(f"  Finding {i+1}: {fname} | confidence={conf:.3f} | status={status}")
 
@@ -250,7 +255,7 @@ async def test_agent1_deep(agent=None):
 
         for i, f in enumerate(deep_findings):
             fname = f.metadata.get("tool_name", f.finding_type) if hasattr(f, "metadata") else f.finding_type
-            conf = getattr(f, "confidence_raw", 0)
+            conf = getattr(f, "confidence_raw", 0) or 0
             phase = f.metadata.get("analysis_phase", "unknown")
             ok(f"  Deep Finding {i+1}: {fname} | confidence={conf:.3f} | phase={phase}")
 
@@ -330,7 +335,7 @@ async def test_other_agents():
 
             for f in findings[:5]:
                 fname = f.metadata.get("tool_name", f.finding_type) if hasattr(f, "metadata") else f.finding_type
-                conf = getattr(f, "confidence_raw", 0)
+                conf = getattr(f, "confidence_raw", 0) or 0
                 ok(f"    {fname}: confidence={conf:.3f}")
 
             if len(findings) > 5:

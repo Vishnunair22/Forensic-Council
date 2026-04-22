@@ -108,27 +108,32 @@ class InferenceClient:
                 self._models["siglip"] = get_clip_analyzer()
             return self._models["siglip"]
 
-    # ── AASIST/SpeechBrain (Audio Anti-Spoofing) ──────────────────────────
+    # ── Audio Deepfake Detector (Audio Anti-Spoofing) ─────────────────────
 
     async def get_aasist_classifier(self):
-        """Get or load AASIST anti-spoofing classifier."""
+        """Get or load the configured audio anti-spoofing classifier."""
         async with self._load_locks["aasist"]:
             if "aasist" not in self._models:
                 try:
-                    from speechbrain.inference.classifiers import EncoderClassifier
-                    logger.info(f"Loading AASIST model {self.settings.aasist_model_name}...")
+                    from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
+                    logger.info(f"Loading audio deepfake model {self.settings.aasist_model_name}...")
 
                     if self.settings.offline_mode:
                         os.environ["HF_HUB_OFFLINE"] = "1"
                         os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
-                    classifier = EncoderClassifier.from_hparams(
-                        source=self.settings.aasist_model_name,
-                        run_opts={"device": "cpu"},
+                    extractor = AutoFeatureExtractor.from_pretrained(
+                        self.settings.aasist_model_name,
+                        local_files_only=self.settings.offline_mode,
                     )
-                    self._models["aasist"] = classifier
+                    model = AutoModelForAudioClassification.from_pretrained(
+                        self.settings.aasist_model_name,
+                        local_files_only=self.settings.offline_mode,
+                    )
+                    model.eval()
+                    self._models["aasist"] = (extractor, model)
                 except Exception as e:
-                    logger.error(f"Failed to load AASIST: {e}")
+                    logger.error(f"Failed to load audio deepfake model: {e}")
                     return None
             return self._models["aasist"]
 
@@ -157,8 +162,11 @@ class InferenceClient:
         classifier = await self.get_aasist_classifier()
         if classifier is None:
             return None
-        # classifier.classify_batch is usually sync in SB
-        return await asyncio.to_thread(classifier.classify_batch, signal)
+        extractor, model = classifier
+        if isinstance(signal, dict):
+            return await asyncio.to_thread(model, **signal)
+        inputs = extractor(signal, sampling_rate=16000, return_tensors="pt", padding=True)
+        return await asyncio.to_thread(model, **inputs)
 
     # ── Phase 2 Neural Forensics ──────────────────────────────────────────
 

@@ -236,7 +236,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             if app <= 0:
                 continue
             rel = max(0.0, 1.0 - m.get("error_rate", 0.0))
-            weight = rel * app * (1.15 if m.get("deep_finding_count", 0) > 0 else 1.0)
+            weight = rel * app * (ForensicPolicy.DEEP_ANALYSIS_BONUS if m.get("deep_finding_count", 0) > 0 else 1.0)
             wc_sum += m["confidence_score"] * weight
             w_sum += weight
             we_num += m["error_rate"] * max(1, app)
@@ -257,24 +257,33 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 return float(meta.get("compression_penalty", 1.0))
         return 1.0
 
-    def _compute_verdict(self, mp, ms, oc, oer, contested, metrics, findings) -> str:
-        if mp >= ForensicPolicy.MANIPULATED_PROB_THRESHOLD and ms >= ForensicPolicy.MANIP_SIGNAL_MIN_REQUIRED:
+    def _compute_verdict(
+        self,
+        manipulation_probability: float,
+        manipulation_signals: int,
+        overall_confidence: float,
+        overall_error_rate: float,
+        contested_count: int,
+        active_metrics: list[dict],
+        all_findings: list[dict],
+    ) -> str:
+        if manipulation_probability >= ForensicPolicy.MANIPULATED_PROB_THRESHOLD and manipulation_signals >= ForensicPolicy.MANIP_SIGNAL_MIN_REQUIRED:
             return "MANIPULATED"
 
-        if mp >= ForensicPolicy.LIKELY_MANIPULATED_PROB_THRESHOLD and ms >= ForensicPolicy.MANIP_SIGNAL_MIN_REQUIRED:
+        if manipulation_probability >= ForensicPolicy.LIKELY_MANIPULATED_PROB_THRESHOLD and manipulation_signals >= ForensicPolicy.MANIP_SIGNAL_MIN_REQUIRED:
             return "LIKELY_MANIPULATED"
 
-        if mp >= ForensicPolicy.SUSPICIOUS_PROB_THRESHOLD and ms >= 1:
+        if manipulation_probability >= ForensicPolicy.SUSPICIOUS_PROB_THRESHOLD and manipulation_signals >= 1:
             return "SUSPICIOUS"
 
-        if (ms == 0 and oc >= ForensicPolicy.AUTHENTIC_CONF_THRESHOLD
-            and oer <= ForensicPolicy.AUTHENTIC_ERROR_MAX and contested == 0):
+        if (manipulation_signals == 0 and overall_confidence >= ForensicPolicy.AUTHENTIC_CONF_THRESHOLD
+            and overall_error_rate <= ForensicPolicy.AUTHENTIC_ERROR_MAX and contested_count == 0):
             return "AUTHENTIC"
 
-        if ms == 0 and oc >= ForensicPolicy.LIKELY_AUTHENTIC_CONF_THRESHOLD and oer <= ForensicPolicy.LIKELY_AUTHENTIC_ERROR_MAX:
+        if manipulation_signals == 0 and overall_confidence >= ForensicPolicy.LIKELY_AUTHENTIC_CONF_THRESHOLD and overall_error_rate <= ForensicPolicy.LIKELY_AUTHENTIC_ERROR_MAX:
             return "LIKELY_AUTHENTIC"
 
-        if (len(metrics) <= 1 and oc < ForensicPolicy.ABSTAIN_CONF_FLOOR) or oer > ForensicPolicy.ABSTAIN_ERROR_CEILING:
+        if (len(active_metrics) <= 1 and overall_confidence < ForensicPolicy.ABSTAIN_CONF_FLOOR) or overall_error_rate > ForensicPolicy.ABSTAIN_ERROR_CEILING:
             return "ABSTAIN"
 
         return "INCONCLUSIVE"
@@ -291,7 +300,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         contested = []
         contradictions = [c for c in comparisons if c.verdict == FindingVerdict.CONTRADICTION]
 
-        for comp in contradictions[:5]:
+        for comp in contradictions:
             fa, fb = comp.finding_a, comp.finding_b
             agent_a_id = fa.get("agent_id", "")
             agent_b_id = fb.get("agent_id", "")

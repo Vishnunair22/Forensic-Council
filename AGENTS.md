@@ -10,13 +10,13 @@ Welcome, AI Assistant. This file provides essential context for working on the F
 
 - **Frontend**: Next.js 15 (App Router), TypeScript, TailwindCSS, Framer Motion
 - **Backend**: FastAPI (Python 3.12), asyncio, ReAct Agent Loops
-- **AI/ML**: Groq (Llama 3.3 70B), Google Gemini 2.0 Pro/Flash (Vision), YOLOv8 (Object Detection)
+- **AI/ML**: Groq (Llama 3.3 70B), Google Gemini 2.0 Flash (Vision), YOLO11 (Object Detection)
 - **Infrastructure**: Redis (Working Memory), PostgreSQL 17 (Custody Ledger), Qdrant (Episodic Memory), Docker, Caddy 2
 
 ### Monorepo Structure
 
 ```
-D:\
+.
 ├── apps/
 │   ├── api/          # Python FastAPI backend
 │   │   ├── agents/   # 5 forensic agents + Arbiter

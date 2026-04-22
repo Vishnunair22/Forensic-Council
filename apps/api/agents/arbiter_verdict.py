@@ -254,7 +254,7 @@ def evidence_verdict_of(finding: dict[str, Any]) -> str:
         return meta_verdict
     if finding.get("status") == "NOT_APPLICABLE":
         return "NOT_APPLICABLE"
-    if finding.get("status") == "INCOMPLETE" or meta.get("court_defensible") is False:
+    if meta.get("court_defensible") is False:
         return "ERROR"
     if _has_legacy_positive_signal(finding):
         return "POSITIVE"

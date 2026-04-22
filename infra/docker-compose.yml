@@ -64,6 +64,7 @@ x-backend-env: &backend-env
   EASYOCR_MODEL_DIR: /app/cache/easyocr
   YOLO_MODEL_DIR: /app/cache/ultralytics
   YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-yolo11n.pt}
+  AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
   YOLO_CONFIG_DIR: /app/cache/ultralytics
   TORCH_HOME: /app/cache/torch
   HF_HOME: /app/cache/huggingface
@@ -259,6 +260,10 @@ services:
       context: ../apps/api
       dockerfile: Dockerfile
       target: development
+      args:
+        PRELOAD_MODELS: ${PRELOAD_MODELS:-1}
+        YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-yolo11n.pt}
+        AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
     container_name: forensic_api
     restart: unless-stopped
     ports:
@@ -339,6 +344,10 @@ services:
       context: ../apps/api
       dockerfile: Dockerfile
       target: development
+      args:
+        PRELOAD_MODELS: ${PRELOAD_MODELS:-1}
+        YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-yolo11n.pt}
+        AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
     container_name: forensic_worker
     restart: unless-stopped
     command: ["worker"]
