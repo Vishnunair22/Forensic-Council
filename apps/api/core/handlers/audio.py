@@ -91,6 +91,9 @@ class AudioHandlers(BaseToolHandler):
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         result = await run_ml_tool("audio_gen_signature_scanner.py", artifact.file_path, timeout=10.0)
         if not result.get("error") and result.get("available"):
+            result.setdefault("is_ai_generated", bool(result.get("synthetic_detected")))
+            result.setdefault("verdict", "LIKELY_SYNTHETIC" if result.get("is_ai_generated") else "NATURAL")
+            result.setdefault("court_defensible", True)
             await self.agent._record_tool_result("audio_gen_signature", result)
             return result
         # Degraded — ML tool unavailable
@@ -170,6 +173,11 @@ class AudioHandlers(BaseToolHandler):
             )
         except Exception as exc:
             result = {"error": str(exc), "degraded": True, "available": False, "confidence": 0.0}
+        if not result.get("error"):
+            result.setdefault("available", True)
+            result.setdefault("court_defensible", True)
+            result.setdefault("is_spoofed", bool(result.get("spoof_detected")))
+            result.setdefault("verdict", "LIKELY_SPOOFED" if result.get("is_spoofed") else "GENUINE")
         # Store under the registered tool name
         await self.agent._record_tool_result("anti_spoofing_detect", result)
         return result
@@ -178,6 +186,12 @@ class AudioHandlers(BaseToolHandler):
         """Acoustic prosody analysis (pitch, jitter, shimmer via Praat/librosa)."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         result = await real_prosody_analyze(artifact=artifact)
+        anomalies = result.get("anomalies") if isinstance(result, dict) else None
+        if isinstance(anomalies, list):
+            result.setdefault("anomaly_count", len(anomalies))
+            result.setdefault("prosody_anomaly", len(anomalies) > 0)
+        result.setdefault("available", True)
+        result.setdefault("court_defensible", True)
         await self.agent._record_tool_result("prosody_analyze", result)
         return result
 
@@ -187,6 +201,8 @@ class AudioHandlers(BaseToolHandler):
         loop = asyncio.get_running_loop()
         await self.agent.update_sub_task("Tracing isolation forest splice points...")
         result = await loop.run_in_executor(None, detect_audio_splices, artifact.file_path)
+        result.setdefault("available", not bool(result.get("error")))
+        result.setdefault("court_defensible", True)
         await self.agent._record_tool_result("audio_splice_detect", result)
         return result
 
@@ -194,6 +210,11 @@ class AudioHandlers(BaseToolHandler):
         """Background noise floor consistency analysis."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         result = await real_background_noise_consistency(artifact=artifact)
+        shift_points = result.get("shift_points") if isinstance(result, dict) else None
+        result.setdefault("shift_detected", result.get("consistent") is False or bool(shift_points))
+        result.setdefault("available", True)
+        result.setdefault("court_defensible", True)
+        result.setdefault("confidence", 0.70 if result.get("shift_detected") else 0.85)
         await self.agent._record_tool_result("background_noise_analysis", result)
         return result
 
@@ -201,6 +222,18 @@ class AudioHandlers(BaseToolHandler):
         """Codec chain re-encoding event fingerprinting."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         result = await real_codec_fingerprint(artifact=artifact)
+        events = result.get("reencoding_events") if isinstance(result, dict) else None
+        result.setdefault("re_encoding_detected", bool(events))
+        result.setdefault("reencoding_event_count", len(events) if isinstance(events, list) else 0)
+        result.setdefault("available", True)
+        result.setdefault("court_defensible", True)
+        if "confidence" not in result:
+            event_confidences = [
+                float(event.get("confidence", 0.0) or 0.0)
+                for event in events or []
+                if isinstance(event, dict)
+            ]
+            result["confidence"] = max(event_confidences) if event_confidences else 0.85
         await self.agent._record_tool_result("codec_fingerprinting", result)
         return result
 
@@ -238,5 +271,7 @@ class AudioHandlers(BaseToolHandler):
         loop = asyncio.get_running_loop()
         await self.agent.update_sub_task("Analyzing electrical network frequency grid...")
         result = await loop.run_in_executor(None, analyze_enf, artifact.file_path)
+        result.setdefault("available", not bool(result.get("error")))
+        result.setdefault("court_defensible", True)
         await self.agent._record_tool_result("enf_analysis", result)
         return result

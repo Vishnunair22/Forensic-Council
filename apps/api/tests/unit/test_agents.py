@@ -28,7 +28,7 @@ os.environ.setdefault("LLM_PROVIDER", "none")
 os.environ.setdefault("LLM_API_KEY", "test-key")
 os.environ.setdefault("LLM_MODEL", "test-model")
 
-from agents.base_agent import SelfReflectionReport
+from agents.reflection import SelfReflectionReport
 from core.config import Settings
 from core.evidence import ArtifactType, EvidenceArtifact
 
@@ -289,5 +289,4 @@ class TestSelfReflectionReport:
         assert r.all_tasks_complete is True
         assert r.court_defensible is True
         assert "cross-validated" in r.reflection_notes
-
 

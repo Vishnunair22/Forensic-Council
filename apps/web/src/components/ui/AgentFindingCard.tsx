@@ -124,14 +124,14 @@ function SectionGroup({ section }: { section: Section }) {
         aria-expanded={open}
       >
         <FlagIcon className={clsx("w-3.5 h-3.5 shrink-0", flagCfg.color)} />
-        <span className={clsx("flex-1 text-[10px] font-black tracking-widest uppercase", flagCfg.color)}>
+        <span className={clsx("flex-1 text-[10px] font-black tracking-widest", flagCfg.color)}>
           {section.label}
         </span>
-        <span className="text-[10px] font-mono font-black text-white/20 mr-2 uppercase">
+        <span className="text-[10px] font-mono font-black text-white/20 mr-2">
           {section.findings.length} Signals
         </span>
         {section.keySignal && (
-          <span className="hidden sm:block text-[9px] font-mono font-black text-white/40 truncate max-w-[200px] mr-2 uppercase">
+          <span className="hidden sm:block text-[9px] font-mono font-black text-white/40 truncate max-w-[200px] mr-2">
             {section.keySignal}
           </span>
         )}
@@ -256,15 +256,15 @@ export function AgentFindingCard({
             </div>
             <div className="space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm font-black text-white uppercase tracking-tighter">{meta.name}</h3>
-                <span className="text-[10px] text-white/40 font-black tracking-widest uppercase">{meta.role}</span>
+                <h3 className="text-sm font-black text-white tracking-tighter">{meta.name}</h3>
+                <span className="text-[10px] text-white/40 font-black tracking-widest">{meta.role}</span>
                 {anomalyCount > 0 && (
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-danger/10 border border-danger/20 text-danger text-[10px] font-black uppercase">
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-danger/10 border border-danger/20 text-danger text-[10px] font-black">
                     <AlertTriangle className="w-2.5 h-2.5" /> {anomalyCount} Flags
                   </span>
                 )}
               </div>
-              <p className="text-[10px] font-mono font-black text-white/40 flex items-center gap-2 uppercase tracking-tight">
+              <p className="text-[10px] font-mono font-black text-white/40 flex items-center gap-2 tracking-tight">
                 {sections.length} Sectors
                 <span className="text-white/10">·</span>
                 {realFindings.length} Signals
@@ -277,7 +277,7 @@ export function AgentFindingCard({
           <div className="flex flex-col items-end gap-3 text-right shrink-0">
             <ConfidenceBar value={confidence} />
             <div className="flex items-center gap-2">
-              <div className="px-3 py-1 rounded-full border border-border-subtle bg-surface-1 text-[9px] font-black tracking-[0.2em] text-white/40 uppercase">
+              <div className="px-3 py-1 rounded-full border border-border-subtle bg-surface-1 text-[9px] font-black tracking-[0.2em] text-white/40">
                 {phase === 'deep' ? 'Deep Analysis' : 'Intake Scan'}
               </div>
               <div className={clsx(

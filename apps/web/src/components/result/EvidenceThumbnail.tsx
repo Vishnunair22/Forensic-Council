@@ -82,8 +82,8 @@ export function EvidenceThumbnail({
      >
       <Icon className="w-7 h-7" style={{ color }} aria-hidden="true" />
      </div>
-     <span className="text-[10px] font-mono font-bold tracking-widest text-white/50">
-      {cat} evidence
+     <span className="text-[10px] font-mono font-bold tracking-widest text-white/50 capitalize">
+      {cat} Evidence
      </span>
      {fileName && (
       <span className="text-[11px] text-white/40 truncate max-w-[140px]">

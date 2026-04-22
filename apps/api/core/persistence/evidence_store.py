@@ -585,7 +585,7 @@ class EvidenceStore:
         """
 
         rows = await self._postgres.fetch(query, session_id)
-        
+
         return [
             EvidenceArtifact(
                 artifact_id=row["artifact_id"],

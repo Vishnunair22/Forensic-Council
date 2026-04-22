@@ -10,7 +10,6 @@ This is distinct from OpenTelemetry (observability.py) which is used for
 infrastructure monitoring. Pipeline tracing is part of the forensic record.
 """
 
-import asyncio
 import json
 from datetime import UTC, datetime
 from typing import Any
@@ -71,9 +70,9 @@ class PipelineTrace:
         self.end_time = datetime.now(UTC)
         if metadata_update:
             self.metadata.update(metadata_update)
-        
+
         duration_ms = int((self.end_time - self.start_time).total_seconds() * 1000)
-        
+
         try:
             client = await get_postgres_client()
             await client.execute(
@@ -98,7 +97,7 @@ class PipelineTrace:
         self.metadata["error"] = error
         if metadata_update:
             self.metadata.update(metadata_update)
-            
+
         duration_ms = int((self.end_time - self.start_time).total_seconds() * 1000)
 
         try:

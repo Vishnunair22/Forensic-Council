@@ -28,7 +28,7 @@ export function IntelligenceBrief({ verdictSentence, keyFindings = [], isDeepPha
           
           <div className="flex items-center gap-3 mb-6 text-white/20">
             <Hash className="w-4 h-4 text-primary/40" />
-            <span className="text-[10px] font-black tracking-[0.4em] uppercase">Executive Briefing</span>
+            <span className="text-[10px] font-black tracking-[0.4em]">Executive Briefing</span>
           </div>
           
           <p className="text-xl sm:text-2xl font-medium text-white/80 leading-relaxed italic text-balance font-sans">
@@ -41,9 +41,9 @@ export function IntelligenceBrief({ verdictSentence, keyFindings = [], isDeepPha
       {keyFindings.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center gap-4">
-            <span className="text-[10px] font-black tracking-[0.3em] text-white/20 uppercase">Key Findings</span>
+            <span className="text-[10px] font-black tracking-[0.3em] text-white/20">Key Findings</span>
             <span className={clsx(
-              "text-[9px] font-black px-3 py-1 rounded-full tracking-[0.2em] uppercase",
+              "text-[9px] font-black px-3 py-1 rounded-full tracking-[0.2em]",
               isDeepPhase
                 ? "bg-accent/10 border border-accent/20 text-accent shadow-[0_0_15px_rgba(139,92,246,0.1)]"
                 : "bg-primary/10 border border-primary/20 text-primary shadow-[0_0_15px_rgba(34,211,238,0.1)]"

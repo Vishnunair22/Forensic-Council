@@ -13,41 +13,63 @@ const overlayVariants = {
 };
 
 const scaleIn = {
- hidden: { opacity: 0, scale: 0.95, y: 10 },
- visible: {
-  opacity: 1,
-  scale: 1,
-  y: 0,
-  transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] as const },
- },
- exit: { opacity: 0, scale: 0.95, y: 10, transition: { duration: 0.2 } },
+	hidden: { opacity: 0, scale: 0.95, y: 10 },
+	visible: {
+		opacity: 1,
+		scale: 1,
+		y: 0,
+		transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] as const },
+	},
+	exit: { opacity: 0, scale: 0.95, y: 10, transition: { duration: 0.2 } },
 };
 
+const ViewfinderBrackets = () => (
+	<div className="absolute inset-0 z-30 pointer-events-none opacity-40">
+		<div className="absolute top-4 left-4 w-4 h-4 border-t-2 border-l-2 border-cyan-400" />
+		<div className="absolute top-4 right-4 w-4 h-4 border-t-2 border-r-2 border-cyan-400" />
+		<div className="absolute bottom-4 left-4 w-4 h-4 border-b-2 border-l-2 border-cyan-400" />
+		<div className="absolute bottom-4 right-4 w-4 h-4 border-b-2 border-r-2 border-cyan-400" />
+	</div>
+);
+
 interface UploadSuccessModalProps {
- file: File;
- onNewUpload: () => void;
- onStartAnalysis: () => void;
+	file: File;
+	onNewUpload: () => void;
+	onStartAnalysis: () => void;
 }
 
 export function UploadSuccessModal({
- file,
- onNewUpload,
- onStartAnalysis,
+	file,
+	onNewUpload,
+	onStartAnalysis,
 }: UploadSuccessModalProps) {
- const [previewUrl, setPreviewUrl] = useState<string | null>(null);
- const [hasError, setHasError] = useState(false);
- const modalRef = useRef<HTMLDivElement>(null);
- const previousFocusRef = useRef<HTMLElement | null>(null);
- const { playSound } = useSound();
- const [mounted, setMounted] = useState(false);
+	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+	const [fileHash, setFileHash] = useState<string | null>(null);
+	const [hasError, setHasError] = useState(false);
+	const modalRef = useRef<HTMLDivElement>(null);
+	const previousFocusRef = useRef<HTMLElement | null>(null);
+	const { playSound } = useSound();
+	const [mounted, setMounted] = useState(false);
 
- useEffect(() => {
-  setMounted(true);
- }, []);
+	const computeHash = async (f: File) => {
+		try {
+			const buf = await f.arrayBuffer();
+			const digest = await crypto.subtle.digest("SHA-256", buf);
+			return Array.from(new Uint8Array(digest))
+				.map((b) => b.toString(16).padStart(2, "0"))
+				.join("");
+		} catch {
+			return null;
+		}
+	};
 
- useEffect(() => {
-  playSound("success");
- }, [playSound]);
+	useEffect(() => {
+		setMounted(true);
+		playSound("success");
+		if (file) {
+			computeHash(file).then(setFileHash);
+		}
+	}, [file, playSound]);
 
  useEffect(() => {
   if (!file) {
@@ -129,8 +151,8 @@ export function UploadSuccessModal({
 
  const modalContent = (
   <motion.div
-   className="fixed top-0 left-0 w-full h-full z-[9999] flex items-center justify-center p-4 backdrop-blur-2xl touch-none"
-   style={{ background: "rgba(0,0,0,0.85)" }}
+   className="fixed top-0 left-0 w-full h-full z-[9999] flex items-center justify-center p-4 backdrop-blur-3xl touch-none"
+   style={{ background: "rgba(0,0,0,0.7)" }}
    variants={overlayVariants}
    initial="hidden"
    animate="visible"
@@ -141,7 +163,7 @@ export function UploadSuccessModal({
   >
     <motion.div
      ref={modalRef}
-     className="premium-glass relative w-full max-w-md overflow-hidden rounded-[2.5rem] p-12 shadow-2xl"
+     className="frosted-panel relative w-full max-w-md overflow-hidden rounded-[2.5rem] p-12 shadow-2xl"
      variants={scaleIn}
      initial="hidden"
      animate="visible"
@@ -149,19 +171,20 @@ export function UploadSuccessModal({
     >
     <div className="scan-line-overlay opacity-20" />
     <motion.div
-     className="w-32 h-32 rounded-[2rem] mx-auto mb-10 overflow-hidden flex items-center justify-center relative z-10 border border-white/[0.08] bg-white/[0.02] shadow-2xl"
+     className="w-32 h-32 rounded-[2rem] mx-auto mb-10 overflow-hidden flex items-center justify-center relative z-10 border border-white/[0.08] bg-black/40 shadow-2xl group"
      animate={{
       y: [0, -5, 0],
-      rotate: [0, 1, 0, -1, 0],
+      rotate: [0, 0.5, 0, -0.5, 0],
      }}
      transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
     >
+     <ViewfinderBrackets />
      {previewUrl && !hasError ? (
       isVideo ? (
        <video
         key={previewUrl}
         src={previewUrl}
-        className="w-full h-full object-cover transition-opacity duration-500"
+        className="w-full h-full object-cover transition-opacity duration-500 opacity-60 group-hover:opacity-100"
         muted
         loop
         autoPlay
@@ -175,7 +198,7 @@ export function UploadSuccessModal({
         key={previewUrl}
         src={previewUrl}
         alt={`Evidence preview: ${file.name}`}
-        className="w-full h-full object-cover transition-opacity duration-500"
+        className="w-full h-full object-cover transition-opacity duration-500 opacity-60 group-hover:opacity-100"
         onError={() => setHasError(true)}
        />
       )
@@ -204,14 +227,27 @@ export function UploadSuccessModal({
         animate={{ opacity: [1, 0.5, 1] }}
         transition={{ duration: 3, repeat: Infinity }}
        />
-       <span className="text-[9px] font-mono font-black text-primary/70 tracking-[0.3em] uppercase">
+       <span className="text-[9px] font-mono font-black text-primary/70 tracking-[0.3em]">
         Integrity Verified
        </span>
       </div>
       
-      <h3 id="upload-success-title" className="text-white text-2xl font-black truncate max-w-full px-4 mb-4 tracking-tight font-heading text-center">
+      <h3 id="upload-success-title" className="text-white text-2xl font-black truncate max-w-full px-4 mb-2 tracking-tight font-heading text-center">
        {file.name}
       </h3>
+      
+      <div className="flex flex-col items-center gap-2 mt-4 w-full">
+        <p className="text-[10px] font-mono font-bold text-white/30 tracking-tight">
+          Size: {(file.size / 1024 / 1024).toFixed(2)} MB // Type: {file.type || "Unknown"}
+        </p>
+        {fileHash && (
+          <div className="py-1 px-3 rounded bg-white/[0.02] border border-white/[0.05]">
+            <p className="text-[9px] font-mono text-cyan-500/50 tracking-widest">
+              SHA-256: {fileHash.slice(0, 12)}...{fileHash.slice(-8)}
+            </p>
+          </div>
+        )}
+      </div>
      </div>
 
      <div className="flex flex-col sm:flex-row gap-4 mt-10 w-full justify-center">

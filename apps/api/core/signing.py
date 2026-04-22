@@ -32,7 +32,7 @@ import hmac as _hmac
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from decimal import Decimal, ROUND_DOWN
+from decimal import ROUND_DOWN, Decimal
 from typing import Any, cast
 
 from cryptography.exceptions import InvalidSignature

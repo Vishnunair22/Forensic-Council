@@ -104,10 +104,10 @@ export function ResultHeader({
         <theme.icon className={clsx("w-10 h-10", theme.text)} />
        </div>
        <div className="space-y-3">
-        <p className={clsx("text-5xl sm:text-7xl font-black tracking-tighter leading-none uppercase text-glow-cyan", theme.text)}>
+        <p className={clsx("text-5xl sm:text-7xl font-black tracking-tighter leading-none text-glow-cyan", theme.text)}>
          {vc.label}
         </p>
-        <p className="text-sm font-black text-white/50 tracking-[0.3em] uppercase">{vc.desc}</p>
+        <p className="text-sm font-black text-white/50 tracking-[0.3em]">{vc.desc}</p>
        </div>
       </div>
 
@@ -121,7 +121,7 @@ export function ResultHeader({
         <span>Pipeline: {pipelineDuration || "N/A"}</span>
        </div>
         <div className={clsx(
-         "px-5 py-2 rounded-full border text-[10px] font-black tracking-[0.2em] transition-all uppercase",
+         "px-5 py-2 rounded-full border text-[10px] font-black tracking-[0.2em] transition-all",
          isDeepPhase ? "bg-accent/10 border-accent/20 text-accent" : "bg-primary/10 border-primary/20 text-primary"
         )}>
          {isDeepPhase ? "Deep Analysis Active" : "Initial Intake Scan"}
@@ -189,12 +189,12 @@ export function ResultHeader({
 
      {/* Error rate */}
       <div className="flex flex-col justify-center items-center gap-2 p-6 premium-card rounded-3xl">
-      <span className="text-[10px] font-black tracking-widest text-white/20 uppercase">System Noise</span>
+      <span className="text-[10px] font-black tracking-widest text-white/20">System Noise</span>
       <span className={clsx(
        "text-3xl font-black font-mono",
        errPct > 20 ? "text-danger" : "text-primary"
       )}>{errPct}%</span>
-      <p className="text-[10px] font-black text-white/10 tracking-[0.2em] uppercase">Error Rate</p>
+      <p className="text-[10px] font-black text-white/10 tracking-[0.2em]">Error Rate</p>
      </div>
     </div>
 

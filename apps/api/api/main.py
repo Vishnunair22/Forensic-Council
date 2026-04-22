@@ -33,13 +33,11 @@ from api.routes.metrics import (
     set_active_sessions,
 )
 from core.config import get_settings, validate_production_settings
-from core.observability import setup_observability
-from core.persistence.postgres_client import get_postgres_client
-from core.persistence.qdrant_client import get_qdrant_client
-from core.persistence.redis_client import get_redis_client, close_redis_client
-from core.persistence.postgres_client import close_postgres_client
-from core.persistence.qdrant_client import close_qdrant_client
 from core.monitoring import start_monitoring
+from core.observability import setup_observability
+from core.persistence.postgres_client import close_postgres_client, get_postgres_client
+from core.persistence.qdrant_client import close_qdrant_client, get_qdrant_client
+from core.persistence.redis_client import close_redis_client, get_redis_client
 from core.structured_logging import get_logger, request_id_ctx
 
 logger = get_logger(__name__)
@@ -176,7 +174,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # as active in the sessions list and prevents WebSocket clients from waiting
     # indefinitely for progress that will never arrive.
     try:
-        from api.routes._session_state import SESSION_METADATA_KEY_PREFIX  # deferred: avoids circular import at module load
+        from api.routes._session_state import (
+            SESSION_METADATA_KEY_PREFIX,  # deferred: avoids circular import at module load
+        )
 
         _redis = await get_redis_client()
         _orphan_keys = await _redis.keys(f"{SESSION_METADATA_KEY_PREFIX}*")

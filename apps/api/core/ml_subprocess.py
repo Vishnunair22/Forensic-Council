@@ -42,6 +42,7 @@ _WARMUP_SCRIPTS = {
     "busternet_v2.py",              # BusterNet dual-branch copy-move detector
     "mantra_net_tracer.py",         # ManTra-Net universal anomaly tracer
     "f3net_freq.py",                # F3-Net frequency GAN/AI artifact detector
+    "diffusion_artifact_detector.py",
     # ── Audio / video tools ───────────────────────────────────────────────
     "audio_splice_detector.py",
     "voice_clone_detector.py",
@@ -69,6 +70,7 @@ class _MLWorker:
         self.tool_name = script_name.replace(".py", "")
         self._proc: asyncio.subprocess.Process | None = None
         self._lock = asyncio.Lock()
+        self._stderr_task: asyncio.Task | None = None
 
     async def _ensure_started(self) -> None:
         if self._proc is not None and self._proc.returncode is None:
@@ -81,7 +83,25 @@ class _MLWorker:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
+        # Start background stderr consumer to prevent pipe deadlock
+        self._stderr_task = asyncio.create_task(self._consume_stderr())
         logger.info(f"ML worker started for {self.tool_name}", pid=self._proc.pid)
+
+    async def _consume_stderr(self) -> None:
+        """Background task to drain stderr so the subprocess doesn't block."""
+        if not self._proc or not self._proc.stderr:
+            return
+        try:
+            while True:
+                line = await self._proc.stderr.readline()
+                if not line:
+                    break
+                # Only log stderr if it contains actual error indicators to keep logs clean
+                decoded = line.decode("utf-8", errors="replace").strip()
+                if any(k in decoded.lower() for k in ("error", "exception", "failed", "traceback")):
+                    logger.warning(f"[{self.tool_name} stderr] {decoded}")
+        except Exception:
+            pass
 
     async def call(
         self, input_path: str, extra_args: list[str] | None, timeout: float
@@ -93,8 +113,11 @@ class _MLWorker:
             try:
                 if not self._proc or not self._proc.stdin or not self._proc.stdout:
                     raise RuntimeError(f"Worker for {self.tool_name} not properly initialized")
+                # Wrap stdin operations in a small timeout to prevent hanging on full pipes
+                # even if the background consumer is running.
                 self._proc.stdin.write((request + "\n").encode())
-                await self._proc.stdin.drain()
+                await asyncio.wait_for(self._proc.stdin.drain(), timeout=5.0)
+
                 raw = await asyncio.wait_for(
                     self._proc.stdout.readline(), timeout=timeout
                 )
@@ -128,6 +151,9 @@ class _MLWorker:
             except OSError:
                 pass
         self._proc = None
+        if self._stderr_task:
+            self._stderr_task.cancel()
+            self._stderr_task = None
 
 
 # Global worker pool — one worker per script

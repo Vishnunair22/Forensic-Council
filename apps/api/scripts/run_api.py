@@ -25,6 +25,7 @@ except ImportError:
     pass
 
 import uvicorn
+
 from core.structured_logging import configure_root_logger
 
 if __name__ == "__main__":

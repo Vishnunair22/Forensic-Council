@@ -164,11 +164,14 @@ class SynthesisService:
         total_calls = tool_success_count + tool_error_count
         _not_applicable_keys = ("ela_not_applicable", "ghost_not_applicable", "noise_fingerprint_not_applicable", "prnu_not_applicable")
 
+        # Filter out findings that are not court-defensible or are marked as not-applicable
         defensible_scores = [
             f.confidence_raw for f in findings
             if f.metadata.get("court_defensible", True) and not any(f.metadata.get(k) for k in _not_applicable_keys)
         ]
-        pre_confidence = round(sum(defensible_scores) / len(defensible_scores), 3) if defensible_scores else 0.75
+        # Filter out None values and ensure they are floats for safe averaging
+        valid_defensible = [float(s) for s in defensible_scores if s is not None]
+        pre_confidence = round(sum(valid_defensible) / len(valid_defensible), 3) if valid_defensible else 0.75
         pre_error_rate = round(tool_error_count / total_calls, 3) if total_calls > 0 else 0.0
 
         # Build sections for prompt
@@ -184,7 +187,7 @@ class SynthesisService:
                 tools_summary.append({
                     "tool": f.metadata.get("tool_name", "unknown"),
                     "finding_type": f.finding_type,
-                    "confidence": round(f.confidence_raw, 3),
+                    "confidence": round(f.confidence_raw, 3) if f.confidence_raw is not None else 0.5,
                     "verdict": f.status,
                     "data": self._compact_metrics(f)
                 })

@@ -5,13 +5,13 @@ import { AGENTS } from "@/lib/constants";
 
 export function AgentsSection() {
   return (
-    <section className="py-24 px-6 bg-background rounded-t-[3rem] border-t border-border-bold">
+    <section className="py-24 px-6 relative z-10">
       <div className="max-w-7xl mx-auto px-6 relative z-10">
         <motion.h2 
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-3xl md:text-5xl font-black text-center mb-4 tracking-tighter text-white"
+          className="text-3xl md:text-5xl font-bold text-center mb-4 tracking-tight text-white font-heading"
         >
           Meet The <span className="text-primary">Council</span>
         </motion.h2>
@@ -20,7 +20,7 @@ export function AgentsSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ delay: 0.1 }}
-          className="text-[11px] font-black text-white/30 tracking-[0.3em] text-center max-w-2xl mx-auto mb-20"
+          className="text-sm font-medium text-white/40 text-center max-w-2xl mx-auto mb-20 font-sans"
         >
           Specialized investigative nodes optimized for multi-modal forensic consensus.
         </motion.p>
@@ -33,7 +33,7 @@ export function AgentsSection() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.1 }}
-              className="premium-glass p-8 rounded-[2rem] border border-border-subtle flex flex-col items-center text-center transition-all duration-300 group cursor-pointer shadow-2xl"
+              className="frosted-panel p-8 rounded-[2.5rem] flex flex-col items-center text-center group cursor-pointer shadow-2xl hover:-translate-y-2 hover:shadow-[0_20px_50px_rgba(0,0,0,0.4)] hover:border-primary/30 transition-all duration-500"
             >
               <motion.div 
                 animate={{ 
@@ -52,16 +52,16 @@ export function AgentsSection() {
                 />
               </motion.div>
               
-              <h3 className="font-black text-lg mb-4 text-white tracking-tighter">{agent.name}</h3>
-              <p className="text-[11px] text-white/40 leading-relaxed font-black tracking-tight mb-8">
+              <h3 className="font-bold text-xl mb-4 text-white tracking-tight font-heading">{agent.name}</h3>
+              <p className="text-sm text-white/50 leading-relaxed font-medium tracking-tight mb-8 font-sans">
                 {agent.desc}
               </p>
 
-              <div className="mt-auto pt-6 border-t border-border-subtle w-full flex justify-between items-center">
-                 <span className="text-[9px] font-mono font-black tracking-[0.4em]" style={{ color: `${agent.color}80` }}>
-                    Node_{agent.id}
+              <div className="mt-auto pt-6 border-t border-white/5 w-full flex justify-between items-center">
+                 <span className="text-[10px] font-mono font-bold tracking-widest" style={{ color: `${agent.color}` }}>
+                    Node {agent.id}
                  </span>
-                 <span className="text-[9px] font-mono font-black text-white/10 tracking-[0.2em]">[{agent.badge}]</span>
+                 <span className="text-[10px] font-mono font-bold text-white/20 tracking-wider">[{agent.badge}]</span>
               </div>
             </motion.div>
           ))}

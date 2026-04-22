@@ -48,39 +48,47 @@ async def init_database() -> bool:
         True if successful, False otherwise
     """
     settings = get_settings()
-    logger.info(
-        "Connecting to database...",
-        host=settings.postgres_host,
-        database=settings.postgres_db,
-    )
+    max_retries = 10
+    retry_delay = 3.0
 
-    manager = MigrationManager()
-    try:
-        success = await manager.migrate()
-        if not success:
-            logger.error("Migration failed — schema may be incomplete")
-            return False
+    for attempt in range(1, max_retries + 1):
+        try:
+            logger.info(
+                f"Connecting to database (attempt {attempt}/{max_retries})...",
+                host=settings.postgres_host,
+                database=settings.postgres_db,
+            )
+            manager = MigrationManager()
+            await manager.connect()
 
-        # Bootstrap users before calling status() — status() disconnects the
-        # pool in its finally block (when _owned_client=True), so this must
-        # happen while the connection is still open.
-        await bootstrap_users(manager.client)
+            success = await manager.migrate()
+            if not success:
+                logger.error("Migration failed — schema may be incomplete")
+                await manager.disconnect()
+                return False
 
-        status = await manager.status()
-        logger.info(
-            "Schema up to date",
-            version=status["current_version"],
-            applied=status["applied_count"],
-        )
+            # Bootstrap users
+            await bootstrap_users(manager.client)
 
-        logger.info("Database initialization complete")
-        return True
+            status = await manager.status()
+            logger.info(
+                "Schema up to date",
+                version=status["current_version"],
+                applied=status["applied_count"],
+            )
 
-    except Exception as e:
-        logger.error("Failed to initialize database", error=str(e))
-        return False
-    finally:
-        await manager.disconnect()
+            logger.info("Database initialization complete")
+            await manager.disconnect()
+            return True
+
+        except Exception as e:
+            if attempt < max_retries:
+                logger.warning(f"Database connection attempt {attempt} failed: {e}. Retrying in {retry_delay}s...")
+                await asyncio.sleep(retry_delay)
+            else:
+                logger.error("Failed to initialize database after multiple attempts", error=str(e))
+                return False
+    return False
 
 
 async def bootstrap_users(client: PostgresClient) -> None:

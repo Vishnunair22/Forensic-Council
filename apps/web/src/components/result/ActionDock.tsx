@@ -33,9 +33,9 @@ export function ActionDock({ onHome, onNew, onExport }: ActionDockProps) {
 
         <button
           onClick={onExport}
-          className="btn-outline border-none shadow-none text-[10px] font-black px-6 py-2.5 h-auto min-h-0 uppercase tracking-widest"
+          className="btn-outline border-none shadow-none text-[10px] font-black px-6 py-2.5 h-auto min-h-0 tracking-widest"
         >
-          <Download className="w-3.5 h-3.5" /> EXPORT
+          <Download className="w-3.5 h-3.5" /> Export
         </button>
       </div>
     </div>

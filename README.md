@@ -66,56 +66,78 @@ The Council Arbiter deduplicates findings, weighs evidence reliability, computes
 ## Repository Layout
 
 ```text
-apps/
-  api/      FastAPI backend, agents, orchestration, tools, tests
-  web/      Next.js frontend, UI components, hooks, API client, tests
-docs/       architecture, API, security, runbooks, project state
-infra/      Docker Compose, Caddy, deployment and validation scripts
+Forensic Council
+├── apps/
+│   ├── api/                 # FastAPI backend
+│   │   ├── agents/          # 5 specialized forensic agents + Arbiter
+│   │   ├── api/             # API routes, schemas, and main entrypoint
+│   │   ├── core/            # Infrastructure: LLM, persistence, auth
+│   │   ├── orchestration/   # Pipeline and worker logic
+│   │   ├── tools/           # Domain-specific forensic analysis tools
+│   │   └── tests/           # Unit and integration test suite
+│   └── web/                 # Next.js 15 frontend
+│       ├── src/
+│       │   ├── app/         # Next.js App Router (pages & layouts)
+│       │   ├── components/  # React UI components
+│       │   ├── hooks/       # Custom React hooks
+│       │   └── lib/         # API client, storage, and utilities
+│       └── tests/           # Jest and Playwright tests
+├── docs/                    # Architectural and API documentation
+├── infra/                   # Docker, Caddy, and orchestration config
+└── .env.example             # Template for environment variables
 ```
 
-## Requirements
+## Production Docker Setup
 
-- Docker Desktop 23+ for full-stack local deployment.
-- Python 3.12 for backend development.
-- Node.js 22+ for frontend development.
-- A Groq-compatible `LLM_API_KEY` when LLM reasoning or synthesis is enabled.
-- A `GEMINI_API_KEY` for multimodal Gemini grounding.
-- Enough disk space for ML model caches. A first full run can download many GB of model files.
+For a full-scale, production-ready deployment, follow these steps. For more granular details on build targets and caching, see [infra/DOCKER_BUILD.md](infra/DOCKER_BUILD.md).
 
-## Quick Start
-
-Create an environment file:
-
+### 1. Initialize Environment
+Copy the example environment file to create your local `.env`:
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Edit `.env` and set at least:
+### 2. Generate Secure Secrets
+Run the provided script to generate high-entropy keys for forensic signing, JWT sessions, and database passwords:
+```bash
+./infra/generate_production_keys.sh
+```
+**Important**: Manually paste the output values for `SIGNING_KEY`, `JWT_SECRET_KEY`, `POSTGRES_PASSWORD`, etc., into your `.env` file.
 
-```text
-SIGNING_KEY=<strong unique value, 32+ chars>
-JWT_SECRET_KEY=<strong unique value, 32+ chars>
-POSTGRES_PASSWORD=<strong password>
-REDIS_PASSWORD=<strong password>
-LLM_API_KEY=<Groq API key or compatible provider key>
-GEMINI_API_KEY=<Google Gemini API key>
+### 3. Configure External APIs
+Edit `.env` and provide your API keys for the analysis engines:
+- `LLM_API_KEY`: Groq API key for agent reasoning.
+- `GEMINI_API_KEY`: Google Gemini key for multimodal grounding.
+
+### 4. Deploy the Stack
+Start the production stack using the primary and production override files. This ensures build-time optimizations and security hardening are applied:
+```powershell
+docker compose `
+  -f infra/docker-compose.yml `
+  -f infra/docker-compose.prod.yml `
+  --env-file .env `
+  up --build -d
 ```
 
-Start the full stack:
-
-```powershell
-docker compose -f infra/docker-compose.yml --env-file .env up --build
+### 5. Verify Readiness
+Once the containers are healthy, run the production readiness check:
+```bash
+./infra/validate_production_readiness.sh
 ```
 
-For local development without Docker:
+## Local Development (No Docker)
 
+If you prefer to run services directly on your host machine:
+
+### Backend
 ```powershell
-# Backend
 cd apps/api
 uv sync
 uv run python scripts/run_api.py
+```
 
-# Frontend, in another shell
+### Frontend
+```powershell
 cd apps/web
 npm install
 npm run dev

@@ -11,16 +11,15 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-from core.llm_client import LLMClient
-from core.signing import sign_content
-from core.structured_logging import get_logger
-
 from agents.arbiter_verdict import (
     AGENT_NAMES,
     ForensicReport,
     confidence_of,
     evidence_verdict_of,
 )
+from core.llm_client import LLMClient
+from core.signing import sign_content
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -604,7 +603,7 @@ Respond ONLY with valid JSON (no markdown):
 
 Rules:
 - verdict_sentence: state the verdict and primary reason in ≤25 words.
-- key_findings: exactly 3-5 plain English bullet items, each ≤25 words. 
+- key_findings: exactly 3-5 plain English bullet items, each ≤25 words.
 - reliability_note: ≤20 words. Cite confidence %, error rate, and note if any tools used fallbacks."""
 
         analysis_mode = (

@@ -1,10 +1,11 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { Poppins, Geist, Geist_Mono } from "next/font/google";
 import { GlobalNavbar } from "@/components/ui/GlobalNavbar";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { RouteExperience } from "@/components/ui/RouteExperience";
 import { Toaster } from "@/components/ui/Toaster";
-import { GlobalBackground } from "@/components/ui/GlobalBackground";
+import { MicroscopeBackground } from "@/components/ui/MicroscopeBackground";
 import { QueryProvider } from "@/components/ui/QueryProvider";
 import "./globals.css";
 
@@ -27,7 +28,7 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
-export const metadata = {
+export const metadata: Metadata = {
   title: { default: "Forensic Council", template: "%s | Forensic Council" },
   description: "Multi-Agent Forensic Evidence Analysis System — Court-grade digital evidence verification.",
   openGraph: { type: "website", title: "Forensic Council", siteName: "Forensic Council" },
@@ -44,7 +45,7 @@ export default function RootLayout({
       <body
         className={`${poppins.variable} ${geist.variable} ${geistMono.variable} font-sans text-slate-100 antialiased min-h-screen flex flex-col`}
       >
-        <GlobalBackground />
+        <MicroscopeBackground />
         <Suspense fallback={null}>
           <RouteExperience />
         </Suspense>

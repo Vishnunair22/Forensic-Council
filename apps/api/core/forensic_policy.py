@@ -7,7 +7,6 @@ tiers, and verdict thresholds. This ensures consistency between the
 Arbiter's overall deliberation and the per-agent summaries.
 """
 
-from typing import Any
 
 
 class ForensicPolicy:

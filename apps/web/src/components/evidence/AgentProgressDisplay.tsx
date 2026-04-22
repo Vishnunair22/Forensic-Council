@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { clsx } from "clsx";
 import {
  Loader2,
  FileText,
@@ -9,6 +8,8 @@ import {
  Microscope,
  RotateCcw,
  CheckCircle2,
+ Activity,
+ Ban,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
@@ -73,10 +74,6 @@ const AgentStatusCard = dynamic(
   () => import("./AgentStatusCard").then((m) => m.AgentStatusCard),
   { ssr: false },
 );
-const ForensicTimeline = dynamic(
-  () => import("./ForensicTimeline").then((m) => m.ForensicTimeline),
-  { ssr: false },
-);
 
 const allValidAgents = AGENTS_DATA.filter((agent) => agent.id !== "AGT-06");
 
@@ -91,12 +88,11 @@ function unsupportedAgentIdsForMime(mimeType?: string): string[] {
 export function AgentProgressDisplay({
  agentUpdates,
  completedAgents,
- progressText,
+ progressText: _progressText,
  allAgentsDone,
  phase,
  awaitingDecision,
  pipelineStatus,
- pipelineMessage,
  onAcceptAnalysis,
  onDeepAnalysis,
  onNewUpload,
@@ -105,9 +101,10 @@ export function AgentProgressDisplay({
  isNavigating = false,
  mimeType,
 }: AgentProgressDisplayProps) {
- const [hiddenAgentIds, setHiddenAgentIds] = useState<Set<string>>(new Set());
- const [skippedAgentIds, setSkippedAgentIds] = useState<Set<string>>(new Set());
- const [showTimeline, setShowTimeline] = useState(false);
+  const [hiddenAgentIds, setHiddenAgentIds] = useState<Set<string>>(new Set());
+  const [skippedAgentIds, setSkippedAgentIds] = useState<Set<string>>(new Set());
+  const [isRunningExpanded, setIsRunningExpanded] = useState(false);
+  const [isSkippedExpanded, setIsSkippedExpanded] = useState(false);
 
  useEffect(() => {
   const unsupportedIds = unsupportedAgentIdsForMime(mimeType);
@@ -185,64 +182,126 @@ export function AgentProgressDisplay({
  const showInitialDecision = phase === "initial" && (awaitingDecision || allAgentsDone);
  const showDeepComplete = phase === "deep" && (allAgentsDone || pipelineStatus === "complete");
 
- // Metrics
- const activeCompleted = completedAgents.filter((a) => {
-  const skip = a.status === "skipped" || (a.error ? /not applicable|not supported|skipping|skipped/i.test(a.error) : false);
-  return !skip;
- });
- const totalFlagged = activeCompleted.reduce((s, c) => s + (c.findings_count || 0), 0);
-
  const runningCount = Object.keys(agentUpdates).filter(id => !completedAgents.some(c => c.agent_id === id)).length;
- const finishedCount = completedAgents.filter(a => {
-  const skip = a.status === "skipped" || (a.error ? /not applicable|not supported|skipping|skipped/i.test(a.error) : false);
-  return !skip;
- }).length;
  const skippedCount = skippedAgentIds.size;
- const alertCount = totalFlagged;
 
  return (
   <div className="flex flex-col w-full max-w-[1560px] mx-auto gap-6 pb-36">
 
-    {/* ── Cinematic Header ────────────────────────────────────────────────── */}
-    <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 w-full">
-     <div className="flex flex-col">
-       <motion.h1
-       initial={{ opacity: 0, x: -20 }}
-       animate={{ opacity: 1, x: 0 }}
-       className="text-3xl sm:text-4xl md:text-5xl font-black text-white uppercase leading-none"
-      >
-       Evidence <span className="text-primary">Analysis</span>
-      </motion.h1>
-      <div className="flex flex-wrap items-center gap-3 mt-3">
-        <span className="text-[10px] font-black text-primary/90 font-mono px-2 py-1 bg-primary/10 border border-primary/20 rounded">
-          {phase === "initial" ? "PHASE_01: SCREENING" : "PHASE_02: INVESTIGATION"}
-        </span>
-        <p className="text-xs text-white/50 font-semibold flex items-center gap-2">
-          {pipelineMessage || progressText}
-        </p>
+    {/* ── Evidence Analysis Title & Phase ────────────────────────────────── */}
+    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-8 w-full mb-8">
+      <div className="flex items-center gap-6">
+        <div className="flex flex-col gap-1">
+          <motion.h1
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="text-4xl font-black text-white tracking-tight"
+          >
+            Evidence Analysis
+          </motion.h1>
+          <div className="flex items-center gap-3">
+            <div className="relative flex items-center justify-center w-5 h-5">
+              <div className="absolute inset-0 bg-primary/20 rounded-full glow-pulse" />
+              <Loader2 className="w-4 h-4 text-primary animate-premium-spin relative z-10" />
+            </div>
+            <p className="text-[10px] font-bold text-primary tracking-[0.3em] uppercase">
+              {phase === "initial" ? "Initial Analysis" : "Deep Analysis"}
+            </p>
+          </div>
+        </div>
       </div>
-     </div>
 
-    <motion.div
-     initial={{ opacity: 0, y: 10 }}
-     animate={{ opacity: 1, y: 0 }}
-     transition={{ delay: 0.2 }}
-     className="flex items-stretch gap-3 w-full lg:w-auto"
-    >
-       <div className="min-w-32 rounded-lg border border-border-subtle bg-white/[0.02] px-4 py-3">
-        <span className="text-[10px] font-black text-white/35 tracking-widest uppercase block mb-1">System Load</span>
-        <span className="text-2xl font-black text-white leading-none font-mono">
-         {allAgentsDone ? "100%" : `${Math.round((finishedCount / allValidAgents.length) * 100)}%`}
-        </span>
-       </div>
-       <div className="min-w-32 rounded-lg border border-border-subtle bg-white/[0.02] px-4 py-3">
-         <span className="text-[10px] font-black text-white/35 tracking-widest uppercase block mb-1">Active Threads</span>
-         <span className="text-2xl font-black text-primary leading-none font-mono">
-          {runningCount}
-         </span>
-       </div>
-    </motion.div>
-   </div>
+      <div className="flex items-center gap-4">
+        {/* Running Agents Summary */}
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={() => setIsRunningExpanded(!isRunningExpanded)}
+            className="flex items-center gap-6 bg-white/[0.03] px-6 py-4 rounded-2xl border border-white/5 backdrop-blur-xl hover:bg-white/[0.06] transition-all group"
+          >
+            <div className="flex flex-col items-start">
+              <span className="text-[9px] font-bold text-white/30 tracking-[0.2em] mb-0.5 uppercase">Status</span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-black text-white font-mono">Running Agents</span>
+                <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-primary/10 text-primary text-xs font-black">
+                  {runningCount}
+                </span>
+              </div>
+            </div>
+            <div className="w-8 h-8 rounded-full border border-primary/20 flex items-center justify-center group-hover:border-primary/50 transition-colors">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+              >
+                <Activity className="w-4 h-4 text-primary" />
+              </motion.div>
+            </div>
+          </button>
+          
+          <AnimatePresence>
+            {isRunningExpanded && runningCount > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -10, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: "auto" }}
+                exit={{ opacity: 0, y: -10, height: 0 }}
+                className="overflow-hidden bg-white/[0.02] border border-white/5 rounded-xl p-3"
+              >
+                <div className="flex flex-wrap gap-2">
+                  {allValidAgents.filter(a => getAgentStatus(a.id) === "running").map(a => (
+                    <div key={a.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/5">
+                      <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                      <span className="text-[10px] font-bold text-white/80">{a.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Skipped Agents Summary */}
+        {skippedCount > 0 && (
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => setIsSkippedExpanded(!isSkippedExpanded)}
+              className="flex items-center gap-6 bg-white/[0.03] px-6 py-4 rounded-2xl border border-white/5 backdrop-blur-xl hover:bg-white/[0.06] transition-all group"
+            >
+              <div className="flex flex-col items-start">
+                <span className="text-[9px] font-bold text-white/30 tracking-[0.2em] mb-0.5 uppercase">System</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-black text-white/40 font-mono">Skipped Agents</span>
+                  <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-white/5 text-white/30 text-xs font-black">
+                    {skippedCount}
+                  </span>
+                </div>
+              </div>
+              <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center group-hover:border-white/30 transition-colors">
+                <Ban className="w-4 h-4 text-white/30" />
+              </div>
+            </button>
+
+            <AnimatePresence>
+              {isSkippedExpanded && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10, height: 0 }}
+                  animate={{ opacity: 1, y: 0, height: "auto" }}
+                  exit={{ opacity: 0, y: -10, height: 0 }}
+                  className="overflow-hidden bg-white/[0.02] border border-white/5 rounded-xl p-3"
+                >
+                  <div className="flex flex-wrap gap-2">
+                    {allValidAgents.filter(a => skippedAgentIds.has(a.id)).map(a => (
+                      <div key={a.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/5">
+                        <div className="w-2 h-2 rounded-full bg-white/20" />
+                        <span className="text-[10px] font-bold text-white/40">{a.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+      </div>
+    </div>
 
    {/* ── Agent Cards Grid ──────────────────────────────────────────────── */}
    <div className="w-full">
@@ -251,7 +310,7 @@ export function AgentProgressDisplay({
      variants={containerVariants}
      initial="hidden"
      animate="show"
-     className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"
+     className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
     >
      <AnimatePresence mode="popLayout">
       {visibleAgents.map((agent) => (
@@ -278,137 +337,58 @@ export function AgentProgressDisplay({
    </div>
 
 
-   {/* ── Status Row + View Ledger ──────────────────────────────────────── */}
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-5 w-full">
-     <div className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between premium-glass p-4 sm:px-5 rounded-xl relative overflow-hidden gap-4 border border-border-subtle">
-      <div className="absolute inset-0 bg-primary/5 opacity-50" />
-      
-      <div className="grid grid-cols-2 sm:flex sm:items-center gap-x-12 gap-y-3 relative z-10 w-full sm:w-auto">
-       {[
-        { label: "Active Threads",  value: runningCount, color: "text-primary" },
-        { label: "Verified Labs", value: finishedCount, color: "text-primary" },
-        { label: "Phase Skips", value: skippedCount, color: "text-white/20" },
-        { label: "Findings",  value: alertCount,  color: alertCount > 0 ? "text-primary" : "text-white/10" },
-       ].map((s) => (
-        <div key={s.label} className="flex flex-col items-start gap-0.5">
-         <span className="text-[10px] font-black text-white/30 tracking-widest uppercase leading-none mb-1">{s.label}</span>
-         <span className={clsx("text-xl font-black font-mono tracking-tight", s.color)}>{s.value}</span>
-        </div>
-       ))}
-      </div>
-
-     <div className="flex items-center gap-6 relative z-10 shrink-0 w-full sm:w-auto justify-end sm:justify-start">
-      {hiddenAgentIds.size > 0 && (
-       <button
-        onClick={() => setHiddenAgentIds(new Set())}
-        className="text-[10px] font-bold text-white/20 hover:text-white/40 tracking-widest transition-colors"
-       >
-        Restore Hidden ({hiddenAgentIds.size})
-       </button>
-      )}
-      <button
-       onClick={() => setShowTimeline(!showTimeline)}
-       aria-expanded={showTimeline}
-       aria-controls="evidence-ledger"
-       className={clsx(
-        "flex items-center gap-2.5 px-6 py-2.5 rounded-full border transition-all duration-300 font-bold text-[10px] tracking-widest",
-        showTimeline
-         ? "bg-white/10 border-white/20 text-white"
-         : "bg-white/[0.02] border-white/10 text-white/40 hover:border-white/20 hover:text-white"
-       )}
-      >
-       <FileText className="w-3.5 h-3.5" aria-hidden="true" />
-       <span>{showTimeline ? "Close Ledger" : "View Ledger"}</span>
-      </button>
-     </div>
-    </div>
-   </div>
-
-   <AnimatePresence>
-    {showTimeline && (
-     <motion.div
-      id="evidence-ledger"
-      initial={{ height: 0, opacity: 0 }}
-      animate={{ height: "auto", opacity: 1 }}
-      exit={{ height: 0, opacity: 0 }}
-      className="w-full max-w-4xl mx-auto overflow-hidden"
-     >
-      <ForensicTimeline
-       completedAgents={completedAgents}
-       agentUpdates={agentUpdates}
-      />
-     </motion.div>
-    )}
-   </AnimatePresence>
 
    <AnimatePresence>
     {(showInitialDecision || showDeepComplete) && (
-     <motion.div
-      initial={{ opacity: 0, y: "100%" }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: "100%" }}
-      transition={{ type: "spring", damping: 30, stiffness: 200 }}
-      className="fixed bottom-0 left-0 right-0 z-50 glass-dock pb-safe pb-8 pt-5 px-4 sm:px-6 pointer-events-auto shadow-[0_-20px_50px_rgba(0,0,0,0.8)] flex flex-col items-center justify-center text-center"
-      role="region"
-      aria-label="Analysis complete — choose next step"
-     >
-      <div className="flex flex-col items-center w-full max-w-4xl mx-auto gap-4">
-       <div className="flex flex-col items-center">
-        <span className="flex items-center justify-center gap-2 text-[10px] font-bold text-cyan-400 tracking-[0.2em] mb-1">
-         <span className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse" aria-hidden="true" />
-         Analysis Phase Complete
-        </span>
-        <span className="text-sm text-white/50 font-medium">
-         {showInitialDecision
-          ? "Initial results ready. Commit findings or initiate depth pass."
-          : "Comprehensive analysis finalized. All signals verified."}
-        </span>
-       </div>
-
-       <div className="flex items-center justify-center gap-4 flex-wrap w-full">
+      <motion.div
+       initial={{ opacity: 0, y: 100 }}
+       animate={{ opacity: 1, y: 0 }}
+       exit={{ opacity: 0, y: 100 }}
+       className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-6 pointer-events-none"
+      >
+       <div className="flex items-center gap-4 p-3 rounded-[2rem] bg-black/40 backdrop-blur-3xl border border-white/10 shadow-[0_32px_64px_rgba(0,0,0,0.6)] pointer-events-auto">
         {showInitialDecision ? (
          <>
           <button
            onClick={onAcceptAnalysis}
            disabled={isNavigating}
-           className="btn-outline px-8"
+           className="flex-1 px-8 py-4 rounded-2xl bg-white/5 border border-white/10 text-white font-black text-xs tracking-[0.2em] hover:bg-white/10 transition-all flex items-center justify-center gap-3 disabled:opacity-50 uppercase"
           >
-           {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="w-4 h-4" aria-hidden="true" />}
+           {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
            Accept Results
           </button>
           <button
            onClick={onDeepAnalysis}
            disabled={isNavigating}
-           className="btn-premium group px-8"
+           className="flex-[1.5] px-8 py-4 rounded-2xl bg-primary text-black font-black text-xs tracking-[0.2em] hover:bg-primary/90 transition-all shadow-[0_0_30px_rgba(34,211,238,0.3)] flex items-center justify-center gap-3 disabled:opacity-50 uppercase"
           >
-           <Microscope className="w-4 h-4" aria-hidden="true" />
-           Deep Analysis
-           <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+           <Microscope className="w-4 h-4" />
+           Deep Investigation
+           <ArrowRight className="w-4 h-4" />
           </button>
          </>
         ) : (
          <>
           <button
            onClick={onNewUpload}
-           className="btn-outline px-8"
+           className="flex-1 px-8 py-4 rounded-2xl bg-white/5 border border-white/10 text-white font-black text-xs tracking-[0.2em] hover:bg-white/10 transition-all flex items-center justify-center gap-3 uppercase"
           >
-           <RotateCcw className="w-4 h-4" aria-hidden="true" />
-           New Analysis
+           <RotateCcw className="w-4 h-4 text-primary" />
+           New Upload
           </button>
           <button
            onClick={onViewResults}
            disabled={isNavigating}
-           className="btn-premium group px-8"
+           className="flex-[1.5] px-8 py-4 rounded-2xl bg-primary text-black font-black text-xs tracking-[0.2em] hover:bg-primary/90 transition-all shadow-[0_0_30px_rgba(34,211,238,0.3)] flex items-center justify-center gap-3 disabled:opacity-50 uppercase"
           >
-           {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <FileText className="w-4 h-4" aria-hidden="true" />}
-           View Final Report
-           <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+           {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+           Generate Final Report
+           <ArrowRight className="w-4 h-4" />
           </button>
          </>
         )}
        </div>
-      </div>
-     </motion.div>
+      </motion.div>
     )}
    </AnimatePresence>
   </div>

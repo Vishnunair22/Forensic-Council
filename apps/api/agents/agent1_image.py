@@ -85,8 +85,11 @@ class Agent1Image(ForensicAgent):
                 "Run frequency_domain_analysis for frequency domain analysis",
                 "Run noiseprint_cluster for sensor-region source inconsistency"
             ]
-        # Lossy path: ELA is authoritative
-        return base + ["Run neural_ela for high-confidence manipulation detection"]
+        # Lossy path: ELA is authoritative; FFT runs first for GAN/periodicity baseline
+        return base + [
+            "Run frequency_domain_analysis for frequency domain analysis",
+            "Run neural_ela for high-confidence manipulation detection",
+        ]
 
     @property
     def deep_task_decomposition(self) -> list[str]:
@@ -106,6 +109,10 @@ class Agent1Image(ForensicAgent):
         # Only add anomaly_tracer if not lossless (as it relies heavily on JPEG noise/ghosts)
         if not self._is_lossless:
             base.insert(-1, "Run anomaly_tracer for ManTra-Net universal anomaly tracing")
+        # adversarial_robustness_check is expensive — only warranted when splicing or
+        # copy-move is confirmed, as anti-forensic perturbations are only meaningful
+        # in that context.
+        base.insert(-1, "Run adversarial_robustness_check for anti-forensics perturbation stability check if splicing or copy-move was detected")
         return base
 
     @property
@@ -164,6 +171,10 @@ class Agent1Image(ForensicAgent):
                     metric["splicing"] = t_res["splicing_detected"]
                 if "is_ai_generated" in t_res:
                     metric["gen_ai"] = t_res["is_ai_generated"]
+                if "diffusion_detected" in t_res and not t_res.get("is_ai_generated"):
+                    # Preserve SUSPICIOUS signal: diffusion artifacts present but
+                    # confidence below confirmed AI-generation threshold.
+                    metric["diffusion_suspicious"] = t_res["diffusion_detected"]
 
                 # Include textual findings for semantic grounding
                 if "full_text" in t_res:

@@ -19,13 +19,21 @@ from pydantic import BaseModel, Field, field_validator
 
 from core.config import Settings
 from core.custody_logger import CustodyLogger, EntryType
+from core.hitl import (
+    HITLCheckpointReason,
+    HITLCheckpointState,
+    HITLCheckpointStatus,
+    HumanDecision,
+    HumanDecisionType,
+)
 from core.llm_client import LLMClient, LLMResponse, parse_llm_step
 from core.observability import get_tracer
 from core.structured_logging import get_logger
 from core.task_tool_config import get_task_tool_overrides
+from core.tool_interpreters import _TOOL_INTERPRETERS
 from core.tool_registry import ToolRegistry, ToolResult
 from core.tracing import PipelineTrace
-from core.working_memory import WorkingMemory, WorkingMemoryState
+from core.working_memory import TaskStatus, WorkingMemory, WorkingMemoryState
 
 logger = get_logger(__name__)
 _tracer = get_tracer("forensic-council.react_loop")
@@ -59,15 +67,6 @@ class ReActStep(BaseModel):
         description="UTC timestamp of the step",
     )
 
-
-from core.hitl import (
-    HITLCheckpointReason,
-    HITLCheckpointStatus,
-    HITLCheckpointState,
-    HumanDecisionType,
-    HumanDecision,
-)
-from core.tool_interpreters import _TOOL_INTERPRETERS
 
 # --- RE-EXPORTS for backward compatibility ---
 # These models are now located in core/hitl.py
@@ -880,11 +879,17 @@ class ReActLoopEngine:
             "scene_incongruent",
             "concern_flag",
             "spoofing_detected",
+            "spoof_detected",
             "is_spoofed",
+            "synthetic_detected",
             "splice_detected",
+            "re_encoding_detected",
+            "shift_detected",
+            "prosody_anomaly",
             "sync_drift_detected",
             "desync_detected",
             "face_swap_detected",
+            "deepfake_suspected",
             "discontinuity_detected",
             "chimeric_signature_detected",
             "has_appended_data",
@@ -946,7 +951,7 @@ class ReActLoopEngine:
         return "CONFIRMED", "NEGATIVE", confidence, court_defensible
 
     async def _handle_hitl_pause(
-        self, checkpoint: "HITLCheckpointState", hitl_reason: "HITLCheckpointReason"
+        self, checkpoint: HITLCheckpointState, hitl_reason: HITLCheckpointReason
     ) -> bool:
         """Wait for human decision at a HITL checkpoint. Returns True if loop should terminate."""
         self._resume_event = asyncio.Event()
@@ -969,8 +974,12 @@ class ReActLoopEngine:
                                 "iteration": self._current_iteration,
                             },
                         )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(
+                        "Failed to log HITL timeout",
+                        agent_id=self.agent_id,
+                        error=str(exc),
+                    )
                 self._terminated = True
                 return True
 
@@ -981,10 +990,8 @@ class ReActLoopEngine:
 
         return self._terminated
 
-    async def _update_task_complete(self, step: "ReActStep") -> None:
+    async def _update_task_complete(self, step: ReActStep) -> None:
         """Mark the working-memory task associated with a completed tool call as COMPLETE."""
-        from core.working_memory import TaskStatus as _TS
-
         _task_id_str = (step.tool_input or {}).get("_task_id")
         _wm_updated = False
 
@@ -995,7 +1002,7 @@ class ReActLoopEngine:
                     session_id=self.session_id,
                     agent_id=self.agent_id,
                     task_id=_UUID(_task_id_str),
-                    status=_TS.COMPLETE,
+                    status=TaskStatus.COMPLETE,
                     result_ref=step.tool_name,
                 )
                 _wm_updated = True
@@ -1009,12 +1016,12 @@ class ReActLoopEngine:
                     session_id=self.session_id, agent_id=self.agent_id)
                 if fresh_state:
                     for task in fresh_state.tasks:
-                        if task.status == _TS.IN_PROGRESS:
+                        if task.status == TaskStatus.IN_PROGRESS:
                             await self.working_memory.update_task(
                                 session_id=self.session_id,
                                 agent_id=self.agent_id,
                                 task_id=task.task_id,
-                                status=_TS.COMPLETE,
+                                status=TaskStatus.COMPLETE,
                                 result_ref=step.tool_name,
                             )
                             _wm_updated = True
@@ -1028,13 +1035,17 @@ class ReActLoopEngine:
                     session_id=self.session_id, agent_id=self.agent_id)
                 if cache_state:
                     for task in cache_state.tasks:
-                        if task.status == _TS.IN_PROGRESS:
-                            task.status = _TS.COMPLETE
+                        if task.status == TaskStatus.IN_PROGRESS:
+                            task.status = TaskStatus.COMPLETE
                             task.result_ref = step.tool_name
                     key = self.working_memory._get_key(self.session_id, self.agent_id)
                     self.working_memory._local_cache[key] = cache_state.model_dump_json()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(
+                    "Local working-memory task completion fallback failed",
+                    agent_id=self.agent_id,
+                    error=str(exc),
+                )
 
     async def run(
         self,
@@ -1288,8 +1299,13 @@ class ReActLoopEngine:
                                     "escalation_reason": _uncertainty.escalation_reason,
                                 },
                             )
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.debug(
+                                "Failed to persist epistemic escalation flag",
+                                agent_id=self.agent_id,
+                                tool_name=next_step.tool_name,
+                                error=str(exc),
+                            )
                 # ----------------------------------------------
 
                 # Create OBSERVATION step
@@ -1315,8 +1331,13 @@ class ReActLoopEngine:
                                 "iteration": self._current_iteration,
                             },
                         )
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug(
+                            "Failed to log tool error to custody",
+                            agent_id=self.agent_id,
+                            tool_name=next_step.tool_name,
+                            error=str(exc),
+                        )
 
                 if not tool_result.success:
                     self._findings.append(
@@ -1601,8 +1622,6 @@ class ReActLoopEngine:
             A THOUGHT step for the next pending task, or None if all tasks
             are done (signalling the loop to stop).
         """
-        from core.working_memory import TaskStatus
-
         # Force-complete any orphaned IN_PROGRESS tasks before finding the next PENDING.
         # An IN_PROGRESS task at the start of a NEW iteration means the previous
         # COMPLETE-marking silently failed (the tool DID run — we have its finding).
@@ -1634,8 +1653,12 @@ class ReActLoopEngine:
                 session_id=self.session_id,
                 agent_id=self.agent_id,
             )
-        except Exception:
-            pass  # Use existing state if refresh fails
+        except Exception as exc:
+            logger.debug(
+                "Working memory refresh failed; using existing state",
+                agent_id=self.agent_id,
+                error=str(exc),
+            )
 
         # Issue 5.3: Skip BLOCKED tasks — prefer IN_PROGRESS > PENDING, skip BLOCKED.
         # A BLOCKED task stalls the loop; mark it complete and move to the next.
@@ -1655,8 +1678,13 @@ class ReActLoopEngine:
                         f"Skipped BLOCKED task: {task.description}",
                         agent_id=self.agent_id,
                     )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(
+                        "Failed to skip blocked task",
+                        agent_id=self.agent_id,
+                        task_id=str(task.task_id),
+                        error=str(exc),
+                    )
                 continue
             if task.status == TaskStatus.PENDING and pending_task is None:
                 pending_task = task
@@ -1665,7 +1693,7 @@ class ReActLoopEngine:
             # All tasks complete (or force-completed) → signal loop to stop
             return None
 
-        _SKIP_TASKS = {
+        skip_tasks = {
             "self-reflection pass",
             "submit calibrated findings to arbiter",
             "submit findings",
@@ -1680,7 +1708,7 @@ class ReActLoopEngine:
         }
 
         if pending_task.description and any(
-            skip in pending_task.description.lower() for skip in _SKIP_TASKS
+            skip in pending_task.description.lower() for skip in skip_tasks
         ):
             try:
                 await self.working_memory.update_task(
@@ -1690,8 +1718,13 @@ class ReActLoopEngine:
                     status=TaskStatus.COMPLETE,
                     result_ref="handled_by_pipeline",
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(
+                    "Failed to mark pipeline-handled task complete",
+                    agent_id=self.agent_id,
+                    task_id=str(pending_task.task_id),
+                    error=str(exc),
+                )
             return ReActStep(
                 step_type="THOUGHT",
                 content=f"Task '{pending_task.description}' is handled by the pipeline orchestrator. Skipping.",
@@ -1732,8 +1765,13 @@ class ReActLoopEngine:
                     status=TaskStatus.COMPLETE,
                     result_ref="no_matching_tool",
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(
+                    "Failed to mark unmatched task complete",
+                    agent_id=self.agent_id,
+                    task_id=str(pending_task.task_id),
+                    error=str(exc),
+                )
             return ReActStep(
                 step_type="THOUGHT",
                 content=(
@@ -1754,8 +1792,13 @@ class ReActLoopEngine:
                 status=TaskStatus.IN_PROGRESS,
                 result_ref=best_tool.name,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(
+                "Failed to mark task in progress",
+                agent_id=self.agent_id,
+                task_id=str(pending_task.task_id),
+                error=str(exc),
+            )
 
         return ReActStep(
             step_type="ACTION",
@@ -1953,8 +1996,13 @@ class ReActLoopEngine:
                     status=status,
                     output=output,
                 )
-            except Exception:
-                pass  # fall through to generic path
+            except Exception as exc:
+                logger.debug(
+                    "Tool interpreter failed; using generic summary",
+                    agent_id=self.agent_id,
+                    tool_name=tool_name,
+                    error=str(exc),
+                )
 
         highlights: list[str] = []
         for key, value in output.items():

@@ -12,16 +12,11 @@ export default function Home() {
       <motion.div
         className="relative w-full h-screen flex flex-col items-center justify-center z-10 overflow-hidden"
       >
-        {/* Cleaner, subtler background elements matching ARGUS reference */}
-        <div className="absolute inset-0 bg-grid-small opacity-[0.15]"></div>
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -z-10 h-[600px] w-[800px] rounded-full bg-primary/5 blur-[120px] pointer-events-none"></div>
-        <div className="absolute right-[-10%] top-[-10%] -z-10 h-[400px] w-[400px] rounded-full bg-accent/5 blur-[100px] pointer-events-none"></div>
-
         <div className="flex flex-col items-center justify-center text-center px-6 relative z-10 pointer-events-auto gap-10">
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-5xl md:text-7xl font-black max-w-5xl tracking-tighter text-white font-heading leading-[0.95] drop-shadow-[0_0_30px_rgba(255,255,255,0.1)]"
+            className="text-5xl md:text-7xl font-bold max-w-5xl tracking-tight text-white font-heading leading-[1.1] drop-shadow-[0_0_30px_rgba(255,255,255,0.1)]"
           >
             Multi-Agent Forensic <br/>
             <span className="text-primary text-glow-cyan">Evidence Analysis System</span>
@@ -46,9 +41,9 @@ export default function Home() {
       </motion.div>
 
       {/* --- Scrolling Content Section ---  */}
-      <div className="relative z-10 w-full">
+      <div className="relative z-20 w-full px-4 pb-20">
         <motion.div
-          className="bg-background min-h-screen rounded-t-[4rem] border-t border-border-subtle shadow-[0_-32px_80px_rgba(0,0,0,0.9)]"
+          className="glass-panel min-h-screen rounded-[3rem] shadow-[0_32px_80px_rgba(0,0,0,0.5)] overflow-hidden"
         >
           <HowWorksSection />
           <AgentsSection />

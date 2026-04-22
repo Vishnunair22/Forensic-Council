@@ -9,6 +9,7 @@ Implements Fix 3 (Decentralization) and Initial Analysis Refinements.
 import asyncio
 import os
 import tempfile
+from types import SimpleNamespace
 
 import cv2
 import numpy as np
@@ -74,12 +75,19 @@ class VideoHandlers(BaseToolHandler):
             if not result.get("error") and result.get("available"):
                 await self.agent._record_tool_result("vfi_error_map", result)
                 return result
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("VFI error mapper unavailable", error=str(exc))
 
         # Fallback to standard frame consistency
         await self.agent.update_sub_task("VFI audit unavailable — falling back to frame consistency...")
-        return await self.frame_consistency_analysis_handler(input_data)
+        fallback = await self.frame_consistency_analysis_handler(input_data)
+        result = {
+            **fallback,
+            "degraded": True,
+            "fallback_reason": "vfi_error_mapper unavailable; used frame consistency analysis",
+        }
+        await self.agent._record_tool_result("vfi_error_map", result)
+        return result
 
     async def thumbnail_coherence_handler(self, input_data: dict) -> dict:
         """[REFINED] Verifies if embedded thumbnails match the actual video content."""
@@ -90,10 +98,16 @@ class VideoHandlers(BaseToolHandler):
             if not result.get("error") and result.get("available"):
                 await self.agent._record_tool_result("thumbnail_coherence", result)
                 return result
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Thumbnail coherence checker unavailable", error=str(exc))
 
-        result = {"available": False, "note": "Thumbnail coherence audit script unavailable in this environment."}
+        result = {
+            "available": False,
+            "not_applicable": True,
+            "confidence": 0.0,
+            "court_defensible": False,
+            "note": "Thumbnail coherence audit script unavailable in this environment.",
+        }
         await self.agent._record_tool_result("thumbnail_coherence", result)
         return result
 
@@ -112,8 +126,12 @@ class VideoHandlers(BaseToolHandler):
         except Exception as e:
             result = {"error": str(e)}
 
-        if result.get("error") or not result.get("available"):
+        if result.get("error") or result.get("available") is False:
             result = await self._optical_flow_fallback(artifact.file_path)
+        else:
+            result.setdefault("available", True)
+            result.setdefault("court_defensible", True)
+            result.setdefault("confidence", 0.80 if result.get("flagged_frames") else 0.90)
 
         await self.agent._record_tool_result("optical_flow_analysis", result)
         return result
@@ -170,17 +188,55 @@ class VideoHandlers(BaseToolHandler):
     async def frame_consistency_analysis_handler(self, input_data: dict) -> dict:
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         await self.agent.update_sub_task("Auditing inter-frame pixel consistency...")
-        result = await real_frame_consistency_analyze(artifact=artifact)
+        loop = asyncio.get_running_loop()
+        frame_dir = await loop.run_in_executor(None, self._extract_sample_frame_dir, artifact.file_path)
+        if not frame_dir:
+            result = {
+                "available": False,
+                "not_applicable": True,
+                "reason": "No readable video frames available for frame consistency analysis.",
+                "confidence": 0.0,
+                "court_defensible": False,
+            }
+        else:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                for source in frame_dir:
+                    os.replace(source, os.path.join(tmpdir, os.path.basename(source)))
+                frames_artifact = SimpleNamespace(file_path=tmpdir)
+                result = await real_frame_consistency_analyze(frames_artifact=frames_artifact)
+                inconsistencies = result.get("inconsistencies", [])
+                result.setdefault("available", True)
+                result.setdefault("court_defensible", True)
+                result.setdefault("discontinuity_detected", bool(inconsistencies))
+                result.setdefault("confidence", 0.82 if inconsistencies else 0.90)
         await self.agent._record_tool_result("frame_consistency_analysis", result)
         return result
 
     async def face_swap_detection_handler(self, input_data: dict) -> dict:
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         await self.agent.update_sub_task("Scanning frames for neural face-swap artifacts...")
-        result = await real_face_swap_detect(
-            artifact=artifact,
-            progress_callback=self.agent.update_sub_task
-        )
+        loop = asyncio.get_running_loop()
+        frame_paths = await loop.run_in_executor(None, self._extract_sample_frame_dir, artifact.file_path)
+        if not frame_paths:
+            result = {
+                "available": False,
+                "not_applicable": True,
+                "reason": "No readable video frames available for face-swap detection.",
+                "confidence": 0.0,
+                "court_defensible": False,
+            }
+        else:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                for source in frame_paths:
+                    os.replace(source, os.path.join(tmpdir, os.path.basename(source)))
+                frames_artifact = SimpleNamespace(file_path=tmpdir)
+                result = await real_face_swap_detect(
+                    frames_artifact=frames_artifact,
+                    progress_callback=self.agent.update_sub_task
+                )
+                result.setdefault("available", True)
+                result.setdefault("court_defensible", True)
+                result.setdefault("face_swap_detected", bool(result.get("deepfake_suspected")))
         await self.agent._record_tool_result("face_swap_detection", result)
         return result
 
@@ -188,6 +244,9 @@ class VideoHandlers(BaseToolHandler):
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         await self.agent.update_sub_task("Performing stream-level metadata probe...")
         result = await real_video_metadata_extract(artifact=artifact)
+        result.setdefault("available", True)
+        result.setdefault("court_defensible", True)
+        result.setdefault("confidence", 0.90)
         await self.agent._record_tool_result("video_metadata", result)
         return result
 
@@ -264,6 +323,32 @@ class VideoHandlers(BaseToolHandler):
 
         await self.agent._record_tool_result("deepfake_frequency_check", result)
         return result
+
+    @staticmethod
+    def _extract_sample_frame_dir(file_path: str, max_frames: int = 12) -> list[str]:
+        cap = cv2.VideoCapture(file_path)
+        if not cap.isOpened():
+            return []
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
+        if total > 0:
+            positions = np.linspace(0, max(0, total - 1), num=min(max_frames, total), dtype=int)
+        else:
+            positions = np.arange(max_frames, dtype=int)
+        paths: list[str] = []
+        try:
+            for idx in positions:
+                if total > 0:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx))
+                ret, frame = cap.read()
+                if not ret or frame is None:
+                    continue
+                fd, tmp_path = tempfile.mkstemp(suffix=".jpg")
+                os.close(fd)
+                cv2.imwrite(tmp_path, frame)
+                paths.append(tmp_path)
+        finally:
+            cap.release()
+        return paths
 
     @staticmethod
     def _extract_frequency_sample_frames(file_path: str) -> list[str]:

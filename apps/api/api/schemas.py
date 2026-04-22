@@ -5,7 +5,7 @@ API Schemas for Forensic Council
 Pydantic models for API request/response handling.
 """
 
-from typing import Annotated, Any, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 

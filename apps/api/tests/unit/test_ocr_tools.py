@@ -1,17 +1,19 @@
+from unittest.mock import MagicMock, mock_open, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, mock_open
-import os
+
 from core.evidence import EvidenceArtifact
 from tools.ocr_tools import (
-    _is_pdf,
-    _get_easyocr_reader,
-    _extract_text_pymupdf_sync,
-    extract_text_from_pdf,
+    _build_summary,
     _extract_text_easyocr_sync,
-    extract_text_easyocr,
+    _extract_text_pymupdf_sync,
+    _get_easyocr_reader,
+    _is_pdf,
     extract_evidence_text,
-    _build_summary
+    extract_text_easyocr,
+    extract_text_from_pdf,
 )
+
 
 @pytest.fixture
 def mock_artifact():
@@ -21,7 +23,7 @@ def mock_artifact():
     return artifact
 
 class TestOCRTools:
-    
+
     def test_is_pdf_valid(self):
         with patch("builtins.open", mock_open(read_data=b"%PDF-1.5")):
             assert _is_pdf("dummy.pdf") is True
@@ -48,9 +50,9 @@ class TestOCRTools:
         mock_doc.page_count = 1
         mock_doc.metadata = {"title": "Test PDF"}
         mock_fitz_open.return_value = mock_doc
-        
+
         result = _extract_text_pymupdf_sync("test.pdf")
-        
+
         assert result["pymupdf_available"] is True
         assert result["full_text"] == "Extracted Text"
         assert result["embedded_image_count"] == 2
@@ -65,11 +67,11 @@ class TestOCRTools:
         import asyncio
         async_future = asyncio.Future()
         async_future.set_result({"pymupdf_available": True, "full_text": "Async Text"})
-        
+
         with patch("asyncio.get_running_loop") as mock_loop:
             mock_loop.return_value.run_in_executor.return_value = async_future
             result = await extract_text_from_pdf(mock_artifact)
-            
+
         assert result["method"] == "pymupdf"
         assert result["full_text"] == "Async Text"
 
@@ -82,9 +84,9 @@ class TestOCRTools:
             ([[20, 0], [30, 0], [30, 10], [20, 10]], "World", 0.85)
         ]
         mock_get_reader.return_value = mock_reader
-        
+
         result = _extract_text_easyocr_sync("image.jpg", detail=True)
-        
+
         assert result["easyocr_available"] is True
         assert result["full_text"] == "Hello World"
         assert result["avg_confidence"] == 0.9
@@ -100,7 +102,7 @@ class TestOCRTools:
             mock_pdf.return_value = {"method": "pymupdf", "has_text": True}
             result = await extract_evidence_text(mock_artifact)
             assert result["file_type_hint"] == "pdf_document"
-            
+
         # Test Image routing
         mock_artifact.file_path = "test.jpg"
         with patch("tools.ocr_tools.extract_text_easyocr") as mock_img:

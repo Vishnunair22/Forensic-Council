@@ -5,13 +5,13 @@ Extracted from arbiter.py to improve maintainability.
 
 from __future__ import annotations
 
-import math
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
+
 from core.forensic_policy import ForensicPolicy
 
 
@@ -282,14 +282,25 @@ def _has_legacy_positive_signal(finding: dict[str, Any]) -> bool:
     return (
         meta.get("manipulation_detected") is True
         or meta.get("deepfake_detected") is True
+        or meta.get("deepfake_suspected") is True
         or meta.get("splicing_detected") is True
         or meta.get("copy_move_detected") is True
+        or meta.get("is_ai_generated") is True
+        or meta.get("gan_artifact_detected") is True
+        or meta.get("diffusion_detected") is True
+        or meta.get("concern_flag") is True
+        or meta.get("scene_incongruent") is True
         or meta.get("mismatch_detected") is True
         or meta.get("stego_suspected") is True
         or meta.get("scale_consistent") is False
         or meta.get("swap_suspect") is True
+        or meta.get("face_swap_detected") is True
         or meta.get("splice_detected") is True
+        or meta.get("spoof_detected") is True
+        or meta.get("synthetic_detected") is True
         or meta.get("shift_detected") is True
+        or meta.get("discontinuity_detected") is True
+        or meta.get("re_encoding_detected") is True
         or meta.get("re_encode_suspect") is True
         or meta.get("adversarial_pattern_detected") is True
         or meta.get("uniformity_suspect") is True
@@ -348,7 +359,7 @@ def calculate_manipulation_probability(
                 _w = ForensicPolicy.get_tool_weight(_tool)
 
                 if compression_penalty < 1.0:
-                    _FRAGILE_TOOLS = {
+                    fragile_tools = {
                         "ela_full_image",
                         "jpeg_ghost_detect",
                         "noise_fingerprint",
@@ -357,7 +368,7 @@ def calculate_manipulation_probability(
                         "diffusion_artifact_detector",
                         "frequency_domain_analysis",
                     }
-                    if _tool in _FRAGILE_TOOLS:
+                    if _tool in fragile_tools:
                         _w *= compression_penalty
 
                 if _diffusion_detected_globally and _tool in {
@@ -438,12 +449,12 @@ async def cross_agent_comparison(
         else:
             category_buckets.setdefault(c, {}).setdefault(agent_id, []).append(f)
 
-    _MAX_FINDINGS_PER_BUCKET = 10
+    max_findings_per_bucket = 10
     for _cat_name, agent_map in category_buckets.items():
         for agent_id, flist in agent_map.items():
-            if len(flist) > _MAX_FINDINGS_PER_BUCKET:
+            if len(flist) > max_findings_per_bucket:
                 flist.sort(key=lambda x: confidence_of(x, default=0.0) or 0.0, reverse=True)
-                agent_map[agent_id] = flist[:_MAX_FINDINGS_PER_BUCKET]
+                agent_map[agent_id] = flist[:max_findings_per_bucket]
         agent_ids = list(agent_map.keys())
         for i, agent_a in enumerate(agent_ids):
             for agent_b in agent_ids[i + 1 :]:

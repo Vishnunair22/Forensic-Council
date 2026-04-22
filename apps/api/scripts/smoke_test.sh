@@ -1,4 +1,4 @@
--#!/bin/bash
+#!/bin/bash
 # ============================================================================
 # Forensic Council - Smoke Test
 # ============================================================================
@@ -18,15 +18,16 @@ NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-PROJECT_DIR="$(cd "$BACKEND_DIR/.." && pwd)"
+PROJECT_DIR="$(cd "$BACKEND_DIR/../.." && pwd)"
 COMPOSE_FILE="$PROJECT_DIR/infra/docker-compose.yml"
+ENV_FILE="$PROJECT_DIR/.env"
 
 echo -e "${YELLOW}=== Forensic Council Smoke Test ===${NC}"
 echo -e "Project root: $PROJECT_DIR"
 
 # 1. Infrastructure health
 echo -e "\n${YELLOW}[1/7] Checking infrastructure containers...${NC}"
-HEALTHY_COUNT=$(docker compose -f "$COMPOSE_FILE" ps --format json 2>/dev/null \
+HEALTHY_COUNT=$(docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps --format json 2>/dev/null \
   | python3 -c "import sys,json; data=sys.stdin.read(); rows=[json.loads(l) for l in data.splitlines() if l]; print(sum(1 for r in rows if 'healthy' in r.get('Health','').lower() and r.get('Service','') in ('redis','qdrant','postgres')))" 2>/dev/null || echo "0")
 if [ "$HEALTHY_COUNT" -ge 3 ]; then
   echo -e "${GREEN}All 3 infrastructure containers healthy${NC}"
@@ -85,4 +86,3 @@ npm run build 2>&1 | tail -5 && echo -e "${GREEN}Frontend build passed${NC}" \
 kill "$API_PID" 2>/dev/null || true
 
 echo -e "\n${GREEN}=== Smoke test complete ===${NC}"
-

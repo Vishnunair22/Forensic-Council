@@ -62,13 +62,14 @@ COPY pyproject.toml uv.lock ./
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_HTTP_TIMEOUT=600 \
+    UV_CONCURRENT_DOWNLOADS=4 \
     UV_CACHE_DIR=/root/.cache/uv
 
 # -- Stage 1: deps-core - core packages only, NO ML extras --------------------
 # Used by: migration (keeps that image ~2-3 GB lighter)
 FROM base AS deps-core
 
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     uv sync --frozen --no-dev --no-install-project
 
 # Purge gcc after install - runtime code does not need the compiler.
@@ -84,7 +85,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # Used by: app - development, production
 FROM base AS deps-full
 
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     uv sync --frozen --no-dev --no-install-project --extra ml
 
 # Purge gcc after install (~60 MB saving).
@@ -152,12 +153,15 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     CURL_HOME="/tmp" \
     MPLCONFIGDIR="/tmp/matplotlib" \
-    XDG_CACHE_HOME="/tmp"
+    XDG_CACHE_HOME="/tmp" \
+    FORENSIC_MODEL_SEED_DIR="/opt/forensic-model-cache"
 
 # ML model cache dirs - must match the volume mounts in docker-compose.yml.
-# Models download once on first run into these paths and persist in named volumes.
+# Docker build preloads models into FORENSIC_MODEL_SEED_DIR; entrypoint copies
+# that seed into mounted runtime volumes before the API or worker starts.
 ENV NUMBA_CACHE_DIR="/app/cache/numba_cache" \
     YOLO_CONFIG_DIR="/app/cache/ultralytics" \
+    YOLO_MODEL_DIR="/app/cache/ultralytics" \
     TORCH_HOME="/app/cache/torch" \
     HF_HOME="/app/cache/huggingface" \
     TRANSFORMERS_CACHE="/app/cache/huggingface/transformers" \
@@ -171,7 +175,31 @@ RUN mkdir -p \
     /app/cache/torch \
     /app/cache/numba_cache \
     /app/cache/ultralytics \
-    /app/cache/easyocr
+    /app/cache/easyocr \
+    /opt/forensic-model-cache/huggingface \
+    /opt/forensic-model-cache/torch \
+    /opt/forensic-model-cache/easyocr \
+    /opt/forensic-model-cache/ultralytics
+
+# Verify ML runtime dependencies and script registry before downloading models.
+RUN python scripts/validate_ml_tools.py
+
+# Bake heavyweight model assets into the image so clean Docker volumes start hot.
+# Runtime named volumes shadow /app/cache/*, so the entrypoint seeds them from
+# /opt/forensic-model-cache on first startup.
+ARG PRELOAD_MODELS=1
+RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
+        HF_HOME="$FORENSIC_MODEL_SEED_DIR/huggingface" \
+        TRANSFORMERS_CACHE="$FORENSIC_MODEL_SEED_DIR/huggingface/transformers" \
+        TORCH_HOME="$FORENSIC_MODEL_SEED_DIR/torch" \
+        EASYOCR_MODEL_DIR="$FORENSIC_MODEL_SEED_DIR/easyocr" \
+        YOLO_CONFIG_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" \
+        YOLO_MODEL_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" \
+        HOME="/tmp" \
+        python scripts/model_pre_download.py --strict; \
+    else \
+        echo "Skipping build-time model preload (PRELOAD_MODELS=$PRELOAD_MODELS)"; \
+    fi
 
 # Pre-compile application bytecode for faster cold starts.
 # UV_COMPILE_BYTECODE=1 compiled venv packages; this handles app source code.
@@ -181,7 +209,7 @@ RUN python -m compileall -q api/ core/ orchestration/ agents/ tools/ scripts/ re
 # volume mounts in docker-compose inherit these permissions.
 RUN addgroup --system --gid 1001 appgroup \
  && adduser  --system --uid  1001 --ingroup appgroup --no-create-home appuser \
- && chown -R appuser:appgroup /app/cache /app/storage
+ && chown -R appuser:appgroup /app/cache /app/storage /opt/forensic-model-cache
 
 RUN chmod +x scripts/docker_entrypoint.sh
 
@@ -189,7 +217,7 @@ RUN chmod +x scripts/docker_entrypoint.sh
 FROM app AS development
 
 # Add dev + test dependencies on top of the full ML env
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     uv sync --frozen --extra ml --extra dev
 
 ENV RELOAD=true \

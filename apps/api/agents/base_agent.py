@@ -13,6 +13,10 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import Any
 
+from agents.mixins.context import AgentContextMixin
+from agents.mixins.investigation import AgentInvestigationMixin
+from agents.mixins.memory import AgentMemoryMixin
+from agents.mixins.reflection import AgentReflectionMixin
 from core.config import Settings
 from core.custody_logger import CustodyLogger
 from core.episodic_memory import EpisodicMemory
@@ -22,11 +26,6 @@ from core.persistence.evidence_store import EvidenceStore
 from core.structured_logging import get_logger
 from core.tool_registry import ToolRegistry
 from core.working_memory import WorkingMemory
-
-from agents.mixins.context import AgentContextMixin
-from agents.mixins.investigation import AgentInvestigationMixin
-from agents.mixins.memory import AgentMemoryMixin
-from agents.mixins.reflection import AgentReflectionMixin
 
 logger = get_logger(__name__)
 

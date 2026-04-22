@@ -252,7 +252,7 @@ async def ela_full_image(
     except Exception as e:
         if isinstance(e, ToolUnavailableError):
             raise
-        raise ToolUnavailableError(f"ELA analysis failed: {str(e)}")
+        raise ToolUnavailableError(f"ELA analysis failed: {str(e)}") from e
 
 
 async def roi_extract(
@@ -340,7 +340,7 @@ async def roi_extract(
     except Exception as e:
         if isinstance(e, ToolUnavailableError):
             raise
-        raise ToolUnavailableError(f"ROI extraction failed: {str(e)}")
+        raise ToolUnavailableError(f"ROI extraction failed: {str(e)}") from e
 
 
 async def jpeg_ghost_detect(
@@ -513,7 +513,7 @@ async def jpeg_ghost_detect(
     except ToolUnavailableError:
         raise
     except Exception as e:
-        raise ToolUnavailableError(f"JPEG ghost detection failed: {str(e)}")
+        raise ToolUnavailableError(f"JPEG ghost detection failed: {str(e)}") from e
 
 
 async def file_hash_verify(
@@ -610,7 +610,7 @@ async def compute_perceptual_hash(
     except Exception as e:
         if isinstance(e, ToolUnavailableError):
             raise
-        raise ToolUnavailableError(f"Perceptual hash computation failed: {str(e)}")
+        raise ToolUnavailableError(f"Perceptual hash computation failed: {str(e)}") from e
 
 
 async def frequency_domain_analysis(
@@ -667,15 +667,23 @@ async def frequency_domain_analysis(
             total_energy = low_freq_energy + high_freq_energy + 1e-10
 
             high_freq_ratio = high_freq_energy / total_energy
-            _NATURAL_CEIL = 0.20
+            natural_ceil = 0.20
             anomaly_score = round(
-                min(1.0, max(0.0, (high_freq_ratio - _NATURAL_CEIL) / _NATURAL_CEIL)), 3
+                min(1.0, max(0.0, (high_freq_ratio - natural_ceil) / natural_ceil)), 3
+            )
+            anomaly_detected = anomaly_score >= 0.4
+            confidence = (
+                round(0.55 + (anomaly_score * 0.35), 3)
+                if anomaly_detected
+                else round(0.70 - (anomaly_score * 0.25), 3)
             )
 
             # Return summary statistics only — omit frequency_spectrum / dominant_frequencies
             # arrays (W×H floats ≈ 16 MB for 1080p) to prevent memory and serialisation pressure.
             return {
                 "anomaly_score": anomaly_score,
+                "anomaly_detected": anomaly_detected,
+                "confidence": confidence,
                 "low_freq_ratio": round(low_freq_energy / total_energy, 4),
                 "high_freq_ratio": round(high_freq_ratio, 4),
                 "court_defensible": False,
@@ -692,7 +700,7 @@ async def frequency_domain_analysis(
     except ToolUnavailableError:
         raise
     except Exception as e:
-        raise ToolUnavailableError(f"Frequency domain analysis failed: {str(e)}")
+        raise ToolUnavailableError(f"Frequency domain analysis failed: {str(e)}") from e
 
 
 async def extract_text_from_image(

@@ -6,11 +6,10 @@ Handles working memory initialization, task state management, and custody loggin
 from __future__ import annotations
 
 import uuid
-from typing import Any
 
-from core.custody_logger import CustodyLogger, EntryType
+from core.custody_logger import CustodyLogger
 from core.structured_logging import get_logger
-from core.working_memory import TaskStatus, WorkingMemory, WorkingMemoryState
+from core.working_memory import TaskStatus, WorkingMemory
 
 logger = get_logger(__name__)
 

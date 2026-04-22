@@ -18,6 +18,15 @@ services:
       RELOAD: "false"
       APP_ENV: production
       DEBUG: "false"
+    volumes: !override
+      - evidence_data:/app/storage/evidence:rw
+      - signing_keys:/app/storage/keys:rw
+      - hf_cache:/app/cache/huggingface:rw
+      - torch_cache:/app/cache/torch:rw
+      - easyocr_cache:/app/cache/easyocr:rw
+      - numba_cache:/app/cache/numba_cache:rw
+      - yolo_cache:/app/cache/ultralytics:rw
+      - calibration_models_cache:/app/storage/calibration_models:rw
     logging:
       driver: "json-file"
       options:
@@ -46,6 +55,15 @@ services:
       RELOAD: "false"
       APP_ENV: production
       DEBUG: "false"
+    volumes: !override
+      - evidence_data:/app/storage/evidence:rw
+      - signing_keys:/app/storage/keys:rw
+      - hf_cache:/app/cache/huggingface:rw
+      - torch_cache:/app/cache/torch:rw
+      - easyocr_cache:/app/cache/easyocr:rw
+      - numba_cache:/app/cache/numba_cache:rw
+      - yolo_cache:/app/cache/ultralytics:rw
+      - calibration_models_cache:/app/storage/calibration_models:rw
     logging:
       driver: "json-file"
       options:

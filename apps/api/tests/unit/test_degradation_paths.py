@@ -13,7 +13,7 @@ These tests focus on the gaps identified in the audit:
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -96,7 +96,6 @@ class TestJWTRS256Hardening:
     """
 
     def test_production_rs256_without_private_key_raises(self):
-        from pydantic import ValidationError
         from core.config import Settings
 
         # Build a minimal production settings object with RS256 but no private key
@@ -166,8 +165,10 @@ class TestGeminiCircuitBreaker:
     @pytest.mark.asyncio
     async def test_open_circuit_rejects_without_calling(self):
         from core.circuit_breaker import (
-            CircuitBreaker, CircuitBreakerConfig,
-            CircuitBreakerOpenError, CircuitState,
+            CircuitBreaker,
+            CircuitBreakerConfig,
+            CircuitBreakerOpenError,
+            CircuitState,
         )
 
         cfg = CircuitBreakerConfig(failure_threshold=1, timeout_seconds=9999)
@@ -196,9 +197,10 @@ class TestGeminiCircuitBreaker:
     @pytest.mark.asyncio
     async def test_circuit_recovers_after_timeout(self):
         from core.circuit_breaker import (
-            CircuitBreaker, CircuitBreakerConfig, CircuitState,
+            CircuitBreaker,
+            CircuitBreakerConfig,
+            CircuitState,
         )
-        from datetime import datetime, timedelta
 
         cfg = CircuitBreakerConfig(failure_threshold=1, timeout_seconds=0)
         breaker = CircuitBreaker("gemini_recover_test", cfg)
@@ -230,7 +232,9 @@ class TestGeminiCircuitBreaker:
         This tests the contract: degraded analysis > no analysis.
         """
         from core.circuit_breaker import (
-            CircuitBreaker, CircuitBreakerConfig, CircuitBreakerOpenError,
+            CircuitBreaker,
+            CircuitBreakerConfig,
+            CircuitBreakerOpenError,
         )
 
         cfg = CircuitBreakerConfig(failure_threshold=1, timeout_seconds=9999)
@@ -317,6 +321,7 @@ class TestAgent1LosslessCache:
     def _make_agent(self, file_path: str = "/tmp/test.jpg", mime: str = "image/jpeg"):
         """Build a minimal Agent1Image stub with only the fields _is_lossless reads."""
         from unittest.mock import MagicMock
+
         from agents.agent1_image import Agent1Image
 
         artifact = MagicMock()
@@ -350,3 +355,91 @@ class TestAgent1LosslessCache:
             "Cache must be stored in __dict__, not via object.__setattr__"
         )
         assert agent.__dict__["_is_lossless_cached"] is True
+
+
+class TestAgent1SignalContracts:
+    """Regression tests for Agent 1 tool-output normalization."""
+
+    def _make_image_handler(self):
+        from core.handlers.image import ImageHandlers
+
+        agent = MagicMock()
+        agent._tool_context = {}
+
+        async def _record_tool_result(tool_name: str, result: dict):
+            agent._tool_context[tool_name] = result
+
+        agent._record_tool_result = AsyncMock(side_effect=_record_tool_result)
+        artifact = MagicMock()
+        artifact.file_path = "test.jpg"
+        agent.evidence_artifact = artifact
+        return ImageHandlers(agent), agent
+
+    @pytest.mark.asyncio
+    async def test_diffusion_probability_becomes_confidence_and_positive_signal(self):
+        from uuid import uuid4
+
+        from core.react_loop import ReActLoopEngine
+
+        handler, _agent = self._make_image_handler()
+
+        with patch(
+            "core.handlers.image.run_ml_tool",
+            new=AsyncMock(
+                return_value={
+                    "verdict": "GEN_AI_DETECTION",
+                    "diffusion_probability": 0.82,
+                    "available": True,
+                    "court_defensible": True,
+                }
+            ),
+        ):
+            result = await handler.diffusion_artifact_detector_handler({})
+
+        assert result["confidence"] == 0.82
+        assert result["diffusion_detected"] is True
+        assert result["is_ai_generated"] is True
+
+        engine = ReActLoopEngine("Agent1", uuid4(), 3, AsyncMock(), AsyncMock())
+        confidence, from_fallback = engine._extract_confidence(
+            result, "diffusion_artifact_detector"
+        )
+        status, verdict, finding_confidence, court_defensible = engine._classify_tool_output(
+            result,
+            "diffusion_artifact_detector",
+            confidence,
+            from_fallback,
+        )
+
+        assert from_fallback is False
+        assert status == "CONFIRMED"
+        assert verdict == "POSITIVE"
+        assert finding_confidence == 0.82
+        assert court_defensible is True
+
+    @pytest.mark.asyncio
+    async def test_adversarial_check_skips_until_splice_or_copy_move_signal(self):
+        handler, agent = self._make_image_handler()
+
+        result = await handler.adversarial_robustness_check_handler({})
+
+        assert result["adversarial_check_skipped"] is True
+        assert result["skipped"] is True
+        assert "adversarial_robustness_check" in agent._tool_context
+
+    @pytest.mark.asyncio
+    async def test_frequency_domain_emits_confidence_and_anomaly_marker(self, tmp_path):
+        from PIL import Image
+
+        from tools.image_tools import frequency_domain_analysis
+
+        img_path = tmp_path / "frequency_test.png"
+        Image.new("RGB", (64, 64), color=(128, 128, 128)).save(img_path)
+        artifact = MagicMock()
+        artifact.file_path = str(img_path)
+
+        result = await frequency_domain_analysis(artifact)
+
+        assert "anomaly_detected" in result
+        assert "confidence" in result
+        assert 0.0 <= result["confidence"] <= 1.0

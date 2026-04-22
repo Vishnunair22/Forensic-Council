@@ -36,7 +36,6 @@ os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-key-abcdefghijklmnopqrstuvwxyz
 
 import pytest
 
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -136,7 +135,6 @@ class TestSignAndVerify:
         assert len(entry.signature) > 0  # hex-encoded DER signature
 
     def test_sign_returns_signed_entry_with_timestamp(self):
-        from datetime import UTC, datetime
         from core.signing import sign_content
 
         ks = _fresh_keystore()
@@ -147,6 +145,7 @@ class TestSignAndVerify:
 
     def test_sign_respects_provided_timestamp(self):
         from datetime import UTC, datetime
+
         from core.signing import sign_content
 
         ks = _fresh_keystore()
@@ -193,8 +192,9 @@ class TestForgeryDetection:
 
     def test_tampered_content_fails_verification(self):
         """Modifying content after signing must invalidate the entry."""
-        from core.signing import sign_content, verify_entry
         import copy
+
+        from core.signing import sign_content, verify_entry
 
         ks = _fresh_keystore()
         content = {"session": "abc", "verdict": "AUTHENTIC"}
@@ -208,8 +208,9 @@ class TestForgeryDetection:
 
     def test_wrong_content_hash_fails_verification(self):
         """An entry with a fabricated content_hash must be rejected."""
+        import dataclasses
+
         from core.signing import sign_content, verify_entry
-        import copy, dataclasses
 
         ks = _fresh_keystore()
         entry = sign_content("Agent1", {"data": "real"}, keystore=ks)
@@ -221,8 +222,9 @@ class TestForgeryDetection:
 
     def test_forged_signature_fails_verification(self):
         """An entry with a completely fabricated signature must be rejected."""
-        from core.signing import sign_content, verify_entry
         import dataclasses
+
+        from core.signing import sign_content, verify_entry
 
         ks = _fresh_keystore()
         entry = sign_content("Agent1", {"data": "real"}, keystore=ks)
@@ -233,8 +235,9 @@ class TestForgeryDetection:
 
     def test_cross_agent_signature_fails(self):
         """An entry signed by Agent1's key must NOT verify under Agent2's key."""
-        from core.signing import sign_content, verify_entry
         import dataclasses
+
+        from core.signing import sign_content, verify_entry
 
         ks = _fresh_keystore()
         entry_a1 = sign_content("Agent1", {"data": "real"}, keystore=ks)
@@ -259,8 +262,9 @@ class TestForgeryDetection:
 
     def test_verify_never_raises(self):
         """verify_entry must return False, never raise, even on corrupt input."""
-        from core.signing import SignedEntry, verify_entry
         from datetime import UTC, datetime
+
+        from core.signing import SignedEntry, verify_entry
 
         ks = _fresh_keystore()
         corrupt = SignedEntry(
@@ -358,8 +362,9 @@ class TestPerAgentKeyIndependence:
 
     def test_agent1_cannot_verify_agent2_signature(self):
         """An entry signed by Agent1 should NOT be claimable as Agent2's work."""
-        from core.signing import sign_content, verify_entry
         import dataclasses
+
+        from core.signing import sign_content, verify_entry
 
         ks = _fresh_keystore()
         entry = sign_content("Agent1", {"finding": "splice detected"}, keystore=ks)
@@ -389,7 +394,7 @@ class TestPEMRoundTrip:
 
     def test_pem_round_trip_signature_still_verifies(self):
         """Entries signed before PEM serialization must still verify after deserialization."""
-        from core.signing import AgentKeyPair, KeyStore, sign_content, verify_entry
+        from core.signing import AgentKeyPair, sign_content, verify_entry
 
         # Sign with original key
         ks = _fresh_keystore()
@@ -427,7 +432,6 @@ class TestKeyRotation:
 
     @pytest.mark.asyncio
     async def test_rotate_produces_new_key(self):
-        from core.signing import sign_content
 
         ks = _fresh_keystore()
         # Pre-load Agent1 deterministically

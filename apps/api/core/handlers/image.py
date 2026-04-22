@@ -103,6 +103,7 @@ class ImageHandlers(BaseToolHandler):
         Used to gate expensive ManTra-Net inference.
         """
         ctx = self.agent._tool_context
+        freq = ctx.get("frequency_domain_analysis", {})
         return any([
             ctx.get("neural_ela", {}).get("manipulation_detected", False),
             (ctx.get("neural_ela") or ctx.get("ela_full_image", {})).get("num_anomaly_regions", 0) > 2,
@@ -111,6 +112,22 @@ class ImageHandlers(BaseToolHandler):
             ctx.get("neural_copy_move", {}).get("copy_move_detected", False),
             ctx.get("f3_net_frequency", {}).get("gan_artifact_detected", False),
             ctx.get("diffusion_artifact_detector", {}).get("is_ai_generated", False),
+            ctx.get("diffusion_artifact_detector", {}).get("diffusion_detected", False),
+            freq.get("anomaly_detected", False),
+            freq.get("num_anomaly_regions", 0) > 2,
+        ])
+
+    def _has_splice_or_copy_move_signal(self) -> bool:
+        """Return True when anti-forensic robustness analysis is warranted."""
+        ctx = self.agent._tool_context
+        return any([
+            ctx.get("neural_splicing", {}).get("splicing_detected", False),
+            ctx.get("splicing_detect", {}).get("splicing_detected", False),
+            ctx.get("neural_copy_move", {}).get("copy_move_detected", False),
+            ctx.get("copy_move_detect", {}).get("copy_move_detected", False),
+            ctx.get("vector_contraband_search", {}).get("concern_flag", False),
+            ctx.get("scene_incongruence", {}).get("scene_incongruent", False),
+            ctx.get("lighting_consistency", {}).get("inconsistency_detected", False),
         ])
 
     async def _store(self, primary_key: str, result: dict, *alias_keys: str) -> None:
@@ -327,6 +344,13 @@ class ImageHandlers(BaseToolHandler):
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         result = await run_ml_tool("diffusion_artifact_detector.py", artifact.file_path, timeout=12.0)
 
+        diffusion_probability = result.get("diffusion_probability")
+        if diffusion_probability is not None:
+            try:
+                result["confidence"] = round(max(0.0, min(1.0, float(diffusion_probability))), 3)
+            except (TypeError, ValueError):
+                result.setdefault("confidence", 0.0)
+
         if result.get("verdict") == "GEN_AI_DETECTION":
             result["diffusion_detected"] = True
             result["is_ai_generated"] = True
@@ -350,6 +374,18 @@ class ImageHandlers(BaseToolHandler):
     async def adversarial_robustness_check_handler(self, input_data: dict) -> dict:
         """Anti-forensics perturbation stability check (sync CPU call — runs in executor)."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        if not self._has_splice_or_copy_move_signal():
+            result = {
+                "adversarial_check_skipped": True,
+                "skipped": True,
+                "reason": "No prior splicing or copy-move signal; anti-forensics robustness check not warranted",
+                "confidence": 0.0,
+                "court_defensible": False,
+                "available": True,
+            }
+            await self.agent._record_tool_result("adversarial_robustness_check", result)
+            return result
+
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(None, check_adversarial_robustness, artifact.file_path)
         await self.agent._record_tool_result("adversarial_robustness_check", result)

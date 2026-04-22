@@ -11,35 +11,40 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from core.config import Settings, get_settings
-from core.forensic_policy import ForensicPolicy
-from core.cross_modal_fusion import fuse as cross_modal_fuse
-from core.severity import assign_severity_tier
-from core.signing import KeyStore
-from core.structured_logging import get_logger
-
+from agents.arbiter_narrative import ArbiterNarrativeMixin
 from agents.arbiter_verdict import (
-    FindingVerdict,
-    FindingComparison,
-    ChallengeResult,
-    TribunalCase,
-    AgentMetrics,
-    ForensicReport,
     AGENT_NAMES,
+    AgentMetrics,
+    ChallengeResult,
+    FindingComparison,
+    FindingVerdict,
+    ForensicReport,
+    TribunalCase,
     calculate_manipulation_probability,
     confidence_of,
     cross_agent_comparison,
     evidence_verdict_of,
 )
-from agents.arbiter_narrative import ArbiterNarrativeMixin
+from core.config import Settings, get_settings
+from core.cross_modal_fusion import fuse as cross_modal_fuse
+from core.forensic_policy import ForensicPolicy
+from core.severity import assign_severity_tier
+from core.signing import KeyStore
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
 # Re-exporting for backward compatibility
 __all__ = [
-    "FindingVerdict", "FindingComparison", "ChallengeResult", "TribunalCase",
-    "AgentMetrics", "ForensicReport", "CouncilArbiter"
+    "FindingVerdict",
+    "FindingComparison",
+    "ChallengeResult",
+    "TribunalCase",
+    "AgentMetrics",
+    "ForensicReport",
+    "CouncilArbiter",
 ]
+
 
 class CouncilArbiter(ArbiterNarrativeMixin):
     """
@@ -74,10 +79,11 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         use_llm: bool = True,
     ) -> ForensicReport:
         """Main deliberation entry point."""
-        _SKIP_TYPES = {"file type not applicable", "format not supported"}
+        skip_types = {"file type not applicable", "format not supported"}
 
         async def _step(msg: str):
-            if self._step_hook: await self._step_hook(msg)
+            if self._step_hook:
+                await self._step_hook(msg)
 
         # ── 1. Finding Extraction & Deduplication ─────────────────────────
         await _step("Gathering all agent findings…")
@@ -87,7 +93,9 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         for aid, res in agent_results.items():
             raw = res.get("findings", [])
             deduped = self._deduplicate_findings(raw)
-            skipped = not deduped or all(str(f.get("finding_type", "")).lower() in _SKIP_TYPES for f in deduped)
+            skipped = not deduped or all(
+                str(f.get("finding_type", "")).lower() in skip_types for f in deduped
+            )
             per_agent_findings[aid] = deduped
             if skipped:
                 skipped_agents[aid] = "File type not applicable to this agent."
@@ -98,8 +106,12 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             if not skipped:
                 active_results[aid] = {**res, "findings": deduped}
                 all_findings.extend(deduped)
-                af_gemini = [f for f in deduped if (f.get("metadata") or {}).get("analysis_source") == "gemini_vision"]
-                if af_gemini: gemini_findings_by_agent[aid] = af_gemini
+                af_gemini = [
+                    f for f in deduped
+                    if str((f.get("metadata") or {}).get("analysis_source", "")).startswith("gemini")
+                ]
+                if af_gemini:
+                    gemini_findings_by_agent[aid] = af_gemini
 
         if not active_results:
             return self._empty_report(case_id, per_agent_findings, per_agent_metrics)
@@ -148,8 +160,8 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         try:
             _fusion_res = cross_modal_fuse(active_results)
             _fusion = _fusion_res.model_dump(mode="json")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Cross-modal fusion failed", error=str(exc))
 
         report = ForensicReport(
             session_id=self.session_id, case_id=case_id or f"case_{self.session_id}",
@@ -162,7 +174,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             uncertainty_statement=narratives["uncertainty_statement"], verdict_sentence=narratives["verdict_sentence"],
             key_findings=narratives["key_findings"], reliability_note=narratives["reliability_note"],
             manipulation_probability=man_prob, confidence_min=c_min, confidence_max=c_max, confidence_std_dev=c_std,
-            per_agent_summary=self._get_agent_summary(per_agent_metrics, per_agent_findings), 
+            per_agent_summary=self._get_agent_summary(per_agent_metrics, per_agent_findings),
             degradation_flags=self._get_degradation_flags(narratives["llm_used"], comp_penalty, all_findings, active_metrics),
             applicable_agent_count=len(active_results), skipped_agents=skipped_agents,
             analysis_coverage_note=analysis_cov, cross_modal_fusion=_fusion,
@@ -173,27 +185,35 @@ class CouncilArbiter(ArbiterNarrativeMixin):
     def _deduplicate_findings(self, findings: list[dict]) -> list[dict]:
         seen, out = {}, []
         for f in findings:
-            if isinstance(f, dict) and "severity_tier" not in f: f["severity_tier"] = assign_severity_tier(f)
+            if isinstance(f, dict) and "severity_tier" not in f:
+                f["severity_tier"] = assign_severity_tier(f)
             meta = f.get("metadata") or {}
             key = (str(f.get("agent_id", "")), str(f.get("finding_type", "")), str(meta.get("tool_name", "")))
             if key in seen:
-                idx = seen[key]; old = out[idx]
+                idx = seen[key]
+                old = out[idx]
                 conf_new = confidence_of(f, default=0.0) or 0.0
                 conf_old = confidence_of(old, default=0.0) or 0.0
-                if conf_new > conf_old: out[idx] = f
+                if conf_new > conf_old:
+                    out[idx] = f
                 continue
-            seen[key] = len(out); out.append(f)
+            seen[key] = len(out)
+            out.append(f)
         return out
 
     def _compute_agent_metrics(self, aid: str, findings: list[dict], skipped: bool) -> AgentMetrics:
         name = AGENT_NAMES.get(aid, aid)
-        if skipped: return AgentMetrics(agent_id=aid, agent_name=name, skipped=True)
+        if skipped:
+            return AgentMetrics(agent_id=aid, agent_name=name, skipped=True)
         real = [f for f in findings if str(f.get("finding_type", "")).lower() not in {"file type not applicable", "format not supported"}]
 
         def _is_na(f):
             return evidence_verdict_of(f) == "NOT_APPLICABLE"
 
-        def _is_fail(f): return evidence_verdict_of(f) == "ERROR" or (not _is_na(f) and f.get("status") == "INCOMPLETE")
+        def _is_fail(f):
+            return evidence_verdict_of(f) == "ERROR" or (
+                not _is_na(f) and f.get("status") == "INCOMPLETE"
+            )
 
         na = sum(1 for f in real if _is_na(f))
         fail = sum(1 for f in real if _is_fail(f))
@@ -213,11 +233,14 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         w_sum, wc_sum, we_num, we_den = 0.0, 0.0, 0.0, 0.0
         for m in active_metrics:
             app = m.get("total_tools_called", 0) - m.get("tools_not_applicable", 0)
-            if app <= 0: continue
+            if app <= 0:
+                continue
             rel = max(0.0, 1.0 - m.get("error_rate", 0.0))
             weight = rel * app * (1.15 if m.get("deep_finding_count", 0) > 0 else 1.0)
-            wc_sum += m["confidence_score"] * weight; w_sum += weight
-            we_num += m["error_rate"] * max(1, app); we_den += max(1, app)
+            wc_sum += m["confidence_score"] * weight
+            w_sum += weight
+            we_num += m["error_rate"] * max(1, app)
+            we_den += max(1, app)
         return (round(wc_sum / w_sum, 3) if w_sum > 0 else 0.0), (round(we_num / we_den, 3) if we_den > 0 else 0.0)
 
     def _get_compression_penalty(self, findings: list[dict]) -> float:
@@ -226,8 +249,11 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         If missing, defaults to no penalty (1.0).
         """
         for f in findings:
-            if f.get("finding_type") == "compression_risk_audit":
-                meta = f.get("metadata") or {}
+            meta = f.get("metadata") or {}
+            if (
+                f.get("finding_type") == "compression_risk_audit"
+                or meta.get("tool_name") == "compression_risk_audit"
+            ):
                 return float(meta.get("compression_penalty", 1.0))
         return 1.0
 
@@ -241,7 +267,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         if mp >= ForensicPolicy.SUSPICIOUS_PROB_THRESHOLD and ms >= 1:
             return "SUSPICIOUS"
 
-        if (ms == 0 and oc >= ForensicPolicy.AUTHENTIC_CONF_THRESHOLD 
+        if (ms == 0 and oc >= ForensicPolicy.AUTHENTIC_CONF_THRESHOLD
             and oer <= ForensicPolicy.AUTHENTIC_ERROR_MAX and contested == 0):
             return "AUTHENTIC"
 
@@ -266,8 +292,10 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         fail = sum(m.get("tools_failed", 0) for m in metrics)
         fallback = sum(1 for f in findings if (f.get("metadata") or {}).get("degraded") is True)
         parts = []
-        if fail: parts.append(f"{fail} of {total} tools failed")
-        if fallback: parts.append(f"{fallback} tools used simplified fallbacks")
+        if fail:
+            parts.append(f"{fail} of {total} tools failed")
+        if fallback:
+            parts.append(f"{fallback} tools used simplified fallbacks")
         return "; ".join(parts) if parts else f"All {total} tools ran successfully"
 
     def _get_agent_summary(self, metrics, findings) -> dict:
@@ -307,8 +335,13 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         flags = []
         if self.config.llm_enable_post_synthesis and not llm_ok:
             flags.append("LLM synthesis bypassed")
-        if penalty < 1.0: flags.append(f"Compression penalty applied ({round((1-penalty)*100)}%)")
-        if not any((f.get("metadata") or {}).get("analysis_source") == "gemini_vision" for f in findings): flags.append("Gemini deep vision skipped")
+        if penalty < 1.0:
+            flags.append(f"Compression penalty applied ({round((1-penalty)*100)}%)")
+        if not any(
+            str((f.get("metadata") or {}).get("analysis_source", "")).startswith("gemini")
+            for f in findings
+        ):
+            flags.append("Gemini deep analysis skipped")
         return flags
 
     def _empty_report(self, case_id, findings, metrics) -> ForensicReport:

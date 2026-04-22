@@ -14,8 +14,10 @@ Usage:
 
 from __future__ import annotations
 
+import hashlib
 import threading
 from dataclasses import dataclass
+from typing import Any
 
 from core.structured_logging import get_logger
 
@@ -262,6 +264,47 @@ class CLIPImageAnalyzer:
         if result.available:
             return result.top_match
         return "unknown"
+
+    def generate_fingerprint(self, image_path: str, projection_dims: int = 64) -> dict[str, Any]:
+        """
+        Generate a deterministic neural perceptual fingerprint from the image embedding.
+
+        The analyzer already computes a normalized vision embedding for semantic
+        classification.  This method reuses that embedding, quantizes its first
+        dimensions into a compact bit signature, and includes a SHA-256 digest of
+        the quantized vector for stable storage/comparison.
+        """
+        result = self.analyze_image(image_path, categories=self.DEFAULT_IMAGE_CATEGORIES)
+        if not result.available or not result.embedding:
+            return {
+                "available": False,
+                "error": result.error or "embedding unavailable",
+                "method": "clip_embedding_projection",
+            }
+
+        embedding = result.embedding
+        dims = max(8, min(projection_dims, len(embedding)))
+        projection = embedding[:dims]
+
+        # Quantize to signed 16-bit buckets so tiny floating-point differences
+        # do not produce wildly different fingerprints across CPU/library builds.
+        quantized = [max(-32768, min(32767, int(round(value * 1000)))) for value in projection]
+        bitstring = "".join("1" if value >= 0 else "0" for value in quantized)
+        digest_input = ",".join(str(value) for value in quantized).encode("ascii")
+
+        return {
+            "available": True,
+            "method": "clip_embedding_projection",
+            "model": self._model_name,
+            "pretrained": self._pretrained,
+            "dimensions": len(embedding),
+            "projection_dimensions": dims,
+            "bit_fingerprint": bitstring,
+            "sha256": hashlib.sha256(digest_input).hexdigest(),
+            "projection": quantized,
+            "top_match": result.top_match,
+            "top_confidence": result.top_confidence,
+        }
 
 
 def get_clip_analyzer() -> CLIPImageAnalyzer:

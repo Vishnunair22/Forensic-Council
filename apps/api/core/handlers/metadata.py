@@ -57,12 +57,19 @@ class MetadataHandlers(BaseToolHandler):
             if not result.get("error") and result.get("available"):
                 await self.agent._record_tool_result("exif_isolation_forest", result)
                 return result
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("EXIF isolation forest unavailable", error=str(exc))
 
         # Fallback to standard anomaly score
         await self.agent.update_sub_task("Isolation Forest unavailable — falling back to standard anomaly score...")
-        return await self.metadata_anomaly_score_handler(input_data)
+        fallback = await self.metadata_anomaly_score_handler(input_data)
+        result = {
+            **fallback,
+            "degraded": True,
+            "fallback_reason": "exif_isolation_forest unavailable; used metadata anomaly score",
+        }
+        await self.agent._record_tool_result("exif_isolation_forest", result)
+        return result
 
     # ── Refinement: Astro Grounding ────────────────────────────────────
 
@@ -76,20 +83,45 @@ class MetadataHandlers(BaseToolHandler):
         ts = exif.get("datetime_original")
 
         if not gps or not ts:
-            return {"available": False, "note": "Astro grounding requires valid GPS and Timestamp in EXIF."}
+            result = {
+                "available": False,
+                "not_applicable": True,
+                "confidence": 0.0,
+                "court_defensible": False,
+                "note": "Astro grounding requires valid GPS and Timestamp in EXIF.",
+            }
+            await self.agent._record_tool_result("astro_grounding", result)
+            return result
 
         try:
-            result = await run_ml_tool("astro_grounding_engine.py", artifact.file_path,
-                                     extra_args=["--lat", str(gps['latitude']), "--lon", str(gps['longitude']), "--time", str(ts)],
-                                     timeout=15.0)
+            result = await run_ml_tool(
+                "astro_grounding_engine.py",
+                artifact.file_path,
+                extra_args=[
+                    "--lat",
+                    str(gps["latitude"]),
+                    "--lon",
+                    str(gps["longitude"]),
+                    "--time",
+                    str(ts),
+                ],
+                timeout=15.0,
+            )
 
             if not result.get("error") and result.get("available"):
                 await self.agent._record_tool_result("astro_grounding", result)
                 return result
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Astro grounding engine unavailable", error=str(exc))
 
-        return {"available": False, "note": "Astro grounding engine failed or analytical model unavailable."}
+        result = {
+            "available": False,
+            "confidence": 0.0,
+            "court_defensible": False,
+            "note": "Astro grounding engine failed or analytical model unavailable.",
+        }
+        await self.agent._record_tool_result("astro_grounding", result)
+        return result
 
     # ── Standard Handlers (Migrated) ─────────────────────────────────────
 
@@ -213,44 +245,48 @@ class MetadataHandlers(BaseToolHandler):
                 "stored_hash": stored,
                 "hash_match": match,
                 "available": True,
+                "confidence": 1.0,
+                "court_defensible": True,
             }
         except Exception as exc:
-            result = {"available": False, "error": str(exc)}
+            result = {"available": False, "error": str(exc), "confidence": 0.0, "court_defensible": False}
         await self.agent._record_tool_result("file_hash_verify", result)
         return result
+
     async def compression_risk_audit_handler(self, input_data: dict) -> dict:
         """Audits metadata for social media/chat app compression footprints."""
-        artifact = input_data.get("artifact") or self.agent.evidence_artifact
         await self.agent.update_sub_task("Auditing for social media compression footprints...")
-        
+
         exif = self.agent._tool_context.get("exif_extract", {})
         sw = str(exif.get("software", "")).lower()
         make = str(exif.get("make", "")).lower()
         model = str(exif.get("model", "")).lower()
-        
+
         # Social Media / Heavy Compression apps
-        # These apps strip forensic noise and resize images heavily, making 
+        # These apps strip forensic noise and resize images heavily, making
         # standard ELA/PRNU/Noise analysis unreliable.
-        SOCIAL_APPS = {"instagram", "tiktok", "facebook", "snapchat", "twitter", "x.com"}
-        CHAT_APPS = {"whatsapp", "telegram", "imessage", "signal", "viber"}
-        
+        social_apps = {"instagram", "tiktok", "facebook", "snapchat", "twitter", "x.com"}
+        chat_apps = {"whatsapp", "telegram", "imessage", "signal", "viber"}
+
         penalty = 1.0
         platform = None
-        
-        if any(x in sw or x in make or x in model for x in SOCIAL_APPS):
+
+        if any(x in sw or x in make or x in model for x in social_apps):
             penalty = 0.45
             platform = "Social Media (High Compression)"
-        elif any(x in sw or x in make or x in model for x in CHAT_APPS):
+        elif any(x in sw or x in make or x in model for x in chat_apps):
             penalty = 0.65
             platform = "Messaging App (Medium Compression)"
-            
+
         result = {
             "available": True,
             "compression_risk": 1.0 - penalty if penalty < 1.0 else 0.0,
             "compression_penalty": penalty,
             "detected_platform": platform,
-            "forensic_reliability_impact": "HIGH" if penalty < 0.5 else ("MEDIUM" if penalty < 1.0 else "NONE")
+            "forensic_reliability_impact": "HIGH" if penalty < 0.5 else ("MEDIUM" if penalty < 1.0 else "NONE"),
+            "confidence": 0.85,
+            "court_defensible": True,
         }
-        
+
         await self.agent._record_tool_result("compression_risk_audit", result)
         return result

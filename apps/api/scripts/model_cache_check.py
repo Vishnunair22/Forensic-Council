@@ -5,14 +5,14 @@ Model Cache Check & Warm-Up
 
 Runs at container startup to:
   1. Report which ML model volumes are populated (already cached)
-  2. Skip any heavy model downloads — those happen lazily on first use
+  2. Verify build-seeded model caches are available
   3. Pre-import lightweight modules that are always needed (fast path only)
   4. Exit 0 if cache is healthy, exit 0 with warnings if partially empty
      (partial cache is normal on first ever run)
 
-This script intentionally does NOT download models. Model files are fetched
-lazily by each agent on first use and cached into the named Docker volumes.
-This script only verifies the cache state so operators know what to expect.
+This script intentionally does NOT download models. Docker builds run
+model_pre_download.py to bake a seed cache into the image, and entrypoint
+startup copies that seed into mounted volumes when they are empty.
 
 Usage:
     python scripts/model_cache_check.py          # full check + soft warm-up
@@ -22,6 +22,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import sys
 import time
 from pathlib import Path
@@ -43,7 +44,7 @@ CACHE_DIRS: dict[str, str] = {
 # Minimum expected file count per cache dir to be considered "populated"
 MIN_FILES: dict[str, int] = {
     "HuggingFace": 3,
-    "PyTorch": 0,  # PyTorch hub models are downloaded lazily per-analysis
+    "PyTorch": 1,
     "EasyOCR": 2,
     "YOLO": 1,
     "Numba": 0,  # generated at runtime, may be empty
@@ -121,7 +122,7 @@ def check_filesystem_cache() -> tuple[int, int]:
     return populated, total
 
 
-def soft_warmup() -> None:
+def soft_warmup() -> bool:
     """
     Import always-needed lightweight modules to pre-populate Python's module
     cache and verify the venv is intact. Heavy ML models are NOT loaded here.
@@ -151,12 +152,10 @@ def soft_warmup() -> None:
     failed: list[str] = []
 
     # python-magic has different import names per platform
-    try:
-        import magic as _magic_test
-
+    if importlib.util.find_spec("magic") is not None:
         print(f"  {GREEN}✓{RESET}  python-magic (libmagic)")
-    except ImportError as e:
-        print(f"  {RED}✗{RESET}  python-magic (libmagic)  →  {e}")
+    else:
+        print(f"  {RED}✗{RESET}  python-magic (libmagic)  →  module not found")
         failed.append("python-magic")
 
     for module, label in modules_to_check:
@@ -175,8 +174,10 @@ def soft_warmup() -> None:
         print(
             f"  {YELLOW}Hint: Run `uv sync --frozen --extra ml` to reinstall dependencies.{RESET}"
         )
+        return False
     else:
         print(f"  {GREEN}All core modules verified.{RESET}")
+        return True
 
 
 def main() -> None:
@@ -185,6 +186,11 @@ def main() -> None:
         "--quick",
         action="store_true",
         help="Filesystem check only; skip Python import verification",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit non-zero when cache directories or imports are not ready",
     )
     args = parser.parse_args()
 
@@ -199,14 +205,18 @@ def main() -> None:
     else:
         empty = total - populated
         print(f"{YELLOW}{BOLD}  {empty} of {total} cache directories are empty.{RESET}")
-        print(f"  {YELLOW}Models will be downloaded automatically on first use.{RESET}")
+        print(f"  {YELLOW}Model seed cache is incomplete; startup fallback may retry downloads.{RESET}")
         print(
-            f"  {YELLOW}Expect slower first-run analysis; subsequent runs use the cache.{RESET}"
+            f"  {YELLOW}Expect slower first-run analysis unless the Docker build preloaded models.{RESET}"
         )
 
+    imports_ok = True
     if not args.quick:
         print()
-        soft_warmup()
+        imports_ok = soft_warmup()
+
+    if args.strict and (populated != total or not imports_ok):
+        sys.exit(1)
 
     print(f"\n{BOLD}{'━' * 55}{RESET}")
     print(f"{BOLD}  Starting Forensic Council API...{RESET}")

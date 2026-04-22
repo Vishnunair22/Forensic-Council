@@ -10,15 +10,16 @@ Validates Docker Compose, Dockerfiles, and Project Manifests for:
 
 Run: pytest tests/infra/test_infra_standards.py -v
 """
-import re
-import yaml
-import pytest
 import json
+import re
 from pathlib import Path
+
+import pytest
+import yaml
 
 # ── Project Constants ──────────────────────────────────────────────────────────
 
-ROOT = Path(__file__).parent.parent.parent
+ROOT = Path(__file__).parents[4]
 COMPOSE_FILE = ROOT / "infra/docker-compose.yml"
 DEV_COMPOSE = ROOT / "infra/docker-compose.dev.yml"
 PROD_COMPOSE = ROOT / "infra/docker-compose.prod.yml"
@@ -29,12 +30,14 @@ ENV_EXAMPLE = ROOT / ".env.example"
 # ── Helper Functions ──────────────────────────────────────────────────────────
 
 def load_yaml(path: Path) -> dict:
-    if not path.exists(): return {}
+    if not path.exists():
+        return {}
     with open(path) as f:
         return yaml.safe_load(f) or {}
 
 def read_text(path: Path) -> str:
-    if not path.exists(): return ""
+    if not path.exists():
+        return ""
     return path.read_text(encoding="utf-8")
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -71,7 +74,7 @@ class TestDockerCompose:
         assert "3000" in str(services["frontend"].get("ports", []))
         assert "8000" in str(services["backend"].get("ports", []))
         assert "80" in str(services["caddy"].get("ports", []))
-        
+
         # Internal only
         for svc in ["postgres", "redis", "qdrant"]:
             ports = services[svc].get("ports", [])
@@ -83,7 +86,7 @@ class TestDockerCompose:
         expected = ["hf_cache", "torch_cache", "easyocr_cache", "yolo_cache"]
         for vol in expected:
             assert vol in volumes, f"ML volume {vol} is missing from top-level definitions."
-        
+
         backend_vols = str(compose["services"]["backend"].get("volumes", []))
         for vol in expected:
             assert vol in backend_vols, f"Backend failed to mount ML volume {vol}."
@@ -109,7 +112,7 @@ class TestDockerCompose:
         """Production hardening: read_only FS and memory limits."""
         backend = compose["services"]["backend"]
         assert backend.get("read_only") is True
-        
+
         # Memory limits check (deploy/resources)
         res = backend.get("deploy", {}).get("resources", {})
         assert "limits" in res or "reservations" in res or "mem_limit" in backend
@@ -136,7 +139,8 @@ class TestDockerfiles:
         """Verify we are not relying on 'latest' as a build target."""
         # Simple check in compose files
         for f in [COMPOSE_FILE, DEV_COMPOSE, PROD_COMPOSE]:
-            if not f.exists(): continue
+            if not f.exists():
+                continue
             content = read_text(f)
             # Only allow :latest if explicitly intended for external base images (like redis:latest)
             # but our own images should be versioned.
@@ -160,11 +164,11 @@ class TestManifestsAndEnv:
         """Ensure versions are consistent across all manifests."""
         backend_toml = read_text(BACKEND_DIR / "pyproject.toml")
         frontend_pkg = json.loads(read_text(FRONTEND_DIR / "package.json"))
-        
+
         # Extract version from TOML (simple regex)
         version_match = re.search(r'version\s*=\s*"(.*?)"', backend_toml)
         backend_version = version_match.group(1) if version_match else None
-        
+
         assert backend_version is not None, "Could not extract version from pyproject.toml"
         assert frontend_pkg.get("version") == backend_version, (
             f"Version mismatch: backend={backend_version}, frontend={frontend_pkg.get('version')}"

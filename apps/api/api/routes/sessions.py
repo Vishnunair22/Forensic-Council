@@ -23,9 +23,9 @@ from api.routes._session_state import (
     set_active_pipeline_metadata,
     unregister_websocket,
 )
-from core.severity import assign_severity_tier as _assign_severity_tier
 from api.schemas import AgentFindingDTO, ReportDTO, ReportStatusDTO, SessionInfo
 from core.auth import User, decode_token, get_current_user
+from core.severity import assign_severity_tier as _assign_severity_tier
 from core.structured_logging import get_logger
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])

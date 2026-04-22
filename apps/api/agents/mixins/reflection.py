@@ -12,7 +12,7 @@ from agents.reflection import SelfReflectionReport
 from core.custody_logger import EntryType
 from core.react_loop import AgentFinding
 from core.structured_logging import get_logger
-from core.working_memory import TaskStatus, WorkingMemoryState
+from core.working_memory import TaskStatus
 
 logger = get_logger(__name__)
 
@@ -151,7 +151,8 @@ class AgentReflectionMixin:
     ) -> list[str]:
         """RT4 Check."""
         deprioritized = []
-        if not state: return []
+        if not state:
+            return []
         for task in state.tasks:
             if task.status == TaskStatus.PENDING:
                 deprioritized.append(f"PENDING_TASK: '{task.description}' never started.")

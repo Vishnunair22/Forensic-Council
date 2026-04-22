@@ -218,7 +218,7 @@ services:
       dockerfile: Dockerfile
       target: migration
     container_name: forensic_migration
-    restart: "no"
+    restart: on-failure
     command: ["python", "scripts/init_db.py"]
     # SECURITY: Run with minimal privileges
     security_opt:
@@ -258,6 +258,7 @@ services:
     build:
       context: ../apps/api
       dockerfile: Dockerfile
+      target: development
     container_name: forensic_api
     restart: unless-stopped
     ports:
@@ -265,6 +266,7 @@ services:
     environment:
       <<: *backend-env
       APP_NAME: forensic_council
+      RELOAD: "false"
       API_HOST: 0.0.0.0
       API_PORT: 8000
       BOOTSTRAP_INVESTIGATOR_PASSWORD: ${BOOTSTRAP_INVESTIGATOR_PASSWORD}
@@ -302,12 +304,17 @@ services:
     cap_drop:
       - ALL
     cap_add:
+      - CHOWN
       - SETUID
       - SETGID
     read_only: true
     tmpfs:
       - /tmp:nosuid,size=512m
     volumes:
+      # Development default: bind source so backend code changes do not require image rebuilds.
+      # More specific mounts below protect runtime state and model caches from the /app bind.
+      - ../apps/api:/app:rw
+      - /app/.venv
       - evidence_data:/app/storage/evidence:rw
       - signing_keys:/app/storage/keys:rw
       - hf_cache:/app/cache/huggingface:rw
@@ -331,12 +338,14 @@ services:
     build:
       context: ../apps/api
       dockerfile: Dockerfile
+      target: development
     container_name: forensic_worker
     restart: unless-stopped
     command: ["worker"]
     environment:
       <<: *backend-env
       APP_NAME: forensic_worker
+      RELOAD: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       OTEL_SERVICE_NAME: forensic_worker
     depends_on:
@@ -360,12 +369,17 @@ services:
     cap_drop:
       - ALL
     cap_add:
+      - CHOWN
       - SETUID
       - SETGID
     read_only: true
     tmpfs:
       - /tmp:nosuid,size=512m
     volumes:
+      # Development default: bind source so worker code changes do not require image rebuilds.
+      # More specific mounts below protect runtime state and model caches from the /app bind.
+      - ../apps/api:/app:rw
+      - /app/.venv
       - evidence_data:/app/storage/evidence:rw
       - signing_keys:/app/storage/keys:rw
       - hf_cache:/app/cache/huggingface:rw
@@ -440,19 +454,20 @@ services:
     build:
       context: ../apps/web
       dockerfile: Dockerfile
+      target: development
       args:
-        # NEXT_PUBLIC_* vars are baked into the JS bundle at build time.
-        # Do NOT pass NEXT_PUBLIC_DEMO_PASSWORD here — it exposes secrets client-side.
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
-        # INTERNAL_API_URL is used by next.config.ts rewrites() at build time
-        # so /api/v1/* proxies to the backend via Docker-internal hostname.
         INTERNAL_API_URL: "http://backend:8000"
     container_name: forensic_ui
     restart: unless-stopped
     ports:
       - "3000:3000"
+    volumes:
+      - ../apps/web:/app:rw
+      - /app/.next
+      - /app/node_modules
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - NEXT_TELEMETRY_DISABLED=1
       # Standalone Next.js server must bind to all interfaces so health-checks
       # and external traffic can reach it from outside the container.
@@ -476,7 +491,7 @@ services:
       # the Next.js standalone server enough time to fully boot before checks begin.
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ > /dev/null 2>&1 || exit 1"]
       interval: 30s
-      timeout: 10s
+      timeout: 60s
       retries: 5
       start_period: 60s
     # SECURITY: Run with minimal privileges (already runs as 'nextjs' user in Dockerfile)
@@ -487,11 +502,11 @@ services:
     deploy:
       resources:
         limits:
+          memory: 2G
+          cpus: "2.0"
+        reservations:
           memory: 512M
           cpus: "0.5"
-        reservations:
-          memory: 128M
-          cpus: "0.25"
     # SECURITY: Frontend can only reach backend, NOT infrastructure services
     networks:
       - frontend_net
@@ -517,6 +532,12 @@ services:
         target: metrics_scrape_token
     ports:
       - "9090:9090"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9090/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     security_opt:
       - no-new-privileges:true
     cap_drop:

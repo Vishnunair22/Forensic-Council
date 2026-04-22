@@ -92,10 +92,10 @@ class Agent3Object(ForensicAgent):
             tasks.extend([
                 "Run secondary_classification on low-confidence objects",
                 "Run scale_validation on confirmed objects",
+                "Run adversarial_robustness_check against object detection evasion",
             ])
         tasks.extend([
-            "Run lighting_consistency for deep shadow-angle audit",
-            "Run adversarial_robustness_check against object detection evasion",
+            "Run lighting_consistency for deep ROI-aware shadow-angle audit",
             "Run gemini_deep_forensic to identify content, detect weapons, describe context",
         ])
         return tasks
@@ -170,7 +170,17 @@ class Agent3Object(ForensicAgent):
                             if k not in ("detections", "artifact", "error", "box")
                         }
                         if tool_name == "object_detection":
-                            dynamic_context[tool_name]["classes"] = list({d["class_name"] for d in result.get("detections", []) if "class_name" in d})
+                            # Include summarized detections with bounding boxes so Gemini
+                            # can reason about spatial layout and compositing plausibility.
+                            dynamic_context[tool_name]["detections_summary"] = [
+                                {
+                                    "class": d["class_name"],
+                                    "confidence": d.get("confidence"),
+                                    "box": d.get("box", {}),
+                                }
+                                for d in result.get("detections", [])[:20]
+                                if "class_name" in d
+                            ]
 
                 agent1_context = self._agent1_context
                 context_summary = {"tools": dynamic_context, "agent1": agent1_context}

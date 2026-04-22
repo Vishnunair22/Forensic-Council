@@ -5,18 +5,18 @@ Model Pre-Download Script
 
 Downloads all required ML models for the Forensic Council platform.
 
-This script is called by the Docker entrypoint on FIRST container startup
-and stores models in named Docker volumes so they persist across all future
-builds and restarts. It is fully idempotent — each model is skipped if its
-expected files already exist in the cache volume.
+This script is called during Docker build to bake a seed cache into the image,
+and can also be called by the Docker entrypoint on first startup as a fallback.
+It is fully idempotent — each model is skipped if its expected files already
+exist in the configured cache directory.
 
 Usage:
     python scripts/model_pre_download.py           # full download (skips existing)
     python scripts/model_pre_download.py --force   # re-download even if cached
     python scripts/model_pre_download.py --check   # report status without downloading
 
-NOT run during `docker build`. Run once at first container startup via
-docker_entrypoint.sh (or SKIP_MODEL_DOWNLOAD=1 to bypass).
+Docker builds run it in strict mode so missing tools fail early instead of
+surprising the first live analysis.
 """
 
 from __future__ import annotations
@@ -244,6 +244,11 @@ def main() -> None:
         action="store_true",
         help="Check cache status only, do not download anything",
     )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit non-zero if any model download fails",
+    )
     args = parser.parse_args()
 
     print(f"\n{BOLD}{'=' * 55}{RESET}")
@@ -253,6 +258,8 @@ def main() -> None:
         print(f"  {YELLOW}--force: re-downloading all models{RESET}")
     if args.check:
         print(f"  {CYAN}--check: status only, no downloads{RESET}")
+    if args.strict:
+        print(f"  {CYAN}--strict: failing if any model is unavailable{RESET}")
 
     print(f"\n  Python {sys.version.split()[0]}")
 
@@ -295,6 +302,9 @@ def main() -> None:
         )
         print(f"  {passed}/{total} succeeded in {elapsed:.0f}s.")
     print(f"{BOLD}{'=' * 55}{RESET}\n")
+
+    if args.strict and passed != total:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

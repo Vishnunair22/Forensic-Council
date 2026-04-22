@@ -1,6 +1,6 @@
 import os
-from datetime import datetime, timedelta, UTC
-from unittest.mock import AsyncMock, patch, MagicMock
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -51,6 +51,7 @@ os.environ["JWT_PUBLIC_KEY"] = TEST_PUBLIC_KEY
 
 from fastapi import HTTPException
 from jose import jwt
+
 from core.auth import (
     UserRole,
     create_access_token,
@@ -59,6 +60,7 @@ from core.auth import (
     verify_password,
 )
 from core.config import get_settings
+
 get_settings.cache_clear() # Force reload with environment variables
 
 class TestRS256Auth:
@@ -68,7 +70,7 @@ class TestRS256Auth:
         with patch("core.auth.is_token_blacklisted", new=AsyncMock(return_value=False)):
             token = create_access_token("user_rs256", UserRole.INVESTIGATOR, username="tester")
             token_data = await decode_token(token)
-            
+
             assert token_data.user_id == "user_rs256"
             assert token_data.username == "tester"
             assert token_data.role == UserRole.INVESTIGATOR
@@ -86,7 +88,7 @@ class TestRS256Auth:
                 "exp": datetime.now(UTC) + timedelta(minutes=30)
             }
             token = jwt.encode(payload, TEST_PRIVATE_KEY, algorithm="RS256")
-            
+
             with pytest.raises(HTTPException) as exc:
                 await decode_token(token)
             assert exc.value.status_code == 401
@@ -105,7 +107,7 @@ class TestRS256Auth:
                 "exp": datetime.now(UTC) + timedelta(minutes=30)
             }
             token = jwt.encode(payload, "dummy-secret", algorithm="HS256")
-            
+
             with pytest.raises(HTTPException) as exc:
                 await decode_token(token)
             assert exc.value.status_code == 401
@@ -140,13 +142,13 @@ class TestRS256Auth:
     async def test_require_role_dependency(self):
         """Test role-based access control dependency."""
         from core.auth import require_role
-        
+
         user = MagicMock(role=UserRole.INVESTIGATOR)
         checker = require_role(UserRole.INVESTIGATOR)
         # Should pass
         result = await checker(current_user=user)
         assert result == user
-        
+
         # Should fail for different role
         checker_admin = require_role(UserRole.ADMIN)
         with pytest.raises(HTTPException) as exc:
@@ -157,17 +159,17 @@ class TestRS256Auth:
     @patch("core.auth.decode_token")
     @patch("core.persistence.postgres_client.get_postgres_client")
     async def test_get_current_user_success(self, mock_pg, mock_decode):
-        from core.auth import get_current_user, TokenData, User
+        from core.auth import TokenData, get_current_user
         mock_decode.return_value = TokenData(user_id="u1", username="test", role=UserRole.INVESTIGATOR)
-        
+
         # Mock postgres return (is_disabled = False)
         mock_conn = AsyncMock()
         mock_conn.fetch_one.return_value = {"is_disabled": False}
         mock_pg.return_value = mock_conn
-        
+
         mock_request = MagicMock()
         mock_creds = MagicMock(credentials="valid-token")
-        
+
         user = await get_current_user(mock_request, credentials=mock_creds)
         assert user.user_id == "u1"
         assert user.role == UserRole.INVESTIGATOR
@@ -176,17 +178,17 @@ class TestRS256Auth:
     @patch("core.auth.decode_token")
     @patch("core.persistence.postgres_client.get_postgres_client")
     async def test_get_current_user_disabled(self, mock_pg, mock_decode):
-        from core.auth import get_current_user, TokenData
+        from core.auth import TokenData, get_current_user
         mock_decode.return_value = TokenData(user_id="u1", username="test", role=UserRole.INVESTIGATOR)
-        
+
         # Mock postgres return (is_disabled = True)
         mock_conn = AsyncMock()
         mock_conn.fetch_one.return_value = {"is_disabled": True}
         mock_pg.return_value = mock_conn
-        
+
         mock_request = MagicMock()
         mock_creds = MagicMock(credentials="valid-token")
-        
+
         with pytest.raises(HTTPException) as exc:
             await get_current_user(mock_request, credentials=mock_creds)
         assert exc.value.status_code == 403
@@ -194,44 +196,50 @@ class TestRS256Auth:
     @pytest.mark.asyncio
     async def test_blacklist_logic_local_cache(self):
         """Test local token blacklist caching."""
-        from core.auth import is_token_blacklisted, blacklist_token
-        import time
-        
+
+        from core.auth import blacklist_token, is_token_blacklisted
+
         token = "test-token-to-blacklist"
         # Mock Redis fail to test local/sqlite
         with patch("core.persistence.redis_client.get_redis_client", return_value=None), \
              patch("core.auth._add_to_persistent_blacklist"):
             await blacklist_token(token, expires_in_seconds=10)
-            
+
             # Should be blacklisted immediately (local cache)
             assert await is_token_blacklisted(token) is True
 
     @pytest.mark.asyncio
     async def test_sqlite_blacklist_persistence(self, tmp_path):
         """Test that blacklisted tokens are persisted to SQLite."""
-        from core.auth import _add_to_persistent_blacklist, _is_in_persistent_blacklist, _init_blacklist_db
         import time
-        
+
+        from core.auth import (
+            _add_to_persistent_blacklist,
+            _init_blacklist_db,
+            _is_in_persistent_blacklist,
+        )
+
         db_file = tmp_path / "test_blacklist.db"
         with patch("core.auth._get_blacklist_db_path", return_value=str(db_file)):
             _init_blacklist_db()
             token_hash = "hash123"
             expiry = time.time() + 100
             _add_to_persistent_blacklist(token_hash, expiry)
-            
+
             assert _is_in_persistent_blacklist(token_hash) is True
             assert _is_in_persistent_blacklist("unknown") is False
 
     def test_cleanup_expired_local_blacklist(self):
         """Test that expired local blacklist entries are removed."""
-        from core.auth import _recently_blacklisted, _cleanup_local_blacklist
         import time
-        
+
+        from core.auth import _cleanup_local_blacklist, _recently_blacklisted
+
         _recently_blacklisted["expired"] = time.time() - 10
         _recently_blacklisted["valid"] = time.time() + 10
-        
+
         _cleanup_local_blacklist()
-        
+
         assert "expired" not in _recently_blacklisted
         assert "valid" in _recently_blacklisted
         _recently_blacklisted.clear()
@@ -256,27 +264,27 @@ class TestRS256Auth:
     @pytest.mark.asyncio
     @patch("core.persistence.postgres_client.get_postgres_client")
     async def test_get_current_user_cookie_fallback(self, mock_pg):
-        from core.auth import get_current_user, TokenData
+        from core.auth import TokenData, get_current_user
         mock_request = MagicMock()
         mock_request.cookies = {"access_token": "cookie-token"}
-        
+
         with patch("core.auth.decode_token") as mock_decode:
             mock_decode.return_value = TokenData(user_id="u1", username="test", role=UserRole.INVESTIGATOR)
             mock_conn = AsyncMock()
             mock_conn.fetch_one.return_value = {"is_disabled": False}
             mock_pg.return_value = mock_conn
-            
+
             user = await get_current_user(mock_request, credentials=None)
             assert user.user_id == "u1"
 
     @pytest.mark.asyncio
     @patch("core.persistence.postgres_client.get_postgres_client")
     async def test_get_current_user_optional(self, mock_pg):
-        from core.auth import get_current_user_optional, TokenData
-        
+        from core.auth import TokenData, get_current_user_optional
+
         # Unauthenticated
         assert await get_current_user_optional(None) is None
-        
+
         # Authenticated
         mock_creds = MagicMock(credentials="token")
         with patch("core.auth.decode_token") as mock_decode:
@@ -285,18 +293,23 @@ class TestRS256Auth:
             assert user.user_id == "u1"
 
     def test_sqlite_pruning(self, tmp_path):
-        from core.auth import _add_to_persistent_blacklist, _is_in_persistent_blacklist, _cleanup_expired_blacklist_entries
-        import time
         import sqlite3
-        
+        import time
+
+        from core.auth import (
+            _add_to_persistent_blacklist,
+            _cleanup_expired_blacklist_entries,
+            _is_in_persistent_blacklist,
+        )
+
         db_file = tmp_path / "prune_test.db"
         with patch("core.auth._get_blacklist_db_path", return_value=str(db_file)):
             _add_to_persistent_blacklist("old", time.time() - 10)
             _add_to_persistent_blacklist("new", time.time() + 10)
-            
+
             # _is_in_persistent_blacklist should prune "old" when checked
             assert _is_in_persistent_blacklist("old") is False
-            
+
             # Manual cleanup should also work
             _cleanup_expired_blacklist_entries()
             with sqlite3.connect(str(db_file)) as conn:

@@ -49,17 +49,30 @@ class Agent2Audio(ForensicAgent):
 
     @property
     def deep_task_decomposition(self) -> list[str]:
+        # voice_clone_detect and anti_spoofing_detect are intentionally absent here —
+        # the ensemble handlers re-run them internally and read the Phase 1 result from
+        # _tool_context before overwriting it, preserving the cross-phase comparison.
         return [
             "Run prosody_analyze for acoustic marker verification",
-            "Run voice_clone_detect for AI speech synthesis detection",
-            "Run anti_spoofing_detect on primary speaker segments",
             "Run audio_splice_detect on audio segments",
             "Run enf_analysis for electrical network frequency splice detection",
             "Run background_noise_analysis to identify shift points",
-            "Run voice_clone_deep_ensemble for cross-validated AI speech synthesis detection",
-            "Run anti_spoofing_deep_ensemble for reinforced anti-spoofing on low-confidence segments",
+            "Run voice_clone_deep_ensemble for cross-validated AI speech synthesis detection if Phase 1 flagged a suspicious voice signal",
+            "Run anti_spoofing_deep_ensemble for reinforced anti-spoofing on low-confidence segments if Phase 1 flagged a spoofing signal",
             "Run gemini_deep_forensic for Neural Audio Audit and Acoustic Provenance",
         ]
+
+    def _has_audio_suspicious_signal(self) -> bool:
+        """Gate expensive Phase-2 ensemble tools on Phase-1 suspicious signals."""
+        ctx = self._tool_context
+        return any([
+            ctx.get("neural_prosody", {}).get("manipulation_detected", False),
+            ctx.get("voice_clone_detect", {}).get("verdict") in ("CLONE", "SYNTHETIC", "SUSPICIOUS"),
+            ctx.get("anti_spoofing_detect", {}).get("verdict") in ("SPOOF", "SUSPICIOUS"),
+            ctx.get("audio_splice_detect", {}).get("splice_detected", False),
+            ctx.get("audio_gen_signature", {}).get("synthetic_detected", False),
+            ctx.get("codec_fingerprinting", {}).get("re_encoding_detected", False),
+        ])
 
     @property
     def iteration_ceiling(self) -> int:
@@ -78,7 +91,21 @@ class Agent2Audio(ForensicAgent):
         registry.register_domain_handler(audio_h)
 
         async def voice_clone_deep_ensemble_handler(input_data: dict) -> dict:
+            # Snapshot Phase 1 result NOW — before the deep re-run overwrites the key.
             initial_result = self._tool_context.get("voice_clone_detect", {})
+
+            if not self._has_audio_suspicious_signal():
+                result = {
+                    "ensemble_skipped": True,
+                    "reason": "No Phase-1 suspicious voice signal — deep ensemble not triggered",
+                    "confidence": initial_result.get("confidence", 0.0),
+                    "verdict": initial_result.get("verdict", "CLEAN"),
+                    "available": True,
+                    "deep_ensemble": True,
+                }
+                await self._record_tool_result("voice_clone_deep_ensemble", result)
+                return result
+
             try:
                 deep_result = await audio_h.voice_clone_detect_handler(input_data)
                 if isinstance(deep_result, dict) and isinstance(initial_result, dict):
@@ -95,7 +122,21 @@ class Agent2Audio(ForensicAgent):
                 return {"error": str(e), "available": False, "deep_ensemble": True}
 
         async def anti_spoofing_deep_ensemble_handler(input_data: dict) -> dict:
+            # Snapshot Phase 1 result NOW — before the deep re-run overwrites the key.
             initial_result = self._tool_context.get("anti_spoofing_detect", {})
+
+            if not self._has_audio_suspicious_signal():
+                result = {
+                    "ensemble_skipped": True,
+                    "reason": "No Phase-1 suspicious spoofing signal — deep ensemble not triggered",
+                    "confidence": initial_result.get("confidence", 0.0),
+                    "verdict": initial_result.get("verdict", "GENUINE"),
+                    "available": True,
+                    "deep_ensemble": True,
+                }
+                await self._record_tool_result("anti_spoofing_deep_ensemble", result)
+                return result
+
             try:
                 deep_result = await audio_h.anti_spoofing_detection_handler(input_data)
                 if isinstance(deep_result, dict) and isinstance(initial_result, dict):
@@ -128,12 +169,31 @@ class Agent2Audio(ForensicAgent):
                 for t_name, t_res in self._tool_context.items():
                     if not t_res or (isinstance(t_res, dict) and t_res.get("error")):
                         continue
-                    # Strip oversized raw data (FFT arrays, spectrograms) to keep prompt efficient
+                    # Drop raw binary blobs and excessively large payloads only.
+                    # Small lists (speaker segments, splice timestamps) are kept as-is.
                     clean_res = {
                         k: v for k, v in t_res.items()
-                        if not isinstance(v, (str, bytes, list)) or len(str(v)) < 1000
+                        if not isinstance(v, bytes) and len(str(v)) < 5000
                     }
                     context_summary[t_name] = clean_res
+
+                # Pull Agent 4 temporal context for AV sync grounding on video files
+                mime = getattr(artifact, "mime_type", "") or ""
+                if self.working_memory and mime.startswith("video/"):
+                    try:
+                        agent4_context = await self.working_memory.get_agent_context(self.session_id, "Agent4")
+                        temporal_data = agent4_context.get("temporal_analysis", {})
+                        if temporal_data:
+                            context_summary["temporal_audit"] = {
+                                "frame_consistency": temporal_data.get("frame_consistency"),
+                                "av_sync_offset_ms": temporal_data.get("av_sync_offset_ms"),
+                                "splice_timestamps": temporal_data.get("splice_timestamps"),
+                            }
+                    except Exception as _ctx_err:
+                        logger.warning(
+                            f"{self.agent_id}: Agent4 temporal context retrieval failed — Gemini will proceed without video temporal grounding",
+                            error=str(_ctx_err),
+                        )
 
                 finding = await _gemini.deep_forensic_analysis(
                     file_path=artifact.file_path,

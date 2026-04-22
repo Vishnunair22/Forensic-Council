@@ -13,9 +13,9 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
+import jwt as _jwt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-import jwt as _jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 

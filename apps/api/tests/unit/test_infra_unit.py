@@ -638,7 +638,7 @@ class TestDownloadReportSerialization:
 # PROXY ROUTE â€” header stripping and structure
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-def _proxy_route_path() -> "pathlib.Path":
+def _proxy_route_path():
     """Resolve the Next.js proxy route file relative to the repo root."""
     import pathlib
     # Walk up: tests/unit/ -> tests/ -> apps/api/ -> apps/ -> repo root
@@ -646,7 +646,7 @@ def _proxy_route_path() -> "pathlib.Path":
     return repo_root / "apps" / "web" / "src" / "app" / "api" / "v1" / "[...path]" / "route.ts"
 
 
-def _sessions_route_path() -> "pathlib.Path":
+def _sessions_route_path():
     """Resolve the backend sessions route (WebSocket auth, rate limiting)."""
     import pathlib
     # Walk up: tests/unit/ -> tests/ -> apps/api/
@@ -654,7 +654,7 @@ def _sessions_route_path() -> "pathlib.Path":
     return api_root / "api" / "routes" / "sessions.py"
 
 
-def _metrics_route_path() -> "pathlib.Path":
+def _metrics_route_path():
     """Resolve the backend metrics route."""
     import pathlib
     api_root = pathlib.Path(__file__).parents[2]
@@ -850,5 +850,4 @@ class TestMetricsPoolStats:
 
         stats = asyncio.run(run())
         assert stats == {"size": 0, "available": 0, "in_use": 0, "max": 0}
-
 

@@ -23,12 +23,10 @@ os.environ.setdefault("LLM_MODEL", "test-model")
 os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-key-abcdefghijklmnopqrstuvwxyz1234")
 
 import json
-import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 1. CalibrationLayer
@@ -37,14 +35,14 @@ import pytest
 class TestCalibrationLayer:
     """Tests for core/calibration.py — CalibrationLayer and helpers."""
 
-    def _make_layer(self, tmp_path: Path) -> "CalibrationLayer":  # noqa: F821
+    def _make_layer(self, tmp_path: Path) -> CalibrationLayer:  # noqa: F821
         from core.calibration import CalibrationLayer
         return CalibrationLayer(models_path=str(tmp_path))
 
     # ── fit_default_model ────────────────────────────────────────────────────
 
     def test_fit_default_model_returns_uncalibrated(self, tmp_path):
-        from core.calibration import CalibrationLayer, CalibrationStatus
+        from core.calibration import CalibrationStatus
 
         layer = self._make_layer(tmp_path)
         model = layer.fit_default_model("agent1_image")
@@ -53,10 +51,9 @@ class TestCalibrationLayer:
         assert model.calibration_status == CalibrationStatus.UNCALIBRATED
 
     def test_fit_default_model_writes_files(self, tmp_path):
-        from core.calibration import CalibrationLayer
 
         layer = self._make_layer(tmp_path)
-        model = layer.fit_default_model("agent1_image")
+        layer.fit_default_model("agent1_image")
 
         latest_path = tmp_path / "agent1_image" / "latest.json"
         assert latest_path.exists()
@@ -65,7 +62,6 @@ class TestCalibrationLayer:
         assert data["agent_id"] == "agent1_image"
 
     def test_fit_default_model_uses_per_agent_params(self, tmp_path):
-        from core.calibration import CalibrationLayer
 
         layer = self._make_layer(tmp_path)
         model = layer.fit_default_model("agent5_metadata")
@@ -75,7 +71,6 @@ class TestCalibrationLayer:
         assert model.params["B"] == -1.5
 
     def test_fit_default_model_unknown_agent_uses_defaults(self, tmp_path):
-        from core.calibration import CalibrationLayer
 
         layer = self._make_layer(tmp_path)
         model = layer.fit_default_model("unknown_agent")
@@ -87,14 +82,12 @@ class TestCalibrationLayer:
     # ── load_model ───────────────────────────────────────────────────────────
 
     def test_load_model_missing_raises_file_not_found(self, tmp_path):
-        from core.calibration import CalibrationLayer
 
         layer = self._make_layer(tmp_path)
         with pytest.raises(FileNotFoundError, match="agent1_image"):
             layer.load_model("agent1_image", "v99_does_not_exist")
 
     def test_load_model_caches_result(self, tmp_path):
-        from core.calibration import CalibrationLayer
 
         layer = self._make_layer(tmp_path)
         layer.fit_default_model("agent2_audio")
@@ -105,7 +98,6 @@ class TestCalibrationLayer:
 
     def test_load_model_falls_back_to_latest_json(self, tmp_path):
         """When version='v_specific' is absent but directory has other JSON, load the latest."""
-        from core.calibration import CalibrationLayer
 
         layer = self._make_layer(tmp_path)
         model = layer.fit_default_model("agent3_object")
@@ -120,7 +112,6 @@ class TestCalibrationLayer:
         assert loaded.agent_id == "agent3_object"
 
     def test_load_model_empty_directory_raises(self, tmp_path):
-        from core.calibration import CalibrationLayer
 
         layer = self._make_layer(tmp_path)
         agent_dir = tmp_path / "empty_agent"
@@ -132,13 +123,11 @@ class TestCalibrationLayer:
     # ── list_versions ────────────────────────────────────────────────────────
 
     def test_list_versions_empty_when_no_dir(self, tmp_path):
-        from core.calibration import CalibrationLayer
 
         layer = self._make_layer(tmp_path)
         assert layer.list_versions("no_such_agent") == []
 
     def test_list_versions_excludes_latest(self, tmp_path):
-        from core.calibration import CalibrationLayer
 
         layer = self._make_layer(tmp_path)
         layer.fit_default_model("agent4_video")
@@ -150,7 +139,7 @@ class TestCalibrationLayer:
     # ── calibrate ────────────────────────────────────────────────────────────
 
     def test_calibrate_returns_calibrated_confidence(self, tmp_path):
-        from core.calibration import CalibrationLayer, CalibrationStatus
+        from core.calibration import CalibrationStatus
 
         layer = self._make_layer(tmp_path)
         result = layer.calibrate("agent1_image", raw_score=0.7, finding_class="ela_high")
@@ -160,7 +149,6 @@ class TestCalibrationLayer:
         assert result.calibration_status == CalibrationStatus.UNCALIBRATED
 
     def test_calibrate_court_statement_warns_uncalibrated(self, tmp_path):
-        from core.calibration import CalibrationLayer
 
         layer = self._make_layer(tmp_path)
         result = layer.calibrate("agent2_audio", raw_score=0.6, finding_class="voice_clone")
@@ -170,7 +158,6 @@ class TestCalibrationLayer:
 
     def test_calibrate_handles_none_score(self, tmp_path):
         """When raw_score is None it should default to 0.5 without crashing."""
-        from core.calibration import CalibrationLayer
 
         layer = self._make_layer(tmp_path)
         # raw_score=None is passed directly — the code defaults it to 0.5
@@ -178,7 +165,6 @@ class TestCalibrationLayer:
         assert result.raw_score == 0.5
 
     def test_calibrate_computes_confidence_interval(self, tmp_path):
-        from core.calibration import CalibrationLayer
 
         layer = self._make_layer(tmp_path)
         result = layer.calibrate("agent4_video", raw_score=0.5, finding_class="motion")
@@ -190,7 +176,6 @@ class TestCalibrationLayer:
         assert ci["lower"] <= ci["upper"]
 
     def test_calibrate_uncertainty_decomposition_present(self, tmp_path):
-        from core.calibration import CalibrationLayer
 
         layer = self._make_layer(tmp_path)
         result = layer.calibrate("agent5_metadata", raw_score=0.3, finding_class="exif_anomaly")
@@ -204,7 +189,6 @@ class TestCalibrationLayer:
     # ── _bootstrap_ci ────────────────────────────────────────────────────────
 
     def test_bootstrap_ci_platt_returns_valid_interval(self, tmp_path):
-        from core.calibration import CalibrationLayer
 
         layer = self._make_layer(tmp_path)
         params = {"A": 2.5, "B": -1.2, "method": "platt"}
@@ -216,7 +200,6 @@ class TestCalibrationLayer:
         assert "platt" in ci["method"]
 
     def test_bootstrap_ci_sigmoid_returns_valid_interval(self, tmp_path):
-        from core.calibration import CalibrationLayer
 
         layer = self._make_layer(tmp_path)
         params = {"k": 10.0, "x0": 0.5, "method": "sigmoid"}
@@ -228,7 +211,6 @@ class TestCalibrationLayer:
     # ── _decompose_uncertainty ────────────────────────────────────────────────
 
     def test_decompose_uncertainty_escalates_uncalibrated_high_ci(self, tmp_path):
-        from core.calibration import CalibrationLayer
 
         layer = self._make_layer(tmp_path)
         ci = {"lower": 0.1, "upper": 0.8}  # width=0.7 → triggers UNCALIBRATED escalation
@@ -245,7 +227,6 @@ class TestCalibrationLayer:
         assert "UNCALIBRATED" in result.escalation_reason
 
     def test_decompose_uncertainty_no_escalate_when_narrow_ci(self, tmp_path):
-        from core.calibration import CalibrationLayer
 
         layer = self._make_layer(tmp_path)
         ci = {"lower": 0.58, "upper": 0.62}  # very narrow CI
@@ -289,7 +270,7 @@ class TestCrossModalFusion:
     # ── _extract_signals ─────────────────────────────────────────────────────
 
     def test_extract_signals_maps_agents_to_modalities(self):
-        from core.cross_modal_fusion import _extract_signals, Modality
+        from core.cross_modal_fusion import Modality, _extract_signals
 
         findings = {
             "Agent1": [self._make_finding()],
@@ -335,7 +316,7 @@ class TestCrossModalFusion:
     # ── _find_corroboration ──────────────────────────────────────────────────
 
     def test_corroboration_both_detect_manipulation(self):
-        from core.cross_modal_fusion import _find_corroboration, ModalitySignal, Modality
+        from core.cross_modal_fusion import Modality, ModalitySignal, _find_corroboration
 
         sig_a = ModalitySignal(
             modality=Modality.IMAGE, agent_id="Agent1",
@@ -352,7 +333,7 @@ class TestCrossModalFusion:
         assert "manipulation" in result["direction"]
 
     def test_corroboration_none_when_no_manipulation(self):
-        from core.cross_modal_fusion import _find_corroboration, ModalitySignal, Modality
+        from core.cross_modal_fusion import Modality, ModalitySignal, _find_corroboration
 
         sig_a = ModalitySignal(
             modality=Modality.IMAGE, agent_id="Agent1",
@@ -368,7 +349,7 @@ class TestCrossModalFusion:
         assert result is None
 
     def test_corroboration_none_when_not_confirmed(self):
-        from core.cross_modal_fusion import _find_corroboration, ModalitySignal, Modality
+        from core.cross_modal_fusion import Modality, ModalitySignal, _find_corroboration
 
         sig_a = ModalitySignal(
             modality=Modality.IMAGE, agent_id="Agent1",
@@ -385,7 +366,7 @@ class TestCrossModalFusion:
     # ── _find_contradiction ──────────────────────────────────────────────────
 
     def test_contradiction_detected_when_disagreement(self):
-        from core.cross_modal_fusion import _find_contradiction, ModalitySignal, Modality
+        from core.cross_modal_fusion import Modality, ModalitySignal, _find_contradiction
 
         sig_a = ModalitySignal(
             modality=Modality.IMAGE, agent_id="Agent1",
@@ -403,7 +384,7 @@ class TestCrossModalFusion:
         assert "Agent5" in result["agents"]
 
     def test_no_contradiction_when_both_agree(self):
-        from core.cross_modal_fusion import _find_contradiction, ModalitySignal, Modality
+        from core.cross_modal_fusion import Modality, ModalitySignal, _find_contradiction
 
         sig_a = ModalitySignal(
             modality=Modality.AUDIO, agent_id="Agent2",
@@ -420,21 +401,21 @@ class TestCrossModalFusion:
     # ── fuse ─────────────────────────────────────────────────────────────────
 
     def test_fuse_empty_returns_insufficient(self):
-        from core.cross_modal_fusion import fuse, CrossModalVerdict
+        from core.cross_modal_fusion import CrossModalVerdict, fuse
 
         result = fuse({})
         assert result.verdict == CrossModalVerdict.INSUFFICIENT
         assert result.fused_confidence == 0.0
 
     def test_fuse_single_agent_independent(self):
-        from core.cross_modal_fusion import fuse, CrossModalVerdict
+        from core.cross_modal_fusion import CrossModalVerdict, fuse
 
         findings = {"Agent1": [self._make_finding(manipulation=False)]}
         result = fuse(findings)
         assert result.verdict in (CrossModalVerdict.INDEPENDENT, CrossModalVerdict.INSUFFICIENT)
 
     def test_fuse_two_corroborating_agents(self):
-        from core.cross_modal_fusion import fuse, CrossModalVerdict
+        from core.cross_modal_fusion import CrossModalVerdict, fuse
 
         findings = {
             "Agent1": [self._make_finding(manipulation=True, confidence=0.85)],
@@ -447,7 +428,7 @@ class TestCrossModalFusion:
         assert len(result.corroborations) >= 1
 
     def test_fuse_contradiction_verdict(self):
-        from core.cross_modal_fusion import fuse, CrossModalVerdict
+        from core.cross_modal_fusion import CrossModalVerdict, fuse
 
         findings = {
             "Agent1": [self._make_finding(manipulation=True, confidence=0.9)],
@@ -458,7 +439,7 @@ class TestCrossModalFusion:
         assert len(result.contradictions) >= 1
 
     def test_fuse_three_corroborations_gives_corroborated(self):
-        from core.cross_modal_fusion import fuse, CrossModalVerdict
+        from core.cross_modal_fusion import CrossModalVerdict, fuse
 
         findings = {
             "Agent1": [self._make_finding(manipulation=True, confidence=0.9)],
@@ -470,7 +451,7 @@ class TestCrossModalFusion:
         assert result.verdict == CrossModalVerdict.CORROBORATED
 
     def test_fuse_intra_agent_phase_contradiction(self):
-        from core.cross_modal_fusion import fuse, CrossModalVerdict
+        from core.cross_modal_fusion import fuse
 
         findings = {
             "Agent1": [
@@ -530,7 +511,7 @@ class TestSynthesisService:
         tool_name: str = "ela_full_image",
         confidence: float = 0.75,
         status: str = "CONFIRMED",
-    ) -> "AgentFinding":  # noqa: F821
+    ) -> AgentFinding:  # noqa: F821
         from core.react_loop import AgentFinding
 
         return AgentFinding(
@@ -542,9 +523,9 @@ class TestSynthesisService:
             metadata={"tool_name": tool_name, "court_defensible": True},
         )
 
-    def _make_service(self) -> "SynthesisService":  # noqa: F821
-        from core.synthesis import SynthesisService
+    def _make_service(self) -> SynthesisService:  # noqa: F821
         from core.config import get_settings
+        from core.synthesis import SynthesisService
 
         return SynthesisService(get_settings())
 
@@ -569,8 +550,8 @@ class TestSynthesisService:
 
     @pytest.mark.asyncio
     async def test_llm_success_path_returns_expected_keys(self):
-        from core.synthesis import SynthesisService
         from core.config import get_settings
+        from core.synthesis import SynthesisService
 
         service = SynthesisService(get_settings())
 
@@ -606,8 +587,8 @@ class TestSynthesisService:
 
     @pytest.mark.asyncio
     async def test_llm_failure_falls_back_gracefully(self):
-        from core.synthesis import SynthesisService
         from core.config import get_settings
+        from core.synthesis import SynthesisService
 
         service = SynthesisService(get_settings())
 
@@ -635,8 +616,8 @@ class TestSynthesisService:
 
     @pytest.mark.asyncio
     async def test_fallback_verdict_suspicious_on_low_confidence(self):
-        from core.synthesis import SynthesisService
         from core.config import get_settings
+        from core.synthesis import SynthesisService
 
         service = SynthesisService(get_settings())
 
@@ -663,8 +644,8 @@ class TestSynthesisService:
     @pytest.mark.asyncio
     async def test_llm_returns_markdown_json_stripped(self):
         """LLM wrapping JSON in ```json fences should be handled correctly."""
-        from core.synthesis import SynthesisService
         from core.config import get_settings
+        from core.synthesis import SynthesisService
 
         service = SynthesisService(get_settings())
 
@@ -690,9 +671,9 @@ class TestSynthesisService:
     @pytest.mark.asyncio
     async def test_agent_id_normalisation_agent2(self):
         """Agent IDs containing 'Agent2' should resolve to the Agent2 tool group."""
-        from core.synthesis import SynthesisService, _TOOL_GROUPS
         from core.config import get_settings
         from core.react_loop import AgentFinding
+        from core.synthesis import SynthesisService
 
         service = SynthesisService(get_settings())
 

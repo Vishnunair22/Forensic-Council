@@ -5,8 +5,7 @@ import { AnimatePresence } from "framer-motion";
 import { PageTransition } from "@/components/ui/PageTransition";
 import { useSound } from "@/hooks/useSound";
 import { useInvestigation } from "@/hooks/useInvestigation";
-import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
-import { ForensicProgressOverlay } from "@/components/ui/ForensicProgressOverlay";
+import { AnalysisProgressOverlay } from "@/components/evidence/AnalysisProgressOverlay";
 
 import {
   FileUploadSection,
@@ -76,8 +75,10 @@ export default function EvidencePage() {
     <div className="min-h-screen text-foreground px-4 sm:px-6 pt-24 pb-24 overflow-x-hidden relative font-sans select-none">
       <AnimatePresence>
         {showLoadingOverlay && (
-          <LoadingOverlay
-            liveText={uploadPhaseText || "Initializing secure workspace..."}
+          <AnalysisProgressOverlay
+            isVisible={showLoadingOverlay}
+            title="Secure Workspace"
+            message={uploadPhaseText || "Initializing secure workspace..."}
           />
         )}
       </AnimatePresence>
@@ -166,12 +167,10 @@ export default function EvidencePage() {
 
       <AnimatePresence>
         {isNavigating && (
-          <ForensicProgressOverlay
-            variant="stream"
+          <AnalysisProgressOverlay
+            isVisible={isNavigating}
             title="Arbiter Deliberation"
-            liveText={arbiterLiveText || "Synthesizing final verdict..."}
-            telemetryLabel="Council Protocol"
-            showElapsed
+            message={arbiterLiveText || "Synthesizing final verdict..."}
           />
         )}
       </AnimatePresence>

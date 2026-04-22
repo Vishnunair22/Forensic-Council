@@ -36,7 +36,7 @@ export function GlobalNavbar() {
   return (
     <nav
       aria-label="Main navigation"
-      className="fixed top-0 left-0 right-0 z-[200] flex items-center justify-between px-10 py-5 transition-all duration-500 bg-surface-2/40 backdrop-blur-2xl border-b border-border-subtle"
+      className="fixed top-6 left-6 z-[200] flex items-center px-6 py-3 glass-panel rounded-2xl"
     >
       <AnimatePresence>
         {isResetting && <ForensicResetOverlay />}
@@ -62,8 +62,8 @@ export function GlobalNavbar() {
           FC
         </motion.div>
 
-        <span className="text-[14px] font-black tracking-tighter text-white/90 group-hover:text-white transition-colors duration-300">
-          Forensic <span className="text-primary">Council</span>
+        <span className="text-base font-bold tracking-tight text-white/90 group-hover:text-primary transition-colors duration-300 font-heading">
+          Forensic <span className="text-primary group-hover:text-white">Council</span>
         </span>
       </button>
 

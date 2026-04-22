@@ -2,14 +2,45 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { X, UploadCloud, FileImage, FileVideo, FileAudio, FileText } from "lucide-react";
 
 const overlayVariants = {
- hidden: { opacity: 0 },
- visible: { opacity: 1, transition: { duration: 0.2 } },
- exit: { opacity: 0, transition: { duration: 0.2 } },
+	hidden: { opacity: 0 },
+	visible: { opacity: 1, transition: { duration: 0.3 } },
+	exit: { opacity: 0, transition: { duration: 0.2 } },
 };
+
+const HUDCorner = ({ position }: { position: "tl" | "tr" | "bl" | "br" }) => {
+	const posClasses = {
+		tl: "top-0 left-0 border-t-2 border-l-2",
+		tr: "top-0 right-0 border-t-2 border-r-2",
+		bl: "bottom-0 left-0 border-b-2 border-l-2",
+		br: "bottom-0 right-0 border-b-2 border-r-2",
+	};
+
+	return (
+		<div
+			className={`absolute w-8 h-8 ${posClasses[position]} border-cyan-500/20 z-10 pointer-events-none transition-all duration-700 group-hover:border-cyan-500/50`}
+		/>
+	);
+};
+
+const ScanningLaser = () => (
+	<motion.div
+		className="absolute inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent z-20 pointer-events-none"
+		initial={{ top: "0%" }}
+		animate={{ top: "100%" }}
+		transition={{
+			duration: 2.5,
+			repeat: Infinity,
+			ease: "linear",
+		}}
+		style={{
+			boxShadow: "0 0 15px rgba(34,211,238,0.8)",
+		}}
+	/>
+);
 
 const scaleIn = {
  hidden: { opacity: 0, scale: 0.95, y: -10 },
@@ -92,8 +123,8 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
 
  const modalContent = (
   <motion.div
-   className="fixed top-0 left-0 w-full h-full z-[9999] flex items-center justify-center p-4 backdrop-blur-2xl touch-none"
-   style={{ background: "rgba(0,0,0,0.85)" }}
+   className="fixed top-0 left-0 w-full h-full z-[9999] flex items-center justify-center p-4 backdrop-blur-3xl touch-none"
+   style={{ background: "rgba(0,0,0,0.7)" }}
    variants={overlayVariants}
    initial="hidden"
    animate="visible"
@@ -113,7 +144,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
     onClick={(e) => e.stopPropagation()}
    >
     <div
-     className="rounded-[2.5rem] overflow-hidden premium-glass shadow-2xl relative"
+     className="rounded-[2.5rem] overflow-hidden frosted-panel shadow-2xl relative"
     >
      <div className="scan-line-overlay opacity-30 pointer-events-none" />
      <div className="relative p-10 z-20">
@@ -130,45 +161,58 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
        animate={{ opacity: 1, y: 0 }}
        transition={{ delay: 0.1, duration: 0.4 }}
       >
-       <div className="mb-10 text-center flex flex-col items-center justify-center">
-        <h3 id="upload-modal-title" className="text-3xl font-black text-white tracking-tighter font-heading">
-          Ingestion Gateway
-        </h3>
-        <p className="text-primary/30 text-[9px] font-mono font-black tracking-[0.4em] mt-2 text-center">
-          {"// Secure Forensic Intake //"}
-        </p>
-       </div>
+        <div className="mb-10 text-center flex flex-col items-center justify-center relative">
+         <h3 id="upload-modal-title" className="text-3xl font-black text-white tracking-tighter font-heading">
+           Ingestion Gateway
+         </h3>
+         <div className="flex items-center gap-3 mt-2">
+           <div className="h-px w-8 bg-cyan-500/20" />
+           <p className="text-primary/40 text-[9px] font-mono font-black tracking-[0.4em]">
+             Secure Forensic Intake
+           </p>
+           <div className="h-px w-8 bg-cyan-500/20" />
+         </div>
+        </div>
 
-       <motion.label
-        htmlFor="dropzone-file"
-        tabIndex={0}
-        aria-label="Upload evidence — click or press Enter to browse, or drag and drop a file"
-        className="group relative rounded-3xl border p-14 text-center cursor-pointer overflow-hidden transition-all duration-500"
-        style={{
-         borderColor: isDragging
-          ? "rgba(34,211,238,0.4)"
-          : "rgba(255,255,255,0.03)",
-         background: isDragging
-          ? "rgba(34,211,238,0.03)"
-          : "rgba(255,255,255,0.01)",
-        }}
-        whileHover={{
-         borderColor: "rgba(34,211,238,0.25)",
-         background: "rgba(34,211,238,0.02)",
-        }}
-        onDragOver={(e) => {
-         e.preventDefault();
-         setIsDragging(true);
-        }}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={(e) => {
-         e.preventDefault();
-         setIsDragging(false);
-         const f = e.dataTransfer.files[0];
-         if (f) handleFile(f);
-        }}
-       >
-        <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none duration-700" />
+        <motion.label
+         htmlFor="dropzone-file"
+         tabIndex={0}
+         aria-label="Upload evidence — click or press Enter to browse, or drag and drop a file"
+         className="group relative rounded-3xl border p-14 text-center cursor-pointer overflow-hidden transition-all duration-700 block"
+         style={{
+          borderColor: isDragging
+           ? "rgba(34,211,238,0.5)"
+           : "rgba(255,255,255,0.05)",
+          background: isDragging
+           ? "rgba(34,211,238,0.05)"
+           : "rgba(255,255,255,0.02)",
+         }}
+         whileHover={{
+          borderColor: "rgba(34,211,238,0.3)",
+          background: "rgba(34,211,238,0.03)",
+         }}
+         onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragging(true);
+         }}
+         onDragLeave={() => setIsDragging(false)}
+         onDrop={(e) => {
+          e.preventDefault();
+          setIsDragging(false);
+          const f = e.dataTransfer.files[0];
+          if (f) handleFile(f);
+         }}
+        >
+         <HUDCorner position="tl" />
+         <HUDCorner position="tr" />
+         <HUDCorner position="bl" />
+         <HUDCorner position="br" />
+         
+         <AnimatePresence>
+          {isDragging && <ScanningLaser />}
+         </AnimatePresence>
+
+         <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none duration-700" />
         <div className="relative z-10">
          <motion.div
           className="w-20 h-20 rounded-2xl bg-cyan-500/[0.03] flex items-center justify-center mx-auto mb-6 border border-cyan-500/10"
@@ -204,17 +248,23 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
         />
        </motion.label>
 
-       <div className="mt-10 flex flex-col items-center justify-center gap-4 px-2 text-center">
-        <div className="flex items-center justify-center gap-3">
-         <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_12px_rgba(34,211,238,0.5)]" />
-         <p className="text-[9px] font-mono font-black text-white/30 tracking-[0.2em]">
-          Supported: IMG, VID, AUD, DOC
+       <div className="mt-10 flex flex-col items-center justify-center gap-6 px-2 text-center">
+        <div className="flex items-center justify-center gap-4 py-2 px-6 rounded-full border border-white/[0.03] bg-white/[0.02] backdrop-blur-sm shadow-inner">
+         <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_12px_rgba(34,211,238,0.6)] animate-pulse" />
+         <p className="text-[9px] font-mono font-black text-white/40 tracking-[0.3em]">
+          Supported: Img, Vid, Aud, Doc
          </p>
         </div>
-        <p className="text-[9px] text-white/10 font-mono font-black tracking-tight leading-relaxed max-w-[320px] mx-auto text-center">
-          Maximum file size: 50 MB // SHA-256 integrity check
-          performed automatically on ingestion.
-        </p>
+        
+        <div className="space-y-2">
+          <p className="text-[10px] text-primary/30 font-mono font-bold tracking-widest">
+            [ SHA-256 Integrity Check Active ]
+          </p>
+          <p className="text-[9px] text-white/10 font-mono font-black tracking-tight leading-relaxed max-w-[320px] mx-auto text-center">
+            Maximum file size: 50 MB // Cryptographic hash
+            verification performed on ingestion.
+          </p>
+        </div>
        </div>
       </motion.div>
      </div>

@@ -102,7 +102,7 @@ class RedisClient:
             raise RedisConnectionError(
                 f"Failed to connect to Redis at {self._host}:{self._port}",
                 details={"host": self._host, "port": self._port, "error": str(e)},
-            )
+            ) from e
 
     async def disconnect(self) -> None:
         """Close connection to Redis."""
@@ -123,6 +123,11 @@ class RedisClient:
             )
         return self._client
 
+    @client.setter
+    def client(self, value: Redis | None) -> None:
+        """Allow tests and integration wiring to inject a Redis-compatible client."""
+        self._client = value
+
     async def ping(self) -> bool:
         """Test Redis connection."""
         try:
@@ -130,7 +135,7 @@ class RedisClient:
             return result is True
         except Exception as e:
             logger.error("Redis ping failed", error=str(e))
-            raise RedisConnectionError("Redis ping failed", details={"error": str(e)})
+            raise RedisConnectionError("Redis ping failed", details={"error": str(e)}) from e
 
     async def set(
         self,

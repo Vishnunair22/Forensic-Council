@@ -79,7 +79,7 @@ export function ToolRow({
      <Icon className="w-4 h-4" />
     </div>
 
-    <span className="flex-1 text-[10px] font-black tracking-[0.2em] text-white/60 group-hover:text-white transition-colors uppercase">
+    <span className="flex-1 text-[10px] font-black tracking-[0.2em] text-white/60 group-hover:text-white transition-colors">
      {fmtTool(toolName)}
     </span>
 
@@ -91,13 +91,13 @@ export function ToolRow({
      )}
      
      <div className={clsx(
-      "px-3 py-1 rounded-full border text-[9px] font-black tracking-[0.2em] uppercase",
+      "px-3 py-1 rounded-full border text-[9px] font-black tracking-[0.2em]",
       status === "success" ? "bg-primary/10 border-primary/20 text-primary" : 
       status === "error" ? "bg-danger/10 border-danger/20 text-danger" : 
       status === "na" ? "bg-surface-1 border-border-subtle text-white/20" : 
       "bg-warning/10 border-warning/20 text-warning"
      )}>
-      {status === "success" ? "Valid" : status === "warning" ? "Flagged" : status.toUpperCase()}
+      {status === "success" ? "Valid" : status === "warning" ? "Flagged" : "Error"}
      </div>
 
      {!na && (
@@ -118,8 +118,8 @@ export function ToolRow({
      <div className="p-6 rounded-[1.5rem] premium-card space-y-5 shadow-inner">
       {/* Per-tool specific signal — raw output from the tool */}
       <div className="space-y-2">
-       <h5 className="text-[9px] font-black text-white/20 tracking-[0.3em] uppercase">Diagnostic Intelligence</h5>
-       <p className="text-[13px] text-white/70 leading-relaxed font-medium font-mono uppercase tracking-tight">
+       <h5 className="text-[9px] font-black text-white/20 tracking-[0.3em]">Diagnostic Intelligence</h5>
+       <p className="text-[13px] text-white/70 leading-relaxed font-medium font-mono tracking-tight">
         {(finding.metadata?.raw_tool_summary as string) || finding.reasoning_summary || "No diagnostic output."}
        </p>
       </div>
@@ -169,7 +169,7 @@ export function MoreFindingsToggle({ findings, count }: { findings: AgentFinding
      </span>
      {!open && issues > 0 && (
       <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] font-bold">
-       <AlertTriangle className="w-2.5 h-2.5" /> {issues} ISSUE{issues > 1 ? "S" : ""}
+       <AlertTriangle className="w-2.5 h-2.5" /> {issues} Issue{issues > 1 ? "s" : ""}
       </span>
      )}
     </div>

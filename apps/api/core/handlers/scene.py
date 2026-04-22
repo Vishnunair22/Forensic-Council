@@ -327,7 +327,8 @@ class SceneHandlers(BaseToolHandler):
             }
         finally:
             for p in tmp_cleanup:
-                if os.path.exists(p): os.unlink(p)
+                if os.path.exists(p):
+                    os.unlink(p)
 
         await self.agent._record_tool_result("secondary_classification", result)
         return result
@@ -392,11 +393,71 @@ class SceneHandlers(BaseToolHandler):
     # ── Phase 2: Lighting Consistency ─────────────────────────────────────────
 
     async def lighting_consistency_handler(self, input_data: dict) -> dict:
-        """Shadow-angle lighting consistency check via lighting_analyzer.py."""
+        """
+        ROI-aware shadow-angle lighting consistency check.
+
+        Computes a scene-wide lighting baseline, then re-runs the heuristic on
+        each high-confidence YOLO detection crop and compares shadow-angle std
+        against the scene. Objects whose lighting deviates significantly are
+        flagged as compositing candidates.
+        """
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
-        result = await self._run_lighting_analyzer(artifact.file_path)
-        await self.agent._record_tool_result("lighting_consistency", result)
-        return result
+        scene_result = await self._run_lighting_analyzer(artifact.file_path)
+
+        yolo_ctx = self.agent._tool_context.get("object_detection", {})
+        detections = yolo_ctx.get("detections", []) if isinstance(yolo_ctx, dict) else []
+        high_conf = [d for d in detections if d.get("confidence", 0.0) >= 0.50 and d.get("box")]
+
+        if not high_conf:
+            scene_result["roi_analysis"] = "skipped — no high-confidence detections"
+            await self.agent._record_tool_result("lighting_consistency", scene_result)
+            return scene_result
+
+        scene_std = scene_result.get("shadow_angle_std_deg", 0.0)
+        roi_flags: list[dict] = []
+
+        loop = asyncio.get_running_loop()
+        tmp_paths: list[str] = []
+        try:
+            with Image.open(artifact.file_path) as img:
+                img_rgb = img.convert("RGB")
+                iw, ih = img_rgb.size
+                for det in high_conf[:8]:  # cap at 8 ROIs to bound cost
+                    box = det["box"]
+                    x1, y1 = max(0, int(box["x1"])), max(0, int(box["y1"]))
+                    x2, y2 = min(iw, int(box["x2"])), min(ih, int(box["y2"]))
+                    if x2 <= x1 or y2 <= y1:
+                        continue
+                    crop = img_rgb.crop((x1, y1, x2, y2))
+                    fd, tmp_path = tempfile.mkstemp(suffix=".jpg")
+                    os.close(fd)
+                    crop.save(tmp_path)
+                    tmp_paths.append(tmp_path)
+
+                    roi_lighting = await loop.run_in_executor(
+                        None, self._lighting_heuristic, tmp_path
+                    )
+                    roi_std = roi_lighting.get("shadow_angle_std_deg", 0.0)
+                    deviation = abs(roi_std - scene_std)
+                    if deviation > 15.0:
+                        roi_flags.append({
+                            "class_name": det.get("class_name", "object"),
+                            "confidence": det.get("confidence"),
+                            "roi_shadow_std_deg": round(roi_std, 2),
+                            "scene_shadow_std_deg": round(scene_std, 2),
+                            "deviation_deg": round(deviation, 2),
+                        })
+        finally:
+            for p in tmp_paths:
+                if os.path.exists(p):
+                    os.unlink(p)
+
+        scene_result["roi_lighting_flags"] = roi_flags
+        scene_result["compositing_candidates"] = len(roi_flags)
+        if roi_flags:
+            scene_result["lighting_consistent"] = False
+        await self.agent._record_tool_result("lighting_consistency", scene_result)
+        return scene_result
 
     async def _run_lighting_analyzer(self, file_path: str) -> dict:
         """Shared helper: run lighting_analyzer.py via ml_subprocess."""
@@ -434,7 +495,10 @@ class SceneHandlers(BaseToolHandler):
                 "backend": "heuristic-houghlines",
                 "note": "Insufficient edges for shadow analysis",
             }
-        angles  = [np.degrees(np.arctan2(l[0][3] - l[0][1], l[0][2] - l[0][0])) for l in lines]
+        angles = [
+            np.degrees(np.arctan2(line[0][3] - line[0][1], line[0][2] - line[0][0]))
+            for line in lines
+        ]
         std_deg = float(np.std(angles))
         return {
             "lighting_consistent":   std_deg < 30.0,
