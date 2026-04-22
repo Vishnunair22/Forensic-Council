@@ -43,13 +43,47 @@ GEMINI_API_KEY=<Gemini key, optional for tool-only local runs>
 METRICS_SCRAPE_TOKEN=<strong scrape token>
 ```
 
-Generate production-safe values with:
+### Generating secrets
+
+Run the key generation script to produce cryptographically strong values for all local secrets:
 
 ```bash
 bash infra/generate_production_keys.sh
 ```
 
+The script outputs the following variables — paste them into your `.env`:
+
+| Variable | Format | Used for |
+| --- | --- | --- |
+| `SIGNING_KEY` | 64-char hex | ECDSA P-256 report signing |
+| `JWT_SECRET_KEY` | 64-char hex | JWT token signing |
+| `POSTGRES_PASSWORD` | 32-char alphanumeric | Database authentication |
+| `REDIS_PASSWORD` | 32-char alphanumeric | Redis authentication |
+| `BOOTSTRAP_ADMIN_PASSWORD` | 32-char alphanumeric | Initial admin user seed |
+| `BOOTSTRAP_INVESTIGATOR_PASSWORD` | 32-char alphanumeric | Initial investigator user seed |
+| `DEMO_PASSWORD` | 32-char alphanumeric | Demo login (dev/staging only) |
+| `METRICS_SCRAPE_TOKEN` | 64-char hex | Prometheus bearer token |
+
+The script does **not** generate `LLM_API_KEY` or `GEMINI_API_KEY` — obtain those from
+[Groq](https://console.groq.com) and [Google AI Studio](https://aistudio.google.com) respectively.
+
+> **Warning:** `SIGNING_KEY` is used to produce ECDSA signatures on forensic reports.
+> If rotated or lost, previously signed reports will fail signature verification.
+> Store it in a password manager or secret management system (e.g., HashiCorp Vault, AWS Secrets Manager).
+
 ## Start The Stack
+
+> **Shell compatibility:** The examples below use Unix-style `\` line continuation (bash/zsh).
+> On Windows PowerShell, replace each `\` with a backtick `` ` ``.
+> Example:
+> ```powershell
+> docker compose `
+>   -f infra/docker-compose.yml `
+>   -f infra/docker-compose.dev.yml `
+>   --env-file .env `
+>   up --build
+> ```
+> Git Bash and WSL2 bash both accept the Unix `\` syntax without modification.
 
 Development:
 
@@ -135,24 +169,46 @@ The compose stack wires this in two places:
 
 ## Volumes
 
-The base compose file pins the project name to `forensic-council`, so named volumes are stable across dev and production overrides.
+The base compose file pins the project name to `forensic-council`, so named volumes are
+stable across dev and production overrides.
 
-Important volumes:
+### Data volumes — do not delete casually
 
-| Volume | Purpose |
-| --- | --- |
-| `postgres_data` | PostgreSQL data |
-| `redis_data` | Redis persistence |
-| `qdrant_data` | Qdrant vector storage |
-| `evidence_data` | Uploaded evidence files |
-| `signing_keys` | Signing key material |
-| `hf_cache` | HuggingFace model cache |
-| `torch_cache` | PyTorch model cache |
-| `easyocr_cache` | EasyOCR cache |
-| `yolo_cache` | Ultralytics/YOLO cache |
-| `calibration_models_cache` | Calibration model storage |
+| Volume | Purpose | Consequence of deletion |
+| --- | --- | --- |
+| `postgres_data` | PostgreSQL data directory | All investigation records lost |
+| `redis_data` | Redis AOF/RDB persistence | Session state and rate-limit counters reset |
+| `qdrant_data` | Qdrant vector storage | Episodic memory lost; re-indexes on next run |
+| `evidence_data` | Uploaded evidence files | All evidence files lost |
+| `signing_keys` | ECDSA P-256 signing key material | Old report signatures become unverifiable |
+| `prometheus_data` | Prometheus TSDB (15-day retention) | Metrics history lost |
+| `caddy_data` | Let's Encrypt certificates | Forces re-issuance; rate-limited to 5/week/domain |
+| `caddy_config` | Caddy configuration cache | Rebuilt automatically on restart |
+| `caddy_logs` | Caddy structured access logs | Log history lost |
 
-Avoid `docker compose down -v` unless you intentionally want to delete all persisted data and model caches.
+### Model / cache volumes — expensive to rebuild
+
+| Volume | Contents | Consequence of deletion |
+| --- | --- | --- |
+| `hf_cache` | HuggingFace model weights | Re-downloads on next start (~several GB) |
+| `torch_cache` | PyTorch checkpoints | Re-downloads on next start |
+| `easyocr_cache` | EasyOCR model files | Re-downloads on next start |
+| `yolo_cache` | Ultralytics/YOLO weights | Re-downloads on next start |
+| `numba_cache` | Numba JIT-compiled kernels | Recompiled on next start (slow first run) |
+| `calibration_models_cache` | Platt scaling calibration files | Must be retrained via `scripts/train_calibration.py` |
+
+### Development-only volumes
+
+| Volume | Contents | Scope |
+| --- | --- | --- |
+| `nextjs_cache` | Next.js webpack compiler cache | Dev overlay only; prevents 120s recompilation on restart |
+
+Avoid `docker compose down -v` unless you intentionally want to delete all persisted data
+and model caches. To stop the stack while preserving volumes:
+
+```bash
+docker compose -f infra/docker-compose.yml --env-file .env down
+```
 
 ## Validation
 
@@ -166,22 +222,85 @@ The script checks key repository files, Docker Compose rendering, basic syntax, 
 
 ## Common Commands
 
+All examples below show the development overlay. For production, replace
+`-f infra/docker-compose.dev.yml` with `-f infra/docker-compose.prod.yml`.
+
 ```bash
-# Render the effective compose config
-docker compose -f infra/docker-compose.yml --env-file .env config
+# Render the effective merged compose config (useful for debugging)
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
+  --env-file .env config
 
-# Rebuild backend only
-docker compose -f infra/docker-compose.yml --env-file .env build backend
+# Rebuild and restart a single service without touching dependencies
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
+  --env-file .env build backend
 
-# Restart backend without touching dependencies
-docker compose -f infra/docker-compose.yml --env-file .env up -d --no-deps backend
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
+  --env-file .env up -d --no-deps backend
 
-# View logs
-docker compose -f infra/docker-compose.yml --env-file .env logs -f
+# Tail logs for all services
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
+  --env-file .env logs -f
 
-# Stop while keeping volumes
-docker compose -f infra/docker-compose.yml --env-file .env down
+# Tail logs for a single service
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
+  --env-file .env logs -f backend
+
+# Stop the stack, keep volumes intact
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
+  --env-file .env down
+
+# Full reset — destroys all data and model caches
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
+  --env-file .env down -v
 ```
+
+## Network Segmentation
+
+The stack uses three bridge networks to enforce least-privilege service-to-service access.
+
+              ┌─────────────┐
+              │    Caddy    │ (frontend_net + backend_net)
+              └──────┬──────┘
+         ┌───────────┼───────────┐
+         ▼           │           ▼
+  frontend_net   backend_net   backend_net
+         │           │           │
+    ┌────┴────┐  ┌───┴────┐     │
+    │Frontend │  │Backend │◄────┘
+    └─────────┘  │Worker  │
+                 └────┬───┘
+                      │ infra_net
+          ┌───────────┼───────────┐
+          ▼           ▼           ▼
+       Redis       Postgres    Qdrant
+
+| Network | Members | Purpose |
+| --- | --- | --- |
+| `infra_net` | backend, worker, migration, redis, postgres, qdrant, jaeger, prometheus | Backend ↔ infrastructure communication |
+| `backend_net` | backend, caddy, frontend | Caddy and frontend reach the backend API |
+| `frontend_net` | frontend, caddy | Caddy proxies to the Next.js server |
+
+**Key isolation guarantees:**
+- The frontend container cannot reach Redis, Postgres, or Qdrant directly.
+- Caddy cannot reach Redis, Postgres, or Qdrant directly.
+- Infrastructure services are not exposed to the frontend network.
+
+When adding a new service, explicitly assign it to only the networks it requires.
+Do not attach new services to `infra_net` unless they genuinely need database access.
 
 ## Production Notes
 

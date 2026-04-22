@@ -90,13 +90,11 @@ class ForensicAgent(
         """Maximum iterations for the ReAct loop."""
         pass
 
-    @property
     @abstractmethod
     async def build_tool_registry(self) -> ToolRegistry:
         """Build and return the tool registry for this agent."""
         pass
 
-    @property
     @abstractmethod
     async def build_initial_thought(self) -> str:
         """Build the opening thought for investigation."""

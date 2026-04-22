@@ -56,7 +56,6 @@ class Agent5Metadata(ForensicAgent):
             "Run astro_grounding to verify shadow-sun-gps-time parity",
             "Run gps_timezone_validate for coordinate timeline checking",
             "Run timestamp_analysis for cross-field date and time consistency",
-            "Self-reflection pass",
         ]
 
     @property

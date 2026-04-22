@@ -49,11 +49,38 @@ class ArbiterNarrativeMixin:
 
     # ── Agent name map (Full versions for LLM reasoning) ────────────────────
     _AGENT_FULL_NAMES: dict[str, str] = {
-        "Agent1": "Image Integrity Agent (ELA · JPEG Ghost · Frequency Domain · Noise Fingerprint)",
-        "Agent2": "Audio Forensics Agent (Speaker Diarization · Anti-Spoofing · Codec Fingerprint)",
-        "Agent3": "Object Detection Agent (YOLO · Lighting Consistency · Contraband DB)",
-        "Agent4": "Video Forensics Agent (Optical Flow · Face-Swap · Rolling Shutter)",
-        "Agent5": "Metadata Forensics Agent (EXIF · GPS · Hex Signature · C2PA Provenance)",
+        "Agent1": (
+            "Image Integrity Agent — "
+            "Phase 1: CLIP · OCR · SigLIP2 · SHA-256 · FFT · Neural ELA / Noiseprint++ | "
+            "Phase 2: TruFor Splicing · BusterNet Copy-Move · Diffusion Artifact · "
+            "F3-Net · ManTra-Net · Gemini Multimodal Synthesis"
+        ),
+        "Agent2": (
+            "Audio Forensics Agent — "
+            "Phase 1: Speaker Diarization · Neural Prosody · TTS Signature · Codec Fingerprint | "
+            "Phase 2: ENF Analysis · Audio Splice · Voice Clone Ensemble · "
+            "Anti-Spoofing Ensemble · Gemini Neural Audio Audit"
+        ),
+        "Agent3": (
+            "Object & Scene Agent — "
+            "Phase 1: YOLOv11 Detection · Contraband CLIP Search · Lighting Correlation · "
+            "Scene Incongruence | "
+            "Phase 2: Secondary Classification · Scale Validation · "
+            "Adversarial Robustness · Gemini Object-Scene Synthesis"
+        ),
+        "Agent4": (
+            "Temporal Video Agent — "
+            "Phase 1: Video Metadata · VFI Error Map · Thumbnail Coherence · Frame Consistency | "
+            "Phase 2: Optical Flow · Interframe Forgery · Face-Swap · Deepfake Frequency · "
+            "Rolling Shutter · Compression Artifacts · Gemini Frame Synthesis"
+        ),
+        "Agent5": (
+            "Metadata & Provenance Agent — "
+            "Phase 1: Hash Verify · EXIF Extract · Compression Risk · Isolation Forest · "
+            "Astro Grounding · GPS Timezone · Timestamp Analysis | "
+            "Phase 2: File Structure · Hex Signature · Metadata Anomaly Score · "
+            "C2PA Provenance · Camera Profile · Gemini Provenance Synthesis"
+        ),
     }
 
     async def _generate_agent_narrative(
@@ -793,7 +820,8 @@ Rules:
                 overall_verdict, overall_confidence, overall_error_rate,
                 manipulation_probability, applicable_agent_count, all_findings,
                 cross_modal_confirmed_count, len(contested_findings), analysis_coverage_note,
-                active_agent_results
+                active_agent_results,
+                incomplete_count=len(incomplete_findings),
             )
         else:
             await _step("Generating forensic summary via Groq (parallel synthesis)…")
@@ -856,10 +884,10 @@ Rules:
             "llm_used": llm_enabled
         }
 
-    def _template_all(self, ov, oc, oer, mp, aac, af, cmc, cont, acn, aar):
+    def _template_all(self, ov, oc, oer, mp, aac, af, cmc, cont, acn, aar, incomplete_count: int = 0):
         vs, kf, rn = self._template_structured_summary(ov, oc, oer, mp, aac, af, cmc, cont, acn)
         exec_s = self._template_executive_summary(len(aar), len(af), cmc, cont, af)
-        unc_s = self._template_uncertainty_statement(0, cont, oer) # approx
+        unc_s = self._template_uncertainty_statement(incomplete_count, cont, oer)
         return vs, kf, rn, {}, exec_s, unc_s
 
     async def sign_report(self, report: ForensicReport) -> ForensicReport:

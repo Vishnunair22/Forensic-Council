@@ -30,6 +30,9 @@ TOOL_TIMEOUTS: dict[str, float] = {
     "neural_fingerprint": 25.0,
     "noiseprint_cluster": 30.0,
     "neural_ela": 30.0,
+    # Gemini deep forensic includes up to 60s wait for Agent1 context
+    # plus Gemini API latency. Give it headroom above the inner wait.
+    "gemini_deep_forensic": 90.0,
 }
 
 

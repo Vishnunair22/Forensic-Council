@@ -280,11 +280,63 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         return "INCONCLUSIVE"
 
     async def _run_challenges(self, comparisons: list[FindingComparison]) -> list[dict]:
+        """
+        Evaluate contradictions and optionally re-invoke agents to resolve them.
+
+        When agent_factory is available, contradicting agents are challenged —
+        they re-run their ReAct loop with contradiction context and may revise
+        their finding. Without agent_factory, contradictions are recorded as
+        contested and escalated to HITL tribunal.
+        """
         contested = []
         contradictions = [c for c in comparisons if c.verdict == FindingVerdict.CONTRADICTION]
+
         for comp in contradictions[:5]:
             fa, fb = comp.finding_a, comp.finding_b
-            contested.append({**comp.model_dump(mode="json"), "plain_description": f"{AGENT_NAMES.get(fa['agent_id'], fa['agent_id'])} vs {AGENT_NAMES.get(fb['agent_id'], fb['agent_id'])} - Conflict detected."})
+            agent_a_id = fa.get("agent_id", "")
+            agent_b_id = fb.get("agent_id", "")
+
+            challenge_entry = {
+                **comp.model_dump(mode="json"),
+                "plain_description": (
+                    f"{AGENT_NAMES.get(agent_a_id, agent_a_id)} vs "
+                    f"{AGENT_NAMES.get(agent_b_id, agent_b_id)} — Conflict detected."
+                ),
+                "challenge_attempted": False,
+                "challenge_resolved": False,
+            }
+
+            # Challenge loop: re-invoke the lower-confidence agent if factory available.
+            # Without agent_factory this remains a contested (HITL-escalated) finding.
+            if self.agent_factory is not None:
+                try:
+                    conf_a = fa.get("raw_confidence_score") or fa.get("confidence_raw") or 0.5
+                    conf_b = fb.get("raw_confidence_score") or fb.get("confidence_raw") or 0.5
+                    challenged_id = agent_a_id if conf_a <= conf_b else agent_b_id
+                    contradicting = fb if challenged_id == agent_a_id else fa
+
+                    challenged_agent = self.agent_factory.get_agent(challenged_id, self.session_id)
+                    if challenged_agent is not None:
+                        revised = await challenged_agent.run_challenge(
+                            contradicting_finding=contradicting,
+                            context={"arbiter_session": str(self.session_id)},
+                        )
+                        challenge_entry["challenge_attempted"] = True
+                        challenge_entry["challenge_resolved"] = bool(revised)
+                        challenge_entry["revised_findings"] = [
+                            f.model_dump(mode="json") if hasattr(f, "model_dump") else f
+                            for f in (revised or [])
+                        ]
+                        logger.info(
+                            "Challenge loop completed",
+                            challenged_agent=challenged_id,
+                            resolved=bool(revised),
+                        )
+                except Exception as exc:
+                    logger.warning(f"Challenge invocation failed for {challenged_id}: {exc}")
+
+            contested.append(challenge_entry)
+
         return contested
 
     def _get_coverage_note(self, metrics, findings) -> str:

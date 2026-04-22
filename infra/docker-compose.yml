@@ -345,7 +345,7 @@ services:
     environment:
       <<: *backend-env
       APP_NAME: forensic_worker
-      RELOAD: "true"
+      RELOAD: "false"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       OTEL_SERVICE_NAME: forensic_worker
     depends_on:
@@ -419,9 +419,11 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      # nc TCP probes confirm Caddy is listening on both ports without triggering
-      # TLS handshake or redirect logic (wget/curl would follow the 301 on prod domains
-      # and hit a self-signed cert on localhost, both causing false negatives).
+      # wget --spider sends a lightweight HEAD-style request to port 80.
+      # On localhost this stays on HTTP (no TLS handshake) and verifies Caddy
+      # is actively accepting connections. On production domains, Caddy redirects
+      # HTTP→HTTPS but the redirect target is still reachable internally via :80,
+      # so the spider check succeeds without requiring a valid TLS certificate.
       test: ["CMD-SHELL", "wget -q --spider http://localhost:80 || exit 1"]
       interval: 30s
       timeout: 10s
@@ -491,7 +493,7 @@ services:
       # the Next.js standalone server enough time to fully boot before checks begin.
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ > /dev/null 2>&1 || exit 1"]
       interval: 30s
-      timeout: 60s
+      timeout: 10s
       retries: 5
       start_period: 60s
     # SECURITY: Run with minimal privileges (already runs as 'nextjs' user in Dockerfile)

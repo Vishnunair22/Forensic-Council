@@ -12,6 +12,40 @@ This guide explains how Docker builds and caches work for Forensic Council.
 | `docker-compose.infra.yml` | Postgres, Redis, and Qdrant only |
 | `docker-compose.test.yml` | Test service stack |
 
+## Build Arguments
+
+### Backend: `PRELOAD_MODELS`
+
+The backend Dockerfile accepts a `PRELOAD_MODELS` build argument (default: `1`).
+
+| Value | Behaviour |
+| --- | --- |
+| `1` (default) | Downloads all ML model weights into the image during build. Clean volume starts hot. |
+| `0` | Skips model download. Models are fetched at runtime on first use and cached in named volumes. |
+
+Use `PRELOAD_MODELS=0` in CI/CD pipelines where build time matters and named volumes
+persist model caches across runs:
+
+```bash
+# Development — skip model preload for faster builds
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
+  --env-file .env \
+  build --build-arg PRELOAD_MODELS=0 backend worker
+
+# Production — default (models baked into the image, volumes start hot)
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.prod.yml \
+  --env-file .env \
+  build backend worker
+```
+
+> **First-run note:** When `PRELOAD_MODELS=0` and named volumes are empty, the backend
+> and worker will download models on startup. This can add 3–10 minutes to the first
+> investigation run depending on network speed.
+
 ## Build Targets
 
 Backend Dockerfile:
@@ -67,6 +101,9 @@ Important model/cache volumes:
 
 ## Common Builds
 
+> **Shell compatibility:** Replace `\` with a backtick `` ` `` on Windows PowerShell.
+> Git Bash and WSL2 bash accept the Unix `\` syntax without modification.
+
 Development:
 
 ```bash
@@ -87,11 +124,32 @@ docker compose \
   up --build -d
 ```
 
-Build one service:
+Build one service (development target):
 
 ```bash
-docker compose -f infra/docker-compose.yml --env-file .env build backend
-docker compose -f infra/docker-compose.yml --env-file .env up -d --no-deps backend
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
+  --env-file .env build backend
+
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
+  --env-file .env up -d --no-deps backend
+```
+
+Build one service (production target):
+
+```bash
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.prod.yml \
+  --env-file .env build backend
+
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.prod.yml \
+  --env-file .env up -d --no-deps backend
 ```
 
 No-cache rebuild while keeping volumes:

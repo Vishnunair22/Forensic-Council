@@ -41,7 +41,29 @@ class AgentInvestigationMixin:
     def supports_uploaded_file(self) -> bool: ...
     def _signal_completion(self, skipped: bool = False) -> None: ...
     async def _initialize_working_memory(self) -> None: ...
-    async def _check_tool_availability(self) -> None: ...
+    async def _check_tool_availability(self) -> None:
+        """Log unavailable tools to custody; does not raise — agents degrade gracefully."""
+        if getattr(self, "_tool_registry", None) is None:
+            return
+        unavailable = [t.name for t in self._tool_registry.list_tools() if not t.available]
+        if unavailable:
+            logger.warning(
+                "Tools unavailable at investigation start",
+                agent_id=self.agent_id,
+                unavailable_tools=unavailable,
+            )
+            if self.custody_logger:
+                from core.custody_logger import EntryType
+                await self.custody_logger.log_entry(
+                    agent_id=self.agent_id,
+                    session_id=self.session_id,
+                    entry_type=EntryType.TOOL_CALL,
+                    content={
+                        "action": "tool_availability_check",
+                        "unavailable_tools": unavailable,
+                        "note": "Degraded mode — these tools will produce INCOMPLETE findings",
+                    },
+                )
     async def _retrieve_episodic_context(self) -> str: ...
     async def self_reflection_pass(self, findings: list[AgentFinding]) -> Any: ...
 
@@ -100,8 +122,7 @@ class AgentInvestigationMixin:
             self._findings = [finding]
             return self._findings
 
-        if not getattr(self, "_skip_memory_init", False):
-            await self._initialize_working_memory()
+        await self._initialize_working_memory()
 
         self._tool_registry = await self.build_tool_registry()
         await self._check_tool_availability()

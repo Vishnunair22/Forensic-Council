@@ -46,7 +46,6 @@ class Agent4Video(ForensicAgent):
             "Run vfi_error_map to flag motion interpolation artifacts",
             "Run thumbnail_coherence to verify metadata preview parity",
             "Run frame_consistency_analysis on sampled frames",
-            "Self-reflection pass",
         ]
 
     @property

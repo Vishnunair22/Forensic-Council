@@ -20,6 +20,7 @@ Phase 2 (deep, neural): TruFor splicing, BusterNet copy-move, diffusion
 
 from __future__ import annotations
 
+import asyncio
 import os
 
 from agents.base_agent import ForensicAgent
@@ -140,7 +141,7 @@ class Agent1Image(ForensicAgent):
 
         async def gemini_deep_forensic_handler(input_data: dict) -> dict:
             """
-            Gemini 1.5 Pro visual forensic synthesis.
+            Gemini multimodal visual forensic synthesis.
 
             Aggregates results from ALL prior tools (both Phase-1 and Phase-2)
             into a cross-tool context summary before calling Gemini.
@@ -211,7 +212,9 @@ class Agent1Image(ForensicAgent):
                 await self._record_tool_result("gemini_deep_forensic", result)
                 if self._gemini_signal_callback:
                     try:
-                        self._gemini_signal_callback(result)
+                        cb_result = self._gemini_signal_callback(result)
+                        if asyncio.iscoroutine(cb_result):
+                            await cb_result
                     except Exception as cb_err:
                         logger.debug(f"{self.agent_id}: Gemini signal callback failed", error=str(cb_err))
 
@@ -226,7 +229,7 @@ class Agent1Image(ForensicAgent):
                     "confidence": 0.0,
                 }
 
-        registry.register("gemini_deep_forensic", gemini_deep_forensic_handler, "Gemini 1.5 Pro visual forensic synthesis")
+        registry.register("gemini_deep_forensic", gemini_deep_forensic_handler, "Gemini multimodal visual forensic synthesis and evidence aggregation")
 
         return registry
 
@@ -252,6 +255,7 @@ class Agent1Image(ForensicAgent):
             f"SigLIP2 neural fingerprint, SHA-256 integrity check, FFT frequency scan, "
             f"and {phase1_tool}. "
             f"Phase 2 (deep, background): TruFor splicing, BusterNet copy-move, "
-            f"diffusion artifact detection, F3-Net frequency, ManTra-Net anomaly tracing, "
-            f"and Gemini 1.5 Pro visual forensic synthesis."
+            f"diffusion_artifact_detector for AI-generation signatures, "
+            f"F3-Net frequency, ManTra-Net anomaly tracing, "
+            f"and Gemini multimodal visual forensic synthesis."
         )

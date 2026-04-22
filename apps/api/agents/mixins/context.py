@@ -32,9 +32,6 @@ class AgentContextMixin:
     evidence_store: EvidenceStore
     inter_agent_bus: Any
 
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-
     def _init_context(self) -> None:
         """Initialize context attributes."""
         self._tool_registry: Any = None

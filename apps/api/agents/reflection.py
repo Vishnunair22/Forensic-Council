@@ -166,9 +166,5 @@ def _attach_llm_reasoning_to_findings(
                             finding.reasoning_summary = (
                                 f"[LLM] {insight}. {existing}".strip()
                             )
-                        elif insight not in existing: # duplicate check
-                             finding.reasoning_summary = (
-                                f"[LLM] {insight}. {existing}".strip()
-                            )
 
     return findings
