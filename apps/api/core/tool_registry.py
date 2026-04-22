@@ -25,8 +25,8 @@ logger = get_logger(__name__)
 TOOL_TIMEOUTS: dict[str, float] = {
     # OCR can cold-start slowly in Docker. Keep it bounded so image analysis
     # never blocks the analyst decision gate.
-    "extract_text_from_image": 18.0,
-    "extract_evidence_text": 18.0,
+    "extract_text_from_image": 45.0,
+    "extract_evidence_text": 45.0,
     "neural_fingerprint": 30.0,
     "noiseprint_cluster": 35.0,
     "neural_ela": 35.0,

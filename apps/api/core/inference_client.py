@@ -64,9 +64,15 @@ class InferenceClient:
         """Get or load YOLO11 model."""
         async with self._load_locks["yolo"]:
             if "yolo" not in self._models:
-                from ultralytics import YOLO
                 yolo_cache = self.settings.yolo_model_dir
                 os.makedirs(yolo_cache, exist_ok=True)
+                yolo_config_dir = os.getenv("YOLO_CONFIG_DIR", "/tmp/ultralytics")
+                if not os.access(yolo_config_dir, os.W_OK):
+                    yolo_config_dir = "/tmp/ultralytics"
+                os.makedirs(yolo_config_dir, exist_ok=True)
+                os.environ["YOLO_CONFIG_DIR"] = yolo_config_dir
+
+                from ultralytics import YOLO
 
                 # Configure Ultralytics settings
                 from ultralytics import settings as yolo_settings

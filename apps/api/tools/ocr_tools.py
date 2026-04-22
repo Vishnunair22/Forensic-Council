@@ -65,6 +65,69 @@ def _is_pdf(file_path: str) -> bool:
         return False
 
 
+def _file_type_hint(artifact: EvidenceArtifact) -> str:
+    """Return a coarse file-type hint for OCR routing."""
+    file_path = str(getattr(artifact, "file_path", "") or "").lower()
+    mime = str(getattr(artifact, "mime_type", "") or "").lower()
+    ext = os.path.splitext(file_path)[1]
+    if _is_pdf(file_path) or mime == "application/pdf" or ext == ".pdf":
+        return "pdf_document"
+    if mime.startswith("image/") or ext in {
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp",
+        ".bmp",
+        ".tif",
+        ".tiff",
+    }:
+        return "image"
+    if mime.startswith(("audio/", "video/")) or ext in {
+        ".wav",
+        ".mp3",
+        ".m4a",
+        ".flac",
+        ".mp4",
+        ".mov",
+        ".avi",
+        ".mkv",
+        ".webm",
+    }:
+        return "audio_video"
+    return "unknown"
+
+
+def _build_summary(result: dict[str, Any], file_type_hint: str) -> str:
+    """Build a compact OCR summary for reports and tests."""
+    word_count = int(result.get("word_count") or 0)
+    method = str(result.get("method") or "ocr")
+    if file_type_hint == "pdf_document":
+        page_count = int(result.get("page_count") or 0)
+        return f"PDF document: {word_count} words via {method}; {page_count} page(s)."
+    if file_type_hint == "image":
+        confidence = result.get("avg_confidence", result.get("confidence", 0.0)) or 0.0
+        try:
+            confidence_pct = int(round(float(confidence) * 100))
+        except (TypeError, ValueError):
+            confidence_pct = 0
+        lines = [str(line) for line in result.get("lines", []) if str(line).strip()]
+        preview = ""
+        if lines:
+            preview = " Preview: " + " | ".join(lines[:3])
+            if len(lines) > 3:
+                preview += " ..."
+        return f"Image text: {word_count} words via {method} ({confidence_pct}% confidence).{preview}"
+    if file_type_hint == "audio_video":
+        return "Audio/video file: OCR skipped; no static image text layer to extract."
+    return f"OCR text extraction: {word_count} words via {method}."
+
+
+def _finalize_result(result: dict[str, Any], file_type_hint: str) -> dict[str, Any]:
+    result["file_type_hint"] = file_type_hint
+    result["summary"] = _build_summary(result, file_type_hint)
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Tier 1 — PyMuPDF (lossless document extraction)
 # ---------------------------------------------------------------------------
@@ -314,7 +377,7 @@ async def _extract_text_tesseract_fallback(
     return result
 
 
-async def extract_evidence_text(
+async def _extract_evidence_text_legacy_unused(
     artifact: EvidenceArtifact,
 ) -> dict[str, Any]:
     """
@@ -339,3 +402,46 @@ async def extract_evidence_text(
         return result
 
     return await extract_text_easyocr(artifact)
+
+
+async def extract_evidence_text(
+    artifact: EvidenceArtifact,
+) -> dict[str, Any]:
+    """Auto-dispatching text extraction for any evidence file type."""
+    file_type_hint = _file_type_hint(artifact)
+
+    if file_type_hint == "audio_video":
+        return _finalize_result(
+            {
+                "method": "skipped",
+                "has_text": False,
+                "full_text": "",
+                "lines": [],
+                "word_count": 0,
+                "court_defensible": True,
+                "note": "OCR is not applicable to audio/video evidence.",
+            },
+            file_type_hint,
+        )
+
+    if file_type_hint == "pdf_document":
+        result = await extract_text_from_pdf(artifact)
+        if result.get("has_text"):
+            return _finalize_result(result, file_type_hint)
+        result.setdefault(
+            "scanned_pdf_note",
+            "PDF has no embedded text; rasterise pages before image OCR.",
+        )
+        return _finalize_result(result, file_type_hint)
+
+    if is_screen_capture_like(artifact):
+        result = await _extract_text_tesseract_fallback(artifact)
+        result["screen_capture_fast_path"] = True
+        result.setdefault(
+            "note",
+            "Screen-capture-like image processed with fast OCR path.",
+        )
+        return _finalize_result(result, "image")
+
+    result = await extract_text_easyocr(artifact)
+    return _finalize_result(result, "image")

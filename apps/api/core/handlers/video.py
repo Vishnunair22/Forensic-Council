@@ -454,6 +454,7 @@ class VideoHandlers(BaseToolHandler):
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         await self.agent.update_sub_task("Running deep AV container profiling via MediaInfo...")
         result = await real_profile_av_container(artifact=artifact)
+        result = self._normalize_mediainfo_profile(result)
         await self.agent._record_tool_result("mediainfo_profile", result)
         return result
 
@@ -462,5 +463,54 @@ class VideoHandlers(BaseToolHandler):
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         await self.agent.update_sub_task("AV pre-screen: resolving file identity...")
         result = await real_get_av_file_identity(artifact=artifact)
+        result = self._normalize_av_identity(result)
         await self.agent._record_tool_result("av_file_identity", result)
+        return result
+
+    @staticmethod
+    def _flag_labels(flags: list[dict] | list[str] | None) -> list[str]:
+        labels: list[str] = []
+        for flag in flags or []:
+            if isinstance(flag, dict):
+                labels.append(str(flag.get("signal") or flag.get("detail") or "UNKNOWN_FLAG"))
+            else:
+                labels.append(str(flag))
+        return labels
+
+    @classmethod
+    def _normalize_mediainfo_profile(cls, result: dict) -> dict:
+        if not isinstance(result, dict):
+            return result
+        flags = result.get("forensic_flags") or []
+        labels = cls._flag_labels(flags)
+        result["forensic_flag_details"] = flags
+        result["forensic_flags"] = labels
+        general = result.get("general") or {}
+        video_tracks = result.get("video_tracks") or []
+        audio_tracks = result.get("audio_tracks") or []
+        first_video = video_tracks[0] if video_tracks else {}
+        first_audio = audio_tracks[0] if audio_tracks else {}
+        result.setdefault("format", general.get("format"))
+        result.setdefault("video_codec", first_video.get("codec"))
+        result.setdefault("audio_codec", first_audio.get("codec"))
+        result["forensic_flag_labels"] = labels
+        result.setdefault("inconsistency_detected", bool(flags))
+        result.setdefault("confidence", 0.78 if flags else 0.82)
+        result.setdefault("court_defensible", bool(result.get("available", True)))
+        return result
+
+    @classmethod
+    def _normalize_av_identity(cls, result: dict) -> dict:
+        if not isinstance(result, dict):
+            return result
+        high_flags = result.get("high_severity_flags") or []
+        labels = cls._flag_labels(high_flags)
+        result["high_severity_flag_details"] = high_flags
+        result["high_severity_flags"] = labels
+        result["high_severity_flag_labels"] = labels
+        result.setdefault("primary_video_codec", result.get("primary_codec"))
+        result.setdefault("duration_seconds", result.get("duration_s"))
+        result.setdefault("inconsistency_detected", bool(high_flags))
+        result.setdefault("confidence", 0.76 if high_flags else 0.82)
+        result.setdefault("court_defensible", bool(result.get("available", True)))
         return result

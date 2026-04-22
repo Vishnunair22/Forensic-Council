@@ -251,8 +251,9 @@ class CalibrationLayer:
             },
         }
 
+        normalized_agent_id = agent_id.lower()
         params = _DEFAULT_PARAMS.get(
-            agent_id,
+            normalized_agent_id,
             {
                 "method": "platt",
                 "A": 2.0,
@@ -271,16 +272,22 @@ class CalibrationLayer:
             calibration_status=CalibrationStatus.UNCALIBRATED,
         )
 
-        agent_dir = self._get_agent_dir(agent_id)
-        agent_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            agent_dir = self._get_agent_dir(agent_id)
+            agent_dir.mkdir(parents=True, exist_ok=True)
 
-        model_path = self._get_model_path(agent_id, version)
-        with open(model_path, "w") as f:
-            json.dump(model.model_dump(), f, indent=2, default=str)
+            model_path = self._get_model_path(agent_id, version)
+            with open(model_path, "w") as f:
+                json.dump(model.model_dump(), f, indent=2, default=str)
 
-        latest_path = self._get_model_path(agent_id, "latest")
-        with open(latest_path, "w") as f:
-            json.dump(model.model_dump(), f, indent=2, default=str)
+            latest_path = self._get_model_path(agent_id, "latest")
+            with open(latest_path, "w") as f:
+                json.dump(model.model_dump(), f, indent=2, default=str)
+        except OSError:
+            # Runtime containers may mount calibration storage read-only or with
+            # host-owned permissions. Defaults remain valid in memory; trained
+            # calibration persistence is handled through save_trained_model().
+            pass
 
         self._loaded_models[f"{agent_id}:{version}"] = model
         self._loaded_models[f"{agent_id}:latest"] = model

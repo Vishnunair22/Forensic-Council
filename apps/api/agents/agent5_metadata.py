@@ -81,12 +81,48 @@ class Agent5Metadata(ForensicAgent):
         return is_screen_capture_like(self.evidence_artifact)
 
     @property
+    def _is_av_media(self) -> bool:
+        mime = getattr(self.evidence_artifact, "mime_type", "") or ""
+        file_path = getattr(self.evidence_artifact, "file_path", "").lower()
+        return (
+            mime.startswith(("audio/", "video/"))
+            or file_path.endswith(
+                (
+                    ".mp4",
+                    ".avi",
+                    ".mov",
+                    ".mkv",
+                    ".webm",
+                    ".flv",
+                    ".wmv",
+                    ".m4v",
+                    ".mp3",
+                    ".wav",
+                    ".flac",
+                    ".ogg",
+                    ".aac",
+                    ".m4a",
+                )
+            )
+        )
+
+    @property
     def agent_name(self) -> str:
         return "Agent5_MetadataContext"
 
     @property
     def task_decomposition(self) -> list[str]:
         # PHASE 1: INITIAL ANALYSIS (Neural Refined)
+        if self._is_av_media:
+            return [
+                "Run file_hash_verify against ingestion hash",
+                "Run file_structure_analysis for binary anomalies in headers and trailers",
+                "Run hex_signature_scan for raw-byte software signatures",
+                "Run compression_risk_audit to check for social media footprints",
+                "Run av_file_identity for AV container identity pre-screen",
+                "Run mediainfo_profile for stream and codec provenance",
+            ]
+
         core_tasks = [
             "Run file_hash_verify against ingestion hash",
             "Run exif_extract to capture all metadata fields",
@@ -107,6 +143,10 @@ class Agent5Metadata(ForensicAgent):
     def deep_task_decomposition(self) -> list[str]:
         if self._is_screen_capture:
             return []
+        if self._is_av_media:
+            return [
+                "Run provenance_chain_verify for C2PA and digital provenance manifests",
+            ]
         if self._is_digital_image:
             return [
                 "Run provenance_chain_verify for C2PA and digital provenance manifests",

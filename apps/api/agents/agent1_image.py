@@ -28,7 +28,7 @@ from core.gemini_client import GeminiVisionClient
 from core.handlers.image import ImageHandlers
 from core.handlers.metadata import MetadataHandlers
 from core.image_utils import is_lossless_image
-from core.media_kind import is_screen_capture_like
+from core.media_kind import is_digitally_created_image, is_screen_capture_like
 from core.structured_logging import get_logger
 from core.tool_registry import ToolRegistry
 
@@ -60,6 +60,11 @@ class Agent1Image(ForensicAgent):
         """Cached: whether the evidence looks like a screenshot/digital capture."""
         return is_screen_capture_like(self.evidence_artifact)
 
+    @cached_property
+    def _is_digital_capture(self) -> bool:
+        """Cached: whether the evidence is a non-camera digital image container."""
+        return is_digitally_created_image(self.evidence_artifact)
+
     @property
     def iteration_ceiling(self) -> int:
         return self._compute_ceiling(len(self.task_decomposition))
@@ -76,7 +81,7 @@ class Agent1Image(ForensicAgent):
             "Run analyze_image_content for semantic image understanding",
             "Run file_hash_verify for evidence integrity check",
         ]
-        if self._is_screen_capture:
+        if self._is_screen_capture or self._is_digital_capture:
             return base + [
                 "Run frequency_domain_analysis for frequency domain analysis",
                 "Run extract_text_from_image for visible text extraction",
@@ -109,7 +114,7 @@ class Agent1Image(ForensicAgent):
             "Run f3_net_frequency for AI-GAN artifact detection",
             "Run gemini_deep_forensic for cross-tool evidence aggregation and semantic grounding",
         ]
-        if self._is_screen_capture:
+        if self._is_screen_capture or self._is_digital_capture:
             return base
         base.insert(0, "Run neural_copy_move for dual-branch copy-move detection")
         base.insert(0, "Run neural_splicing for ViT-based region composition analysis")
@@ -258,7 +263,14 @@ class Agent1Image(ForensicAgent):
     async def build_initial_thought(self) -> str:
         name = os.path.basename(getattr(self.evidence_artifact, "file_path", "unknown"))
         lossless = self._is_lossless
-        phase1_tool = "Noiseprint++ sensor clustering" if lossless else "ViT Neural ELA manipulation detection"
+        digital = self._is_screen_capture or self._is_digital_capture
+        phase1_tool = (
+            "digital-capture FFT and OCR checks"
+            if digital
+            else "Noiseprint++ sensor clustering"
+            if lossless
+            else "ViT Neural ELA manipulation detection"
+        )
         return (
             f"Starting image integrity analysis for '{name}'. "
             f"Phase 1 (fast): CLIP semantic classification, Tesseract OCR, "

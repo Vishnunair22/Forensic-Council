@@ -86,11 +86,11 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
     ),
     "file_hash_verify": lambda o: (
         "Hash verification: SHA-256 = "
-        + str(o.get("current_hash", o.get("original_hash", "")))[:20]
+        + str(o.get("current_hash", o.get("computed_hash", o.get("original_hash", ""))))[:20]
         + "... "
         + (
             "Hash matches chain-of-custody record — file integrity confirmed."
-            if o.get("hash_matches")
+            if o.get("hash_matches") is True or o.get("hash_match") is True
             else "WARNING: hash mismatch — file may have been modified after ingestion."
         )
     ),

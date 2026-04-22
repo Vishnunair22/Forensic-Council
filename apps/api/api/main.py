@@ -737,20 +737,25 @@ async def ml_tools_health():
     Used by operators to verify models are ready before investigations.
     """
     from core.config import get_settings
-    from core.ml_subprocess import get_warmup_status
+    from core.ml_subprocess import get_warmup_status, health_check_ml_tools
 
     settings = get_settings()
     warmup_status = get_warmup_status()
+    script_status = await health_check_ml_tools()
 
-    tools_ready = sum(1 for v in warmup_status.values() if v)
-    tools_total = len(warmup_status)
+    tools_present = sum(1 for v in script_status.values() if v != "script_not_found")
+    tools_total = len(script_status)
+    tools_warmed = sum(1 for v in warmup_status.values() if v)
 
     return {
-        "status": "ready" if tools_ready == tools_total else "warming_up",
-        "tools_ready": tools_ready,
+        "status": "available" if tools_present == tools_total else "missing_scripts",
+        "tools_present": tools_present,
         "tools_total": tools_total,
-        "warmup_percentage": round((tools_ready / tools_total * 100) if tools_total > 0 else 0, 1),
-        "details": warmup_status,
+        "warmup_status": "managed_by_worker",
+        "tools_warmed_in_process": tools_warmed,
+        "presence_percentage": round((tools_present / tools_total * 100) if tools_total > 0 else 0, 1),
+        "details": script_status,
+        "warmup_details": warmup_status,
         "cache_dirs": {
             "huggingface": str(settings.hf_home),
             "torch": str(settings.torch_home),

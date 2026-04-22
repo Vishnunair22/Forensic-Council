@@ -116,12 +116,23 @@ class AudioHandlers(BaseToolHandler):
         min_speakers = input_data.get("min_speakers", 1)
         max_speakers = input_data.get("max_speakers", 10)
         await self.agent.update_sub_task("Establishing voice count baseline...")
-        result = await real_speaker_diarize(
-            artifact=artifact,
-            min_speakers=min_speakers,
-            max_speakers=max_speakers,
-            progress_callback=self.agent.update_sub_task,
-        )
+        try:
+            result = await real_speaker_diarize(
+                artifact=artifact,
+                min_speakers=min_speakers,
+                max_speakers=max_speakers,
+                progress_callback=self.agent.update_sub_task,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Speaker diarization primary path failed; using heuristic fallback",
+                error=str(exc),
+            )
+            result = {
+                "error": str(exc),
+                "available": False,
+                "degraded": True,
+            }
         if result.get("error") or not result.get("available"):
             result = await self._diarization_fallback(artifact.file_path, min_speakers, max_speakers)
         # Store under the registered tool name
@@ -221,7 +232,14 @@ class AudioHandlers(BaseToolHandler):
     async def codec_fingerprinting_handler(self, input_data: dict) -> dict:
         """Codec chain re-encoding event fingerprinting."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
-        result = await real_codec_fingerprint(artifact=artifact)
+        try:
+            result = await real_codec_fingerprint(artifact=artifact)
+        except Exception as exc:
+            logger.warning(
+                "Codec fingerprint primary path failed; using container metadata fallback",
+                error=str(exc),
+            )
+            result = self._codec_fingerprint_fallback(artifact.file_path, str(exc))
         events = result.get("reencoding_events") if isinstance(result, dict) else None
         result.setdefault("re_encoding_detected", bool(events))
         result.setdefault("reencoding_event_count", len(events) if isinstance(events, list) else 0)
@@ -236,6 +254,51 @@ class AudioHandlers(BaseToolHandler):
             result["confidence"] = max(event_confidences) if event_confidences else 0.85
         await self.agent._record_tool_result("codec_fingerprinting", result)
         return result
+
+    def _codec_fingerprint_fallback(self, file_path: str, error_msg: str) -> dict:
+        """SoundFile-only codec fallback when librosa/numba analysis is unavailable."""
+        try:
+            info = sf.info(file_path)
+            ext = str(file_path).rsplit(".", 1)[-1].lower() if "." in str(file_path) else ""
+            codec_by_ext = {
+                "wav": "PCM",
+                "mp3": "MP3",
+                "m4a": "AAC",
+                "mp4": "AAC",
+                "aac": "AAC",
+                "flac": "FLAC",
+                "ogg": "Vorbis",
+                "oga": "Vorbis",
+            }
+            codec = codec_by_ext.get(ext, f"Unknown ({ext or 'no extension'})")
+            return {
+                "reencoding_events": [],
+                "codec_chain": [codec],
+                "format_info": {
+                    "format": info.format,
+                    "subtype": info.subtype,
+                    "channels": info.channels,
+                    "samplerate": info.samplerate,
+                    "duration": info.duration,
+                    "frames": info.frames,
+                },
+                "available": True,
+                "degraded": True,
+                "court_defensible": False,
+                "confidence": 0.65,
+                "fallback_reason": f"Full codec fingerprint failed ({error_msg}); used container metadata only.",
+            }
+        except Exception as exc:
+            return {
+                "reencoding_events": [],
+                "codec_chain": [],
+                "available": False,
+                "degraded": True,
+                "court_defensible": False,
+                "confidence": 0.0,
+                "error": f"Codec fallback failed: {exc}",
+                "fallback_reason": error_msg,
+            }
 
     async def audio_visual_sync_handler(self, input_data: dict) -> dict:
         """Audio-visual synchronisation verification."""

@@ -179,9 +179,19 @@ class SceneHandlers(BaseToolHandler):
                             "box": {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
                         })
 
+                classes_found = sorted(
+                    {str(d.get("class_name", "unknown")) for d in detections if d.get("class_name")}
+                )
+                weapon_terms = {"knife", "gun", "pistol", "rifle", "shotgun", "firearm", "weapon"}
+                weapon_detections = [
+                    d for d in detections
+                    if any(term in str(d.get("class_name", "")).lower() for term in weapon_terms)
+                ]
                 res = {
                     "detections":      detections,
                     "detection_count": len(detections),
+                    "classes_found":    classes_found,
+                    "weapon_detections": weapon_detections,
                     "backend":         "yolo11m",
                     "available":       True,
                     "confidence":      0.90 if detections else 0.70,
@@ -199,6 +209,8 @@ class SceneHandlers(BaseToolHandler):
                 degraded = {
                     "detections":      [],
                     "detection_count": 0,
+                    "classes_found":    [],
+                    "weapon_detections": [],
                     "available":       False,
                     "degraded":        True,
                     "confidence":      0.0,
@@ -264,6 +276,7 @@ class SceneHandlers(BaseToolHandler):
         await self.agent.update_sub_task("Auditing light-source vectors for compositing anomalies...")
         result = await run_ml_tool("lighting_correlator.py", artifact.file_path, timeout=12.0)
         if not result.get("error") and result.get("available"):
+            result = self._normalize_lighting_result(result)
             await self.agent._record_tool_result("lighting_correlation_initial", result)
             return result
         # Fallback to standard lighting consistency
@@ -473,6 +486,7 @@ class SceneHandlers(BaseToolHandler):
         scene_result["compositing_candidates"] = len(roi_flags)
         if roi_flags:
             scene_result["lighting_consistent"] = False
+        scene_result = self._normalize_lighting_result(scene_result)
         await self.agent._record_tool_result("lighting_consistency", scene_result)
         return scene_result
 
@@ -490,6 +504,20 @@ class SceneHandlers(BaseToolHandler):
                     "available": False, "degraded": True, "confidence": 0.0,
                     "court_defensible": False, "error": str(exc),
                 }
+        return self._normalize_lighting_result(result)
+
+    @staticmethod
+    def _normalize_lighting_result(result: dict) -> dict:
+        """Expose both positive and negative lighting booleans for interpreters."""
+        if not isinstance(result, dict):
+            return result
+        if "lighting_consistent" in result and "inconsistency_detected" not in result:
+            result["inconsistency_detected"] = result.get("lighting_consistent") is False
+        elif "inconsistency_detected" in result and "lighting_consistent" not in result:
+            result["lighting_consistent"] = not bool(result.get("inconsistency_detected"))
+        result.setdefault("compositing_candidates", 1 if result.get("inconsistency_detected") else 0)
+        result.setdefault("available", True)
+        result.setdefault("confidence", 0.55 if result.get("inconsistency_detected") else 0.70)
         return result
 
     @staticmethod
