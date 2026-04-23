@@ -36,7 +36,7 @@ export function GlobalNavbar() {
   return (
     <nav
       aria-label="Main navigation"
-      className="fixed top-6 left-6 z-[200] flex items-center px-5 py-2.5 bg-black/40 backdrop-blur-xl border border-white/5 rounded-2xl shadow-[0_4px_30px_rgba(0,0,0,0.5)]"
+      className="absolute top-6 left-6 z-[200] flex items-center px-5 py-2.5 bg-black/40 backdrop-blur-xl border border-white/5 rounded-2xl shadow-[0_4px_30px_rgba(0,0,0,0.5)] w-fit whitespace-nowrap"
     >
       <AnimatePresence>
         {isResetting && <ForensicResetOverlay />}

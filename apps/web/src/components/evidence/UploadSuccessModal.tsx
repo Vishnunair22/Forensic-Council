@@ -3,9 +3,15 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { CheckCircle2, X } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 
-export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: any) {
+export interface UploadSuccessModalProps {
+  file: File;
+  onNewUpload: () => void;
+  onStartAnalysis: () => void;
+}
+
+export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: UploadSuccessModalProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {

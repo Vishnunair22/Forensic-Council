@@ -233,7 +233,7 @@ export function AgentStatusCard({
                   with <span className="text-white font-bold">{Math.round(completedData.confidence * 100)}%</span>{" "}
                   confidence. Tool error rate was{" "}
                   <span className="text-rose-400 font-bold">{Math.round((completedData.tool_error_rate || 0) * 100)}%</span>;
-                  the agent's manipulation signal is{" "}
+                  the agent&apos;s manipulation signal is{" "}
                   <span className={clsx("font-bold", (completedData.verdict_score ?? 0) > 0.5 ? "text-rose-500" : "text-emerald-400")}>
                     {Math.round((completedData.verdict_score || 0) * 100)}%
                   </span>.

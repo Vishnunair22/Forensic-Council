@@ -36,7 +36,7 @@ const nextConfig: NextConfig = {
   compress: false,
 
   // ── TypeScript & ESLint ───────────────────────────────────────────────
-  transpilePackages: ["class-variance-authority"],
+  // Note: transpilePackages is no longer needed for class-variance-authority in Next 15.
 
 
   // ── Turbopack (Next.js 15 default build engine) ───────────────────────────
@@ -45,10 +45,8 @@ const nextConfig: NextConfig = {
   // The webpack config below is retained for the default Next.js dev server on
   // Windows Docker bind mounts.
   turbopack: {
-    resolveExtensions: ['.tsx', '.ts', '.jsx', '.js', '.json'],
-    resolveAlias: {
-      'class-variance-authority': path.resolve(process.cwd(), 'node_modules/class-variance-authority'),
-    },
+    resolveExtensions: [".tsx", ".ts", ".jsx", ".js", ".json"],
+    // Removed redundant class-variance-authority alias
   },
 
   // ── Bundle optimisation ───────────────────────────────────────────────────
@@ -59,11 +57,13 @@ const nextConfig: NextConfig = {
       "lucide-react",
       "framer-motion",
       "@radix-ui/react-dialog",
-      "class-variance-authority",
     ],
     // Inline small CSS into JS bundle (saves one HTTP round-trip on first load).
     // Disabled in dev mode to improve stability.
     optimizeCss: false,
+    // Performance optimizations for large builds
+    webpackBuildWorker: true,
+    parallelServerBuildTraces: true,
   },
 
   // ── Dev-mode file watcher (Windows + Docker fallback) ────────────────────
@@ -71,14 +71,11 @@ const nextConfig: NextConfig = {
   // reliably, so polling restores HMR. The custom source-map template also
   // avoids Chrome "illegal path" errors for host paths with spaces.
   webpack: (config: Record<string, unknown> & { resolve: { alias: Record<string, string> }; watchOptions?: unknown; output?: Record<string, unknown> }, { dev }: { dev: boolean }) => {
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      'class-variance-authority': path.resolve(process.cwd(), 'node_modules/class-variance-authority'),
-    };
+    // Removed redundant class-variance-authority alias
 
     if (dev) {
       config.watchOptions = {
-        poll: 800,
+        poll: 500, // Reduced from 800ms to 500ms for faster HMR
         aggregateTimeout: 300,
       };
       // Use relative, URL-encoded paths for source maps to avoid "illegal path"

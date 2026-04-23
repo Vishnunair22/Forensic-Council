@@ -18,6 +18,9 @@ export default function Home() {
       <motion.div
         className="relative w-full h-screen flex flex-col items-center justify-center z-10 overflow-hidden"
       >
+        {/* NEW: Cyber Blueprint Grid (Adds subtle technical depth) */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_40%,#000_40%,transparent_100%)] pointer-events-none z-0" />
+
         {/* NEW: Volumetric Background Glow */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%] w-[800px] h-[500px] bg-primary/10 blur-[120px] rounded-[100%] pointer-events-none z-0" />
 
