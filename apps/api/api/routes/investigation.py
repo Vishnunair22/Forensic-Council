@@ -287,7 +287,9 @@ async def start_investigation(
                 logger.debug("Session persistence registration skipped", error=str(exc))
 
         _t = asyncio.create_task(_register())
-        _t.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+        add_done_callback = getattr(_t, "add_done_callback", None)
+        if callable(add_done_callback):
+            add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
 
         return InvestigationResponse(
             session_id=session_id,

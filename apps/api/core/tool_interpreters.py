@@ -711,7 +711,7 @@ _TOOL_INTERPRETERS.update(
         # Agent 3 object/context tools.
         "vector_contraband_search": lambda o: (
             f"Threat/contraband vector search top match: {o.get('top_match', 'none')} "
-            f"({o.get('confidence', o.get('top_confidence', 0)):.0%}). "
+            f"({o.get('top_confidence', o.get('confidence', 0)):.0%}). "
             + ("Potential threat item flagged." if o.get("concern_flag") else "No threat/contraband match above concern threshold.")
         ),
         "lighting_correlation_initial": lambda o: (

@@ -232,10 +232,14 @@ class SceneHandlers(BaseToolHandler):
     async def vector_contraband_search_handler(self, input_data: dict) -> dict:
         """SigLIP embedding search against weapon/contraband manifold."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        target_path = artifact.file_path
+        tmp_frame_path: str | None = None
+        if self._is_video(target_path):
+            target_path, tmp_frame_path = await self._extract_best_video_frame(target_path)
         try:
             await self.agent.update_sub_task("Auditing high-dimensional threat manifolds (SigLIP)...")
             ic = await self.get_inference()
-            raw = await ic.predict_siglip(artifact.file_path, check_concerns=True)
+            raw = await ic.predict_siglip(target_path, check_concerns=True)
             # predict_siglip may return an object or a dict — handle both.
             if isinstance(raw, dict):
                 top_match     = raw.get("top_match", "unknown")
@@ -250,7 +254,8 @@ class SceneHandlers(BaseToolHandler):
 
             result = {
                 "top_match":     top_match,
-                "confidence":    top_confidence,
+                "top_confidence": top_confidence,
+                "confidence":    float(top_confidence) if concern_flag else max(0.70, 1.0 - float(top_confidence or 0.0)),
                 "concern_flag":  concern_flag,
                 "available":     available,
                 "court_defensible": True,
@@ -264,6 +269,9 @@ class SceneHandlers(BaseToolHandler):
                 "court_defensible": False,
                 "error":          str(exc),
             }
+        finally:
+            if tmp_frame_path and os.path.exists(tmp_frame_path):
+                os.unlink(tmp_frame_path)
 
         await self.agent._record_tool_result("vector_contraband_search", result)
         return result
@@ -273,17 +281,25 @@ class SceneHandlers(BaseToolHandler):
     async def lighting_correlation_handler(self, input_data: dict) -> dict:
         """Automated lighting vector correlation pass."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        target_path = artifact.file_path
+        tmp_frame_path: str | None = None
+        if self._is_video(target_path):
+            target_path, tmp_frame_path = await self._extract_best_video_frame(target_path)
         await self.agent.update_sub_task("Auditing light-source vectors for compositing anomalies...")
-        result = await run_ml_tool("lighting_correlator.py", artifact.file_path, timeout=12.0)
-        if not result.get("error") and result.get("available"):
-            result = self._normalize_lighting_result(result)
-            await self.agent._record_tool_result("lighting_correlation_initial", result)
-            return result
-        # Fallback to standard lighting consistency
-        await self.agent.update_sub_task("Shadow-angle fallback audit in progress...")
-        fallback = await self._run_lighting_analyzer(artifact.file_path)
-        await self.agent._record_tool_result("lighting_correlation_initial", fallback)
-        return fallback
+        try:
+            result = await run_ml_tool("lighting_correlator.py", target_path, timeout=12.0)
+            if not result.get("error") and result.get("available"):
+                result = self._normalize_lighting_result(result)
+                await self.agent._record_tool_result("lighting_correlation_initial", result)
+                return result
+            # Fallback to standard lighting consistency
+            await self.agent.update_sub_task("Shadow-angle fallback audit in progress...")
+            fallback = await self._run_lighting_analyzer(target_path)
+            await self.agent._record_tool_result("lighting_correlation_initial", fallback)
+            return fallback
+        finally:
+            if tmp_frame_path and os.path.exists(tmp_frame_path):
+                os.unlink(tmp_frame_path)
 
     # ── Phase 2: Secondary Classification ─────────────────────────────────────
 
@@ -564,16 +580,23 @@ class SceneHandlers(BaseToolHandler):
         High variance across cells indicates pasting from a different scene.
         """
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        target_path = artifact.file_path
+        tmp_frame_path: str | None = None
+        if self._is_video(target_path):
+            target_path, tmp_frame_path = await self._extract_best_video_frame(target_path)
         try:
             loop   = asyncio.get_running_loop()
             result = await loop.run_in_executor(
-                None, self._scene_incongruence_heuristic, artifact.file_path
+                None, self._scene_incongruence_heuristic, target_path
             )
         except Exception as exc:
             result = {
                 "available": False, "degraded": True, "confidence": 0.0,
                 "court_defensible": False, "error": str(exc),
             }
+        finally:
+            if tmp_frame_path and os.path.exists(tmp_frame_path):
+                os.unlink(tmp_frame_path)
         await self.agent._record_tool_result("scene_incongruence", result)
         return result
 

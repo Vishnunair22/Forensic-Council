@@ -113,9 +113,97 @@ const finalReport = {
   applicable_agent_count: 5,
 };
 
+const initialReport = {
+  ...finalReport,
+  report_id: '33333333-3333-4333-8333-333333333333',
+  executive_summary: 'The submitted evidence completed initial forensic screening and is ready for analyst acceptance or deeper review.',
+  per_agent_findings: {
+    Agent1: [{
+      finding_id: 'f-agent1-initial',
+      agent_id: 'Agent1',
+      agent_name: 'Image Forensics',
+      finding_type: 'initial_screen',
+      status: 'CONFIRMED',
+      confidence_raw: 0.84,
+      evidence_verdict: 'NEGATIVE',
+      calibrated: true,
+      calibrated_probability: null,
+      raw_confidence_score: 0.84,
+      court_statement: 'Initial visual screening found no decisive manipulation cluster.',
+      robustness_caveat: false,
+      robustness_caveat_detail: null,
+      reasoning_summary: 'Initial ELA, OCR, and visual content checks did not produce a decisive manipulation signal.',
+      metadata: {
+        analysis_phase: 'initial',
+        tool_name: 'initial_screen',
+        llm_refined_summary: 'Initial visual screening did not find a decisive manipulation signal.',
+      },
+      severity_tier: 'LOW',
+    }],
+    Agent3: [{
+      finding_id: 'f-agent3-initial',
+      agent_id: 'Agent3',
+      agent_name: 'Object Detection',
+      finding_type: 'scene_screen',
+      status: 'CONFIRMED',
+      confidence_raw: 0.82,
+      evidence_verdict: 'NEGATIVE',
+      calibrated: true,
+      calibrated_probability: null,
+      raw_confidence_score: 0.82,
+      court_statement: 'Initial scene checks found no object-context conflict.',
+      robustness_caveat: false,
+      robustness_caveat_detail: null,
+      reasoning_summary: 'Initial object and scene checks found no obvious context conflict.',
+      metadata: {
+        analysis_phase: 'initial',
+        tool_name: 'scene_screen',
+        llm_refined_summary: 'Initial scene checks found no obvious object-context conflict.',
+      },
+      severity_tier: 'LOW',
+    }],
+    Agent5: [{
+      finding_id: 'f-agent5-initial',
+      agent_id: 'Agent5',
+      agent_name: 'Metadata Expert',
+      finding_type: 'metadata_screen',
+      status: 'CONFIRMED',
+      confidence_raw: 0.86,
+      evidence_verdict: 'NEGATIVE',
+      calibrated: true,
+      calibrated_probability: null,
+      raw_confidence_score: 0.86,
+      court_statement: 'Initial metadata screening found no custody-breaking inconsistency.',
+      robustness_caveat: false,
+      robustness_caveat_detail: null,
+      reasoning_summary: 'Initial metadata and custody checks found no timestamp or file-structure conflict.',
+      metadata: {
+        analysis_phase: 'initial',
+        tool_name: 'metadata_screen',
+        llm_refined_summary: 'Initial metadata checks found no custody-breaking inconsistency.',
+      },
+      severity_tier: 'LOW',
+    }],
+  },
+  per_agent_analysis: {
+    Agent1: 'Initial visual screening completed successfully.',
+    Agent3: 'Initial scene screening completed successfully.',
+    Agent5: 'Initial metadata screening completed successfully.',
+  },
+  overall_confidence: 0.84,
+  overall_verdict: 'LIKELY_AUTHENTIC',
+  verdict_sentence: 'The council finds the evidence likely authentic after initial analysis.',
+  key_findings: [
+    'Initial analysis completed across applicable forensic agents.',
+    'Accept Analysis generated and rendered the signed initial report.',
+  ],
+  manipulation_probability: 0.12,
+};
+
 async function installJourneyMocks(page: import('@playwright/test').Page) {
   let liveSocket: import('@playwright/test').WebSocketRoute | null = null;
   let arbiterComplete = false;
+  let reportPayload = finalReport;
 
   const sendInitialPhase = () => {
     if (!liveSocket) return;
@@ -204,7 +292,16 @@ async function installJourneyMocks(page: import('@playwright/test').Page) {
       body: JSON.stringify({ status: 'resumed', deep_analysis: body.deep_analysis }),
     });
     if (body.deep_analysis) {
+      reportPayload = finalReport;
       setTimeout(sendDeepPhase, 100);
+    } else {
+      reportPayload = initialReport;
+      setTimeout(() => {
+        arbiterComplete = true;
+        liveSocket?.send(liveMessage('PIPELINE_COMPLETE', {
+          message: 'Initial report signed.',
+        }));
+      }, 100);
     }
   });
 
@@ -214,7 +311,7 @@ async function installJourneyMocks(page: import('@playwright/test').Page) {
       contentType: 'application/json',
       body: JSON.stringify(
         arbiterComplete
-          ? { status: 'complete', message: 'Final report signed.', report_id: finalReport.report_id }
+          ? { status: 'complete', message: 'Final report signed.', report_id: reportPayload.report_id }
           : { status: 'running', message: 'Council deliberating...' },
       ),
     });
@@ -232,7 +329,7 @@ async function installJourneyMocks(page: import('@playwright/test').Page) {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(finalReport),
+      body: JSON.stringify(reportPayload),
     });
   });
 }
@@ -360,6 +457,84 @@ test.describe('Forensic Analyst Journey', () => {
     await expect(page).toHaveURL(/\/result/);
     await expect(page.getByRole('tab', { name: /Overview/i })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/The council finds the evidence likely authentic/i)).toBeVisible();
+    await expect(page.getByText(/Deep analysis completed and final report rendering succeeded/i)).toBeVisible();
+
+    expect(pageErrors).toEqual([]);
+  });
+
+  test('completes initial analysis acceptance and renders signed result report', async ({ page }) => {
+    test.setTimeout(90_000);
+    const pageErrors: string[] = [];
+    page.on('pageerror', error => pageErrors.push(error.message));
+
+    await installJourneyMocks(page);
+    await page.goto('/evidence');
+
+    await expect(page.getByRole('heading', { name: /Initiate Investigation/i })).toBeVisible();
+
+    const png1x1 = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+      'base64',
+    );
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'initial-evidence.png',
+      mimeType: 'image/png',
+      buffer: png1x1,
+    });
+
+    await expect(page.getByText('initial-evidence.png')).toBeVisible();
+    await page.getByRole('button', { name: /Start Analysis/i }).click();
+
+    await expect(page.getByRole('heading', { name: /Evidence Analysis/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('button', { name: /Accept Analysis/i })).toBeVisible({ timeout: 25_000 });
+    await expect(page.getByRole('button', { name: /^Deep Analysis$/i })).toBeVisible();
+
+    await page.getByRole('button', { name: /Accept Analysis/i }).click();
+    await expect(page.getByText(/Arbiter Deliberation/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page).toHaveURL(/\/result/, { timeout: 30_000 });
+
+    await expect(page.getByRole('tab', { name: /Overview/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/The council finds the evidence likely authentic after initial analysis/i)).toBeVisible();
+    await expect(page.getByText(/Accept Analysis generated and rendered the signed initial report/i)).toBeVisible();
+
+    expect(pageErrors).toEqual([]);
+  });
+
+  test('completes deep analysis and renders signed final report', async ({ page }) => {
+    test.setTimeout(90_000);
+    const pageErrors: string[] = [];
+    page.on('pageerror', error => pageErrors.push(error.message));
+
+    await installJourneyMocks(page);
+    await page.goto('/evidence');
+
+    await expect(page.getByRole('heading', { name: /Initiate Investigation/i })).toBeVisible();
+
+    const png1x1 = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+      'base64',
+    );
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'deep-evidence.png',
+      mimeType: 'image/png',
+      buffer: png1x1,
+    });
+
+    await expect(page.getByText('deep-evidence.png')).toBeVisible();
+    await page.getByRole('button', { name: /Start Analysis/i }).click();
+
+    await expect(page.getByRole('heading', { name: /Evidence Analysis/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('button', { name: /^Deep Analysis$/i })).toBeVisible({ timeout: 25_000 });
+
+    await page.getByRole('button', { name: /^Deep Analysis$/i }).click();
+    await expect(page.getByText(/Deep Analysis/i).first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('button', { name: /Generate Final Report/i })).toBeVisible({ timeout: 25_000 });
+
+    await page.getByRole('button', { name: /Generate Final Report/i }).click();
+    await expect(page).toHaveURL(/\/result/, { timeout: 30_000 });
+
+    await expect(page.getByRole('tab', { name: /Overview/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/The council finds the evidence likely authentic after deep analysis/i)).toBeVisible();
     await expect(page.getByText(/Deep analysis completed and final report rendering succeeded/i)).toBeVisible();
 
     expect(pageErrors).toEqual([]);

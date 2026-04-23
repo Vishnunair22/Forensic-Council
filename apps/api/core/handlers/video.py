@@ -73,6 +73,12 @@ class VideoHandlers(BaseToolHandler):
         try:
             result = await run_ml_tool("vfi_error_mapper.py", artifact.file_path, timeout=30.0)
             if not result.get("error") and result.get("available"):
+                suspected = bool(result.get("vfi_suspected") or result.get("manipulation_detected"))
+                flagged = result.get("flagged_samples") or result.get("flagged_frames") or []
+                result.setdefault("vfi_artifact_detected", suspected)
+                result.setdefault("interpolation_artifact_detected", suspected)
+                result.setdefault("inconsistency_detected", suspected)
+                result.setdefault("flagged_frame_count", len(flagged) if isinstance(flagged, list) else 0)
                 await self.agent._record_tool_result("vfi_error_map", result)
                 return result
         except Exception as exc:
@@ -205,9 +211,13 @@ class VideoHandlers(BaseToolHandler):
                 frames_artifact = SimpleNamespace(file_path=tmpdir)
                 result = await real_frame_consistency_analyze(frames_artifact=frames_artifact)
                 inconsistencies = result.get("inconsistencies", [])
+                stats = result.get("statistics") or {}
                 result.setdefault("available", True)
                 result.setdefault("court_defensible", True)
                 result.setdefault("discontinuity_detected", bool(inconsistencies))
+                result.setdefault("inconsistency_detected", bool(inconsistencies))
+                result.setdefault("inconsistent_frame_count", len(inconsistencies))
+                result.setdefault("total_frames", stats.get("total_frames"))
                 result.setdefault("confidence", 0.82 if inconsistencies else 0.90)
         await self.agent._record_tool_result("frame_consistency_analysis", result)
         return result
@@ -244,6 +254,31 @@ class VideoHandlers(BaseToolHandler):
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         await self.agent.update_sub_task("Performing stream-level metadata probe...")
         result = await real_video_metadata_extract(artifact=artifact)
+        metadata = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}
+        fps = float(metadata.get("fps") or 0.0)
+        frame_count = int(metadata.get("frame_count") or 0)
+        width = int(metadata.get("width") or 0)
+        height = int(metadata.get("height") or 0)
+        duration = float(metadata.get("duration") or 0.0)
+        fourcc = str(metadata.get("fourcc_str") or "").strip().strip("\x00")
+
+        result.setdefault("codec", fourcc or "unknown")
+        result.setdefault("fps", fps)
+        result.setdefault("frame_count", frame_count)
+        result.setdefault("width", width)
+        result.setdefault("height", height)
+        result.setdefault("resolution", f"{width}x{height}" if width and height else "unknown")
+        result.setdefault("duration", round(duration, 3) if duration else 0.0)
+        result.setdefault("duration_seconds", round(duration, 3) if duration else 0.0)
+        result.setdefault("file_size", metadata.get("file_size"))
+        if not (fps > 0 and frame_count > 0 and width > 0 and height > 0):
+            result.setdefault("metadata_incomplete", True)
+            result.setdefault("status", "INCOMPLETE")
+            result.setdefault("court_defensible", False)
+            result.setdefault(
+                "note",
+                "OpenCV metadata probe returned incomplete stream dimensions/timing; treat as a tool limitation.",
+            )
         result.setdefault("available", True)
         result.setdefault("court_defensible", True)
         result.setdefault("confidence", 0.90)

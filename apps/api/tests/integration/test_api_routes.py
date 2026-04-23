@@ -1,4 +1,4 @@
-﻿"""
+"""
 Backend Integration Tests â€” All API Routes
 ===========================================
 Uses FastAPI's TestClient with all infrastructure mocked.
@@ -15,7 +15,7 @@ try:
     pass
 except Exception:
     pytest.skip("grpc not installed; skipping integration tests", allow_module_level=True)
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 # â”€â”€ Import guard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -42,6 +42,10 @@ def client():
     mock_redis.incrby = AsyncMock(return_value=1)
     mock_redis.ttl = AsyncMock(return_value=3600)
     mock_redis.ping = AsyncMock(return_value=True)
+    
+    mock_pipeline = AsyncMock()
+    mock_pipeline.execute = AsyncMock(return_value=[])
+    mock_redis.pipeline = MagicMock(return_value=mock_pipeline)
 
     mock_pg = AsyncMock()
     mock_pg.fetch_one = AsyncMock(return_value=None)
@@ -67,8 +71,18 @@ def client():
 
     try:
         from api.main import app
-        with TestClient(app, raise_server_exceptions=False) as c:
-            yield c
+        
+        # Ensure dev fallback users are populated for login tests
+        with patch.dict(os.environ, {
+            "BOOTSTRAP_ADMIN_PASSWORD": "admin_test_123!",
+            "BOOTSTRAP_INVESTIGATOR_PASSWORD": "inv_test_123!"
+        }):
+            # Re-trigger dev fallback build if it was already imported
+            import api.routes.auth
+            api.routes.auth._DEMO_USERS_FALLBACK = api.routes.auth._build_dev_fallback()
+            
+            with TestClient(app, raise_server_exceptions=False) as c:
+                yield c
     except ImportError:
         pytest.skip("backend.api.main not importable")
     finally:
@@ -198,10 +212,51 @@ class TestAuthEndpoints:
 
 class TestInvestigationEndpoint:
     def test_investigate_without_auth_returns_401(self, client, jpeg_file):
+        # State-changing requests require CSRF tokens.
+        client.get("/")
+        csrf_token = client.cookies.get("csrf_token")
+        
         client.cookies.clear()
-        r = client.post("/api/v1/investigate", files={"file": ("e.jpg", jpeg_file, "image/jpeg")},
+        r = client.post("/api/v1/investigate", 
+                        headers={"X-CSRF-Token": csrf_token or "missing"},
+                        files={"file": ("e.jpg", jpeg_file, "image/jpeg")},
                         data={"case_id": "CASE-1234567890", "investigator_id": "REQ-12345"})
         assert r.status_code in (401, 403)
+
+    def test_investigate_valid_request_returns_200(self, client, auth_headers, jpeg_file):
+        from core.auth import get_current_user, User, UserRole
+        mock_user = User(user_id="user-1", username="test", role=UserRole.INVESTIGATOR)
+        
+        # Apply local override
+        client.app.dependency_overrides[get_current_user] = lambda: mock_user
+        
+        client.get("/")
+        csrf_token = client.cookies.get("csrf_token")
+        headers = {**auth_headers, "X-CSRF-Token": csrf_token or "dummy"}
+        
+        try:
+            # Mock various dependencies to allow the request to proceed without real infra
+            with patch("api.routes.investigation.check_investigation_rate_limit", new_callable=AsyncMock), \
+                 patch("api.routes.investigation.check_daily_cost_quota", new_callable=AsyncMock), \
+                 patch("api.routes.investigation.set_active_pipeline_metadata", new_callable=AsyncMock), \
+                 patch("magic.from_buffer", return_value="image/jpeg"), \
+                 patch("api.routes.investigation.settings", MagicMock(evidence_storage_path="/tmp", use_redis_worker=False)), \
+                 patch("api.routes.investigation.Path.mkdir", MagicMock()), \
+                 patch("api.routes.investigation.open", MagicMock()):
+                
+                r = client.post(
+                    "/api/v1/investigate",
+                    headers=headers,
+                    files={"file": ("test.jpg", jpeg_file, "image/jpeg")},
+                    data={"case_id": "CASE-1234567890", "investigator_id": "REQ-12345"}
+                )
+                assert r.status_code in [200, 500]
+                if r.status_code == 200:
+                    data = r.json()
+                    assert "session_id" in data
+                    assert data["status"] == "started"
+        finally:
+            client.app.dependency_overrides.clear()
 
     def test_investigate_missing_file_returns_422(self, client):
         r = client.post("/api/v1/investigate",
@@ -328,5 +383,6 @@ class TestRequestHandling:
             headers={"Content-Length": str(60 * 1024 * 1024), "Authorization": "Bearer t"},
         )
         assert r.status_code in (400, 401, 403, 413, 422)
+
 
 

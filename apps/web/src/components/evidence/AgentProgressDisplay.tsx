@@ -53,7 +53,16 @@ export interface AgentUpdate {
 }
 
 interface AgentProgressDisplayProps {
- agentUpdates: Record<string, { status: string; thinking: string }>;
+ agentUpdates: Record<
+  string,
+  {
+   status: string;
+   thinking: string;
+   tools_done?: number;
+   tools_total?: number;
+   tool_name?: string;
+  }
+ >;
  completedAgents: AgentUpdate[];
  progressText: string;
  allAgentsDone: boolean;
@@ -326,6 +335,7 @@ export function AgentProgressDisplay({
          badge={agent.badge}
          status={getAgentStatus(agent.id)}
          thinking={agentUpdates[agent.id]?.thinking}
+         liveUpdate={agentUpdates[agent.id]}
          completedData={completedAgents.find((c) => c.agent_id === agent.id)}
          isRevealed={true}
          fileMime={mimeType}
@@ -355,7 +365,7 @@ export function AgentProgressDisplay({
            className="flex-1 px-8 py-4 rounded-2xl bg-white/5 border border-white/10 text-white font-black text-xs tracking-[0.2em] hover:bg-white/10 transition-all flex items-center justify-center gap-3 disabled:opacity-50 uppercase"
           >
            {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-           Accept Results
+           Accept Analysis
           </button>
           <button
            onClick={onDeepAnalysis}
@@ -363,7 +373,7 @@ export function AgentProgressDisplay({
            className="flex-[1.5] px-8 py-4 rounded-2xl bg-primary text-black font-black text-xs tracking-[0.2em] hover:bg-primary/90 transition-all shadow-[0_0_30px_rgba(34,211,238,0.3)] flex items-center justify-center gap-3 disabled:opacity-50 uppercase"
           >
            <Microscope className="w-4 h-4" />
-           Deep Investigation
+           Deep Analysis
            <ArrowRight className="w-4 h-4" />
           </button>
          </>

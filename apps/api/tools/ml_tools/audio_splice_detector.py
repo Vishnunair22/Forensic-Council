@@ -29,24 +29,59 @@ import sys
 import numpy as np
 
 
+def _load_audio_soundfile(audio_path: str) -> tuple[np.ndarray, int]:
+    import soundfile as sf
+
+    y, sr = sf.read(audio_path, dtype="float32")
+    if getattr(y, "ndim", 1) > 1:
+        y = y.mean(axis=1)
+    y = np.asarray(y, dtype=np.float32)
+    if y.size == 0:
+        raise ValueError("Audio stream is empty")
+    return y, int(sr)
+
+
+def _spectral_features_np(y: np.ndarray, sr: int) -> np.ndarray:
+    if y.size == 0:
+        return np.zeros(30, dtype=np.float32)
+    frame_size = min(2048, max(256, int(2 ** np.floor(np.log2(max(256, min(len(y), 2048)))))))
+    padded = np.pad(y, (0, max(0, frame_size - len(y))))[:frame_size]
+    window = np.hanning(frame_size).astype(np.float32)
+    spectrum = np.abs(np.fft.rfft(padded * window))
+    freqs = np.fft.rfftfreq(frame_size, d=1.0 / float(sr))
+    total = float(np.sum(spectrum)) + 1e-9
+    centroid = float(np.sum(freqs * spectrum) / total)
+    rolloff_idx = int(np.searchsorted(np.cumsum(spectrum), total * 0.85))
+    rolloff = float(freqs[min(rolloff_idx, len(freqs) - 1)])
+    zcr = float(np.mean(np.abs(np.diff(np.signbit(padded)))))
+    rms = float(np.sqrt(np.mean(padded**2)))
+    bands = np.array_split(spectrum, 13)
+    band_means = np.asarray([float(np.mean(b)) for b in bands], dtype=np.float32)
+    band_stds = np.asarray([float(np.std(b)) for b in bands], dtype=np.float32)
+    return np.concatenate([band_means, band_stds, [centroid, zcr, rms, rolloff]]).astype(np.float32)
+
+
 def extract_segment_features(y: np.ndarray, sr: int) -> np.ndarray:
     """Extract forensic audio features from a segment."""
-    import librosa
+    try:
+        import librosa
 
-    # MFCC statistics (robust to content variation)
-    mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
-    mfcc_mean = np.mean(mfcc, axis=1)
-    mfcc_std = np.std(mfcc, axis=1)
+        # MFCC statistics (robust to content variation)
+        mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
+        mfcc_mean = np.mean(mfcc, axis=1)
+        mfcc_std = np.std(mfcc, axis=1)
 
-    # Spectral features
-    spec_centroid = float(np.mean(librosa.feature.spectral_centroid(y=y, sr=sr)))
-    zcr = float(np.mean(librosa.feature.zero_crossing_rate(y)))
-    rms = float(np.mean(librosa.feature.rms(y=y)))
+        # Spectral features
+        spec_centroid = float(np.mean(librosa.feature.spectral_centroid(y=y, sr=sr)))
+        zcr = float(np.mean(librosa.feature.zero_crossing_rate(y)))
+        rms = float(np.mean(librosa.feature.rms(y=y)))
 
-    # Spectral rolloff (codec fingerprint proxy)
-    rolloff = float(np.mean(librosa.feature.spectral_rolloff(y=y, sr=sr)))
+        # Spectral rolloff (codec fingerprint proxy)
+        rolloff = float(np.mean(librosa.feature.spectral_rolloff(y=y, sr=sr)))
 
-    return np.concatenate([mfcc_mean, mfcc_std, [spec_centroid, zcr, rms, rolloff]])
+        return np.concatenate([mfcc_mean, mfcc_std, [spec_centroid, zcr, rms, rolloff]])
+    except Exception:
+        return _spectral_features_np(y, sr)
 
 
 def detect_audio_splices(audio_path: str, window_s: float = 1.0) -> dict:
@@ -54,7 +89,12 @@ def detect_audio_splices(audio_path: str, window_s: float = 1.0) -> dict:
     from sklearn.ensemble import IsolationForest
 
     try:
-        y, sr = librosa.load(audio_path, sr=None, mono=True)
+        try:
+            y, sr = librosa.load(audio_path, sr=None, mono=True)
+            backend = "librosa"
+        except Exception:
+            y, sr = _load_audio_soundfile(audio_path)
+            backend = "soundfile_numpy_fallback"
     except Exception as e:
         return {"error": f"Cannot load audio: {e}", "available": False}
 
@@ -145,6 +185,7 @@ def detect_audio_splices(audio_path: str, window_s: float = 1.0) -> dict:
         "verdict": verdict,
         "duration_s": round(duration, 2),
         "available": True,
+        "backend": backend,
     }
 
 

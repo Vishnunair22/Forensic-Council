@@ -1,270 +1,127 @@
 # Testing Guide — Forensic Council
 
-**Version:** v1.4.0 | Complete testing reference.
+**Version:** v1.5.0 | Comprehensive Forensic & App Testing Reference.
 
 ---
 
-## Test Structure
+## 🏗️ Test Architecture
 
-```
-tests/
-├── fixtures/                           ← Test media files (gitignored)
-│   ├── test_image.webp
-│   ├── ai_persona_test.png
-│   ├── alley_object_test.png
-│   ├── beach_gps_test.png
-│   ├── invoice_ela_test.png
-│   ├── sample_evidence.png
-│   └── whatsapp_context_test.png
-├── apps/web/
-│   ├── unit/
-│   │   ├── lib/api.test.ts              ← API client: tokens, auth, investigation, WS, polling
-│   │   ├── lib/schemas_utils.test.ts    ← Zod schemas, cn() utility
-│   │   ├── hooks/useForensicData.test.ts ← Hook + mapReportDtoToReport
-│   │   └── components/components.test.tsx ← FileUploadSection, AgentProgressDisplay
-│   ├── accessibility/
-│   │   └── accessibility.test.tsx       ← WCAG 2.1 AA: keyboard, ARIA, focus, errors
-│   ├── integration/
-│   │   └── page_flows.test.tsx          ← Session flow, dedup, WS message types, auth lifecycle
-│   └── e2e/
-│       └── websocket_flow.test.ts       ← Full WS lifecycle, arbiter fix, deep analysis
-├── apps/api/
-│   ├── conftest.py                      ← Shared fixtures: mocked Redis/Postgres/Qdrant, auth
-│   ├── unit/core/
-│   │   ├── test_auth.py                 ← bcrypt, JWT creation/validation, RBAC
-│   │   └── test_config_signing_schemas.py ← Config, ECDSA signing, Pydantic DTOs
-│   ├── integration/
-│   │   └── test_api_routes.py           ← All HTTP endpoints (TestClient, mocked infra)
-│   └── security/
-│       └── test_security.py             ← Auth bypass, injection, CORS, rate limits
-├── infrastructure/
-│   └── test_infrastructure.py           ← docker-compose structure, Dockerfiles, env vars, CI
-├── docker/
-│   └── test_docker.py                   ← Service config, ports, volumes, healthchecks
-├── connectivity/
-│   └── test_connectivity.py             ← Live service pings (requires running stack)
-└── test_forensic_system.py              ← Full system pipeline test (Agent 1-5 + Arbiter)
+The Forensic Council testing suite is designed for **Legal Admissibility**. Every layer, from mathematical forensic invariants to the UI's cryptographic verification, is covered by a multi-modal testing strategy.
+
+```mermaid
+graph TD
+    A[Property-Based] -->|Math Invariants| B(Forensic Tools)
+    C[Unit Tests] -->|Logic Verification| D(Core Backend)
+    E[Integration] -->|Infra Mocking| F(API Routes)
+    G[Security] -->|Hardening| H(Auth & Custody)
+    I[E2E / A11y] -->|User Journey| J(Frontend UI)
+    B & D & F & H & J --> K[Court-Defensible Report]
 ```
 
 ---
 
-## Running Tests
+## 📂 Test Inventory
 
-### Frontend — Jest
+### ⚖️ Forensic Logic & Mathematical Invariants
+| File | Aspect Tested | Dependencies | Coverage |
+| :--- | :--- | :--- | :--- |
+| `test_forensic_properties.py` | Forensic algorithm robustness | `Hypothesis`, `Pillow`, `NumPy` | Validates ELA/JPEG Ghost invariants across millions of generated inputs (boundary cases, 1x1 images, overflow). |
+| `test_forensic_system.py` | Multi-agent pipeline flow | `pytest-asyncio`, Redis Mock | Orchestration of all 5 agents + Arbiter synthesis; verifies context injection (A1 -> A3/A5). |
+
+### 🛡️ Cryptographic Integrity & Security
+| File | Aspect Tested | Dependencies | Coverage |
+| :--- | :--- | :--- | :--- |
+| `test_custody_chain_integration.py` | Chain of Custody (CoC) | `cryptography`, ECDSA P-256 | Cryptographic linking of hashes; tamper-detection in the PostgreSQL-backed ledger. |
+| `test_security.py` | API & JWT Hardening | `PyJWT`, `httpx` | SQLi in Case IDs, JWT `alg=none` attacks, role escalation, and rate-limit enforcement. |
+| `test_config_signing_schemas.py` | DTO & Signing Logic | `pydantic`, `ECDSA` | Validates that every report is deterministically signed and schema-compliant. |
+
+### 👤 Authentication & Session State
+| File | Aspect Tested | Dependencies | Coverage |
+| :--- | :--- | :--- | :--- |
+| `test_auth.py` (Backend) | Identity Management | `passlib` (bcrypt) | Password hashing, JWT creation/refresh, and UserRole RBAC guards. |
+| `api.test.ts` (Frontend) | Auth Lifecycle | `Jest`, `sessionStorage` | Token storage, auto-login, and header injection for the API client. |
+| `schemas_utils.test.ts` | Data Validation | `Zod` | Ensures the frontend rejects malformed agent findings or corrupted reports. |
+
+### 🌐 API & Integration Surface
+| File | Aspect Tested | Dependencies | Coverage |
+| :--- | :--- | :--- | :--- |
+| `test_api_routes.py` | REST Endpoint Health | `FastAPI TestClient`, `magic` | 200/4xx/5xx status codes, MIME-type allow-lists, and CORS header reflection. |
+| `websocket_flow.test.ts` | Real-time Analysis | `Playwright`, `WS-Mocks` | State machine transitions for the live analysis dashboard (8 distinct message types). |
+| `useForensicData.test.ts` | Data Transformation | `Jest` | Mapping backend DTOs to UI models; calibration and court-statement formatting. |
+
+### ♿ UI & Accessibility (WCAG 2.1 AA)
+| File | Aspect Tested | Dependencies | Coverage |
+| :--- | :--- | :--- | :--- |
+| `accessibility.spec.ts` | Automated A11y Audit | `Playwright`, `axe-core` | Full-page runtime audits; verifies color contrast, heading hierarchy, and modal focus. |
+| `accessibility.test.tsx` | Component A11y | `RTL`, `jest-axe` | Keyboard navigation (Tab/Enter), ARIA labels, and screen-reader error announcements. |
+| `components.test.tsx` | UI Interactions | `React Testing Library` | Render states for `FileUploadSection` and `AgentProgressDisplay`. |
+
+---
+
+## 🚀 Running Tests
+
+### 🐍 Backend (Python 3.12+)
+Run from `apps/api` using `uv`:
 
 ```bash
-cd apps/web
+# Unit & Property Tests
+uv run pytest tests/unit -v
 
-# All tests (watch mode — default)
+# Integration & Custody Chain
+uv run pytest tests/integration -v
+
+# Full Coverage Report
+uv run pytest tests --cov=. --cov-report=html
+```
+> [!NOTE]
+> Backend tests use a fully mocked infrastructure. No local Postgres or Redis is required to pass these suites.
+
+### ⚛️ Frontend (Next.js 15)
+Run from `apps/web`:
+
+```bash
+# Jest (Unit & Component A11y)
 npm test
 
-# One-shot (CI mode)
-npm test -- --watchAll=false
+# Playwright (E2E & A11y Audit)
+npx playwright test
 
-# Specific test file
-npm test -- tests/unit/lib/api.test.ts --watchAll=false
-
-# With coverage
-npm run test:coverage
-
-# By pattern
-npm test -- --testPathPattern="accessibility" --watchAll=false
+# Playwright UI Mode (Visual Debugging)
+npx playwright test --ui
 ```
 
-**Coverage targets:** Statements ≥ 60% · Functions ≥ 60% · Branches ≥ 50% · Lines ≥ 60%
-
-### Backend + Infrastructure — pytest
-
-```bash
-# Install test dependencies (one-time)
-pip install pytest pytest-asyncio httpx pyyaml
-
-# Run all non-connectivity tests from PROJECT ROOT
-pytest tests apps/api/tests --ignore=tests/connectivity -v
-
-# Individual categories
-cd apps/api && uv run pytest tests/unit -v        # Unit tests (no infra needed)
-cd apps/api && uv run pytest tests/integration -v # API routes (mocked infra)
-cd apps/api && uv run pytest tests/security -v   # Security checks
-pytest tests/infra -v                          # Static config analysis
-
-# With coverage
-pip install pytest-cov
-cd apps/api && uv run pytest tests --cov=. --cov-report=html
-```
-
-> **Critical:** Run backend tests from `apps/api` and frontend tests from `apps/web` so commands match the current monorepo layout.
-
-### Connectivity Tests (requires running stack)
+### 🐋 Infrastructure & Live Connectivity
+Run from Project Root:
 
 ```bash
-./manage.sh up
-# Wait for healthy status, then:
-pytest tests/connectivity/ -v
+# Static Infra Audit
+pytest tests/infra tests/docker -v
 
-# Skip in CI
-pytest tests/ --ignore=tests/connectivity -m "not requires_docker" -v
+# Live Stack Integration (Requires 'docker compose up')
+pytest tests/connectivity -v
 ```
 
 ---
 
-## What Each Test Category Covers
+## 📈 Coverage Targets
 
-### Frontend Unit Tests
+| Domain | Statements | Functions | Branches |
+| :--- | :--- | :--- | :--- |
+| **Forensic Core** | 90% | 95% | 85% |
+| **Auth & Security** | 100% | 100% | 90% |
+| **Frontend UI** | 60% | 60% | 50% |
 
-**`api.test.ts`** — 50+ tests:
-- Token storage: `setAuthToken`, `getAuthToken`, `clearAuthToken`, `isAuthenticated`
-- Auth flow: `login()` (form encoding, 401/500 handling), `logout()`, `autoLoginAsInvestigator()`, `ensureAuthenticated()`
-- Investigation: `startInvestigation()` (case ID/investigator ID validation, FormData, error details)
-- Reports: `getReport()` (202→in_progress, 200→complete, 404→throw), `getBrief()`, `getCheckpoints()`
-- WebSocket: `createLiveSocket()` (AUTH message, CONNECTED resolve, race condition, error/close rejection)
-- Polling: `pollForReport()` (immediate resolve, onProgress callback, timeout rejection)
-
-**`schemas_utils.test.ts`** — 40+ tests:
-- `AgentResultSchema` — all fields, optional fields, boundary confidence, type rejection
-- `ReportSchema` — single/multiple agents, empty arrays, nested validation
-- `HistorySchema` — empty, valid, non-array rejection
-- `cn()` — class merge, conditionals, Tailwind conflict resolution
-
-**`useForensicData.test.ts`** — 35+ tests:
-- `mapReportDtoToReport()` — field mappings, `court_statement` vs `reasoning_summary`, calibration fallback, multi-agent, `signed_utc`, phase metadata, dedup
-- Hook initial state, sessionStorage load, malformed data graceful handling
-- `addToHistory`, `deleteFromHistory`, `clearHistory`, `saveCurrentReport`
-- `validateFile` — size limit, all allowed MIME types, rejected types
-
-**`components.test.tsx`** — 30+ tests:
-- `FileUploadSection` — render, file display, upload/clear callbacks, uploading state, validation errors, drag state
-- `AgentProgressDisplay` — progress text, decision buttons, isNavigating guard, deep phase label, completed agents
-
-### Accessibility Tests
-
-**`accessibility.test.tsx`** — WCAG 2.1 AA validation:
-- Keyboard navigation (Tab focus, Enter/Space activation)
-- No focus trap
-- All buttons have accessible names (text or `aria-label`)
-- Disabled buttons use native `disabled` attribute
-- Error messages conveyed as text (not color alone)
-- Error state announces on prop change
-- Loading states provide text feedback beyond spinners
-- isNavigating disables buttons with `disabled` attribute + text change
-
-### Integration Tests
-
-**`page_flows.test.tsx`** — 25+ tests:
-- Complex multi-agent report mapping (10 findings, phase metadata, dedup)
-- Session ID stored in sessionStorage
-- Report persisted after poll completes
-- History deduplication
-- WebSocket message type structure (all 8 types)
-- Auth token set/expire/clear lifecycle
-
-### E2E Tests
-
-**`websocket_flow.test.ts`** — 25+ tests:
-- WS URL construction, AUTH message on open
-- CONNECTED message resolves `connected` promise
-- AGENT_UPDATE also resolves (race condition fix)
-- Error/close rejection with reason
-- No-token rejection
-- Full 5-agent sequence (15 messages)
-- PIPELINE_PAUSED message handling
-- **Arbiter fix** — `isNavigating` prevents double-call
-- **Arbiter fix** — error resets `isNavigating` for retry
-- **Arbiter fix** — `resumeInvestigation` awaited before `router.push`
-- Deep analysis second WS connection
-- Phase metadata in deep AGENT_COMPLETE
-
-### Backend Unit Tests
-
-**`test_auth.py`**:
-- bcrypt hash format, correct/wrong/empty verify, salted uniqueness, 72-byte truncation limit
-- JWT: format, `sub`/`role`/`exp` fields, 60-min limit, custom expiry
-- JWT validation: valid accept, expired/invalid/none-alg/tampered rejection
-- RBAC: `UserRole` enum, `require_role`, user disabled check
-
-**`test_config_signing_schemas.py`**:
-- Config loads, JWT ≤ 120 min, CORS is list, debug is bool, singleton cache
-- ECDSA signing: produces `SignedEntry`, hash is deterministic, tamper detection, timestamp is UTC, complex nested data
-- Pydantic DTOs: `InvestigationRequest`, `AgentFindingDTO`, `HITLDecisionRequest` validation
-- `ReportDTO`: all required fields present (including `per_agent_metrics`, `overall_verdict`, etc.)
-
-### Backend Integration Tests
-
-**`test_api_routes.py`** — TestClient with fully mocked infrastructure:
-- Root `200 + status=running`, health `200 + checks field`
-- Security headers: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`
-- Auth: login exists, protected routes reject without token, wrong password 401
-- Investigate: missing file 422, invalid case ID 400/422, oversized 413
-- Sessions: resume at correct URL, nonexistent 404, checkpoints/brief endpoints exist
-- HITL: auth required, invalid body 422
-- Metrics: endpoint exists
-
-### Security Tests
-
-**`test_security.py`**:
-- No token / malformed / wrong-secret / expired token rejection
-- `alg=none` JWT attack rejected
-- Role escalation via forged JWT rejected
-- JWT 60-min expiry (v1.0.3 regression guard)
-- SQL injection in `case_id` caught by Pydantic validation
-- Path traversal strings are invalid UUIDs
-- Oversized JSON body rejected
-- CORS: allowed origin reflects, evil origin not reflected
-- Rate limit function raises 429 when exceeded
-- ECDSA tamper detection
-- SHA-256 hash length = 64
-
-### Infrastructure Tests
-
-**`test_infrastructure.py`** — Static analysis:
-- docker-compose: all 6 services, project name, ML volumes defined, `depends_on` + `service_healthy`, restart policies, security hardening (`read_only`, tmpfs, requirepass, memory limits, no `latest` tags)
-- Frontend Dockerfile: `node-alpine`, multi-stage, `HOSTNAME=0.0.0.0`, wget healthcheck, standalone output
-- Backend Dockerfile: `python:3.12`, multi-stage, dev+prod targets, uv, BuildKit cache mounts, port 8000
-- `.env.example`: all required vars, `COMPOSE_PROJECT_NAME`, JWT 60-min, Groq docs, `DOMAIN`
-- CI/CD: jobs, push/PR triggers, backend+frontend+docker jobs, correct test paths
-- `pyproject.toml`, `package.json`, `jest.config.ts`
-
-### Docker Tests
-
-**`test_docker.py`**:
-- All required services defined
-- Port mappings correct (3000, 8000, 80/443)
-- Postgres/Redis/Qdrant ports NOT exposed to host
-- Env var guards (`:?`) for required secrets
-- ML volumes mounted to backend
-- All named volumes declared at top level
-- Healthcheck commands correct (`pg_isready`, `PING`, `/health`, `wget`)
-- Dev compose uses `target: development`
-- Prod compose uses `target: production`
-- Caddyfile proxies frontend + backend + API routes
-
-### Connectivity Tests
-
-**`test_connectivity.py`** — Live integration:
-- Backend: root 200, health 200 + healthy status, security headers, login endpoint responds, protected route 401
-- Frontend: home page 200, HTML content-type, API proxy
-- Postgres: accepts connections, has `investigation_state`/`users`/`session_reports` tables
-- Redis: PING, set/get/delete, password required
-- Qdrant: health endpoint, collections endpoint, JSON response
-- WebSocket: endpoint reachable, AUTH message handled
-- E2E auth: login → token → `/auth/me` → 200, token works on protected routes, logout invalidates
+> [!IMPORTANT]
+> **Legal Admissibility Rule**: Any change to forensic logic (`ela_full_image`, `Arbiter`) MUST include a corresponding update to `test_forensic_properties.py` and `test_forensic_system.py`.
 
 ---
 
-## CI Integration
+## 🛠️ Mocking Strategy
 
-Tests run automatically on push and pull requests via `.github/workflows/ci.yml`:
-
-```
-backend-test    → ruff lint + format + pyright + pytest tests/apps/api/ tests/infrastructure/ tests/docker/
-backend-docker  → docker build backend (production target)
-frontend-test   → npm lint + tsc + build + npm test
-frontend-docker → docker build frontend (runner target)
-security-audit  → pip-audit + npm audit (advisory)
-integration-smoke → docker compose up + /health check + auth rejection check (main branch only)
-```
-
-Connectivity tests are excluded from CI (require a running stack with real infra).
+1. **Redis**: Mocked via `AsyncMock` in `conftest.py`. Includes support for `pipeline()` and `execute()`.
+2. **PostgreSQL**: Mocked via `AsyncMock`. Use the `mock_pg` fixture for custom row returns.
+3. **LLMs**: All agent calls to Groq/Gemini are intercepted to prevent API costs and ensure deterministic results during testing.
+4. **Time**: Use `freezegun` (backend) or `jest.useFakeTimers()` (frontend) for timestamp-sensitive tests.
 
 
 

@@ -267,7 +267,14 @@ def confidence_of(finding: dict[str, Any], default: float | None = None) -> floa
     """Return a usable confidence, preserving None for NA/error findings."""
     if evidence_verdict_of(finding) in {"NOT_APPLICABLE", "ERROR"}:
         return None
-    for key in ("raw_confidence_score", "calibrated_probability", "confidence_raw"):
+    calibration_status = str(finding.get("calibration_status") or "").upper()
+    use_calibrated = bool(finding.get("calibrated")) or calibration_status == "TRAINED"
+    keys = (
+        ("raw_confidence_score", "calibrated_probability", "confidence_raw")
+        if use_calibrated
+        else ("confidence_raw", "raw_confidence_score", "calibrated_probability")
+    )
+    for key in keys:
         value = finding.get(key)
         if value is not None:
             try:

@@ -405,7 +405,7 @@ async def frame_consistency_analyze(
                 # Compute edge difference
                 edge_diff = np.sum(
                     np.abs(prev_edges.astype(float) - edges.astype(float))
-                ) / (edges.shape[0] * edges.shape[1])
+                ) / (edges.shape[0] * edges.shape[1] * 255.0)
 
                 # Check for inconsistencies
                 if hist_diff > histogram_threshold:

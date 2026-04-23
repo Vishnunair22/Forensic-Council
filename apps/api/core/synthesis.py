@@ -24,6 +24,8 @@ _TOOL_GROUPS: dict[str, list[dict[str, Any]]] = {
                 "ela_anomaly_classify",
                 "jpeg_ghost_detect",
                 "noise_fingerprint",
+                "neural_ela",
+                "noiseprint_cluster",
             ],
             "desc": "Compression-artifact and noise-consistency checks — primary manipulation signal for JPEG images.",
         },
@@ -46,7 +48,7 @@ _TOOL_GROUPS: dict[str, list[dict[str, Any]]] = {
         {
             "id": "chain_of_custody",
             "label": "Chain of Custody",
-            "tools": ["file_hash_verify", "adversarial_robustness_check"],
+            "tools": ["file_hash_verify", "adversarial_robustness_check", "neural_fingerprint"],
             "desc": "File integrity since ingestion and anti-forensics evasion robustness.",
         },
         {
@@ -86,13 +88,23 @@ _TOOL_GROUPS: dict[str, list[dict[str, Any]]] = {
         {
             "id": "scene_semantics",
             "label": "Scene Semantics",
-            "tools": ["object_detection", "scene_incongruence", "contraband_database"],
+            "tools": [
+                "object_detection",
+                "scene_incongruence",
+                "contraband_database",
+                "vector_contraband_search",
+            ],
             "desc": "Object and scene semantic consistency — identifying contextually inappropriate items.",
         },
         {
             "id": "physical_consistency",
             "label": "Physical Consistency",
-            "tools": ["lighting_consistency", "shadow_validation", "scale_validation"],
+            "tools": [
+                "lighting_consistency",
+                "lighting_correlation_initial",
+                "shadow_validation",
+                "scale_validation",
+            ],
             "desc": "Lighting, shadow, and geometric vanishing-point physics validation.",
         },
     ],
@@ -102,8 +114,11 @@ _TOOL_GROUPS: dict[str, list[dict[str, Any]]] = {
             "label": "Temporal Flow",
             "tools": [
                 "optical_flow_analyze",
+                "optical_flow_analysis",
+                "vfi_error_map",
                 "frame_consistency_analysis",
                 "interframe_forgery_detector",
+                "thumbnail_coherence",
             ],
             "desc": "Frame-to-frame flow and motion-ghosting forgery detection.",
         },
@@ -116,7 +131,12 @@ _TOOL_GROUPS: dict[str, list[dict[str, Any]]] = {
         {
             "id": "device",
             "label": "Device & Container",
-            "tools": ["av_file_identity", "mediainfo_profile", "rolling_shutter_validation"],
+            "tools": [
+                "av_file_identity",
+                "mediainfo_profile",
+                "video_metadata",
+                "rolling_shutter_validation",
+            ],
             "desc": "Container metadata and sensor-specific rolling shutter validation.",
         },
     ],
@@ -128,8 +148,11 @@ _TOOL_GROUPS: dict[str, list[dict[str, Any]]] = {
                 "exif_extract",
                 "extract_deep_metadata",
                 "metadata_anomaly_scorer",
+                "metadata_anomaly_score",
+                "exif_isolation_forest",
                 "timestamp_analysis",
                 "gps_timezone_validate",
+                "astro_grounding",
             ],
             "desc": "EXIF/XMP integrity and probabilistic fabrication detection.",
         },
@@ -140,7 +163,11 @@ _TOOL_GROUPS: dict[str, list[dict[str, Any]]] = {
                 "file_hash_verify",
                 "file_structure_analysis",
                 "hex_signature_scan",
+                "compression_risk_audit",
                 "c2pa_validator",
+                "provenance_chain_verify",
+                "av_file_identity",
+                "mediainfo_profile",
             ],
             "desc": "Binary-level anomalies, chimeric signatures, and C2PA provenance manifests.",
         },
@@ -226,6 +253,13 @@ class SynthesisService:
 
             tools_summary = []
             for f in grp_findings:
+                is_tool_limitation = (
+                    f.status in {"INCOMPLETE", "NOT_APPLICABLE", "ABSTAIN"}
+                    or f.evidence_verdict in {"ERROR", "NOT_APPLICABLE"}
+                    or f.metadata.get("available") is False
+                    or bool(f.metadata.get("degraded"))
+                    or bool(f.metadata.get("metadata_incomplete"))
+                )
                 tools_summary.append(
                     {
                         "tool": f.metadata.get("tool_name", "unknown"),
@@ -233,7 +267,10 @@ class SynthesisService:
                         "confidence": round(f.confidence_raw, 3)
                         if f.confidence_raw is not None
                         else 0.5,
-                        "verdict": f.status,
+                        "verdict": "TOOL_LIMITATION" if is_tool_limitation else f.status,
+                        "status": f.status,
+                        "evidence_verdict": f.evidence_verdict,
+                        "tool_limitation": is_tool_limitation,
                         "data": self._compact_metrics(f),
                     }
                 )
@@ -262,6 +299,7 @@ Agent: {agent_name} ({agent_id})
 3. [EXECUTIVE SUMMARY]: The 'narrative_summary' must be a concise (max 35 words), high-impact forensic conclusion. It MUST mention the primary technical indicator.
 4. [USER-FRIENDLY FINDINGS]: For each tool in the group, translate the machine metrics into a 'user_friendly_summary'. Instead of "ELA 0.85 anomaly", say "Detected digital traces of editing in specific areas". Avoid jargon in these summaries.
 5. Use objective, technical language for the 'narrative_summary' and 'opinion', but accessible language for 'user_friendly_summary'.
+6. Tool failures, unavailable tools, degraded fallbacks, NOT_APPLICABLE results, and INCOMPLETE findings are coverage limitations only. Do NOT treat them as evidence of tampering or authenticity. Mention them as limitations and base SUSPICIOUS/TAMPERED verdicts only on successful POSITIVE forensic signals.
 
 Return ONLY a JSON object in this format:
 {{

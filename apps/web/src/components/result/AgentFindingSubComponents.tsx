@@ -6,12 +6,68 @@ import {
  Clock, 
  AlertTriangle, 
  CheckCircle2, 
- XCircle 
+ XCircle,
+ Info
 } from "lucide-react";
 import { clsx } from "clsx";
 import { fmtTool } from "@/lib/fmtTool";
 import { getToolIcon } from "@/lib/tool-icons";
 import type { AgentFindingDTO } from "@/lib/api";
+
+const TECHNICAL_KEYS_TO_HIDE = new Set([
+ "tool_name",
+ "llm_reasoning",
+ "llm_synthesis",
+ "llm_refined_summary",
+ "raw_tool_summary",
+ "section_key_signal",
+ "section_id",
+ "section_label",
+ "section_flag",
+ "analysis_phase",
+ "court_defensible",
+ "evidence_verdict",
+ "artifact_id",
+ "session_id",
+ "case_id",
+]);
+
+function metricHighlights(metadata: Record<string, unknown> | null | undefined) {
+ if (!metadata) return [];
+ const items: Array<{ label: string; value: string }> = [];
+
+ for (const [key, value] of Object.entries(metadata)) {
+  if (items.length >= 5) break;
+  if (key.startsWith("_") || TECHNICAL_KEYS_TO_HIDE.has(key)) continue;
+  if (value === null || value === undefined || typeof value === "object") continue;
+
+  const label = key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  let text = "";
+  if (typeof value === "boolean") text = value ? "Yes" : "No";
+  else if (typeof value === "number") text = Math.abs(value) < 1 ? value.toFixed(3) : String(Math.round(value * 100) / 100);
+  else if (typeof value === "string" && value.length <= 80) text = value;
+  if (text) items.push({ label, value: text });
+ }
+
+ return items;
+}
+
+function findingMeaning(finding: AgentFindingDTO, status: string) {
+ const verdict = String(finding.evidence_verdict || "").toUpperCase();
+ if (status === "na" || verdict === "NOT_APPLICABLE") {
+  return "This check does not apply to the submitted file type, so it is not counted as suspicious or clean evidence.";
+ }
+ if (status === "error" || verdict === "ERROR") {
+  return "This check did not complete. It is a coverage limitation, not evidence of manipulation.";
+ }
+ if (verdict === "POSITIVE") {
+  return "This is an active forensic signal. It should be weighed with the other tools before deciding authenticity.";
+ }
+ if (verdict === "NEGATIVE") {
+  return "This supports the absence of this specific manipulation pattern.";
+ }
+ return "This result is useful context, but by itself does not support a firm conclusion.";
+}
 
 // ─── Confidence Bar Component ───
 export function ConfidenceBar({ value }: { value: number }) {
@@ -57,6 +113,12 @@ export function ToolRow({
  const Icon = getToolIcon(toolName);
  const timingMs = (finding.metadata?.execution_time_ms as number) || null;
  const confidence = finding.raw_confidence_score || 0;
+ const metrics = metricHighlights(finding.metadata);
+ const primarySummary =
+  (finding.metadata?.llm_refined_summary as string) ||
+  (finding.metadata?.raw_tool_summary as string) ||
+  finding.reasoning_summary ||
+  "No diagnostic output.";
 
  return (
   <div className={clsx("group", !isLast && "border-b border-white/[0.03]")}>
@@ -91,13 +153,13 @@ export function ToolRow({
      )}
      
      <div className={clsx(
-      "px-3 py-1 rounded-full border text-[9px] font-black tracking-[0.2em]",
+     "px-3 py-1 rounded-full border text-[9px] font-black tracking-[0.2em]",
       status === "success" ? "bg-primary/10 border-primary/20 text-primary" : 
       status === "error" ? "bg-danger/10 border-danger/20 text-danger" : 
       status === "na" ? "bg-surface-1 border-border-subtle text-white/20" : 
-      "bg-warning/10 border-warning/20 text-warning"
+     "bg-warning/10 border-warning/20 text-warning"
      )}>
-      {status === "success" ? "Valid" : status === "warning" ? "Flagged" : "Error"}
+      {status === "success" ? "Clean" : status === "warning" ? "Flagged" : status === "na" ? "N/A" : "Error"}
      </div>
 
      {!na && (
@@ -118,12 +180,30 @@ export function ToolRow({
      <div className="p-6 rounded-[1.5rem] premium-card space-y-5 shadow-inner">
       {/* Per-tool specific signal — raw output from the tool */}
       <div className="space-y-2">
-       <h5 className="text-[9px] font-black text-white/20 tracking-[0.3em]">Diagnostic Intelligence</h5>
+      <h5 className="text-[9px] font-black text-white/20 tracking-[0.3em]">Diagnostic Intelligence</h5>
        <p className={clsx(
         "text-[13px] text-white/70 leading-relaxed font-medium tracking-tight",
         !finding.metadata?.llm_refined_summary && "font-mono"
        )}>
-        {(finding.metadata?.llm_refined_summary as string) || (finding.metadata?.raw_tool_summary as string) || finding.reasoning_summary || "No diagnostic output."}
+        {primarySummary}
+       </p>
+      </div>
+
+      {metrics.length > 0 && (
+       <div className="flex flex-wrap gap-2">
+        {metrics.map((m) => (
+         <div key={`${toolName}-${m.label}`} className="px-3 py-2 rounded-xl bg-white/[0.03] border border-white/5">
+          <span className="block text-[8px] font-black tracking-[0.2em] text-white/20 uppercase">{m.label}</span>
+          <span className="block text-[11px] font-mono font-bold text-white/55 mt-0.5">{m.value}</span>
+         </div>
+        ))}
+       </div>
+      )}
+
+      <div className="flex items-start gap-2 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+       <Info className="w-3.5 h-3.5 text-primary/60 mt-0.5 shrink-0" />
+       <p className="text-[11px] text-white/45 leading-relaxed">
+        {findingMeaning(finding, status)}
        </p>
       </div>
 

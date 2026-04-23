@@ -52,6 +52,7 @@ export const useSimulation = ({
         thinking: string;
         tools_done?: number;
         tools_total?: number;
+        tool_name?: string;
       }
     >
   >({});
@@ -150,6 +151,7 @@ export const useSimulation = ({
                       thinking?: string;
                       tools_done?: number;
                       tools_total?: number;
+                      tool_name?: string;
                     };
                     const incomingId = update.agent_id ?? "";
 
@@ -162,6 +164,7 @@ export const useSimulation = ({
                             thinking: string;
                             tools_done?: number;
                             tools_total?: number;
+                            tool_name?: string;
                           }
                         >,
                       ) => ({
@@ -180,6 +183,10 @@ export const useSimulation = ({
                             typeof agentData.tools_total === "number"
                               ? agentData.tools_total
                               : prev[incomingId]?.tools_total,
+                          tool_name:
+                            typeof agentData.tool_name === "string"
+                              ? agentData.tool_name
+                              : prev[incomingId]?.tool_name,
                         },
                       }),
                     );

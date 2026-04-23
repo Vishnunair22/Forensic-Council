@@ -6,6 +6,7 @@ Domain-specific handlers for metadata and provenance forensic tools.
 Implements Fix 3 (Decentralization) and Initial Analysis Refinements.
 """
 
+from pathlib import Path
 
 from core.handlers.base import BaseToolHandler
 from core.ml_subprocess import run_ml_tool
@@ -130,6 +131,18 @@ class MetadataHandlers(BaseToolHandler):
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         await self.agent.update_sub_task("Extracting EXIF bitstream...")
         result = await real_exif_extract(artifact=artifact)
+        path = Path(artifact.file_path)
+        total_fields = int(result.get("total_exif_tags") or result.get("total_fields_extracted") or 0)
+        absent_fields = list(result.get("absent_fields") or result.get("absent_mandatory_fields") or [])
+        result.setdefault("file_name", path.name)
+        result.setdefault("mime_type", getattr(artifact, "mime_type", "") or "")
+        result.setdefault("total_fields_extracted", total_fields)
+        result.setdefault("absent_mandatory_fields", absent_fields)
+        result.setdefault("available", True)
+        result.setdefault("court_defensible", True)
+        result.setdefault("confidence", 0.4 if total_fields == 0 else 0.75)
+        if total_fields == 0:
+            result.setdefault("file_format_note", "No EXIF metadata block was present; EXIF-dependent checks are limited.")
         await self.agent._record_tool_result("exif_extract", result)
         return result
 

@@ -154,7 +154,13 @@ class ImageHandlers(BaseToolHandler):
             return result
 
         # Fallback: classical multi-quality ELA
-        return await self.ela_full_image_handler(input_data)
+        fallback = await self.ela_full_image_handler(input_data)
+        fallback["degraded"] = True
+        fallback["fallback_reason"] = (
+            "neural_ela_transformer unavailable or failed; used classical multi-quality ELA"
+        )
+        await self._store("neural_ela", fallback, "ela_full_image")
+        return fallback
 
     # ── Phase 1: Noiseprint Cluster ───────────────────────────────────────────
 
@@ -167,7 +173,13 @@ class ImageHandlers(BaseToolHandler):
             return result
 
         # Fallback: heuristic noise fingerprint
-        return await self.noise_fingerprint_handler(input_data)
+        fallback = await self.noise_fingerprint_handler(input_data)
+        fallback["degraded"] = True
+        fallback["fallback_reason"] = (
+            "noiseprint_clustering unavailable or failed; used heuristic noise fingerprint"
+        )
+        await self._store("noiseprint_cluster", fallback, "noise_fingerprint")
+        return fallback
 
     # ── Standard Handlers (used as fallbacks and standalone) ─────────────────
 
@@ -521,6 +533,8 @@ class ImageHandlers(BaseToolHandler):
         # Fallback: pHash / aHash / dHash / wHash suite
         from tools.image_tools import compute_perceptual_hash as legacy_phash
         fallback = await legacy_phash(artifact=artifact)
+        fallback["degraded"] = True
+        fallback["fallback_reason"] = "SigLIP2 neural fingerprint unavailable or timed out; used perceptual hash suite"
         await self.agent._record_tool_result("neural_fingerprint", fallback)
         return fallback
 

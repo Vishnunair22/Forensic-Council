@@ -8,6 +8,7 @@ End-to-end orchestration pipeline for forensic evidence analysis.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -118,9 +119,6 @@ class AgentFactory:
             challenge_id=challenge_context.get("challenge_id"),
         )
 
-        # Create the appropriate agent class
-        agent_class = self._get_agent_class(agent_id)
-
         # Build agent kwargs
         agent_kwargs = {
             "agent_id": agent_id,
@@ -137,8 +135,16 @@ class AgentFactory:
         if agent_id in ("Agent2", "Agent3", "Agent4") and self.inter_agent_bus:
             agent_kwargs["inter_agent_bus"] = self.inter_agent_bus
 
-        # Create and run the agent
-        agent = agent_class(**agent_kwargs)
+        # Create and run the agent. Prefer the registry's class API, but keep
+        # compatibility with tests/legacy registries that expose create_agent().
+        registry = get_agent_registry()
+        create_agent = getattr(registry, "create_agent", None)
+        used_create_agent = callable(create_agent)
+        if used_create_agent:
+            agent = create_agent(**agent_kwargs)
+        else:
+            agent_class = self._get_agent_class(agent_id)
+            agent = agent_class(**agent_kwargs)
 
         # Run investigation with challenge context injected into initial thought
         if challenge_context.get("contradiction"):
@@ -148,15 +154,36 @@ class AgentFactory:
             # Store challenge context so the agent's build_initial_thought
             # can reference it for a focused re-examination.
             agent._challenge_context = challenge_context
-        findings = await agent.run_investigation()
+        challenge_id = challenge_context.get("challenge_id")
+        if isinstance(challenge_id, str):
+            try:
+                challenge_id = UUID(challenge_id)
+            except ValueError:
+                pass
+        if used_create_agent and challenge_id is not None:
+            maybe_findings = agent.run_investigation(challenge_id)
+        else:
+            maybe_findings = agent.run_investigation()
+        findings = await maybe_findings if inspect.isawaitable(maybe_findings) else maybe_findings
+
+        serialized_findings = [
+            f.model_dump(mode="json") if hasattr(f, "model_dump") else f
+            for f in findings
+        ]
+
+        reflection_report = (
+            getattr(agent, "__dict__", {}).get("_reflection_report")
+            if hasattr(agent, "__dict__")
+            else getattr(agent, "_reflection_report", None)
+        )
 
         # Return results in expected format
         return {
             "agent_id": agent_id,
-            "findings": [f.model_dump(mode="json") for f in findings],
+            "findings": serialized_findings,
             "reflection_report": (
-                agent._reflection_report.model_dump(mode="json")
-                if hasattr(agent, "_reflection_report") and agent._reflection_report
+                reflection_report.model_dump(mode="json")
+                if reflection_report and hasattr(reflection_report, "model_dump")
                 else {}
             ),
             "react_chain": _serialize_react_chain(getattr(agent, "_react_chain", [])),
@@ -329,9 +356,18 @@ class ForensicCouncilPipeline:
                     elif type_val in ("THOUGHT", "ACTION") and isinstance(content, dict):
                         if content.get("action") == "session_start": return result
                         agent_name = AGENT_NAMES.get(agent_id, agent_id)
-                        thinking_text = f"Calling {content['tool_name'].replace('_', ' ').title()}..." if type_val == "ACTION" and content.get("tool_name") else content.get("content", "Analyzing...")
+                        raw_tool_name = content.get("tool_name") if type_val == "ACTION" else None
+                        tool_name = raw_tool_name if isinstance(raw_tool_name, str) else None
+                        thinking_text = f"Calling {tool_name.replace('_', ' ').title()}..." if tool_name else content.get("content", "Analyzing...")
+                        iteration = content.get("iteration")
+                        tools_done = iteration if isinstance(iteration, int) and iteration > 0 else None
                         await broadcast_update(ws_session_id, BriefUpdate(
-                            type="AGENT_UPDATE", session_id=ws_session_id, agent_id=agent_id, agent_name=agent_name, message=thinking_text, data={"status": "running", "thinking": thinking_text}
+                            type="AGENT_UPDATE", session_id=ws_session_id, agent_id=agent_id, agent_name=agent_name, message=thinking_text, data={
+                                "status": "running",
+                                "thinking": thinking_text,
+                                "tool_name": tool_name,
+                                "tools_done": tools_done,
+                            }
                         ))
                 except Exception as e:
                     logger.debug("Broadcast failed", error=str(e))
@@ -951,6 +987,8 @@ class ForensicCouncilPipeline:
                         "findings_preview": preview,
                         "agent_verdict": synthesis.get("verdict") if isinstance(synthesis, dict) else None,
                         "tool_error_rate": getattr(agent_inst, "_agent_error_rate", None) if agent_inst is not None else None,
+                        "tools_ran": getattr(agent_inst, "_tool_success_count", None) if agent_inst is not None else None,
+                        "tools_failed": getattr(agent_inst, "_tool_error_count", None) if agent_inst is not None else None,
                         "section_flags": synthesis.get("sections") if isinstance(synthesis, dict) else None,
                     }
                 ))

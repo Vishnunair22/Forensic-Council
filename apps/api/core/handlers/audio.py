@@ -21,6 +21,10 @@ Fix log (applied in audit pass):
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import tempfile
+from dataclasses import replace
+from pathlib import Path
 
 import numpy as np
 import soundfile as sf
@@ -57,6 +61,61 @@ logger = get_logger(__name__)
 class AudioHandlers(BaseToolHandler):
     """Handles Audio Integrity, Voice Clone, and Anti-spoofing tools."""
 
+    async def _audio_artifact(self):
+        """Return an audio-file artifact, extracting video audio once if needed."""
+        artifact = self.agent.evidence_artifact
+        mime = getattr(artifact, "mime_type", "") or ""
+        if not mime.startswith("video/"):
+            return artifact
+
+        cached = getattr(self.agent, "_extracted_audio_artifact", None)
+        if cached is not None:
+            return cached
+
+        src = Path(artifact.file_path)
+        out_path = Path(tempfile.gettempdir()) / f"{self.agent.session_id}_{src.stem}_audio.wav"
+        try:
+            import imageio_ffmpeg
+
+            ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+            proc = await asyncio.create_subprocess_exec(
+                ffmpeg,
+                "-y",
+                "-i",
+                str(src),
+                "-vn",
+                "-ac",
+                "1",
+                "-ar",
+                "16000",
+                "-f",
+                "wav",
+                str(out_path),
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=30.0)
+            if proc.returncode != 0 or not out_path.exists() or out_path.stat().st_size == 0:
+                err = stderr.decode("utf-8", errors="ignore")[-300:] if stderr else "ffmpeg failed"
+                raise RuntimeError(err)
+
+            content_hash = hashlib.sha256(out_path.read_bytes()).hexdigest()
+            extracted = replace(
+                artifact,
+                file_path=str(out_path),
+                content_hash=content_hash,
+                metadata={
+                    **(artifact.metadata or {}),
+                    "mime_type": "audio/wav",
+                    "extracted_from_video": artifact.file_path,
+                },
+            )
+            self.agent._extracted_audio_artifact = extracted
+            return extracted
+        except Exception as exc:
+            logger.warning("Video audio extraction failed", file_path=str(src), error=str(exc))
+            return artifact
+
     def register_tools(self, registry) -> None:
         """Register tools with the agent's ToolRegistry."""
         registry.register("speaker_diarize",         self.speaker_diarization_handler,     "Speaker diarization")
@@ -75,20 +134,25 @@ class AudioHandlers(BaseToolHandler):
 
     async def neural_prosody_handler(self, input_data: dict) -> dict:
         """Neural prosody analysis. Falls back to acoustic prosody."""
-        artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        artifact = input_data.get("artifact") or await self._audio_artifact()
         result = await run_ml_tool("neural_prosody_classifier.py", artifact.file_path, timeout=15.0)
         if not result.get("error") and result.get("available"):
             await self.agent._record_tool_result("neural_prosody", result)
             return result
         # Fallback — record result from prosody_analysis_handler
         fallback = await self.prosody_analysis_handler(input_data)
+        fallback["degraded"] = True
+        fallback["fallback_reason"] = (
+            "neural_prosody_classifier unavailable or failed; used acoustic prosody analysis"
+        )
+        self.agent._tool_context["neural_prosody"] = fallback
         return fallback
 
     # ── Refinement: Audio Gen Signature ──────────────────────────────────────
 
     async def audio_gen_signature_handler(self, input_data: dict) -> dict:
         """Detection of spectral artifacts specific to generative TTS engines."""
-        artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        artifact = input_data.get("artifact") or await self._audio_artifact()
         result = await run_ml_tool("audio_gen_signature_scanner.py", artifact.file_path, timeout=10.0)
         if not result.get("error") and result.get("available"):
             result.setdefault("is_ai_generated", bool(result.get("synthetic_detected")))
@@ -112,7 +176,7 @@ class AudioHandlers(BaseToolHandler):
 
     async def speaker_diarization_handler(self, input_data: dict) -> dict:
         """Speaker diarization using SpeechBrain ECAPA-TDNN."""
-        artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        artifact = input_data.get("artifact") or await self._audio_artifact()
         min_speakers = input_data.get("min_speakers", 1)
         max_speakers = input_data.get("max_speakers", 10)
         await self.agent.update_sub_task("Establishing voice count baseline...")
@@ -133,8 +197,21 @@ class AudioHandlers(BaseToolHandler):
                 "available": False,
                 "degraded": True,
             }
-        if result.get("error") or not result.get("available"):
+        if result.get("error") or result.get("available") is False:
             result = await self._diarization_fallback(artifact.file_path, min_speakers, max_speakers)
+        else:
+            result.setdefault("available", True)
+            result.setdefault("court_defensible", True)
+            result.setdefault("confidence", 0.85)
+        if result.get("analysis_source") == "librosa_spectral_fallback":
+            result.setdefault("available", True)
+            result.setdefault("degraded", True)
+            result.setdefault("court_defensible", False)
+            result.setdefault("confidence", 0.50)
+            result.setdefault(
+                "fallback_reason",
+                "SpeechBrain diarization unavailable; used librosa spectral-energy clustering",
+            )
         # Store under the registered tool name
         await self.agent._record_tool_result("speaker_diarize", result)
         return result
@@ -176,7 +253,7 @@ class AudioHandlers(BaseToolHandler):
 
     async def anti_spoofing_detection_handler(self, input_data: dict) -> dict:
         """Anti-spoofing detection via AASIST / legacy SpeechBrain."""
-        artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        artifact = input_data.get("artifact") or await self._audio_artifact()
         try:
             result = await real_anti_spoofing_detect(
                 artifact=artifact,
@@ -195,7 +272,7 @@ class AudioHandlers(BaseToolHandler):
 
     async def prosody_analysis_handler(self, input_data: dict) -> dict:
         """Acoustic prosody analysis (pitch, jitter, shimmer via Praat/librosa)."""
-        artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        artifact = input_data.get("artifact") or await self._audio_artifact()
         result = await real_prosody_analyze(artifact=artifact)
         anomalies = result.get("anomalies") if isinstance(result, dict) else None
         if isinstance(anomalies, list):
@@ -208,7 +285,7 @@ class AudioHandlers(BaseToolHandler):
 
     async def audio_splice_detect_handler(self, input_data: dict) -> dict:
         """MFCC IsolationForest splice point detection (sync — runs in executor)."""
-        artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        artifact = input_data.get("artifact") or await self._audio_artifact()
         loop = asyncio.get_running_loop()
         await self.agent.update_sub_task("Tracing isolation forest splice points...")
         result = await loop.run_in_executor(None, detect_audio_splices, artifact.file_path)
@@ -219,7 +296,7 @@ class AudioHandlers(BaseToolHandler):
 
     async def background_noise_analysis_handler(self, input_data: dict) -> dict:
         """Background noise floor consistency analysis."""
-        artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        artifact = input_data.get("artifact") or await self._audio_artifact()
         result = await real_background_noise_consistency(artifact=artifact)
         shift_points = result.get("shift_points") if isinstance(result, dict) else None
         result.setdefault("shift_detected", result.get("consistent") is False or bool(shift_points))
@@ -231,7 +308,7 @@ class AudioHandlers(BaseToolHandler):
 
     async def codec_fingerprinting_handler(self, input_data: dict) -> dict:
         """Codec chain re-encoding event fingerprinting."""
-        artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        artifact = input_data.get("artifact") or await self._audio_artifact()
         try:
             result = await real_codec_fingerprint(artifact=artifact)
         except Exception as exc:
@@ -243,6 +320,14 @@ class AudioHandlers(BaseToolHandler):
         events = result.get("reencoding_events") if isinstance(result, dict) else None
         result.setdefault("re_encoding_detected", bool(events))
         result.setdefault("reencoding_event_count", len(events) if isinstance(events, list) else 0)
+        format_info = result.get("format_info") if isinstance(result, dict) else {}
+        if isinstance(format_info, dict):
+            result.setdefault("sample_rate", format_info.get("samplerate"))
+            result.setdefault("channels", format_info.get("channels"))
+            result.setdefault("duration_seconds", format_info.get("duration"))
+            codec_chain = result.get("codec_chain") or []
+            if isinstance(codec_chain, list) and codec_chain:
+                result.setdefault("codec", codec_chain[0])
         result.setdefault("available", True)
         result.setdefault("court_defensible", True)
         if "confidence" not in result:
@@ -304,12 +389,16 @@ class AudioHandlers(BaseToolHandler):
         """Audio-visual synchronisation verification."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         result = await real_av_sync_verify(artifact=artifact)
+        if not result.get("error") and result.get("available") is not False:
+            result.setdefault("available", True)
+            result.setdefault("court_defensible", True)
+            result.setdefault("confidence", 0.82 if result.get("av_sync") == "IN_SYNC" else 0.55)
         await self.agent._record_tool_result("audio_visual_sync", result)
         return result
 
     async def voice_clone_detect_handler(self, input_data: dict) -> dict:
         """Voice clone / AI speech synthesis detection via subprocess."""
-        artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        artifact = input_data.get("artifact") or await self._audio_artifact()
         # Run as managed subprocess — avoids the Python startup cost on repeat calls
         # and keeps heavy SpeechBrain/librosa imports out of the main process.
         result = await run_ml_tool("voice_clone_detector.py", artifact.file_path, timeout=30.0)
@@ -330,7 +419,7 @@ class AudioHandlers(BaseToolHandler):
 
     async def enf_analysis_handler(self, input_data: dict) -> dict:
         """ENF electrical network frequency analysis (sync — runs in executor)."""
-        artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        artifact = input_data.get("artifact") or await self._audio_artifact()
         loop = asyncio.get_running_loop()
         await self.agent.update_sub_task("Analyzing electrical network frequency grid...")
         result = await loop.run_in_executor(None, analyze_enf, artifact.file_path)

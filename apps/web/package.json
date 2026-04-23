@@ -51,6 +51,7 @@
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "axe-playwright": "^2.2.2",
     "eslint": "^9.39.4",
     "eslint-config-next": "^15.5.14",
     "eslint-plugin-jsx-a11y": "^6.10.2",

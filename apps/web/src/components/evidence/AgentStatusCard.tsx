@@ -13,6 +13,10 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import { fmtTool } from "@/lib/fmtTool";
+import {
+  getDefaultProgressTotal,
+  getLiveProgressDescriptor,
+} from "@/lib/tool-progress";
 import type { AgentUpdate, FindingPreview } from "./AgentProgressDisplay";
 
 interface AgentStatusCardProps {
@@ -21,6 +25,13 @@ interface AgentStatusCardProps {
   badge: string;
   status: "waiting" | "checking" | "running" | "complete" | "error" | "unsupported";
   thinking?: string;
+  liveUpdate?: {
+    status: string;
+    thinking: string;
+    tools_done?: number;
+    tools_total?: number;
+    tool_name?: string;
+  };
   completedData?: AgentUpdate;
   isRevealed: boolean;
   isFadingOut?: boolean;
@@ -61,7 +72,7 @@ export function AgentStatusCard({
   agentId,
   name,
   status,
-  thinking,
+  liveUpdate,
   completedData,
   isRevealed,
   isFadingOut,
@@ -85,7 +96,19 @@ export function AgentStatusCard({
 
   const findings = completedData?.findings_preview || [];
   const toolsRan = completedData?.tools_ran || findings.length || 0;
-  const currentToolIndex = Math.min(stageIndex + 1, toolsRan);
+  const fallbackTotal = getDefaultProgressTotal(agentId);
+  const liveTotal = liveUpdate?.tools_total || toolsRan || fallbackTotal;
+  const liveDone =
+    typeof liveUpdate?.tools_done === "number"
+      ? liveUpdate.tools_done
+      : stageIndex + 1;
+  const currentToolIndex = Math.min(Math.max(1, liveDone), liveTotal);
+  const progressDescriptor = getLiveProgressDescriptor(
+    agentId,
+    liveUpdate?.tool_name,
+    currentToolIndex - 1,
+  );
+  const ProgressIcon = progressDescriptor.icon;
   const isSkipped = status === "unsupported";
   
   const toggleFinding = (id: string) => {
@@ -152,25 +175,27 @@ export function AgentStatusCard({
             >
               <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                 <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                  key={liveUpdate?.tool_name || progressDescriptor.label}
+                  initial={{ scale: 0.86, opacity: 0.4 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ duration: 0.25 }}
                 >
-                  <Icon className="w-5 h-5 text-primary" />
+                  <ProgressIcon className="w-5 h-5 text-primary" />
                 </motion.div>
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[11px] font-bold text-white/80 truncate">
-                  Identifying patterns using {thinking?.split(' ').slice(-1)[0] || "Neural Engine"}
+                  {progressDescriptor.label}
                 </p>
                 <div className="flex items-center gap-2 mt-1">
                   <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
                     <motion.div
                       className="h-full bg-primary"
-                      animate={{ width: `${(currentToolIndex / (toolsRan || 6)) * 100}%` }}
+                      animate={{ width: `${(currentToolIndex / liveTotal) * 100}%` }}
                     />
                   </div>
                   <span className="text-[9px] font-black text-primary/60 font-mono shrink-0">
-                    {currentToolIndex}/{toolsRan || 6}
+                    {currentToolIndex}/{liveTotal}
                   </span>
                 </div>
               </div>
@@ -203,7 +228,15 @@ export function AgentStatusCard({
               
               <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5">
                 <p className="text-xs leading-relaxed text-white/60 font-medium">
-                  <span className="text-white font-bold">{name}</span> ran <span className="text-primary font-bold">{toolsRan} tools</span> and found findings precise with a confidence of <span className="text-white font-bold">{Math.round(completedData.confidence * 100)}%</span> with a error rate of <span className="text-rose-400 font-bold">{Math.round((completedData.tool_error_rate || 0) * 100)}%</span> and detected a manipulation of <span className={clsx("font-bold", (completedData.verdict_score ?? 0) > 0.5 ? "text-rose-500" : "text-emerald-400")}>{Math.round((completedData.verdict_score || 0) * 100)}%</span>.
+                  <span className="text-white font-bold">{name}</span> completed{" "}
+                  <span className="text-primary font-bold">{toolsRan || completedData.findings_count} checks</span>{" "}
+                  with <span className="text-white font-bold">{Math.round(completedData.confidence * 100)}%</span>{" "}
+                  confidence. Tool error rate was{" "}
+                  <span className="text-rose-400 font-bold">{Math.round((completedData.tool_error_rate || 0) * 100)}%</span>;
+                  the agent's manipulation signal is{" "}
+                  <span className={clsx("font-bold", (completedData.verdict_score ?? 0) > 0.5 ? "text-rose-500" : "text-emerald-400")}>
+                    {Math.round((completedData.verdict_score || 0) * 100)}%
+                  </span>.
                 </p>
               </div>
             </motion.div>

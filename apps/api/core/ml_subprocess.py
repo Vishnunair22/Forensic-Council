@@ -290,6 +290,18 @@ async def health_check_ml_tools() -> dict[str, str]:
     return status
 
 
+async def shutdown_ml_workers() -> None:
+    """Terminate persistent ML workers cleanly for short-lived probe/test scripts."""
+    async with _pool_lock:
+        workers = list(_worker_pool.values())
+        _worker_pool.clear()
+    for worker in workers:
+        try:
+            await worker.kill()
+        except Exception:
+            logger.debug("Failed to shut down ML worker", tool=worker.tool_name, exc_info=True)
+
+
 # ── Main runner ────────────────────────────────────────────────────────────
 
 

@@ -894,6 +894,7 @@ class ReActLoopEngine:
             "chimeric_signature_detected",
             "has_appended_data",
             "editing_software_detected",
+            "is_anomalous",
         )
         if any(bool(output.get(k)) for k in positive_keys):
             return True
@@ -1260,6 +1261,11 @@ class ReActLoopEngine:
                             llm_reasoning=llm_reasoning,
                         ),
                         metadata={
+                            **(
+                                output
+                                if isinstance(output, dict)
+                                else {"raw_output": str(output)}
+                            ),
                             "tool_name": next_step.tool_name,
                             "court_defensible": court_defensible and not is_stub,
                             "raw_tool_status": str(output.get("status", "")) if isinstance(output, dict) else "",
@@ -1271,11 +1277,6 @@ class ReActLoopEngine:
                             if _uncertainty
                             else None,
                             "llm_reasoning": llm_reasoning,  # [M1] Injected trace data
-                            **(
-                                output
-                                if isinstance(output, dict)
-                                else {"raw_output": str(output)}
-                            ),
                         },
                     )
                     self._findings.append(finding)

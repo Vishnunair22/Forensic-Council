@@ -121,6 +121,66 @@ class AgentInvestigationMixin:
             logger.warning(f"{phase.title()} synthesis failed: {e}")
         return None
 
+    def _build_deterministic_synthesis(
+        self,
+        findings: list[AgentFinding],
+        phase: str,
+    ) -> dict[str, Any]:
+        """Build metrics and a plain synthesis when the LLM is unavailable."""
+        actionable = [
+            f
+            for f in findings
+            if f.status != "NOT_APPLICABLE" and f.evidence_verdict != "NOT_APPLICABLE"
+        ]
+        confidence_values = [
+            float(f.confidence_raw)
+            for f in actionable
+            if f.confidence_raw is not None
+            and f.status != "INCOMPLETE"
+            and f.evidence_verdict != "ERROR"
+        ]
+        confidence = round(sum(confidence_values) / len(confidence_values), 3) if confidence_values else 0.0
+        error_count = sum(
+            1
+            for f in actionable
+            if f.status == "INCOMPLETE" or f.evidence_verdict == "ERROR"
+        )
+        error_rate = round(error_count / len(actionable), 3) if actionable else 0.0
+        positive_count = sum(1 for f in actionable if f.evidence_verdict == "POSITIVE")
+        negative_count = sum(1 for f in actionable if f.evidence_verdict == "NEGATIVE")
+
+        if positive_count >= 2:
+            verdict = "TAMPERED"
+        elif positive_count == 1 or error_rate > 0.25:
+            verdict = "SUSPICIOUS"
+        elif (
+            error_rate == 0
+            and actionable
+            and negative_count >= max(1, int(len(actionable) * 0.75))
+        ):
+            verdict = "AUTHENTIC"
+            if confidence < 0.7:
+                confidence = 0.7
+        elif confidence >= 0.7 and error_rate == 0:
+            verdict = "AUTHENTIC"
+        else:
+            verdict = "INCONCLUSIVE"
+
+        narrative = (
+            f"{self.agent_name} {phase} synthesis used deterministic fallback: "
+            f"{len(actionable)} findings, {positive_count} positive signals, "
+            f"{error_rate:.0%} tool error rate."
+        )
+        return {
+            "agent_confidence": confidence,
+            "agent_error_rate": error_rate,
+            "verdict": verdict,
+            "narrative_summary": narrative,
+            "sections": [],
+            "synthesis_source": "deterministic_fallback",
+            "fallback_reason": "LLM synthesis unavailable, disabled, rate-limited, or timed out.",
+        }
+
     async def run_investigation(self) -> list[AgentFinding]:
         """Run the full investigation workflow."""
         agent_trace = PipelineTrace(
@@ -182,12 +242,13 @@ class AgentInvestigationMixin:
         self._react_chain = loop_result.react_chain
         self._loop_result = loop_result
 
-        await self._synthesize_findings_once(self._findings, phase="initial", timeout_s=15.0)
+        synthesis = await self._synthesize_findings_once(self._findings, phase="initial", timeout_s=15.0)
 
-        if self._agent_confidence is None:
-            self._agent_confidence = 0.0
-        if self._agent_error_rate is None:
-            self._agent_error_rate = 1.0
+        if synthesis is None:
+            synthesis = self._build_deterministic_synthesis(self._findings, phase="initial")
+            self._agent_confidence = synthesis["agent_confidence"]
+            self._agent_error_rate = synthesis["agent_error_rate"]
+            self._agent_synthesis = synthesis
 
         self._reflection_report = await self.self_reflection_pass(self._findings)
         self._signal_completion(skipped=False)

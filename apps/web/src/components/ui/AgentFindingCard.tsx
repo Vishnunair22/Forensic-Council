@@ -97,6 +97,45 @@ function groupFindingsBySection(findings: AgentFindingDTO[]): Section[] {
   );
 }
 
+function cleanSummary(text: string, maxLen = 210) {
+  const stripped = text.replace(/^[^:]{1,55}:\s*/, "").trim();
+  if (stripped.length <= maxLen) return stripped;
+  const clipped = stripped.slice(0, maxLen);
+  const lastSpace = clipped.lastIndexOf(" ");
+  return (lastSpace > 40 ? clipped.slice(0, lastSpace) : clipped) + "...";
+}
+
+function buildAgentOverview(findings: AgentFindingDTO[], metrics?: AgentMetricsDTO, narrative?: string) {
+  if (narrative && narrative.trim().length > 0) {
+    return cleanSummary(narrative.trim(), 360);
+  }
+
+  const active = findings.filter((f) => f.evidence_verdict !== "NOT_APPLICABLE");
+  const positives = active.filter((f) => f.evidence_verdict === "POSITIVE");
+  const errors = active.filter((f) => f.evidence_verdict === "ERROR" || f.status === "INCOMPLETE");
+  const negatives = active.filter((f) => f.evidence_verdict === "NEGATIVE");
+  const top = [...positives, ...active]
+    .filter((f, index, arr) => arr.findIndex((x) => x.finding_id === f.finding_id) === index)
+    .sort((a, b) => (b.raw_confidence_score ?? b.confidence_raw ?? 0) - (a.raw_confidence_score ?? a.confidence_raw ?? 0))
+    .slice(0, 2);
+
+  const confidence = Math.round((metrics?.confidence_score ?? 0) * 100);
+  const errorRate = Math.round((metrics?.error_rate ?? 0) * 100);
+  const lead =
+    positives.length > 0
+      ? `${positives.length} check${positives.length === 1 ? "" : "s"} reported manipulation signals`
+      : negatives.length > 0
+        ? `${negatives.length} check${negatives.length === 1 ? "" : "s"} supported clean evidence for their specific tests`
+        : "The agent found no decisive manipulation signal";
+
+  const highlights = top
+    .map((f) => cleanSummary((f.metadata?.llm_refined_summary as string) || f.reasoning_summary || "", 120))
+    .filter(Boolean)
+    .join(" ");
+
+  return `${lead}. Confidence is ${confidence}% with ${errorRate}% tool error rate. ${highlights || "Open each tool result for the exact diagnostic metrics."}${errors.length ? ` ${errors.length} check${errors.length === 1 ? "" : "s"} did not complete and are treated only as coverage limits.` : ""}`;
+}
+
 function SectionGroup({ section }: { section: Section }) {
   const [open, setOpen] = useState(section.flag === "bad" || section.flag === "warn");
   const [showAnalysis, setShowAnalysis] = useState(false);
@@ -200,6 +239,10 @@ export function AgentFindingCard({
   }, [realFindings]);
 
   const sections = useMemo(() => groupFindingsBySection(realFindings), [realFindings]);
+  const overview = useMemo(
+    () => buildAgentOverview(realFindings, metrics, narrative),
+    [realFindings, metrics, narrative]
+  );
 
   // Count anomalies for the header badge
   const anomalyCount = useMemo(
@@ -303,14 +346,14 @@ export function AgentFindingCard({
           <div className="p-6 pt-3 space-y-6 animate-in fade-in slide-in-from-top-4 duration-700">
 
             {/* Agent narrative (court_notes / reliability note) — concise, not primary */}
-            {narrative && (
+            {overview && (
               <div className="relative p-4 rounded-2xl bg-[#000]/30 border border-white/5">
                 <div className="flex items-center gap-2 mb-2">
                   <Activity className="w-3 h-3 text-cyan-400/50" />
-                  <span className="text-[10px] font-black tracking-[0.3em] text-white/20">Agent Synthesis</span>
+                  <span className="text-[10px] font-black tracking-[0.3em] text-white/20">Precise Overview</span>
                 </div>
                 <p className="text-[12px] text-white/60 leading-relaxed font-medium">
-                  {narrative}
+                  {overview}
                 </p>
               </div>
             )}
