@@ -294,11 +294,12 @@ class ForensicCouncilPipeline:
         """Initialize all components for a session."""
         from core.persistence.postgres_client import get_postgres_client
         from core.persistence.qdrant_client import get_qdrant_client
+        from api.routes._session_state import broadcast_update
+        from api.schemas import BriefUpdate
 
         if self._redis is None:
             try:
                 from core.persistence.redis_client import get_redis_client
-
                 self._redis = await get_redis_client()
             except Exception as e:
                 logger.warning("Failed to connect to Redis", error=str(e))
@@ -308,8 +309,30 @@ class ForensicCouncilPipeline:
                     "rate limiting and token blacklisting may be degraded."
                 )
 
+        # Broadcast initial startup
+        try:
+            await broadcast_update(str(session_id), BriefUpdate(
+                type="AGENT_UPDATE",
+                session_id=str(session_id),
+                agent_id=None,
+                message="Initializing forensic core...",
+                data={"status": "initiating", "thinking": "Establishing secure neural bridge..."}
+            ))
+        except Exception:
+            pass
+
         if self._qdrant is None:
             try:
+                try:
+                    await broadcast_update(str(session_id), BriefUpdate(
+                        type="AGENT_UPDATE",
+                        session_id=str(session_id),
+                        agent_id=None,
+                        message="Establishing episodic link...",
+                        data={"status": "initiating", "thinking": "Syncing with Qdrant vector space..."}
+                    ))
+                except Exception:
+                    pass
                 self._qdrant = await get_qdrant_client()
             except Exception as e:
                 logger.warning("Failed to connect to Qdrant", error=str(e))
@@ -320,6 +343,16 @@ class ForensicCouncilPipeline:
 
         if self._postgres is None:
             try:
+                try:
+                    await broadcast_update(str(session_id), BriefUpdate(
+                        type="AGENT_UPDATE",
+                        session_id=str(session_id),
+                        agent_id=None,
+                        message="Connecting to custody ledger...",
+                        data={"status": "initiating", "thinking": "Securing Postgres persistence layer..."}
+                    ))
+                except Exception:
+                    pass
                 self._postgres = await get_postgres_client()
             except Exception as e:
                 logger.warning("Failed to connect to PostgreSQL", error=str(e))
@@ -490,6 +523,21 @@ class ForensicCouncilPipeline:
         """Core logic for the investigation pipeline."""
         await self._initialize_components(session_id)
 
+        # Broadcast initial pipeline state to move UI out of 'idle/initiating'
+        # so agents appear as 'Connecting' instead of 'Dim/Waiting' during ingestion.
+        try:
+            from api.routes._session_state import broadcast_update
+            from api.schemas import BriefUpdate
+            await broadcast_update(str(session_id), BriefUpdate(
+                type="AGENT_UPDATE",
+                session_id=str(session_id),
+                agent_id=None,
+                message="Forensic pipeline initialized. Ingesting evidence...",
+                data={"status": "initiating", "thinking": "Securing evidence artifacts..."}
+            ))
+        except Exception:
+            pass
+
         # Create evidence artifact
         evidence_artifact = await self._ingest_evidence(
             evidence_file_path,
@@ -497,6 +545,19 @@ class ForensicCouncilPipeline:
             investigator_id,
             original_filename=original_filename,
         )
+
+        try:
+            from api.routes._session_state import broadcast_update
+            from api.schemas import BriefUpdate
+            await broadcast_update(str(session_id), BriefUpdate(
+                type="AGENT_UPDATE",
+                session_id=str(session_id),
+                agent_id=None,
+                message="Evidence secured. Initializing forensic session...",
+                data={"status": "processing", "thinking": "Validating chain of custody..."}
+            ))
+        except Exception:
+            pass
 
         # Set evidence artifact in factory and bus
         if hasattr(self, "agent_factory"):
@@ -512,6 +573,19 @@ class ForensicCouncilPipeline:
             investigator_id=investigator_id,
             agent_ids=all_agents,
         )
+
+        try:
+            from api.routes._session_state import broadcast_update
+            from api.schemas import BriefUpdate
+            await broadcast_update(str(session_id), BriefUpdate(
+                type="AGENT_UPDATE",
+                session_id=str(session_id),
+                agent_id=None,
+                message="Session active. Dispatching specialist agents...",
+                data={"status": "processing", "thinking": "Allocating neural resources..."}
+            ))
+        except Exception:
+            pass
 
         # Initialize signal bus
         self.signal_bus = SignalBus(all_agents)
@@ -996,35 +1070,73 @@ class ForensicCouncilPipeline:
             except Exception as exc:
                 logger.debug("Agent status broadcast failed", agent_id=aid, error=str(exc))
 
-        async def run_agent_initial_with_status(cls, aid, ex):
-            await _broadcast_agent_status(aid, "running", f"Running {aid} initial pass...")
-            agent, initial_findings, result_status = await run_agent_initial_only(cls, aid, ex)
-            if result_status == "unsupported":
+        # Mapping results back to instances (index-aligned with registry order)
+        agent_map = {}
+        registry = get_agent_registry()
+        agent_instances = []
+
+        # Step 1: Initialize all agents and check support
+        for aid in registry.get_all_agent_ids():
+            extra = {}
+            if aid in (AgentID.AGENT2.value, AgentID.AGENT3.value, AgentID.AGENT4.value):
+                extra = {"inter_agent_bus": self.inter_agent_bus}
+            
+            cls = registry.get_agent_class(aid)
+            kwargs = {
+                "agent_id": aid,
+                "session_id": session_id,
+                "evidence_artifact": evidence_artifact,
+                "config": self.config,
+                "working_memory": self.working_memory,
+                "episodic_memory": self.episodic_memory,
+                "custody_logger": self.custody_logger,
+                "evidence_store": self.evidence_store,
+                **extra
+            }
+            
+            inst = cls(**kwargs)
+            if self.inter_agent_bus is not None:
+                self.inter_agent_bus.register_agent(aid, inst)
+            
+            supported = inst.supports_uploaded_file
+            agent_instances.append((inst, supported))
+
+            if not supported:
                 await _broadcast_agent_status(
-                    aid,
-                    "skipped",
-                    f"{aid} skipped initial analysis because this file type is not supported by the agent.",
-                    error="Agent skipped initial analysis as this file type is not supported.",
-                    agent_inst=agent,
+                    aid, "skipped", f"{aid} bypassed: file type not supported.", 
+                    error="Unsupported file type.", agent_inst=inst
                 )
             else:
-                message = (
-                    f"{aid} initial analysis completed with partial findings."
-                    if result_status == "error"
-                    else f"{aid} initial analysis complete."
+                await _broadcast_agent_status(aid, "running", f"Agent {aid} active. Initializing scan...", agent_inst=inst)
+
+        # Step 2: Run all supported initial passes concurrently
+        async def _run_one(agent, aid, supported):
+            if not supported:
+                return agent, [], "unsupported"
+            
+            try:
+                # We already broadcasted "running", but agents might broadcast again during loop
+                logger.info(f"Running {aid} initial investigation")
+                initial_findings = await asyncio.wait_for(
+                    agent.run_investigation(),
+                    timeout=min(float(self.config.investigation_timeout), 300.0),
                 )
-                await _broadcast_agent_status(
-                    aid,
-                    "complete",
-                    message,
-                    findings=initial_findings,
-                    error=None,
-                    agent_inst=agent,
-                )
-            return agent, initial_findings, result_status
+                
+                # Signal for quorum
+                if self.signal_bus:
+                    self.signal_bus.signal_ready(aid, initial_findings)
+
+                message = f"{aid} initial analysis complete."
+                await _broadcast_agent_status(aid, "complete", message, findings=initial_findings, agent_inst=agent)
+                return agent, initial_findings, "complete"
+            except Exception as e:
+                logger.error(f"{aid} initial pass failed", error=str(e))
+                findings = list(getattr(agent, "_findings", []) or [])
+                await _broadcast_agent_status(aid, "error", f"{aid} error: {e}", findings=findings, error=str(e), agent_inst=agent)
+                return agent, findings, "error"
 
         raw_initial = await asyncio.gather(
-            *[run_agent_initial_with_status(cls, aid, ex) for cls, aid, ex in agent_def_list],
+            *[_run_one(inst, aid, supported) for (inst, supported), aid in zip(agent_instances, registry.get_all_agent_ids())],
             return_exceptions=True,
         )
 

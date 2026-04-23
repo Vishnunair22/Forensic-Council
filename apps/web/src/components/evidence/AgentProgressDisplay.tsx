@@ -173,21 +173,28 @@ export function AgentProgressDisplay({
   }
  };
 
- const getAgentStatus = (agentId: string) => {
-  if (skippedAgentIds.has(agentId)) return "unsupported";
-  const completed = completedAgents.find((c) => c.agent_id === agentId);
-  if (completed) {
-   const isSkipped =
-    completed.status === "skipped" ||
-    (completed.error
-     ? /not applicable|not supported|skipping|skipped/i.test(completed.error)
-     : false);
-   if (isSkipped) return "unsupported";
-   return (completed.status === "error" || completed.status === "failed" || completed.error) ? "error" : "complete";
-  }
-  if (agentUpdates[agentId]) return "running";
-  return "waiting";
- };
+  const getAgentStatus = (agentId: string) => {
+   if (skippedAgentIds.has(agentId)) return "unsupported";
+   const completed = completedAgents.find((c) => c.agent_id === agentId);
+   if (completed) {
+    const isSkipped =
+     completed.status === "skipped" ||
+     (completed.error
+      ? /not applicable|not supported|skipping|skipped/i.test(completed.error)
+      : false);
+    if (isSkipped) return "unsupported";
+    return (completed.status === "error" || completed.status === "failed" || completed.error) ? "error" : "complete";
+   }
+   if (agentUpdates[agentId]) return "running";
+
+   // If the pipeline is active but agent hasn't started yet, show as "checking" (Connecting)
+   // instead of "waiting" (Dim/0.3 opacity). This provides better visual feedback during ingestion.
+   if (pipelineStatus === "analyzing" || pipelineStatus === "initiating" || pipelineStatus === "processing") {
+     return "checking";
+   }
+
+   return "waiting";
+  };
 
  const showInitialDecision = phase === "initial" && (awaitingDecision || allAgentsDone);
  const showDeepComplete = phase === "deep" && (allAgentsDone || pipelineStatus === "complete");

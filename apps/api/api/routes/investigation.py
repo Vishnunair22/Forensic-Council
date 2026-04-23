@@ -240,9 +240,19 @@ async def start_investigation(
         )
 
         if settings.use_redis_worker:
+            from api.routes._session_state import broadcast_update
+            from api.schemas import BriefUpdate
             from orchestration.investigation_queue import get_investigation_queue
 
             try:
+                # Signal immediately that the task is in the queue
+                await broadcast_update(session_id, BriefUpdate(
+                    type="AGENT_UPDATE",
+                    session_id=session_id,
+                    message="Investigation enqueued. Awaiting available forensic worker...",
+                    data={"status": "initiating", "thinking": "Queueing forensic task..."}
+                ))
+
                 await get_investigation_queue().submit(
                     session_id=UUID(session_id),
                     case_id=case_id,

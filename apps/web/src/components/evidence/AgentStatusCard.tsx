@@ -147,7 +147,7 @@ export function AgentStatusCard({
               <div className="flex items-center gap-2">
                 <span className={clsx(
                   "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide border shadow-sm",
-                  status === "running" ? "bg-primary/[0.08] text-primary/80 border-primary/20 animate-pulse" :
+                  (status === "running" || status === "checking") ? "bg-primary/[0.08] text-primary/80 border-primary/20 animate-pulse" :
                   status === "complete" ? "bg-primary/[0.08] text-primary border-primary/20" :
                   status === "error" ? "bg-danger/[0.06] text-danger border-danger/20" :
                   "bg-white/[0.03] text-white/40 border-white/[0.06]"
@@ -311,23 +311,41 @@ export function AgentStatusCard({
                 </button>
               )}
             </div>
+          ) : status === "checking" ? (
+            <div className="flex flex-col items-center justify-center h-full gap-6 max-w-[280px] mx-auto">
+              <div className="relative">
+                <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full animate-pulse" />
+                <div className="w-20 h-20 rounded-2xl bg-primary/5 border border-primary/20 flex items-center justify-center text-primary animate-pulse">
+                  <Icon className="w-10 h-10" />
+                </div>
+              </div>
+              <div className="space-y-2 text-center">
+                <h3 className="text-[10px] font-black text-primary/60 tracking-[0.2em] uppercase">Syncing Neural Link</h3>
+                <p className="text-sm text-white/40 font-medium leading-relaxed">
+                  Establishing secure forensic bridge. Awaiting agent handshake...
+                </p>
+              </div>
+            </div>
           ) : status === "running" ? (
             <div className="flex flex-col items-center justify-center h-full opacity-20 gap-4">
               <div className="relative">
                 <div className="absolute inset-0 bg-primary blur-2xl opacity-20 animate-pulse" />
                 <Icon className="w-12 h-12 text-primary animate-pulse" />
               </div>
-              <span className="text-xs font-semibold tracking-wide">Analyzing Stream...</span>
+              <span className="text-xs font-semibold tracking-wide text-primary/80">Analyzing Stream...</span>
             </div>
           ) : isSkipped ? (
-            <div className="flex flex-col items-center justify-center h-full text-center p-6 gap-4">
-              <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center text-white/20">
-                <Ban className="w-8 h-8" />
+            <div className="flex flex-col items-center justify-center h-full text-center p-8 gap-6 max-w-[280px] mx-auto">
+              <div className="relative">
+                <div className="absolute inset-0 bg-white/5 blur-3xl rounded-full" />
+                <div className="w-20 h-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/20 rotate-3 transition-transform hover:rotate-0">
+                  <Ban className="w-10 h-10" />
+                </div>
               </div>
-              <div>
-                <p className="text-xs font-black text-white/40 tracking-wide mb-1">Agent Bypassed</p>
-                <p className="text-sm text-white/50 font-medium leading-relaxed">
-                  File compatibility mismatch detected. This module was skipped to optimize performance.
+              <div className="space-y-2">
+                <h3 className="text-[10px] font-black text-white/40 tracking-[0.2em] uppercase">Module Bypassed</h3>
+                <p className="text-sm text-white/60 font-medium leading-relaxed">
+                  Incompatible file format detected. Agent has been safely decommissioned.
                 </p>
               </div>
             </div>

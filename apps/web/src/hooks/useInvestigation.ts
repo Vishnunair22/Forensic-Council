@@ -465,11 +465,15 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const showUploadForm = !autoStartBlocking && status === "idle" && !isUploading;
 
   useEffect(() => {
-    if (showLoadingOverlay && analysisStreamReady) {
-      setShowLoadingOverlay(false);
-      sessionOnlyStorage.removeItem("fc_show_loading");
+    // Only hide overlay when WebSocket is ready AND the backend has progressed 
+    // beyond initial handshake to actual agent activity.
+    const hasActiveAgents = Object.values(agentUpdates).some(u => u.status === "running");
+    
+    if (showLoadingOverlay && analysisStreamReady && (hasActiveAgents || status === "complete" || status === "error")) {
+       setShowLoadingOverlay(false);
+       sessionOnlyStorage.removeItem("fc_show_loading");
     }
-  }, [showLoadingOverlay, analysisStreamReady]);
+  }, [showLoadingOverlay, analysisStreamReady, status, agentUpdates]);
 
   return {
     file, setFile,
