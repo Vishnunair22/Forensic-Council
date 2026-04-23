@@ -74,7 +74,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
           animate={{ rotateX: 180, opacity: 0 }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
           style={{ transformOrigin: "top" }}
-          className="absolute inset-0 z-40 bg-gradient-to-b from-black to-black/90 border border-primary/40 rounded-3xl flex items-center justify-center shadow-[0_-20px_50px_rgba(0,255,65,0.15)] pointer-events-none"
+          className="absolute inset-0 z-20 bg-gradient-to-b from-black to-black/90 border border-primary/40 rounded-3xl flex items-center justify-center shadow-[0_-20px_50px_rgba(0,255,65,0.15)] pointer-events-none"
         >
           <div className="absolute bottom-0 w-1/2 h-[1px] bg-primary shadow-[0_0_10px_rgba(0,255,65,0.8)]" />
         </motion.div>
@@ -109,7 +109,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              className={`mt-8 w-full border-2 border-dashed rounded-2xl p-12 transition-all duration-300 cursor-pointer group flex flex-col items-center justify-center relative overflow-hidden ${
+              className={`mt-8 w-full border-2 border-dashed rounded-2xl p-12 transition-all duration-300 cursor-pointer group flex flex-col items-center justify-center relative overflow-hidden z-50 ${
                 isDragging 
                   ? "border-primary bg-primary/10 shadow-[inset_0_0_50px_rgba(var(--primary),0.1)]" 
                   : "border-white/10 hover:border-primary/50 bg-white/[0.02]"
