@@ -29,14 +29,16 @@ _session_chain_locks: defaultdict[UUID, asyncio.Lock] = defaultdict(asyncio.Lock
 
 
 def _json_safe(value: Any) -> Any:
-    """Return a PostgreSQL JSON-safe copy, replacing non-finite floats."""
-    if isinstance(value, float):
-        return value if math.isfinite(value) else None
+    """Return a PostgreSQL JSON-safe copy, replacing non-finite floats and numpy types."""
+    import numpy as np
+    if isinstance(value, (float, np.floating)):
+        f_val = float(value)
+        return f_val if math.isfinite(f_val) else None
+    if isinstance(value, (int, np.integer)):
+        return int(value)
     if isinstance(value, dict):
         return {str(k): _json_safe(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_json_safe(v) for v in value]
-    if isinstance(value, tuple):
+    if isinstance(value, (list, tuple, np.ndarray)):
         return [_json_safe(v) for v in value]
     return value
 

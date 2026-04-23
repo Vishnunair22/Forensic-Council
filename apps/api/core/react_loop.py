@@ -750,6 +750,10 @@ class ReActLoopEngine:
         raw_conf: float | None = None
         if isinstance(output, dict):
             raw_conf = output.get("confidence")
+            if raw_conf is None:
+                raw_conf = output.get("confidence_raw")
+            if raw_conf is None:
+                raw_conf = output.get("confidence_score")
             if raw_conf is None and "confidence" in output:
                 raw_conf = 0.50
             if raw_conf is None:
@@ -761,7 +765,8 @@ class ReActLoopEngine:
                         break
             if raw_conf is None:
                 for key in ("noise_consistency_score", "consistency_score",
-                            "overall_consistency", "avg_confidence", "confidence_score"):
+                            "overall_consistency", "avg_confidence", "confidence_score",
+                            "trace_continuity"):
                     val = output.get(key)
                     if isinstance(val, (int, float)):
                         raw_conf = max(0.0, min(1.0, float(val)))
@@ -785,9 +790,9 @@ class ReActLoopEngine:
                              "LIKELY_AUTHENTIC", "LIKELY_GENUINE", "CONTENT_CREDENTIALS_PRESENT",
                              "NO_CONTENT_CREDENTIALS"):
                         raw_conf = 0.85
-                    elif v in ("INCONSISTENT", "SUSPICIOUS", "TAMPERED"):
+                    elif v in ("INCONSISTENT", "SUSPICIOUS", "TAMPERED", "SPLICE_SUSPECTED", "SPLICE_DETECTED"):
                         raw_conf = 0.40
-                    elif v in ("INCONCLUSIVE", "ERROR"):
+                    elif v in ("INCONCLUSIVE", "ERROR", "NO_ENF_SIGNAL", "TOO_SHORT"):
                         raw_conf = 0.50
                     elif v == "NOT_APPLICABLE":
                         raw_conf = 0.0
@@ -797,6 +802,18 @@ class ReActLoopEngine:
                     raw_conf = round(max(0.10, 1.0 - float(output["synthetic_probability"])), 3)
                 elif output.get("spoof_probability") is not None:
                     raw_conf = round(max(0.10, 1.0 - float(output["spoof_probability"])), 3)
+                elif "gemini_verdict" in output:
+                    v = str(output.get("gemini_verdict", "")).upper()
+                    if v in ("AUTHENTIC", "LIKELY_AUTHENTIC", "CLEAN"):
+                        raw_conf = 0.85
+                    elif v in ("SUSPICIOUS", "MANIPULATED", "ALTERED"):
+                        raw_conf = 0.40
+                    else:
+                        raw_conf = 0.50
+                elif "anomalies" in output and isinstance(output["anomalies"], list):
+                    # For tools like prosody_analyze that return an anomaly list
+                    num_anomalies = len(output["anomalies"])
+                    raw_conf = max(0.40, 1.0 - (num_anomalies * 0.15))
                 elif output.get("num_anomaly_regions") is not None:
                     raw_conf = 0.85 if int(output["num_anomaly_regions"]) == 0 else 0.40
                 elif output.get("anomaly_detected") is True or output.get("inconsistency_detected") is True:
@@ -906,12 +923,29 @@ class ReActLoopEngine:
         )
         if any(bool(output.get(k)) for k in positive_keys):
             return True
-        if output.get("plausible") is False or output.get("hash_match") is False or output.get("hash_matches") is False:
+        if any(bool(output.get(f"gemini_{k}")) for k in positive_keys):
+            return True
+        if output.get("gemini_manipulation_signals") or output.get("manipulation_signals"):
+            return True
+        if (
+            output.get("plausible") is False
+            or output.get("hash_match") is False
+            or output.get("hash_matches") is False
+            or output.get("scale_consistent") is False
+            or output.get("lighting_consistent") is False
+            or output.get("inconsistency_detected") is True
+        ):
+            return True
+
+        if output.get("contextual_anomalies") and len(output.get("contextual_anomalies", [])) > 0:
+            return True
+
+        if output.get("manipulation_signals") and len(output.get("manipulation_signals", [])) > 0:
             return True
         if int(output.get("anomaly_count", 0) or 0) > 0:
             return True
         verdict = str(output.get("verdict", "")).upper()
-        return verdict in {"SUSPICIOUS", "TAMPERED", "MANIPULATED", "INCONSISTENT", "ANOMALOUS"}
+        return verdict in {"SUSPICIOUS", "TAMPERED", "MANIPULATED", "INCONSISTENT", "ANOMALOUS", "SPLICE_DETECTED", "SPLICE_SUSPECTED"}
 
     def _classify_tool_output(
         self,

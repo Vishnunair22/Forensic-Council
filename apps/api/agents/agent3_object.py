@@ -182,7 +182,7 @@ class Agent3Object(ForensicAgent):
                     try:
                         await asyncio.wait_for(asyncio.shield(_ctx_event.wait()), timeout=_timeout)
                     except asyncio.TimeoutError:
-                        self.logger.warning(
+                        logger.warning(
                             f"Agent 3 timed out waiting for Agent 1 context after {_timeout}s; proceeding with local data."
                         )
                         await self._record_tool_error(
@@ -207,6 +207,9 @@ class Agent3Object(ForensicAgent):
 
                     result = finding.to_finding_dict(self.agent_id)
                     result["analysis_source"] = "gemini_vision"
+                    # Ensure ReAct loop sees the confidence
+                    if "confidence" not in result and finding.confidence:
+                        result["confidence"] = finding.confidence
                     await self._record_tool_result("gemini_deep_forensic", result)
                     return result
                 except Exception as e:

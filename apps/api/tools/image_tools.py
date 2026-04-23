@@ -40,7 +40,7 @@ class BoundingBox:
         return {"x": self.x, "y": self.y, "w": self.w, "h": self.h}
 
 
-async def ela_full_image(
+def ela_full_image(
     artifact: EvidenceArtifact,
     evidence_store: EvidenceStore | None = None,
     quality: int = 95,
@@ -126,8 +126,7 @@ async def ela_full_image(
                 "available": True,
             }
 
-        # ── offload blocking PIL/numpy multi-quality sweep to a thread ──────────
-        import asyncio as _asyncio
+        # ── blocking PIL/numpy multi-quality sweep ──────────
 
         # Capture parameters for the closure
         _quality = quality
@@ -246,8 +245,7 @@ async def ela_full_image(
                     except OSError:
                         pass
 
-        loop = _asyncio.get_running_loop()
-        return await loop.run_in_executor(None, _blocking_ela_compute)
+        return _blocking_ela_compute()
 
     except Exception as e:
         if isinstance(e, ToolUnavailableError):
@@ -474,26 +472,18 @@ async def jpeg_ghost_detect(
 
                 ghost_detected = len(ghost_regions) > 0
 
-                # Confidence: high when ghost regions are absent (authentic),
-                # low when ghost regions are present (suspicious).
-                # Previously this was max_variance/50 which produced ~0.007 for
-                # clean images — incorrectly low for the react_loop confidence
-                # extraction path which interprets confidence as "how reliable/
-                # authentic is this result" (0=unreliable, 1=reliable).
-                # Confidence: high when ghost regions are absent (authentic),
-                # low when ghost regions are present (suspicious).
-                # Audit Fix: Split into manipulation_confidence (strength of signal)
-                # and tool_reliability (how dependable the algorithm result is).
-                manipulation_confidence = round(max(0.10, min(0.50, max_variance / 50.0)), 3) if ghost_detected else 0.10
-                tool_reliability = 0.85
+                # NEW (clear semantics: confidence = detection reliability):
+                if ghost_detected:
+                    # High variance = stronger ghost signal = more reliable detection of manipulation
+                    confidence = round(min(0.95, max(0.60, 0.60 + (max_variance / 100.0))), 3)
+                else:
+                    # No ghosts detected: high confidence the image is authentic (for this test)
+                    # But cap at 0.90 since absence of evidence ≠ evidence of absence
+                    confidence = round(min(0.90, 0.75 + (mean_variance / 20.0)), 3)
 
-                # Return summary statistics only — omit the full variance_map array
-                # (W×H floats ≈ 16 MB for 1080p) to prevent event-loop and memory pressure.
                 return {
                     "ghost_detected": ghost_detected,
-                    "confidence": manipulation_confidence if ghost_detected else tool_reliability,
-                    "manipulation_confidence": manipulation_confidence,
-                    "tool_reliability": tool_reliability,
+                    "confidence": confidence,  # Now clearly means: "how reliable is this result?"
                     "ghost_regions": [r.to_dict() for r in ghost_regions],
                     "num_ghost_regions": len(ghost_regions),
                     "max_variance": max_variance,

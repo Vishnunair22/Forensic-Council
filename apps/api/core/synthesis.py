@@ -291,7 +291,7 @@ MIME: {evidence_artifact.mime_type}
 Agent: {agent_name} ({agent_id})
 
 [RAW TOOL RESULTS]
-{json.dumps(grouped_sections_data, indent=2)}
+{json.dumps(grouped_sections_data, indent=2, default=str)}
 
 [INSTRUCTIONS]
 1. For each group, provide a 1-2 sentence "Forensic Opinion" that synthesizes the raw tool data.

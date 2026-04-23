@@ -140,7 +140,7 @@ class AgentInvestigationMixin:
 
                 return synthesis_result
         except Exception as e:
-            logger.warning(f"{phase.title()} synthesis failed: {e}")
+            logger.warning(f"{phase.title()} synthesis failed: {e}", exc_info=True)
         return None
 
     async def _publish_agent_context(
