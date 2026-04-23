@@ -1,278 +1,94 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { RefreshCw, ArrowRight, FileImage, FileAudio, FileVideo, FileText } from "lucide-react";
-import { useSound } from "@/hooks/useSound";
+import { CheckCircle2, X } from "lucide-react";
 
-const overlayVariants = {
- hidden: { opacity: 0 },
- visible: { opacity: 1, transition: { duration: 0.2 } },
- exit: { opacity: 0, transition: { duration: 0.2 } },
-};
+export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: any) {
+  const [mounted, setMounted] = useState(false);
 
-const scaleIn = {
-	hidden: { opacity: 0, scale: 0.95, y: 10 },
-	visible: {
-		opacity: 1,
-		scale: 1,
-		y: 0,
-		transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] as const },
-	},
-	exit: { opacity: 0, scale: 0.95, y: 10, transition: { duration: 0.2 } },
-};
+  useEffect(() => {
+    setMounted(true);
+    // Lock scroll on mount, unlock on unmount
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    
+    return () => {
+      document.body.style.overflow = originalBodyOverflow || "unset";
+      document.documentElement.style.overflow = originalHtmlOverflow || "unset";
+    };
+  }, []);
 
-const ViewfinderBrackets = () => (
-	<div className="absolute inset-0 z-30 pointer-events-none opacity-40">
-		<div className="absolute top-4 left-4 w-4 h-4 border-t-2 border-l-2 border-cyan-400" />
-		<div className="absolute top-4 right-4 w-4 h-4 border-t-2 border-r-2 border-cyan-400" />
-		<div className="absolute bottom-4 left-4 w-4 h-4 border-b-2 border-l-2 border-cyan-400" />
-		<div className="absolute bottom-4 right-4 w-4 h-4 border-b-2 border-r-2 border-cyan-400" />
-	</div>
-);
+  if (!mounted) return null;
 
-interface UploadSuccessModalProps {
-	file: File;
-	onNewUpload: () => void;
-	onStartAnalysis: () => void;
-}
-
-export function UploadSuccessModal({
-	file,
-	onNewUpload,
-	onStartAnalysis,
-}: UploadSuccessModalProps) {
-	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-	const [fileHash, setFileHash] = useState<string | null>(null);
-	const [hasError, setHasError] = useState(false);
-	const modalRef = useRef<HTMLDivElement>(null);
-	const previousFocusRef = useRef<HTMLElement | null>(null);
-	const { playSound } = useSound();
-	const [mounted, setMounted] = useState(false);
-
-	const computeHash = async (f: File) => {
-		try {
-			const buf = await f.arrayBuffer();
-			const digest = await crypto.subtle.digest("SHA-256", buf);
-			return Array.from(new Uint8Array(digest))
-				.map((b) => b.toString(16).padStart(2, "0"))
-				.join("");
-		} catch {
-			return null;
-		}
-	};
-
-	useEffect(() => {
-		setMounted(true);
-		playSound("success");
-		if (file) {
-			computeHash(file).then(setFileHash);
-		}
-	}, [file, playSound]);
-
- useEffect(() => {
-  if (!file) {
-   setPreviewUrl(null);
-   return;
-  }
-
-  const isMedia =
-   file.type.startsWith("image/") ||
-   file.type.startsWith("video/") ||
-   /\.(jpe?g|png|gif|bmp|webp|jfif|mp4|webm|mov|ogg)$/i.test(file.name);
-
-  if (isMedia) {
-   const url = URL.createObjectURL(file);
-   setPreviewUrl(url);
-   setHasError(false);
-   return () => {
-    URL.revokeObjectURL(url);
-   };
-  } else {
-   setPreviewUrl(null);
-  }
- }, [file]);
-
- useEffect(() => {
-  const originalBodyOverflow = document.body.style.overflow;
-  const originalHtmlOverflow = document.documentElement.style.overflow;
-  document.body.style.overflow = "hidden";
-  document.documentElement.style.overflow = "hidden";
-  previousFocusRef.current = document.activeElement as HTMLElement;
-  if (modalRef.current) {
-   const focusable = modalRef.current.querySelector<HTMLElement>(
-    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-   );
-   focusable?.focus();
-  }
-  const handleKeyDown = (e: KeyboardEvent) => {
-   if (e.key === "Escape") {
-    onStartAnalysis();
-   }
-   if (e.key === "Tab") {
-    const focusableElements = modalRef.current?.querySelectorAll<HTMLElement>(
-     'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-    );
-    if (!focusableElements || focusableElements.length === 0) return;
-    const firstFocusable = focusableElements[0];
-    const lastFocusable = focusableElements[focusableElements.length - 1];
-    if (e.shiftKey) {
-     if (document.activeElement === firstFocusable) {
-      e.preventDefault();
-      lastFocusable.focus();
-     }
-    } else {
-     if (document.activeElement === lastFocusable) {
-      e.preventDefault();
-      firstFocusable.focus();
-     }
-    }
-   }
-  };
-  document.addEventListener("keydown", handleKeyDown);
-  return () => {
-   document.body.style.overflow = originalBodyOverflow || "unset";
-   document.documentElement.style.overflow = originalHtmlOverflow || "auto";
-   document.removeEventListener("keydown", handleKeyDown);
-   previousFocusRef.current?.focus();
-  };
- }, [onStartAnalysis]);
-
- const isVideo =
-  file.type.startsWith("video/") || /\.(mp4|webm|mov|ogg)$/i.test(file.name);
- const FileTypeIcon = file.type.startsWith("image/")
-  ? FileImage
-  : file.type.startsWith("audio/")
-   ? FileAudio
-   : isVideo
-    ? FileVideo
-    : FileText;
-
- const modalContent = (
-  <motion.div
-   className="fixed top-0 left-0 w-full h-full z-[9999] flex items-center justify-center p-4 backdrop-blur-3xl touch-none"
-   style={{ background: "rgba(0,0,0,0.7)" }}
-   variants={overlayVariants}
-   initial="hidden"
-   animate="visible"
-   exit="exit"
-   role="dialog"
-   aria-modal="true"
-   aria-labelledby="upload-success-title"
-  >
+  return createPortal(
     <motion.div
-     ref={modalRef}
-     className="frosted-panel relative w-full max-w-md overflow-hidden rounded-[2.5rem] p-12 shadow-2xl"
-     variants={scaleIn}
-     initial="hidden"
-     animate="visible"
-     exit="exit"
+      initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
+      animate={{ opacity: 1, backdropFilter: "blur(12px)" }}
+      // Overall overlay fade out is delayed to let the envelope close first
+      exit={{ opacity: 0, backdropFilter: "blur(0px)", transition: { delay: 0.5 } }}
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
     >
-    <div className="scan-line-overlay opacity-20" />
-    <motion.div
-     className="w-32 h-32 rounded-[2rem] mx-auto mb-10 overflow-hidden flex items-center justify-center relative z-10 border border-white/[0.08] bg-black/40 shadow-2xl group"
-     animate={{
-      y: [0, -5, 0],
-      rotate: [0, 0.5, 0, -0.5, 0],
-     }}
-     transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-    >
-     <ViewfinderBrackets />
-     {previewUrl && !hasError ? (
-      isVideo ? (
-       <video
-        key={previewUrl}
-        src={previewUrl}
-        className="w-full h-full object-cover transition-opacity duration-500 opacity-60 group-hover:opacity-100"
-        muted
-        loop
-        autoPlay
-        playsInline
-        onError={() => setHasError(true)}
-        aria-hidden="true"
-       />
-      ) : (
-       /* eslint-disable-next-line @next/next/no-img-element */
-       <img
-        key={previewUrl}
-        src={previewUrl}
-        alt={`Evidence preview: ${file.name}`}
-        className="w-full h-full object-cover transition-opacity duration-500 opacity-60 group-hover:opacity-100"
-        onError={() => setHasError(true)}
-       />
-      )
-     ) : (
-      <div className="flex flex-col items-center gap-3">
-       <div className="p-4 rounded-3xl bg-cyan-500/5 border border-cyan-500/10">
-        <FileTypeIcon
-         className="w-10 h-10 text-cyan-400/60"
-         aria-hidden="true"
-        />
-       </div>
-      </div>
-     )}
-    </motion.div>
+      <div className="relative w-full max-w-xl" style={{ perspective: "1500px" }}>
+        
+        {/* The Cyber-Flap (Closes downward on exit) */}
+        <motion.div
+          initial={{ rotateX: 180, opacity: 0 }}
+          animate={{ rotateX: 180, opacity: 0 }} // Stays open while viewing success
+          // The Magic: Folds down and solidifies when exiting (routing to analysis)
+          exit={{ rotateX: 0, opacity: 1, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } }} 
+          style={{ transformOrigin: "top" }}
+          className="absolute inset-0 z-40 bg-gradient-to-b from-primary/10 to-black border border-primary/50 rounded-3xl flex items-center justify-center shadow-[0_20px_50px_rgba(0,255,65,0.2)] pointer-events-none"
+        >
+           <span className="text-primary font-mono text-sm tracking-[0.3em] shadow-[0_0_10px_rgba(0,255,65,0.8)]">PAYLOAD SECURED</span>
+        </motion.div>
 
-    <motion.div
-     initial={{ opacity: 0, y: 20 }}
-     animate={{ opacity: 1, y: 0 }}
-     transition={{ delay: 0.1, duration: 0.5, ease: "easeOut" }}
-     className="relative z-10"
-    >
-     <div className="flex flex-col items-center mb-10">
-      <div className="inline-flex items-center gap-3 mb-6 px-6 py-2 rounded-full bg-primary/5 border border-primary/10 backdrop-blur-sm">
-       <motion.div
-        className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_15px_rgba(34,211,238,0.5)]"
-        animate={{ opacity: [1, 0.5, 1] }}
-        transition={{ duration: 3, repeat: Infinity }}
-       />
-       <span className="text-[9px] font-mono font-black text-primary/70 tracking-[0.3em]">
-        Integrity Verified
-       </span>
-      </div>
-      
-      <h3 id="upload-success-title" className="text-white text-2xl font-black truncate max-w-full px-4 mb-2 tracking-tight font-heading text-center">
-       {file.name}
-      </h3>
-      
-      <div className="flex flex-col items-center gap-2 mt-4 w-full">
-        <p className="text-[10px] font-mono font-bold text-white/30 tracking-tight">
-          Size: {(file.size / 1024 / 1024).toFixed(2)} MB // Type: {file.type || "Unknown"}
-        </p>
-        {fileHash && (
-          <div className="py-1 px-3 rounded bg-white/[0.02] border border-white/[0.05]">
-            <p className="text-[9px] font-mono text-cyan-500/50 tracking-widest">
-              SHA-256: {fileHash.slice(0, 12)}...{fileHash.slice(-8)}
-            </p>
+        {/* The Success Content */}
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 10, opacity: 0, scale: 0.95, transition: { duration: 0.3 } }}
+          className="relative z-20 bg-black/80 backdrop-blur-xl border border-primary/20 rounded-3xl p-10 shadow-[0_0_60px_rgba(0,255,65,0.05)]"
+        >
+          <div className="flex flex-col items-center text-center gap-6">
+            <motion.div 
+              initial={{ scale: 0.5, opacity: 0 }} 
+              animate={{ scale: 1, opacity: 1 }} 
+              transition={{ type: "spring", bounce: 0.5, delay: 0.2 }}
+              className="w-20 h-20 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center shadow-[0_0_30px_rgba(0,255,65,0.2)]"
+            >
+              <CheckCircle2 className="w-10 h-10 text-primary" />
+            </motion.div>
+            
+            <div className="space-y-2">
+              <h3 className="text-3xl font-bold tracking-tight text-white">Ready for Processing</h3>
+              <p className="text-sm font-mono text-white/40 break-all bg-white/[0.02] px-4 py-2 rounded-lg border border-white/5">
+                {file.name}
+              </p>
+            </div>
+
+            <div className="flex w-full gap-4 mt-6">
+              <button
+                onClick={onNewUpload}
+                className="flex-1 py-4 text-xs font-bold tracking-widest uppercase text-white/50 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all"
+              >
+                Reselect
+              </button>
+              <button
+                onClick={onStartAnalysis}
+                className="flex-1 py-4 text-xs font-bold tracking-widest uppercase text-black bg-primary hover:bg-glow-green rounded-xl shadow-[0_0_20px_rgba(0,255,65,0.3)] hover:shadow-[0_0_40px_rgba(0,255,65,0.5)] transition-all transform hover:scale-[1.02]"
+              >
+                Analyse
+              </button>
+            </div>
           </div>
-        )}
+        </motion.div>
       </div>
-     </div>
-
-     <div className="flex flex-col sm:flex-row gap-4 mt-10 w-full justify-center">
-      <button
-       onClick={onNewUpload}
-       className="btn-outline flex-1 !px-6 tracking-[0.2em]"
-      >
-       <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-700" />
-       <span>Reset</span>
-      </button>
-
-      <button
-       onClick={onStartAnalysis}
-       className="btn-premium flex-[1.6] group !px-6 tracking-[0.2em]"
-      >
-       <span>Analyze</span>
-       <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition-transform duration-500" />
-      </button>
-     </div>
-    </motion.div>
-   </motion.div>
-  </motion.div>
- );
-
- if (!mounted) return null;
-
- return createPortal(modalContent, document.body);
+    </motion.div>,
+    document.body
+  );
 }

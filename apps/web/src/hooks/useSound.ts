@@ -3,6 +3,11 @@
 import { useCallback } from "react";
 
 export type SoundType =
+  | "envelope-open"
+  | "envelope-close"
+  | "success-chime"
+  | "envelope_open"
+  | "envelope_close"
   | "success"
   | "error"
   | "agent"
@@ -10,8 +15,6 @@ export type SoundType =
   | "think"
   | "click"
   | "upload"
-  | "envelope_open"
-  | "envelope_close"
   | "scan"
   | "page_load"
   | "analysis_done"
@@ -113,7 +116,7 @@ export function useSound() {
         g.connect(out);
         o.start(t);
         o.stop(t + 0.07);
-      } else if (type === "upload" || type === "success") {
+      } else if (type === "upload" || type === "success" || type === "success-chime") {
         // Mock Design Sync: Rising 523 -> 1046Hz sine
         const o = ctx.createOscillator();
         const g = ctx.createGain();
@@ -181,7 +184,7 @@ export function useSound() {
           o.start(t);
           o.stop(t + 0.42);
         });
-      } else if (type === "envelope_open") {
+      } else if (type === "envelope_open" || type === "envelope-open") {
         // Paper swish + latch click + C5→E5 confirmation tone
         const bufLen = Math.ceil(ctx.sampleRate * 0.08);
         const noiseBuffer = ctx.createBuffer(1, bufLen, ctx.sampleRate);
@@ -225,7 +228,7 @@ export function useSound() {
           o.start(t + delay);
           o.stop(t + delay + 0.24);
         });
-      } else if (type === "envelope_close") {
+      } else if (type === "envelope_close" || type === "envelope-close") {
         // Descending C5→G4 + soft paper close
         [523.25, 392].forEach((freq, i) => {
           const delay = i * 0.08;

@@ -87,10 +87,10 @@ export function HeroAuthActions() {
     <>
       <button
         onClick={() => {
-          playSound("hum");
+          playSound("envelope-open"); // UPDATED
           setShowUpload(true);
         }}
-        className="group px-12 py-5 text-sm font-bold tracking-[0.1em] uppercase relative overflow-hidden rounded-full bg-black/50 backdrop-blur-md text-white transition-all duration-500 hover:scale-[1.02] border border-primary/30 hover:border-primary hover:shadow-[0_0_40px_rgba(0,255,65,0.2)]"
+        className="group px-12 py-5 text-sm font-bold tracking-[0.1em] uppercase relative overflow-hidden rounded-full bg-white/[0.03] backdrop-blur-xl text-white transition-all duration-500 hover:scale-[1.02] border border-primary/30 hover:border-primary shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),0_0_20px_rgba(0,0,0,0.5)] hover:shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),0_0_40px_rgba(var(--primary),0.2)]"
         aria-label={isAuthenticating ? "Initializing..." : authError ? authError : "Upload a file to begin analysis"}
       >
         {/* Update Scanning Line Color */}
@@ -119,18 +119,26 @@ export function HeroAuthActions() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {showUpload && !selectedFile && (
           <UploadModal
+            key="upload-modal" // Crucial for mode="wait" to track component lifecycle
             onClose={() => setShowUpload(false)}
-            onFileSelected={(f) => setSelectedFile(f)}
+            onFileSelected={(f) => {
+              playSound("success-chime"); // The soft, elegant success sound
+              setSelectedFile(f);
+            }}
           />
         )}
         {showUpload && selectedFile && (
           <UploadSuccessModal
+            key="success-modal"
             file={selectedFile}
             onNewUpload={() => setSelectedFile(null)}
-            onStartAnalysis={handleStartAnalysis}
+            onStartAnalysis={() => {
+              playSound("envelope-close"); // The locking seal sound before routing
+              handleStartAnalysis();
+            }}
           />
         )}
       </AnimatePresence>

@@ -1,279 +1,124 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import { X, UploadCloud, FileImage, FileVideo, FileAudio, FileText } from "lucide-react";
+import { motion } from "framer-motion";
+import { X, UploadCloud } from "lucide-react";
 
-const overlayVariants = {
-	hidden: { opacity: 0 },
-	visible: { opacity: 1, transition: { duration: 0.3 } },
-	exit: { opacity: 0, transition: { duration: 0.2 } },
-};
+export function UploadModal({ onClose, onFileSelected }: any) {
+  const [mounted, setMounted] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-const HUDCorner = ({ position }: { position: "tl" | "tr" | "bl" | "br" }) => {
-	const posClasses = {
-		tl: "top-0 left-0 border-t-2 border-l-2",
-		tr: "top-0 right-0 border-t-2 border-r-2",
-		bl: "bottom-0 left-0 border-b-2 border-l-2",
-		br: "bottom-0 right-0 border-b-2 border-r-2",
-	};
+  useEffect(() => {
+    setMounted(true);
+    // Lock scroll on mount, unlock on unmount
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    
+    return () => {
+      document.body.style.overflow = originalBodyOverflow || "unset";
+      document.documentElement.style.overflow = originalHtmlOverflow || "unset";
+    };
+  }, []);
 
-	return (
-		<div
-			className={`absolute w-8 h-8 ${posClasses[position]} border-cyan-500/20 z-10 pointer-events-none transition-all duration-700 group-hover:border-cyan-500/50`}
-		/>
-	);
-};
+  if (!mounted) return null;
 
-const ScanningLaser = () => (
-	<motion.div
-		className="absolute inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent z-20 pointer-events-none"
-		initial={{ top: "0%" }}
-		animate={{ top: "100%" }}
-		transition={{
-			duration: 2.5,
-			repeat: Infinity,
-			ease: "linear",
-		}}
-		style={{
-			boxShadow: "0 0 15px rgba(34,211,238,0.8)",
-		}}
-	/>
-);
-
-const scaleIn = {
- hidden: { opacity: 0, scale: 0.95, y: -10 },
- visible: {
-  opacity: 1,
-  scale: 1,
-  y: 0,
-  transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] as const },
- },
- exit: { opacity: 0, scale: 0.95, y: -10, transition: { duration: 0.2 } },
-};
-
-interface UploadModalProps {
- onClose: () => void;
- onFileSelected: (f: File) => void;
-}
-
-export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
- const [isDragging, setIsDragging] = useState(false);
- const fileInputRef = useRef<HTMLInputElement>(null);
- const modalRef = useRef<HTMLDivElement>(null);
- const previousFocusRef = useRef<HTMLElement | null>(null);
- const [mounted, setMounted] = useState(false);
-
- useEffect(() => {
-  setMounted(true);
- }, []);
-
- const handleFile = useCallback(
-  (f: File) => {
-   onFileSelected(f);
-  },
-  [onFileSelected],
- );
-
- useEffect(() => {
-  const originalBodyOverflow = document.body.style.overflow;
-  const originalHtmlOverflow = document.documentElement.style.overflow;
-  document.body.style.overflow = "hidden";
-  document.documentElement.style.overflow = "hidden";
-  previousFocusRef.current = document.activeElement as HTMLElement;
-  if (modalRef.current) {
-   const focusable = modalRef.current.querySelector<HTMLElement>(
-    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-   );
-   focusable?.focus();
-  }
-  const handleKeyDown = (e: KeyboardEvent) => {
-   if (e.key === "Escape") {
-    onClose();
-   }
-   if (e.key === "Tab") {
-    const focusableElements = modalRef.current?.querySelectorAll<HTMLElement>(
-     'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-    );
-    if (!focusableElements || focusableElements.length === 0) return;
-    const firstFocusable = focusableElements[0];
-    const lastFocusable = focusableElements[focusableElements.length - 1];
-    if (e.shiftKey) {
-     if (document.activeElement === firstFocusable) {
-      e.preventDefault();
-      lastFocusable.focus();
-     }
-    } else {
-     if (document.activeElement === lastFocusable) {
-      e.preventDefault();
-      firstFocusable.focus();
-     }
-    }
-   }
-  };
-  document.addEventListener("keydown", handleKeyDown);
-  return () => {
-   document.body.style.overflow = originalBodyOverflow || "unset";
-   document.documentElement.style.overflow = originalHtmlOverflow || "auto";
-   document.removeEventListener("keydown", handleKeyDown);
-   previousFocusRef.current?.focus();
-  };
- }, [onClose]);
-
- const modalContent = (
-  <motion.div
-   className="fixed top-0 left-0 w-full h-full z-[9999] flex items-center justify-center p-4 backdrop-blur-3xl touch-none"
-   style={{ background: "rgba(0,0,0,0.7)" }}
-   variants={overlayVariants}
-   initial="hidden"
-   animate="visible"
-   exit="exit"
-   onClick={onClose}
-   role="dialog"
-   aria-modal="true"
-   aria-labelledby="upload-modal-title"
-  >
-   <motion.div
-    ref={modalRef}
-    className="relative w-full max-w-lg"
-    variants={scaleIn}
-    initial="hidden"
-    animate="visible"
-    exit="exit"
-    onClick={(e) => e.stopPropagation()}
-   >
-    <div
-     className="rounded-[2.5rem] overflow-hidden frosted-panel shadow-2xl relative"
+  return createPortal(
+    <motion.div
+      initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
+      animate={{ opacity: 1, backdropFilter: "blur(12px)" }}
+      exit={{ opacity: 0, backdropFilter: "blur(0px)", transition: { delay: 0.3 } }}
+      // Click outside to close
+      onClick={onClose}
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
     >
-     <div className="scan-line-overlay opacity-30 pointer-events-none" />
-     <div className="relative p-10 z-20">
-      <button
-       onClick={onClose}
-       className="absolute top-8 right-8 p-2 rounded-xl cursor-pointer hover:bg-white/[0.05] transition-colors border border-white/[0.05] z-30"
-       aria-label="Close upload modal"
+      {/* 3D Perspective Wrapper */}
+      <div 
+        className="relative w-full max-w-xl" 
+        style={{ perspective: "1500px" }}
+        onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
       >
-       <X className="w-5 h-5 text-white/50" />
-      </button>
-
-      <motion.div
-       initial={{ opacity: 0, y: 16 }}
-       animate={{ opacity: 1, y: 0 }}
-       transition={{ delay: 0.1, duration: 0.4 }}
-      >
-        <div className="mb-10 text-center flex flex-col items-center justify-center relative">
-         <h3 id="upload-modal-title" className="text-3xl font-black text-white tracking-tighter font-heading">
-           Ingestion Gateway
-         </h3>
-         <div className="flex items-center gap-3 mt-2">
-           <div className="h-px w-8 bg-cyan-500/20" />
-           <p className="text-primary/40 text-[9px] font-mono font-black tracking-[0.4em]">
-             Secure Forensic Intake
-           </p>
-           <div className="h-px w-8 bg-cyan-500/20" />
-         </div>
-        </div>
-
-        <motion.label
-         htmlFor="dropzone-file"
-         tabIndex={0}
-         aria-label="Upload evidence — click or press Enter to browse, or drag and drop a file"
-         className="group relative rounded-3xl border p-14 text-center cursor-pointer overflow-hidden transition-all duration-700 block"
-         style={{
-          borderColor: isDragging
-           ? "rgba(34,211,238,0.5)"
-           : "rgba(255,255,255,0.05)",
-          background: isDragging
-           ? "rgba(34,211,238,0.05)"
-           : "rgba(255,255,255,0.02)",
-         }}
-         whileHover={{
-          borderColor: "rgba(34,211,238,0.3)",
-          background: "rgba(34,211,238,0.03)",
-         }}
-         onDragOver={(e) => {
-          e.preventDefault();
-          setIsDragging(true);
-         }}
-         onDragLeave={() => setIsDragging(false)}
-         onDrop={(e) => {
-          e.preventDefault();
-          setIsDragging(false);
-          const f = e.dataTransfer.files[0];
-          if (f) handleFile(f);
-         }}
-        >
-         <HUDCorner position="tl" />
-         <HUDCorner position="tr" />
-         <HUDCorner position="bl" />
-         <HUDCorner position="br" />
-         
-         <AnimatePresence>
-          {isDragging && <ScanningLaser />}
-         </AnimatePresence>
-
-         <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none duration-700" />
-        <div className="relative z-10">
-         <motion.div
-          className="w-20 h-20 rounded-2xl bg-cyan-500/[0.03] flex items-center justify-center mx-auto mb-6 border border-cyan-500/10"
-          whileHover={{ scale: 1.1, rotate: 5 }}
-          transition={{ type: "spring", stiffness: 400, damping: 10 }}
-         >
-          <UploadCloud className="w-10 h-10 text-cyan-400/50" />
-         </motion.div>
-         <p className="text-xl font-black text-white tracking-tighter mb-3">
-          Drop evidence here or{" "}
-          <span className="text-primary underline underline-offset-8 decoration-primary/20 hover:text-primary/80 transition-colors">
-           browse
-          </span>
-         </p>
-         <div className="flex items-center justify-center gap-4 opacity-20 group-hover:opacity-40 transition-opacity duration-700">
-          <FileImage className="w-4 h-4" />
-          <FileVideo className="w-4 h-4" />
-          <FileAudio className="w-4 h-4" />
-          <FileText className="w-4 h-4" />
-         </div>
-        </div>
-        <input
-         id="dropzone-file"
-         ref={fileInputRef}
-         type="file"
-         className="hidden"
-         accept="image/*,audio/*,video/*"
-         aria-label="Select evidence file"
-         onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) handleFile(f);
-         }}
-        />
-       </motion.label>
-
-       <div className="mt-10 flex flex-col items-center justify-center gap-6 px-2 text-center">
-        <div className="flex items-center justify-center gap-4 py-2 px-6 rounded-full border border-white/[0.03] bg-white/[0.02] backdrop-blur-sm shadow-inner">
-         <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_12px_rgba(34,211,238,0.6)] animate-pulse" />
-         <p className="text-[9px] font-mono font-black text-white/40 tracking-[0.3em]">
-          Supported: Img, Vid, Aud, Doc
-         </p>
-        </div>
         
-        <div className="space-y-2">
-          <p className="text-[10px] text-primary/30 font-mono font-bold tracking-widest">
-            [ SHA-256 Integrity Check Active ]
-          </p>
-          <p className="text-[9px] text-white/10 font-mono font-black tracking-tight leading-relaxed max-w-[320px] mx-auto text-center">
-            Maximum file size: 50 MB // Cryptographic hash
-            verification performed on ingestion.
-          </p>
-        </div>
-       </div>
-      </motion.div>
-     </div>
-    </div>
-   </motion.div>
-  </motion.div>
- );
+        {/* The Cyber-Flap (Opens upward) */}
+        <motion.div
+          initial={{ rotateX: 0, opacity: 1 }}
+          animate={{ rotateX: 180, opacity: 0 }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+          style={{ transformOrigin: "top" }}
+          className="absolute inset-0 z-30 bg-gradient-to-b from-black to-black/90 border border-primary/40 rounded-3xl flex items-center justify-center shadow-[0_-20px_50px_rgba(0,255,65,0.15)] pointer-events-none"
+        >
+          {/* Subtle glowing line on the flap edge */}
+          <div className="absolute bottom-0 w-1/2 h-[1px] bg-primary shadow-[0_0_10px_rgba(0,255,65,0.8)]" />
+        </motion.div>
 
- if (!mounted) return null;
+        {/* The Modal Content (The inside of the envelope) */}
+        <motion.div
+          initial={{ y: 20, opacity: 0, scale: 0.95 }}
+          animate={{ y: 0, opacity: 1, scale: 1 }}
+          exit={{ y: -20, opacity: 0, scale: 0.95 }}
+          transition={{ duration: 0.5, delay: 0.15, ease: "easeOut" }}
+          className="relative z-40 bg-black/80 backdrop-blur-xl border border-white/10 rounded-3xl p-10 shadow-[0_20px_60px_rgba(0,0,0,0.8)]"
+        >
+          {/* Close Button */}
+          <button 
+            onClick={onClose}
+            className="absolute top-6 right-6 text-white/40 hover:text-white transition-colors"
+            autoFocus
+          >
+            <X className="w-5 h-5" />
+          </button>
 
- return createPortal(modalContent, document.body);
+          {/* Refined Dropzone UI */}
+          <div className="flex flex-col items-center text-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-4 shadow-[inset_0_0_20px_rgba(var(--primary),0.1)]">
+              <UploadCloud className="w-8 h-8 text-primary" />
+            </div>
+            <h3 className="text-2xl font-bold tracking-tight text-white">Upload Evidence</h3>
+            <p className="text-sm font-medium text-white/50 max-w-sm leading-relaxed">
+              Drag and drop digital media or click to browse. The neural protocol accepts image, video, and audio payloads.
+            </p>
+            
+            {/* Input integration - Using ref for reliable trigger */}
+            <div 
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                const f = e.dataTransfer.files[0];
+                if (f) onFileSelected(f);
+              }}
+              className={`mt-8 w-full border-2 border-dashed rounded-2xl p-12 transition-all cursor-pointer group flex items-center justify-center relative ${
+                isDragging ? "border-primary bg-primary/5 shadow-[0_0_20px_rgba(var(--primary),0.1)]" : "border-white/10 bg-white/[0.02] hover:border-primary/50"
+              }`}
+            >
+              <span className={`text-xs font-bold tracking-widest uppercase transition-colors ${
+                isDragging ? "text-primary" : "text-white/40 group-hover:text-primary"
+              }`}>
+                {isDragging ? "Drop Payload" : "Select File"}
+              </span>
+              <input 
+                ref={fileInputRef}
+                type="file" 
+                style={{ display: "none" }}
+                accept="image/*,video/*,audio/*"
+                onChange={(e) => {
+                  if (e.target.files?.[0]) onFileSelected(e.target.files[0]);
+                }}
+              />
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    </motion.div>,
+    document.body
+  );
 }
