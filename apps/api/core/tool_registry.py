@@ -62,6 +62,22 @@ class ToolResult(BaseModel):
 # Type for tool handlers - async function that takes input dict and returns dict
 ToolHandler = Callable[[dict[str, Any]], Coroutine[Any, Any, dict[str, Any]]]
 
+def tool(name: str, description: str):
+    """
+    Decorator to mark a method as a tool handler.
+    
+    Usage:
+        @tool(name="my_tool", description="Does something cool")
+        async def my_handler(self, input_data: dict) -> dict:
+            ...
+    """
+    def decorator(func):
+        func._is_tool = True
+        func._tool_name = name
+        func._tool_description = description
+        return func
+    return decorator
+
 
 class ToolRegistry:
     """
@@ -95,11 +111,21 @@ class ToolRegistry:
     def register_domain_handler(self, handler_instance: BaseToolHandler) -> None:
         """
         Register all tools defined by a domain-specific handler.
-
-        Args:
-            handler_instance: Instance of a BaseToolHandler subclass
+        
+        Detects methods decorated with @tool and also calls the legacy
+        register_tools() for manual registration.
         """
+        # 1. Manual registration via register_tools()
         handler_instance.register_tools(self)
+
+        # 2. Automatic registration via @tool decorator
+        import inspect
+        for name, method in inspect.getmembers(handler_instance, predicate=inspect.ismethod):
+            if getattr(method, "_is_tool", False):
+                t_name = getattr(method, "_tool_name")
+                t_desc = getattr(method, "_tool_description")
+                self.register(t_name, method, t_desc)
+                logger.debug(f"Auto-registered tool: {t_name} from {handler_instance.__class__.__name__}")
 
     def get_handler(self, name: str) -> ToolHandler | None:
         """Return the callable handler for a registered tool, or None."""

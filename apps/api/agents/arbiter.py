@@ -25,6 +25,7 @@ from agents.arbiter_verdict import (
     cross_agent_comparison,
     evidence_verdict_of,
 )
+from core.agents import AgentID
 from core.config import Settings, get_settings
 from core.cross_modal_fusion import fuse as cross_modal_fuse
 from core.forensic_policy import ForensicPolicy
@@ -68,7 +69,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         self.agent_factory = agent_factory
         self.config = config or get_settings()
         self._key_store = KeyStore()
-        self._key_store.get_or_create("Arbiter")
+        self._key_store.get_or_create(AgentID.ARBITER)
         self._synthesis_client: Any = None
         self._step_hook: Any = None
 

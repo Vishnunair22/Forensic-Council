@@ -467,6 +467,26 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Forensic Tool Timeouts
+    agent_context_wait_timeout: float = Field(
+        default=60.0,
+        ge=10,
+        le=300,
+        description="Max seconds an agent waits for Agent 1 Gemini context before proceeding.",
+    )
+    ocr_tool_timeout: float = Field(
+        default=60.0,
+        ge=30,
+        le=180,
+        description="Timeout for OCR text extraction tools.",
+    )
+    clip_analysis_timeout: float = Field(
+        default=90.0,
+        ge=60,
+        le=300,
+        description="Timeout for CLIP semantic content analysis.",
+    )
+
     @field_validator("gemini_api_key")
     @classmethod
     def validate_gemini_api_key(cls, v: str | None) -> str | None:

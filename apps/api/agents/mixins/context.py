@@ -102,6 +102,29 @@ class AgentContextMixin:
         else:
             self._tool_success_count += 1
 
+        # Prune context to prevent memory bloat
+        self._prune_tool_context()
+
+    def _prune_tool_context(self, max_entries: int = 50, max_payload_bytes: int = 100_000) -> None:
+        """Prune _tool_context to prevent memory bloat."""
+        # Keep only last N entries by insertion order
+        if len(self._tool_context) > max_entries:
+            keys = list(self._tool_context.keys())
+            for key in keys[:-max_entries]:
+                del self._tool_context[key]
+
+        # Truncate large string/list payloads
+        for key, val in self._tool_context.items():
+            if isinstance(val, dict):
+                for k in list(val.keys()):
+                    # Check for large string or list payloads that don't need full persistence
+                    if isinstance(val[k], (str, list)) and len(str(val[k])) > max_payload_bytes:
+                        if isinstance(val[k], str):
+                            val[k] = val[k][:max_payload_bytes] + "...[truncated]"
+                        else:
+                            # For lists, preserve the structure but limit elements
+                            val[k] = val[k][:100] + [f"...[truncated {len(val[k])-100} items]"]
+
     async def query_episodic_memory(
         self,
         signature_type: ForensicSignatureType,

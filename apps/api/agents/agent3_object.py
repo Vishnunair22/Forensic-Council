@@ -67,10 +67,11 @@ class Agent3Object(ForensicAgent):
             inter_agent_bus=inter_agent_bus,
         )
         self._agent1_context: dict = {}
-        self._agent1_context_event: Any | None = None
+        self._agent1_context_event: asyncio.Event = asyncio.Event()
 
     def inject_agent1_context(self, agent1_gemini_findings: dict) -> None:
         self._agent1_context = agent1_gemini_findings or {}
+        self._agent1_context_event.set()
 
     @cached_property
     def _is_screen_capture(self) -> bool:
@@ -175,46 +176,23 @@ class Agent3Object(ForensicAgent):
                 # Wait for Agent1 context if event exists
                 _ctx_event = getattr(self, "_agent1_context_event", None)
                 if _ctx_event is not None and not _ctx_event.is_set():
+                    # Wait for Agent 1 Gemini context before starting deep pass
+                    from core.config import get_settings
+                    _timeout = get_settings().agent_context_wait_timeout
                     try:
-                        await asyncio.wait_for(asyncio.shield(_ctx_event.wait()), timeout=60.0)
-                    except TimeoutError:
-                        logger.warning(
-                            f"{self.agent_id}: Agent1 context wait timed out after 60s — proceeding without image-integrity context"
+                        await asyncio.wait_for(asyncio.shield(_ctx_event.wait()), timeout=_timeout)
+                    except asyncio.TimeoutError:
+                        self.logger.warning(
+                            f"Agent 3 timed out waiting for Agent 1 context after {_timeout}s; proceeding with local data."
                         )
                         await self._record_tool_error(
                             "agent1_context_sync",
-                            "Agent1 Gemini context unavailable (60s timeout) — object/scene analysis may lack image-integrity grounding",
+                            f"Agent1 Gemini context unavailable ({_timeout}s timeout) — object/scene analysis may lack image-integrity grounding",
                         )
 
                 # Audit Fix: DYNAMIC CONTEXT AGGREGATION
-                # Collect all successful tool results from the current session
-                # to ensure the AI has total forensic visibility (Lighting, Contraband, Scale etc)
-                dynamic_context = {}
-                for tool_name, result in self._tool_context.items():
-                    if not isinstance(result, dict):
-                        continue
-                    if result.get("error") and not result.get("detections"):
-                        # Skip pure error results; keep results that have data alongside an error
-                        continue
-
-                    # Extract high-value forensic keys for Gemini
-                    dynamic_context[tool_name] = {
-                        k: v
-                        for k, v in result.items()
-                        if k not in ("detections", "artifact", "error", "box")
-                    }
-                    if tool_name == "object_detection":
-                        # Include summarized detections with bounding boxes so Gemini
-                        # can reason about spatial layout and compositing plausibility.
-                        dynamic_context[tool_name]["detections_summary"] = [
-                            {
-                                "class": d["class_name"],
-                                "confidence": d.get("confidence"),
-                                "box": d.get("box", {}),
-                            }
-                            for d in result.get("detections", [])[:20]
-                            if "class_name" in d
-                        ]
+                from core.context_utils import aggregate_tool_context
+                dynamic_context = aggregate_tool_context(self._tool_context, agent_id=self.agent_id)
 
                 agent1_context = self._agent1_context
                 context_summary = {"tools": dynamic_context, "agent1": agent1_context}

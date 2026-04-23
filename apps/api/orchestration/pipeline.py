@@ -16,6 +16,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from core.agent_registry import get_agent_registry
+from core.agents import AgentID
 from core.config import Settings, get_settings
 
 
@@ -550,7 +551,7 @@ class ForensicCouncilPipeline:
         if self.custody_logger:
             await self.custody_logger.log_entry(
                 entry_type=EntryType.REPORT_SIGNED,
-                agent_id="Arbiter",
+                agent_id=AgentID.ARBITER.value,
                 session_id=session_id,
                 content={
                     "report_id": str(self._final_report.report_id),
@@ -919,7 +920,7 @@ class ForensicCouncilPipeline:
         agent_def_list = []
         for aid in registry.get_all_agent_ids():
             extra = {}
-            if aid in ("Agent2", "Agent3", "Agent4"):
+            if aid in (AgentID.AGENT2.value, AgentID.AGENT3.value, AgentID.AGENT4.value):
                 extra = {"inter_agent_bus": self.inter_agent_bus}
             agent_def_list.append((registry.get_agent_class(aid), aid, extra))
 
@@ -1033,11 +1034,11 @@ class ForensicCouncilPipeline:
             res = raw_initial[i] if not isinstance(raw_initial[i], BaseException) else (None, [], "error")
             agent_map[aid] = res
 
-        agent1, a1_init, a1_ok = agent_map["Agent1"]
-        agent2, a2_init, a2_ok = agent_map["Agent2"]
-        agent3, a3_init, a3_ok = agent_map["Agent3"]
-        agent4, a4_init, a4_ok = agent_map["Agent4"]
-        agent5, a5_init, a5_ok = agent_map["Agent5"]
+        agent1, a1_init, a1_ok = agent_map[AgentID.AGENT1.value]
+        agent2, a2_init, a2_ok = agent_map[AgentID.AGENT2.value]
+        agent3, a3_init, a3_ok = agent_map[AgentID.AGENT3.value]
+        agent4, a4_init, a4_ok = agent_map[AgentID.AGENT4.value]
+        agent5, a5_init, a5_ok = agent_map[AgentID.AGENT5.value]
 
         initial_results = [
             AgentLoopResult(
@@ -1146,7 +1147,7 @@ class ForensicCouncilPipeline:
                 logger.warning(f"Early signal callback failed: {_cb_err}")
 
         # Configure producers and consumers
-        producer_id = "Agent1" # Primary vision producer
+        producer_id = AgentID.AGENT1.value # Primary vision producer
         producer_inst = agent_map.get(producer_id, (None, None, "error"))[0]
 
         if producer_inst:

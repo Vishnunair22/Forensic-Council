@@ -480,16 +480,20 @@ async def jpeg_ghost_detect(
                 # clean images — incorrectly low for the react_loop confidence
                 # extraction path which interprets confidence as "how reliable/
                 # authentic is this result" (0=unreliable, 1=reliable).
-                if ghost_detected:
-                    confidence = round(max(0.10, min(0.50, max_variance / 50.0)), 3)
-                else:
-                    confidence = 0.85
+                # Confidence: high when ghost regions are absent (authentic),
+                # low when ghost regions are present (suspicious).
+                # Audit Fix: Split into manipulation_confidence (strength of signal)
+                # and tool_reliability (how dependable the algorithm result is).
+                manipulation_confidence = round(max(0.10, min(0.50, max_variance / 50.0)), 3) if ghost_detected else 0.10
+                tool_reliability = 0.85
 
                 # Return summary statistics only — omit the full variance_map array
                 # (W×H floats ≈ 16 MB for 1080p) to prevent event-loop and memory pressure.
                 return {
                     "ghost_detected": ghost_detected,
-                    "confidence": confidence,
+                    "confidence": manipulation_confidence if ghost_detected else tool_reliability,
+                    "manipulation_confidence": manipulation_confidence,
+                    "tool_reliability": tool_reliability,
                     "ghost_regions": [r.to_dict() for r in ghost_regions],
                     "num_ghost_regions": len(ghost_regions),
                     "max_variance": max_variance,
@@ -705,7 +709,7 @@ async def frequency_domain_analysis(
 
 async def extract_text_from_image(
     artifact: EvidenceArtifact,
-    timeout: float = 60.0,
+    timeout: float | None = None,
 ) -> dict[str, Any]:
     """
     Extract visible text from an image using OCR (Tesseract/pytesseract).
@@ -715,6 +719,8 @@ async def extract_text_from_image(
     Runs blocking OCR in a thread executor with a timeout to prevent hangs.
     """
     import asyncio as _asyncio
+    from core.config import get_settings
+    _timeout = timeout or get_settings().ocr_tool_timeout
 
     def _run_ocr():
         import cv2
@@ -776,13 +782,13 @@ async def extract_text_from_image(
         loop = _asyncio.get_running_loop()
         return await _asyncio.wait_for(
             loop.run_in_executor(None, _run_ocr),
-            timeout=timeout,
+            timeout=_timeout,
         )
     except TimeoutError:
         return {
             "status": "timeout",
             "court_defensible": False,
-            "error": "OCR timed out after 45s",
+            "error": f"OCR timed out after {_timeout}s",
             "extracted_text": [],
             "raw_text": "",
             "word_count": 0,
@@ -818,7 +824,7 @@ async def extract_text_from_image(
 async def analyze_image_content(
     artifact: EvidenceArtifact,
     custom_categories: list[str] | None = None,
-    timeout: float = 90.0,
+    timeout: float | None = None,
 ) -> dict[str, Any]:
     """
     Analyze image content using CLIP for semantic understanding.
@@ -844,6 +850,8 @@ async def analyze_image_content(
         - error: Error message if analysis failed
     """
     try:
+        from core.config import get_settings
+        _timeout = timeout or get_settings().clip_analysis_timeout
         from tools.clip_utils import get_clip_analyzer
 
         original_path = artifact.file_path
@@ -864,7 +872,7 @@ async def analyze_image_content(
                 None,
                 lambda: analyzer.analyze_image(original_path, categories=categories),
             ),
-            timeout=timeout,
+            timeout=_timeout,
         )
 
         if not result.available:

@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
+from core.agents import AgentID
 from core.forensic_policy import ForensicPolicy
 
 
@@ -160,13 +161,7 @@ class ForensicReport(BaseModel):
 
 # --- Verdict Constants ---
 
-AGENT_NAMES: dict[str, str] = {
-    "Agent1": "Image Forensics",
-    "Agent2": "Audio Forensics",
-    "Agent3": "Object Detection",
-    "Agent4": "Video Forensics",
-    "Agent5": "Metadata Forensics",
-}
+AGENT_NAMES: dict[str, str] = {aid.value: aid.friendly_name for aid in AgentID}
 
 FINDING_CATEGORY_MAP: dict[str, str] = {
     # Image integrity
@@ -270,9 +265,9 @@ def confidence_of(finding: dict[str, Any], default: float | None = None) -> floa
     calibration_status = str(finding.get("calibration_status") or "").upper()
     use_calibrated = bool(finding.get("calibrated")) or calibration_status == "TRAINED"
     keys = (
-        ("raw_confidence_score", "calibrated_probability", "confidence_raw")
+        ("calibrated_probability", "tool_reliability", "raw_confidence_score", "confidence_raw", "manipulation_confidence")
         if use_calibrated
-        else ("confidence_raw", "raw_confidence_score", "calibrated_probability")
+        else ("tool_reliability", "confidence_raw", "manipulation_confidence", "raw_confidence_score", "calibrated_probability")
     )
     for key in keys:
         value = finding.get(key)
@@ -436,7 +431,7 @@ def _get_finding_category(finding_type: str, agent_id: str = "") -> str | None:
         FINDING_CATEGORY_MAP.items(), key=lambda x: len(x[0]), reverse=True
     ):
         if keyword in ft:
-            if keyword in ("noise", "prnu") and aid == "AGENT3":
+            if keyword in ("noise", "prnu") and aid == AgentID.AGENT3.value.upper():
                 return "object_detection"
             return category
     return None

@@ -168,31 +168,9 @@ class Agent1Image(ForensicAgent):
             # from _tool_context so Gemini has total visibility without code updates.
             # Brutal Context Synthesis: Ensure all Phase-1/2 signals are summarized
             # with high fidelity for the multi-modal Gemini audit.
-            context_summary = {}
-            for t_name, t_res in self._tool_context.items():
-                if not t_res or (isinstance(t_res, dict) and t_res.get("error")):
-                    continue
-
-                # Extract key forensic metrics rather than raw stats
-                metric = {}
-                if "manipulation_detected" in t_res:
-                    metric["signal"] = "POSITIVE" if t_res["manipulation_detected"] else "NEGATIVE"
-                if "confidence" in t_res:
-                    metric["conf"] = t_res["confidence"]
-                if "splicing_detected" in t_res:
-                    metric["splicing"] = t_res["splicing_detected"]
-                if "is_ai_generated" in t_res:
-                    metric["gen_ai"] = t_res["is_ai_generated"]
-                if "diffusion_detected" in t_res and not t_res.get("is_ai_generated"):
-                    # Preserve SUSPICIOUS signal: diffusion artifacts present but
-                    # confidence below confirmed AI-generation threshold.
-                    metric["diffusion_suspicious"] = t_res["diffusion_detected"]
-
-                # Include textual findings for semantic grounding
-                if "full_text" in t_res:
-                    metric["ocr"] = t_res["full_text"][:500]
-
-                context_summary[t_name] = metric if metric else {k:v for k,v in t_res.items() if len(str(v)) < 500}
+            # Audit Fix: DYNAMIC CONTEXT AGGREGATION
+            from core.context_utils import aggregate_tool_context
+            context_summary = aggregate_tool_context(self._tool_context, agent_id=self.agent_id)
 
             # EXIF Cross-modal check
             if self.working_memory:

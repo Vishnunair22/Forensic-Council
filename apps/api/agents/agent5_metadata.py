@@ -66,11 +66,12 @@ class Agent5Metadata(ForensicAgent):
             inter_agent_bus=inter_agent_bus,
         )
         self._agent1_context: dict = {}
-        self._agent1_context_event: asyncio.Event | None = None
+        self._agent1_context_event: asyncio.Event = asyncio.Event()
 
     def inject_agent1_context(self, agent1_gemini_findings: dict) -> None:
         """Share Agent 1 Gemini vision findings with this agent instance."""
         self._agent1_context = agent1_gemini_findings or {}
+        self._agent1_context_event.set()
 
     @property
     def _is_digital_image(self) -> bool:
@@ -236,34 +237,24 @@ class Agent5Metadata(ForensicAgent):
         async def gemini_deep_forensic_handler(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact
 
-            # Wait for Agent1 context
+            # Wait for Agent1 context if event exists
             _ctx_event = getattr(self, "_agent1_context_event", None)
             if _ctx_event is not None and not _ctx_event.is_set():
+                from core.config import get_settings
+                _timeout = get_settings().agent_context_wait_timeout
                 try:
-                    await asyncio.wait_for(asyncio.shield(_ctx_event.wait()), timeout=60.0)
-                except TimeoutError:
-                    logger.warning(
-                        f"{self.agent_id}: Agent1 context wait timed out after 60s — proceeding without image-integrity context"
+                    await asyncio.wait_for(asyncio.shield(_ctx_event.wait()), timeout=_timeout)
+                except asyncio.TimeoutError:
+                    self.logger.warning(
+                        f"Agent 5 timed out waiting for Agent 1 context after {_timeout}s; proceeding with local data."
                     )
                     await self._record_tool_error(
                         "agent1_context_sync",
-                        "Agent1 Gemini context unavailable (60s timeout) — metadata provenance analysis may lack image-integrity grounding",
+                        f"Agent1 Gemini context unavailable ({_timeout}s timeout) — metadata analysis may lack image-integrity grounding",
                     )
 
-            # Audit Fix: DYNAMIC CONTEXT AGGREGATION
-            # Collect all successful tool results to ensure no blindspots (C2PA, Astro, Stego)
-            dynamic_context = {}
-            for tool_name, result in self._tool_context.items():
-                if not isinstance(result, dict):
-                    continue
-                if result.get("error"):
-                    # Skip error results in provenance synthesis
-                    continue
-
-                # Extract high-value forensic keys for Gemini
-                dynamic_context[tool_name] = {
-                    k: v for k, v in result.items() if k not in ("exif_raw", "artifact", "error")
-                }
+                from core.context_utils import aggregate_tool_context
+                dynamic_context = aggregate_tool_context(self._tool_context, agent_id=self.agent_id)
 
             # Add Agent1 context if available
             a1 = getattr(self, "_agent1_context", {})

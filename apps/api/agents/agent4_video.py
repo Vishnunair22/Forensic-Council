@@ -125,20 +125,8 @@ class Agent4Video(ForensicAgent):
         async def gemini_deep_forensic_handler(input_data: dict) -> dict:
             artifact = input_data.get("artifact") or self.evidence_artifact
             # Audit Fix: DYNAMIC CONTEXT AGGREGATION
-            # Collect all successful tool results to ensure no blindspots (VFI, Metadata, Codecs)
-            dynamic_context = {}
-            for tool_name, result in self._tool_context.items():
-                if not isinstance(result, dict):
-                    continue
-                if result.get("error"):
-                    # Skip error results in temporal synthesis
-                    continue
-
-                # Extract high-value forensic keys for Gemini
-                dynamic_context[tool_name] = {
-                    k: v for k, v in result.items()
-                    if k not in ("artifact", "error", "frames", "flagged_frames")
-                }
+            from core.context_utils import aggregate_tool_context
+            dynamic_context = aggregate_tool_context(self._tool_context, agent_id=self.agent_id)
 
             # Context from Agent 1 (Image Integrity) for cross-modal check
             agent1_context = {}
