@@ -36,6 +36,41 @@ TOOL_TIMEOUTS: dict[str, float] = {
 }
 
 DEFAULT_TOOL_TIMEOUT = 60.0
+ 
+# Tools that are CPU/GPU intensive and should be throttled by a semaphore.
+# API-based tools (like Gemini) or light metadata tools are excluded.
+HEAVY_TOOLS: set[str] = {
+    "ela_full_image",
+    "ela_anomaly_classify",
+    "jpeg_ghost_detect",
+    "frequency_domain_analysis",
+    "splicing_detect",
+    "noise_fingerprint",
+    "deepfake_frequency_check",
+    "neural_fingerprint",
+    "neural_copy_move",
+    "extract_text_from_image",
+    "extract_evidence_text",
+    "speaker_diarize",
+    "anti_spoofing_detect",
+    "prosody_analyze",
+    "audio_splice_detect",
+    "background_noise_analysis",
+    "object_detection",
+    "lighting_consistency",
+    "scene_incongruence",
+    "vector_contraband_search",
+    "optical_flow_analysis",
+    "frame_consistency_analysis",
+    "face_swap_detection",
+    "vfi_error_map",
+    "interframe_forgery_detector",
+    "rolling_shutter_validation",
+    "steganography_scan",
+    "file_structure_analysis",
+    "hex_signature_scan",
+    "astro_grounding",
+}
 
 
 
@@ -179,6 +214,7 @@ class ToolRegistry:
         agent_id: str,
         session_id: uuid.UUID,
         custody_logger: CustodyLogger | None = None,
+        semaphore: asyncio.Semaphore | None = None,
     ) -> ToolResult:
         """
         Execute a tool call with logging and graceful degradation.
@@ -253,7 +289,14 @@ class ToolRegistry:
             # their own tighter timeouts inside run_ml_tool.
             timeout_s = TOOL_TIMEOUTS.get(tool_name, DEFAULT_TOOL_TIMEOUT)
 
-            output = await asyncio.wait_for(handler(input_data), timeout=timeout_s)
+            # Apply semaphore gating for heavy CPU/GPU tools
+            if semaphore and tool_name in HEAVY_TOOLS:
+                async with semaphore:
+                    logger.debug(f"Acquired heavy tool semaphore for {tool_name}", agent_id=agent_id)
+                    output = await asyncio.wait_for(handler(input_data), timeout=timeout_s)
+            else:
+                output = await asyncio.wait_for(handler(input_data), timeout=timeout_s)
+
             result = ToolResult(tool_name=tool_name, success=True, output=output)
         except TimeoutError:
             logger.warning(

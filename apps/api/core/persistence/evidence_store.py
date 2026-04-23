@@ -121,6 +121,20 @@ class EvidenceStore:
 
         return await asyncio.to_thread(_read)
 
+    async def _compute_file_hash(self, file_path: str) -> str:
+        """Compute SHA-256 hash of a file using chunked streaming to avoid OOM."""
+        import asyncio
+        import hashlib
+
+        def _hash_sync():
+            sha256 = hashlib.sha256()
+            with open(file_path, "rb") as f:
+                for chunk in iter(lambda: f.read(1024 * 1024), b""): # 1MB chunks
+                    sha256.update(chunk)
+            return sha256.hexdigest()
+
+        return await asyncio.to_thread(_hash_sync)
+
     async def ingest(
         self,
         file_path: str,
@@ -133,32 +147,17 @@ class EvidenceStore:
         """
         Ingest a file as evidence.
 
-        Computes hash, copies to immutable storage, creates artifact record,
-        and logs to chain of custody.
-
-        Args:
-            file_path: Path to the file to ingest
-            session_id: Analysis session ID
-            agent_id: Agent performing ingestion
-            artifact_type: Type of artifact (default: ORIGINAL)
-            action: Action description (default: "ingest")
-            metadata: Additional metadata
-
-        Returns:
-            EvidenceArtifact representing the ingested file
-
-        Raises:
-            EvidenceStoreError: If ingestion fails
+        Computes hash using streaming, copies to immutable storage, 
+        creates artifact record, and logs to chain of custody.
         """
         try:
-            # Read and hash file asynchronously
-            data = await self._read_file(file_path)
-            content_hash = self._compute_hash(data)
+            # Compute hash using chunked streaming (memory-safe)
+            content_hash = await self._compute_file_hash(file_path)
 
-            # Create artifact record (root_id will be set to artifact_id)
+            # Create artifact record placeholder (path updated after storage)
             artifact = EvidenceArtifact.create_root(
                 artifact_type=artifact_type,
-                file_path="",  # Will be updated after storage
+                file_path="", 
                 content_hash=content_hash,
                 action=action,
                 agent_id=agent_id,
@@ -166,11 +165,11 @@ class EvidenceStore:
                 metadata=metadata,
             )
 
-            # Store file in immutable storage
+            # Store file in immutable storage using direct file copy (memory-safe)
             stored_path = await self._storage.store(
                 root_id=artifact.root_id,
                 artifact_id=artifact.artifact_id,
-                data=data,
+                file_path=file_path,
             )
             artifact.file_path = stored_path
 
@@ -194,10 +193,9 @@ class EvidenceStore:
                 )
 
             logger.info(
-                "Ingested evidence artifact",
+                "Ingested evidence artifact (memory-safe)",
                 artifact_id=str(artifact.artifact_id),
                 root_id=str(artifact.root_id),
-                content_hash=content_hash[:16] + "...",
                 session_id=str(session_id),
             )
 

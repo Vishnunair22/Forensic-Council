@@ -375,6 +375,9 @@ class Settings(BaseSettings):
     investigation_timeout: int = Field(
         default=600, description="Max seconds for a single investigation"
     )
+    hitl_decision_timeout: int = Field(
+        default=3600, description="Max seconds to wait for HITL decision before auto-skipping deep analysis"
+    )
     investigation_max_retries: int = Field(
         default=3, description="Max retry attempts for failed investigations"
     )
@@ -384,6 +387,12 @@ class Settings(BaseSettings):
     session_ttl_hours: int = Field(
         default=24,
         description="Hours to retain completed investigation sessions in memory before eviction",
+    )
+    max_parallel_heavy_tools: int = Field(
+        default=2,
+        ge=1,
+        le=5,
+        description="Maximum number of simultaneous heavy neural/math tools allowed (prevents CPU starvation).",
     )
 
     # LLM Configuration

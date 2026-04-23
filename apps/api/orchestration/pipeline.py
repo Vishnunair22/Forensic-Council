@@ -35,8 +35,19 @@ class SignalBus:
             self.findings[agent_id] = initial_findings
             self.events[agent_id].set()
             self._ready_agents.add(agent_id)
-            if len(self._ready_agents) >= self._required_quorum:
-                self.quorum_event.set()
+            self._check_quorum()
+
+    def signal_failure(self, agent_id: str):
+        """Signal that an agent has failed its initial investigation."""
+        if agent_id in self.events:
+            self.events[agent_id].set()
+            self._ready_agents.add(agent_id)
+            self._check_quorum()
+
+    def _check_quorum(self):
+        """Check if enough agents have reported (success or failure) to unblock deliberation."""
+        if len(self._ready_agents) >= self._required_quorum:
+            self.quorum_event.set()
 
     async def wait_for_quorum(self, timeout: float = 60.0):
         """Wait until a quorum of agents is ready."""
@@ -282,6 +293,12 @@ class ForensicCouncilPipeline:
         self.session_manager: SessionManager | None = None
         self.arbiter: CouncilArbiter | None = None
         self.signal_bus: SignalBus | None = None
+        
+        # Concurrency Control: Cap simultaneous heavy neural/math tools 
+        # to prevent CPU starvation on systems without dedicated GPUs.
+        self.heavy_tool_semaphore = asyncio.Semaphore(
+            max(1, (self.config.max_parallel_heavy_tools or 2))
+        )
 
     def _setup_infrastructure(self) -> None:
         """Set up infrastructure slot placeholders; actual connections are
@@ -954,6 +971,9 @@ class ForensicCouncilPipeline:
                 try:
                     initial_count = len(initial_findings)
                     logger.info(f"Running {agent_id} deep investigation")
+                    
+                    # Execution logic moved to agent.run_deep_investigation()
+                    # which now uses internal semaphore gating for heavy tools.
                     await asyncio.wait_for(
                         agent.run_deep_investigation(),
                         timeout=self.config.investigation_timeout,
@@ -1091,6 +1111,7 @@ class ForensicCouncilPipeline:
                 "episodic_memory": self.episodic_memory,
                 "custody_logger": self.custody_logger,
                 "evidence_store": self.evidence_store,
+                "heavy_tool_semaphore": self.heavy_tool_semaphore,
                 **extra
             }
             
@@ -1132,6 +1153,10 @@ class ForensicCouncilPipeline:
             except Exception as e:
                 logger.error(f"{aid} initial pass failed", error=str(e))
                 findings = list(getattr(agent, "_findings", []) or [])
+                # Signal for quorum even on error to prevent deadlock
+                if self.signal_bus:
+                    self.signal_bus.signal_failure(aid)
+                
                 await _broadcast_agent_status(aid, "error", f"{aid} error: {e}", findings=findings, error=str(e), agent_inst=agent)
                 return agent, findings, "error"
 
@@ -1208,14 +1233,39 @@ class ForensicCouncilPipeline:
             )
 
             try:
-                while True:
-                    decision = await redis.get_json(decision_key)
-                    if isinstance(decision, dict):
-                        self.run_deep_analysis_flag = bool(decision.get("deep_analysis"))
-                        return self.run_deep_analysis_flag
+                # Issue 15.2: Use existing redis client and add timeout logic
+                redis = self._redis or await get_redis_client()
+                timeout = self.config.hitl_decision_timeout or 3600
+                start_time = time.perf_counter()
+
+                while (time.perf_counter() - start_time) < timeout:
+                    try:
+                        decision = await redis.get_json(decision_key)
+                        if isinstance(decision, dict):
+                            self.run_deep_analysis_flag = bool(decision.get("deep_analysis"))
+                            logger.info(
+                                "Analyst decision received via Redis", 
+                                session_id=str(session_id), 
+                                deep_analysis=self.run_deep_analysis_flag
+                            )
+                            return self.run_deep_analysis_flag
+                    except Exception as poll_err:
+                        # Log error but don't crash the loop - Redis might be flickering
+                        logger.debug("Decision polling flicker", error=str(poll_err))
+
                     if self.deep_analysis_decision_event.is_set():
+                        logger.info("Analyst decision received via internal event", session_id=str(session_id))
                         return bool(self.run_deep_analysis_flag)
-                    await asyncio.sleep(0.5)
+                    
+                    # 2s poll is plenty responsive for a human decision
+                    await asyncio.sleep(2.0)
+                
+                logger.warning(
+                    "HITL decision timed out; defaulting to skip deep analysis",
+                    session_id=str(session_id),
+                    timeout_seconds=timeout
+                )
+                return False
             finally:
                 self._awaiting_user_decision = False
                 try:
@@ -1247,12 +1297,13 @@ class ForensicCouncilPipeline:
 
                 if meta:
                     for aid, (agent_inst, _, _) in agent_map.items():
-                        if agent_inst is None or aid in context_injected:
+                        # Producer doesn't need to inject context into itself
+                        if agent_inst is None or aid in context_injected or aid == producer_id:
                             continue
                         if hasattr(agent_inst, "inject_agent1_context"):
                             agent_inst.inject_agent1_context(meta)
                             context_injected.add(aid)
-                    logger.info("Early context broadcast triggered from producer")
+                    logger.info(f"Early context broadcast from {producer_id} triggered")
 
                 context_event.set()
             except Exception as _cb_err:

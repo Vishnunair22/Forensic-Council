@@ -16,35 +16,41 @@ class ForensicPolicy:
     # --- Tool Reliability Tiers ---
     # Maps tool names to their base reliability weight (0.0 to 1.0)
     TOOL_RELIABILITY_TIERS: dict[str, float] = {
-        # Calibrated (highest weight)
+        # Calibrated / Neural High-Recall (highest weight)
+        "neural_ela": 1.0,
+        "noiseprint_cluster": 1.0,
+        "neural_copy_move": 0.95,
+        "neural_splicing": 0.95,
+        "anomaly_tracer": 0.90,
+        "f3_net_frequency": 0.90,
+        "diffusion_artifact_detector": 0.95,
         "ela_full_image": 1.0,
         "jpeg_ghost_detect": 1.0,
         "noise_fingerprint": 1.0,
         "frequency_domain_analysis": 1.0,
-        "enf_analysis": 1.0,
-        "file_hash_verify": 1.0,
-        "codec_fingerprinting": 1.0,
-        # ML-based (medium weight)
-        "deepfake_frequency_check": 0.75,
-        "face_swap_detection": 0.75,
+        "codec_fingerprint": 1.0,
+
+        # ML-based / Neural (medium-high weight)
+        "voice_clone_detect": 0.85,
+        "anti_spoofing_detect": 0.85,
         "speaker_diarize": 0.75,
-        "anti_spoofing_detect": 0.75,
-        "optical_flow_analysis": 0.75,
-        "object_detection": 0.75,
+        "optical_flow_analyze": 0.80,
+        "face_swap_detect": 0.85,
+        "object_detection": 0.80,
         "lighting_consistency": 0.75,
         "lighting_correlator": 0.80,
-        "diffusion_artifact_detector": 0.75,
         "interframe_forgery_detector": 0.75,
         "scene_incongruence": 0.65,
-        "voice_clone_detect": 0.75,
         "vector_contraband_search": 0.80,
         "copy_move_detect": 0.75,
         "splicing_detect": 0.75,
         "audio_splice_detect": 0.75,
         "rolling_shutter_validation": 0.75,
         "adversarial_robustness_check": 0.70,
-        "voice_clone_deep_ensemble": 0.80,
-        "anti_spoofing_deep_ensemble": 0.80,
+        "vfi_error_map": 0.85,
+        "thumbnail_coherence": 0.75,
+        "av_sync_verify": 0.80,
+
         # Heuristic / metadata (lower weight)
         "exif_extract": 0.5,
         "metadata_anomaly_score": 0.65,
@@ -53,12 +59,16 @@ class ForensicPolicy:
         "gps_timezone_validate": 0.5,
         "timestamp_analysis": 0.5,
         "scale_validation": 0.6,
-        "c2pa_validator": 0.65,
+        "camera_profile_match": 0.65,
+        "provenance_chain_verify": 0.75,
         "device_fingerprint_db": 0.55,
         "reverse_image_search": 0.50,
         "astronomical_api": 0.55,
         "perceptual_hash": 0.60,
         "gemini_deep_forensic": 0.85,
+        "analyze_image_content": 0.40,
+        "extract_text_from_image": 0.40,
+        "ocr_analysis": 0.40,
     }
 
     DEFAULT_TOOL_RELIABILITY = 0.65

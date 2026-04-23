@@ -532,7 +532,16 @@ async def face_swap_detect(
         total_faces = 0
         deepfake_scores = []
 
+        # Optimization: Target ~300 samples for the whole video to stay within 
+        # deep analysis latency budgets on CPU-bound environments.
+        total_frame_count = len(frame_files)
+        skip_rate = max(1, total_frame_count // 300)
+
         for frame_idx, frame_file in enumerate(frame_files):
+            # Apply skipping
+            if frame_idx % skip_rate != 0:
+                continue
+                
             if progress_callback and frame_idx % 10 == 0:
                 await progress_callback(
                     f"Scanning frame {frame_idx}/{len(frame_files)} for face anomalies..."

@@ -55,6 +55,7 @@ class ForensicAgent(
         custody_logger: CustodyLogger,
         evidence_store: EvidenceStore,
         inter_agent_bus: Any = None,
+        heavy_tool_semaphore: asyncio.Semaphore | None = None,
     ) -> None:
         """Initialize a forensic agent and all its modular components."""
         self.agent_id = agent_id
@@ -66,6 +67,7 @@ class ForensicAgent(
         self.custody_logger = custody_logger
         self.evidence_store = evidence_store
         self.inter_agent_bus = inter_agent_bus
+        self.heavy_tool_semaphore = heavy_tool_semaphore
 
         # Initialize mixin-provided state containers
         self._init_context()

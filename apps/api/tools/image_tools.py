@@ -245,7 +245,11 @@ def ela_full_image(
                     except OSError:
                         pass
 
-        return _blocking_ela_compute()
+        # Use a thread executor for the heavy PIL/numpy re-compression sweep 
+        # to avoid blocking the main event loop.
+        import asyncio as _asyncio
+        loop = _asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _blocking_ela_compute)
 
     except Exception as e:
         if isinstance(e, ToolUnavailableError):

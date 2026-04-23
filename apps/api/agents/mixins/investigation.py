@@ -32,6 +32,7 @@ class AgentInvestigationMixin:
     evidence_artifact: Any
     iteration_ceiling: int
     agent_name: str
+    heavy_tool_semaphore: asyncio.Semaphore | None
     task_decomposition: list[str]
     deep_task_decomposition: list[str]
 
@@ -301,6 +302,7 @@ class AgentInvestigationMixin:
             iteration_ceiling=self.iteration_ceiling,
             working_memory=self.working_memory,
             custody_logger=self.custody_logger,
+            heavy_tool_semaphore=self.heavy_tool_semaphore,
         )
 
         llm_generator = None
@@ -372,6 +374,7 @@ class AgentInvestigationMixin:
             iteration_ceiling=len(deep_tasks) + 3,
             working_memory=self.working_memory,
             custody_logger=self.custody_logger,
+            heavy_tool_semaphore=self.heavy_tool_semaphore,
         )
 
         loop_result = await loop_engine.run(
@@ -430,6 +433,7 @@ class AgentInvestigationMixin:
             iteration_ceiling=max(3, self.iteration_ceiling // 2),
             working_memory=self.working_memory,
             custody_logger=self.custody_logger,
+            heavy_tool_semaphore=self.heavy_tool_semaphore,
         )
 
         llm_generator = None

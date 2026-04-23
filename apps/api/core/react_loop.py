@@ -711,12 +711,13 @@ class ReActLoopEngine:
         iteration_ceiling: int,
         working_memory: WorkingMemory,
         custody_logger: CustodyLogger,
-        redis_client: Any = None,  # Redis client for HITL checkpoint storage
-        hitl_timeout: float = 300.0,  # Timeout for HITL resume wait (5 minutes default)
+        redis_client: Any = None,
+        hitl_timeout: float = 300.0,
+        heavy_tool_semaphore: asyncio.Semaphore | None = None,
     ) -> None:
         """
         Initialize the ReAct loop engine.
-
+ 
         Args:
             agent_id: ID of the agent running this loop
             session_id: Session ID for this analysis
@@ -725,6 +726,7 @@ class ReActLoopEngine:
             custody_logger: Logger for chain of custody
             redis_client: Redis client for HITL checkpoint storage
             hitl_timeout: Timeout in seconds for waiting on HITL resume (default 300s = 5 min)
+            heavy_tool_semaphore: Shared semaphore for throttling heavy CPU/GPU tools
         """
         self.agent_id = agent_id
         self.session_id = session_id
@@ -733,6 +735,7 @@ class ReActLoopEngine:
         self.custody_logger = custody_logger
         self.redis_client = redis_client
         self.hitl_timeout = hitl_timeout
+        self.heavy_tool_semaphore = heavy_tool_semaphore
 
         # Internal state
         self._current_iteration = 0
@@ -1209,6 +1212,7 @@ class ReActLoopEngine:
                             agent_id=self.agent_id,
                             session_id=self.session_id,
                             custody_logger=self.custody_logger,
+                            semaphore=self.heavy_tool_semaphore,
                         )
                         _tool_span.set_attribute("tool_success", tool_result.success)
 
