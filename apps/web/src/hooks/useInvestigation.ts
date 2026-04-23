@@ -160,10 +160,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   const [authError, setAuthError] = useState<string | null>(null);
 
-  const authReadyRef = useRef<Promise<void>>(
-    typeof document !== "undefined" &&
-      (document.cookie.includes("access_token") ||
-        storage.getItem("forensic_auth_ok") === "1")
+  const authReadyRef = useRef<Promise<void> | null>(null);
+
+  if (typeof window !== "undefined" && !authReadyRef.current) {
+    authReadyRef.current = (document.cookie.includes("access_token") ||
+      storage.getItem("forensic_auth_ok") === "1")
       ? Promise.resolve()
       : autoLoginAsInvestigator()
           .then(() => {})
@@ -174,8 +175,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
               title: "Authentication Error",
               description: `Could not establish session: ${msg}. Please refresh the page.`,
             });
-          })
-  );
+          });
+  }
 
   const filePreviewUrl = useMemo(() => {
     if (!file) return null;
@@ -434,7 +435,16 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const validCompletedAgents = completedAgents.filter((c: AgentUpdate) =>
     validAgentsData.some((v) => v.id === c.agent_id)
   );
-  const expectedAgentIds = supportedAgentIdsForMime(storage.getItem<string>("forensic_mime_type"));
+
+  const [mimeType, setMimeType] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Safely sync from storage on mount/file change to avoid hydration mismatch
+    setMimeType(storage.getItem<string>("forensic_mime_type") || file?.type || null);
+  }, [file]);
+
+  const expectedAgentIds = useMemo(() => supportedAgentIdsForMime(mimeType), [mimeType]);
+
   const expectedCompletedCount = validCompletedAgents.filter((c: AgentUpdate) =>
     expectedAgentIds.has(c.agent_id)
   ).length;

@@ -120,7 +120,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
                 <div className="absolute inset-0 w-full h-[2px] bg-primary/40 animate-pulse top-1/2 -translate-y-1/2 blur-[2px]" />
               )}
               
-              <span className={`text-xs font-bold tracking-widest uppercase transition-colors z-10 pointer-events-none ${isDragging ? "text-primary" : "text-white/40 group-hover:text-primary"}`}>
+              <span className={`text-xs font-bold tracking-widest transition-colors z-10 pointer-events-none ${isDragging ? "text-primary" : "text-white/40 group-hover:text-primary"}`}>
                 {isDragging ? "Release Payload" : "Select File"}
               </span>
               

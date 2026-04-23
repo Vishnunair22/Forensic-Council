@@ -45,7 +45,6 @@ export function mapReportDtoToReport(dto: ReportDTO): Report {
         evidenceVerdict === "NOT_APPLICABLE" || evidenceVerdict === "ERROR"
           ? 0
           : (finding.raw_confidence_score ??
-            finding.calibrated_probability ??
             finding.confidence_raw ??
             0);
 

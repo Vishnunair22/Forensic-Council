@@ -52,11 +52,15 @@ export function FileUploadSection({
   };
 
   useEffect(() => {
+    let isActive = true;
     if (file) {
-      computeHash(file).then(setFileHash);
+      computeHash(file).then(hash => {
+        if (isActive) setFileHash(hash);
+      });
     } else {
       setFileHash(null);
     }
+    return () => { isActive = false; };
   }, [file]);
 
   const fileSizeMb = file ? file.size / 1024 / 1024 : 0;
@@ -162,7 +166,10 @@ export function FileUploadSection({
       {/* Actions */}
       <div className="p-6 grid grid-cols-2 gap-4 bg-white/[0.02]">
        <button
-        onClick={onClear}
+        onClick={() => {
+          if (fileInputRef.current) fileInputRef.current.value = "";
+          onClear();
+        }}
         disabled={isUploading}
         className="flex items-center justify-center gap-2 py-4 rounded-xl border border-white/10 bg-white/5 text-white/50 text-[10px] font-black tracking-widest hover:bg-white/10 transition-all active:scale-95"
        >
@@ -205,7 +212,7 @@ export function FileUploadSection({
       onClick={() => fileInputRef.current?.click()}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInputRef.current?.click(); } }}
       onDragEnter={(e) => { e.preventDefault(); onDragEnter(); }}
-      onDragOver={(e) => { e.preventDefault(); if (!isDragging) onDragEnter(); }}
+      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
       onDragLeave={onDragLeave}
       onDrop={(e) => {
        e.preventDefault();

@@ -213,7 +213,7 @@ export function AgentProgressDisplay({
               <div className="absolute inset-0 bg-primary/20 rounded-full glow-pulse" />
               <Loader2 className="w-4 h-4 text-primary animate-premium-spin relative z-10" />
             </div>
-            <p className="text-[10px] font-bold text-primary tracking-[0.3em] uppercase">
+            <p className="text-[10px] font-bold text-primary tracking-[0.3em]">
               {phase === "initial" ? "Initial Analysis" : "Deep Analysis"}
             </p>
           </div>
@@ -228,7 +228,7 @@ export function AgentProgressDisplay({
             className="flex items-center gap-6 bg-white/[0.03] px-6 py-4 rounded-2xl border border-white/5 backdrop-blur-xl hover:bg-white/[0.06] transition-all group"
           >
             <div className="flex flex-col items-start">
-              <span className="text-[9px] font-bold text-white/30 tracking-[0.2em] mb-0.5 uppercase">Status</span>
+              <span className="text-[9px] font-bold text-white/30 tracking-[0.2em] mb-0.5">Status</span>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-black text-white font-mono">Running Agents</span>
                 <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-primary/10 text-primary text-xs font-black">
@@ -275,7 +275,7 @@ export function AgentProgressDisplay({
               className="flex items-center gap-6 bg-white/[0.03] px-6 py-4 rounded-2xl border border-white/5 backdrop-blur-xl hover:bg-white/[0.06] transition-all group"
             >
               <div className="flex flex-col items-start">
-                <span className="text-[9px] font-bold text-white/30 tracking-[0.2em] mb-0.5 uppercase">System</span>
+                <span className="text-[9px] font-bold text-white/30 tracking-[0.2em] mb-0.5">System</span>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-black text-white/40 font-mono">Skipped Agents</span>
                   <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-white/5 text-white/30 text-xs font-black">
@@ -362,7 +362,7 @@ export function AgentProgressDisplay({
           <button
            onClick={onAcceptAnalysis}
            disabled={isNavigating}
-           className="flex-1 px-8 py-4 rounded-2xl bg-white/5 border border-white/10 text-white font-black text-xs tracking-[0.2em] hover:bg-white/10 transition-all flex items-center justify-center gap-3 disabled:opacity-50 uppercase"
+           className="flex-1 px-8 py-4 rounded-2xl bg-white/5 border border-white/10 text-white font-black text-xs tracking-[0.2em] hover:bg-white/10 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
           >
            {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
            Accept Analysis
@@ -370,7 +370,7 @@ export function AgentProgressDisplay({
           <button
            onClick={onDeepAnalysis}
            disabled={isNavigating}
-           className="flex-[1.5] px-8 py-4 rounded-2xl bg-primary text-black font-black text-xs tracking-[0.2em] hover:bg-primary/90 transition-all shadow-[0_0_30px_rgba(34,211,238,0.3)] flex items-center justify-center gap-3 disabled:opacity-50 uppercase"
+           className="flex-[1.5] px-8 py-4 rounded-2xl bg-primary text-black font-black text-xs tracking-[0.2em] hover:bg-primary/90 transition-all shadow-[0_0_30px_rgba(34,211,238,0.3)] flex items-center justify-center gap-3 disabled:opacity-50"
           >
            <Microscope className="w-4 h-4" />
            Deep Analysis
@@ -381,7 +381,7 @@ export function AgentProgressDisplay({
          <>
           <button
            onClick={onNewUpload}
-           className="flex-1 px-8 py-4 rounded-2xl bg-white/5 border border-white/10 text-white font-black text-xs tracking-[0.2em] hover:bg-white/10 transition-all flex items-center justify-center gap-3 uppercase"
+           className="flex-1 px-8 py-4 rounded-2xl bg-white/5 border border-white/10 text-white font-black text-xs tracking-[0.2em] hover:bg-white/10 transition-all flex items-center justify-center gap-3"
           >
            <RotateCcw className="w-4 h-4 text-primary" />
            New Upload
@@ -389,7 +389,7 @@ export function AgentProgressDisplay({
           <button
            onClick={onViewResults}
            disabled={isNavigating}
-           className="flex-[1.5] px-8 py-4 rounded-2xl bg-primary text-black font-black text-xs tracking-[0.2em] hover:bg-primary/90 transition-all shadow-[0_0_30px_rgba(34,211,238,0.3)] flex items-center justify-center gap-3 disabled:opacity-50 uppercase"
+           className="flex-[1.5] px-8 py-4 rounded-2xl bg-primary text-black font-black text-xs tracking-[0.2em] hover:bg-primary/90 transition-all shadow-[0_0_30px_rgba(34,211,238,0.3)] flex items-center justify-center gap-3 disabled:opacity-50"
           >
            {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
            Generate Final Report

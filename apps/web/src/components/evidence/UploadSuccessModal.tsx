@@ -50,7 +50,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: Uploa
           style={{ transformOrigin: "top" }}
           className="absolute inset-0 z-40 bg-gradient-to-b from-primary/10 to-black border border-primary/50 rounded-3xl flex items-center justify-center shadow-[0_20px_50px_rgba(0,255,65,0.2)] pointer-events-none"
         >
-           <span className="text-primary font-mono text-sm tracking-[0.3em] shadow-[0_0_10px_rgba(0,255,65,0.8)]">PAYLOAD SECURED</span>
+           <span className="text-primary font-mono text-sm tracking-[0.3em] shadow-[0_0_10px_rgba(0,255,65,0.8)]">Payload Secured</span>
         </motion.div>
 
         {/* The Success Content */}
@@ -80,13 +80,13 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: Uploa
             <div className="flex w-full gap-4 mt-6">
               <button
                 onClick={onNewUpload}
-                className="flex-1 py-4 text-xs font-bold tracking-widest uppercase text-white/50 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all"
+                className="flex-1 py-4 text-xs font-bold tracking-widest text-white/50 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all"
               >
                 Reselect
               </button>
               <button
                 onClick={onStartAnalysis}
-                className="flex-1 py-4 text-xs font-bold tracking-widest uppercase text-black bg-primary hover:bg-glow-green rounded-xl shadow-[0_0_20px_rgba(0,255,65,0.3)] hover:shadow-[0_0_40px_rgba(0,255,65,0.5)] transition-all transform hover:scale-[1.02]"
+                className="flex-1 py-4 text-xs font-bold tracking-widest text-black bg-primary hover:bg-glow-green rounded-xl shadow-[0_0_20px_rgba(0,255,65,0.3)] hover:shadow-[0_0_40px_rgba(0,255,65,0.5)] transition-all transform hover:scale-[1.02]"
               >
                 Analyse
               </button>

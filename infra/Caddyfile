@@ -55,6 +55,8 @@
             header_up X-Real-IP         {remote_host}
             header_up X-Forwarded-For   {remote_host}
             header_up X-Forwarded-Proto {scheme}
+            header_up Upgrade           {http_upgrade}
+            header_up Connection        "{http_connection}"
 
             transport http {
                 response_header_timeout 300s
@@ -116,6 +118,8 @@
             header_up X-Real-IP         {remote_host}
             header_up X-Forwarded-For   {remote_host}
             header_up X-Forwarded-Proto {scheme}
+            header_up Upgrade           {http_upgrade}
+            header_up Connection        "{http_connection}"
 
             transport http {
                 response_header_timeout 300s

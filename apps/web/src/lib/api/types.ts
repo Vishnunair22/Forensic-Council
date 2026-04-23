@@ -11,7 +11,6 @@ export interface AgentFindingDTO {
   confidence_raw: number | null;
   evidence_verdict?: "POSITIVE" | "NEGATIVE" | "INCONCLUSIVE" | "NOT_APPLICABLE" | "ERROR";
   calibrated: boolean;
-  calibrated_probability: number | null; // DEPRECATED
   raw_confidence_score: number | null;
   court_statement: string | null;
   robustness_caveat: boolean;

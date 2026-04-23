@@ -34,7 +34,7 @@ export default function Home() {
             {/* NEW: System Status Badge */}
             <div className="flex items-center gap-3 px-4 py-1.5 rounded-full bg-primary/[0.03] border border-primary/20 mb-8 backdrop-blur-md shadow-[0_0_20px_rgba(var(--primary),0.05)]">
               <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(var(--primary),0.8)]" />
-              <span className="text-[10px] font-mono font-bold tracking-[0.3em] text-primary/80 uppercase">Neural Forensic Protocol v4.0</span>
+              <span className="text-[10px] font-mono font-bold tracking-[0.3em] text-primary/80">Neural Forensic Protocol v4.0</span>
             </div>
 
             {/* NEW: Gradient & Shadowed Typography */}
@@ -81,7 +81,7 @@ export default function Home() {
           transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
           className="absolute bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3"
         >
-          <span className="text-[9px] font-mono font-bold text-white/30 tracking-[0.3em] uppercase">Scroll to Inspect</span>
+          <span className="text-[9px] font-mono font-bold text-white/30 tracking-[0.3em]">Scroll to Inspect</span>
           <div className="w-[1px] h-16 bg-gradient-to-b from-primary/30 to-transparent" />
         </motion.div>
       </motion.div>

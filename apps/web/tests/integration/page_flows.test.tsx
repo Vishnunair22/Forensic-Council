@@ -77,7 +77,7 @@ describe("mapReportDtoToReport — complex reports", () => {
         {
           finding_id: `${id}-f1`, agent_id: id, agent_name: `${id} Expert`,
           finding_type: "primary", status: "complete",
-          confidence_raw: 0.9, calibrated: true, calibrated_probability: 0.87,
+          confidence_raw: 0.9, calibrated: true,
           raw_confidence_score: null,
           court_statement: "Statement A.", robustness_caveat: false,
           robustness_caveat_detail: null, reasoning_summary: "Summary A.", metadata: null,
@@ -85,7 +85,7 @@ describe("mapReportDtoToReport — complex reports", () => {
         {
           finding_id: `${id}-f2`, agent_id: id, agent_name: `${id} Expert`,
           finding_type: "secondary", status: "complete",
-          confidence_raw: 0.6, calibrated: false, calibrated_probability: null,
+          confidence_raw: 0.6, calibrated: false,
           raw_confidence_score: null,
           court_statement: "Statement B.", robustness_caveat: true,
           robustness_caveat_detail: "Low confidence.", reasoning_summary: "Summary B.", metadata: null,
@@ -102,7 +102,7 @@ describe("mapReportDtoToReport — complex reports", () => {
         {
           finding_id: "f-initial", agent_id: "agent-img", agent_name: "Image Expert",
           finding_type: "ela_analysis", status: "complete",
-          confidence_raw: 0.8, calibrated: false, calibrated_probability: null,
+          confidence_raw: 0.8, calibrated: false,
           raw_confidence_score: null,
           court_statement: "Initial pass.", robustness_caveat: false,
           robustness_caveat_detail: null, reasoning_summary: "Summary.", metadata: null,
@@ -110,7 +110,7 @@ describe("mapReportDtoToReport — complex reports", () => {
         {
           finding_id: "f-deep", agent_id: "agent-img", agent_name: "Image Expert",
           finding_type: "ela_analysis", status: "complete",
-          confidence_raw: 0.95, calibrated: true, calibrated_probability: 0.93,
+          confidence_raw: 0.95, calibrated: true,
           raw_confidence_score: null,
           court_statement: "Deep pass.", robustness_caveat: false,
           robustness_caveat_detail: null, reasoning_summary: "Deep summary.",
@@ -132,7 +132,7 @@ describe("mapReportDtoToReport — complex reports", () => {
         {
           finding_id: "f-dup-1", agent_id: "agent-img", agent_name: "Image Expert",
           finding_type: "ela_analysis", status: "complete",
-          confidence_raw: 0.8, calibrated: false, calibrated_probability: null,
+          confidence_raw: 0.8, calibrated: false,
           raw_confidence_score: null,
           court_statement: "First.", robustness_caveat: false,
           robustness_caveat_detail: null, reasoning_summary: "Summary.", metadata: null,
@@ -140,7 +140,7 @@ describe("mapReportDtoToReport — complex reports", () => {
         {
           finding_id: "f-dup-2", agent_id: "agent-img", agent_name: "Image Expert",
           finding_type: "ela_analysis", status: "complete",
-          confidence_raw: 0.9, calibrated: false, calibrated_probability: null,
+          confidence_raw: 0.9, calibrated: false,
           raw_confidence_score: null,
           court_statement: "Second.", robustness_caveat: false,
           robustness_caveat_detail: null, reasoning_summary: "Summary.", metadata: null,
@@ -158,7 +158,7 @@ describe("mapReportDtoToReport — complex reports", () => {
       "agent-vid": [{
         finding_id: "fv", agent_id: "agent-vid", agent_name: "Video Expert",
         finding_type: "deepfake_detection", status: "complete",
-        confidence_raw: 0.97, calibrated: true, calibrated_probability: 0.95,
+        confidence_raw: 0.97, calibrated: true,
           raw_confidence_score: null,
         court_statement: "No deepfake detected at p < 0.05.",
         robustness_caveat: false, robustness_caveat_detail: null,
@@ -167,7 +167,7 @@ describe("mapReportDtoToReport — complex reports", () => {
     };
     const report = mapReportDtoToReport(makeDTO({ per_agent_findings: perAgent }));
     expect(report.agents[0].result).toBe("No deepfake detected at p < 0.05.");
-    expect(report.agents[0].confidence).toBe(0.95);
+    expect(report.agents[0].confidence).toBe(0.97);
   });
 
   it("produces correct report metadata fields", () => {

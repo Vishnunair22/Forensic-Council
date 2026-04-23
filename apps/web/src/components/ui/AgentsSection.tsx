@@ -61,12 +61,12 @@ export function AgentsSection() {
 
               <div className="mt-auto pt-8 border-t border-white/5 w-full flex justify-between items-center group-hover:border-white/10 transition-colors">
                  <div className="flex flex-col items-start gap-1">
-                   <span className="text-[9px] font-mono font-bold tracking-[0.2em] text-white/30 group-hover:text-primary/70 transition-colors">NODE_ID</span>
+                    <span className="text-[9px] font-mono font-bold tracking-[0.2em] text-white/30 group-hover:text-primary/70 transition-colors">Node ID</span>
                    <span className="text-xs font-mono font-medium text-white/80">{agent.id}</span>
                  </div>
                  <div className="flex flex-col items-end gap-1">
-                   <span className="text-[9px] font-mono font-bold tracking-[0.2em] text-white/30 group-hover:text-primary/70 transition-colors">STATUS</span>
-                   <span className="text-xs font-mono font-bold text-primary/90 uppercase">{agent.badge}</span>
+                    <span className="text-[9px] font-mono font-bold tracking-[0.2em] text-white/30 group-hover:text-primary/70 transition-colors">Status</span>
+                    <span className="text-xs font-mono font-bold text-primary/90">{agent.badge}</span>
                  </div>
               </div>
 

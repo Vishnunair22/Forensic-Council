@@ -91,13 +91,25 @@
     font-size: clamp(14px, 1vw + 0.5rem, 18px);
   }
 
-  button, a, [role="button"] {
-    cursor: pointer;
-  }
-
   :focus-visible {
     outline: 2px solid var(--color-primary);
     outline-offset: 3px;
+  }
+
+  /* Global Button & Interactive Elements — Consistent UX */
+  button, a, [role="button"], label, input[type="checkbox"], input[type="radio"], select, summary {
+    cursor: pointer;
+  }
+
+  button, [role="button"] {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Requirement: All buttons go transparent on hover */
+  button:hover, [role="button"]:hover {
+    background-color: transparent !important;
+    border-color: var(--color-primary) !important;
+    color: var(--color-primary) !important;
   }
 
   h1, h2, h3, h4, h5, h6 {

@@ -147,7 +147,7 @@ export function AgentStatusCard({
               <h3 className="text-xl font-black text-white tracking-tight mb-1">{name}</h3>
               <div className="flex items-center gap-2">
                 <span className={clsx(
-                  "px-3 py-1 rounded-full text-[9px] font-black tracking-widest uppercase",
+                  "px-3 py-1 rounded-full text-[9px] font-black tracking-widest",
                   status === "running" ? "bg-primary/20 text-primary animate-pulse" :
                   status === "complete" ? "bg-emerald-500/20 text-emerald-400" :
                   "bg-white/5 text-white/30"
@@ -210,7 +210,7 @@ export function AgentStatusCard({
             >
               <div className="flex items-end justify-between px-1">
                 <div>
-                  <span className="text-[10px] font-black text-white/30 tracking-[0.2em] uppercase block mb-1">Final Verdict</span>
+                  <span className="text-[10px] font-black text-white/30 tracking-[0.2em] block mb-1">Final Verdict</span>
                   <span className={clsx(
                     "text-2xl font-black tracking-tight",
                     (completedData.verdict_score ?? 0) > 0.6 ? "text-rose-500" : "text-emerald-400"
@@ -219,7 +219,7 @@ export function AgentStatusCard({
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-[10px] font-black text-white/30 tracking-[0.2em] uppercase block mb-1">Confidence</span>
+                  <span className="text-[10px] font-black text-white/30 tracking-[0.2em] block mb-1">Confidence</span>
                   <span className="text-2xl font-black text-white font-mono">
                     {Math.round(completedData.confidence * 100)}%
                   </span>
@@ -272,14 +272,14 @@ export function AgentStatusCard({
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2 mb-1">
-                          <span className="text-[11px] font-black text-white/90 tracking-tight uppercase">
+                          <span className="text-[11px] font-black text-white/90 tracking-tight">
                             {fmtTool(f.tool)}
                           </span>
                           <span className={clsx(
                             "text-[10px] font-black font-mono",
                             isAlert ? "text-rose-400" : "text-emerald-400"
                           )}>
-                            {Math.round((f.confidence || 0) * 100)}% MATCH
+                            {Math.round((f.confidence || 0) * 100)}% Match
                           </span>
                         </div>
                         <p className={clsx(
@@ -291,7 +291,7 @@ export function AgentStatusCard({
                         {f.summary.length > 100 && (
                           <button
                             onClick={() => toggleFinding(`${f.tool}-${i}`)}
-                            className="text-[10px] font-black text-primary/60 hover:text-primary mt-2 transition-colors uppercase tracking-widest"
+                            className="text-[10px] font-black text-primary/60 hover:text-primary mt-2 transition-colors tracking-widest"
                           >
                             {isExpanded ? "Show Less" : "Show More"}
                           </button>
@@ -305,7 +305,7 @@ export function AgentStatusCard({
               {findings.length > 2 && (
                 <button
                   onClick={() => setShowAllTools(!showAllTools)}
-                  className="w-full py-4 rounded-2xl border border-dashed border-white/10 text-white/30 hover:text-white/60 hover:border-white/20 hover:bg-white/[0.01] transition-all text-[10px] font-black uppercase tracking-[0.2em]"
+                  className="w-full py-4 rounded-2xl border border-dashed border-white/10 text-white/30 hover:text-white/60 hover:border-white/20 hover:bg-white/[0.01] transition-all text-[10px] font-black tracking-[0.2em]"
                 >
                   {showAllTools ? "Collapse Findings" : `Show ${findings.length - 2} More Findings`}
                 </button>
@@ -317,7 +317,7 @@ export function AgentStatusCard({
                 <div className="absolute inset-0 bg-primary blur-2xl opacity-20 animate-pulse" />
                 <Icon className="w-12 h-12 text-primary animate-pulse" />
               </div>
-              <span className="text-[10px] font-black uppercase tracking-[0.3em]">Analyzing Stream...</span>
+              <span className="text-[10px] font-black tracking-[0.3em]">Analyzing Stream...</span>
             </div>
           ) : isSkipped ? (
             <div className="flex flex-col items-center justify-center h-full text-center p-6 gap-4">
@@ -325,7 +325,7 @@ export function AgentStatusCard({
                 <Ban className="w-8 h-8" />
               </div>
               <div>
-                <p className="text-xs font-black text-white/40 uppercase tracking-widest mb-1">Agent Bypassed</p>
+                <p className="text-xs font-black text-white/40 tracking-widest mb-1">Agent Bypassed</p>
                 <p className="text-[11px] text-white/20 font-medium leading-relaxed">
                   File compatibility mismatch detected. This module was skipped to optimize performance.
                 </p>

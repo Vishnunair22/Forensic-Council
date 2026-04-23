@@ -57,7 +57,7 @@ export function HowWorksSection() {
               
               <div className="mt-8 flex justify-center opacity-0 group-hover:opacity-100 transition-all duration-500">
                 {/* Removed the translate-y to prevent layout jitter */}
-                <span className="text-[10px] font-mono font-bold tracking-[0.2em] px-4 py-1.5 rounded-full border border-primary/20 text-primary/80 uppercase bg-primary/[0.02]">
+                <span className="text-[10px] font-mono font-bold tracking-[0.2em] px-4 py-1.5 rounded-full border border-primary/20 text-primary/80 bg-primary/[0.02]">
                   {item.tag}
                 </span>
               </div>

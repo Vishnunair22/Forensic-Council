@@ -47,7 +47,7 @@ const sampleDTO: ReportDTO = {
     "agent-img": [{
       finding_id: "f1", agent_id: "agent-img", agent_name: "Image Analyst",
       finding_type: "ela_analysis", status: "complete",
-      confidence_raw: 0.90, calibrated: true, calibrated_probability: 0.88,
+      confidence_raw: 0.90, calibrated: true,
           raw_confidence_score: null,
       court_statement: "No manipulation.", robustness_caveat: false,
       robustness_caveat_detail: null, reasoning_summary: "ELA uniform.", metadata: null,
@@ -55,7 +55,7 @@ const sampleDTO: ReportDTO = {
     "agent-audio": [{
       finding_id: "f2", agent_id: "agent-audio", agent_name: "Audio Analyst",
       finding_type: "splice_detection", status: "complete",
-      confidence_raw: 0.75, calibrated: false, calibrated_probability: null,
+      confidence_raw: 0.75, calibrated: false,
           raw_confidence_score: null,
       court_statement: null, robustness_caveat: true,
       robustness_caveat_detail: "Low quality", reasoning_summary: "No splice.", metadata: null,
@@ -111,10 +111,10 @@ describe("mapReportDtoToReport()", () => {
     const audio = agents.find(a => a.id === "agent-audio");
     expect(audio?.result).toBe("No splice.");
   });
-  it("uses calibrated_probability as confidence when available", () => {
+  it("uses confidence_raw as confidence when available", () => {
     const agents = mapReportDtoToReport(sampleDTO).agents;
     const img = agents.find(a => a.id === "agent-img");
-    expect(img?.confidence).toBe(0.88);
+    expect(img?.confidence).toBe(0.90);
   });
   it("falls back to confidence_raw when not calibrated", () => {
     const agents = mapReportDtoToReport(sampleDTO).agents;
