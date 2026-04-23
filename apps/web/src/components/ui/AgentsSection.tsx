@@ -33,7 +33,7 @@ export function AgentsSection() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.1, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-              className="glass-panel p-10 rounded-[3rem] flex flex-col items-center text-center group cursor-pointer"
+              className="bg-gradient-to-b from-white/[0.03] to-transparent border border-white/[0.05] p-10 rounded-[3rem] flex flex-col items-center text-center group cursor-pointer hover:border-primary/20 transition-all duration-700"
             >
               <motion.div 
                 animate={{ 
@@ -59,20 +59,20 @@ export function AgentsSection() {
                 {agent.desc}
               </p>
 
-              <div className="mt-auto pt-8 border-t border-white/5 w-full flex justify-between items-center group-hover:border-primary/20 transition-colors">
-                 <div className="flex flex-col items-start">
-                   <span className="text-[10px] font-mono font-bold tracking-[0.2em] text-white/20 group-hover:text-primary transition-colors">NODE_ID</span>
-                   <span className="text-xs font-mono font-bold text-white/60">{agent.id}</span>
+              <div className="mt-auto pt-8 border-t border-white/5 w-full flex justify-between items-center group-hover:border-white/10 transition-colors">
+                 <div className="flex flex-col items-start gap-1">
+                   <span className="text-[9px] font-mono font-bold tracking-[0.2em] text-white/30 group-hover:text-primary/70 transition-colors">NODE_ID</span>
+                   <span className="text-xs font-mono font-medium text-white/80">{agent.id}</span>
                  </div>
-                 <div className="flex flex-col items-end">
-                   <span className="text-[10px] font-mono font-bold tracking-[0.2em] text-white/20 group-hover:text-primary transition-colors">STATUS</span>
-                   <span className="text-xs font-mono font-bold text-primary/80 uppercase">{agent.badge}</span>
+                 <div className="flex flex-col items-end gap-1">
+                   <span className="text-[9px] font-mono font-bold tracking-[0.2em] text-white/30 group-hover:text-primary/70 transition-colors">STATUS</span>
+                   <span className="text-xs font-mono font-bold text-primary/90 uppercase">{agent.badge}</span>
                  </div>
               </div>
 
               {/* Card Decoration: Corner Lines */}
-              <div className="absolute top-6 left-6 w-4 h-4 border-t border-l border-white/10 group-hover:border-primary/40 transition-colors" />
-              <div className="absolute bottom-6 right-6 w-4 h-4 border-b border-r border-white/10 group-hover:border-primary/40 transition-colors" />
+              <div className="absolute top-6 left-6 w-4 h-4 border-t border-l border-white/5 group-hover:border-primary/30 transition-colors duration-500" />
+              <div className="absolute bottom-6 right-6 w-4 h-4 border-b border-r border-white/5 group-hover:border-primary/30 transition-colors duration-500" />
             </motion.div>
           ))}
         </div>

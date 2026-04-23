@@ -38,19 +38,12 @@ export function HowWorksSection() {
             <div className="relative mb-12">
                 <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" aria-hidden="true" />
                 <motion.div 
-                  animate={{ 
-                    y: [0, -12, 0],
-                  }}
-                  transition={{
-                    duration: 5,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                    delay: i * 0.3
-                  }}
-                  className="relative p-8 glass-panel rounded-3xl group-hover:border-primary group-hover:shadow-[0_0_50px_rgba(0,255,65,0.1)] transition-all duration-500"
+                  animate={{ y: [0, -8, 0] }} // Reduced floating distance
+                  transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: i * 0.3 }}
+                  className="relative p-8 bg-white/[0.02] backdrop-blur-md rounded-3xl border border-white/[0.05] group-hover:border-primary/30 group-hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)] transition-all duration-500"
                 >
-                  <item.icon className="w-10 h-10 text-primary group-hover:scale-110 transition-transform duration-500" aria-hidden="true" />
-                  <span className="absolute -top-3 -right-3 text-[10px] font-mono font-bold text-primary px-2.5 py-1 bg-black border border-primary/40 rounded-md shadow-lg group-hover:scale-110 transition-transform">
+                  <item.icon className="w-10 h-10 text-primary group-hover:scale-105 transition-transform duration-500" aria-hidden="true" />
+                  <span className="absolute -top-3 -right-3 text-[10px] font-mono font-bold text-primary px-3 py-1 bg-black border border-primary/30 rounded-md shadow-[0_0_15px_rgba(0,255,65,0.1)] transition-transform duration-500">
                     {item.step.padStart(2, '0')}
                   </span>
                 </motion.div>
@@ -62,8 +55,9 @@ export function HowWorksSection() {
                 {item.desc}
               </p>
               
-              <div className="mt-8 flex justify-center opacity-20 group-hover:opacity-100 transition-all duration-500 transform group-hover:translate-y-[-4px]">
-                <span className="text-[10px] font-mono font-bold tracking-[0.2em] px-4 py-1.5 rounded-full border border-primary/30 text-primary uppercase">
+              <div className="mt-8 flex justify-center opacity-0 group-hover:opacity-100 transition-all duration-500">
+                {/* Removed the translate-y to prevent layout jitter */}
+                <span className="text-[10px] font-mono font-bold tracking-[0.2em] px-4 py-1.5 rounded-full border border-primary/20 text-primary/80 uppercase bg-primary/[0.02]">
                   {item.tag}
                 </span>
               </div>

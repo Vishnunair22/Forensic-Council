@@ -90,23 +90,23 @@ export function HeroAuthActions() {
           playSound("hum");
           setShowUpload(true);
         }}
-        className="group px-14 py-6 text-base font-bold tracking-tighter uppercase relative overflow-hidden rounded-full bg-gradient-to-br from-[#14b8a6] to-[#0d9488] hover:bg-transparent hover:from-transparent hover:to-transparent text-white shadow-[0_0_40px_rgba(20,184,166,0.3)] transition-all duration-500 hover:scale-[1.05] hover:shadow-[0_0_60px_rgba(20,184,166,0.5)] border border-teal-400/40 hover:border-teal-400"
+        className="group px-12 py-5 text-sm font-bold tracking-[0.1em] uppercase relative overflow-hidden rounded-full bg-black/50 backdrop-blur-md text-white transition-all duration-500 hover:scale-[1.02] border border-primary/30 hover:border-primary hover:shadow-[0_0_40px_rgba(0,255,65,0.2)]"
         aria-label={isAuthenticating ? "Initializing..." : authError ? authError : "Upload a file to begin analysis"}
       >
-        {/* Scanning Line Effect within Button */}
+        {/* Update Scanning Line Color */}
         <motion.div 
-          className="absolute inset-0 w-full h-[1px] bg-white/20 z-10"
+          className="absolute inset-0 w-full h-[1px] bg-primary/40 z-10"
           animate={{ top: ["0%", "100%", "0%"] }}
-          transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+          transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
         />
         
-        <span className="relative z-10 flex items-center gap-4">
-          <UploadCloud className="w-5 h-5 group-hover:animate-bounce" />
+        <span className="relative z-10 flex items-center gap-3">
+          <UploadCloud className="w-5 h-5 text-primary group-hover:animate-pulse" />
           {isAuthenticating ? "Initializing..." : authError ? authError : "Begin Investigation"}
         </span>
 
-        {/* Outer Glow on Hover */}
-        <div className="absolute inset-0 bg-teal-400 opacity-0 group-hover:opacity-20 blur-2xl transition-opacity duration-500" />
+        {/* Outer Glow Update */}
+        <div className="absolute inset-0 bg-primary opacity-0 group-hover:opacity-10 blur-xl transition-opacity duration-700" />
       </button>
 
       <AnimatePresence>

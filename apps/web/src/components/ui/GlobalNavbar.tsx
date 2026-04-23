@@ -36,7 +36,7 @@ export function GlobalNavbar() {
   return (
     <nav
       aria-label="Main navigation"
-      className="fixed top-6 left-6 z-[200] flex items-center px-6 py-3 glass-panel rounded-2xl"
+      className="fixed top-6 left-6 z-[200] flex items-center px-5 py-2.5 bg-black/40 backdrop-blur-xl border border-white/5 rounded-2xl shadow-[0_4px_30px_rgba(0,0,0,0.5)]"
     >
       <AnimatePresence>
         {isResetting && <ForensicResetOverlay />}
@@ -50,9 +50,9 @@ export function GlobalNavbar() {
         aria-current={pathname === "/" ? "page" : undefined}
       >
         <motion.div
-          className="relative w-10 h-10 flex items-center justify-center rounded-xl bg-gradient-to-br from-primary to-black p-[1px] shadow-[0_0_20px_rgba(0,255,65,0.2)] group-hover:shadow-[0_0_30px_rgba(0,255,65,0.4)] transition-all duration-500"
-          whileHover={{ scale: 1.05, rotate: -5 }}
-          whileTap={{ scale: 0.95 }}
+          className="relative w-10 h-10 flex items-center justify-center rounded-xl bg-gradient-to-br from-primary/80 to-black p-[1px] shadow-[0_0_15px_rgba(var(--primary),0.15)] group-hover:shadow-[0_0_25px_rgba(var(--primary),0.3)] transition-all duration-700 ease-out"
+          whileHover={{ scale: 1.02, rotate: -2 }}
+          whileTap={{ scale: 0.98 }}
         >
           <div className="w-full h-full bg-black rounded-[11px] flex items-center justify-center overflow-hidden relative">
             <span className="text-primary font-mono font-black text-sm tracking-tighter z-10">FC</span>
@@ -66,8 +66,8 @@ export function GlobalNavbar() {
           {/* Animated Glow Ring */}
           <motion.div 
             className="absolute -inset-1 border border-primary/20 rounded-2xl"
-            animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.6, 0.3] }}
-            transition={{ duration: 3, repeat: Infinity }}
+            animate={{ scale: [1, 1.05, 1], opacity: [0.2, 0.4, 0.2] }}
+            transition={{ duration: 4, ease: "easeInOut", repeat: Infinity }}
           />
         </motion.div>
 

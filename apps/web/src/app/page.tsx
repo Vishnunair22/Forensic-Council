@@ -27,7 +27,7 @@ export default function Home() {
           >
             <span className="text-[10px] font-mono font-bold tracking-[0.5em] text-primary/60 mb-6 uppercase">Neural Forensic Protocol v4.0</span>
             <h1
-              className="text-5xl md:text-7xl font-bold max-w-7xl tracking-tighter text-white leading-[0.9] drop-shadow-[0_0_50px_rgba(0,255,65,0.1)] flex flex-col"
+              className="text-5xl md:text-7xl lg:text-8xl font-black max-w-7xl tracking-[-0.04em] text-white leading-[0.85] drop-shadow-[0_0_40px_rgba(0,255,65,0.05)] flex flex-col"
             >
               <span className="block">Multi Agent Forensic</span>
               <span className="text-primary text-glow-green block">Evidence Analysis System</span>
@@ -38,7 +38,7 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.4, duration: 1.2 }}
-            className="text-lg md:text-xl font-medium text-white/70 max-w-5xl mx-auto leading-relaxed tracking-tight"
+            className="text-lg md:text-xl font-medium text-white/50 max-w-4xl mx-auto leading-relaxed tracking-tight"
           >
             Forensic Council is a Multi Agent AI based application, that uses multiple customized agents to analyse digital forensic evidence to create a cohesive and effective report.
           </motion.p>
