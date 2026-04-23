@@ -2,14 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 
-interface ArcGaugeProps {
- value: number;
- size?: number;
- strokeWidth?: number;
- color?: string;
- label?: string;
- sublabel?: string;
-}
 
 function useAnimatedValue(target: number, duration = 800): number {
  const [display, setDisplay] = useState(0);
@@ -110,7 +102,7 @@ export function ArcGauge({
     <path
      d={trackPath}
      fill="none"
-     stroke="rgba(255,255,255,0.08)"
+     stroke="rgba(255,255,255,0.06)"
      strokeWidth={strokeWidth}
      strokeLinecap="round"
     />
@@ -140,12 +132,12 @@ export function ArcGauge({
    </span>
 
    {label && (
-    <span className="text-[10px] font-bold tracking-widest text-white/50 text-center">
+    <span className="text-xs font-semibold tracking-wide text-white/50 text-center">
      {label}
     </span>
    )}
    {sublabel && (
-    <span className="text-[10px] font-mono text-white/50 text-center">
+    <span className="text-xs font-mono text-white/50 text-center">
      {sublabel}
     </span>
    )}

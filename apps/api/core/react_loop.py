@@ -444,11 +444,11 @@ def _get_available_tools_for_llm(state: WorkingMemoryState) -> list[dict[str, An
             "description": "SHA-256 hash verification — confirms file integrity",
         },
         {
-            "name": "perceptual_hash",
+            "name": "neural_fingerprint",
             "description": "pHash perceptual similarity hash for near-duplicate detection",
         },
         {
-            "name": "copy_move_detect",
+            "name": "neural_copy_move",
             "description": "SIFT keypoint self-matching — detects copy-move forgery",
         },
         {
@@ -510,16 +510,24 @@ def _get_available_tools_for_llm(state: WorkingMemoryState) -> list[dict[str, An
             "description": "CLIP semantic incongruence — objects that do not belong in scene",
         },
         {
-            "name": "image_splice_check",
-            "description": "Splicing detection on detected object regions",
+            "name": "vector_contraband_search",
+            "description": "SigLIP vector search for weapons and contraband concepts",
+        },
+        {
+            "name": "lighting_correlation_initial",
+            "description": "Initial lighting-vector correlation for compositing candidates",
+        },
+        {
+            "name": "scale_validation",
+            "description": "Object scale and proportion validation",
         },
         # Agent 4 — Video
         {
-            "name": "optical_flow_analyze",
+            "name": "optical_flow_analysis",
             "description": "Dense optical flow analysis — detect frame discontinuities",
         },
         {
-            "name": "frame_window_extract",
+            "name": "frame_extraction",
             "description": "Extract frame window for per-frame analysis",
         },
         {
@@ -533,8 +541,24 @@ def _get_available_tools_for_llm(state: WorkingMemoryState) -> list[dict[str, An
         # rPPG liveness is QUARANTINED — not registered by Agent4.
         # Do NOT list it here or the LLM may hallucinate a call to it.
         {
-            "name": "video_metadata_extract",
+            "name": "video_metadata",
             "description": "Extract video container metadata",
+        },
+        {
+            "name": "vfi_error_map",
+            "description": "Video frame interpolation error mapping for motion inconsistencies",
+        },
+        {
+            "name": "thumbnail_coherence",
+            "description": "Embedded-thumbnail coherence check against video content",
+        },
+        {
+            "name": "interframe_forgery_detector",
+            "description": "Interframe forgery detection for motion ghosting and SSIM variance",
+        },
+        {
+            "name": "rolling_shutter_validation",
+            "description": "Rolling shutter signature validation against claimed device metadata",
         },
         {
             "name": "mediainfo_profile",
@@ -574,12 +598,12 @@ def _get_available_tools_for_llm(state: WorkingMemoryState) -> list[dict[str, An
             "description": "Timestamp consistency analysis across all metadata fields",
         },
         {
-            "name": "extract_deep_metadata",
-            "description": "Deep metadata extraction including MakerNotes and XMP",
+            "name": "exif_isolation_forest",
+            "description": "Isolation Forest outlier detection for EXIF metadata fields",
         },
         {
-            "name": "get_physical_address",
-            "description": "Reverse geocode GPS coordinates to physical address",
+            "name": "astro_grounding",
+            "description": "Shadow/sun/GPS/timestamp astronomical grounding",
         },
     ]
 
@@ -622,10 +646,8 @@ class ReActLoopEngine:
         "extract_evidence_text": "OCR Text Extraction",
         "extract_text_from_image": "OCR Text Extraction",
         "analyze_image_content": "Semantic Image Analysis",
-        "perceptual_hash": "Perceptual Hash (pHash)",
         "file_hash_verify": "File Hash Verification",
         "splicing_detect": "Splicing Detection",
-        "image_splice_check": "Image Splice Check",
         "roi_extract": "Region of Interest Extraction",
         "speaker_diarize": "Speaker Diarization",
         "anti_spoofing_detect": "Anti-Spoofing Detection",
@@ -639,16 +661,16 @@ class ReActLoopEngine:
         "scene_incongruence": "Scene Incongruence (CLIP)",
         "secondary_classification": "Secondary Object Classification",
         "scale_validation": "Scale & Proportion Validation",
-        "contraband_database": "Contraband / Weapons CLIP Analysis",
+        "vector_contraband_search": "Threat / Contraband Vector Search",
+        "lighting_correlation_initial": "Initial Lighting Correlation",
         "optical_flow_analysis": "Optical Flow Analysis",
-        "optical_flow_analyze": "Optical Flow Analysis",
         "frame_extraction": "Frame Window Extraction",
-        "frame_window_extract": "Frame Window Extraction",
         "frame_consistency_analysis": "Frame Consistency Analysis",
         "face_swap_detection": "Face-Swap Detection",
         "video_metadata": "Video Metadata Extraction",
-        "video_metadata_extract": "Video Metadata Extraction",
-        "anomaly_classification": "Anomaly Classification",
+        "vfi_error_map": "VFI Motion Error Map",
+        "thumbnail_coherence": "Thumbnail Coherence Check",
+        "interframe_forgery_detector": "Interframe Forgery Detection",
         "rolling_shutter_validation": "Rolling Shutter Validation",
         "mediainfo_profile": "MediaInfo Container Profile",
         "av_file_identity": "AV File Identity Pre-Screen",
@@ -659,10 +681,6 @@ class ReActLoopEngine:
         "file_structure_analysis": "File Structure Analysis",
         "hex_signature_scan": "Hex Signature Scan",
         "timestamp_analysis": "Timestamp Consistency Analysis",
-        "extract_deep_metadata": "Deep Metadata Extraction",
-        "get_physical_address": "GPS Reverse Geocoding",
-        "astronomical_api": "Astronomical Timestamp Validation",
-        "reverse_image_search": "Reverse Image Search (pHash)",
         "device_fingerprint_db": "Device Fingerprint Analysis",
         "adversarial_robustness_check": "Adversarial Robustness Check",
         "neural_ela": "Neural ELA — ViT Manipulation Detection",
@@ -673,19 +691,9 @@ class ReActLoopEngine:
         "anomaly_tracer": "ManTra-Net Universal Anomaly Tracer",
         "f3_net_frequency": "F3-Net Frequency Artifact Analysis",
         "diffusion_artifact_detector": "Diffusion/AI-Generation Artifact Detection",
-        "gemini_identify_content": "Gemini Vision — Content Identification",
-        "gemini_cross_validate_manipulation": "Gemini Vision — Manipulation Cross-Validation",
-        "gemini_object_scene_analysis": "Gemini Vision — Object & Scene Analysis",
-        "gemini_metadata_visual_consistency": "Gemini Vision — Metadata Consistency Check",
         "gemini_deep_forensic": "Gemini Deep Forensic Analysis",
-        "prnu_analysis": "PRNU Camera Sensor Fingerprint",
-        "cfa_demosaicing": "CFA Demosaicing Pattern Analysis",
         "voice_clone_detect": "Voice Clone Detection",
         "enf_analysis": "ENF Frequency Analysis",
-        "object_text_ocr": "Object Region OCR",
-        "document_authenticity": "Document Authenticity Check",
-        "c2pa_verify": "C2PA Content Credentials",
-        "thumbnail_mismatch": "Thumbnail Mismatch Detection",
         "sensor_db_query": "Camera Sensor DB Query",
     }
 

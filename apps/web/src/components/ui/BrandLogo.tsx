@@ -26,11 +26,11 @@ export function BrandLogo({ className, size = "md", isHero = false }: BrandLogoP
     <div className={cn("flex items-center gap-3", className)}>
       <motion.div
         className={cn(
-          "relative flex items-center justify-center rounded-xl bg-gradient-to-b from-white/20 to-white/5 p-[1px] shadow-lg overflow-hidden group-hover:shadow-[0_0_30px_rgba(var(--primary),0.3)] transition-all duration-500 ease-out",
+          "relative flex items-center justify-center rounded-2xl bg-gradient-to-b from-white/20 to-white/5 p-[1px] shadow-lg overflow-hidden group-hover:shadow-[0_0_30px_rgba(var(--primary),0.3)] transition-all duration-500 ease-out",
           iconSizes[size]
         )}
       >
-        <div className="absolute inset-0 bg-black/90 backdrop-blur-xl rounded-[11px]" />
+        <div className="absolute inset-0 bg-black/90 backdrop-blur-xl rounded-[15px]" />
         
         {/* Technical crosshair/target effect */}
         <div className="absolute inset-0 flex items-center justify-center opacity-30">
@@ -39,7 +39,7 @@ export function BrandLogo({ className, size = "md", isHero = false }: BrandLogoP
           <div className="absolute w-[60%] h-[60%] border border-primary/20 rounded-full" />
         </div>
 
-        <span className="relative text-white font-mono font-black text-sm tracking-widest z-10 group-hover:text-primary transition-colors duration-300">
+        <span className="relative text-white font-mono font-black text-sm tracking-wide z-10 group-hover:text-primary transition-colors duration-300">
           FC
         </span>
 
@@ -48,13 +48,6 @@ export function BrandLogo({ className, size = "md", isHero = false }: BrandLogoP
           className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/10 to-transparent w-full h-[200%] -top-full"
           animate={{ top: ["-100%", "100%"] }}
           transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-        />
-        
-        {/* Pulsing core */}
-        <motion.div 
-          className="absolute inset-0 bg-primary/5 rounded-full blur-sm"
-          animate={{ scale: [0.8, 1.2, 0.8], opacity: [0.3, 0.6, 0.3] }}
-          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
         />
       </motion.div>
 
@@ -81,7 +74,7 @@ export function BrandLogo({ className, size = "md", isHero = false }: BrandLogoP
             className="flex items-center gap-2 mt-0.5"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-            <span className="text-[10px] font-mono font-bold tracking-[0.2em] text-white/40 uppercase">
+            <span className="text-[10px] font-mono font-bold tracking-[0.15em] text-white/40">
               Neural Forensic Protocol v4.0
             </span>
           </motion.div>

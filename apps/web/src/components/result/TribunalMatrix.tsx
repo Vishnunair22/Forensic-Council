@@ -38,16 +38,16 @@ export function TribunalMatrix({ report }: TribunalMatrixProps) {
     )}>
      <div className="flex items-center gap-2">
       <Shield className={clsx("w-3.5 h-3.5", hasContested ? "text-rose-400" : "text-amber-400")} />
-      <span className="text-[10px] font-bold tracking-widest text-foreground/60">
+      <span className="text-[10px] font-bold tracking-wide text-foreground/60">
        Tribunal Consensus Matrix
       </span>
      </div>
      {hasContested ? (
-      <span className="text-[10px] font-mono font-black text-rose-500/70 tracking-widest">
+      <span className="text-[10px] font-mono font-black text-rose-500/70 tracking-wide">
        ⚠ Requires Human Review
       </span>
      ) : (
-      <span className="text-[10px] font-mono font-black text-amber-500/50 tracking-widest">
+      <span className="text-[10px] font-mono font-black text-amber-500/50 tracking-wide">
        Dispute Resolution Active
       </span>
      )}

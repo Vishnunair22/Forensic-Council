@@ -208,7 +208,7 @@ describe("WS message payload shapes", () => {
       type: "AGENT_UPDATE",
       agent_id: "Agent1",
       message: "Running ELA",
-      data: { thinking: "Analysing" },
+      data: { thinking: "Analyzing" },
     };
     expect(p.type).toBe("AGENT_UPDATE");
     expect(p.agent_id).toBeTruthy();

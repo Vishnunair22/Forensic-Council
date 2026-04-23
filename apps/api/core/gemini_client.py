@@ -1141,22 +1141,43 @@ class GeminiVisionClient:
         """
         import io
 
-        import librosa
         import numpy as np
+        import soundfile as sf
+        from scipy import signal
         from PIL import Image as _PImage
 
-        # Load audio (downsample to 22.05kHz for faster processing)
-        y, sr = librosa.load(file_path, sr=22050, duration=120) # cap at 2min
+        # Load audio without librosa. The Gemini path should be lightweight and
+        # robust even when optional numba/librosa hooks are unavailable.
+        y, sr = sf.read(file_path, dtype="float32", always_2d=False)
+        if y.ndim > 1:
+            y = y.mean(axis=1)
+        if sr <= 0 or y.size == 0:
+            raise ValueError("empty or invalid audio stream")
+        y = y[: int(sr * 120)]  # cap at 2min
 
-        # Compute Mel Spectrogram
-        S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128, fmax=8000)
-        S_dB = librosa.power_to_db(S, ref=np.max)
+        nperseg = min(2048, max(256, int(sr * 0.05)))
+        noverlap = min(nperseg - 1, nperseg // 2)
+        _, _, spec = signal.spectrogram(
+            y,
+            fs=sr,
+            window="hann",
+            nperseg=nperseg,
+            noverlap=noverlap,
+            scaling="spectrum",
+            mode="magnitude",
+        )
+        if spec.size == 0:
+            raise ValueError("spectrogram produced no bins")
+        spec_db = 20.0 * np.log10(np.maximum(spec, 1e-10))
 
         # Normalize to 0-255 for image conversion
-        # S_dB is roughly -80 to 0
-        img_data = ((S_dB - S_dB.min()) / (S_dB.max() - S_dB.min()) * 255).astype(np.uint8)
+        value_range = float(spec_db.max() - spec_db.min())
+        if value_range <= 1e-9:
+            img_data = np.zeros_like(spec_db, dtype=np.uint8)
+        else:
+            img_data = ((spec_db - spec_db.min()) / value_range * 255).astype(np.uint8)
 
-        # Create image (greyscale MEL map)
+        # Create image (greyscale spectrogram map)
         # Flip vertically so low frequencies are at the bottom
         img = _PImage.fromarray(np.flipud(img_data), mode="L")
 

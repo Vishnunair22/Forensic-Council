@@ -50,7 +50,9 @@ export function LoadingOverlay({ liveText, dispatchedCount = 0, totalAgents = 6 
     <motion.div
       className="fixed inset-0 z-[300] flex flex-col items-center justify-center px-6 selection:bg-transparent"
       style={{
-        background: "rgba(0, 0, 0, 0.9)",
+        background: "rgba(0, 0, 0, 0.95)",
+        backdropFilter: "blur(24px)",
+        WebkitBackdropFilter: "blur(24px)",
       }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -64,8 +66,8 @@ export function LoadingOverlay({ liveText, dispatchedCount = 0, totalAgents = 6 
           animate={{ y: 0, opacity: 1 }}
           className="flex items-center gap-2.5 mb-8"
         >
-          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(var(--color-primary-rgb),0.4)]" />
-          <span className="text-[10px] font-bold tracking-widest text-primary/40">
+          <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+          <span className="text-xs font-semibold tracking-wide text-white/50">
             Forensic Protocol 2026
           </span>
         </motion.div>
@@ -73,18 +75,18 @@ export function LoadingOverlay({ liveText, dispatchedCount = 0, totalAgents = 6 
         {/* Title Area */}
         <div className="text-center mb-12">
             <motion.h1
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.1 }}
-            className="text-4xl font-bold tracking-tight text-white mb-2 font-heading"
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.1 }}
+              className="text-4xl font-black tracking-tight text-white mb-2"
             >
-            Initializing <span className="text-primary">Stream</span>
+              Uplinking...
             </motion.h1>
             <motion.div 
                 initial={{ scaleX: 0 }}
                 animate={{ scaleX: 1 }}
                 transition={{ delay: 0.3, duration: 0.8 }}
-                className="h-[1px] w-32 mx-auto bg-gradient-to-r from-transparent via-primary/40 to-transparent" 
+                className="h-[1px] w-32 mx-auto bg-primary/20" 
             />
         </div>
 
@@ -103,16 +105,16 @@ export function LoadingOverlay({ liveText, dispatchedCount = 0, totalAgents = 6 
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ delay: 0.2 + idx * 0.1 }}
                 className={clsx(
-                  "flex items-center gap-4 px-5 py-4 rounded-2xl border transition-all duration-500",
-                  isActive && "bg-primary/[0.05] border-primary/20 shadow-[0_0_20px_rgba(var(--color-primary-rgb),0.1)]",
-                  isDone && "bg-emerald-500/[0.03] border-emerald-500/10 opacity-60",
+                  "flex items-center gap-4 px-6 py-5 rounded-2xl border transition-all duration-500",
+                  isActive && "bg-primary/[0.05] border-primary/20 shadow-[0_0_40px_rgba(0,255,65,0.05)]",
+                  isDone && "bg-white/[0.02] border-white/5 opacity-50",
                   isPending && "bg-white/[0.01] border-white/5 opacity-20"
                 )}
               >
                 <div className={clsx(
                     "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border transition-all duration-500",
                     isActive && "bg-primary/20 border-primary/40 text-primary",
-                    isDone && "bg-emerald-500/10 border-emerald-500/30 text-emerald-400",
+                    isDone && "bg-white/5 border-white/10 text-white/40",
                     isPending && "bg-white/5 border-white/5 text-white/10"
                 )}>
                   <AnimatePresence mode="wait">
@@ -131,23 +133,11 @@ export function LoadingOverlay({ liveText, dispatchedCount = 0, totalAgents = 6 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className={clsx(
-                        "text-[11px] font-bold tracking-tight",
+                        "text-sm font-bold tracking-tight",
                         isActive ? "text-white" : "text-white/40"
                     )}>{phase.label}</span>
-                    {isActive && (
-                        <div className="flex gap-1">
-                            {[0, 1, 2].map(i => (
-                                <motion.div 
-                                    key={i} 
-                                    className="w-1 h-1 bg-primary rounded-full" 
-                                    animate={{ opacity: [0.2, 1, 0.2] }} 
-                                    transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }} 
-                                />
-                            ))}
-                        </div>
-                    )}
                   </div>
-                  <p className="text-[10px] font-medium text-white/20 mt-0.5 tracking-tight">{phase.detail}</p>
+                  <p className="text-sm font-medium text-white/50 mt-1 leading-tight">{phase.detail}</p>
                 </div>
               </motion.div>
             );
@@ -159,7 +149,7 @@ export function LoadingOverlay({ liveText, dispatchedCount = 0, totalAgents = 6 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
-          className="mt-10 text-[11px] font-mono font-bold tracking-widest text-primary/30 text-center px-4"
+          className="mt-10 text-sm font-mono font-semibold tracking-wide text-primary/60 text-center px-4"
         >
           {liveText || "Initializing Workspace..."}
         </motion.p>

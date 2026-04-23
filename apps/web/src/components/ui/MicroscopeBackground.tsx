@@ -18,7 +18,7 @@ export function MicroscopeBackground() {
   });
 
   const lensY = useTransform(smoothYProgress, [0, 1], ["10%", "90%"]);
-  const lensScale = useTransform(smoothYProgress, [0, 0.5, 1], [1, 1.1, 1]);
+  const lensScale = useTransform(smoothYProgress, [0, 0.5, 1], [1, 1.04, 1]);
   const lensRotate = useTransform(smoothYProgress, [0, 1], [0, 180]);
 
   return (
@@ -49,7 +49,7 @@ export function MicroscopeBackground() {
         className="absolute w-[450px] h-[450px] md:w-[700px] md:h-[700px] z-20"
       >
         {/* Outer Lens Frame (Technical) */}
-        <div className="absolute inset-0 rounded-full border-2 border-primary/20 bg-primary/5 backdrop-blur-[4px] shadow-[0_0_120px_rgba(0,255,65,0.1)]" />
+        <div className="absolute inset-0 rounded-full border border-primary/15 bg-primary/5 backdrop-blur-[4px] shadow-[0_0_120px_rgba(0,255,65,0.1)]" />
         <div className="absolute inset-[2px] rounded-full border border-white/5" />
         
         {/* Inner Lens Details (Grid + Crosshairs) */}
@@ -90,13 +90,6 @@ export function MicroscopeBackground() {
         {/* Focal Point Data */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
             <div className="w-4 h-4 rounded-full bg-primary shadow-[0_0_20px_var(--color-primary)] animate-pulse" />
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="mt-4 px-2 py-1 bg-black/80 border border-primary/40 rounded text-[10px] font-mono text-primary whitespace-nowrap"
-            >
-              SCAN_COORD: [51.5074, 0.1278]
-            </motion.div>
         </div>
       </motion.div>
 
@@ -154,7 +147,7 @@ function EvidenceNode({ node, progress }: { node: NodeData; progress: import("fr
       className="absolute flex flex-col items-center group"
     >
       <div className="w-1.5 h-1.5 bg-primary/20 rounded-full border border-primary/40 group-hover:bg-primary transition-colors" />
-      <div className="mt-2 px-1.5 py-0.5 bg-black/40 border border-white/5 rounded text-[8px] font-mono text-white/20 group-hover:text-primary/60 transition-colors">
+      <div className="mt-2 px-1.5 py-0.5 bg-black/40 border border-white/5 rounded text-[8px] font-mono text-white/30 group-hover:text-primary/60 transition-colors">
         {node.label}
       </div>
     </motion.div>

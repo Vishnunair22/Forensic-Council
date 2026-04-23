@@ -102,7 +102,7 @@ export function ForensicProgressOverlay({
             animate={reducedMotion ? { opacity: 1 } : { opacity: [1, 0.3, 1], scale: [1, 1.3, 1] }}
             transition={reducedMotion ? { duration: 0 } : { duration: 2, repeat: Infinity, ease: "easeInOut" }}
           />
-          <span className="text-xs font-semibold tracking-wide text-white/50">
+          <span className="text-xs font-semibold tracking-wide text-white/40">
             {telemetryLabel}
           </span>
         </motion.div>
@@ -112,7 +112,7 @@ export function ForensicProgressOverlay({
           initial={{ y: 30, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.08, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-          className={`text-4xl sm:text-5xl md:text-7xl font-black tracking-tighter leading-tight text-white drop-shadow-2xl`}
+          className={`text-5xl md:text-7xl font-black tracking-tighter leading-tight text-white`}
         >
           {title}
         </motion.h1>
@@ -122,7 +122,7 @@ export function ForensicProgressOverlay({
           initial={{ scaleX: 0, opacity: 0 }}
           animate={{ scaleX: 1, opacity: 1 }}
           transition={{ delay: 0.15, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="w-48 sm:w-80 h-[1px] bg-white/10 mt-10 mb-12 relative overflow-hidden flex-shrink-0"
+          className="w-48 sm:w-80 h-[1px] bg-white/5 mt-10 mb-12 relative overflow-hidden flex-shrink-0"
         >
           <motion.div
             className="absolute top-0 bottom-0 left-0 w-1/3"
@@ -131,7 +131,7 @@ export function ForensicProgressOverlay({
               boxShadow: `0 0 10px ${accent.primary}`
             }}
             animate={{ x: ["-100%", "300%"] }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
           />
         </motion.div>
 
@@ -139,7 +139,6 @@ export function ForensicProgressOverlay({
         <div
           className="h-[140px] flex flex-col justify-end items-center gap-3 w-full"
           aria-live="polite"
-          aria-label="Live analysis progress feed"
           aria-atomic="false"
         >
           <AnimatePresence mode="popLayout">
@@ -149,36 +148,38 @@ export function ForensicProgressOverlay({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="text-xs font-mono tracking-widest text-white/20"
+                className="text-xs font-mono tracking-wide text-white/40"
               >
-                Awaiting neural sink...
+                Awaiting Neural Sink...
               </motion.div>
             ) : (
               log.map((entry, idx) => {
                 const isLatest = idx === log.length - 1;
                 const ageRatio = (log.length - 1 - idx) / Math.max(log.length - 1, 1);
-                const opacity = isLatest ? 1 : Math.max(0, 0.6 - ageRatio * 0.5);
-                const scale = isLatest ? 1 : Math.max(0.85, 0.95 - ageRatio * 0.1);
+                const opacity = isLatest ? 1 : Math.max(0, 0.4 - ageRatio * 0.4);
+                const scale = isLatest ? 1 : Math.max(0.9, 0.98 - ageRatio * 0.05);
 
                  return (
                   <motion.div
                     key={entry.id}
-                    initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                    initial={{ opacity: 0, y: 15, scale: 0.98 }}
                     animate={{ opacity, y: 0, scale }}
-                    exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
-                    transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                    className="flex flex-col items-center"
+                    exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+                    transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                    className="w-full max-w-2xl"
                   >
                     <span 
-                      className={`text-[12px] sm:text-[14px] font-mono leading-relaxed max-w-2xl text-center px-10 tracking-tight ${
-                        isLatest
-                          ? entry.cat === "error" ? "text-danger drop-shadow-md font-black"
-                            : entry.cat === "success" ? "text-primary drop-shadow-md font-black"
-                            : "text-white/90 drop-shadow-md font-black"
-                          : "text-white/30 font-bold"
-                      }`}
+                      className={`block rounded-r-lg px-4 py-2 font-mono text-xs leading-relaxed tracking-wide text-left ${
+                        entry.cat === "success"
+                          ? "text-primary/90 bg-primary/[0.04] border-l-2 border-primary/40"
+                          : entry.cat === "error"
+                            ? "text-danger/90 bg-danger/[0.04] border-l-2 border-danger/40"
+                            : entry.cat === "info"
+                              ? "text-white/70 bg-white/[0.02] border-l-2 border-white/10"
+                              : "text-white/40 bg-transparent border-l border-white/[0.05]"
+                      } ${isLatest ? "font-semibold" : ""}`}
                     >
-                      <span className="text-white/10 mr-2">[{fmtDiagnosticTime()}]</span>
+                      <span className="text-white/10 mr-3">[{fmtDiagnosticTime()}]</span>
                       {entry.text}
                     </span>
                   </motion.div>

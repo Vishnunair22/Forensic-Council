@@ -42,7 +42,7 @@ async def run_setup() -> bool:
     else:
         print("[OK] System dependencies verified.")
 
-    print("\n[INFO] Initialising core databases...")
+    print("\n[INFO] Initializing core databases...")
     try:
         from scripts.init_db import init_database
 

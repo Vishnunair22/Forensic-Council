@@ -10,7 +10,6 @@ import {
  DialogFooter,
 } from "@/components/ui/dialog";
 import { CheckCircle2, Loader2, ShieldAlert, ArrowRight } from "lucide-react";
-import { motion } from "framer-motion";
 import { clsx } from "clsx";
 
 interface HITLCheckpoint {
@@ -98,18 +97,18 @@ export function HITLCheckpointModal({
        {/* Context Panels */}
        <div className="grid grid-cols-1 gap-4">
         <div className="p-5 rounded-2xl glass-panel bg-white/[0.02] border-white/5 space-y-2">
-         <h4 className="text-[10px] font-black font-mono text-white/20 tracking-[0.2em]">Evidence Brief</h4>
+         <h4 className="text-[10px] font-black font-mono text-white/20 tracking-wide">Evidence Brief</h4>
          <p className="text-sm text-white/70 leading-relaxed">{checkpoint.brief_text}</p>
         </div>
         <div className="p-5 rounded-2xl bg-primary/[0.03] border border-primary/10 space-y-2">
-         <h4 className="text-[10px] font-black font-mono text-primary/50 tracking-[0.2em]">Decision Required</h4>
+         <h4 className="text-[10px] font-black font-mono text-primary/50 tracking-wide">Decision Required</h4>
          <p className="text-sm text-primary-200/80 leading-relaxed font-medium">{checkpoint.decision_needed}</p>
         </div>
        </div>
 
        {/* Decision Grid */}
        <div className="space-y-3">
-        <h4 className="text-xs font-black text-white/40 tracking-widest px-1">Protocol Selection</h4>
+        <h4 className="text-xs font-black text-white/40 tracking-wide px-1">Protocol Selection</h4>
         <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Protocol Selection">
           {decisionOptions.map((option) => (
            <button
@@ -117,40 +116,24 @@ export function HITLCheckpointModal({
             role="radio"
             aria-checked={selectedDecision === option.value}
             onClick={() => setSelectedDecision(option.value)}
-           className={clsx(
-            "p-4 rounded-2xl border text-left transition-all duration-300 relative overflow-hidden group",
-            selectedDecision === option.value
-             ? {
-               emerald: "border-emerald-500/40 bg-emerald-500/5 shadow-[0_0_20px_rgba(16,185,129,0.1)]",
-               cyan: "border-cyan-500/40 bg-cyan-500/5 shadow-[0_0_20px_rgba(8,145,178,0.1)]",
-               slate: "border-slate-500/40 bg-slate-500/5 shadow-[0_0_20px_rgba(100,116,139,0.1)]",
-               red: "border-rose-500/40 bg-rose-500/5 shadow-[0_0_20px_rgba(244,63,94,0.1)]",
-              }[option.color]
-             : "border-white/5 bg-white/[0.01] hover:bg-white/[0.04] hover:border-white/10"
-           )}
+            className={clsx(
+              "p-5 rounded-2xl border text-left transition-all duration-300 relative overflow-hidden group",
+              selectedDecision === option.value
+                ? "bg-primary/10 border-primary shadow-[0_0_20px_rgba(0,255,65,0.2)]"
+                : "border-white/10 bg-white/[0.02] hover:bg-primary/[0.03] hover:border-primary/40"
+            )}
           >
            <div className="flex flex-col gap-1 relative z-10">
             <span className={clsx(
-             "text-xs font-black tracking-tight transition-colors",
-             selectedDecision === option.value 
-              ? { emerald: "text-emerald-400", cyan: "text-cyan-400", slate: "text-slate-400", red: "text-rose-400" }[option.color]
-              : "text-white/60 group-hover:text-white"
+              "text-sm font-bold tracking-tight transition-colors",
+              selectedDecision === option.value ? "text-primary" : "text-white/80 group-hover:text-white"
             )}>
              {option.label}
             </span>
-            <span className="text-[10px] text-white/20 font-medium leading-tight group-hover:text-white/50 transition-colors">
+            <span className="text-[10px] text-white/30 font-medium leading-tight group-hover:text-white/50 transition-colors">
              {option.description}
             </span>
            </div>
-            {selectedDecision === option.value && (
-             <motion.div 
-              layoutId="active-bg" 
-              className={clsx(
-               "absolute inset-0 opacity-10",
-               { emerald: "bg-emerald-500", slate: "bg-slate-500", red: "bg-rose-500" }[option.color as any] || "bg-primary"
-              )}
-             />
-            )}
           </button>
          ))}
         </div>
@@ -158,7 +141,7 @@ export function HITLCheckpointModal({
 
        {/* Note input */}
        <div className="space-y-3">
-        <h4 className="text-xs font-black text-white/40 tracking-widest px-1">Supplemental Documentation</h4>
+        <h4 className="text-xs font-black text-white/40 tracking-wide px-1">Supplemental Documentation</h4>
         <textarea
          id="hitl-notes"
          value={note}
@@ -170,24 +153,24 @@ export function HITLCheckpointModal({
        </div>
 
        {decisionError && (
-        <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[11px] font-bold text-center tracking-widest">
+        <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[11px] font-bold text-center tracking-wide">
          {decisionError}
         </div>
        )}
       </div>
 
-      <DialogFooter className="sm:justify-between border-t border-white/5 pt-6 gap-4">
+      <DialogFooter className="sm:justify-between border-t border-white/5 p-8 pt-6 gap-4">
        <button
         onClick={onDismiss}
         disabled={isSubmitting}
-        className="btn-pill-secondary px-8"
+        className="px-8 py-4 rounded-full border border-white/10 text-white/60 hover:text-white hover:bg-white/[0.05] transition-all text-sm font-bold tracking-wide"
        >
         Cancel
        </button>
        <button
         onClick={handleSubmit}
         disabled={!selectedDecision || isSubmitting}
-        className="btn-pill-primary px-10 gap-3 !normal-case !tracking-wide !font-bold"
+        className="px-10 py-4 rounded-full bg-primary text-black font-bold text-sm tracking-wide hover:bg-primary/90 active:scale-[0.98] transition-all duration-300 shadow-[0_0_30px_rgba(0,255,65,0.25)] hover:shadow-[0_0_50px_rgba(0,255,65,0.4)] flex items-center gap-2"
        >
         {isSubmitting ? (
          <>

@@ -238,6 +238,10 @@ class WorkingMemory:
         """Get Redis key for session/agent."""
         return f"wm:{session_id}:{agent_id}"
 
+    def _get_context_key(self, session_id: UUID, agent_id: str) -> str:
+        """Get Redis key for compact cross-agent context."""
+        return f"wm_context:{session_id}:{agent_id}"
+
     def _wal_write(self, key: str, state_json: str) -> None:
         """Write state to file-based WAL for crash recovery."""
         try:
@@ -580,6 +584,76 @@ class WorkingMemory:
             )
 
         return state
+
+    async def set_agent_context(
+        self,
+        session_id: UUID,
+        agent_id: str,
+        context: dict[str, Any],
+    ) -> None:
+        """Persist compact context that sibling agents may use for grounding."""
+        key = self._get_context_key(session_id, agent_id)
+        context_json = json.dumps(context, default=str)
+        self._local_cache[key] = context_json
+        self._wal_write(key, context_json)
+        if self._redis is not None:
+            try:
+                await self._redis.set(key, context_json, ex=86400)
+            except Exception as e:
+                logger.warning(
+                    "WorkingMemory.set_agent_context: Redis write failed, using fallback",
+                    error=str(e),
+                )
+
+        if self._custody_logger:
+            await self._custody_logger.log_entry(
+                agent_id=agent_id,
+                session_id=session_id,
+                entry_type=EntryType.MEMORY_WRITE,
+                content={
+                    "operation": "set_agent_context",
+                    "key": key,
+                    "fields": list(context.keys()),
+                },
+            )
+
+    async def get_agent_context(
+        self,
+        session_id: UUID,
+        agent_id: str,
+    ) -> dict[str, Any]:
+        """Read compact context published by another agent in the same session."""
+        key = self._get_context_key(session_id, agent_id)
+        data = None
+        if self._redis is not None:
+            try:
+                data = await self._redis.get(key)
+            except Exception as e:
+                logger.debug(
+                    "WorkingMemory.get_agent_context: Redis read failed, trying fallback",
+                    error=str(e),
+                )
+
+        if data is None:
+            data = self._local_cache.get(key) or self._wal_read(key)
+        if data is None:
+            return {}
+
+        if isinstance(data, dict):
+            context = data
+        elif isinstance(data, bytes):
+            context = json.loads(data.decode("utf-8"))
+        else:
+            context = json.loads(data)
+
+        if self._custody_logger:
+            await self._custody_logger.log_entry(
+                agent_id=agent_id,
+                session_id=session_id,
+                entry_type=EntryType.MEMORY_READ,
+                content={"operation": "get_agent_context", "key": key},
+            )
+        return context
 
     async def _legacy_update_state(
         self,

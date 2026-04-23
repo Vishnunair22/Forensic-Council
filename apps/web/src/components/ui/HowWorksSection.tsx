@@ -12,7 +12,7 @@ export function HowWorksSection() {
         viewport={{ once: true, amount: 0.2 }}
         className="text-4xl md:text-6xl font-bold text-white mb-6 tracking-tighter"
       >
-        How Forensic <span className="text-primary text-glow-green">Council Works</span>
+        How Forensic <span className="text-primary">Council Works</span>
       </motion.h2>
       <motion.p
         initial={{ opacity: 0, y: 20 }}
@@ -38,12 +38,12 @@ export function HowWorksSection() {
             <div className="relative mb-12">
                 <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" aria-hidden="true" />
                 <motion.div 
-                  animate={{ y: [0, -8, 0] }} // Reduced floating distance
+                  animate={{ y: [0, -8, 0] }}
                   transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: i * 0.3 }}
-                  className="relative p-8 bg-white/[0.02] backdrop-blur-md rounded-3xl border border-white/[0.05] group-hover:border-primary/30 group-hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)] transition-all duration-500"
+                  className="relative p-6 bg-white/[0.04] backdrop-blur-xl rounded-3xl border border-white/10 group-hover:border-primary/30 group-hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)] transition-all duration-500"
                 >
                   <item.icon className="w-10 h-10 text-primary group-hover:scale-105 transition-transform duration-500" aria-hidden="true" />
-                  <span className="absolute -top-3 -right-3 text-[10px] font-mono font-bold text-primary px-3 py-1 bg-black border border-primary/30 rounded-md shadow-[0_0_15px_rgba(0,255,65,0.1)] transition-transform duration-500">
+                  <span className="absolute -top-3 -right-3 text-xs font-mono font-semibold text-primary px-3 py-1 bg-black/80 border border-primary/20 rounded-full shadow-[0_0_15px_rgba(0,255,65,0.1)] transition-transform duration-500">
                     {item.step.padStart(2, '0')}
                   </span>
                 </motion.div>
@@ -56,7 +56,7 @@ export function HowWorksSection() {
               </p>
               
               <div className="mt-8 flex justify-center transition-all duration-500">
-                <span className="text-[10px] font-mono font-bold tracking-[0.2em] px-4 py-1.5 rounded-full border border-white/10 group-hover:border-primary/30 text-white/30 group-hover:text-primary transition-colors duration-500 bg-white/[0.02] group-hover:bg-primary/[0.05]">
+                <span className="text-[10px] font-mono font-bold tracking-wide px-4 py-1.5 rounded-full border border-white/10 group-hover:border-primary/30 text-white/30 group-hover:text-primary transition-colors duration-500 bg-white/[0.02] group-hover:bg-primary/[0.05]">
                   {item.tag}
                 </span>
               </div>

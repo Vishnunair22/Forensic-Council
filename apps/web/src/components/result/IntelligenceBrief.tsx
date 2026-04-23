@@ -21,7 +21,7 @@ export function IntelligenceBrief({ verdictSentence, keyFindings = [], isDeepPha
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative px-8 py-10 rounded-[2.5rem] premium-glass border-border-subtle overflow-hidden group hover:bg-surface-3 transition-colors shadow-2xl"
+          className="relative px-8 py-10 rounded-3xl premium-glass border-border-subtle overflow-hidden group hover:bg-surface-3 transition-colors shadow-2xl"
         >
           <div className="absolute top-0 left-0 w-1.5 h-full bg-primary/20" />
           <Quote className="absolute top-6 right-8 w-16 h-16 text-primary/5 pointer-events-none" />
@@ -58,7 +58,7 @@ export function IntelligenceBrief({ verdictSentence, keyFindings = [], isDeepPha
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: i * 0.1 }}
-              className="flex items-start gap-4 p-6 rounded-[2rem] premium-card group shadow-lg"
+              className="flex items-start gap-4 p-6 rounded-2xl premium-card group shadow-lg"
             >
               <AlertCircle className="w-5 h-5 text-primary/30 shrink-0 mt-0.5 group-hover:text-primary transition-colors" />
               <p className="text-[14px] text-white/60 leading-relaxed font-medium">

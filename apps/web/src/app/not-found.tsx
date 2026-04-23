@@ -25,7 +25,7 @@ export default function NotFound() {
     </motion.div>
 
     <div className="space-y-2">
-     <p className="text-primary font-mono text-xs tracking-[0.2em] ">
+     <p className="text-primary font-mono text-xs tracking-wide ">
       404 — Route Not Found
      </p>
      <h1 className="text-3xl font-black text-foreground tracking-tight">

@@ -18,6 +18,7 @@ TOOL_ALIASES: dict[str, tuple[str, ...]] = {
     "neural_copy_move": ("neural_copy_move",),
     "diffusion_artifact_detector": ("diffusion_artifact_detector",),
     "f3_net_frequency": ("f3_net_frequency",),
+    "anomaly_tracer": ("anomaly_tracer",),
     "gemini_deep_forensic": ("gemini_deep_forensic",),
     "prosody_analyze": ("prosody_analyze",),
     "audio_splice_detect": ("audio_splice_detect",),

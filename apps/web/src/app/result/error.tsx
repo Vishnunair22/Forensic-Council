@@ -79,13 +79,13 @@ export default function ResultError({
       <div className="flex gap-3">
         <button
           onClick={reset}
-          className="flex items-center gap-2 px-8 py-3 rounded-full text-xs font-black tracking-[0.2em] bg-amber-500/15 text-amber-300 border border-amber-500/25 hover:bg-amber-500/25 transition-all cursor-pointer"
+          className="flex items-center gap-2 px-8 py-3 rounded-full text-xs font-black tracking-wide bg-amber-500/15 text-amber-300 border border-amber-500/25 hover:bg-amber-500/25 transition-all cursor-pointer"
         >
           <RotateCcw className="w-4 h-4" /> Retry
         </button>
         <button
           onClick={() => router.push("/")}
-          className="flex items-center gap-2 px-8 py-3 rounded-full text-xs font-black tracking-[0.2em] text-foreground/50 border border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.06] transition-all cursor-pointer"
+          className="flex items-center gap-2 px-8 py-3 rounded-full text-xs font-black tracking-wide text-foreground/50 border border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.06] transition-all cursor-pointer"
         >
           <Home className="w-4 h-4" /> Home
         </button>

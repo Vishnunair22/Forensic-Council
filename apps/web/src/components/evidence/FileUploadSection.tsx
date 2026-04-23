@@ -88,17 +88,17 @@ export function FileUploadSection({
     animate={{ opacity: 1, y: 0 }}
     className="text-center mb-12"
    >
-    <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full mb-8 bg-primary/5 border border-primary/10">
+    <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full mb-8 bg-primary/[0.08] border border-primary/20">
      <span className="relative flex h-2 w-2">
       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
       <span className="relative inline-flex rounded-full h-full w-full bg-primary" />
      </span>
-     <span className=" tracking-widest font-bold text-xs text-primary font-mono">
+     <span className=" tracking-wide font-bold text-xs text-primary font-mono">
       Evidence Upload
      </span>
     </div>
 
-    <h1 className="text-4xl md:text-5xl font-black mb-4 tracking-tighter text-white leading-tight font-heading">
+    <h1 className="text-4xl md:text-5xl font-black mb-4 tracking-tight text-white leading-tight font-heading">
      Initiate Investigation
     </h1>
 
@@ -115,7 +115,7 @@ export function FileUploadSection({
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.98 }}
-      className="w-full rounded-3xl overflow-hidden glass-panel border-white/10 group shadow-[0_32px_64px_rgba(0,0,0,0.4)]"
+      className="w-full rounded-3xl overflow-hidden bg-black/50 backdrop-blur-xl border border-white/10 group shadow-[0_32px_64px_rgba(0,0,0,0.4)]"
      >
       {/* Preview Viewport */}
       <div className="relative w-full aspect-video bg-black/40 overflow-hidden">
@@ -150,12 +150,12 @@ export function FileUploadSection({
         <div className="flex items-center justify-between">
          <div className="flex flex-col">
           <span className="text-xs font-bold text-white font-mono truncate max-w-xs">{file.name}</span>
-           <span className={`text-[10px] ${fileSizeColor} font-bold tracking-widest mt-1`}>
+           <span className={`text-[10px] ${fileSizeColor} font-bold tracking-wide mt-1`}>
             {fileSizeMb.toFixed(2)} MB · {(file.type.split('/')[1] ?? file.type).toUpperCase()}
            </span>
            {fileHash && (
-            <span className="text-[9px] font-mono text-white/15 tracking-tight mt-0.5 truncate max-w-xs block" title={fileHash}>
-             SHA-256: {fileHash.slice(0, 16)}…{fileHash.slice(-8)}
+            <span className="text-[10px] font-mono text-white/30 break-all tracking-tight mt-0.5 max-w-xs block" title={fileHash}>
+             SHA-256: {fileHash.slice(0, 16)}...{fileHash.slice(-8)}
             </span>
            )}
          </div>
@@ -171,7 +171,7 @@ export function FileUploadSection({
           onClear();
         }}
         disabled={isUploading}
-        className="flex items-center justify-center gap-2 py-4 rounded-xl border border-white/10 bg-white/5 text-white/50 text-[10px] font-black tracking-widest hover:bg-white/10 transition-all active:scale-95"
+        className="flex items-center justify-center gap-2 py-4 min-h-[48px] rounded-full border border-white/15 text-white/70 hover:border-white/30 hover:text-white text-sm font-semibold tracking-wide hover:bg-white/[0.05] transition-all active:scale-95"
        >
         <RotateCcw className="w-3.5 h-3.5" />
         Discard
@@ -179,7 +179,7 @@ export function FileUploadSection({
        <button
         onClick={() => onUpload(file)}
         disabled={isUploading}
-        className="flex items-center justify-center gap-3 py-4 rounded-xl bg-primary text-black text-sm font-bold tracking-widest hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(var(--color-primary-rgb),0.3)] active:scale-95"
+        className="flex items-center justify-center gap-3 py-4 px-8 min-h-[48px] rounded-full bg-primary text-black text-sm font-bold tracking-wide hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(var(--color-primary-rgb),0.3)] active:scale-95"
        >
         {isUploading ? (
          <>
@@ -207,7 +207,7 @@ export function FileUploadSection({
       aria-label="Upload evidence file. Click or drag and drop."
       className={clsx(
        "w-full rounded-3xl transition-all duration-500 cursor-pointer overflow-hidden relative border-2 border-dashed group",
-       isDragging ? "bg-primary/10 border-primary/40 scale-[1.01]" : "bg-white/[0.01] border-white/5 hover:border-white/20 hover:bg-white/[0.02]"
+       isDragging ? "bg-primary/10 border-primary/50 scale-[1.01]" : "bg-white/[0.01] border-white/[0.15] hover:border-primary/50 hover:bg-primary/[0.03]"
       )}
       onClick={() => fileInputRef.current?.click()}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInputRef.current?.click(); } }}
@@ -257,12 +257,12 @@ export function FileUploadSection({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      className="mt-8 p-5 rounded-3xl glass-panel border-rose-500/20 bg-rose-500/[0.04] flex items-start gap-4 max-w-md shadow-2xl shadow-rose-950/20"
+      className="mt-8 p-5 rounded-3xl bg-danger/[0.05] backdrop-blur-xl border border-danger/20 flex items-start gap-4 max-w-md shadow-2xl shadow-rose-950/20"
      >
-      <ShieldAlert className="w-6 h-6 text-rose-500 shrink-0 mt-0.5" />
+      <ShieldAlert className="w-6 h-6 text-danger shrink-0 mt-0.5" />
       <div className="space-y-1">
-       <span className="text-[10px] font-bold text-white/40 tracking-[0.2em]">Forensic Logic</span>
-       <p className="text-xs text-rose-200/60 font-medium leading-relaxed">{validationError}</p>
+       <span className="text-xs font-bold text-danger/80 tracking-wide">Forensic Logic</span>
+       <p className="text-sm text-white/80 font-medium leading-relaxed">{validationError}</p>
       </div>
      </motion.div>
     )}

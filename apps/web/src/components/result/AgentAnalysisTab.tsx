@@ -30,7 +30,7 @@ export function AgentAnalysisTab({
   <section aria-label="Agent analysis findings">
    <div className="flex items-center gap-3 mb-6 px-1">
     <Cpu className="w-4 h-4 text-white/20" aria-hidden="true" />
-    <h2 className="text-[10px] font-bold tracking-[0.2em] text-white/50 ">
+    <h2 className="text-[10px] font-bold tracking-wide text-white/50 ">
      Neural Findings
      <span className="ml-2 text-white/10">— {activeAgentIds.length} Nodes Online</span>
     </h2>

@@ -67,6 +67,28 @@ class AgentInvestigationMixin:
     async def _retrieve_episodic_context(self) -> str: ...
     async def self_reflection_pass(self, findings: list[AgentFinding]) -> Any: ...
 
+    async def _publish_tool_registry_snapshot(self, agent_id: str | None = None) -> None:
+        """Expose the live tool catalogue to working memory for LLM ReAct mode."""
+        registry = getattr(self, "_tool_registry", None)
+        if registry is None:
+            return
+        snapshot = [
+            tool.model_dump()
+            for tool in registry.list_tools()
+        ]
+        try:
+            await self.working_memory.update_state(
+                session_id=self.session_id,
+                agent_id=agent_id or self.agent_id,
+                updates={"tool_registry_snapshot": snapshot},
+            )
+        except Exception as exc:
+            logger.debug(
+                "Failed to publish tool registry snapshot",
+                agent_id=agent_id or self.agent_id,
+                error=str(exc),
+            )
+
     async def _synthesize_findings_once(
         self,
         findings: list[AgentFinding],
@@ -120,6 +142,65 @@ class AgentInvestigationMixin:
         except Exception as e:
             logger.warning(f"{phase.title()} synthesis failed: {e}")
         return None
+
+    async def _publish_agent_context(
+        self,
+        phase: str,
+        findings: list[AgentFinding],
+    ) -> None:
+        """Publish compact cross-agent context for sibling-agent grounding."""
+        if not self.working_memory:
+            return
+        compact_tools = {}
+        for tool_name, result in getattr(self, "_tool_context", {}).items():
+            if not isinstance(result, dict):
+                continue
+            compact_tools[tool_name] = {
+                key: value
+                for key, value in result.items()
+                if key
+                in {
+                    "verdict",
+                    "status",
+                    "confidence",
+                    "manipulation_detected",
+                    "splicing_detected",
+                    "copy_move_detected",
+                    "is_ai_generated",
+                    "diffusion_detected",
+                    "device_model",
+                    "software",
+                    "gps_info",
+                    "metadata_timeline_consistent",
+                    "inconsistency_detected",
+                    "anomaly_detected",
+                    "summary",
+                }
+            }
+
+        context = {
+            "phase": phase,
+            "agent_id": self.agent_id,
+            "agent_name": self.agent_name,
+            "initial_summary": getattr(self, "_agent_synthesis", None) or {},
+            "tool_context": compact_tools,
+            "finding_count": len(findings),
+            "agent_confidence": getattr(self, "_agent_confidence", None),
+            "agent_error_rate": getattr(self, "_agent_error_rate", None),
+        }
+        try:
+            await self.working_memory.set_agent_context(
+                self.session_id,
+                self.agent_id,
+                context,
+            )
+        except Exception as exc:
+            logger.debug(
+                "Failed to publish agent context",
+                agent_id=self.agent_id,
+                phase=phase,
+                error=str(exc),
+            )
 
     def _build_deterministic_synthesis(
         self,
@@ -207,6 +288,7 @@ class AgentInvestigationMixin:
         await self._initialize_working_memory()
 
         self._tool_registry = await self.build_tool_registry()
+        await self._publish_tool_registry_snapshot()
         await self._check_tool_availability()
         self._episodic_context = await self._retrieve_episodic_context()
         initial_thought = await self.build_initial_thought()
@@ -250,6 +332,7 @@ class AgentInvestigationMixin:
             self._agent_error_rate = synthesis["agent_error_rate"]
             self._agent_synthesis = synthesis
 
+        await self._publish_agent_context("initial", self._findings)
         self._reflection_report = await self.self_reflection_pass(self._findings)
         self._signal_completion(skipped=False)
         await agent_trace.complete({"finding_count": len(self._findings)})
@@ -281,6 +364,7 @@ class AgentInvestigationMixin:
         await self.working_memory.initialize(
             self.session_id, deep_agent_id, deep_tasks, len(deep_tasks) + 3
         )
+        await self._publish_tool_registry_snapshot(deep_agent_id)
 
         loop_engine = ReActLoopEngine(
             agent_id=deep_agent_id,
@@ -302,7 +386,13 @@ class AgentInvestigationMixin:
             f.metadata["analysis_phase"] = "deep"
 
         self._findings = self._findings + deep_findings
-        await self._synthesize_findings_once(self._findings, phase="deep", timeout_s=20.0)
+        synthesis = await self._synthesize_findings_once(self._findings, phase="deep", timeout_s=20.0)
+        if synthesis is None:
+            synthesis = self._build_deterministic_synthesis(self._findings, phase="deep")
+            self._agent_confidence = synthesis["agent_confidence"]
+            self._agent_error_rate = synthesis["agent_error_rate"]
+            self._agent_synthesis = synthesis
+        await self._publish_agent_context("deep", self._findings)
         self._reflection_report = await self.self_reflection_pass(self._findings)
         await deep_trace.complete({"deep_finding_count": len(deep_findings)})
         return deep_findings

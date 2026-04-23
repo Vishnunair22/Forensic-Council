@@ -228,6 +228,7 @@ class Agent3Object(ForensicAgent):
                     )
 
                     result = finding.to_finding_dict(self.agent_id)
+                    result["analysis_source"] = "gemini_vision"
                     await self._record_tool_result("gemini_deep_forensic", result)
                     return result
                 except Exception as e:

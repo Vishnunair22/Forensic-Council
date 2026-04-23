@@ -41,22 +41,22 @@ export function TimelineTab({
     <section aria-label="Forensic Execution Timeline" className="space-y-6 pt-4">
       <div className="flex items-center gap-3 px-1">
         <Clock className="w-4 h-4 text-white/20" />
-        <h2 className="text-[10px] font-bold tracking-[0.2em] text-white/50">
+        <h2 className="text-[10px] font-bold tracking-wide text-white/50">
           Forensic Execution Lifecycle
         </h2>
       </div>
 
-      <div className="rounded-[2.5rem] border border-border-subtle overflow-hidden premium-glass">
+      <div className="rounded-3xl border border-border-subtle overflow-hidden premium-glass">
         {/* Timeline Header */}
         <div className="px-10 py-8 border-b border-border-subtle bg-surface-low/50 flex items-center justify-between">
           <div className="flex flex-col gap-1">
             <h3 className="text-lg font-black text-white tracking-tighter">
               Sequence Registry
             </h3>
-            <p className="text-[10px] font-black text-white/20 tracking-[0.3em]">Atomic tool execution and consensus deliberation</p>
+            <p className="text-[10px] font-black text-white/20 tracking-wide">Atomic tool execution and consensus deliberation</p>
           </div>
           {pipelineStartAt && report.signed_utc && (
-            <div className="px-4 py-2 rounded-full bg-surface-1 border border-border-subtle text-[10px] font-black text-primary tracking-[0.2em] shadow-inner">
+            <div className="px-4 py-2 rounded-full bg-surface-1 border border-border-subtle text-[10px] font-black text-primary tracking-wide shadow-inner">
               Cycle Time: {fmtDuration(pipelineStartAt, report.signed_utc)}
             </div>
           )}
@@ -70,7 +70,7 @@ export function TimelineTab({
               <div className="relative group">
                 <div className="absolute -left-[49px] top-1 w-4 h-4 rounded-full border border-border-subtle bg-surface-low shadow-xl transition-all group-hover:bg-primary/20" />
                 <div className="space-y-1">
-                  <span className="text-[10px] font-black text-primary/40 tracking-[0.4em]">Phase 01</span>
+                  <span className="text-[10px] font-black text-primary/40 tracking-wide">Phase 01</span>
                   <h4 className="text-sm font-black text-white/80 tracking-tighter">Evidence Ingress</h4>
                   <p className="text-[11px] text-white/50 font-medium leading-relaxed max-w-xl">
                     Secure intake of forensic evidence. Metadata extraction and integrity pre-check completed.
@@ -85,7 +85,7 @@ export function TimelineTab({
               <div className="absolute -left-[49px] top-1 w-4 h-4 rounded-full border border-primary/30 bg-primary/20 shadow-[0_0_20px_rgba(34,211,238,0.2)]" />
               <div className="space-y-6">
                 <div className="space-y-1">
-                  <span className="text-[10px] font-black text-primary/40 tracking-[0.4em]">Phase 02</span>
+                  <span className="text-[10px] font-black text-primary/40 tracking-wide">Phase 02</span>
                   <h4 className="text-sm font-black text-white/80 tracking-tighter">Tool Volley</h4>
                   <p className="text-[11px] text-white/50 font-medium leading-relaxed max-w-xl">
                     Parallel execution of deep neural probes and investigative agents.
@@ -102,7 +102,7 @@ export function TimelineTab({
                         <div key={idx} className="flex items-center gap-4 p-4 rounded-2xl premium-card group transition-colors">
                           <div className={clsx("w-2 h-2 rounded-full", theme.dot)} />
                           <div className="flex-1 min-w-0">
-                            <h5 className={clsx("text-[10px] font-black tracking-widest", theme.text)}>
+                            <h5 className={clsx("text-[10px] font-black tracking-wide", theme.text)}>
                               {update.agent_name || update.agent_id}
                             </h5>
                             <p className="text-[10px] font-mono font-black text-white/20 truncate tracking-tight">{update.message || "Executing investigative probe..."}</p>
@@ -137,7 +137,7 @@ export function TimelineTab({
               <div className="relative group">
                 <div className="absolute -left-[49px] top-1 w-4 h-4 rounded-full border border-accent/30 bg-accent/20 shadow-[0_0_20px_rgba(139,92,246,0.2)]" />
                 <div className="space-y-1">
-                  <span className="text-[10px] font-black text-accent/40 tracking-[0.4em]">Phase 03</span>
+                  <span className="text-[10px] font-black text-accent/40 tracking-wide">Phase 03</span>
                   <h4 className="text-sm font-black text-white/80 tracking-tighter">Council Synthesis</h4>
                   <p className="text-[11px] text-white/50 font-medium leading-relaxed max-w-xl">
                     Arbiter consolidation of all agent findings. Final verdict calculation and cryptographic signing.

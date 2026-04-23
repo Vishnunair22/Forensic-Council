@@ -13,7 +13,7 @@ export function AgentsSection() {
           viewport={{ once: true }}
           className="text-4xl md:text-6xl font-bold text-center mb-6 tracking-tighter text-white"
         >
-          Meet The <span className="text-primary text-glow-green">Council</span>
+          Meet The <span className="text-primary">Council</span>
         </motion.h2>
         <motion.p
           initial={{ opacity: 0, y: 20 }}
@@ -33,7 +33,7 @@ export function AgentsSection() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.1, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-              className="bg-gradient-to-b from-white/[0.03] to-transparent border border-white/[0.05] p-10 rounded-[3rem] flex flex-col items-center text-center group cursor-pointer hover:border-primary/20 transition-colors duration-700"
+              className="relative bg-white/[0.04] backdrop-blur-xl border border-white/10 p-8 rounded-3xl flex flex-col items-center text-center group cursor-pointer hover:border-primary/20 transition-all duration-500"
             >
               <motion.div 
                 animate={{ 
@@ -45,7 +45,7 @@ export function AgentsSection() {
                   repeat: Infinity,
                   ease: "easeInOut",
                 }}
-                className="relative p-7 bg-white/5 rounded-2xl mb-10 group-hover:bg-primary/10 transition-colors"
+                className="relative p-5 bg-white/[0.06] backdrop-blur-sm rounded-2xl mb-10 group-hover:bg-primary/10 transition-colors border border-white/[0.06]"
               >
                 <div className="absolute inset-0 bg-primary/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                 <agent.icon
@@ -54,25 +54,25 @@ export function AgentsSection() {
                 />
               </motion.div>
               
-              <h3 className="font-bold text-2xl mb-4 text-white tracking-tight">{agent.name}</h3>
+              <h3 className="font-bold text-xl mb-4 text-white tracking-tight">{agent.name}</h3>
               <p className="text-sm text-white/60 leading-relaxed font-medium tracking-tight mb-10 group-hover:text-white/90 transition-colors">
                 {agent.desc}
               </p>
 
-              <div className="mt-auto pt-8 border-t border-white/5 w-full flex justify-between items-center group-hover:border-white/10 transition-colors">
+              <div className="mt-auto pt-8 border-t border-white/10 w-full flex justify-between items-center transition-colors">
                  <div className="flex flex-col items-start gap-1">
-                    <span className="text-[9px] font-mono font-bold tracking-[0.2em] text-white/30 group-hover:text-primary/70 transition-colors">Node ID</span>
+                    <span className="text-[9px] font-mono font-bold tracking-wide text-white/40 group-hover:text-primary/70 transition-colors">Node ID</span>
                    <span className="text-xs font-mono font-medium text-white/80">{agent.id}</span>
                  </div>
                  <div className="flex flex-col items-end gap-1">
-                    <span className="text-[9px] font-mono font-bold tracking-[0.2em] text-white/30 group-hover:text-primary/70 transition-colors">Status</span>
+                    <span className="text-[9px] font-mono font-bold tracking-wide text-white/40 group-hover:text-primary/70 transition-colors">Status</span>
                     <span className="text-xs font-mono font-bold text-primary/90">{agent.badge}</span>
                  </div>
               </div>
 
               {/* Card Decoration: Corner Lines */}
-              <div className="absolute top-6 left-6 w-2 h-2 border-t border-l border-white/5 group-hover:border-primary/30 transition-colors duration-500" />
-              <div className="absolute bottom-6 right-6 w-2 h-2 border-b border-r border-white/5 group-hover:border-primary/30 transition-colors duration-500" />
+              <div className="absolute top-6 left-6 w-3 h-3 border-t border-l border-white/10 group-hover:border-primary/40 transition-colors duration-500" />
+              <div className="absolute bottom-6 right-6 w-3 h-3 border-b border-r border-white/10 group-hover:border-primary/40 transition-colors duration-500" />
             </motion.div>
           ))}
         </div>

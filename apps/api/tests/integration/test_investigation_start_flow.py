@@ -104,7 +104,7 @@ async def test_start_investigation_continues_when_queue_handoff_fails(monkeypatc
     assert created_tasks, "expected local background tasks to be scheduled"
     assert metadata_updates
     assert metadata_updates[-1][1]["status"] == "running"
-    assert metadata_updates[-1][1]["brief"] == "Initialising forensic pipeline..."
+    assert metadata_updates[-1][1]["brief"] == "Initializing forensic pipeline..."
 
 
 @pytest.mark.asyncio

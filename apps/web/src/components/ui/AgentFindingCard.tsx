@@ -163,7 +163,7 @@ function SectionGroup({ section }: { section: Section }) {
         aria-expanded={open}
       >
         <FlagIcon className={clsx("w-3.5 h-3.5 shrink-0", flagCfg.color)} />
-        <span className={clsx("flex-1 text-[10px] font-black tracking-widest", flagCfg.color)}>
+        <span className={clsx("flex-1 text-[10px] font-black tracking-wide", flagCfg.color)}>
           {section.label}
         </span>
         <span className="text-[10px] font-mono font-black text-white/20 mr-2">
@@ -194,7 +194,7 @@ function SectionGroup({ section }: { section: Section }) {
                 className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-white/[0.02] transition-all"
               >
                 <Activity className="w-3 h-3 text-primary/40 shrink-0" />
-                <span className="text-[10px] font-bold tracking-widest text-white/20 flex-1">
+                <span className="text-[10px] font-bold tracking-wide text-white/20 flex-1">
                   Section Analysis
                 </span>
                 <ChevronDown className={clsx("w-3 h-3 text-white/15 transition-transform duration-300", showAnalysis && "rotate-180")} />
@@ -268,14 +268,14 @@ export function AgentFindingCard({
             <p className="text-[10px] font-mono font-bold text-white/20 mt-0.5">{meta.role} · Protocol Skip</p>
           </div>
         </div>
-        <span className="text-[10px] font-bold tracking-widest text-white/10 px-3 py-1 rounded-full border border-white/5">Not Applicable</span>
+        <span className="text-[10px] font-bold tracking-wide text-white/10 px-3 py-1 rounded-full border border-white/5">Not Applicable</span>
       </div>
     );
   }
 
   return (
     <motion.div className={clsx(
-      "rounded-[2rem] overflow-hidden premium-glass border transition-all duration-500",
+      "rounded-2xl overflow-hidden premium-glass border transition-all duration-500",
       open ? "border-primary/20 shadow-[0_32px_64px_rgba(0,0,0,0.5)]" : "border-border-subtle shadow-none"
     )}>
       {/* Header Button */}
@@ -300,7 +300,7 @@ export function AgentFindingCard({
             <div className="space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-sm font-black text-white tracking-tighter">{meta.name}</h3>
-                <span className="text-[10px] text-white/40 font-black tracking-widest">{meta.role}</span>
+                <span className="text-[10px] text-white/40 font-black tracking-wide">{meta.role}</span>
                 {anomalyCount > 0 && (
                   <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-danger/10 border border-danger/20 text-danger text-[10px] font-black">
                     <AlertTriangle className="w-2.5 h-2.5" /> {anomalyCount} Flags
@@ -320,7 +320,7 @@ export function AgentFindingCard({
           <div className="flex flex-col items-end gap-3 text-right shrink-0">
             <ConfidenceBar value={confidence} />
             <div className="flex items-center gap-2">
-              <div className="px-3 py-1 rounded-full border border-border-subtle bg-surface-1 text-[9px] font-black tracking-[0.2em] text-white/40">
+              <div className="px-3 py-1 rounded-full border border-border-subtle bg-surface-1 text-[9px] font-black tracking-wide text-white/40">
                 {phase === 'deep' ? 'Deep Analysis' : 'Intake Scan'}
               </div>
               <div className={clsx(
@@ -350,7 +350,7 @@ export function AgentFindingCard({
               <div className="relative p-4 rounded-2xl bg-[#000]/30 border border-white/5">
                 <div className="flex items-center gap-2 mb-2">
                   <Activity className="w-3 h-3 text-primary/50" />
-                  <span className="text-[10px] font-black tracking-[0.3em] text-white/20">Precise Overview</span>
+                  <span className="text-[10px] font-black tracking-wide text-white/20">Precise Overview</span>
                 </div>
                 <p className="text-[12px] text-white/60 leading-relaxed font-medium">
                   {overview}
@@ -363,7 +363,7 @@ export function AgentFindingCard({
               <div className="flex items-center justify-between border-b border-white/5 pb-2">
                 <div className="flex items-center gap-2">
                   <Cpu className="w-3 h-3 text-white/20" />
-                  <span className="text-[10px] font-black tracking-widest text-white/20">Tool Results by Section</span>
+                  <span className="text-[10px] font-black tracking-wide text-white/20">Tool Results by Section</span>
                 </div>
                 <span className="text-[10px] font-mono text-white/10 font-black">
                   {realFindings.length} tool{realFindings.length !== 1 ? "s" : ""} · {sections.length} group{sections.length !== 1 ? "s" : ""}

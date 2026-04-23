@@ -94,6 +94,12 @@ class ImageHandlers(BaseToolHandler):
         registry.register("roi_extract",              self.roi_extract_handler,              "Region of interest extraction")
         registry.register("ela_anomaly_classify",     self.ela_anomaly_classify_handler,     "ELA anomaly block classification")
         registry.register("adversarial_robustness_check", self.adversarial_robustness_check_handler, "Anti-forensics perturbation stability check")
+        registry.register("ela_full_image",           self.ela_full_image_handler,           "Classical multi-quality ELA sweep")
+        registry.register("jpeg_ghost_detect",        self.jpeg_ghost_detect_handler,        "JPEG ghost / double-compression artifact detection")
+        registry.register("splicing_detect",          self.splicing_detect_handler,          "Heuristic image splicing detection")
+        registry.register("copy_move_detect",         self.copy_move_detect_handler,         "SIFT-based copy-move clone detection")
+        registry.register("noise_fingerprint",        self.noise_fingerprint_handler,        "Heuristic PRNU noise consistency analysis")
+        registry.register("deepfake_frequency_check", self.deepfake_frequency_check_handler, "Heuristic frequency-band GAN artifact analysis")
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

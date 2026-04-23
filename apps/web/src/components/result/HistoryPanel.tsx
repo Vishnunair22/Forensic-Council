@@ -43,7 +43,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
 
   return (
     <div className="w-full max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="glass-panel rounded-[2.5rem] border border-white/5 bg-white/[0.01] overflow-hidden shadow-2xl">
+      <div className="glass-panel rounded-3xl border border-white/5 bg-white/[0.01] overflow-hidden shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-10 py-8 border-b border-white/5">
           <div className="flex flex-col gap-1">
@@ -76,7 +76,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
         <div className="p-8">
           {history.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 gap-6 text-white/10">
-              <div className="w-24 h-24 rounded-[2rem] bg-white/[0.02] border border-white/5 flex items-center justify-center">
+              <div className="w-24 h-24 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-center">
                 <HistoryIcon className="w-10 h-10 opacity-20" />
               </div>
               <div className="text-center">
@@ -90,7 +90,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                 <div
                   key={item.sessionId}
                   onClick={() => onSelect(item.sessionId)}
-                  className="group relative flex flex-col gap-5 p-6 rounded-[2rem] bg-white/[0.01] border border-white/5 hover:border-white/10 hover:bg-white/[0.02] transition-all cursor-pointer"
+                  className="group relative flex flex-col gap-5 p-6 rounded-2xl bg-white/[0.01] border border-white/5 hover:border-white/10 hover:bg-white/[0.02] transition-all cursor-pointer"
                 >
                   {/* Top Row: Visual + Title + Actions */}
                   <div className="flex items-center gap-5">

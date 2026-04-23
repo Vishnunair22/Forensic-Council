@@ -2,8 +2,8 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import { UploadCloud } from "lucide-react";
+import { AnimatePresence } from "framer-motion";
+import { UploadCloud, ArrowRight, Loader2 } from "lucide-react";
 
 import { AnalysisProgressOverlay } from "@/components/evidence/AnalysisProgressOverlay";
 import { autoLoginAsInvestigator, checkBackendHealth, ProtocolWarmingError } from "@/lib/api";
@@ -87,25 +87,30 @@ export function HeroAuthActions() {
     <>
       <button
         onClick={() => {
-          playSound("envelope-open"); // UPDATED
+          playSound("envelope-open");
           setShowUpload(true);
         }}
         aria-label={isAuthenticating ? "Initializing..." : authError ? authError : "Upload a file to begin analysis"}
+        className="group relative inline-flex items-center gap-3 px-8 py-4 rounded-full 
+                   bg-info text-white font-bold text-base tracking-wide
+                   hover:bg-transparent hover:text-info border border-transparent hover:border-info
+                   active:scale-[0.98] transition-all duration-300
+                   shadow-[0_0_30px_rgba(0,163,255,0.25)] hover:shadow-[0_0_50px_rgba(0,163,255,0.4)]
+                   min-h-[52px] select-none"
       >
-        {/* Update Scanning Line Color */}
-        <motion.div 
-          className="absolute inset-0 w-full h-[1px] bg-primary/40 z-10"
-          animate={{ top: ["0%", "100%", "0%"] }}
-          transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-        />
-        
         <span className="relative z-10 flex items-center gap-3">
-          <UploadCloud className="w-5 h-5 text-primary group-hover:animate-pulse" />
-          {isAuthenticating ? "Initializing..." : authError ? authError : "Begin Investigation"}
+          <span className="font-bold">
+            {isAuthenticating ? "Initializing..." : authError ? authError : "Begin Analysis"}
+          </span>
+          {isAuthenticating ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+          )}
         </span>
 
         {/* Outer Glow Update */}
-        <div className="absolute inset-0 bg-primary opacity-0 group-hover:opacity-10 blur-xl transition-opacity duration-700" />
+        <div className="absolute inset-0 bg-info opacity-0 group-hover:opacity-10 blur-xl transition-opacity duration-700" />
       </button>
 
       <AnimatePresence>
@@ -118,7 +123,7 @@ export function HeroAuthActions() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence mode="wait">
+      <AnimatePresence>
         {showUpload && !selectedFile && (
           <UploadModal
             key="upload-modal" // Crucial for mode="wait" to track component lifecycle

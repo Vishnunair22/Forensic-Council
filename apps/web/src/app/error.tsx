@@ -20,7 +20,7 @@ export default function GlobalError({
   return (
     <div className="min-h-screen text-foreground flex flex-col items-center justify-center p-6 text-center relative overflow-hidden bg-background">
       <motion.div
-        className="relative max-w-md w-full p-10 rounded-[2.5rem] overflow-hidden flex flex-col items-center z-10 premium-glass border-danger/20"
+        className="relative max-w-md w-full p-10 rounded-3xl overflow-hidden flex flex-col items-center z-10 premium-glass border-danger/20"
         initial={{ opacity: 0, scale: 0.9, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
@@ -28,7 +28,7 @@ export default function GlobalError({
         <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-danger/40 to-transparent" />
 
         <motion.div
-          className="w-20 h-20 bg-danger/10 border border-danger/30 rounded-[2rem] flex items-center justify-center mb-8 shadow-[0_0_40px_rgba(244,63,94,0.2)]"
+          className="w-20 h-20 bg-danger/10 border border-danger/30 rounded-2xl flex items-center justify-center mb-8 shadow-[0_0_40px_rgba(244,63,94,0.2)]"
           animate={{ scale: [1, 1.05, 1], opacity: [0.8, 1, 0.8] }}
           transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
         >
@@ -47,7 +47,7 @@ export default function GlobalError({
         <div className="w-full space-y-4">
           <motion.button
             onClick={() => reset()}
-            className="btn-premium w-full py-4 tracking-[0.2em]"
+            className="btn-premium w-full py-4 tracking-wide"
             whileTap={{ scale: 0.98 }}
           >
             <RefreshCcw className="w-4 h-4" />
@@ -56,7 +56,7 @@ export default function GlobalError({
 
           <Link
             href="/"
-            className="btn-outline w-full py-4 tracking-[0.2em]"
+            className="btn-outline w-full py-4 tracking-wide"
           >
             <Home className="w-4 h-4" />
             Return To Hub

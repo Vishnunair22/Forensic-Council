@@ -152,7 +152,7 @@ class InterAgentBus:
 
         When a registered instance exists for *callee_agent_id*, ``send()`` will
         reuse it instead of creating a fresh agent from scratch.  This avoids
-        the overhead of re-initialising working memory, episodic memory, and
+        the overhead of re-initializing working memory, episodic memory, and
         tool registries for a callee that is already running in the same
         investigation session.
         """

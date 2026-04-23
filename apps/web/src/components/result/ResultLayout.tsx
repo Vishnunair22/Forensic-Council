@@ -52,6 +52,7 @@ export function ResultLayout() {
   }
 
   return (
+    <div className="min-h-screen pb-32">
       {rs.state === "arbiter" && (
         <ForensicProgressOverlay 
           variant="council" 
@@ -67,7 +68,7 @@ export function ResultLayout() {
         <div className="max-w-5xl mx-auto px-10 py-6 flex items-center justify-between gap-8">
           <button 
             onClick={rs.handleHome}
-            className="flex items-center gap-2.5 text-[11px] font-bold text-white/50 hover:text-white transition-colors group"
+            className="inline-flex items-center gap-2 text-sm font-medium text-white/50 hover:text-white transition-colors group"
           >
             <HomeIcon className="w-4 h-4 text-white/10 group-hover:text-primary/50 transition-colors" />
             Back to Evidence Analysis
@@ -83,10 +84,10 @@ export function ResultLayout() {
                 aria-controls={`tabpanel-${tab}`}
                 onClick={() => rs.setActiveTab(tab)}
                 className={clsx(
-                  "px-6 py-1.5 rounded-full text-[11px] font-bold tracking-tight transition-all flex items-center gap-2",
+                  "rounded-full px-5 py-2 text-sm transition-all duration-200 flex items-center gap-2 font-medium",
                   rs.activeTab === tab 
-                    ? "bg-white/10 text-white shadow-[0_4px_20px_rgba(var(--color-primary-rgb),0.1)]" 
-                    : "text-white/20 hover:text-white/40 hover:bg-white/[0.02]"
+                    ? "bg-primary/15 border border-primary/20 text-primary font-semibold" 
+                    : "text-white/50 hover:text-white/80"
                 )}
               >
                 {tab === "analysis" ? <Activity className="w-4 h-4" /> : <HistoryIcon className="w-4 h-4" />}
@@ -218,10 +219,10 @@ function ResultSkeletonView() {
       </div>
       <div className="max-w-5xl mx-auto px-6 pt-12 space-y-12">
         {/* Verdict card skeleton — matches ResultHeader layout */}
-        <div className="rounded-[2.5rem] border border-white/5 glass-panel p-10 space-y-8">
+        <div className="rounded-3xl border border-white/5 glass-panel p-10 space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-8 items-center">
             {/* ArcGauge placeholder */}
-            <div className="skeleton w-40 h-40 rounded-[2rem] mx-auto" />
+            <div className="skeleton w-40 h-40 rounded-2xl mx-auto" />
             {/* Right column: verdict + discord + 3 metric cards */}
             <div className="flex-1 space-y-6">
               <div className="space-y-3 text-center md:text-left">
@@ -243,7 +244,7 @@ function ResultSkeletonView() {
         <div className="space-y-6">
           <div className="skeleton h-10 w-80 rounded-full" />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[1,2,3,4].map(i => <div key={i} className="skeleton h-48 rounded-[2rem]" />)}
+            {[1,2,3,4].map(i => <div key={i} className="skeleton h-48 rounded-2xl" />)}
           </div>
         </div>
       </div>

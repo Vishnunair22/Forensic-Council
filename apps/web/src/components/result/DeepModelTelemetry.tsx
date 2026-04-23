@@ -34,7 +34,7 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
    <div className="px-5 py-3.5 border-b border-white/[0.05] bg-white/[0.02] flex items-center justify-between">
     <div className="flex items-center gap-2">
      <Cpu className="w-3.5 h-3.5 text-violet-400" />
-     <span className="text-[10px] font-bold tracking-widest text-foreground/60">
+     <span className="text-[10px] font-bold tracking-wide text-foreground/60">
       Deep Model Telemetry
      </span>
     </div>

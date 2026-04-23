@@ -141,7 +141,7 @@ export function ToolRow({
      <Icon className="w-4 h-4" />
     </div>
 
-    <span className="flex-1 text-[10px] font-black tracking-[0.2em] text-white/60 group-hover:text-white transition-colors">
+    <span className="flex-1 text-[10px] font-black tracking-wide text-white/60 group-hover:text-white transition-colors">
      {fmtTool(toolName)}
     </span>
 
@@ -153,7 +153,7 @@ export function ToolRow({
      )}
      
      <div className={clsx(
-     "px-3 py-1 rounded-full border text-[9px] font-black tracking-[0.2em]",
+     "px-3 py-1 rounded-full border text-[9px] font-black tracking-wide",
       status === "success" ? "bg-primary/10 border-primary/20 text-primary" : 
       status === "error" ? "bg-danger/10 border-danger/20 text-danger" : 
       status === "na" ? "bg-surface-1 border-border-subtle text-white/20" : 
@@ -180,7 +180,7 @@ export function ToolRow({
      <div className="p-6 rounded-[1.5rem] premium-card space-y-5 shadow-inner">
       {/* Per-tool specific signal — raw output from the tool */}
       <div className="space-y-2">
-      <h5 className="text-[9px] font-black text-white/20 tracking-[0.3em]">Diagnostic Intelligence</h5>
+      <h5 className="text-[9px] font-black text-white/20 tracking-wide">Diagnostic Intelligence</h5>
        <p className={clsx(
         "text-[13px] text-white/70 leading-relaxed font-medium tracking-tight",
         !finding.metadata?.llm_refined_summary && "font-mono"
@@ -193,7 +193,7 @@ export function ToolRow({
        <div className="flex flex-wrap gap-2">
         {metrics.map((m) => (
          <div key={`${toolName}-${m.label}`} className="px-3 py-2 rounded-xl bg-white/[0.03] border border-white/5">
-          <span className="block text-[8px] font-black tracking-[0.2em] text-white/20">{m.label}</span>
+          <span className="block text-[8px] font-black tracking-wide text-white/20">{m.label}</span>
           <span className="block text-[11px] font-mono font-bold text-white/55 mt-0.5">{m.value}</span>
          </div>
         ))}
@@ -218,13 +218,13 @@ export function ToolRow({
       )}
 
       {finding.status === "ERROR" && (
-       <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-500/5 border border-rose-500/10 text-rose-400 text-[10px] font-bold tracking-widest">
+       <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-500/5 border border-rose-500/10 text-rose-400 text-[10px] font-bold tracking-wide">
         <XCircle className="w-3.5 h-3.5" /> Analysis Protocol Error
        </div>
       )}
 
       {finding.status === "INCOMPLETE" && (
-       <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-amber-400 text-[10px] font-bold tracking-widest">
+       <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-amber-400 text-[10px] font-bold tracking-wide">
         <AlertTriangle className="w-3.5 h-3.5" /> No Matching Tool — Task Not Executed
        </div>
       )}
@@ -247,7 +247,7 @@ export function MoreFindingsToggle({ findings, count }: { findings: AgentFinding
     className="w-full flex items-center justify-between px-6 py-4 hover:bg-white/[0.02] transition-all group"
    >
     <div className="flex items-center gap-3">
-     <span className="text-[10px] font-black tracking-[0.2em] text-white/50 group-hover:text-white/50 transition-colors">
+     <span className="text-[10px] font-black tracking-wide text-white/50 group-hover:text-white/50 transition-colors">
       {open ? "Condense Analysis" : `+${count} Additional Signal${count > 1 ? "s" : ""}`}
      </span>
      {!open && issues > 0 && (

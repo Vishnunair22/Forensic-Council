@@ -14,7 +14,7 @@ interface MetricsPanelProps {
 function StatCard({ label, value, color, sublabel }: { label: string; value: string; color: string; sublabel?: string }) {
  return (
   <div className="p-5 rounded-2xl bg-white/[0.01] border border-white/5 space-y-2 group hover:bg-white/[0.02] transition-colors">
-   <p className="text-xs font-semibold tracking-widest text-white/50 group-hover:text-white/50 transition-colors">{label}</p>
+   <p className="text-xs font-semibold tracking-wide text-white/50 group-hover:text-white/50 transition-colors">{label}</p>
    <div className="flex items-baseline gap-2">
     <span className={clsx("text-2xl font-black font-mono tracking-tighter", color)}>
       {Number.isNaN(parseInt(value)) ? value : <><AnimatedNumber value={parseInt(value)} />{value.replace(/\d/g, "")}</>}
@@ -40,7 +40,7 @@ export function MetricsPanel({ report, activeAgentIds }: MetricsPanelProps) {
      <div className="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/[0.03] flex gap-3">
       <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
       <div>
-       <p className="text-[10px] font-black text-amber-400/60 tracking-widest mb-1">
+       <p className="text-[10px] font-black text-amber-400/60 tracking-wide mb-1">
         Analysis Degradation Flags
        </p>
        <ul className="space-y-1">
@@ -52,7 +52,7 @@ export function MetricsPanel({ report, activeAgentIds }: MetricsPanelProps) {
      </div>
     )}
     <div className="flex items-center gap-3 px-1">
-    <h2 className="text-[10px] font-bold tracking-[0.2em] text-white/50">
+    <h2 className="text-[10px] font-bold tracking-wide text-white/50">
      Intelligence & Key Signals
     </h2>
    </div>
@@ -61,7 +61,7 @@ export function MetricsPanel({ report, activeAgentIds }: MetricsPanelProps) {
     {/* Agent Confidence Matrix */}
     <div className="rounded-3xl border border-white/5 bg-white/[0.01] p-8 space-y-6 glass-panel">
      <div className="flex items-center justify-between border-b border-white/5 pb-4">
-      <p className="text-[10px] font-bold text-white/20 tracking-widest">Global Consensus Profile</p>
+      <p className="text-[10px] font-bold text-white/20 tracking-wide">Global Consensus Profile</p>
       <h3 className="text-[11px] font-bold text-white/60 font-heading">
        Agent Confidence Matrix
       </h3>

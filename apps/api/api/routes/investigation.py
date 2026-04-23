@@ -230,7 +230,7 @@ async def start_investigation(
             session_id,
             {
                 "status": "running",
-                "brief": "Initialising forensic pipeline...",
+                "brief": "Initializing forensic pipeline...",
                 "case_id": case_id,
                 "investigator_id": investigator_id,
                 "file_path": str(tmp_path),

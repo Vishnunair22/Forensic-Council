@@ -95,7 +95,7 @@ async def main() -> None:
                 session_str,
                 {
                     "status": "running",
-                    "brief": "Initialising forensic pipeline...",
+                    "brief": "Initializing forensic pipeline...",
                     "case_id": case_id,
                     "investigator_id": investigator_id,
                     "file_path": evidence_file_path,
@@ -108,7 +108,7 @@ async def main() -> None:
                 BriefUpdate(
                     type="AGENT_UPDATE",
                     session_id=session_str,
-                    message="Initialising forensic pipeline; loading specialist agents.",
+                    message="Initializing forensic pipeline; loading specialist agents.",
                     data={"status": "starting"},
                 ),
             )

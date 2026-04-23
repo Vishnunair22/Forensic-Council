@@ -73,7 +73,7 @@ export function ForensicTimeline({
       <History className="w-4 h-4 text-primary" />
      </div>
      <div>
-      <h4 className="text-xs font-black tracking-widest text-white/50 leading-none mb-1">Evidence Ledger</h4>
+      <h4 className="text-xs font-black tracking-wide text-white/50 leading-none mb-1">Evidence Ledger</h4>
       <span className="text-[10px] font-mono text-white/20 tracking-tighter">Real-time Forensic Feed</span>
      </div>
     </div>
@@ -82,7 +82,7 @@ export function ForensicTimeline({
        <motion.div 
         animate={{ opacity: [0.4, 1, 0.4] }}
         transition={{ duration: 2, repeat: Infinity }}
-        className="px-2 py-0.5 rounded-full bg-primary/10 border border-primary/30 text-primary text-[10px] font-black tracking-widest flex items-center gap-1.5"
+        className="px-2 py-0.5 rounded-full bg-primary/10 border border-primary/30 text-primary text-[10px] font-black tracking-wide flex items-center gap-1.5"
        >
         <span className="w-1.5 h-1.5 rounded-full bg-primary" />
         Live Feed
@@ -116,7 +116,7 @@ export function ForensicTimeline({
          <Clock className="w-4 h-4 text-primary animate-spin" />
         </div>
         <div className="flex-1 pt-1.5 min-w-0">
-          <p className="text-[11px] font-mono text-primary leading-relaxed font-black tracking-widest">
+          <p className="text-[11px] font-mono text-primary leading-relaxed font-black tracking-wide">
            Establishing Secure Pipe
           </p>
           <span className="text-[10px] text-white/20 ">Awaiting Stream Initialization</span>
@@ -167,7 +167,7 @@ export function ForensicTimeline({
                 )}>
                   {fmtTool(finding.tool)}
                 </span>
-                <span className="text-[10px] text-white/20 tracking-[0.2em]">
+                <span className="text-[10px] text-white/20 tracking-wide">
                   {finding.agentName}
                 </span>
                </div>
@@ -192,7 +192,7 @@ export function ForensicTimeline({
         className="flex flex-col items-center justify-center py-20 text-center gap-4 opacity-20"
        >
         <Search className="w-10 h-10" />
-        <p className="text-[10px] font-black tracking-[0.3em]">No Intelligence Logged</p>
+        <p className="text-[10px] font-black tracking-wide">No Intelligence Logged</p>
        </motion.div>
       )}
      </AnimatePresence>
@@ -203,7 +203,7 @@ export function ForensicTimeline({
    <div className="mt-auto border-t border-white/5 pt-4 flex items-center justify-between">
      <div className="flex items-center gap-1.5">
       <Zap className="w-3 h-3 text-primary" />
-      <span className="text-[10px] font-black tracking-widest text-white/20">Live Intelligence Feed</span>
+      <span className="text-[10px] font-black tracking-wide text-white/20">Live Intelligence Feed</span>
      </div>
      <span className="text-xs font-mono text-white/30 font-semibold tracking-wide">
       Total Signals: {allFindings.length.toString().padStart(3, '0')}

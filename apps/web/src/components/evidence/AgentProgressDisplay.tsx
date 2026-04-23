@@ -218,7 +218,7 @@ export function AgentProgressDisplay({
               <Loader2 className="w-4 h-4 text-primary animate-spin relative z-10" />
             </div>
             <div className="flex flex-col gap-1">
-              <p className="text-[10px] font-bold text-primary tracking-[0.3em]">
+              <p className="text-[10px] font-bold text-primary tracking-wide">
                 {phase === "initial" ? "Initial Analysis" : "Deep Analysis"}
               </p>
               <p className="text-xs font-medium text-white/45" role="status" aria-live="polite">
@@ -238,7 +238,7 @@ export function AgentProgressDisplay({
             className="flex items-center gap-6 bg-white/[0.03] px-6 py-4 rounded-2xl border border-white/5 backdrop-blur-xl hover:bg-white/[0.06] transition-all group"
           >
             <div className="flex flex-col items-start">
-              <span className="text-[9px] font-bold text-white/30 tracking-[0.2em] mb-0.5">Status</span>
+              <span className="text-[9px] font-bold text-white/30 tracking-wide mb-0.5">Status</span>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-black text-white font-mono">Running Agents</span>
                 <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-primary/10 text-primary text-xs font-black">
@@ -285,7 +285,7 @@ export function AgentProgressDisplay({
               className="flex items-center gap-6 bg-white/[0.03] px-6 py-4 rounded-2xl border border-white/5 backdrop-blur-xl hover:bg-white/[0.06] transition-all group"
             >
               <div className="flex flex-col items-start">
-                <span className="text-[9px] font-bold text-white/30 tracking-[0.2em] mb-0.5">System</span>
+                <span className="text-[9px] font-bold text-white/30 tracking-wide mb-0.5">System</span>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-black text-white/40 font-mono">Skipped Agents</span>
                   <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-white/5 text-white/30 text-xs font-black">
@@ -366,7 +366,7 @@ export function AgentProgressDisplay({
        exit={{ opacity: 0, y: 100 }}
        className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-6 pointer-events-none"
       >
-       <div className="flex items-center gap-4 p-3 rounded-[2rem] bg-black/40 backdrop-blur-3xl border border-white/10 shadow-[0_32px_64px_rgba(0,0,0,0.6)] pointer-events-auto">
+       <div className="flex items-center gap-4 p-3 rounded-2xl bg-black/40 backdrop-blur-3xl border border-white/10 shadow-[0_32px_64px_rgba(0,0,0,0.6)] pointer-events-auto">
         {showInitialDecision ? (
          <>
           <button

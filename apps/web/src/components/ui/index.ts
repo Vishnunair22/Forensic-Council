@@ -2,7 +2,6 @@ export * from "./AgentFindingCard";
 export * from "./AgentIcon";
 export * from "./AgentsSection";
 export * from "./Badge";
-export * from "./GlobalBackground";
 export * from "./MicroscopeBackground";
 export * from "./GlobalFooter";
 export * from "./GlobalNavbar";

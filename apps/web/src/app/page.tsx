@@ -4,16 +4,10 @@ import { motion } from "framer-motion";
 import { HowWorksSection } from "@/components/ui/HowWorksSection";
 import { AgentsSection } from "@/components/ui/AgentsSection";
 import { HeroAuthActions } from "@/components/ui/HeroAuthActions";
-import { BrandLogo } from "@/components/ui/BrandLogo";
 
 export default function Home() {
   return (
     <div className="relative bg-black text-foreground min-h-screen selection:bg-primary/20 selection:text-white">
-      {/* --- Scan Line Effect --- */}
-      <div className="scan-line-overlay" />
-      
-      {/* --- Noise Overlay for texture --- */}
-      <div className="absolute inset-0 pointer-events-none opacity-[0.03] bg-[url('https://grainy-gradients.vercel.app/noise.svg')] z-[5]" />
 
       {/* --- Normal Hero Section --- */}
       <motion.div
@@ -32,18 +26,12 @@ export default function Home() {
              transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
              className="flex flex-col items-center"
           >
-            {/* System Status Badge (Restored) */}
-            <div className="flex items-center gap-3 px-5 py-2 rounded-full bg-black/50 border border-white/10 mb-8 backdrop-blur-xl shadow-2xl">
-              <span className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_12px_rgba(var(--primary),1)]" />
-              <span className="text-[11px] font-mono font-bold tracking-[0.25em] text-white/90">Neural Forensic Protocol v4.0</span>
-            </div>
-
             {/* NEW: Gradient & Shadowed Typography */}
             <h1
               className="text-5xl md:text-7xl lg:text-[5.5rem] font-black max-w-6xl tracking-[-0.03em] leading-none flex flex-col items-center"
             >
-              <span className="block text-transparent bg-clip-text bg-gradient-to-b from-white via-white/90 to-white/60 pb-2">
-                Multi Agent Forensic
+              <span className="block text-white/95 pb-2">
+                Multi-Agent Forensic
               </span>
               <span className="block text-primary drop-shadow-[0_0_40px_rgba(var(--primary),0.2)]">
                 Evidence Analysis System
@@ -56,9 +44,9 @@ export default function Home() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3, duration: 1 }}
-            className="text-base md:text-lg font-medium text-white/50 max-w-3xl mx-auto leading-relaxed tracking-wide mt-2 mb-4"
+            className="text-base md:text-lg font-medium text-white/60 max-w-3xl mx-auto leading-relaxed tracking-wide mt-2 mb-4"
           >
-            Forensic Council is a Multi Agent AI based application, that uses multiple customized agents to analyse digital forensic evidence to create a cohesive and effective report.
+            Forensic Council is a Multi-Agent AI-based application, that uses multiple customized agents to analyze digital forensic evidence to create a cohesive and effective report.
           </motion.p>
 
           <motion.div 
@@ -81,7 +69,7 @@ export default function Home() {
           transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
           className="absolute bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1"
         >
-          <span className="text-[11px] font-mono font-semibold text-white/40 tracking-[0.2em]">Scroll To Inspect</span>
+          <span className="text-[11px] font-mono font-semibold text-white/40 tracking-wide">Scroll To Inspect</span>
           <div className="w-[2px] h-12 mt-2 bg-gradient-to-b from-primary/50 to-transparent rounded-full" />
         </motion.div>
       </motion.div>
@@ -93,7 +81,7 @@ export default function Home() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ margin: "-100px" }}
           transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-          className="glass-panel min-h-screen rounded-[4rem] shadow-[0_40px_120px_rgba(0,0,0,0.8)] overflow-hidden"
+          className="bg-white/[0.05] backdrop-blur-xl border border-white/10 min-h-screen rounded-[4rem] shadow-[0_40px_120px_rgba(0,0,0,0.8)] overflow-hidden"
         >
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1.5 bg-white/5 rounded-full mt-8" />
           <HowWorksSection />
