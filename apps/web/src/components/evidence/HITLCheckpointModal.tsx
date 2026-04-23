@@ -40,7 +40,7 @@ const decisionOptions: Array<{
   color: "emerald" | "cyan" | "slate" | "red";
 }> = [
   { value: "APPROVE", label: "Approve", description: "Accept finding and continue", color: "emerald" },
-  { value: "REDIRECT", label: "Redirect", description: "Request cross-modal review", color: "cyan" },
+  { value: "REDIRECT", label: "Redirect", description: "Request cross-modal review", color: "emerald" },
   { value: "OVERRIDE", label: "Override", description: "Provide alternate verdict", color: "slate" },
   { value: "TERMINATE", label: "Terminate", description: "Halt pipeline — critical risk detected", color: "red" },
   { value: "ESCALATE", label: "Escalate", description: "Flag for senior council", color: "red" },
@@ -80,14 +80,14 @@ export function HITLCheckpointModal({
      <div className="p-8 space-y-6">
       <DialogHeader className="text-left space-y-2">
        <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
-         <ShieldAlert className="w-6 h-6 text-cyan-500" />
+        <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+         <ShieldAlert className="w-6 h-6 text-primary" />
         </div>
         <div>
-         <DialogTitle className="text-xl font-black text-white px-0 font-heading tracking-tight">
+         <DialogTitle className="text-2xl font-extrabold text-white px-0 tracking-tight drop-shadow-md">
           Investigator Intervention
          </DialogTitle>
-         <DialogDescription className="text-xs font-mono font-bold text-white/50 tracking-widest mt-1">
+         <DialogDescription className="text-sm font-mono font-medium text-white/60 tracking-wide mt-1">
           Checkpoint ID: {checkpoint.checkpoint_id.slice(0, 8)} · {checkpoint.agent_name}
          </DialogDescription>
         </div>
@@ -101,9 +101,9 @@ export function HITLCheckpointModal({
          <h4 className="text-[10px] font-black font-mono text-white/20 tracking-[0.2em]">Evidence Brief</h4>
          <p className="text-sm text-white/70 leading-relaxed">{checkpoint.brief_text}</p>
         </div>
-        <div className="p-5 rounded-2xl bg-cyan-500/[0.03] border border-cyan-500/10 space-y-2">
-         <h4 className="text-[10px] font-black font-mono text-cyan-500/50 tracking-[0.2em]">Decision Required</h4>
-         <p className="text-sm text-cyan-200/80 leading-relaxed font-medium">{checkpoint.decision_needed}</p>
+        <div className="p-5 rounded-2xl bg-primary/[0.03] border border-primary/10 space-y-2">
+         <h4 className="text-[10px] font-black font-mono text-primary/50 tracking-[0.2em]">Decision Required</h4>
+         <p className="text-sm text-primary-200/80 leading-relaxed font-medium">{checkpoint.decision_needed}</p>
         </div>
        </div>
 
@@ -142,15 +142,15 @@ export function HITLCheckpointModal({
              {option.description}
             </span>
            </div>
-           {selectedDecision === option.value && (
-            <motion.div 
-             layoutId="active-bg" 
-             className={clsx(
-              "absolute inset-0 opacity-10",
-              { emerald: "bg-emerald-500", cyan: "bg-cyan-500", slate: "bg-slate-500", red: "bg-rose-500" }[option.color]
-             )}
-            />
-           )}
+            {selectedDecision === option.value && (
+             <motion.div 
+              layoutId="active-bg" 
+              className={clsx(
+               "absolute inset-0 opacity-10",
+               { emerald: "bg-emerald-500", slate: "bg-slate-500", red: "bg-rose-500" }[option.color as any] || "bg-primary"
+              )}
+             />
+            )}
           </button>
          ))}
         </div>
@@ -164,7 +164,7 @@ export function HITLCheckpointModal({
          value={note}
          onChange={(e) => setNote(e.target.value)}
          placeholder="Enter forensic notes for this intervention..."
-         className="w-full px-5 py-4 rounded-2xl bg-white/[0.02] border border-white/5 text-sm text-white/80 placeholder:text-white/10 focus:outline-none focus:border-cyan-500/30 transition-all min-h-[100px] resize-none"
+         className="w-full px-5 py-4 rounded-2xl bg-white/[0.02] border border-white/5 text-sm text-white/80 placeholder:text-white/10 focus:outline-none focus:border-primary/30 transition-all min-h-[100px] resize-none"
          disabled={isSubmitting}
         />
        </div>
@@ -187,7 +187,7 @@ export function HITLCheckpointModal({
        <button
         onClick={handleSubmit}
         disabled={!selectedDecision || isSubmitting}
-        className="btn-pill-primary px-10 gap-3"
+        className="btn-pill-primary px-10 gap-3 !normal-case !tracking-wide !font-bold"
        >
         {isSubmitting ? (
          <>

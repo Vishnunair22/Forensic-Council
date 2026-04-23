@@ -46,17 +46,17 @@ export function ResultStateView({ type, message, onNew, onHome }: ResultStateVie
       <h2 className="text-4xl font-black text-white tracking-tighter mb-4">
         {c.title}
       </h2>
-      <p className="text-sm font-black text-white/30 max-w-sm mb-12 tracking-widest">{c.desc}</p>
+      <p className="text-base font-medium text-white/50 max-w-sm mb-12 tracking-wide leading-relaxed">{c.desc}</p>
 
       {(onNew || onHome) && (
         <div className="flex gap-4 flex-wrap justify-center">
           {onNew && (
-            <button onClick={onNew} className="btn-premium px-10 py-4 tracking-[0.2em]">
+            <button onClick={onNew} className="btn-premium px-10 py-4 tracking-wide font-bold !normal-case">
               New Investigation
             </button>
           )}
           {onHome && (
-            <button onClick={onHome} className="btn-outline px-10 py-4 tracking-[0.2em]">
+            <button onClick={onHome} className="btn-outline px-10 py-4 tracking-wide font-bold !normal-case">
               <HomeIcon className="w-4 h-4" /> Hub
             </button>
           )}

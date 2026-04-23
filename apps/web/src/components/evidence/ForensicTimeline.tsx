@@ -18,13 +18,13 @@ import { AGENTS as AGENTS_DATA } from "@/lib/constants";
 interface ForensicTimelineProps {
  completedAgents: AgentUpdate[];
  agentUpdates: Record<string, { status: string; thinking: string }>;
- isInitialating?: boolean;
+ isInitializing?: boolean;
 }
 
 export function ForensicTimeline({ 
  completedAgents, 
  agentUpdates: _agentUpdates,
- isInitialating 
+ isInitializing 
 }: ForensicTimelineProps) {
  
  // Aggregate all findings across all agents
@@ -69,8 +69,8 @@ export function ForensicTimeline({
    {/* Interactive Header */}
    <div className="flex items-center justify-between">
     <div className="flex items-center gap-3">
-     <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20">
-      <History className="w-4 h-4 text-cyan-400" />
+     <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20">
+      <History className="w-4 h-4 text-primary" />
      </div>
      <div>
       <h4 className="text-xs font-black tracking-widest text-white/50 leading-none mb-1">Evidence Ledger</h4>
@@ -79,14 +79,14 @@ export function ForensicTimeline({
     </div>
     
     <div className="flex gap-2 items-center">
-      <motion.div 
-       animate={{ opacity: [0.4, 1, 0.4] }}
-       transition={{ duration: 2, repeat: Infinity }}
-       className="px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-[10px] font-black tracking-widest flex items-center gap-1.5"
-      >
-       <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-       LIVE_FEED
-      </motion.div>
+       <motion.div 
+        animate={{ opacity: [0.4, 1, 0.4] }}
+        transition={{ duration: 2, repeat: Infinity }}
+        className="px-2 py-0.5 rounded-full bg-primary/10 border border-primary/30 text-primary text-[10px] font-black tracking-widest flex items-center gap-1.5"
+       >
+        <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+        Live Feed
+       </motion.div>
       <div className="px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] font-black ">
        {flaggedFindings.length} Alerts
       </div>
@@ -101,22 +101,22 @@ export function ForensicTimeline({
      aria-live="polite"
      aria-relevant="additions"
     >
-    <div className="absolute left-[15px] top-0 bottom-0 w-[1px] bg-gradient-to-b from-cyan-500/20 via-white/5 to-transparent z-0" />
+    <div className="absolute left-[15px] top-0 bottom-0 w-[1px] bg-gradient-to-b from-primary/20 via-white/5 to-transparent z-0" />
     
     <div className="space-y-6 relative z-10">
      <AnimatePresence mode="popLayout">
-      {isInitialating && (
+      {isInitializing && (
        <motion.div 
         initial={{ opacity: 0, x: -10 }}
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, scale: 0.9 }}
         className="flex items-start gap-4"
        >
-        <div className="w-8 h-8 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center shrink-0">
-         <Clock className="w-4 h-4 text-cyan-400 animate-spin" />
+        <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center shrink-0">
+         <Clock className="w-4 h-4 text-primary animate-spin" />
         </div>
         <div className="flex-1 pt-1.5 min-w-0">
-          <p className="text-[11px] font-mono text-cyan-400 leading-relaxed font-black tracking-widest">
+          <p className="text-[11px] font-mono text-primary leading-relaxed font-black tracking-widest">
            Establishing Secure Pipe
           </p>
           <span className="text-[10px] text-white/20 ">Awaiting Stream Initialization</span>
@@ -185,7 +185,7 @@ export function ForensicTimeline({
          </motion.div>
         );
        })
-      ) : !isInitialating && (
+      ) : !isInitializing && (
        <motion.div 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -202,11 +202,11 @@ export function ForensicTimeline({
    {/* Footer Stats */}
    <div className="mt-auto border-t border-white/5 pt-4 flex items-center justify-between">
      <div className="flex items-center gap-1.5">
-      <Zap className="w-3 h-3 text-cyan-400" />
+      <Zap className="w-3 h-3 text-primary" />
       <span className="text-[10px] font-black tracking-widest text-white/20">Live Intelligence Feed</span>
      </div>
-     <span className="text-[10px] font-mono text-white/10 font-black">
-      TOTAL_SIGNALS: {allFindings.length.toString().padStart(3, '0')}
+     <span className="text-xs font-mono text-white/30 font-semibold tracking-wide">
+      Total Signals: {allFindings.length.toString().padStart(3, '0')}
      </span>
    </div>
   </div>

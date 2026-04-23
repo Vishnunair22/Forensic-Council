@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { HowWorksSection } from "@/components/ui/HowWorksSection";
 import { AgentsSection } from "@/components/ui/AgentsSection";
 import { HeroAuthActions } from "@/components/ui/HeroAuthActions";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 
 export default function Home() {
   return (
@@ -21,8 +22,8 @@ export default function Home() {
         {/* NEW: Cyber Blueprint Grid (Adds subtle technical depth) */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_40%,#000_40%,transparent_100%)] pointer-events-none z-0" />
 
-        {/* NEW: Volumetric Background Glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%] w-[800px] h-[500px] bg-primary/10 blur-[120px] rounded-[100%] pointer-events-none z-0" />
+        {/* Volumetric Background Glow */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%] w-[800px] h-[500px] bg-primary/5 blur-[120px] rounded-[100%] pointer-events-none z-0" />
 
         <div className="flex flex-col items-center justify-center text-center px-6 relative z-10 pointer-events-auto gap-8">
           <motion.div
@@ -31,17 +32,17 @@ export default function Home() {
              transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
              className="flex flex-col items-center"
           >
-            {/* NEW: System Status Badge */}
-            <div className="flex items-center gap-3 px-4 py-1.5 rounded-full bg-primary/[0.03] border border-primary/20 mb-8 backdrop-blur-md shadow-[0_0_20px_rgba(var(--primary),0.05)]">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(var(--primary),0.8)]" />
-              <span className="text-[10px] font-mono font-bold tracking-[0.3em] text-primary/80">Neural Forensic Protocol v4.0</span>
+            {/* System Status Badge (Restored) */}
+            <div className="flex items-center gap-3 px-5 py-2 rounded-full bg-black/50 border border-white/10 mb-8 backdrop-blur-xl shadow-2xl">
+              <span className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_12px_rgba(var(--primary),1)]" />
+              <span className="text-[11px] font-mono font-bold tracking-[0.25em] text-white/90">Neural Forensic Protocol v4.0</span>
             </div>
 
             {/* NEW: Gradient & Shadowed Typography */}
             <h1
-              className="text-5xl md:text-7xl lg:text-[5.5rem] font-black max-w-6xl tracking-[-0.03em] leading-[0.9] flex flex-col items-center"
+              className="text-5xl md:text-7xl lg:text-[5.5rem] font-black max-w-6xl tracking-[-0.03em] leading-none flex flex-col items-center"
             >
-              <span className="block text-transparent bg-clip-text bg-gradient-to-b from-white via-white/90 to-white/40 pb-2">
+              <span className="block text-transparent bg-clip-text bg-gradient-to-b from-white via-white/90 to-white/60 pb-2">
                 Multi Agent Forensic
               </span>
               <span className="block text-primary drop-shadow-[0_0_40px_rgba(var(--primary),0.2)]">
@@ -57,7 +58,7 @@ export default function Home() {
             transition={{ delay: 0.3, duration: 1 }}
             className="text-base md:text-lg font-medium text-white/50 max-w-3xl mx-auto leading-relaxed tracking-wide mt-2 mb-4"
           >
-            Forensic Council uses autonomous neural nodes to analyze digital evidence, ensuring cryptographic and semantic integrity across multiple modalities.
+            Forensic Council is a Multi Agent AI based application, that uses multiple customized agents to analyse digital forensic evidence to create a cohesive and effective report.
           </motion.p>
 
           <motion.div 
@@ -74,15 +75,14 @@ export default function Home() {
           </motion.div>
         </div>
 
-        {/* Scroll Indicator (Kept tight) */}
         <motion.div 
           initial={{ opacity: 0 }}
           animate={{ opacity: [0, 0.5, 0], y: [0, 15, 0] }}
           transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3"
+          className="absolute bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1"
         >
-          <span className="text-[9px] font-mono font-bold text-white/30 tracking-[0.3em]">Scroll to Inspect</span>
-          <div className="w-[1px] h-16 bg-gradient-to-b from-primary/30 to-transparent" />
+          <span className="text-[11px] font-mono font-semibold text-white/40 tracking-[0.2em]">Scroll To Inspect</span>
+          <div className="w-[2px] h-12 mt-2 bg-gradient-to-b from-primary/50 to-transparent rounded-full" />
         </motion.div>
       </motion.div>
 

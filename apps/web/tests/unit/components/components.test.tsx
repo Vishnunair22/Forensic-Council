@@ -225,7 +225,7 @@ describe("AgentProgressDisplay", () => {
       expect(screen.queryByRole("button", { name: /new investigation/i })).not.toBeInTheDocument();
       
       rerender(<AgentProgressDisplay {...awaitProps} phase="deep" />);
-      expect(screen.getByRole("button", { name: /new investigation/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /new upload|new investigation/i })).toBeInTheDocument();
     });
     it("calls onAcceptAnalysis on click", () => {
       const onAccept = jest.fn();
@@ -242,7 +242,7 @@ describe("AgentProgressDisplay", () => {
     it("calls onNewUpload on click when in deep complete state", () => {
       const onNew = jest.fn();
       render(<AgentProgressDisplay {...awaitProps} phase="deep" onNewUpload={onNew} />);
-      fireEvent.click(screen.getByRole("button", { name: /new investigation/i }));
+      fireEvent.click(screen.getByRole("button", { name: /new upload|new investigation/i }));
       expect(onNew).toHaveBeenCalled();
     });
   });

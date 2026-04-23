@@ -42,7 +42,7 @@ const AGENT_META: Record<string, { name: string; role: string; color: string; ic
 };
 
 const COLOR_MAP: Record<string, { bg: string; border: string; text: string; glow: string }> = {
-  cyan: { bg: "bg-cyan-500/5", border: "border-cyan-500/20", text: "text-cyan-400", glow: "shadow-[0_0_30px_rgba(34,211,238,0.1)]" },
+  cyan: { bg: "bg-primary/5", border: "border-primary/20", text: "text-primary", glow: "shadow-[0_0_30px_rgba(var(--color-primary-rgb),0.1)]" },
   blue: { bg: "bg-blue-500/5", border: "border-blue-500/20", text: "text-blue-400", glow: "shadow-[0_0_30px_rgba(59,130,246,0.1)]" },
   amber: { bg: "bg-amber-500/5", border: "border-amber-500/20", text: "text-amber-400", glow: "shadow-[0_0_30px_rgba(245,158,11,0.1)]" },
   teal: { bg: "bg-teal-500/5", border: "border-teal-500/20", text: "text-teal-400", glow: "shadow-[0_0_30px_rgba(45,212,191,0.1)]" },
@@ -193,7 +193,7 @@ function SectionGroup({ section }: { section: Section }) {
                 onClick={() => setShowAnalysis(!showAnalysis)}
                 className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-white/[0.02] transition-all"
               >
-                <Activity className="w-3 h-3 text-cyan-400/40 shrink-0" />
+                <Activity className="w-3 h-3 text-primary/40 shrink-0" />
                 <span className="text-[10px] font-bold tracking-widest text-white/20 flex-1">
                   Section Analysis
                 </span>
@@ -293,7 +293,7 @@ export function AgentFindingCard({
           <div className="flex items-center gap-5">
             <div className={clsx(
               "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border transition-all duration-500",
-              theme.bg, theme.border, theme.text, open && "scale-105 shadow-[0_0_20px_rgba(34,211,238,0.1)]"
+              theme.bg, theme.border, theme.text, open && "scale-105 shadow-[0_0_20px_rgba(var(--color-primary-rgb),0.1)]"
             )}>
               <meta.icon className="w-7 h-7" />
             </div>
@@ -349,7 +349,7 @@ export function AgentFindingCard({
             {overview && (
               <div className="relative p-4 rounded-2xl bg-[#000]/30 border border-white/5">
                 <div className="flex items-center gap-2 mb-2">
-                  <Activity className="w-3 h-3 text-cyan-400/50" />
+                  <Activity className="w-3 h-3 text-primary/50" />
                   <span className="text-[10px] font-black tracking-[0.3em] text-white/20">Precise Overview</span>
                 </div>
                 <p className="text-[12px] text-white/60 leading-relaxed font-medium">

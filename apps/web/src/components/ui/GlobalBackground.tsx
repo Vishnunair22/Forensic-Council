@@ -16,7 +16,7 @@ export function GlobalBackground() {
         className="absolute inset-0"
         style={{
           background:
-            "radial-gradient(ellipse 70% 60% at 50% -15%, rgba(34, 211, 238, 0.15) 0%, transparent 80%)",
+            "radial-gradient(ellipse 70% 60% at 50% -15%, rgba(0, 255, 65, 0.1) 0%, transparent 80%)",
         }}
       />
 
@@ -34,7 +34,7 @@ export function GlobalBackground() {
         className="absolute inset-0 opacity-[0.2]"
         style={{
           backgroundImage:
-            "radial-gradient(rgba(34, 211, 238, 0.15) 1px, transparent 1px)",
+            "radial-gradient(rgba(0, 255, 65, 0.1) 1px, transparent 1px)",
           backgroundSize: "32px 32px",
         }}
       />
@@ -43,7 +43,7 @@ export function GlobalBackground() {
       <div
         className="absolute inset-0"
         style={{
-          background: "radial-gradient(circle at 50% 50%, rgba(34, 211, 238, 0.05) 0%, transparent 60%)"
+          background: "radial-gradient(circle at 50% 50%, rgba(0, 255, 65, 0.05) 0%, transparent 60%)"
         }}
       />
 

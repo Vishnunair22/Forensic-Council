@@ -97,11 +97,12 @@ function unsupportedAgentIdsForMime(mimeType?: string): string[] {
 export function AgentProgressDisplay({
  agentUpdates,
  completedAgents,
- progressText: _progressText,
+ progressText,
  allAgentsDone,
  phase,
  awaitingDecision,
  pipelineStatus,
+ pipelineMessage,
  onAcceptAnalysis,
  onDeepAnalysis,
  onNewUpload,
@@ -190,6 +191,9 @@ export function AgentProgressDisplay({
 
  const showInitialDecision = phase === "initial" && (awaitingDecision || allAgentsDone);
  const showDeepComplete = phase === "deep" && (allAgentsDone || pipelineStatus === "complete");
+ const phaseStatusText = allAgentsDone || pipelineStatus === "complete"
+  ? `${phase === "initial" ? "Initial" : "Deep"} analysis phase complete`
+  : `${phase === "initial" ? "Initial" : "Deep"} analysis in progress`;
 
  const runningCount = Object.keys(agentUpdates).filter(id => !completedAgents.some(c => c.agent_id === id)).length;
  const skippedCount = skippedAgentIds.size;
@@ -211,11 +215,17 @@ export function AgentProgressDisplay({
           <div className="flex items-center gap-3">
             <div className="relative flex items-center justify-center w-5 h-5">
               <div className="absolute inset-0 bg-primary/20 rounded-full glow-pulse" />
-              <Loader2 className="w-4 h-4 text-primary animate-premium-spin relative z-10" />
+              <Loader2 className="w-4 h-4 text-primary animate-spin relative z-10" />
             </div>
-            <p className="text-[10px] font-bold text-primary tracking-[0.3em]">
-              {phase === "initial" ? "Initial Analysis" : "Deep Analysis"}
-            </p>
+            <div className="flex flex-col gap-1">
+              <p className="text-[10px] font-bold text-primary tracking-[0.3em]">
+                {phase === "initial" ? "Initial Analysis" : "Deep Analysis"}
+              </p>
+              <p className="text-xs font-medium text-white/45" role="status" aria-live="polite">
+                {pipelineMessage || progressText || phaseStatusText}
+              </p>
+              <p className="sr-only">{phaseStatusText}</p>
+            </div>
           </div>
         </div>
       </div>
@@ -362,7 +372,7 @@ export function AgentProgressDisplay({
           <button
            onClick={onAcceptAnalysis}
            disabled={isNavigating}
-           className="flex-1 px-8 py-4 rounded-2xl bg-white/5 border border-white/10 text-white font-black text-xs tracking-[0.2em] hover:bg-white/10 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+           className="flex-1 btn-outline h-auto py-4 rounded-2xl flex items-center justify-center gap-3 disabled:opacity-50 !normal-case"
           >
            {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
            Accept Analysis
@@ -370,7 +380,7 @@ export function AgentProgressDisplay({
           <button
            onClick={onDeepAnalysis}
            disabled={isNavigating}
-           className="flex-[1.5] px-8 py-4 rounded-2xl bg-primary text-black font-black text-xs tracking-[0.2em] hover:bg-primary/90 transition-all shadow-[0_0_30px_rgba(34,211,238,0.3)] flex items-center justify-center gap-3 disabled:opacity-50"
+           className="flex-[1.5] btn-premium h-auto py-4 rounded-2xl flex items-center justify-center gap-3 disabled:opacity-50 !normal-case"
           >
            <Microscope className="w-4 h-4" />
            Deep Analysis
@@ -381,7 +391,7 @@ export function AgentProgressDisplay({
          <>
           <button
            onClick={onNewUpload}
-           className="flex-1 px-8 py-4 rounded-2xl bg-white/5 border border-white/10 text-white font-black text-xs tracking-[0.2em] hover:bg-white/10 transition-all flex items-center justify-center gap-3"
+           className="flex-1 btn-outline h-auto py-4 rounded-2xl flex items-center justify-center gap-3 !normal-case"
           >
            <RotateCcw className="w-4 h-4 text-primary" />
            New Upload
@@ -389,7 +399,7 @@ export function AgentProgressDisplay({
           <button
            onClick={onViewResults}
            disabled={isNavigating}
-           className="flex-[1.5] px-8 py-4 rounded-2xl bg-primary text-black font-black text-xs tracking-[0.2em] hover:bg-primary/90 transition-all shadow-[0_0_30px_rgba(34,211,238,0.3)] flex items-center justify-center gap-3 disabled:opacity-50"
+           className="flex-[1.5] btn-premium h-auto py-4 rounded-2xl flex items-center justify-center gap-3 disabled:opacity-50 !normal-case"
           >
            {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
            Generate Final Report

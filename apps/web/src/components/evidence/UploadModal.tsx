@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { X, UploadCloud } from "lucide-react";
+import { X, Upload } from "lucide-react";
 
 export interface UploadModalProps {
   onClose: () => void;
@@ -13,7 +13,6 @@ export interface UploadModalProps {
 export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
   const [mounted, setMounted] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -44,13 +43,6 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
       onFileSelected(e.dataTransfer.files[0]);
     }
   }, [onFileSelected]);
-
-  const handleFileClick = () => {
-    // Programmatically trigger the hidden native file input
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
 
   if (!mounted) return null;
 
@@ -85,7 +77,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
           animate={{ y: 0, opacity: 1, scale: 1 }}
           exit={{ y: -20, opacity: 0, scale: 0.95 }}
           transition={{ duration: 0.5, delay: 0.15, ease: "easeOut" }}
-          className="relative z-30 bg-black/80 backdrop-blur-xl border border-white/10 rounded-3xl p-10 shadow-[0_20px_60px_rgba(0,0,0,0.8)]"
+          className="relative z-30 bg-black/60 backdrop-blur-3xl border border-white/10 rounded-3xl p-10 shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden transform-gpu"
         >
           <button 
             onClick={onClose}
@@ -95,46 +87,49 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
           </button>
 
           <div className="flex flex-col items-center text-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-4 shadow-[inset_0_0_20px_rgba(var(--primary),0.1)]">
-              <UploadCloud className="w-8 h-8 text-primary" />
-            </div>
-            <h3 className="text-2xl font-bold tracking-tight text-white">Upload Evidence</h3>
-            <p className="text-sm font-medium text-white/50 max-w-sm leading-relaxed">
-              Drag and drop digital media or click to browse. The neural protocol accepts image, video, and audio payloads.
-            </p>
-            
             {/* The fixed, robust dropzone */}
-            <div 
-              onClick={handleFileClick}
+            <div
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              className={`mt-8 w-full border-2 border-dashed rounded-2xl p-12 transition-all duration-300 cursor-pointer group flex flex-col items-center justify-center relative overflow-hidden z-50 ${
+              className={`w-full border border-dashed rounded-2xl px-8 py-10 transition-all duration-300 cursor-pointer group flex flex-col items-center justify-center gap-4 relative overflow-hidden z-50 ${
                 isDragging 
-                  ? "border-primary bg-primary/10 shadow-[inset_0_0_50px_rgba(var(--primary),0.1)]" 
-                  : "border-white/10 hover:border-primary/50 bg-white/[0.02]"
+                  ? "border-primary bg-primary/[0.05] shadow-[inset_0_0_20px_rgba(var(--primary),0.1)]" 
+                  : "border-white/20 hover:border-primary/60 hover:bg-primary/[0.02] bg-black/40"
               }`}
+              data-active={isDragging}
             >
               {/* Optional: Add a pulsing scan line when dragging */}
               {isDragging && (
                 <div className="absolute inset-0 w-full h-[2px] bg-primary/40 animate-pulse top-1/2 -translate-y-1/2 blur-[2px]" />
               )}
-              
-              <span className={`text-xs font-bold tracking-widest transition-colors z-10 pointer-events-none ${isDragging ? "text-primary" : "text-white/40 group-hover:text-primary"}`}>
-                {isDragging ? "Release Payload" : "Select File"}
+
+              <div className="relative z-10 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-white/50 transition-all duration-300 group-hover:border-primary/30 group-hover:bg-primary/10 group-hover:text-primary">
+                <Upload className="h-8 w-8" strokeWidth={1.5} />
+              </div>
+
+              <span className={`text-base font-bold transition-colors z-10 pointer-events-none ${isDragging ? "text-primary" : "text-white/80 group-hover:text-primary"}`}>
+                {isDragging ? "Release Payload" : "Upload Evidence"}
+              </span>
+
+              <span className="relative z-10 text-xs font-medium text-white/35 transition-colors group-hover:text-white/50 pointer-events-none">
+                Image, video, or audio evidence
               </span>
               
-              {/* Truly hidden, but interactable via ref */}
-              <input 
+              <input
                 type="file" 
-                ref={fileInputRef}
-                className="hidden"
+                aria-label="Upload evidence file"
+                className="absolute inset-0 z-20 h-full w-full cursor-pointer opacity-0"
                 accept="image/*,video/*,audio/*"
                 onChange={(e) => {
                   if (e.target.files?.[0]) onFileSelected(e.target.files[0]);
                 }}
               />
             </div>
+
+            <p className="text-sm font-medium text-white/50 max-w-sm leading-relaxed">
+              Drag and drop digital media or click to browse. The neural protocol accepts image, video, and audio payloads.
+            </p>
           </div>
         </motion.div>
       </div>

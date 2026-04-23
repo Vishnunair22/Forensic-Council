@@ -15,7 +15,7 @@ export interface ForensicProgressOverlayProps {
 }
 
 const variantAccent = {
-  stream: { primary: "#22d3ee", gradient: "from-primary to-cyan-400", glow: "rgba(34,211,238,0.15)" },
+  stream: { primary: "#00FF41", gradient: "from-primary to-emerald-400", glow: "rgba(0,255,65,0.15)" },
   council: { primary: "#8b5cf6", gradient: "from-accent to-violet-400", glow: "rgba(139,92,246,0.15)" },
 };
 
@@ -102,7 +102,7 @@ export function ForensicProgressOverlay({
             animate={reducedMotion ? { opacity: 1 } : { opacity: [1, 0.3, 1], scale: [1, 1.3, 1] }}
             transition={reducedMotion ? { duration: 0 } : { duration: 2, repeat: Infinity, ease: "easeInOut" }}
           />
-          <span className="text-[10px] font-black tracking-[0.4em] text-white/40">
+          <span className="text-xs font-semibold tracking-wide text-white/50">
             {telemetryLabel}
           </span>
         </motion.div>
@@ -196,7 +196,7 @@ export function ForensicProgressOverlay({
           className="absolute bottom-8 left-1/2 -translate-x-1/2"
         >
           {showElapsed && (
-             <span className="text-[10px] font-mono font-bold tracking-widest text-white/50">
+             <span className="text-xs font-medium tracking-wide text-white/50">
                Elapsed // {elapsed}s
              </span>
           )}

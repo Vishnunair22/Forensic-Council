@@ -25,7 +25,7 @@ interface ResultHeaderProps {
 const VERDICT_THEMES: Record<string, { border: string; glow: string; text: string; bg: string; icon: LucideIcon }> = {
  emerald: { 
   border: "border-primary/20", 
-  glow: "shadow-[0_0_40px_rgba(34,211,238,0.1)]", 
+  glow: "shadow-[0_0_40px_rgba(var(--color-primary-rgb),0.1)]", 
   text: "text-primary", 
   bg: "bg-primary/5",
   icon: ShieldCheck 
@@ -104,7 +104,7 @@ export function ResultHeader({
         <theme.icon className={clsx("w-10 h-10", theme.text)} />
        </div>
        <div className="space-y-3">
-        <p className={clsx("text-5xl sm:text-7xl font-black tracking-tighter leading-none text-glow-cyan", theme.text)}>
+        <p className={clsx("text-5xl sm:text-7xl font-black tracking-tighter leading-none text-glow-green", theme.text)}>
          {vc.label}
         </p>
         <p className="text-sm font-black text-white/50 tracking-[0.3em]">{vc.desc}</p>
@@ -113,11 +113,11 @@ export function ResultHeader({
 
       <div className="flex flex-wrap gap-4 items-center justify-center pt-2">
        <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.02] border border-white/[0.05] text-[10px] font-bold text-white/40 transition-colors hover:bg-white/[0.04]">
-        <Lock className="w-3.5 h-3.5 text-cyan-500/40" />
+        <Lock className="w-3.5 h-3.5 text-primary/40" />
         <span>{activeAgentIds.length} Applicable Agents</span>
        </div>
        <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.02] border border-white/[0.05] text-[10px] font-bold text-white/40 transition-colors hover:bg-white/[0.04]">
-        <Fingerprint className="w-3.5 h-3.5 text-cyan-500/40" />
+        <Fingerprint className="w-3.5 h-3.5 text-primary/40" />
         <span>Pipeline: {pipelineDuration || "N/A"}</span>
        </div>
         <div className={clsx(
@@ -157,11 +157,11 @@ export function ResultHeader({
          "text-3xl font-bold font-mono",
          discordPct > 30 ? "text-rose-400" : discordPct > 15 ? "text-amber-400" : "text-emerald-400"
         )}>{discordPct}%</div>
-         <span className="text-[10px] font-bold text-cyan-400 tracking-[0.2em]">{isDeepPhase ? "Deep Analysis Complete" : "Initial Phase Complete"}</span>
+         <span className="text-[10px] font-bold text-primary/60 tracking-[0.2em]">{isDeepPhase ? "Deep Analysis Complete" : "Initial Phase Complete"}</span>
        </div>
        <div className="w-16 h-1 w-full bg-white/5 rounded-full overflow-hidden">
         <div 
-         className={clsx("h-full rounded-full transition-all duration-1000", discordPct > 30 ? "bg-rose-500" : "bg-cyan-500")}
+         className={clsx("h-full rounded-full transition-all duration-1000", discordPct > 30 ? "bg-rose-500" : "bg-primary")}
          style={{ width: `${discordPct}%` }}
         />
        </div>
@@ -202,7 +202,7 @@ export function ResultHeader({
     {report.cryptographic_signature && (
      <div className="px-8 py-5 rounded-[2rem] bg-[#000]/30 border border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4 group">
       <div className="flex items-center gap-4 min-w-0">
-       <Fingerprint className="w-5 h-5 text-cyan-500/30 group-hover:text-cyan-500/60 transition-colors" />
+       <Fingerprint className="w-5 h-5 text-primary/30 group-hover:text-primary/60 transition-colors" />
        <div className="min-w-0">
         <p className="text-[10px] font-bold tracking-[0.2em] text-white/10 mb-0.5">ECDSA P-256 Digital Signature</p>
         <p className="text-[10px] font-mono text-white/20 truncate max-w-[200px] sm:max-w-md">{report.cryptographic_signature}</p>

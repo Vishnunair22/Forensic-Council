@@ -41,8 +41,8 @@ interface AgentStatusCardProps {
 
 const statusConfig = {
   waiting:     { color: "text-white/50",   label: "Waiting"   },
-  checking:    { color: "text-cyan-500",   label: "Connecting" },
-  running:     { color: "text-cyan-400",   label: "Analyzing" },
+  checking:    { color: "text-primary",    label: "Connecting" },
+  running:     { color: "text-primary",    label: "Analyzing" },
   complete:    { color: "text-emerald-500",label: "Complete"  },
   error:       { color: "text-rose-500",   label: "Error"     },
   unsupported: { color: "text-white/50",   label: "Skipped"   },
@@ -61,9 +61,9 @@ function isAlertFinding(finding: FindingPreview) {
 }
 
 const AGENT_GRAPHICS: Record<string, { icon: LucideIcon; color: string; bg: string }> = {
-  "Agent1": { icon: Scan, color: "text-cyan-400", bg: "bg-cyan-500/10" },
+  "Agent1": { icon: Scan, color: "text-primary", bg: "bg-primary/10" },
   "Agent2": { icon: Activity, color: "text-emerald-400", bg: "bg-emerald-500/10" },
-  "Agent3": { icon: Microscope, color: "text-purple-400", bg: "bg-purple-500/10" },
+  "Agent3": { icon: Microscope, color: "text-primary", bg: "bg-primary/10" },
   "Agent4": { icon: Cpu, color: "text-amber-400", bg: "bg-amber-500/10" },
   "Agent5": { icon: ShieldAlert, color: "text-rose-400", bg: "bg-rose-500/10" },
 };
@@ -125,8 +125,8 @@ export function AgentStatusCard({
         scale: isFadingOut ? 0.95 : 1,
       }}
       className={clsx(
-        "frosted-panel relative flex flex-col rounded-[2.5rem] overflow-hidden min-h-[520px] transition-all duration-500",
-        status === "running" && "ring-2 ring-primary/40 shadow-[0_0_60px_rgba(34,211,238,0.15)]",
+        "bg-black/40 backdrop-blur-3xl border border-white/10 relative flex flex-col rounded-[2.5rem] overflow-hidden min-h-[520px] transition-all duration-500 shadow-[0_20px_50px_rgba(0,0,0,0.5)] hover:border-white/20",
+        status === "running" && "ring-2 ring-primary/40 shadow-[0_0_60px_rgba(var(--color-primary-rgb),0.15)]",
         status === "complete" && (completedData?.verdict_score ?? 0) > 0.5 && "ring-2 ring-rose-500/30 shadow-[0_0_60px_rgba(244,63,94,0.15)]"
       )}
     >
@@ -147,7 +147,7 @@ export function AgentStatusCard({
               <h3 className="text-xl font-black text-white tracking-tight mb-1">{name}</h3>
               <div className="flex items-center gap-2">
                 <span className={clsx(
-                  "px-3 py-1 rounded-full text-[9px] font-black tracking-widest",
+                  "px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide shadow-sm",
                   status === "running" ? "bg-primary/20 text-primary animate-pulse" :
                   status === "complete" ? "bg-emerald-500/20 text-emerald-400" :
                   "bg-white/5 text-white/30"
@@ -188,9 +188,9 @@ export function AgentStatusCard({
                   {progressDescriptor.label}
                 </p>
                 <div className="flex items-center gap-2 mt-1">
-                  <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
+                  <div className="flex-1 h-[2px] bg-white/5 rounded-full overflow-hidden">
                     <motion.div
-                      className="h-full bg-primary"
+                      className="h-full bg-primary shadow-[0_0_10px_rgba(var(--color-primary-rgb),0.5)]"
                       animate={{ width: `${(currentToolIndex / liveTotal) * 100}%` }}
                     />
                   </div>
@@ -291,7 +291,7 @@ export function AgentStatusCard({
                         {f.summary.length > 100 && (
                           <button
                             onClick={() => toggleFinding(`${f.tool}-${i}`)}
-                            className="text-[10px] font-black text-primary/60 hover:text-primary mt-2 transition-colors tracking-widest"
+                            className="text-[10px] font-bold text-primary/60 hover:text-primary mt-2 transition-colors tracking-widest hover:underline underline-offset-4"
                           >
                             {isExpanded ? "Show Less" : "Show More"}
                           </button>
@@ -305,7 +305,7 @@ export function AgentStatusCard({
               {findings.length > 2 && (
                 <button
                   onClick={() => setShowAllTools(!showAllTools)}
-                  className="w-full py-4 rounded-2xl border border-dashed border-white/10 text-white/30 hover:text-white/60 hover:border-white/20 hover:bg-white/[0.01] transition-all text-[10px] font-black tracking-[0.2em]"
+                  className="w-full py-4 rounded-2xl border border-dashed border-white/10 text-white/40 hover:text-white/80 hover:border-white/30 hover:bg-white/[0.03] transition-all text-xs font-semibold tracking-wide"
                 >
                   {showAllTools ? "Collapse Findings" : `Show ${findings.length - 2} More Findings`}
                 </button>

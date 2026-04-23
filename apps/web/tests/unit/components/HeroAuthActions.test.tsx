@@ -88,7 +88,7 @@ describe("HeroAuthActions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /upload a file to begin analysis/i }));
 
-    expect(mockPlaySound).toHaveBeenCalledWith("hum");
+    expect(mockPlaySound).toHaveBeenCalledWith("envelope-open");
     expect(screen.getByTestId("upload-modal")).toBeInTheDocument();
   });
 

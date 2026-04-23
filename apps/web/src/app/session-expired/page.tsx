@@ -40,7 +40,6 @@ export default function SessionExpiredPage() {
 
         <motion.button
           onClick={() => router.push("/")}
-          className="btn-primary w-full py-4 rounded-xl font-bold inline-flex items-center justify-center gap-2 text-white border border-cyan-400/30"
           whileHover={{
             scale: 1.02,
           }}

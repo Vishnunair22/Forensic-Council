@@ -52,7 +52,6 @@ export function ResultLayout() {
   }
 
   return (
-    <div className="min-h-screen text-foreground selection:bg-cyan-500/20 pb-32">
       {rs.state === "arbiter" && (
         <ForensicProgressOverlay 
           variant="council" 
@@ -70,7 +69,7 @@ export function ResultLayout() {
             onClick={rs.handleHome}
             className="flex items-center gap-2.5 text-[11px] font-bold text-white/50 hover:text-white transition-colors group"
           >
-            <HomeIcon className="w-4 h-4 text-white/10 group-hover:text-cyan-500/50 transition-colors" />
+            <HomeIcon className="w-4 h-4 text-white/10 group-hover:text-primary/50 transition-colors" />
             Back to Evidence Analysis
           </button>
 
@@ -86,7 +85,7 @@ export function ResultLayout() {
                 className={clsx(
                   "px-6 py-1.5 rounded-full text-[11px] font-bold tracking-tight transition-all flex items-center gap-2",
                   rs.activeTab === tab 
-                    ? "bg-white/10 text-white shadow-xl" 
+                    ? "bg-white/10 text-white shadow-[0_4px_20px_rgba(var(--color-primary-rgb),0.1)]" 
                     : "text-white/20 hover:text-white/40 hover:bg-white/[0.02]"
                 )}
               >
@@ -124,9 +123,9 @@ export function ResultLayout() {
               <ResultStateView type="empty" onNew={rs.handleNew} onHome={rs.handleHome} />
             )}
             {rs.state === "arbiter" && (
-              <div className="flex flex-col items-center justify-center py-32 gap-6 opacity-30">
-                <Activity className="w-8 h-8 text-cyan-500 animate-pulse" />
-                <p className="font-mono text-[11px] font-bold tracking-widest text-white/40">Awaiting Neural Synthesis...</p>
+              <div className="flex flex-col items-center justify-center py-32 gap-6 opacity-40">
+                <Activity className="w-8 h-8 text-primary animate-pulse" />
+                <p className="font-mono text-xs font-semibold tracking-wide text-white/60">Awaiting Neural Synthesis...</p>
               </div>
             )}
             {rs.state === "ready" && rs.report && (
@@ -214,7 +213,7 @@ function ResultSkeletonView() {
       <div className="sticky top-[60px] z-40 w-full bg-black/60 backdrop-blur-xl border-b border-white/[0.05]">
         <div className="max-w-5xl mx-auto px-10 py-6 flex items-center justify-between gap-4">
           <div className="skeleton h-5 w-40 rounded-full" />
-          <div className="skeleton h-10 w-64 rounded-full" />
+          <div className="skeleton h-10 w-64 rounded-2xl" />
         </div>
       </div>
       <div className="max-w-5xl mx-auto px-6 pt-12 space-y-12">

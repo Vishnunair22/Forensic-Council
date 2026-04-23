@@ -33,7 +33,7 @@ export function AgentsSection() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.1, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-              className="bg-gradient-to-b from-white/[0.03] to-transparent border border-white/[0.05] p-10 rounded-[3rem] flex flex-col items-center text-center group cursor-pointer hover:border-primary/20 transition-all duration-700"
+              className="bg-gradient-to-b from-white/[0.03] to-transparent border border-white/[0.05] p-10 rounded-[3rem] flex flex-col items-center text-center group cursor-pointer hover:border-primary/20 transition-colors duration-700"
             >
               <motion.div 
                 animate={{ 
@@ -71,8 +71,8 @@ export function AgentsSection() {
               </div>
 
               {/* Card Decoration: Corner Lines */}
-              <div className="absolute top-6 left-6 w-4 h-4 border-t border-l border-white/5 group-hover:border-primary/30 transition-colors duration-500" />
-              <div className="absolute bottom-6 right-6 w-4 h-4 border-b border-r border-white/5 group-hover:border-primary/30 transition-colors duration-500" />
+              <div className="absolute top-6 left-6 w-2 h-2 border-t border-l border-white/5 group-hover:border-primary/30 transition-colors duration-500" />
+              <div className="absolute bottom-6 right-6 w-2 h-2 border-b border-r border-white/5 group-hover:border-primary/30 transition-colors duration-500" />
             </motion.div>
           ))}
         </div>

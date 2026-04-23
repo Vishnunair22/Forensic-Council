@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@300;400;500;600;700&family=Varela+Round&display=swap');
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -102,7 +101,7 @@
   }
 
   button, [role="button"] {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   /* Requirement: All buttons go transparent on hover */
@@ -249,8 +248,8 @@
   font-weight: 600;
   color: #000;
   background: var(--color-primary);
-  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
-  box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 0 20px rgba(var(--color-primary-rgb), 0.2);
   border: 1px solid transparent;
 }
 

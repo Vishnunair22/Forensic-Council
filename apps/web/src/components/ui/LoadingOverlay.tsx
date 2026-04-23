@@ -29,7 +29,7 @@ const PHASES = [
     id: "dispatch",
     Icon: Zap,
     label: "Dispatching Agents",
-    detail: "Initialising specialist forensic units",
+    detail: "Initializing specialist forensic units",
     keywords: ["dispatch", "agent", "ready"],
   },
 ] as const;
@@ -64,8 +64,8 @@ export function LoadingOverlay({ liveText, dispatchedCount = 0, totalAgents = 6 
           animate={{ y: 0, opacity: 1 }}
           className="flex items-center gap-2.5 mb-8"
         >
-          <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse shadow-[0_0_8px_rgba(6,182,212,0.4)]" />
-          <span className="text-[10px] font-bold tracking-widest text-cyan-500/40">
+          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(var(--color-primary-rgb),0.4)]" />
+          <span className="text-[10px] font-bold tracking-widest text-primary/40">
             Forensic Protocol 2026
           </span>
         </motion.div>
@@ -78,13 +78,13 @@ export function LoadingOverlay({ liveText, dispatchedCount = 0, totalAgents = 6 
             transition={{ delay: 0.1 }}
             className="text-4xl font-bold tracking-tight text-white mb-2 font-heading"
             >
-            Initializing <span className="text-cyan-400">Stream</span>
+            Initializing <span className="text-primary">Stream</span>
             </motion.h1>
             <motion.div 
                 initial={{ scaleX: 0 }}
                 animate={{ scaleX: 1 }}
                 transition={{ delay: 0.3, duration: 0.8 }}
-                className="h-[1px] w-32 mx-auto bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent" 
+                className="h-[1px] w-32 mx-auto bg-gradient-to-r from-transparent via-primary/40 to-transparent" 
             />
         </div>
 
@@ -104,14 +104,14 @@ export function LoadingOverlay({ liveText, dispatchedCount = 0, totalAgents = 6 
                 transition={{ delay: 0.2 + idx * 0.1 }}
                 className={clsx(
                   "flex items-center gap-4 px-5 py-4 rounded-2xl border transition-all duration-500",
-                  isActive && "bg-cyan-500/[0.05] border-cyan-500/20 shadow-[0_0_20px_rgba(6,182,212,0.1)]",
+                  isActive && "bg-primary/[0.05] border-primary/20 shadow-[0_0_20px_rgba(var(--color-primary-rgb),0.1)]",
                   isDone && "bg-emerald-500/[0.03] border-emerald-500/10 opacity-60",
                   isPending && "bg-white/[0.01] border-white/5 opacity-20"
                 )}
               >
                 <div className={clsx(
                     "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border transition-all duration-500",
-                    isActive && "bg-cyan-500/20 border-cyan-500/40 text-cyan-400",
+                    isActive && "bg-primary/20 border-primary/40 text-primary",
                     isDone && "bg-emerald-500/10 border-emerald-500/30 text-emerald-400",
                     isPending && "bg-white/5 border-white/5 text-white/10"
                 )}>
@@ -139,7 +139,7 @@ export function LoadingOverlay({ liveText, dispatchedCount = 0, totalAgents = 6 
                             {[0, 1, 2].map(i => (
                                 <motion.div 
                                     key={i} 
-                                    className="w-1 h-1 bg-cyan-500 rounded-full" 
+                                    className="w-1 h-1 bg-primary rounded-full" 
                                     animate={{ opacity: [0.2, 1, 0.2] }} 
                                     transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }} 
                                 />
@@ -159,7 +159,7 @@ export function LoadingOverlay({ liveText, dispatchedCount = 0, totalAgents = 6 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
-          className="mt-10 text-[11px] font-mono font-bold tracking-widest text-cyan-500/30 text-center px-4"
+          className="mt-10 text-[11px] font-mono font-bold tracking-widest text-primary/30 text-center px-4"
         >
           {liveText || "Initializing Workspace..."}
         </motion.p>

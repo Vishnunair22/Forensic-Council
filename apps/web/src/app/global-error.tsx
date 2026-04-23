@@ -53,14 +53,14 @@ export default function GlobalError({
             <div className="w-full space-y-3">
               <motion.button
                 onClick={() => reset()}
-                className="w-full py-3.5 rounded-xl inline-flex items-center justify-center gap-2 font-bold text-white border border-cyan-400/30"
+                className="w-full py-3.5 rounded-xl inline-flex items-center justify-center gap-2 font-bold text-white border border-primary/30"
                 style={{
-                  background: "linear-gradient(135deg, #0891b2 0%, #22d3ee 100%)",
-                  boxShadow: "0 0 24px rgba(34,211,238,0.18)",
+                  background: "linear-gradient(135deg, #00FF41 0%, #10b981 100%)",
+                  boxShadow: "0 0 24px rgba(var(--color-primary-rgb),0.18)",
                 }}
                 whileHover={{
                   scale: 1.02,
-                  boxShadow: "0 0 32px rgba(34,211,238,0.28)",
+                  boxShadow: "0 0 32px rgba(var(--color-primary-rgb),0.28)",
                 }}
                 whileTap={{ scale: 0.98 }}
               >
@@ -70,7 +70,7 @@ export default function GlobalError({
 
               <Link
                 href="/"
-                className="w-full py-3.5 rounded-xl inline-flex items-center justify-center gap-2 font-semibold text-white/80 bg-white/[0.04] border border-white/[0.09] hover:bg-cyan-500/[0.07] hover:border-cyan-500/28 hover:text-cyan-400 transition-colors"
+                className="w-full py-3.5 rounded-xl inline-flex items-center justify-center gap-2 font-semibold text-white/80 bg-white/[0.04] border border-white/[0.09] hover:bg-primary/[0.07] hover:border-primary/28 hover:text-primary transition-colors"
               >
                 <Home className="w-4 h-4" />
                 Return to Dashboard

@@ -26,7 +26,7 @@ function StatCard({ label, value, color, sublabel }: { label: string; value: str
 }
 
 const AGENT_THEMES: Record<string, { color: string; label: string }> = {
- "Agent1": { color: "text-cyan-400",  label: "Image Forensics" },
+ "Agent1": { color: "text-primary",  label: "Image Forensics" },
  "Agent2": { color: "text-blue-400",  label: "Audio Forensics" },
  "Agent3": { color: "text-amber-400", label: "Object Detection" },
  "Agent4": { color: "text-teal-400",  label: "Video Forensics" },
@@ -123,7 +123,7 @@ export function MetricsPanel({ report, activeAgentIds }: MetricsPanelProps) {
       <StatCard 
        label="Active Probes" 
        value={String(report.applicable_agent_count ?? activeAgentIds.length)}
-       color="text-cyan-400/80"
+       color="text-primary/80"
        sublabel="Verified"
       />
       <StatCard 
@@ -139,10 +139,10 @@ export function MetricsPanel({ report, activeAgentIds }: MetricsPanelProps) {
    {(report.reliability_note || report.cryptographic_signature) && (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
      {report.reliability_note && (
-      <div className="p-6 rounded-2xl bg-cyan-500/[0.02] border border-cyan-500/10 flex gap-4">
-       <Info className="w-5 h-5 text-cyan-400/30 shrink-0" />
+      <div className="p-6 rounded-2xl bg-primary/[0.02] border border-primary/10 flex gap-4">
+       <Info className="w-5 h-5 text-primary/30 shrink-0" />
        <div className="space-y-1">
-        <p className="text-[10px] font-bold text-cyan-400/30">Reliability Note</p>
+        <p className="text-[10px] font-bold text-primary/30">Reliability Note</p>
         <p className="text-[11px] text-white/50 leading-relaxed font-medium">{report.reliability_note}</p>
        </div>
       </div>

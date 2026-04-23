@@ -65,7 +65,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: Uploa
               initial={{ scale: 0.5, opacity: 0 }} 
               animate={{ scale: 1, opacity: 1 }} 
               transition={{ type: "spring", bounce: 0.5, delay: 0.2 }}
-              className="w-20 h-20 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center shadow-[0_0_30px_rgba(0,255,65,0.2)]"
+              className="w-20 h-20 rounded-full bg-gradient-to-b from-primary/20 to-transparent border border-primary/30 text-primary flex items-center justify-center mb-6 relative shadow-[0_0_30px_rgba(var(--primary),0.2)] after:absolute after:inset-0 after:rounded-full after:animate-ping after:border after:border-primary/40 after:opacity-0"
             >
               <CheckCircle2 className="w-10 h-10 text-primary" />
             </motion.div>
@@ -86,9 +86,9 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: Uploa
               </button>
               <button
                 onClick={onStartAnalysis}
-                className="flex-1 py-4 text-xs font-bold tracking-widest text-black bg-primary hover:bg-glow-green rounded-xl shadow-[0_0_20px_rgba(0,255,65,0.3)] hover:shadow-[0_0_40px_rgba(0,255,65,0.5)] transition-all transform hover:scale-[1.02]"
+                className="flex-1 group px-8 py-4 text-xs font-bold tracking-widest relative overflow-hidden rounded-full bg-primary/10 backdrop-blur-md text-primary transition-all duration-500 hover:bg-primary hover:text-black border border-primary/50 hover:shadow-[0_0_30px_rgba(var(--primary),0.4)] active:scale-[0.98]"
               >
-                Analyse
+                Analyze
               </button>
             </div>
           </div>

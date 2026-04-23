@@ -84,7 +84,7 @@ export function ConfidenceBar({ value }: { value: number }) {
       className={clsx(
        "h-1 rounded-full transition-all duration-700",
        i < filled ? color : "bg-white/5",
-       i < filled ? "w-6 shadow-[0_0_10px_rgba(34,211,238,0.5)]" : "w-1.5"
+       i < filled ? "w-6 shadow-[0_0_10px_rgba(var(--color-primary-rgb),0.5)]" : "w-1.5"
       )}
      />
     ))}
@@ -193,7 +193,7 @@ export function ToolRow({
        <div className="flex flex-wrap gap-2">
         {metrics.map((m) => (
          <div key={`${toolName}-${m.label}`} className="px-3 py-2 rounded-xl bg-white/[0.03] border border-white/5">
-          <span className="block text-[8px] font-black tracking-[0.2em] text-white/20 uppercase">{m.label}</span>
+          <span className="block text-[8px] font-black tracking-[0.2em] text-white/20">{m.label}</span>
           <span className="block text-[11px] font-mono font-bold text-white/55 mt-0.5">{m.value}</span>
          </div>
         ))}

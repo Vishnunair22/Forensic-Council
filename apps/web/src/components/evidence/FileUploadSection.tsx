@@ -88,12 +88,12 @@ export function FileUploadSection({
     animate={{ opacity: 1, y: 0 }}
     className="text-center mb-12"
    >
-    <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full mb-8 bg-cyan-500/5 border border-cyan-500/10">
+    <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full mb-8 bg-primary/5 border border-primary/10">
      <span className="relative flex h-2 w-2">
-      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-500 opacity-60" />
-      <span className="relative inline-flex rounded-full h-full w-full bg-cyan-500" />
+      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
+      <span className="relative inline-flex rounded-full h-full w-full bg-primary" />
      </span>
-     <span className=" tracking-widest font-bold text-xs text-cyan-400 font-mono">
+     <span className=" tracking-widest font-bold text-xs text-primary font-mono">
       Evidence Upload
      </span>
     </div>
@@ -140,7 +140,7 @@ export function FileUploadSection({
        {!file.type.startsWith("image/") && !file.type.startsWith("video/") && (
         <div className="flex flex-col items-center justify-center h-full gap-4">
          <div className="w-20 h-20 rounded-2xl flex items-center justify-center bg-white/5 border border-white/10">
-          <FileAudio className="w-10 h-10 text-cyan-500" />
+          <FileAudio className="w-10 h-10 text-primary" />
          </div>
         </div>
        )}
@@ -179,7 +179,7 @@ export function FileUploadSection({
        <button
         onClick={() => onUpload(file)}
         disabled={isUploading}
-        className="flex items-center justify-center gap-3 py-4 rounded-xl bg-cyan-600 text-white text-sm font-bold tracking-widest hover:bg-cyan-500 transition-all shadow-[0_0_20px_rgba(8,145,178,0.3)] active:scale-95"
+        className="flex items-center justify-center gap-3 py-4 rounded-xl bg-primary text-black text-sm font-bold tracking-widest hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(var(--color-primary-rgb),0.3)] active:scale-95"
        >
         {isUploading ? (
          <>
@@ -207,7 +207,7 @@ export function FileUploadSection({
       aria-label="Upload evidence file. Click or drag and drop."
       className={clsx(
        "w-full rounded-3xl transition-all duration-500 cursor-pointer overflow-hidden relative border-2 border-dashed group",
-       isDragging ? "bg-cyan-500/10 border-cyan-500/40 scale-[1.01]" : "bg-white/[0.01] border-white/5 hover:border-white/20 hover:bg-white/[0.02]"
+       isDragging ? "bg-primary/10 border-primary/40 scale-[1.01]" : "bg-white/[0.01] border-white/5 hover:border-white/20 hover:bg-white/[0.02]"
       )}
       onClick={() => fileInputRef.current?.click()}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInputRef.current?.click(); } }}
@@ -224,7 +224,7 @@ export function FileUploadSection({
       <div className="py-20 flex flex-col items-center gap-6">
        <div className={clsx(
         "w-20 h-20 rounded-3xl flex items-center justify-center transition-all duration-500 border shadow-2xl",
-        isDragging ? "bg-cyan-500/20 border-cyan-400/50 text-cyan-400 rotate-12 scale-110" : "bg-white/5 border-white/10 text-white/20 group-hover:text-cyan-400 group-hover:bg-cyan-500/10 group-hover:border-cyan-500/30 group-hover:scale-110"
+        isDragging ? "bg-primary/20 border-primary/40 text-primary rotate-12 scale-110" : "bg-white/5 border-white/10 text-white/20 group-hover:text-primary group-hover:bg-primary/10 group-hover:border-primary/30 group-hover:scale-110"
        )}>
         <UploadCloud className="w-8 h-8" strokeWidth={1.5} />
        </div>

@@ -90,7 +90,6 @@ export function HeroAuthActions() {
           playSound("envelope-open"); // UPDATED
           setShowUpload(true);
         }}
-        className="group px-12 py-5 text-sm font-bold tracking-[0.1em] relative overflow-hidden rounded-full bg-white/[0.03] backdrop-blur-xl text-white transition-all duration-500 hover:scale-[1.02] border border-primary/30 hover:border-primary shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),0_0_20px_rgba(0,0,0,0.5)] hover:shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),0_0_40px_rgba(var(--primary),0.2)]"
         aria-label={isAuthenticating ? "Initializing..." : authError ? authError : "Upload a file to begin analysis"}
       >
         {/* Update Scanning Line Color */}

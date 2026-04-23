@@ -9,7 +9,7 @@ export function HowWorksSection() {
       <motion.h2 
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
+        viewport={{ once: true, amount: 0.2 }}
         className="text-4xl md:text-6xl font-bold text-white mb-6 tracking-tighter"
       >
         How Forensic <span className="text-primary text-glow-green">Council Works</span>
@@ -17,7 +17,7 @@ export function HowWorksSection() {
       <motion.p
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
+        viewport={{ once: true, amount: 0.2 }}
         transition={{ delay: 0.1 }}
         className="text-base font-medium text-white/60 max-w-2xl mx-auto mb-24"
       >
@@ -30,7 +30,7 @@ export function HowWorksSection() {
             key={item.step} 
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
+            viewport={{ once: true, amount: 0.2 }}
             transition={{ delay: i * 0.15, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
             className="flex flex-col items-center group cursor-default"
           >
@@ -55,9 +55,8 @@ export function HowWorksSection() {
                 {item.desc}
               </p>
               
-              <div className="mt-8 flex justify-center opacity-0 group-hover:opacity-100 transition-all duration-500">
-                {/* Removed the translate-y to prevent layout jitter */}
-                <span className="text-[10px] font-mono font-bold tracking-[0.2em] px-4 py-1.5 rounded-full border border-primary/20 text-primary/80 bg-primary/[0.02]">
+              <div className="mt-8 flex justify-center transition-all duration-500">
+                <span className="text-[10px] font-mono font-bold tracking-[0.2em] px-4 py-1.5 rounded-full border border-white/10 group-hover:border-primary/30 text-white/30 group-hover:text-primary transition-colors duration-500 bg-white/[0.02] group-hover:bg-primary/[0.05]">
                   {item.tag}
                 </span>
               </div>
