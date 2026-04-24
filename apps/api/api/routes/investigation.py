@@ -199,10 +199,12 @@ async def start_investigation(
             logger.debug("Evidence deduplication skipped", error=str(exc))
 
         import magic
-
         with open(tmp_path, "rb") as _f:
             head = _f.read(2048)
-        mime = magic.from_buffer(head, mime=True)
+        
+        # Use to_thread to prevent blocking the event loop on MIME detection
+        mime = await asyncio.to_thread(magic.from_buffer, head, mime=True)
+        
         valid_exts = _EXACT_MIME_EXT_MAP.get(mime, frozenset())
         if not valid_exts or raw_suffix not in valid_exts:
             tmp_path.unlink(missing_ok=True)
@@ -215,12 +217,17 @@ async def start_investigation(
             try:
                 from PIL import Image
 
-                with Image.open(str(tmp_path)) as img:
-                    img.verify()
-                with Image.open(str(tmp_path)) as img2:
-                    w, h = img2.size
-                    if w * h > 100_000_000:
-                        raise HTTPException(status_code=400, detail="Image too large.")
+                # Offload image verification to a thread executor
+                def _verify_image(path):
+                    with Image.open(path) as img:
+                        img.verify()
+                    with Image.open(path) as img2:
+                        return img2.size
+                
+                size = await asyncio.to_thread(_verify_image, str(tmp_path))
+                w, h = size
+                if w * h > 100_000_000:
+                    raise HTTPException(status_code=400, detail="Image too large.")
             except HTTPException:
                 raise
             except Exception:

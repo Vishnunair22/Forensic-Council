@@ -147,49 +147,8 @@ class Agent1Image(ForensicAgent):
         # extract_evidence_text is used in some decomposition lists; map it to the unified OCR
         registry.register("extract_evidence_text", self.extract_text_from_image_handler, "Evidence text extraction (unified)")
 
-        # ── Gemini Vision Handler ─────────────────────────────────────────────
-        _gemini = GeminiVisionClient(self.config)
-
+        # ── Gemini Vision Handler (Unified) ───────────────────────────────────
         async def gemini_deep_forensic_handler(input_data: dict) -> dict:
-            """
-            Gemini multimodal visual forensic synthesis.
-
-            Aggregates results from ALL prior tools (both Phase-1 and Phase-2)
-            into a cross-tool context summary before calling Gemini.
-
-            Uses a priority lookup (_get_ctx) that checks the neural key first,
-            then the legacy key, so the handler is correct regardless of which
-            code path (neural success vs. fallback) populated _tool_context.
-            """
-            artifact = input_data.get("artifact") or self.evidence_artifact
-
-            # Audit Fix 3: DYNAMIC CONTEXT AGGREGATION
-            # Instead of a hardcoded map, we digest ALL successful results
-            # from _tool_context so Gemini has total visibility without code updates.
-            # Brutal Context Synthesis: Ensure all Phase-1/2 signals are summarized
-            # with high fidelity for the multi-modal Gemini audit.
-            # Audit Fix: DYNAMIC CONTEXT AGGREGATION
-            from core.context_utils import aggregate_tool_context
-            context_summary = aggregate_tool_context(self._tool_context, agent_id=self.agent_id)
-
-            # EXIF Cross-modal check
-            if self.working_memory:
-                try:
-                    agent5_context = await self.working_memory.get_agent_context(self.session_id, "Agent5")
-                    exif_data = agent5_context.get("exif_extract", {})
-                    if exif_data:
-                        context_summary["metadata_audit"] = {
-                            "camera": exif_data.get("device_model"),
-                            "software": exif_data.get("software"),
-                            "gps": bool(exif_data.get("gps_info")),
-                            "timestamp_mismatch": exif_data.get("metadata_timeline_consistent") is False
-                        }
-                except Exception as _ctx_err:
-                    logger.warning(
-                        f"{self.agent_id}: EXIF cross-modal context retrieval failed — Gemini will proceed without metadata audit",
-                        error=str(_ctx_err),
-                    )
-
             async def _signal_cb(msg: str) -> None:
                 """Relay Gemini progress to the inter-agent bus for frontend streaming."""
                 try:
@@ -202,26 +161,11 @@ class Agent1Image(ForensicAgent):
                 except Exception as _e:
                     logger.debug(f"{self.agent_id}: Gemini signal relay failed", error=str(_e))
 
-            try:
-                finding = await _gemini.deep_forensic_analysis(
-                    file_path=artifact.file_path,
-                    exif_summary=context_summary,
-                    signal_callback=_signal_cb,
-                )
-                result = finding.to_finding_dict(self.agent_id)
-                result["analysis_source"] = "gemini_vision"
-
-                await self._record_tool_result("gemini_deep_forensic", result)
-                return result
-            except Exception as e:
-                await self._record_tool_error("gemini_deep_forensic", str(e))
-                return {
-                    "error": str(e),
-                    "analysis_source": "gemini_vision",
-                    "available": False,
-                    "court_defensible": False,
-                    "confidence": 0.0,
-                }
+            return await self._gemini_deep_forensic_handler(
+                input_data, 
+                model_hint="gemini-2.0-flash", 
+                signal_callback=_signal_cb
+            )
 
         registry.register("gemini_deep_forensic", gemini_deep_forensic_handler, "Gemini multimodal visual forensic synthesis and evidence aggregation")
 
@@ -259,3 +203,37 @@ class Agent1Image(ForensicAgent):
             f"F3-Net frequency, ManTra-Net anomaly tracing, "
             f"and Gemini multimodal visual forensic synthesis."
         )
+    async def on_tool_result(self, finding: AgentFinding) -> None:
+        """Reactive task expansion based on pixel and semantic signals."""
+        from core.working_memory import TaskStatus
+
+        # 1. If semantic analysis detects a person or AI-generation markers, escalate to deepfake check
+        if finding.metadata.get("tool_name") == "analyze_image_content":
+            image_type = finding.metadata.get("image_type", "").lower()
+            all_classes = finding.metadata.get("all_classifications", [])
+            
+            # Check for person or AI markers in any top classification
+            has_person = "person" in image_type or any("person" in str(c[0]).lower() and c[1] > 0.4 for c in all_classes)
+            has_ai_marker = "ai image" in image_type or any("ai image" in str(c[0]).lower() and c[1] > 0.4 for c in all_classes)
+
+            if has_person or has_ai_marker:
+                logger.info(f"Semantic trigger: {image_type}; injecting deepfake frequency audit", agent_id=self.agent_id)
+                await self.working_memory.create_task(
+                    session_id=self.session_id,
+                    agent_id=self.agent_id,
+                    description="Run deepfake_frequency_check for GAN/Diffusion artifacts",
+                    status=TaskStatus.PENDING,
+                    priority=15
+                )
+
+        # 2. If neural ELA flags high-confidence manipulation, inject localized ROI extraction
+        if finding.metadata.get("tool_name") == "neural_ela":
+            if finding.evidence_verdict == "POSITIVE" and finding.confidence_raw > 0.8:
+                logger.info("High-confidence ELA signal; injecting ROI extraction", agent_id=self.agent_id)
+                await self.working_memory.create_task(
+                    session_id=self.session_id,
+                    agent_id=self.agent_id,
+                    description="Run roi_extract on anomalous regions identified by Neural ELA",
+                    status=TaskStatus.PENDING,
+                    priority=20
+                )

@@ -286,6 +286,20 @@ class RedisClient:
             keys.append(key)
         return keys
 
+    async def publish(self, channel: str, message: Any) -> int:
+        """
+        Publish a message to a Redis channel.
+        """
+        if not isinstance(message, str):
+            message = json.dumps(message)
+        return await self.client.publish(channel, message)
+
+    def get_pubsub(self):
+        """
+        Get a Redis pubsub instance.
+        """
+        return self.client.pubsub()
+
     def pipeline(self):
         """Return a Redis pipeline for batched commands."""
         return self.client.pipeline()

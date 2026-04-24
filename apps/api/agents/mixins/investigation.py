@@ -303,6 +303,7 @@ class AgentInvestigationMixin:
             working_memory=self.working_memory,
             custody_logger=self.custody_logger,
             heavy_tool_semaphore=self.heavy_tool_semaphore,
+            agent=self,
         )
 
         llm_generator = None
@@ -375,6 +376,7 @@ class AgentInvestigationMixin:
             working_memory=self.working_memory,
             custody_logger=self.custody_logger,
             heavy_tool_semaphore=self.heavy_tool_semaphore,
+            agent=self,
         )
 
         loop_result = await loop_engine.run(

@@ -184,12 +184,32 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         return await self.sign_report(report)
 
     def _deduplicate_findings(self, findings: list[dict]) -> list[dict]:
+        """
+        Deduplicate findings while preserving forensic contradictions.
+        
+        If the same tool produces different verdicts (e.g. POSITIVE and NEGATIVE),
+        both are preserved so the tribunal can deliberate on the inconsistency.
+        Otherwise, the highest-confidence finding for a given key is kept.
+        """
         seen, out = {}, []
         for f in findings:
-            if isinstance(f, dict) and "severity_tier" not in f:
+            if not isinstance(f, dict):
+                continue
+                
+            if "severity_tier" not in f:
                 f["severity_tier"] = assign_severity_tier(f)
+            
             meta = f.get("metadata") or {}
-            key = (str(f.get("agent_id", "")), str(f.get("finding_type", "")), str(meta.get("tool_name", "")))
+            verdict = evidence_verdict_of(f)
+            
+            # Key now includes verdict to ensure contradictions are not deduped away
+            key = (
+                str(f.get("agent_id", "")), 
+                str(f.get("finding_type", "")), 
+                str(meta.get("tool_name", "")),
+                verdict
+            )
+            
             if key in seen:
                 idx = seen[key]
                 old = out[idx]
@@ -198,6 +218,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 if conf_new > conf_old:
                     out[idx] = f
                 continue
+                
             seen[key] = len(out)
             out.append(f)
         return out

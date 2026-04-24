@@ -8,6 +8,7 @@ Now decomposed into mixins for better maintainability.
 
 from __future__ import annotations
 
+import asyncio
 import math
 import uuid
 from abc import ABC, abstractmethod
@@ -17,6 +18,7 @@ from agents.mixins.context import AgentContextMixin
 from agents.mixins.investigation import AgentInvestigationMixin
 from agents.mixins.memory import AgentMemoryMixin
 from agents.mixins.reflection import AgentReflectionMixin
+from agents.mixins.synthesis import NeuralSynthesisMixin
 from core.config import Settings
 from core.custody_logger import CustodyLogger
 from core.episodic_memory import EpisodicMemory
@@ -35,6 +37,7 @@ class ForensicAgent(
     AgentMemoryMixin,
     AgentInvestigationMixin,
     AgentReflectionMixin,
+    NeuralSynthesisMixin,
     ABC,
 ):
     """
@@ -113,6 +116,13 @@ class ForensicAgent(
     def supported_file_types(self) -> list[str]:
         """List of MIME type prefixes supported by this specialist."""
         return ["*"]
+
+    async def on_tool_result(self, finding: AgentFinding) -> None:
+        """
+        Lifecycle hook called after each tool result is processed.
+        Override this to implement reactive logic (e.g. dynamic task injection).
+        """
+        pass
 
     # ── Concrete Infrastructure Logic ────────────────────────────────────────
 

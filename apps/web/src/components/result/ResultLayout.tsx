@@ -13,6 +13,7 @@ import { ReportFooter } from "./ReportFooter";
 import { IntelligenceBrief } from "./IntelligenceBrief";
 import { DegradationBanner } from "./DegradationBanner";
 import { ActionDock } from "./ActionDock";
+import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 import { ResultStateView } from "./ResultStateView";
 
 const AgentAnalysisTab = dynamic(
@@ -117,8 +118,16 @@ export function ResultLayout() {
           aria-labelledby="tab-analysis"
           hidden={rs.activeTab !== "analysis"}
         >
+            <ForensicErrorModal 
+              isVisible={rs.state === "error"} 
+              message={rs.errorMsg} 
+              onHome={rs.handleHome} 
+              onRetry={rs.handleNew} 
+            />
             {rs.state === "error" && (
-              <ResultStateView type="error" message={rs.errorMsg} onNew={rs.handleNew} onHome={rs.handleHome} />
+              <div className="flex flex-col items-center justify-center py-32 opacity-20">
+                <p className="font-mono text-xs">Analysis Pipeline Halted</p>
+              </div>
             )}
             {rs.state === "empty" && (
               <ResultStateView type="empty" onNew={rs.handleNew} onHome={rs.handleHome} />

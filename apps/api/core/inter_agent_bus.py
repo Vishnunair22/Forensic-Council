@@ -119,12 +119,88 @@ class InterAgentBus:
         self._registered_agents: dict[str, Any] = {}
         # Lock to make circular-dependency check + _active_calls registration atomic
         self._dispatch_lock = asyncio.Lock()
+        
+        # Redis Pub/Sub integration
+        self._listener_task: asyncio.Task | None = None
+        self._pubsub: Any = None
+        self._on_abort: Any | None = None
 
-    def signal_event(self, session_id: Any, event_name: str, payload: dict = None) -> None:
-        """Signal an event to any waiting agents. Safe from any context."""
-        key = f"{session_id}:{event_name}"
+    def set_abort_handler(self, handler: Any) -> None:
+        """Set a callback to be invoked when a GLOBAL_ABORT signal is received."""
+        self._on_abort = handler
+
+    async def start(self) -> None:
+        """Start the Redis Pub/Sub listener for distributed signaling."""
+        if self._working_memory is None or not hasattr(self._working_memory, "_redis"):
+            return
+            
+        redis = self._working_memory._redis
+        if redis is None:
+            return
+            
+        self._pubsub = redis.get_pubsub()
+        channel = f"forensic:signal:{self._session_id}"
+        await self._pubsub.subscribe(channel)
+        
+        async def _listen():
+            try:
+                while True:
+                    message = await self._pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                    if message:
+                        data = message.get("data")
+                        if isinstance(data, str):
+                            try:
+                                payload = json.loads(data)
+                                event_name = payload.get("event")
+                                if event_name:
+                                    self._set_local_event(event_name)
+                                    if event_name == "GLOBAL_ABORT" and self._on_abort:
+                                        logger.warning(f"GLOBAL_ABORT received for session {self._session_id}")
+                                        if asyncio.iscoroutinefunction(self._on_abort):
+                                            await self._on_abort(payload.get("payload"))
+                                        else:
+                                            self._on_abort(payload.get("payload"))
+                            except Exception as e:
+                                logger.debug(f"InterAgentBus message parsing error: {e}")
+                    await asyncio.sleep(0.1)
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.error(f"InterAgentBus listener failed: {e}")
+
+        self._listener_task = asyncio.create_task(_listen())
+        logger.info(f"InterAgentBus started distributed listener for session {self._session_id}")
+
+    async def stop(self) -> None:
+        """Stop the Redis Pub/Sub listener."""
+        if self._listener_task:
+            self._listener_task.cancel()
+            try:
+                await self._listener_task
+            except asyncio.CancelledError:
+                pass
+        if self._pubsub:
+            await self._pubsub.unsubscribe()
+            self._pubsub = None
+
+    def _set_local_event(self, event_name: str) -> None:
+        """Set a local event and wake up any waiters."""
+        key = event_name # Local key in _events is just name now
         if key not in self._events:
             self._events[key] = asyncio.Event()
+        self._events[key].set()
+
+    def signal_event(self, session_id: Any, event_name: str, payload: dict = None) -> None:
+        """Signal an event to any waiting agents. Broadcasts via Redis if available."""
+        # 1. Trigger locally
+        self._set_local_event(event_name)
+        
+        # 2. Broadcast to other workers
+        if self._working_memory and hasattr(self._working_memory, "_redis") and self._working_memory._redis:
+            channel = f"forensic:signal:{session_id}"
+            asyncio.create_task(
+                self._working_memory._redis.publish(channel, {"event": event_name, "payload": payload})
+            )
 
         if payload and "note" in event_name.lower():
             self._broadcast_history.append({
@@ -132,8 +208,6 @@ class InterAgentBus:
                 "event": event_name,
                 "payload": payload
             })
-
-        self._events[key].set()
 
     def broadcast_note(self, agent_id: str, note_type: str, content: dict) -> None:
         """
@@ -148,14 +222,7 @@ class InterAgentBus:
         )
 
     def register_agent(self, agent_id: str, agent_instance: Any) -> None:
-        """Register a live agent instance for inter-agent calls.
-
-        When a registered instance exists for *callee_agent_id*, ``send()`` will
-        reuse it instead of creating a fresh agent from scratch.  This avoids
-        the overhead of re-initializing working memory, episodic memory, and
-        tool registries for a callee that is already running in the same
-        investigation session.
-        """
+        """Register a live agent instance for inter-agent calls."""
         self._registered_agents[agent_id] = agent_instance
 
     def unregister_agent(self, agent_id: str) -> None:
@@ -164,15 +231,14 @@ class InterAgentBus:
 
     async def wait_for_event(self, session_id: Any, event_name: str, timeout: float = 60.0) -> bool:
         """Wait for a named event to be signaled. Returns True if signaled, False on timeout."""
-        key = f"{session_id}:{event_name}"
-        if key not in self._events:
-            self._events[key] = asyncio.Event()
-        evt = self._events[key]
+        if event_name not in self._events:
+            self._events[event_name] = asyncio.Event()
+        evt = self._events[event_name]
 
         try:
             await asyncio.wait_for(evt.wait(), timeout=timeout)
             return True
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             return False
 
     def is_call_permitted(self, caller: str, callee: str) -> bool:

@@ -714,6 +714,7 @@ class ReActLoopEngine:
         redis_client: Any = None,
         hitl_timeout: float = 300.0,
         heavy_tool_semaphore: asyncio.Semaphore | None = None,
+        agent: Any | None = None,
     ) -> None:
         """
         Initialize the ReAct loop engine.
@@ -736,6 +737,7 @@ class ReActLoopEngine:
         self.redis_client = redis_client
         self.hitl_timeout = hitl_timeout
         self.heavy_tool_semaphore = heavy_tool_semaphore
+        self.agent = agent
 
         # Internal state
         self._current_iteration = 0
@@ -1326,6 +1328,13 @@ class ReActLoopEngine:
                         },
                     )
                     self._findings.append(finding)
+                    
+                    # [INT-DECOMP] Reactive hook: Allow agent to inject tasks based on finding
+                    if self.agent is not None:
+                        try:
+                            await self.agent.on_tool_result(finding)
+                        except Exception as hook_err:
+                            logger.debug("Agent on_tool_result hook failed", error=str(hook_err))
 
                     # Check for epistemic uncertainty escalation (arXiv:2512.16614)
                     if _uncertainty and _uncertainty.should_escalate:

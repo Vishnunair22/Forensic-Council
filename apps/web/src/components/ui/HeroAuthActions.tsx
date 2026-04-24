@@ -13,6 +13,7 @@ import { storage, sessionOnlyStorage } from "@/lib/storage";
 
 import { UploadModal } from "@/components/evidence/UploadModal";
 import { UploadSuccessModal } from "@/components/evidence/UploadSuccessModal";
+import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 
 export function HeroAuthActions() {
   const router = useRouter();
@@ -122,6 +123,15 @@ export function HeroAuthActions() {
           />
         )}
       </AnimatePresence>
+
+      <ForensicErrorModal 
+        isVisible={!!authError}
+        title="Protocol Initialization Failure"
+        message={authError || "Could not establish secure investigator session."}
+        errorCode="0xFC_AUTH_INIT"
+        onRetry={handleStartAnalysis}
+        onHome={() => setAuthError(null)}
+      />
 
       <AnimatePresence>
         {showUpload && !selectedFile && (

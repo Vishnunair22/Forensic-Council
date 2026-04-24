@@ -149,87 +149,30 @@ class Agent3Object(ForensicAgent):
             "Adversarial robustness check",
         )
 
-        # Gemini deep forensic analysis handler
-        _gemini = GeminiVisionClient(self.config)
-
-        async def _gemini_signal_callback(msg: str):
-            """Signal callback for early hand-off to Arbiter."""
-            try:
-                if self.inter_agent_bus:
-                    self.inter_agent_bus.signal_event(
-                        self.session_id,
-                        "agent3_initial_signal",
-                        {
-                            "progress": msg,
-                            "object_count": self._tool_context.get("object_detection", {}).get(
-                                "detection_count", 0
-                            ),
-                        },
-                    )
-            except Exception as e:
-                logger.debug(f"{self.agent_id}: Gemini signal callback failed", error=str(e))
-
+        # ── Gemini Vision Handler (Unified) ───────────────────────────────────
         async def gemini_deep_forensic_handler(input_data: dict) -> dict:
-            try:
-                artifact = input_data.get("artifact") or self.evidence_artifact
-
-                # Wait for Agent1 context if event exists
-                _ctx_event = getattr(self, "_agent1_context_event", None)
-                if _ctx_event is not None and not _ctx_event.is_set():
-                    # Wait for Agent 1 Gemini context before starting deep pass
-                    from core.config import get_settings
-                    _timeout = get_settings().agent_context_wait_timeout
-                    try:
-                        await asyncio.wait_for(asyncio.shield(_ctx_event.wait()), timeout=_timeout)
-                    except asyncio.TimeoutError:
-                        logger.warning(
-                            f"Agent 3 timed out waiting for Agent 1 context after {_timeout}s; proceeding with local data."
-                        )
-                        await self._record_tool_error(
-                            "agent1_context_sync",
-                            f"Agent1 Gemini context unavailable ({_timeout}s timeout) — object/scene analysis may lack image-integrity grounding",
-                        )
-
-                # Audit Fix: DYNAMIC CONTEXT AGGREGATION
-                from core.context_utils import aggregate_tool_context
-                dynamic_context = aggregate_tool_context(self._tool_context, agent_id=self.agent_id)
-
-                agent1_context = self._agent1_context
-                context_summary = {"tools": dynamic_context, "agent1": agent1_context}
-
+            async def _gemini_signal_callback(msg: str):
+                """Signal callback for early hand-off to Arbiter."""
                 try:
-                    await self.update_sub_task("Synthesizing neural object-scene verdict...")
-                    finding = await _gemini.deep_forensic_analysis(
-                        file_path=artifact.file_path,
-                        exif_summary=context_summary,
-                        signal_callback=_gemini_signal_callback,
-                    )
-
-                    result = finding.to_finding_dict(self.agent_id)
-                    result["analysis_source"] = "gemini_vision"
-                    # Ensure ReAct loop sees the confidence
-                    if "confidence" not in result and finding.confidence:
-                        result["confidence"] = finding.confidence
-                    await self._record_tool_result("gemini_deep_forensic", result)
-                    return result
+                    if self.inter_agent_bus:
+                        self.inter_agent_bus.signal_event(
+                            self.session_id,
+                            "agent3_initial_signal",
+                            {
+                                "progress": msg,
+                                "object_count": self._tool_context.get("object_detection", {}).get(
+                                    "detection_count", 0
+                                ),
+                            },
+                        )
                 except Exception as e:
-                    logger.error(f"{self.agent_id}: Gemini deep analysis failed", error=str(e))
-                    err_result = {
-                        "error": str(e),
-                        "status": "FAILED",
-                        "finding_type": "Gemini analysis error",
-                        "reasoning_summary": "Deep forensic analysis via Gemini LLM failed or timed out.",
-                    }
-                    await self._record_tool_error("gemini_deep_forensic", str(e))
-                    return err_result
-            except Exception as e:
-                logger.error(f"{self.agent_id}: gemini_deep_forensic_handler failed", error=str(e))
-                return {
-                    "error": str(e),
-                    "status": "FAILED",
-                    "finding_type": "Handler error",
-                    "reasoning_summary": "Deep forensic handler encountered an unexpected error.",
-                }
+                    logger.debug(f"{self.agent_id}: Gemini signal callback failed", error=str(e))
+
+            return await self._gemini_deep_forensic_handler(
+                input_data,
+                model_hint="gemini-2.0-flash",
+                signal_callback=_gemini_signal_callback
+            )
 
         registry.register(
             "gemini_deep_forensic",

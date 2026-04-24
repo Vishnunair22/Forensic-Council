@@ -220,70 +220,57 @@ class Agent5Metadata(ForensicAgent):
                 "av_file_identity", video_h.av_file_identity_handler, "Lightweight AV pre-screen"
             )
 
-        # Gemini deep forensic analysis
-        _gemini = GeminiVisionClient(self.config)
-
-        async def _gemini_signal_callback(msg: str):
-            """Signal callback for early hand-off to Arbiter."""
-            if self.inter_agent_bus:
-                # Signal coordinates for geospatial grounding
-                exif = self._tool_context.get("exif_extract", {})
-                self.inter_agent_bus.signal_event(
-                    self.session_id,
-                    "agent5_initial_signal",
-                    {"progress": msg, "has_gps": bool(exif.get("gps_coordinates"))},
-                )
-
+        # ── Gemini Vision Handler (Unified) ───────────────────────────────────
         async def gemini_deep_forensic_handler(input_data: dict) -> dict:
-            artifact = input_data.get("artifact") or self.evidence_artifact
-
-            # Wait for Agent1 context if event exists
-            _ctx_event = getattr(self, "_agent1_context_event", None)
-            if _ctx_event is not None and not _ctx_event.is_set():
-                from core.config import get_settings
-                _timeout = get_settings().agent_context_wait_timeout
-                try:
-                    await asyncio.wait_for(asyncio.shield(_ctx_event.wait()), timeout=_timeout)
-                except asyncio.TimeoutError:
-                    self.logger.warning(
-                        f"Agent 5 timed out waiting for Agent 1 context after {_timeout}s; proceeding with local data."
-                    )
-                    await self._record_tool_error(
-                        "agent1_context_sync",
-                        f"Agent1 Gemini context unavailable ({_timeout}s timeout) — metadata analysis may lack image-integrity grounding",
+            async def _gemini_signal_callback(msg: str):
+                """Signal callback for early hand-off to Arbiter."""
+                if self.inter_agent_bus:
+                    # Signal coordinates for geospatial grounding
+                    exif = self._tool_context.get("exif_extract", {})
+                    self.inter_agent_bus.signal_event(
+                        self.session_id,
+                        "agent5_initial_signal",
+                        {"progress": msg, "has_gps": bool(exif.get("gps_coordinates"))},
                     )
 
-                from core.context_utils import aggregate_tool_context
-                dynamic_context = aggregate_tool_context(self._tool_context, agent_id=self.agent_id)
-
-            # Add Agent1 context if available
-            a1 = getattr(self, "_agent1_context", {})
-            context_summary = {"tools": dynamic_context, "agent1": a1}
-
-            try:
-                await self.update_sub_task("Synthesizing provenance and custody verdict...")
-                finding = await _gemini.deep_forensic_analysis(
-                    file_path=artifact.file_path,
-                    exif_summary=context_summary,
-                    signal_callback=_gemini_signal_callback,
-                )
-            except Exception as e:
-                await self._record_tool_error("gemini_deep_forensic", str(e))
-                return {
-                    "error": str(e),
-                    "analysis_source": "gemini_vision",
-                    "available": False,
-                    "court_defensible": False,
-                    "confidence": 0.0,
-                }
-
-            result = finding.to_finding_dict(self.agent_id)
-            result["analysis_source"] = "gemini_vision"
-            await self._record_tool_result("gemini_deep_forensic", result)
-            return result
+            return await self._gemini_deep_forensic_handler(
+                input_data,
+                model_hint="gemini-2.0-flash",
+                signal_callback=_gemini_signal_callback
+            )
 
         registry.register(
             "gemini_deep_forensic", gemini_deep_forensic_handler, "Gemini deep forensic analysis"
         )
 
         return registry
+    async def on_tool_result(self, finding: AgentFinding) -> None:
+        """Reactive task expansion based on metadata signals."""
+        from core.working_memory import TaskStatus
+
+        # 1. If EXIF detects editing software, escalate to deep file structure audit
+        if finding.metadata.get("tool_name") == "exif_extract":
+            software = str(finding.metadata.get("software", "")).lower()
+            editing_tools = {"photoshop", "gimp", "lightroom", "picsart", "snapseed", "canva", "capcut"}
+            
+            if any(tool in software for tool in editing_tools):
+                logger.info(f"Editing software signature detected: {software}; injecting hex audit", agent_id=self.agent_id)
+                await self.working_memory.create_task(
+                    session_id=self.session_id,
+                    agent_id=self.agent_id,
+                    description="Run file_structure_analysis for hidden hex-level manipulation artifacts",
+                    status=TaskStatus.PENDING,
+                    priority=15
+                )
+
+        # 2. If metadata anomaly score is high, trigger manual provenance chain verification
+        if finding.metadata.get("tool_name") == "metadata_anomaly_score":
+            if finding.evidence_verdict == "POSITIVE" and finding.confidence_raw > 0.7:
+                logger.info("High metadata anomaly score; injecting provenance chain audit", agent_id=self.agent_id)
+                await self.working_memory.create_task(
+                    session_id=self.session_id,
+                    agent_id=self.agent_id,
+                    description="Run provenance_chain_verify for C2PA/JUMBF integrity check",
+                    status=TaskStatus.PENDING,
+                    priority=10
+                )

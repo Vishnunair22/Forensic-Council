@@ -158,73 +158,13 @@ class Agent2Audio(ForensicAgent):
         # ── Gemini Vision Handler (Audio Forensic synthesis) ───────────────────
         # Note: Even for audio, Gemini Vision acts as a multi-modal synthesis engine
         # and a neural grounding signal for Agent 4 (Video).
-        _gemini = GeminiVisionClient(self.config)
-
+        # ── Gemini Vision Handler (Unified) ───────────────────────────────────
         async def gemini_deep_forensic_handler(input_data: dict) -> dict:
             """Neural audio forensic audit using Gemini Flash."""
-            artifact = input_data.get("artifact") or self.evidence_artifact
-            try:
-                # Dynamic context aggregation — digest all successful results so
-                # Gemini has total visibility without per-tool code updates.
-                context_summary = {}
-                for t_name, t_res in self._tool_context.items():
-                    if not t_res or (isinstance(t_res, dict) and t_res.get("error")):
-                        continue
-                    # Drop raw binary blobs and excessively large payloads only.
-                    # Small lists (speaker segments, splice timestamps) are kept as-is.
-                    clean_res = {
-                        k: v for k, v in t_res.items()
-                        if not isinstance(v, bytes) and len(str(v)) < 5000
-                    }
-                    context_summary[t_name] = clean_res
-
-                # Pull Agent 4 temporal context for AV sync grounding on video files
-                mime = getattr(artifact, "mime_type", "") or ""
-                if self.working_memory and mime.startswith("video/"):
-                    try:
-                        agent4_context = await self.working_memory.get_agent_context(self.session_id, "Agent4")
-                        temporal_data = agent4_context.get("temporal_analysis", {})
-                        if temporal_data:
-                            context_summary["temporal_audit"] = {
-                                "frame_consistency": temporal_data.get("frame_consistency"),
-                                "av_sync_offset_ms": temporal_data.get("av_sync_offset_ms"),
-                                "splice_timestamps": temporal_data.get("splice_timestamps"),
-                            }
-                    except Exception as _ctx_err:
-                        logger.warning(
-                            f"{self.agent_id}: Agent4 temporal context retrieval failed — Gemini will proceed without video temporal grounding",
-                            error=str(_ctx_err),
-                        )
-
-                finding = await _gemini.deep_forensic_analysis(
-                    file_path=artifact.file_path,
-                    exif_summary=context_summary,
-                    model_hint="gemini-2.5-flash"
-                )
-                result = finding.to_finding_dict(self.agent_id)
-                result["analysis_source"] = "gemini_flash"
-                
-                # Inter-agent sync: Notify Agent 4 (Video) if audio authenticity
-                # has a clear verdict, to help resolve AV sync/deepfake contradictions.
-                if self.inter_agent_bus:
-                    self.inter_agent_bus.signal_event(
-                        self.session_id,
-                        "agent2_complete",
-                        {"verdict": result.get("verdict"), "confidence": result.get("confidence")},
-                    )
-
-                await self._record_tool_result("gemini_deep_forensic", result)
-                return result
-            except Exception as e:
-                logger.error(f"{self.agent_id}: Gemini deep forensic failed", error=str(e))
-                await self._record_tool_error("gemini_deep_forensic", str(e))
-                return {
-                    "error": str(e),
-                    "analysis_source": "gemini_vision",
-                    "available": False,
-                    "court_defensible": False,
-                    "confidence": 0.0,
-                }
+            return await self._gemini_deep_forensic_handler(
+                input_data,
+                model_hint="gemini-2.0-flash"
+            )
 
         registry.register("gemini_deep_forensic", gemini_deep_forensic_handler, "Gemini Flash neural audio forensic audit")
 

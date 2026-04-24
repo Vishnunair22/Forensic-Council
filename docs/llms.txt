@@ -1,4 +1,4 @@
-﻿# Forensic Council
+# Forensic Council
 
 Multi-Agent Forensic Evidence Analysis System for court-grade digital evidence verification.
 
@@ -21,7 +21,7 @@ Multi-Agent Forensic Evidence Analysis System for court-grade digital evidence v
 ## Key Docs
 
 - Architecture: docs/ARCHITECTURE.md
-- Agent capabilities: docs/AGENTS.md
+- Agent capabilities: docs/agent_capabilities.md
 - API reference: docs/API.md
 - Setup: docs/DEVELOPMENT_SETUP.md
 - Docker build: infra/DOCKER_BUILD.md

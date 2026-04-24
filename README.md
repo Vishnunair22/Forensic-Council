@@ -152,7 +152,7 @@ npm run dev        # backend and frontend development servers
 npm run lint       # backend ruff + frontend eslint
 npm run test       # backend pytest + frontend jest
 npm run build:web  # frontend production build
-npm run docker:up  # full Docker stack
+npm run docker:dev  # full Docker stack
 ```
 
 Backend-only:

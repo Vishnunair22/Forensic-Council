@@ -273,6 +273,7 @@ class ForensicCouncilPipeline:
         # Report and error state, set by the investigation task.
         self._final_report: ForensicReport | None = None
         self._error: str | None = None
+        self._current_run_task: asyncio.Task | None = None
 
         # Deep analysis pause/resume, set by the investigation wrapper.
         # when the initial analysis completes and the user must decide.
@@ -463,6 +464,8 @@ class ForensicCouncilPipeline:
             custody_logger=self.custody_logger,
             evidence_store=self.evidence_store,
         )
+        self.inter_agent_bus.set_abort_handler(self._handle_global_abort)
+        await self.inter_agent_bus.start()
 
         # Initialize session manager
         self.session_manager = SessionManager(redis_client=self._redis)
@@ -514,6 +517,7 @@ class ForensicCouncilPipeline:
         self._investigation_deadline = loop.time() + self.config.investigation_timeout
 
         try:
+            self._current_run_task = asyncio.current_task()
             await self._run_investigation_core(
                 evidence_file_path, case_id, investigator_id, original_filename, session_id
             )
@@ -524,8 +528,13 @@ class ForensicCouncilPipeline:
                 raise RuntimeError("Investigation finished but no report was generated")
 
             return self._final_report
-
+        except asyncio.CancelledError:
+            logger.warning("Investigation cancelled (Global Abort)")
+            if self._error:
+                 raise RuntimeError(f"Investigation aborted: {self._error}")
+            raise
         finally:
+            self._current_run_task = None
             # Ensure working memory is cleared even on failure
             await self._clear_working_memory_for_session(session_id)
 
@@ -638,7 +647,6 @@ class ForensicCouncilPipeline:
             session_id=session_id,
             report_id=self._final_report.report_id,
         )
-
         if self.custody_logger:
             await self.custody_logger.log_entry(
                 entry_type=EntryType.REPORT_SIGNED,
@@ -651,6 +659,10 @@ class ForensicCouncilPipeline:
                     ),
                 },
             )
+
+        # Stop inter-agent bus listener
+        if hasattr(self, "inter_agent_bus"):
+            await self.inter_agent_bus.stop()
 
     def _normalize_agent_results(self, agent_results: list[AgentLoopResult]) -> dict[str, Any]:
         """Normalize agent findings for the arbiter."""
@@ -795,6 +807,27 @@ class ForensicCouncilPipeline:
             or finding.get("metadata", {}).get("error")
             or finding.get("status") == "INCOMPLETE"
         )
+
+    async def _handle_global_abort(self, payload: dict | None = None) -> None:
+        """Handle a GLOBAL_ABORT signal by cancelling the investigation."""
+        reason = payload.get("reason", "Unknown forensic violation") if payload else "Unknown forensic violation"
+        self._error = f"GLOBAL_ABORT: {reason}"
+        
+        # Broadcast quarantine state to UI
+        try:
+            from api.routes._session_state import broadcast_update
+            from api.schemas import BriefUpdate
+            await broadcast_update(str(self._session_id), BriefUpdate(
+                type="PIPELINE_QUARANTINED",
+                session_id=str(self._session_id),
+                message=f"CRITICAL: Pipeline quarantined. Reason: {reason}",
+                data={"status": "quarantined", "reason": reason}
+            ))
+        except Exception:
+            pass
+            
+        if self._current_run_task:
+            self._current_run_task.cancel()
 
     async def _verify_custody_integrity(self, session_id: UUID) -> None:
         """Verify chain-of-custody integrity."""

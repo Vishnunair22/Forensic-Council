@@ -10,9 +10,9 @@ import { AnalysisProgressOverlay } from "@/components/evidence/AnalysisProgressO
 import {
   FileUploadSection,
   AgentProgressDisplay,
-  ErrorDisplay,
   HITLCheckpointModal,
 } from "@/components/evidence";
+import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 import { sessionOnlyStorage, storage } from "@/lib/storage";
 
 const FORENSIC_MIME_TYPE_KEY = "forensic_mime_type";
@@ -128,19 +128,13 @@ export default function EvidencePage() {
               />
             )}
 
-            {(validationError || errorMessage) && !hasStartedAnalysis && !showUploadForm && (
-              <div key="error-display" className="flex flex-col items-center justify-center min-h-[60vh]">
-                <ErrorDisplay
-                  message={validationError || errorMessage || "Unknown error"}
-                  onDismiss={() => {
-                    setValidationError(null);
-                    resetSimulation();
-                  }}
-                  onRetry={() => file && triggerAnalysis(file)}
-                  showRetry={!!file}
-                />
-              </div>
-            )}
+            <ForensicErrorModal 
+              isVisible={!!(validationError || errorMessage)} 
+              message={validationError || errorMessage || "The analysis pipeline was interrupted."} 
+              errorCode={validationError ? "0xFC_VALIDATION_FAIL" : "0xFC_PIPELINE_HALT"}
+              onRetry={!!file ? () => triggerAnalysis(file as File) : undefined}
+              onHome={handleNewUpload} 
+            />
 
             {!showUploadForm && !hasStartedAnalysis && !showLoadingOverlay && !validationError && (
               <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 text-center px-6">

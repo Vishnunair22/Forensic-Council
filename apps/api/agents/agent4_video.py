@@ -108,58 +108,54 @@ class Agent4Video(ForensicAgent):
         # is loaded, tested, and validated. See agent4_video.py docstring.
         # When ready, register with available=False and a clear quarantine flag.
 
-        _gemini = GeminiVisionClient(self.config)
-
-        async def _gemini_signal_callback(msg: str):
-            """Signal callback for early hand-off to Arbiter."""
-            try:
-                if self.inter_agent_bus:
-                    self.inter_agent_bus.signal_event(
-                        self.session_id,
-                        "agent4_initial_signal",
-                        {"progress": msg, "anomalies_detected": self._tool_context.get("optical_flow_analysis", {}).get("anomaly_count", 0)}
-                    )
-            except Exception as e:
-                logger.debug(f"{self.agent_id}: Gemini signal callback failed", error=str(e))
-
+        # ── Gemini Vision Handler (Unified) ───────────────────────────────────
         async def gemini_deep_forensic_handler(input_data: dict) -> dict:
-            artifact = input_data.get("artifact") or self.evidence_artifact
-            # Audit Fix: DYNAMIC CONTEXT AGGREGATION
-            from core.context_utils import aggregate_tool_context
-            dynamic_context = aggregate_tool_context(self._tool_context, agent_id=self.agent_id)
-
-            # Context from Agent 1 (Image Integrity) for cross-modal check
-            agent1_context = {}
-            if self.working_memory:
+            async def _gemini_signal_callback(msg: str):
+                """Signal callback for early hand-off to Arbiter."""
                 try:
-                    a1 = await self.working_memory.get_agent_context(self.session_id, "Agent1")
-                    agent1_context = a1.get("initial_summary", {})
+                    if self.inter_agent_bus:
+                        self.inter_agent_bus.signal_event(
+                            self.session_id,
+                            "agent4_initial_signal",
+                            {
+                                "progress": msg, 
+                                "anomalies_detected": self._tool_context.get("optical_flow_analysis", {}).get("anomaly_count", 0)
+                            }
+                        )
                 except Exception as e:
-                    logger.warning(f"{self.agent_id}: Failed to retrieve Agent1 context from working memory", error=str(e))
+                    logger.debug(f"{self.agent_id}: Gemini signal callback failed", error=str(e))
 
-            context_summary = {"tools": dynamic_context, "agent1": agent1_context}
-
-            try:
-                await self.update_sub_task("Synthesizing temporal consistency verdict...")
-                finding = await _gemini.deep_forensic_analysis(
-                    file_path=artifact.file_path,
-                    exif_summary=context_summary,
-                    signal_callback=_gemini_signal_callback
-                )
-                result = finding.to_finding_dict(self.agent_id)
-                result["analysis_source"] = "gemini_vision"
-                await self._record_tool_result("gemini_deep_forensic", result)
-                return result
-            except Exception as e:
-                await self._record_tool_error("gemini_deep_forensic", str(e))
-                return {
-                    "error": str(e),
-                    "analysis_source": "gemini_vision",
-                    "available": False,
-                    "court_defensible": False,
-                    "confidence": 0.0,
-                }
+            return await self._gemini_deep_forensic_handler(
+                input_data,
+                model_hint="gemini-2.0-flash",
+                signal_callback=_gemini_signal_callback
+            )
 
         registry.register("gemini_deep_forensic", gemini_deep_forensic_handler, "Gemini deep forensic analysis for video frames")
 
         return registry
+    async def on_tool_result(self, finding: AgentFinding) -> None:
+        """Reactive task expansion based on temporal signals."""
+        # 1. If frame consistency shows discontinuities, escalate to face swap check
+        if finding.metadata.get("tool_name") == "frame_consistency_analysis":
+            if finding.evidence_verdict == "POSITIVE" or finding.metadata.get("discontinuity_detected"):
+                logger.info("Temporal discontinuity detected; injecting face-swap audit", agent_id=self.agent_id)
+                from core.working_memory import TaskStatus
+                await self.working_memory.create_task(
+                    session_id=self.session_id,
+                    agent_id=self.agent_id,
+                    description="Run face_swap_detection on frames near detected discontinuities",
+                    status=TaskStatus.PENDING,
+                    priority=20 # High priority
+                )
+
+        # 2. Add other reactive triggers here (e.g. VFI error -> deeper flow analysis)
+        if finding.metadata.get("tool_name") == "vfi_error_map":
+            if finding.metadata.get("vfi_artifact_detected"):
+                await self.working_memory.create_task(
+                    session_id=self.session_id,
+                    agent_id=self.agent_id,
+                    description="Run deep optical_flow_analysis on VFI-flagged segments",
+                    status=TaskStatus.PENDING,
+                    priority=15
+                )

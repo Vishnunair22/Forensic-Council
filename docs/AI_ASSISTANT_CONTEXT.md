@@ -1,4 +1,4 @@
-# AGENTS.md: AI Assistant Context & Guidelines
+# AI Assistant Context & Guidelines
 
 Welcome, Agent. This project follows a specific monorepo and architectural pattern optimized for high-integrity forensic analysis.
 

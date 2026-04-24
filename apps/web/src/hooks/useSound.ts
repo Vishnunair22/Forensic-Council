@@ -21,6 +21,7 @@ export type SoundType =
   | "arbiter_start"
   | "arbiter_done"
   | "result_reveal"
+  | "alert-error"
   | "hum";
 
 let globalCtx: AudioContext | null = null;
@@ -422,6 +423,21 @@ export function useSound() {
         g2.connect(out);
         o2.start(t + 0.28);
         o2.stop(t + 0.76);
+      } else if (type === "alert-error") {
+        // Harsh dissonance for quarantine: 320Hz + 415Hz
+        [320, 415].forEach((freq) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = "sine";
+          o.frequency.value = freq;
+          g.gain.setValueAtTime(0, t);
+          g.gain.linearRampToValueAtTime(0.06, t + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + 0.8);
+          o.connect(g);
+          g.connect(out);
+          o.start(t);
+          o.stop(t + 0.85);
+        });
       } else if (type === "hum") {
         const masterGain = ctx.createGain();
         masterGain.gain.setValueAtTime(0, t);
