@@ -34,7 +34,7 @@ export function useResult() {
   const [mounted, setMounted] = useState(false);
   const [state, setState] = useState<PageState>("arbiter");
   const [report, setReport] = useState<ReportDTO | null>(null);
-  const [arbiterMsg, setArbiterMsg] = useState("");
+  const [arbiterMsg, setArbiterMsg] = useState("Council deliberating on evidence...");
   const [errorMsg, setErrorMsg] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("analysis");
   
@@ -100,16 +100,11 @@ export function useResult() {
     if (!reportQueryData) return;
     setReport(reportQueryData);
     setState("ready");
-    try {
-      addToHistory(mapReportDtoToReport(reportQueryData));
-    } catch (e: unknown) {
-      dbg.error("History addition skipped", e);
-    }
     setTimeout(() => {
       soundRef.current("arbiter_done");
       soundRef.current("result_reveal");
     }, 200);
-  }, [reportQueryData, addToHistory]);
+  }, [reportQueryData]); // addToHistory removed — effect #2 owns all history writes
 
   useEffect(() => {
     if (reportQueryError) {

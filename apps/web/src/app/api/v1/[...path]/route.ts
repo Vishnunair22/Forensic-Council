@@ -74,7 +74,11 @@ async function proxyRequest(
   const requestHeaders = copyRequestHeaders(request);
   
   // Is this an upload or a heavy forensic operation?
-  const isHeavyPath = path.includes("upload") || path.includes("deep-analysis") || path.includes("video");
+  const isHeavyPath =
+    path.includes("upload") ||
+    path.includes("deep-analysis") ||
+    path.includes("video") ||
+    path[0] === "investigate"; // POST /api/v1/investigate is the evidence upload endpoint
   const timeoutMs = isHeavyPath ? 300_000 : 60_000; // 5 min for uploads/deep, 1 min otherwise
 
   // Optimization: Do not buffer the entire request in memory for large forensic uploads.

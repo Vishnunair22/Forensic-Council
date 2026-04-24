@@ -138,7 +138,9 @@ else
 fi
 
 if [ "${APP_ENV:-}" = "production" ]; then
-  for var in SIGNING_KEY JWT_SECRET_KEY POSTGRES_PASSWORD REDIS_PASSWORD METRICS_SCRAPE_TOKEN; do
+  for var in SIGNING_KEY JWT_SECRET_KEY POSTGRES_PASSWORD REDIS_PASSWORD \
+             METRICS_SCRAPE_TOKEN BOOTSTRAP_ADMIN_PASSWORD \
+             BOOTSTRAP_INVESTIGATOR_PASSWORD DEMO_PASSWORD; do
     if [ -n "${!var:-}" ] && ! printf '%s' "${!var}" | grep -q "REPLACE_ME"; then
       pass "$var is set"
     else

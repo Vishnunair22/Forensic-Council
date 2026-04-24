@@ -17,14 +17,6 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: Uploa
 
   useEffect(() => {
     setMounted(true);
-    
-    // Create preview URL for images and videos
-    if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
-      return () => URL.revokeObjectURL(url);
-    }
-
     // Lock scroll on mount, unlock on unmount
     const originalBodyOverflow = document.body.style.overflow;
     const originalHtmlOverflow = document.documentElement.style.overflow;
@@ -36,6 +28,15 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: Uploa
       document.body.style.overflow = originalBodyOverflow || "unset";
       document.documentElement.style.overflow = originalHtmlOverflow || "unset";
     };
+  }, []); // Run once on mount
+
+  useEffect(() => {
+    // Create preview URL for images and videos
+    if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
   }, [file]);
 
   if (!mounted) return null;

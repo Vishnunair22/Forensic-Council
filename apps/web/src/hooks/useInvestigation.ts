@@ -163,11 +163,15 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const authReadyRef = useRef<Promise<void> | null>(null);
 
   if (typeof window !== "undefined" && !authReadyRef.current) {
-    authReadyRef.current = (document.cookie.includes("access_token") ||
-      storage.getItem("forensic_auth_ok") === "1")
+    authReadyRef.current = (
+      document.cookie.includes("access_token") ||
+      (storage.getItem("forensic_auth_ok") === "1" && getAuthToken() !== null)
+    )
       ? Promise.resolve()
       : autoLoginAsInvestigator()
-          .then(() => {})
+          .then(() => {
+            storage.setItem("forensic_auth_ok", "1");
+          })
           .catch((err: unknown) => {
             const msg = err instanceof Error ? err.message : "Authentication failed";
             setAuthError(msg);
@@ -414,7 +418,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     router.push("/");
     setTimeout(() => {
       window.dispatchEvent(new Event("fc:open-upload"));
-    }, 500);
+    }, 800); // 800ms gives Next.js router time to fully swap the page
   }, [resetSimulation, playSound, router]);
 
   const handleViewResults = useCallback(async () => {

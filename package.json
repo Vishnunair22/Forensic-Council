@@ -9,7 +9,7 @@
     "dev:web": "cd apps/web && npm run dev",
     "build:web": "cd apps/web && npm run build",
     "type-check": "npm run type-check:api && npm run type-check:web",
-    "type-check:api": "cd apps/api && uv run pyright core/ agents/ api/ tools/",
+    "type-check:api": "cd apps/api && uv run pyright core/ agents/ api/ tools/ orchestration/",
     "type-check:web": "cd apps/web && npm run type-check",
     "test": "npm run test:api && npm run test:web",
     "test:api": "cd apps/api && uv run pytest tests/",

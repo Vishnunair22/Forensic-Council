@@ -43,6 +43,9 @@ services:
       target: runner
     # Suppress direct port access — all traffic via Caddy in production
     ports: !reset []
+    # Remove dev bind-mount (../apps/web:/app) — runner image is self-contained.
+    # Without this, the host source tree overwrites the compiled standalone app.
+    volumes: !override []
     environment:
       NODE_ENV: production
     logging:

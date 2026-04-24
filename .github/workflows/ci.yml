@@ -23,7 +23,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version-file: apps/api/.python-version
-          cache: pip
+
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('apps/api/uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
 
       - name: Install dependencies
         run: |
@@ -35,7 +41,7 @@ jobs:
         run: cd apps/api && uv run ruff check .
 
       - name: Type check with pyright
-        run: cd apps/api && uv run pyright core/ agents/ api/ tools/
+        run: cd apps/api && uv run pyright core/ agents/ api/ tools/ orchestration/
 
   backend-test:
     name: Backend tests
@@ -70,7 +76,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version-file: apps/api/.python-version
-          cache: pip
+
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('apps/api/uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
 
       - name: Install dependencies
         run: |

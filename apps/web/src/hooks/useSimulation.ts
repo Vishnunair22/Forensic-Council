@@ -476,6 +476,7 @@ export const useSimulation = ({
         connected
           .then(async () => {
             wsConnectionReady = true;
+            reconnectAttemptsRef.current = 0; // Reset backoff on successful connect
             resolve();
             // Rehydrate: if the arbiter reached a terminal state while the socket
             // was down, catch up immediately. The arbiter-status endpoint returns
