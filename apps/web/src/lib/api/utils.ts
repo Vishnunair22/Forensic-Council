@@ -110,7 +110,7 @@ export function clearAuthToken(): void {
 export function isAuthenticated(): boolean {
   if (getAuthToken() !== null) return true;
   if (typeof document !== "undefined") {
-    return document.cookie.includes("fc_session=") || document.cookie.includes("sessionid=");
+    return document.cookie.includes("access_token=");
   }
   return false;
 }

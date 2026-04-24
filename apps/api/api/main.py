@@ -355,7 +355,7 @@ async def security_headers_middleware(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["X-XSS-Protection"] = "0"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     response.headers["Content-Security-Policy"] = (
@@ -363,7 +363,7 @@ async def security_headers_middleware(request: Request, call_next):
         "script-src 'self'; "
         "style-src 'self'; "
         "img-src 'self' blob: data:; "
-        "connect-src 'self' ws: wss:; "
+        "connect-src 'self'; "
         "frame-ancestors 'none'; "
         "base-uri 'self'; "
         "form-action 'self';"
@@ -407,6 +407,7 @@ async def csrf_middleware(request: Request, call_next):
             value=token,
             httponly=False,  # JS must read this to send X-CSRF-Token header
             samesite="strict",
+            secure=settings.app_env == "production",
             max_age=86400,
             path="/",
         )

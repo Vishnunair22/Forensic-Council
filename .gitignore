@@ -40,8 +40,13 @@ build/
 .venv/
 venv/
 .pytest_cache/
+**/.pytest_cache/
 .mypy_cache/
+**/.mypy_cache/
 .ruff_cache/
+**/.ruff_cache/
+.pyright/
+**/.pyright/
 htmlcov/
 .coverage
 coverage.xml
@@ -49,13 +54,19 @@ coverage.xml
 # ── Node / Next.js ───────────────────────────────────────────────────────────
 node_modules/
 **/node_modules/
-apps/web/.next/
+.next/
+**/.next/
 apps/web/out/
 apps/web/.npm
 apps/web/.cache
+.cache/
+**/.cache/
+.turbo/
+**/.turbo/
+.nyc_output/
+.eslintcache
 apps/web/coverage/
 apps/web/test-results/
-apps/web/tsconfig.tsbuildinfo
 apps/web/lint_output*.txt
 *.tsbuildinfo
 .pnpm-store/
@@ -105,19 +116,46 @@ tests/fixtures/*.avi
 /apps/web/public/temp/*
 !/apps/web/public/temp/.gitkeep
 
-# ── IDE / Editor ─────────────────────────────────────────────────────────────
+# ── IDEs, Editors & Tooling ──────────────────────────────────────────────────
 .idea/
 .vscode/
+.history/
 *.swp
 *.swo
+*.swn
+*.swm
+.netrwhist
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+*.sublime-project
+*.sublime-workspace
 .planning/
 .claude/
 .cursor/
 .uv-cache/
+.uv_cache/
+**/.uv_cache/
+**/.uv-cache/
 .mcp.json
 .opencode.json
 CLAUDE.md
 MASTER_FIX_*.md
+.ipynb_checkpoints/
+
+# ── Agent & Plugin Local State ───────────────────────────────────────────────
+**/agent_state/
+**/plugin_state/
+*.agent_scratch
+*.plugin_scratch
+memory.db
+agent_memory.db
+*.agent.log
+*.plugin.log
+agent_interaction_*.json
+plugin_test_*.tmp
 
 # Added by code-review-graph
 .code-review-graph/

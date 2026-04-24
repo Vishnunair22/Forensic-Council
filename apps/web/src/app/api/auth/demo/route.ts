@@ -68,7 +68,7 @@ export async function POST() {
         nextResponse.cookies.set("access_token", data.access_token as string, {
           httpOnly: true,
           path: "/",
-          sameSite: "lax",
+          sameSite: "strict",
           maxAge: (data.expires_in as number) ?? 3600,
           secure: cookieSecure,
         });
@@ -78,7 +78,7 @@ export async function POST() {
           nextResponse.cookies.set("csrf_token", data.csrf_token as string, {
             httpOnly: false,
             path: "/",
-            sameSite: "lax",
+            sameSite: "strict",
             maxAge: (data.expires_in as number) ?? 3600,
             secure: cookieSecure,
           });

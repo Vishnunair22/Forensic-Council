@@ -207,7 +207,7 @@ RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
 
 # Pre-compile application bytecode for faster cold starts.
 # UV_COMPILE_BYTECODE=1 compiled venv packages; this handles app source code.
-RUN python -m compileall -q api/ core/ orchestration/ agents/ tools/ scripts/ reports/ 2>/dev/null || true
+RUN python -m compileall -q api/ core/ orchestration/ agents/ tools/ scripts/ reports/ || true
 
 # Create a dedicated non-root user. All writable paths are chown'd here;
 # volume mounts in docker-compose inherit these permissions.

@@ -71,14 +71,20 @@ do
 done
 
 section "2. Syntax And Configuration"
-if command -v python >/dev/null 2>&1; then
-  if find apps/api -name '*.py' -print0 | xargs -0 python -m py_compile; then
+PYTHON_BIN=""
+if command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN="python3"
+elif command -v python >/dev/null 2>&1; then
+  PYTHON_BIN="python"
+fi
+if [ -n "$PYTHON_BIN" ]; then
+  if find apps/api -name '*.py' -print0 | xargs -0 "$PYTHON_BIN" -m py_compile; then
     pass "Python files compile"
   else
     fail "Python syntax check failed"
   fi
 else
-  warn "python not found; skipped Python syntax check"
+  warn "python3/python not found; skipped Python syntax check"
 fi
 
 if command -v docker >/dev/null 2>&1; then

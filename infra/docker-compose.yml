@@ -34,6 +34,7 @@ x-backend-env: &backend-env
   QDRANT_PORT: 6333
   QDRANT_GRPC_PORT: 6334
   POSTGRES_HOST: postgres
+  POSTGRES_PORT: 5432
   POSTGRES_USER: ${POSTGRES_USER:-forensic_user}
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forensic_pass}
   POSTGRES_DB: ${POSTGRES_DB:-forensic_council}
@@ -337,9 +338,10 @@ services:
     # Allow enough time for the graceful 120-second investigation shutdown in main.py
     # to complete before Docker forcibly kills the container (SIGKILL).
     stop_grace_period: 130s
-    # SECURITY: Connect to infrastructure net (redis, postgres, qdrant) and backend net (frontend, caddy)
+    # SECURITY: infra_net for Redis/Postgres/Qdrant; external_net for Groq/Gemini outbound; backend_net for Caddy/Frontend
     networks:
       - infra_net
+      - external_net
       - backend_net
 
   # --------------------------------------------------------------------------
@@ -413,8 +415,10 @@ services:
         reservations:
           memory: 2G
           cpus: "1.0"
+    # SECURITY: infra_net for Redis/Postgres/Qdrant; external_net for Groq/Gemini outbound
     networks:
       - infra_net
+      - external_net
 
   # --------------------------------------------------------------------------
   # Reverse Proxy (Caddy) — TLS termination, security headers, rate limiting
@@ -577,8 +581,9 @@ services:
         reservations:
           memory: 128M
           cpus: "0.1"
+    # Prometheus only needs backend_net to scrape backend:8000/api/v1/metrics/raw
     networks:
-      - infra_net
+      - backend_net
 
 volumes:
   redis_data:
@@ -598,15 +603,20 @@ volumes:
   prometheus_data:
 
 # ── Network Segmentation ───────────────────────────────────────────────────────
-# SECURITY: Separate networks to isolate services
-# - infra_net: Backend ↔ Infrastructure (Redis, Postgres, Qdrant)
-# - frontend_net: Caddy ↔ Frontend
-# - backend_net: Frontend ↔ Backend, Caddy ↔ Backend
-# Frontend cannot directly access infrastructure services
+# SECURITY: Four-network isolation model:
+# - infra_net (internal):  Redis, Postgres, Qdrant — no internet, no frontend access
+# - external_net:          Backend + Worker outbound only (Groq, Gemini API calls)
+# - backend_net:           Caddy ↔ Backend, Frontend ↔ Backend
+# - frontend_net:          Caddy ↔ Frontend only
+# Backend/Worker join infra_net + external_net + backend_net.
+# Infra services (Redis/Postgres/Qdrant) are on infra_net only — no outbound.
 networks:
   infra_net:
     driver: bridge
-    internal: false  # Backend needs outbound for external APIs (Groq, Gemini)
+    internal: true   # No outbound internet — infra services don't need it
+  external_net:
+    driver: bridge
+    internal: false  # Backend/Worker outbound for Groq, Gemini external APIs
   frontend_net:
     driver: bridge
   backend_net:

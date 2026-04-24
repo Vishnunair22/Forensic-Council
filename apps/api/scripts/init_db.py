@@ -101,9 +101,7 @@ async def bootstrap_users(client: PostgresClient) -> None:
         BOOTSTRAP_INVESTIGATOR_USERNAME: Username for investigator (default: investigator)
         BOOTSTRAP_INVESTIGATOR_PASSWORD: Password for investigator (required)
     """
-    from passlib.context import CryptContext
-
-    pwd_context = CryptContext(["bcrypt"], deprecated="auto")
+    from core.auth import get_password_hash
 
     # Check if users table exists (migrations may not have run yet on first ever call)
     tables = await client.fetch(
@@ -135,7 +133,7 @@ async def bootstrap_users(client: PostgresClient) -> None:
         )
 
         if not admin_exists:
-            hashed = pwd_context.hash(admin_password)
+            hashed = get_password_hash(admin_password)
             await client.execute(
                 """
                 INSERT INTO users
@@ -148,7 +146,7 @@ async def bootstrap_users(client: PostgresClient) -> None:
             )
             logger.info("Admin user created", username=admin_username)
         else:
-            hashed = pwd_context.hash(admin_password)
+            hashed = get_password_hash(admin_password)
             await client.execute(
                 """
                 UPDATE users
@@ -169,7 +167,7 @@ async def bootstrap_users(client: PostgresClient) -> None:
         )
 
         if not investigator_exists:
-            hashed = pwd_context.hash(investigator_password)
+            hashed = get_password_hash(investigator_password)
             await client.execute(
                 """
                 INSERT INTO users
@@ -182,7 +180,7 @@ async def bootstrap_users(client: PostgresClient) -> None:
             )
             logger.info("Investigator user created", username=investigator_username)
         else:
-            hashed = pwd_context.hash(investigator_password)
+            hashed = get_password_hash(investigator_password)
             await client.execute(
                 """
                 UPDATE users

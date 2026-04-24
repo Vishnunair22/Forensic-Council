@@ -28,6 +28,15 @@
     @production_domain not host localhost 127.0.0.1
     redir @production_domain https://{host}{uri}
 
+    header {
+        X-Content-Type-Options     "nosniff"
+        X-Frame-Options            "DENY"
+        X-Robots-Tag               "none"
+        Referrer-Policy            "strict-origin-when-cross-origin"
+        -Server
+        -X-Powered-By
+    }
+
     request_body {
         max_size 55MB
     }
@@ -67,7 +76,7 @@
         X-Frame-Options            "DENY"
         Referrer-Policy            "strict-origin-when-cross-origin"
         Permissions-Policy         "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
-        Content-Security-Policy    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' fonts.gstatic.com data:; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;"
+        Content-Security-Policy    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' fonts.gstatic.com data:; connect-src 'self' ws://{$DOMAIN:localhost} wss://{$DOMAIN:localhost}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;"
         -Server
         -X-Powered-By
     }

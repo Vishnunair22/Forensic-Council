@@ -493,22 +493,31 @@ require_investigator = require_role(UserRole.INVESTIGATOR)
 
 
 async def get_current_user_optional(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security_optional),  # noqa: B008
 ) -> User | None:
     """
     Dependency to optionally get the current user (allows anonymous access).
+    Checks Authorization header first, then falls back to 'access_token' cookie.
 
     Args:
+        request: Incoming request (for cookie fallback)
         credentials: Optional HTTP Bearer credentials
 
     Returns:
         User object if authenticated, None otherwise
     """
-    if not credentials:
+    token = None
+    if credentials:
+        token = credentials.credentials
+    else:
+        token = request.cookies.get("access_token")
+
+    if not token:
         return None
 
     try:
-        token_data = await decode_token(credentials.credentials)
+        token_data = await decode_token(token)
         return User(
             user_id=token_data.user_id,
             username=token_data.username,

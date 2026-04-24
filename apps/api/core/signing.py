@@ -341,7 +341,7 @@ class KeyStore:
             )
             logger.info("Saved key to PostgreSQL", agent_id=agent_id)
         except Exception as e:
-            logger.debug("Could not save key to PostgreSQL", agent_id=agent_id, error=str(e))
+            logger.warning("Could not save key to PostgreSQL — key is in-memory only and will be lost on restart", agent_id=agent_id, error=str(e))
 
     async def _retire_key_in_db(self, agent_id: str) -> None:
         """Mark the current active key for an agent as retired (is_active=false)."""

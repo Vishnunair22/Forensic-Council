@@ -18,12 +18,6 @@ export function getBackendBaseUrls(): string[] {
   ].filter((value): value is string => Boolean(value && value.trim()));
 
   const targets = [...new Set(candidates.map(normalizeBaseUrl))];
-  
-  // Log the targets during development to help diagnose connectivity issues
-  if (process.env.NODE_ENV !== "production") {
-    console.log(`[BACKEND_TARGETS] Resolved targets: ${targets.join(", ")}`);
-  }
-
   return targets;
 }
 

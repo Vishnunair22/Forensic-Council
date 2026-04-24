@@ -357,14 +357,14 @@ async def refresh_token(current_user: User = Depends(get_current_user)):
     """
     Refresh the access token.
 
-    Returns a new access token with extended expiration.
+    Returns a new access token with extended expiration and refreshes
+    the HttpOnly cookie so cookie-based clients stay authenticated.
 
     Returns:
         TokenResponse with new access token
     """
-    access_token_expires = timedelta(
-        minutes=get_settings().jwt_access_token_expire_minutes
-    )
+    _s = get_settings()
+    access_token_expires = timedelta(minutes=_s.jwt_access_token_expire_minutes)
     access_token = create_access_token(
         user_id=current_user.user_id,
         role=current_user.role,
@@ -374,13 +374,25 @@ async def refresh_token(current_user: User = Depends(get_current_user)):
 
     logger.info("Token refreshed", user_id=current_user.user_id)
 
-    return TokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=get_settings().jwt_access_token_expire_minutes * 60,
-        user_id=current_user.user_id,
-        role=current_user.role.value,
+    response = JSONResponse(
+        content=TokenResponse(
+            access_token=access_token,
+            token_type="bearer",
+            expires_in=_s.jwt_access_token_expire_minutes * 60,
+            user_id=current_user.user_id,
+            role=current_user.role.value,
+        ).model_dump()
     )
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        max_age=_s.jwt_access_token_expire_minutes * 60,
+        expires=_s.jwt_access_token_expire_minutes * 60,
+        samesite="strict",
+        secure=_s.app_env == "production",
+    )
+    return response
 
 
 @router.post("/logout")
