@@ -28,7 +28,8 @@ os.environ.setdefault("LLM_PROVIDER", "none")
 os.environ.setdefault("LLM_API_KEY", "test-key")
 os.environ.setdefault("LLM_MODEL", "test-model")
 
-from agents.base_agent import ForensicAgent, _attach_llm_reasoning_to_findings
+from agents.base_agent import ForensicAgent
+from agents.reflection import _attach_llm_reasoning_to_findings
 from core.config import Settings
 from core.evidence import ArtifactType, EvidenceArtifact
 from core.react_loop import AgentFinding, ReActStep
@@ -261,7 +262,7 @@ class TestForensicAgentMethods:
         ))
         agent._loop_result = None  # required before run_challenge
         with patch.object(agent, "build_tool_registry", new=AsyncMock(return_value=tool_reg)):
-            with patch("agents.base_agent.ReActLoopEngine", return_value=mock_engine):
+            with patch("core.react_loop.ReActLoopEngine", return_value=mock_engine):
                 result = await agent.run_challenge(
                     contradicting_finding={"finding_type": "test", "detail": "test contradiction"},
                     context={"session_id": str(agent.session_id)},

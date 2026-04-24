@@ -462,6 +462,7 @@ async def cross_agent_comparison(
         else:
             category_buckets.setdefault(c, {}).setdefault(agent_id, []).append(f)
 
+    # 10 findings per bucket balances thoroughness vs O(n²) comparison performance
     max_findings_per_bucket = 10
     for _cat_name, agent_map in category_buckets.items():
         for agent_id, flist in agent_map.items():

@@ -12,6 +12,8 @@ services:
       RELOAD: "true"
       APP_ENV: development
       DEBUG: "true"
+      SKIP_CACHE_CHECK: 1
+      SKIP_MODEL_DOWNLOAD: 1
     volumes:
       - ../apps/api:/app:rw
       # Protect the container's venv from being overwritten by local (potentially incompatible) .venv
@@ -38,6 +40,8 @@ services:
       RELOAD: "true"
       APP_ENV: development
       DEBUG: "true"
+      SKIP_CACHE_CHECK: 1
+      SKIP_MODEL_DOWNLOAD: 1
     volumes:
       - ../apps/api:/app:rw
       - /app/.venv

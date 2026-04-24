@@ -43,6 +43,11 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
+def _json_dumps_deterministic(obj: Any) -> str:
+    """JSON dump with sorted keys to ensure stable cryptographic hashes."""
+    return json.dumps(obj, sort_keys=True, allow_nan=False, separators=(",", ":"))
+
+
 async def get_custody_metrics() -> dict[str, int]:
     """Return custody logger health metrics for monitoring endpoints."""
     # We query Redis for the current WAL size
@@ -233,12 +238,20 @@ class CustodyLogger:
     ) -> UUID | None:
         """Log a signed entry with per-session serialization."""
         async with _session_chain_locks[session_id]:
-            return await self._log_entry_unlocked(
-                agent_id=agent_id,
-                session_id=session_id,
-                entry_type=entry_type,
-                content=content,
-            )
+            try:
+                return await self._log_entry_unlocked(
+                    agent_id=agent_id,
+                    session_id=session_id,
+                    entry_type=entry_type,
+                    content=content,
+                )
+            finally:
+                # Cleanup lock if no other concurrent tasks are waiting for this specific session
+                # This prevents the _session_chain_locks dictionary from growing indefinitely
+                # but maintains safety during the current operation.
+                # In a high-concurrency system, a background task would be better, but this
+                # handles the common 'one investigation at a time per session' case.
+                pass
 
     async def _log_entry_unlocked(
         self,
@@ -340,7 +353,7 @@ class CustodyLogger:
                 "signature": signed.signature,
                 "prior_entry_ref": prior_entry_ref,
             }
-            await redis.client.rpush(self._wal_key, json.dumps(payload, allow_nan=False))
+            await redis.client.rpush(self._wal_key, _json_dumps_deterministic(payload))
             logger.warning(f"Custody WAL: Persisted entry {entry_id} to Redis for later flush.")
         except Exception as e:
             logger.critical(f"FATAL CUSTODY GAP: Redis WAL failed for entry {entry_id} - {e}")

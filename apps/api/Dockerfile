@@ -42,6 +42,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         libgl1 \
         libglib2.0-0 \
         gcc \
+        mediainfo \
         libmediainfo-dev \
         libmagic-dev \
         util-linux \

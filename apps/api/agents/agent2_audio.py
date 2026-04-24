@@ -13,9 +13,9 @@ from __future__ import annotations
 import asyncio
 
 from agents.base_agent import ForensicAgent
-from core.gemini_client import GeminiVisionClient
 from core.handlers.audio import AudioHandlers
 from core.inter_agent_bus import InterAgentCall, InterAgentCallType
+from core.react_loop import AgentFinding
 from core.structured_logging import get_logger
 from core.tool_registry import ToolRegistry
 
@@ -41,6 +41,8 @@ class Agent2Audio(ForensicAgent):
             "Run speaker_diarize to establish voice count baseline",
             "Run neural_prosody across full audio track for acoustic artifact screening",
             "Run audio_gen_signature to identify spectral TTS fingerprints",
+            "Run voice_clone_detect for initial ML voice clone screening",
+            "Run anti_spoofing_detect for biometric spoofing pre-screen",
             "Run codec_fingerprinting for re-encoding event detection",
         ]
         mime = getattr(self.evidence_artifact, "mime_type", "") or ""
@@ -77,8 +79,9 @@ class Agent2Audio(ForensicAgent):
 
     @property
     def iteration_ceiling(self) -> int:
-        # Phase 1 ceiling only — deep pass has its own budget via run_deep_investigation.
-        return self._compute_ceiling(len(self.task_decomposition))
+        # Include both initial and deep tasks to prevent truncation of the forensic pipeline.
+        base_count = len(self.task_decomposition) + len(self.deep_task_decomposition)
+        return self._compute_ceiling(base_count)
 
     @property
     def supported_file_types(self) -> list[str]:
@@ -163,7 +166,7 @@ class Agent2Audio(ForensicAgent):
             """Neural audio forensic audit using Gemini Flash."""
             return await self._gemini_deep_forensic_handler(
                 input_data,
-                model_hint="gemini-2.0-flash"
+                model_hint="gemini-2.5-flash"
             )
 
         registry.register("gemini_deep_forensic", gemini_deep_forensic_handler, "Gemini Flash neural audio forensic audit")
@@ -196,3 +199,56 @@ class Agent2Audio(ForensicAgent):
             f"I will execute spectral, temporal, and ML-based "
             f"integrity checks to detect clones, splices, or encoding anomalies."
         )
+
+    async def on_tool_result(self, finding: AgentFinding) -> None:
+        """Reactive task expansion based on audio signals."""
+        try:
+            await self._on_tool_result_impl(finding)
+        except Exception as e:
+            logger.warning("on_tool_result failed", agent_id=self.agent_id, error=str(e))
+
+    async def _on_tool_result_impl(self, finding: AgentFinding) -> None:
+        """Implementation of reactive task expansion for audio signals."""
+        tool_name = finding.metadata.get("tool_name")
+
+        # 1. If voice clone detected at high confidence, escalate to deep ensemble
+        if tool_name == "voice_clone_detect":
+            if finding.evidence_verdict in ("CLONE", "SYNTHETIC") and (finding.confidence_raw or 0.0) > 0.7:
+                logger.info("Voice clone detected; escalating to deep ensemble", agent_id=self.agent_id)
+                await self.inject_task(
+                    description="Run voice_clone_deep_ensemble for validated AI speech synthesis detection",
+                    priority=20
+                )
+
+        # 2. If anti-spoofing flags spoofing, escalate
+        if tool_name == "anti_spoofing_detect":
+            if finding.evidence_verdict in ("SPOOF", "SUSPICIOUS") and (finding.confidence_raw or 0.0) > 0.6:
+                logger.info("Spoofing detected; escalating to deep ensemble", agent_id=self.agent_id)
+                await self.inject_task(
+                    description="Run anti_spoofing_deep_ensemble for reinforced anti-spoofing analysis",
+                    priority=18
+                )
+
+        # 3. If audio splice detected, inject ENF analysis
+        if tool_name == "audio_splice_detect":
+            if finding.metadata.get("splice_detected"):
+                logger.info("Audio splice detected; injecting ENF analysis", agent_id=self.agent_id)
+                await self.inject_task(
+                    description="Run enf_analysis to verify electrical network frequency splice markers",
+                    priority=15
+                )
+
+        # 4. Signal to inter-agent bus if AV sync is relevant
+        if tool_name == "audio_visual_sync":
+            if self.inter_agent_bus:
+                try:
+                    self.inter_agent_bus.signal_event(
+                        self.session_id,
+                        "agent2_audio_signal",
+                        {
+                            "progress": f"Completed {tool_name}",
+                            "verdict": finding.evidence_verdict,
+                        },
+                    )
+                except Exception:
+                    pass

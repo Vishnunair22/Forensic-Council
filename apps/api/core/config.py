@@ -185,15 +185,19 @@ class Settings(BaseSettings):
     )
     yolo_model_name: str = Field(
         default="yolo11n.pt",
-        description="YOLO model weight filename (default yolo11n.pt for reliable local-cache inference)",
+        description="YOLO model weight filename (default yolo11n.pt for speed; use yolo11m.pt for high precision)",
     )
     siglip_model_name: str = Field(
-        default="ViT-B-32",
+        default="ViT-L-14",
         description="OpenCLIP model name for vision-language analysis",
     )
     aasist_model_name: str = Field(
-        default="Vansh180/deepfake-audio-wav2vec2",
-        description="Audio deepfake anti-spoofing model for voice clone detection",
+        default="clovaai/AASIST",
+        description="AASIST model for audio deepfake anti-spoofing detection",
+    )
+    voice_clone_model_name: str = Field(
+        default="clovaai/AASIST",
+        description="Primary model for voice clone and AI speech synthesis detection (default AASIST)",
     )
     easyocr_model_dir: str = Field(
         default=os.getenv("EASYOCR_MODEL_DIR", "/app/cache/easyocr"),
@@ -216,7 +220,7 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = Field(
         default=60, description="JWT access token expiry in minutes"
     )
-    jwt_algorithm: str = Field(default="RS256", description="JWT signing algorithm")
+    jwt_algorithm: str = Field(default="HS256", description="JWT signing algorithm")
     jwt_private_key: str | None = Field(
         default=None, description="RSA Private Key (PEM) for JWT signing"
     )
@@ -395,10 +399,10 @@ class Settings(BaseSettings):
         description="Maximum number of simultaneous heavy neural/math tools allowed (prevents CPU starvation).",
     )
 
-    # LLM Configuration
+    # LLM Configuration (Global / Agents)
     llm_provider: str = Field(
         default="none",
-        description="LLM provider: groq (recommended), openai, anthropic, or none",
+        description="LLM provider for agents: groq (recommended), openai, anthropic, or none",
     )
     llm_api_key: str | None = Field(default=None, description="API key for LLM provider")
     llm_model: str = Field(
@@ -430,6 +434,27 @@ class Settings(BaseSettings):
     llm_enable_post_synthesis: bool = Field(
         default=True,
         description="After tools complete, call LLM once to synthesize findings into rich forensic narratives",
+    )
+
+    # Arbiter LLM Configuration (Dedicated high-reasoning tier)
+    arbiter_llm_provider: str = Field(
+        default="groq",
+        description="High-reasoning provider for Arbiter deliberation. Groq Llama 3 70B is used for high-speed evidentiary synthesis.",
+    )
+    arbiter_llm_api_key: str | None = Field(
+        default=None,
+        description="Dedicated API key for Arbiter LLM (e.g. Anthropic key). If unset, falls back to LLM_API_KEY.",
+    )
+    arbiter_primary_model: str = Field(
+        default="llama-3.3-70b-versatile",
+        description="Primary reasoning engine for the Council Arbiter (Groq Llama 3 70B).",
+    )
+    arbiter_fallback_chain: str = Field(
+        default="gemini/gemini-2.5-flash,gemini/gemini-2.5-flash-lite",
+        description=(
+            "Cross-provider fallback chain for the Arbiter. Supports provider prefixes "
+            "(e.g. 'gemini/gemini-2.5-flash')."
+        ),
     )
 
     # Gemini Vision Configuration (for deep analysis in Agents 1, 3, 5)

@@ -177,6 +177,7 @@ class SceneHandlers(BaseToolHandler):
                             "bbox_xywh":   [x_c, y_c, w, h],
                             # Normalised corner format — consumed by roi_extract_handler
                             "box": {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
+                            "is_reliable": float(box.conf) > 0.35,
                         })
 
                 classes_found = sorted(
@@ -605,26 +606,37 @@ class SceneHandlers(BaseToolHandler):
         img = cv2.imread(file_path)
         if img is None:
             return {"error": "Cannot read image", "available": False, "confidence": 0.0}
-        h, w  = img.shape[:2]
+        h, w = img.shape[:2]
         rows, cols = 3, 3
         cell_h, cell_w = h // rows, w // cols
-        hist_means = []
+        
+        histograms = []
         for r in range(rows):
             for c in range(cols):
                 cell = img[r * cell_h:(r + 1) * cell_h, c * cell_w:(c + 1) * cell_w]
-                hist = cv2.calcHist([cell], [0, 1, 2], None, [8, 8, 8],
-                                    [0, 256, 0, 256, 0, 256])
+                hist = cv2.calcHist([cell], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
                 cv2.normalize(hist, hist)
-                hist_means.append(float(hist.mean()))
+                histograms.append(hist)
 
-        variance = float(np.var(hist_means))
-        is_incongruent = variance > 0.0005
+        # Compute average correlation across all adjacent cells
+        correlations = []
+        for i in range(len(histograms)):
+            for j in range(i + 1, len(histograms)):
+                # Correlation metric: 1 is perfect match, -1 is total mismatch
+                corr = cv2.compareHist(histograms[i], histograms[j], cv2.HISTCMP_CORREL)
+                correlations.append(corr)
+
+        avg_corr = float(np.mean(correlations)) if correlations else 1.0
+        # High incongruence if average correlation is low
+        is_incongruent = avg_corr < 0.35 
+        
         return {
-            "scene_incongruent":   is_incongruent,
-            "colour_variance":     round(variance, 6),
+            "scene_incongruent": is_incongruent,
+            "average_histogram_correlation": round(avg_corr, 4),
             "grid_cells_analyzed": rows * cols,
-            "confidence":          0.55,
-            "available":           True,
-            "court_defensible":    False,
-            "backend":             "heuristic-colour-grid",
+            "confidence": 0.45,
+            "available": True,
+            "court_defensible": False,
+            "backend": "heuristic-spatial-histogram-correlation",
+            "note": "Grid-based histogram correlation check. Low correlation suggests compositing from disparate lighting/environments.",
         }

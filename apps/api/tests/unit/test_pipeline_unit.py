@@ -59,30 +59,33 @@ class TestSignalBus:
         assert len(bus.findings) == 3
         assert bus._required_quorum == 2  # majority of 3
 
-    def test_signal_ready_sets_event(self):
+    @pytest.mark.asyncio
+    async def test_signal_ready_sets_event(self):
         bus = SignalBus(["Agent1", "Agent2"])
-        bus.signal_ready("Agent1", [{"finding_type": "ela"}])
+        await bus.signal_ready("Agent1", [{"finding_type": "ela"}])
         assert bus.events["Agent1"].is_set()
         assert len(bus.findings["Agent1"]) == 1
 
-    def test_quorum_reached_after_majority(self):
+    @pytest.mark.asyncio
+    async def test_quorum_reached_after_majority(self):
         bus = SignalBus(["Agent1", "Agent2", "Agent3"])
-        bus.signal_ready("Agent1", [])
+        await bus.signal_ready("Agent1", [])
         assert not bus.quorum_event.is_set()
-        bus.signal_ready("Agent2", [])
+        await bus.signal_ready("Agent2", [])
         # 2/3 is majority → quorum
         assert bus.quorum_event.is_set()
 
-    def test_signal_unknown_agent_ignored(self):
+    @pytest.mark.asyncio
+    async def test_signal_unknown_agent_ignored(self):
         bus = SignalBus(["Agent1"])
         # Should not raise
-        bus.signal_ready("AgentX", [])
+        await bus.signal_ready("AgentX", [])
         assert not bus.events.get("AgentX")
 
     @pytest.mark.asyncio
     async def test_wait_for_quorum_returns_true_when_met(self):
         bus = SignalBus(["Agent1"])
-        bus.signal_ready("Agent1", [])
+        await bus.signal_ready("Agent1", [])
         result = await bus.wait_for_quorum(timeout=1.0)
         assert result is True
 
@@ -90,7 +93,7 @@ class TestSignalBus:
     async def test_wait_for_quorum_returns_false_on_timeout(self):
         bus = SignalBus(["Agent1", "Agent2"])
         # Only signal one agent — quorum never reached
-        bus.signal_ready("Agent1", [])
+        await bus.signal_ready("Agent1", [])
         result = await bus.wait_for_quorum(timeout=0.05)
         assert result is False
 

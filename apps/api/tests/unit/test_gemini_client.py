@@ -142,23 +142,26 @@ class TestGeminiVisionFindingSchema:
 
 
 class TestGeminiGenerateSpectrogram:
-    @patch("librosa.load")
-    @patch("librosa.feature.melspectrogram")
-    @patch("librosa.power_to_db")
-    def test_generate_spectrogram_returns_png_bytes(self, mock_power, mock_mel, mock_load, tmp_path):
+    @patch("soundfile.read")
+    @patch("scipy.signal.spectrogram")
+    def test_generate_spectrogram_returns_png_bytes(self, mock_spectrogram, mock_sf_read, tmp_path):
         test_file = tmp_path / "test.wav"
-        test_file.write_bytes(b"RIFF" + b"\x00" * 36)  # minimal wav-like bytes
+        test_file.write_bytes(b"RIFF" + b"\x00" * 36)
 
-        mock_load.return_value = (np.zeros(1024), 22050)
-        mock_mel.return_value = np.zeros((128, 50))
-        mock_power.return_value = np.linspace(-80, 0, 128 * 50).reshape(128, 50)
+        sr = 22050
+        mock_sf_read.return_value = (np.zeros(sr, dtype="float32"), sr)
+
+        freqs = np.linspace(0, sr / 2, 64)
+        times = np.linspace(0, 1.0, 50)
+        spec = np.abs(np.random.randn(64, 50)).astype("float32") + 1e-6
+        mock_spectrogram.return_value = (freqs, times, spec)
 
         data, mime = GeminiVisionClient._generate_spectrogram(str(test_file))
 
         assert mime == "image/png"
         assert isinstance(data, bytes)
         assert len(data) > 0
-        mock_load.assert_called_once_with(str(test_file), sr=22050, duration=120)
+        mock_sf_read.assert_called_once_with(str(test_file), dtype="float32", always_2d=False)
 
 
 class TestGeminiEncodeFile:

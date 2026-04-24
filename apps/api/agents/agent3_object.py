@@ -23,11 +23,11 @@ from core.config import Settings
 from core.custody_logger import CustodyLogger
 from core.episodic_memory import EpisodicMemory
 from core.evidence import EvidenceArtifact
-from core.gemini_client import GeminiVisionClient
 from core.handlers.image import ImageHandlers
 from core.handlers.scene import SceneHandlers
 from core.media_kind import is_screen_capture_like
 from core.persistence.evidence_store import EvidenceStore
+from core.react_loop import AgentFinding
 from core.structured_logging import get_logger
 from core.tool_registry import ToolRegistry
 from core.working_memory import WorkingMemory
@@ -54,6 +54,7 @@ class Agent3Object(ForensicAgent):
         custody_logger: CustodyLogger,
         evidence_store: EvidenceStore,
         inter_agent_bus: Any | None = None,
+        heavy_tool_semaphore: asyncio.Semaphore | None = None,
     ) -> None:
         super().__init__(
             agent_id=agent_id,
@@ -65,6 +66,7 @@ class Agent3Object(ForensicAgent):
             custody_logger=custody_logger,
             evidence_store=evidence_store,
             inter_agent_bus=inter_agent_bus,
+            heavy_tool_semaphore=heavy_tool_semaphore,
         )
         self._agent1_context: dict = {}
         self._agent1_context_event: asyncio.Event = asyncio.Event()
@@ -98,7 +100,10 @@ class Agent3Object(ForensicAgent):
     @property
     def deep_task_decomposition(self) -> list[str]:
         if self._is_screen_capture:
-            return []
+            return [
+                "Run scene_incongruence for document and text contextual anomalies",
+                "Run gemini_deep_forensic to describe content and identify any concerns",
+            ]
         object_ctx = self._tool_context.get("object_detection", {})
         detections = object_ctx.get("detections", []) if isinstance(object_ctx, dict) else []
         tasks = []
@@ -120,8 +125,9 @@ class Agent3Object(ForensicAgent):
 
     @property
     def iteration_ceiling(self) -> int:
-        # Phase 1 ceiling only — deep pass has its own budget via run_deep_investigation.
-        return self._compute_ceiling(len(self.task_decomposition))
+        # Include both initial and deep tasks to prevent truncation of the forensic pipeline.
+        base_count = len(self.task_decomposition) + len(self.deep_task_decomposition)
+        return self._compute_ceiling(base_count)
 
     async def build_initial_thought(self) -> str:
         return (
@@ -129,6 +135,60 @@ class Agent3Object(ForensicAgent):
             f"I will perform scene-wide object detection, lighting consistency checks, "
             f"and search for any prohibited items or contextual anomalies."
         )
+
+    async def on_tool_result(self, finding: AgentFinding) -> None:
+        """Reactive task expansion based on object/scene signals."""
+        try:
+            await self._on_tool_result_impl(finding)
+        except Exception as e:
+            logger.warning("on_tool_result failed", agent_id=self.agent_id, error=str(e))
+
+    async def _on_tool_result_impl(self, finding: AgentFinding) -> None:
+        """Implementation of reactive task expansion for object detection."""
+        tool_name = finding.metadata.get("tool_name")
+
+        # 1. If weapon/contraband detected, escalate to secondary classification
+        if tool_name == "vector_contraband_search":
+            if finding.evidence_verdict == "POSITIVE" and (finding.confidence_raw or 0.0) > 0.6:
+                logger.info("High-confidence contraband detected; escalating", agent_id=self.agent_id)
+                await self.inject_task(
+                    description="Run secondary_classification on flagged objects for validation",
+                    priority=20
+                )
+
+        # 2. If lighting inconsistency in initial check, escalate to deep analysis
+        if tool_name == "lighting_correlation_initial":
+            if finding.evidence_verdict == "POSITIVE":
+                logger.info("Lighting inconsistency detected; escalating to deep analysis", agent_id=self.agent_id)
+                await self.inject_task(
+                    description="Run lighting_consistency for deep ROI-aware shadow-angle audit",
+                    priority=15
+                )
+
+        # 3. If scene incongruence found, inject adversarial robustness check
+        if tool_name == "scene_incongruence":
+            if finding.evidence_verdict == "POSITIVE" or finding.metadata.get("incongruence_detected"):
+                logger.info("Scene incongruence detected; injecting adversarial check", agent_id=self.agent_id)
+                await self.inject_task(
+                    description="Run adversarial_robustness_check against object detection evasion",
+                    priority=12
+                )
+
+        # 4. Signal to inter-agent bus
+        if tool_name == "object_detection":
+            if self.inter_agent_bus:
+                try:
+                    obj_count = finding.metadata.get("detection_count", 0)
+                    self.inter_agent_bus.signal_event(
+                        self.session_id,
+                        "agent3_object_signal",
+                        {
+                            "progress": f"Detected {obj_count} objects",
+                            "verdict": finding.evidence_verdict,
+                        },
+                    )
+                except Exception:
+                    pass
 
     @property
     def supported_file_types(self) -> list[str]:
@@ -170,7 +230,7 @@ class Agent3Object(ForensicAgent):
 
             return await self._gemini_deep_forensic_handler(
                 input_data,
-                model_hint="gemini-2.0-flash",
+                model_hint="gemini-2.5-flash",
                 signal_callback=_gemini_signal_callback
             )
 

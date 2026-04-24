@@ -175,7 +175,7 @@ class WorkingMemory:
                     agent_id = agent_id,
                     tasks = {},
                     current_iteration = 0,
-                    iteration_ceiling = 10
+                    iteration_ceiling = 25 -- Default to safe high value if not provided
                 }
             end
 

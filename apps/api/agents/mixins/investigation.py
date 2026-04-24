@@ -42,6 +42,25 @@ class AgentInvestigationMixin:
     def supports_uploaded_file(self) -> bool: ...
     def _signal_completion(self, skipped: bool = False) -> None: ...
     async def _initialize_working_memory(self) -> None: ...
+
+    async def inject_task(self, description: str, priority: int = 10) -> None:
+        """
+        Dynamically inject a new task into the investigation pipeline.
+        Used for reactive task decomposition based on intermediate findings.
+        """
+        try:
+            from core.working_memory import TaskStatus
+            await self.working_memory.create_task(
+                session_id=self.session_id,
+                agent_id=self.agent_id,
+                description=description,
+                status=TaskStatus.PENDING,
+                priority=priority
+            )
+            logger.info("Dynamic task injected", agent_id=self.agent_id, task=description)
+        except Exception as e:
+            logger.error("Failed to inject dynamic task", agent_id=self.agent_id, error=str(e))
+
     async def _check_tool_availability(self) -> None:
         """Log unavailable tools to custody; does not raise — agents degrade gracefully."""
         if getattr(self, "_tool_registry", None) is None:
@@ -172,6 +191,11 @@ class AgentInvestigationMixin:
                     "device_model",
                     "software",
                     "gps_info",
+                    "image_type",
+                    "all_classifications",
+                    "detections",
+                    "weapon_detections",
+                    "classes_found",
                     "metadata_timeline_consistent",
                     "inconsistency_detected",
                     "anomaly_detected",

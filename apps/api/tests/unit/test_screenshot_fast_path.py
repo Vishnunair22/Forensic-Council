@@ -98,7 +98,8 @@ def test_agent3_skips_physical_scene_tools_for_screen_capture(tmp_path):
     assert agent.task_decomposition == [
         "Run screenshot_scene_applicability for screen-capture object/scene scope",
     ]
-    assert agent.deep_task_decomposition == []
+    # Now has deep tasks for screen captures instead of empty
+    assert len(agent.deep_task_decomposition) == 2
 
 
 def test_agent5_omits_camera_provenance_tools_for_screen_capture(tmp_path):

@@ -10,6 +10,7 @@ import {
   DuplicateInvestigationError, 
   getArbiterStatus, 
   getReport,
+  getAuthToken,
   type HITLCheckpoint,
   type ArbiterStatusResponse,
   type HITLDecision
@@ -389,7 +390,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     try {
       await resumeInvestigation(false);
       const sid = storage.getItem<string>("forensic_session_id");
-      if (sid) await waitForFinalReport(sid, setArbiterLiveText, 120_000);
+      if (sid) await waitForFinalReport(sid, setArbiterLiveText, 300_000);
       router.push("/result", { scroll: true });
     } catch {
       setIsNavigating(false);
@@ -428,7 +429,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setIsNavigating(true);
     const sid = storage.getItem<string>("forensic_session_id");
     try {
-      if (sid) await waitForFinalReport(sid, setArbiterLiveText, 120_000);
+      if (sid) await waitForFinalReport(sid, setArbiterLiveText, 300_000);
       router.push("/result", { scroll: true });
     } finally {
       setIsNavigating(false);
@@ -469,13 +470,21 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const showUploadForm = !autoStartBlocking && status === "idle" && !isUploading;
 
   useEffect(() => {
-    // Only hide overlay when WebSocket is ready AND the backend has progressed 
-    // beyond initial handshake to actual agent activity.
-    const hasActiveAgents = Object.values(agentUpdates).some(u => u.status === "running");
-    
-    if (showLoadingOverlay && analysisStreamReady && (hasActiveAgents || status === "complete" || status === "error")) {
-       setShowLoadingOverlay(false);
-       sessionOnlyStorage.removeItem("fc_show_loading");
+    // Hide overlay as soon as the WebSocket is live AND the backend has left the
+    // pure-idle state — includes 'analyzing', 'awaiting_decision', any agent activity.
+    const hasBackendActivity =
+      status === "processing" ||
+      status === "analyzing" ||
+      status === "awaiting_decision" ||
+      status === "complete" ||
+      status === "error" ||
+      Object.values(agentUpdates).some(
+        (u) => u.status === "running" || u.status === "complete" || u.status === "skipped"
+      );
+
+    if (showLoadingOverlay && analysisStreamReady && hasBackendActivity) {
+      setShowLoadingOverlay(false);
+      sessionOnlyStorage.removeItem("fc_show_loading");
     }
   }, [showLoadingOverlay, analysisStreamReady, status, agentUpdates]);
 

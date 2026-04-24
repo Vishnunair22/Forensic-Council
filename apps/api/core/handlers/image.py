@@ -103,14 +103,16 @@ class ImageHandlers(BaseToolHandler):
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
-    def _has_tampering_signal(self) -> bool:
+    async def _has_tampering_signal(self) -> bool:
         """
         Return True if any Phase-1 or Phase-2 tool already flagged manipulation.
         Used to gate expensive ManTra-Net inference.
         """
         ctx = self.agent._tool_context
         freq = ctx.get("frequency_domain_analysis", {})
-        return any([
+        
+        # Local signals
+        local_signal = any([
             ctx.get("neural_ela", {}).get("manipulation_detected", False),
             (ctx.get("neural_ela") or ctx.get("ela_full_image", {})).get("num_anomaly_regions", 0) > 2,
             ctx.get("noiseprint_cluster", {}).get("manipulation_detected", False),
@@ -122,19 +124,49 @@ class ImageHandlers(BaseToolHandler):
             freq.get("anomaly_detected", False),
             freq.get("num_anomaly_regions", 0) > 2,
         ])
+        if local_signal:
+            return True
 
-    def _has_splice_or_copy_move_signal(self) -> bool:
+        # Cross-agent signals from Agent 3 (Object & Context)
+        try:
+            from core.agents import AgentID
+            shared_ctx = await self.agent.working_memory.get_agent_context(
+                self.agent.session_id, AgentID.AGENT3
+            )
+            a3_tools = shared_ctx.get("tool_context", {})
+            return any([
+                a3_tools.get("lighting_consistency", {}).get("inconsistency_detected", False),
+                a3_tools.get("scene_incongruence", {}).get("scene_incongruent", False),
+            ])
+        except Exception:
+            return False
+
+    async def _has_splice_or_copy_move_signal(self) -> bool:
         """Return True when anti-forensic robustness analysis is warranted."""
         ctx = self.agent._tool_context
-        return any([
+        local_signal = any([
             ctx.get("neural_splicing", {}).get("splicing_detected", False),
             ctx.get("splicing_detect", {}).get("splicing_detected", False),
             ctx.get("neural_copy_move", {}).get("copy_move_detected", False),
             ctx.get("copy_move_detect", {}).get("copy_move_detected", False),
-            ctx.get("vector_contraband_search", {}).get("concern_flag", False),
-            ctx.get("scene_incongruence", {}).get("scene_incongruent", False),
-            ctx.get("lighting_consistency", {}).get("inconsistency_detected", False),
         ])
+        if local_signal:
+            return True
+
+        # Cross-agent signals from Agent 3
+        try:
+            from core.agents import AgentID
+            shared_ctx = await self.agent.working_memory.get_agent_context(
+                self.agent.session_id, AgentID.AGENT3
+            )
+            a3_tools = shared_ctx.get("tool_context", {})
+            return any([
+                a3_tools.get("vector_contraband_search", {}).get("concern_flag", False),
+                a3_tools.get("scene_incongruence", {}).get("scene_incongruent", False),
+                a3_tools.get("lighting_consistency", {}).get("inconsistency_detected", False),
+            ])
+        except Exception:
+            return False
 
     async def _store(self, primary_key: str, result: dict, *alias_keys: str) -> None:
         """
@@ -150,46 +182,50 @@ class ImageHandlers(BaseToolHandler):
 
     # ── Phase 1: Neural ELA ───────────────────────────────────────────────────
 
-    async def neural_ela_handler(self, input_data: dict) -> dict:
+    async def neural_ela_handler(self, input_data: dict, record: bool = True) -> dict:
         """ViT-based Neural ELA. Falls back to multi-quality classical ELA."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         result = await run_ml_tool("neural_ela_transformer.py", artifact.file_path, timeout=15.0)
         if not result.get("error") and result.get("available"):
-            # Store under both neural key and legacy key so Gemini reads it correctly.
-            await self._store("neural_ela", result, "ela_full_image")
+            if record:
+                # Store under both neural key and legacy key so Gemini reads it correctly.
+                await self._store("neural_ela", result, "ela_full_image")
             return result
 
-        # Fallback: classical multi-quality ELA
-        fallback = await self.ela_full_image_handler(input_data)
+        # Fallback: classical multi-quality ELA (pass record=False to avoid double-counting)
+        fallback = await self.ela_full_image_handler(input_data, record=False)
         fallback["degraded"] = True
         fallback["fallback_reason"] = (
             "neural_ela_transformer unavailable or failed; used classical multi-quality ELA"
         )
-        await self._store("neural_ela", fallback, "ela_full_image")
+        if record:
+            await self._store("neural_ela", fallback, "ela_full_image")
         return fallback
 
     # ── Phase 1: Noiseprint Cluster ───────────────────────────────────────────
 
-    async def noiseprint_cluster_handler(self, input_data: dict) -> dict:
+    async def noiseprint_cluster_handler(self, input_data: dict, record: bool = True) -> dict:
         """Noiseprint++ CNN sensor-region clustering. Falls back to heuristic noise analysis."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         result = await run_ml_tool("noiseprint_clustering.py", artifact.file_path, timeout=20.0)
         if not result.get("error") and result.get("available"):
-            await self._store("noiseprint_cluster", result, "noise_fingerprint")
+            if record:
+                await self._store("noiseprint_cluster", result, "noise_fingerprint")
             return result
 
         # Fallback: heuristic noise fingerprint
-        fallback = await self.noise_fingerprint_handler(input_data)
+        fallback = await self.noise_fingerprint_handler(input_data, record=False)
         fallback["degraded"] = True
         fallback["fallback_reason"] = (
             "noiseprint_clustering unavailable or failed; used heuristic noise fingerprint"
         )
-        await self._store("noiseprint_cluster", fallback, "noise_fingerprint")
+        if record:
+            await self._store("noiseprint_cluster", fallback, "noise_fingerprint")
         return fallback
 
     # ── Standard Handlers (used as fallbacks and standalone) ─────────────────
 
-    async def ela_full_image_handler(self, input_data: dict) -> dict:
+    async def ela_full_image_handler(self, input_data: dict, record: bool = True) -> dict:
         """Classical multi-quality ELA sweep (4 quality levels, fused via max)."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         try:
@@ -212,9 +248,10 @@ class ImageHandlers(BaseToolHandler):
                 raw_sig, reliability_tag="opencv_heuristic"
             )
 
-        # Store under both keys — neural_ela handler may have already stored here
-        # on a failure path; we overwrite with the same result for consistency.
-        await self._store("ela_full_image", result, "neural_ela")
+        if record:
+            # Store under both keys — neural_ela handler may have already stored here
+            # on a failure path; we overwrite with the same result for consistency.
+            await self._store("ela_full_image", result, "neural_ela")
         return result
 
     def _ela_fallback(self, file_path: str, error_msg: str) -> dict:
@@ -248,9 +285,17 @@ class ImageHandlers(BaseToolHandler):
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         bounding_box = input_data.get("bounding_box")
 
-        # Priority 1: YOLO detections from Agent 3
+        # Priority 1: YOLO detections (local or from Agent 3)
         if not bounding_box:
-            obj_ctx = self.agent._tool_context.get("object_detection", {})
+            obj_ctx = self.agent._tool_context.get("object_detection")
+            if not obj_ctx:
+                # Fallback: check shared context from Agent 3 (Object Detection)
+                from core.agents import AgentID
+                shared_ctx = await self.agent.working_memory.get_agent_context(
+                    self.agent.session_id, AgentID.AGENT3
+                )
+                obj_ctx = shared_ctx.get("tool_context", {}).get("object_detection", {})
+            
             detections = obj_ctx.get("detections", [])
             if detections:
                 box = detections[0].get("box", {})
@@ -294,7 +339,7 @@ class ImageHandlers(BaseToolHandler):
         await self.agent._record_tool_result("roi_extract", result)
         return result
 
-    async def noise_fingerprint_handler(self, input_data: dict) -> dict:
+    async def noise_fingerprint_handler(self, input_data: dict, record: bool = True) -> dict:
         """
         Heuristic PRNU noise consistency analysis.
         Only meaningful for lossless images; noiseprint_cluster is preferred.
@@ -311,19 +356,22 @@ class ImageHandlers(BaseToolHandler):
                 "confidence": 0.0,
                 "available": True,
             }
-            await self.agent._record_tool_result("noise_fingerprint", result)
+            if record:
+                await self.agent._record_tool_result("noise_fingerprint", result)
             return result
 
         # Try ML-based noise fingerprint first
         result = await run_ml_tool("noise_fingerprint.py", artifact.file_path, timeout=15.0)
         if not result.get("error") and result.get("available"):
-            await self._store("noise_fingerprint", result, "noiseprint_cluster")
+            if record:
+                await self._store("noise_fingerprint", result, "noiseprint_cluster")
             return result
 
         # Fallback: heuristic — run in executor so it doesn't block the event loop
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(None, analyze_noise_consistency, artifact.file_path)
-        await self._store("noise_fingerprint", result, "noiseprint_cluster")
+        if record:
+            await self._store("noise_fingerprint", result, "noiseprint_cluster")
         return result
 
     async def jpeg_ghost_detect_handler(self, input_data: dict) -> dict:
@@ -392,7 +440,7 @@ class ImageHandlers(BaseToolHandler):
     async def adversarial_robustness_check_handler(self, input_data: dict) -> dict:
         """Anti-forensics perturbation stability check (sync CPU call — runs in executor)."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
-        if not self._has_splice_or_copy_move_signal():
+        if not await self._has_splice_or_copy_move_signal():
             result = {
                 "adversarial_check_skipped": True,
                 "skipped": True,
@@ -411,29 +459,29 @@ class ImageHandlers(BaseToolHandler):
 
     # ── Phase 2: Neural Forensics Handlers ───────────────────────────────────
 
-    async def neural_copy_move_handler(self, input_data: dict) -> dict:
+    async def neural_copy_move_handler(self, input_data: dict, record: bool = True) -> dict:
         """BusterNet dual-branch copy-move detection. Falls back to SIFT."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         from core.inference_client import get_inference_client
         client = await get_inference_client()
 
         # No outer wait_for here — predict_busternet delegates to run_ml_tool which
-        # manages its own timeout and subprocess cleanup.  A wrapping wait_for would
-        # inject CancelledError instead of TimeoutError, bypassing proc.kill() and
-        # leaking zombie subprocesses.
+        # manages its own timeout and subprocess cleanup.
         result = await client.predict_busternet(artifact.file_path)
 
         if not result.get("error"):
-            await self._store("neural_copy_move", result, "copy_move_detect")
+            if record:
+                await self._store("neural_copy_move", result, "copy_move_detect")
             return result
 
         # Fallback: SIFT-based copy-move (runs in executor — sync CPU call)
         loop = asyncio.get_running_loop()
         fallback = await loop.run_in_executor(None, detect_copy_move, artifact.file_path)
-        await self._store("neural_copy_move", fallback, "copy_move_detect")
+        if record:
+            await self._store("neural_copy_move", fallback, "copy_move_detect")
         return fallback
 
-    async def neural_splicing_handler(self, input_data: dict) -> dict:
+    async def neural_splicing_handler(self, input_data: dict, record: bool = True) -> dict:
         """TruFor ViT-based splicing detection. Falls back to heuristic splicing."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         from core.inference_client import get_inference_client
@@ -443,13 +491,15 @@ class ImageHandlers(BaseToolHandler):
         result = await client.predict_trufor(artifact.file_path)
 
         if not result.get("error"):
-            await self._store("neural_splicing", result, "splicing_detect")
+            if record:
+                await self._store("neural_splicing", result, "splicing_detect")
             return result
 
         # Fallback: heuristic splicing detection (sync — run in executor)
         loop = asyncio.get_running_loop()
         fallback = await loop.run_in_executor(None, detect_splicing, artifact.file_path)
-        await self._store("neural_splicing", fallback, "splicing_detect")
+        if record:
+            await self._store("neural_splicing", fallback, "splicing_detect")
         return fallback
 
     async def anomaly_tracer_handler(self, input_data: dict) -> dict:
@@ -462,7 +512,7 @@ class ImageHandlers(BaseToolHandler):
         """
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
 
-        if not self._has_tampering_signal():
+        if not await self._has_tampering_signal():
             result = {
                 "anomaly_tracer_skipped": True,
                 "reason": "No prior tampering signals from Phase-1/Phase-2 tools — ManTra-Net not triggered",
@@ -528,7 +578,8 @@ class ImageHandlers(BaseToolHandler):
                 "court_defensible": True,
                 "available": True,
             }
-            await self.agent._record_tool_result("neural_fingerprint", result)
+            # Alias to perceptual_hash for backward compatibility
+            await self._store("neural_fingerprint", result, "compute_perceptual_hash", "perceptual_hash")
             return result
         except Exception as e:
             if isinstance(e, asyncio.TimeoutError):
@@ -541,7 +592,8 @@ class ImageHandlers(BaseToolHandler):
         fallback = await legacy_phash(artifact=artifact)
         fallback["degraded"] = True
         fallback["fallback_reason"] = "SigLIP2 neural fingerprint unavailable or timed out; used perceptual hash suite"
-        await self.agent._record_tool_result("neural_fingerprint", fallback)
+        # Alias to perceptual_hash for backward compatibility
+        await self._store("neural_fingerprint", fallback, "compute_perceptual_hash", "perceptual_hash")
         return fallback
 
     # ── Global Semantic & Content Handlers ───────────────────────────────────
@@ -557,9 +609,8 @@ class ImageHandlers(BaseToolHandler):
         """Tiered OCR — unified entry point for PDF/Image text extraction."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         result = await real_extract_evidence_text(artifact=artifact)
-        await self.agent._record_tool_result("extract_text_from_image", result)
-        # Also store under legacy OCR key for backward compatibility
-        self.agent._tool_context["extract_evidence_text"] = result
+        # Store under both primary and legacy OCR keys for backward compatibility
+        await self._store("extract_text_from_image", result, "extract_evidence_text")
         return result
 
     async def frequency_domain_analysis_handler(self, input_data: dict) -> dict:

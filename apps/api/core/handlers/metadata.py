@@ -17,6 +17,7 @@ from tools.metadata_tools import file_structure_analysis as real_file_structure_
 from tools.metadata_tools import gps_timezone_validate as real_gps_timezone_validate
 from tools.metadata_tools import hex_signature_scan as real_hex_signature_scan
 from tools.metadata_tools import provenance_chain_verify as real_provenance_chain_verify
+from tools.metadata_tools import prnu_sensor_verification as real_prnu_sensor_verification
 from tools.metadata_tools import steganography_scan as real_steganography_scan
 from tools.metadata_tools import timestamp_analysis as real_timestamp_analysis
 
@@ -38,6 +39,7 @@ class MetadataHandlers(BaseToolHandler):
         registry.register("compression_risk_audit", self.compression_risk_audit_handler, "Audit metadata for social media compression footprints")
         registry.register("file_structure_analysis", self.file_structure_analysis_handler, "Binary structure and trailer/header anomaly analysis")
         registry.register("hex_signature_scan", self.hex_signature_scan_handler, "Raw-byte software signature scan")
+        registry.register("prnu_sensor_verification", self.prnu_sensor_verification_handler, "PRNU camera sensor fingerprint match")
 
         # Compatibility aliases for older task plans and arbiter/synthesis labels.
         registry.register("metadata_anomaly_scorer", self.metadata_anomaly_score_handler, "Alias for ML metadata anomaly score")
@@ -50,27 +52,29 @@ class MetadataHandlers(BaseToolHandler):
 
     # ── Refinement: EXIF Isolation Forest ─────────────────────────────
 
-    async def exif_isolation_forest_handler(self, input_data: dict) -> dict:
+    async def exif_isolation_forest_handler(self, input_data: dict, record: bool = True) -> dict:
         """[REFINED] Uses Isolation Forest ML to identify anomalous metadata clusters."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         await self.agent.update_sub_task("Auditing EXIF manifold via Isolation Forest ML...")
         try:
             result = await run_ml_tool("exif_isolation_forest.py", artifact.file_path, timeout=15.0)
             if not result.get("error") and result.get("available"):
-                await self.agent._record_tool_result("exif_isolation_forest", result)
+                if record:
+                    await self.agent._record_tool_result("exif_isolation_forest", result)
                 return result
         except Exception as exc:
             logger.debug("EXIF isolation forest unavailable", error=str(exc))
 
-        # Fallback to standard anomaly score
+        # Fallback to standard anomaly score (pass record=False to avoid double-counting)
         await self.agent.update_sub_task("Isolation Forest unavailable — falling back to standard anomaly score...")
-        fallback = await self.metadata_anomaly_score_handler(input_data)
+        fallback = await self.metadata_anomaly_score_handler(input_data, record=False)
         result = {
             **fallback,
             "degraded": True,
             "fallback_reason": "exif_isolation_forest unavailable; used metadata anomaly score",
         }
-        await self.agent._record_tool_result("exif_isolation_forest", result)
+        if record:
+            await self.agent._record_tool_result("exif_isolation_forest", result)
         return result
 
     # ── Refinement: Astro Grounding ────────────────────────────────────
@@ -146,7 +150,7 @@ class MetadataHandlers(BaseToolHandler):
         await self.agent._record_tool_result("exif_extract", result)
         return result
 
-    async def metadata_anomaly_score_handler(self, input_data: dict) -> dict:
+    async def metadata_anomaly_score_handler(self, input_data: dict, record: bool = True) -> dict:
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         await self.agent.update_sub_task("Auditing probabilistic metadata fabrication (ML)...")
         result = await run_ml_tool("metadata_anomaly_scorer.py", artifact.file_path, timeout=15.0)
@@ -156,9 +160,12 @@ class MetadataHandlers(BaseToolHandler):
             total_fields = int(exif.get("total_fields_extracted", 0) or 0) if isinstance(exif, dict) else 0
             score = 0.15
             if total_fields == 0:
-                score = 0.35
+                score = 0.85 # High risk: completely stripped EXIF
+            elif len(absent) >= 10:
+                score = 0.65
             elif len(absent) >= 5:
                 score = 0.45
+
             result = {
                 "available": True,
                 "degraded": True,
@@ -169,7 +176,8 @@ class MetadataHandlers(BaseToolHandler):
                 "confidence": max(0.55, 1.0 - score),
                 "note": "ML metadata scorer unavailable; used deterministic EXIF completeness fallback.",
             }
-        await self.agent._record_tool_result("metadata_anomaly_score", result)
+        if record:
+            await self.agent._record_tool_result("metadata_anomaly_score", result)
         return result
 
     async def gps_timezone_validate_handler(self, input_data: dict) -> dict:
@@ -242,8 +250,23 @@ class MetadataHandlers(BaseToolHandler):
 
     async def provenance_chain_verify_handler(self, input_data: dict) -> dict:
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
-        await self.agent.update_sub_task("Auditing C2PA provenance manifest and blockchain signatures...")
-        result = await real_provenance_chain_verify(artifact=artifact)
+        await self.agent.update_sub_task("Auditing C2PA provenance manifest and binary JUMBF signatures...")
+        
+        # Use ML-grade C2PA validator primarily (Fix for Checklist Item 10)
+        result = await run_ml_tool("c2pa_validator.py", artifact.file_path, timeout=10.0)
+        
+        if result.get("error") or not result.get("available"):
+            # Fallback to heuristic EXIF-based check
+            fallback = await real_provenance_chain_verify(artifact=artifact)
+            result = {
+                **fallback,
+                "degraded": True,
+                "fallback_reason": f"ML C2PA validator failed: {result.get('error', 'unavailable')}"
+            }
+        
+        # Normalize result for Arbiter
+        result.setdefault("provenance_found", result.get("c2pa_present", False))
+        
         await self.agent._record_tool_result("provenance_chain_verify", result)
         return result
 
@@ -278,38 +301,84 @@ class MetadataHandlers(BaseToolHandler):
 
     async def compression_risk_audit_handler(self, input_data: dict) -> dict:
         """Audits metadata for social media/chat app compression footprints."""
+        artifact = input_data.get("artifact") or self.agent.evidence_artifact
         await self.agent.update_sub_task("Auditing for social media compression footprints...")
 
         exif = self.agent._tool_context.get("exif_extract", {})
         sw = str(exif.get("software", "")).lower()
         make = str(exif.get("make", "")).lower()
         model = str(exif.get("model", "")).lower()
+        file_name = str(getattr(artifact, "file_name", "") or "").lower()
 
         # Social Media / Heavy Compression apps
-        # These apps strip forensic noise and resize images heavily, making
-        # standard ELA/PRNU/Noise analysis unreliable.
         social_apps = {"instagram", "tiktok", "facebook", "snapchat", "twitter", "x.com"}
-        chat_apps = {"whatsapp", "telegram", "imessage", "signal", "viber"}
+        chat_apps = {"whatsapp", "telegram", "imessage", "signal", "viber", "discord", "slack"}
 
         penalty = 1.0
         platform = None
 
+        # 1. Explicit app markers in EXIF
         if any(x in sw or x in make or x in model for x in social_apps):
             penalty = 0.45
             platform = "Social Media (High Compression)"
         elif any(x in sw or x in make or x in model for x in chat_apps):
             penalty = 0.65
-            platform = "Messaging App (Medium Compression)"
+            platform = "Messaging App (Medium-High Compression)"
+        
+        # 2. Filename patterns (forensic signals for specific platforms)
+        elif "whatsapp" in file_name or "telegram" in file_name:
+            penalty = 0.65
+            platform = "Messaging App (Filename Signal)"
+        elif "screenshot" in file_name:
+            penalty = 0.85
+            platform = "System Screenshot (UI Compression)"
+        elif "fb_img" in file_name or "insta" in file_name:
+            penalty = 0.45
+            platform = "Social Media (Filename Signal)"
+
+        # 3. Stripped EXIF (Common social media signal, but also privacy tools)
+        total_fields = int(exif.get("total_fields_extracted", 0))
+        if penalty == 1.0 and total_fields < 5:
+            # If it looks like a standard camera filename, be more conservative about the penalty
+            is_camera_file = any(x in file_name for x in ("dsc", "img_", "p_", "mvc", "dcim"))
+            if is_camera_file:
+                penalty = 0.88 # Slight penalty for lack of calibration data
+                platform = "Camera Capture (Stripped Metadata)"
+            else:
+                penalty = 0.60 # Higher risk if non-standard name AND stripped
+                platform = "Unknown (Stripped Metadata - High Compression Risk)"
 
         result = {
             "available": True,
-            "compression_risk": 1.0 - penalty if penalty < 1.0 else 0.0,
+            "compression_risk": round(1.0 - penalty if penalty < 1.0 else 0.0, 3),
             "compression_penalty": penalty,
             "detected_platform": platform,
-            "forensic_reliability_impact": "HIGH" if penalty < 0.5 else ("MEDIUM" if penalty < 1.0 else "NONE"),
+            "metadata_stripped": total_fields < 5,
+            "forensic_reliability_impact": "HIGH" if penalty < 0.5 else ("MEDIUM" if penalty < 0.8 else "NONE"),
             "confidence": 0.85,
             "court_defensible": True,
+            "note": f"Compression penalty of {penalty} applied due to {platform or 'no detected footprints'}."
         }
 
         await self.agent._record_tool_result("compression_risk_audit", result)
+        return result
+
+
+    async def prnu_sensor_verification_handler(self, input_data: dict) -> dict:
+        artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        await self.agent.update_sub_task("Auditing sensor noise residuals for PRNU fingerprint matching...")
+        
+        # Upgrade: Use real noiseprint ML tool instead of baseline stub (Fix for Checklist Item 10)
+        result = await run_ml_tool("noiseprint_clustering.py", artifact.file_path, timeout=30.0)
+        
+        if result.get("error") or not result.get("available"):
+            # Final fallback to baseline if ML fails
+            fallback = await real_prnu_sensor_verification(artifact=artifact)
+            result = {
+                **fallback,
+                "degraded": True,
+                "fallback_reason": f"ML noiseprint clustering failed: {result.get('error', 'unavailable')}"
+            }
+        
+        await self.agent._record_tool_result("prnu_sensor_verification", result)
         return result

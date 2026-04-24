@@ -20,4 +20,5 @@ export {
   pollForReport,
   startInvestigation,
   submitHITLDecision,
+  getAuthToken,
 } from "./client";

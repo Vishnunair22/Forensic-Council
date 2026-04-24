@@ -422,6 +422,7 @@ async def live_updates(websocket: WebSocket, session_id: str):
                 if message["type"] == "message":
                     data = json.loads(message["data"])
                     await websocket.send_json(data)
+                    last_activity = time.time()  # Keep connection alive during long output
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -742,6 +743,7 @@ async def get_session_report(
                         calibrated_probability=_opt_float(f.get("calibrated_probability")),
                         raw_confidence_score=_opt_float(f.get("raw_confidence_score"))
                         or _opt_float(f.get("confidence_raw")),
+                        calibration_status=str(f.get("calibration_status", "UNCALIBRATED")),
                         court_statement=f.get("court_statement"),
                         robustness_caveat=bool(f.get("robustness_caveat", False)),
                         robustness_caveat_detail=f.get("robustness_caveat_detail"),
@@ -1003,11 +1005,11 @@ async def resume_investigation(
     decision_key = f"forensic:session:resume_decision:{session_id}"
     await redis.set(
         decision_key,
-        {
+        json.dumps({
             "deep_analysis": request.deep_analysis,
             "decided_by": current_user.user_id,
             "decided_at": datetime.now(UTC).isoformat(),
-        },
+        }),
         ex=14400,
     )
 

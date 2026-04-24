@@ -15,28 +15,29 @@ export const dbg = {
 
 // ── Origin & URLs ─────────────────────────────────────────────────────────────
 
-export const API_BASE =
-  typeof window === "undefined"
-    ? process.env.INTERNAL_API_URL || "http://localhost:8000"
-    : "";
+const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+const INTERNAL_API_BASE = process.env.INTERNAL_API_URL ?? "";
 
-export const WS_BASE =
+export const API_BASE: string =
   typeof window !== "undefined"
-    ? (() => {
-        if (process.env.NEXT_PUBLIC_WS_URL) return process.env.NEXT_PUBLIC_WS_URL;
-        const { protocol, host } = window.location;
-        const wsProto = protocol === "https:" ? "wss" : "ws";
-        
-        // Handle Next.js dev server proxying fallback
-        if (host.includes(":3000")) {
-          return `${wsProto}://${host.replace(":3000", ":8000")}`;
-        }
-        return `${wsProto}://${host}`;
-      })()
-    : (() => {
-        const base = process.env.INTERNAL_API_URL || "http://localhost:8000";
-        return base.replace(/^https?/, (m) => (m === "https" ? "wss" : "ws"));
-      })();
+    ? RAW_API_BASE && RAW_API_BASE !== "/"
+      ? RAW_API_BASE.replace(/\/$/, "")
+      : window.location.origin
+    : INTERNAL_API_BASE || RAW_API_BASE || "http://backend:8000";
+
+export const WS_BASE: string = (() => {
+  if (typeof window === "undefined") return API_BASE.replace(/^http/, "ws");
+  
+  // If we are accessing the UI via port 3000 (Next.js dev server directly),
+  // we must redirect WebSocket traffic to port 80 (Caddy) because Next.js 
+  // doesn't proxy WebSockets.
+  if (window.location.port === "3000") {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${window.location.hostname}`; // Defaults to port 80/443
+  }
+
+  return API_BASE.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
+})();
 
 // ── Cookie & Auth Helpers ────────────────────────────────────────────────────
 

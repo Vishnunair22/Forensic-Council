@@ -100,7 +100,7 @@ services:
       - redis_data:/data
     healthcheck:
       # SECURITY: Use REDISCLI_AUTH env var and test without password on command line
-      test: ["CMD-SHELL", "redis-cli ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -316,6 +316,8 @@ services:
       - CHOWN
       - SETUID
       - SETGID
+      - DAC_OVERRIDE
+      - FOWNER
     read_only: true
     tmpfs:
       - /tmp:nosuid,size=512m
@@ -371,11 +373,11 @@ services:
       migration:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f \"scripts/run_worker.py\" > /dev/null || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import redis, os; r = redis.Redis(host=os.getenv('REDIS_HOST','redis'), port=int(os.getenv('REDIS_PORT', 6379)), password=os.getenv('REDIS_PASSWORD',''), socket_connect_timeout=3); r.ping()\" || exit 1"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 5
-      start_period: 30s
+      start_period: 60s
     # SECURITY: Run with minimal privileges
     security_opt:
       - no-new-privileges:true
@@ -385,6 +387,8 @@ services:
       - CHOWN
       - SETUID
       - SETGID
+      - DAC_OVERRIDE
+      - FOWNER
     read_only: true
     tmpfs:
       - /tmp:nosuid,size=512m
@@ -401,6 +405,14 @@ services:
       - numba_cache:/app/cache/numba_cache:rw
       - yolo_cache:/app/cache/ultralytics:rw
       - calibration_models_cache:/app/storage/calibration_models:rw
+    deploy:
+      resources:
+        limits:
+          memory: 12G
+          cpus: "4.0"
+        reservations:
+          memory: 2G
+          cpus: "1.0"
     networks:
       - infra_net
 

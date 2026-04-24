@@ -36,7 +36,7 @@ class ForensicPolicy:
         "speaker_diarize": 0.75,
         "optical_flow_analyze": 0.80,
         "face_swap_detect": 0.85,
-        "object_detection": 0.80,
+        "yolo_object_detection": 0.80,
         "lighting_consistency": 0.75,
         "lighting_correlator": 0.80,
         "interframe_forgery_detector": 0.75,
@@ -50,6 +50,7 @@ class ForensicPolicy:
         "vfi_error_map": 0.85,
         "thumbnail_coherence": 0.75,
         "av_sync_verify": 0.80,
+        "compression_risk_audit": 0.85,
 
         # Heuristic / metadata (lower weight)
         "exif_extract": 0.5,
@@ -83,6 +84,7 @@ class ForensicPolicy:
     LIKELY_MANIPULATED_PROB_THRESHOLD = 0.55
     SUSPICIOUS_PROB_THRESHOLD = 0.45
     MANIP_SIGNAL_MIN_REQUIRED = 2  # Min direct signals for "MANIPULATED"
+    SINGLE_SIGNAL_MANIP_THRESHOLD = 0.85 # Confidence floor for a single signal to trigger LIKELY_MANIPULATED
 
     AUTHENTIC_CONF_THRESHOLD = 0.75  # Higher bar for absolute "AUTHENTIC"
     AUTHENTIC_ERROR_MAX = 0.15
@@ -114,4 +116,5 @@ class ForensicPolicy:
     @classmethod
     def is_suspicious(cls, confidence: float, error_rate: float) -> bool:
         """Check if metrics meet the SUSPICIOUS threshold."""
-        return confidence < cls.AGENT_SUSPICIOUS_CONF and error_rate > cls.AGENT_SUSPICIOUS_ERR
+        # Suspicious = medium/high error rate but still some usable confidence
+        return confidence >= cls.AGENT_SUSPICIOUS_CONF and error_rate > cls.AGENT_SUSPICIOUS_ERR

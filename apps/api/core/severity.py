@@ -63,7 +63,9 @@ def is_failed(meta: dict[str, Any], is_na: bool) -> bool:
     """True if the tool failed (not court-defensible or status INCOMPLETE)."""
     if is_na:
         return False
-    return meta.get("court_defensible") is False
+    # Only return true if the tool failed to produce any usable forensic signal.
+    # Degraded results (court_defensible=False) are still usable signals.
+    return str(meta.get("status", "")).upper() == "INCOMPLETE" or "error" in meta
 
 
 def assign_severity_tier(f: Any) -> str:
@@ -116,6 +118,7 @@ def assign_severity_tier(f: Any) -> str:
     has_anomaly = (
         meta.get("anomaly_detected") is True
         or meta.get("inconsistency_detected") is True
+        or meta.get("is_anomalous") is True
         or str(meta.get("verdict", "")).upper()
         in ("TAMPERED", "SUSPICIOUS", "MANIPULATED")
     )

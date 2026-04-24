@@ -34,12 +34,7 @@
 
     handle /api/v1/* {
         reverse_proxy backend:8000 {
-            header_up Host              {host}
-            header_up X-Real-IP         {remote_host}
-            header_up X-Forwarded-For   {remote_host}
-            header_up X-Forwarded-Proto {scheme}
-            header_up Upgrade           {http_upgrade}
-            header_up Connection        "{http_connection}"
+            header_up Host {host}
             flush_interval -1
 
             transport http {
@@ -51,12 +46,7 @@
 
     handle {
         reverse_proxy frontend:3000 {
-            header_up Host              {host}
-            header_up X-Real-IP         {remote_host}
-            header_up X-Forwarded-For   {remote_host}
-            header_up X-Forwarded-Proto {scheme}
-            header_up Upgrade           {http_upgrade}
-            header_up Connection        "{http_connection}"
+            header_up Host {host}
 
             transport http {
                 response_header_timeout 300s
@@ -77,7 +67,7 @@
         X-Frame-Options            "DENY"
         Referrer-Policy            "strict-origin-when-cross-origin"
         Permissions-Policy         "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
-        Content-Security-Policy    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' fonts.gstatic.com data:; connect-src 'self' wss://{$DOMAIN} ws://localhost:8000; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;"
+        Content-Security-Policy    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' fonts.gstatic.com data:; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;"
         -Server
         -X-Powered-By
     }
@@ -90,13 +80,7 @@
     # must remain routed to the frontend, so keep this matcher scoped to /api/v1/*.
     handle /api/v1/* {
         reverse_proxy backend:8000 {
-            header_up Host              {host}
-            header_up X-Real-IP         {remote_host}
-            header_up X-Forwarded-For   {remote_host}
-            header_up X-Forwarded-Proto {scheme}
-            header_up Upgrade           {http_upgrade}
-            header_up Connection        "{http_connection}"
-
+            header_up Host {host}
             health_uri      /health
             health_interval 10s
             health_timeout  5s
@@ -114,12 +98,7 @@
 
     handle {
         reverse_proxy frontend:3000 {
-            header_up Host              {host}
-            header_up X-Real-IP         {remote_host}
-            header_up X-Forwarded-For   {remote_host}
-            header_up X-Forwarded-Proto {scheme}
-            header_up Upgrade           {http_upgrade}
-            header_up Connection        "{http_connection}"
+            header_up Host {host}
 
             transport http {
                 response_header_timeout 300s

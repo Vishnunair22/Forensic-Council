@@ -18,9 +18,9 @@ and validated.
 from __future__ import annotations
 
 from agents.base_agent import ForensicAgent
-from core.gemini_client import GeminiVisionClient
 from core.handlers.video import VideoHandlers
 from core.inter_agent_bus import InterAgentCall, InterAgentCallType
+from core.react_loop import AgentFinding
 from core.structured_logging import get_logger
 from core.tool_registry import ToolRegistry
 
@@ -64,8 +64,9 @@ class Agent4Video(ForensicAgent):
 
     @property
     def iteration_ceiling(self) -> int:
-        # Phase 1 ceiling only — deep pass has its own budget via run_deep_investigation.
-        return self._compute_ceiling(len(self.task_decomposition))
+        # Include both initial and deep tasks to prevent truncation of the forensic pipeline.
+        base_count = len(self.task_decomposition) + len(self.deep_task_decomposition)
+        return self._compute_ceiling(base_count)
 
     async def build_initial_thought(self) -> str:
         return (
@@ -127,7 +128,7 @@ class Agent4Video(ForensicAgent):
 
             return await self._gemini_deep_forensic_handler(
                 input_data,
-                model_hint="gemini-2.0-flash",
+                model_hint="gemini-2.5-flash",
                 signal_callback=_gemini_signal_callback
             )
 
@@ -136,26 +137,34 @@ class Agent4Video(ForensicAgent):
         return registry
     async def on_tool_result(self, finding: AgentFinding) -> None:
         """Reactive task expansion based on temporal signals."""
+        try:
+            await self._on_tool_result_impl(finding)
+        except Exception as e:
+            logger.warning("on_tool_result failed", agent_id=self.agent_id, error=str(e))
+
+    async def _on_tool_result_impl(self, finding: AgentFinding) -> None:
+        """Implementation of reactive task expansion."""
+        tool_name = finding.metadata.get("tool_name")
+
         # 1. If frame consistency shows discontinuities, escalate to face swap check
-        if finding.metadata.get("tool_name") == "frame_consistency_analysis":
+        if tool_name == "frame_consistency_analysis":
             if finding.evidence_verdict == "POSITIVE" or finding.metadata.get("discontinuity_detected"):
                 logger.info("Temporal discontinuity detected; injecting face-swap audit", agent_id=self.agent_id)
-                from core.working_memory import TaskStatus
-                await self.working_memory.create_task(
-                    session_id=self.session_id,
-                    agent_id=self.agent_id,
+                await self.inject_task(
                     description="Run face_swap_detection on frames near detected discontinuities",
-                    status=TaskStatus.PENDING,
                     priority=20 # High priority
                 )
 
-        # 2. Add other reactive triggers here (e.g. VFI error -> deeper flow analysis)
-        if finding.metadata.get("tool_name") == "vfi_error_map":
-            if finding.metadata.get("vfi_artifact_detected"):
-                await self.working_memory.create_task(
-                    session_id=self.session_id,
-                    agent_id=self.agent_id,
-                    description="Run deep optical_flow_analysis on VFI-flagged segments",
-                    status=TaskStatus.PENDING,
+        # 2. Reactive trigger for VFI (Video Frame Interpolation) artifacts
+        if tool_name == "vfi_error_map":
+            vfi_signals = [
+                finding.metadata.get("vfi_artifact_detected"),
+                finding.metadata.get("interpolation_artifact_detected"),
+                finding.metadata.get("manipulation_detected")
+            ]
+            if any(vfi_signals) or finding.evidence_verdict == "POSITIVE":
+                logger.info("VFI motion interpolation artifact detected; injecting deep optical flow audit", agent_id=self.agent_id)
+                await self.inject_task(
+                    description="Run deep optical_flow_analysis on VFI-flagged segments to verify motion continuity",
                     priority=15
                 )

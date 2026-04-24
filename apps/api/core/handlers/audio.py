@@ -135,17 +135,22 @@ class AudioHandlers(BaseToolHandler):
     async def neural_prosody_handler(self, input_data: dict) -> dict:
         """Neural prosody analysis. Falls back to acoustic prosody."""
         artifact = input_data.get("artifact") or await self._audio_artifact()
-        result = await run_ml_tool("neural_prosody_classifier.py", artifact.file_path, timeout=15.0)
-        if not result.get("error") and result.get("available"):
-            await self.agent._record_tool_result("neural_prosody", result)
-            return result
+        
+        try:
+            result = await run_ml_tool("neural_prosody_classifier.py", artifact.file_path, timeout=15.0)
+            if not result.get("error") and result.get("available"):
+                await self.agent._record_tool_result("neural_prosody", result)
+                return result
+        except Exception as exc:
+            logger.warning("Neural prosody execution failed", error=str(exc))
+        
         # Fallback — record result from prosody_analysis_handler
         fallback = await self.prosody_analysis_handler(input_data)
         fallback["degraded"] = True
-        fallback["fallback_reason"] = (
-            "neural_prosody_classifier unavailable or failed; used acoustic prosody analysis"
-        )
-        self.agent._tool_context["neural_prosody"] = fallback
+        fallback["fallback_reason"] = "neural_prosody_classifier failed; used acoustic prosody analysis"
+        
+        # Ensure fallback path is recorded in metrics
+        await self.agent._record_tool_result("neural_prosody", fallback)
         return fallback
 
     # ── Refinement: Audio Gen Signature ──────────────────────────────────────
@@ -401,7 +406,12 @@ class AudioHandlers(BaseToolHandler):
         artifact = input_data.get("artifact") or await self._audio_artifact()
         # Run as managed subprocess — avoids the Python startup cost on repeat calls
         # and keeps heavy SpeechBrain/librosa imports out of the main process.
-        result = await run_ml_tool("voice_clone_detector.py", artifact.file_path, timeout=30.0)
+        result = await run_ml_tool(
+            "voice_clone_detector.py",
+            artifact.file_path,
+            timeout=30.0,
+            model=self.agent.config.voice_clone_model_name
+        )
         if not result.get("error") and result.get("available"):
             await self.agent._record_tool_result("voice_clone_detect", result)
             return result

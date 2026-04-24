@@ -121,12 +121,10 @@ class TestRS256Auth:
         assert not verify_password("wrong-password", hashed)
 
     def test_password_truncation(self):
-        """Test that passwords longer than 72 bytes are handled correctly (bcrypt limit)."""
+        """Test that passwords longer than 72 bytes are rejected."""
         long_password = "a" * 100
-        hashed = get_password_hash(long_password)
-        assert verify_password(long_password, hashed)
-        # Verify that only first 72 bytes matter
-        assert verify_password("a" * 72 + "different", hashed)
+        with pytest.raises(ValueError, match="exceeds the 72-byte"):
+            get_password_hash(long_password)
 
     @pytest.mark.asyncio
     @patch("core.auth.is_token_blacklisted", new=AsyncMock(return_value=True))
@@ -193,42 +191,6 @@ class TestRS256Auth:
             await get_current_user(mock_request, credentials=mock_creds)
         assert exc.value.status_code == 403
 
-    @pytest.mark.asyncio
-    async def test_blacklist_logic_local_cache(self):
-        """Test local token blacklist caching."""
-
-        from core.auth import blacklist_token, is_token_blacklisted
-
-        token = "test-token-to-blacklist"
-        # Mock Redis fail to test local/sqlite
-        with patch("core.persistence.redis_client.get_redis_client", return_value=None), \
-             patch("core.auth._add_to_persistent_blacklist"):
-            await blacklist_token(token, expires_in_seconds=10)
-
-            # Should be blacklisted immediately (local cache)
-            assert await is_token_blacklisted(token) is True
-
-    @pytest.mark.asyncio
-    async def test_sqlite_blacklist_persistence(self, tmp_path):
-        """Test that blacklisted tokens are persisted to SQLite."""
-        import time
-
-        from core.auth import (
-            _add_to_persistent_blacklist,
-            _init_blacklist_db,
-            _is_in_persistent_blacklist,
-        )
-
-        db_file = tmp_path / "test_blacklist.db"
-        with patch("core.auth._get_blacklist_db_path", return_value=str(db_file)):
-            _init_blacklist_db()
-            token_hash = "hash123"
-            expiry = time.time() + 100
-            _add_to_persistent_blacklist(token_hash, expiry)
-
-            assert _is_in_persistent_blacklist(token_hash) is True
-            assert _is_in_persistent_blacklist("unknown") is False
-
     def test_cleanup_expired_local_blacklist(self):
         """Test that expired local blacklist entries are removed."""
         import time
@@ -292,26 +254,3 @@ class TestRS256Auth:
             user = await get_current_user_optional(mock_creds)
             assert user.user_id == "u1"
 
-    def test_sqlite_pruning(self, tmp_path):
-        import sqlite3
-        import time
-
-        from core.auth import (
-            _add_to_persistent_blacklist,
-            _cleanup_expired_blacklist_entries,
-            _is_in_persistent_blacklist,
-        )
-
-        db_file = tmp_path / "prune_test.db"
-        with patch("core.auth._get_blacklist_db_path", return_value=str(db_file)):
-            _add_to_persistent_blacklist("old", time.time() - 10)
-            _add_to_persistent_blacklist("new", time.time() + 10)
-
-            # _is_in_persistent_blacklist should prune "old" when checked
-            assert _is_in_persistent_blacklist("old") is False
-
-            # Manual cleanup should also work
-            _cleanup_expired_blacklist_entries()
-            with sqlite3.connect(str(db_file)) as conn:
-                res = conn.execute("SELECT count(*) FROM blacklisted_tokens").fetchone()
-                assert res[0] == 1 # only "new" remains

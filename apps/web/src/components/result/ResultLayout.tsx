@@ -108,7 +108,7 @@ export function ResultLayout() {
           hidden={rs.activeTab !== "history"}
         >
           <HistoryPanel onDismiss={() => rs.setActiveTab("analysis")} onSelect={(sid) => {
-            storage.setItem("forensic_session_id", sid);
+            rs.selectSession(sid);        // drives sessionId state + resets arbiter poll
             rs.setActiveTab("analysis");
           }} />
         </div>

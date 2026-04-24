@@ -8,6 +8,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Callable
 
+import httpx
+
 from core.context_utils import aggregate_tool_context
 from core.gemini_client import GeminiVisionClient
 from core.structured_logging import get_logger
@@ -59,7 +61,7 @@ class NeuralSynthesisMixin:
     async def _gemini_deep_forensic_handler(
         self, 
         input_data: dict, 
-        model_hint: str = "gemini-2.0-flash",
+        model_hint: str = "gemini-2.5-flash",
         signal_callback: Callable[[str], Any] | None = None
     ) -> dict:
         """
@@ -112,6 +114,53 @@ class NeuralSynthesisMixin:
                 
             return result
             
+        except httpx.AuthenticationError as e:
+            logger.error(
+                "Gemini authentication failed - invalid API key",
+                agent_id=self.agent_id,
+                error=str(e),
+                exc_info=True
+            )
+            err_result = {
+                "error": str(e),
+                "analysis_source": "gemini_vision",
+                "available": False,
+                "court_defensible": False,
+                "confidence": 0.0,
+                "status": "AUTH_FAILED"
+            }
+            if hasattr(self, "_record_tool_error"):
+                await self._record_tool_error("gemini_deep_forensic", f"Authentication error: {e}")
+            raise  # Re-raise auth failures - cannot recover
+
+        except httpx.RateLimitError as e:
+            logger.warning(
+                "Gemini rate limit hit - will retry",
+                agent_id=self.agent_id,
+                error=str(e),
+            )
+            if hasattr(self, "_record_tool_error"):
+                await self._record_tool_error("gemini_deep_forensic", f"Rate limited: {e}")
+            raise  # Retry on rate limits
+
+        except httpx.TimeoutException as e:
+            logger.warning(
+                "Gemini request timed out",
+                agent_id=self.agent_id,
+                error=str(e),
+            )
+            err_result = {
+                "error": f"Timeout: {e}",
+                "analysis_source": "gemini_vision",
+                "available": False,
+                "court_defensible": False,
+                "confidence": 0.0,
+                "status": "TIMEOUT"
+            }
+            if hasattr(self, "_record_tool_error"):
+                await self._record_tool_error("gemini_deep_forensic", f"Timeout: {e}")
+            return err_result
+
         except Exception as e:
             logger.error(
                 "Gemini deep forensic analysis failed",

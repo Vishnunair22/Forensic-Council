@@ -61,7 +61,7 @@ export const AGENTS = [
     desc: "Inspects hidden file data to verify where, when, and how the evidence was originally created.",
   },
   {
-    id: "AGT-06",
+    id: "Arbiter",
     name: "Council Arbiter",
     icon: Scale,
     color: "#10b981",
@@ -140,12 +140,12 @@ export const TAB_ICONS: Record<ReportTab, typeof FileImage> = {
   Video: FileVideo,
 };
 
-// perceived responsiveness for analyses that typically complete in 15–90 s.
-export const ARBITER_POLL_INTERVAL_MS = 2_500;
+// start at 1.5 s
+export const ARBITER_POLL_INTERVAL_MS = 1500;
 
 // Maximum arbiter polling attempts before declaring a timeout.
-// 720 × 2.5 s = 30 minutes — enough headroom for deep video analysis.
-export const ARBITER_POLL_MAX_ATTEMPTS = 720;
+// 400 × up-to-3s ≈ 20-min max
+export const ARBITER_POLL_MAX_ATTEMPTS = 400;
 
 // 30 s permits 50MB uploads and slow Redis/Docker cold starts without timing out.
 export const INVESTIGATION_REQUEST_TIMEOUT_MS = 30_000;

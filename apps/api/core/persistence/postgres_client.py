@@ -88,8 +88,10 @@ class PostgresClient:
 
     async def _init_connection(self, conn: Connection) -> None:
         """Initialize a connection with JSON codec."""
+        from functools import partial
+        deterministic_dumps = partial(json.dumps, sort_keys=True, allow_nan=False, separators=(",", ":"))
         await conn.set_type_codec(
-            "jsonb", encoder=json.dumps, decoder=json.loads, schema="pg_catalog"
+            "jsonb", encoder=deterministic_dumps, decoder=json.loads, schema="pg_catalog"
         )
 
     async def connect(self) -> None:

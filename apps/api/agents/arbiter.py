@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 from uuid import UUID
+import uuid as _uuid
 
 from agents.arbiter_narrative import ArbiterNarrativeMixin
 from agents.arbiter_verdict import (
@@ -194,6 +195,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         seen, out = {}, []
         for f in findings:
             if not isinstance(f, dict):
+                logger.warning("Skipping non-dict finding during deduplication", type=type(f).__name__)
                 continue
                 
             if "severity_tier" not in f:
@@ -240,7 +242,10 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         na = sum(1 for f in real if _is_na(f))
         fail = sum(1 for f in real if _is_fail(f))
         app = len(real) - na
-        err = round(fail / app, 3) if app > 0 else 0.0
+        if app == 0 and fail > 0:
+            err = 1.0  # All tools failed - 100% error rate
+        else:
+            err = round(fail / app, 3) if app > 0 else 0.0
         conf = [
             c
             for f in real
@@ -249,7 +254,19 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             if c is not None
         ]
         avg_conf = round(sum(conf) / len(conf), 3) if conf else 0.0
-        return AgentMetrics(agent_id=aid, agent_name=name, total_tools_called=len(real), tools_succeeded=app-fail, tools_failed=fail, tools_not_applicable=na, error_rate=err, confidence_score=avg_conf, finding_count=len(real))
+        deep = sum(1 for f in real if (f.get("metadata") or {}).get("analysis_phase") == "deep")
+        return AgentMetrics(
+            agent_id=aid, 
+            agent_name=name, 
+            total_tools_called=len(real), 
+            tools_succeeded=app-fail, 
+            tools_failed=fail, 
+            tools_not_applicable=na, 
+            error_rate=err, 
+            confidence_score=avg_conf, 
+            finding_count=len(real),
+            deep_finding_count=deep
+        )
 
     def _calculate_weighted_stats(self, active_metrics: list[dict]) -> tuple[float, float]:
         w_sum, wc_sum, we_num, we_den = 0.0, 0.0, 0.0, 0.0
@@ -266,10 +283,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         return (round(wc_sum / w_sum, 3) if w_sum > 0 else 0.0), (round(we_num / we_den, 3) if we_den > 0 else 0.0)
 
     def _get_compression_penalty(self, findings: list[dict]) -> float:
-        """
-        Retrieves the compression penalty calculated by Agent 5 (Metadata).
-        If missing, defaults to no penalty (1.0).
-        """
+        """Retrieve compression penalty from Agent 5's audit finding."""
         for f in findings:
             meta = f.get("metadata") or {}
             if (
@@ -277,7 +291,15 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 or meta.get("tool_name") == "compression_risk_audit"
             ):
                 return float(meta.get("compression_penalty", 1.0))
-        return 1.0
+        
+        # Agent 5 ran but produced no audit — apply a small conservative penalty
+        # to prevent overconfident AUTHENTIC verdicts without compression evidence.
+        agent5_active = any(
+            f.get("agent_id") == "Agent5"
+            for f in findings
+            if f.get("evidence_verdict") not in ("NOT_APPLICABLE", "ERROR")
+        )
+        return 0.95 if agent5_active else 1.0
 
     def _compute_verdict(
         self,
@@ -292,23 +314,27 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         if manipulation_probability >= ForensicPolicy.MANIPULATED_PROB_THRESHOLD and manipulation_signals >= ForensicPolicy.MANIP_SIGNAL_MIN_REQUIRED:
             return "MANIPULATED"
 
-        if manipulation_probability >= ForensicPolicy.LIKELY_MANIPULATED_PROB_THRESHOLD and manipulation_signals >= ForensicPolicy.MANIP_SIGNAL_MIN_REQUIRED:
+        elif manipulation_probability >= ForensicPolicy.LIKELY_MANIPULATED_PROB_THRESHOLD and (
+            manipulation_signals >= ForensicPolicy.MANIP_SIGNAL_MIN_REQUIRED
+            or (manipulation_signals == 1 and manipulation_probability >= ForensicPolicy.SINGLE_SIGNAL_MANIP_THRESHOLD)
+        ):
             return "LIKELY_MANIPULATED"
 
-        if manipulation_probability >= ForensicPolicy.SUSPICIOUS_PROB_THRESHOLD and manipulation_signals >= 1:
+        elif manipulation_probability >= ForensicPolicy.SUSPICIOUS_PROB_THRESHOLD and manipulation_signals >= 1:
             return "SUSPICIOUS"
 
-        if (manipulation_signals == 0 and overall_confidence >= ForensicPolicy.AUTHENTIC_CONF_THRESHOLD
+        elif (manipulation_signals == 0 and overall_confidence >= ForensicPolicy.AUTHENTIC_CONF_THRESHOLD
             and overall_error_rate <= ForensicPolicy.AUTHENTIC_ERROR_MAX and contested_count == 0):
             return "AUTHENTIC"
 
-        if manipulation_signals == 0 and overall_confidence >= ForensicPolicy.LIKELY_AUTHENTIC_CONF_THRESHOLD and overall_error_rate <= ForensicPolicy.LIKELY_AUTHENTIC_ERROR_MAX:
+        elif manipulation_signals == 0 and overall_confidence >= ForensicPolicy.LIKELY_AUTHENTIC_CONF_THRESHOLD and overall_error_rate <= ForensicPolicy.LIKELY_AUTHENTIC_ERROR_MAX:
             return "LIKELY_AUTHENTIC"
 
-        if (len(active_metrics) <= 1 and overall_confidence < ForensicPolicy.ABSTAIN_CONF_FLOOR) or overall_error_rate > ForensicPolicy.ABSTAIN_ERROR_CEILING:
+        elif (len(active_metrics) <= 1 and overall_confidence < ForensicPolicy.ABSTAIN_CONF_FLOOR) or overall_error_rate > ForensicPolicy.ABSTAIN_ERROR_CEILING:
             return "ABSTAIN"
 
-        return "INCONCLUSIVE"
+        else:
+            return "INCONCLUSIVE"
 
     async def _run_challenges(self, comparisons: list[FindingComparison]) -> list[dict]:
         """
@@ -346,23 +372,24 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                     challenged_id = agent_a_id if conf_a <= conf_b else agent_b_id
                     contradicting = fb if challenged_id == agent_a_id else fa
 
-                    challenged_agent = self.agent_factory.get_agent(challenged_id, self.session_id)
-                    if challenged_agent is not None:
-                        revised = await challenged_agent.run_challenge(
-                            contradicting_finding=contradicting,
-                            context={"arbiter_session": str(self.session_id)},
-                        )
-                        challenge_entry["challenge_attempted"] = True
-                        challenge_entry["challenge_resolved"] = bool(revised)
-                        challenge_entry["revised_findings"] = [
-                            f.model_dump(mode="json") if hasattr(f, "model_dump") else f
-                            for f in (revised or [])
-                        ]
-                        logger.info(
-                            "Challenge loop completed",
-                            challenged_agent=challenged_id,
-                            resolved=bool(revised),
-                        )
+                    challenge_result = await self.agent_factory.reinvoke_agent(
+                        agent_id=challenged_id,
+                        session_id=self.session_id,
+                        challenge_context={
+                            "challenge_id": str(_uuid.uuid4()),
+                            "contradiction": contradicting,
+                            "arbiter_session": str(self.session_id),
+                        },
+                    )
+                    challenge_entry["challenge_attempted"] = True
+                    revised_findings = challenge_result.get("findings", [])
+                    challenge_entry["challenge_resolved"] = bool(revised_findings)
+                    challenge_entry["revised_findings"] = revised_findings
+                    logger.info(
+                        "Challenge loop completed",
+                        challenged_agent=challenged_id,
+                        resolved=bool(revised_findings),
+                    )
                 except Exception as exc:
                     logger.warning(f"Challenge invocation failed for {challenged_id}: {exc}")
 
@@ -402,7 +429,8 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             elif ForensicPolicy.is_suspicious(conf, err):
                 v = "SUSPICIOUS"
             else:
-                v = "INCONCLUSIVE"
+                # Default to AUTHENTIC if confidence is high and no suspicious signals found
+                v = "AUTHENTIC" if conf >= ForensicPolicy.AUTHENTIC_CONF_THRESHOLD else "INCONCLUSIVE"
 
             if m.get("skipped"):
                 v = "NOT_APPLICABLE"

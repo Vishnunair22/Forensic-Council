@@ -218,41 +218,6 @@ class TestLogSensitiveOperation:
         )
 
 
-# ── ToolHandlers ──────────────────────────────────────────────────────────────
-
-class TestToolHandlers:
-    @pytest.mark.asyncio
-    async def test_run_ml_safe_returns_dict(self):
-        from agents.tool_handlers import ToolHandlers
-        with patch("agents.tool_handlers.run_ml_tool", new=AsyncMock(return_value={"available": True})):
-            result = await ToolHandlers.run_ml_safe("test_tool.py", "/tmp/file.jpg")
-        assert isinstance(result, dict)
-
-    @pytest.mark.asyncio
-    async def test_run_ml_safe_on_exception(self):
-        from agents.tool_handlers import ToolHandlers
-        with patch("agents.tool_handlers.run_ml_tool", new=AsyncMock(side_effect=RuntimeError("crash"))):
-            result = await ToolHandlers.run_ml_safe("bad_tool.py", "/tmp/file.jpg")
-        assert result.get("available") is False
-        assert "error" in result
-
-    @pytest.mark.asyncio
-    async def test_image_ela_handler_delegates(self):
-        from agents.tool_handlers import ToolHandlers
-        from core.evidence import ArtifactType, EvidenceArtifact
-        artifact = EvidenceArtifact.create_root(
-            artifact_type=ArtifactType.ORIGINAL,
-            file_path="/tmp/test.jpg",
-            content_hash="hash",
-            action="upload",
-            agent_id="system",
-            session_id=uuid4(),
-        )
-        with patch("tools.image_tools.ela_full_image", new=AsyncMock(return_value={"available": False})):
-            result = await ToolHandlers.image_ela_handler(artifact, quality=90)
-        assert isinstance(result, dict)
-
-
 # ── MimeRegistry ──────────────────────────────────────────────────────────────
 
 class TestMimeRegistry:

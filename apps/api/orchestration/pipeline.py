@@ -26,28 +26,44 @@ class SignalBus:
         self.events = {aid: asyncio.Event() for aid in agent_ids}
         self.findings = {aid: [] for aid in agent_ids}
         self.quorum_event = asyncio.Event()
+        self._agent_ids = agent_ids
+        # Initial quorum based on all agents; will be refined once support is checked.
         self._required_quorum = max(1, len(agent_ids) // 2 + 1)
         self._ready_agents = set()
+        self._quorum_lock = asyncio.Lock()
 
-    def signal_ready(self, agent_id: str, initial_findings: list):
+    def update_applicable_agents(self, applicable_ids: list[str]):
+        """Update quorum threshold based on actually applicable agents."""
+        sorted_ids = sorted(applicable_ids)
+        self._required_quorum = max(1, len(sorted_ids) // 2 + 1)
+        logger.info(
+            "Quorum threshold updated",
+            applicable_count=len(sorted_ids),
+            required_quorum=self._required_quorum,
+            agent_ids=sorted_ids,
+        )
+        asyncio.get_event_loop().create_task(self._async_check_quorum())
+
+    async def signal_ready(self, agent_id: str, initial_findings: list):
         """Signal that an agent has finished its initial investigation."""
         if agent_id in self.events:
-            self.findings[agent_id] = initial_findings
+            self.findings[agent_id] = list(initial_findings)
             self.events[agent_id].set()
             self._ready_agents.add(agent_id)
-            self._check_quorum()
+            await self._async_check_quorum()
 
-    def signal_failure(self, agent_id: str):
+    async def signal_failure(self, agent_id: str):
         """Signal that an agent has failed its initial investigation."""
         if agent_id in self.events:
             self.events[agent_id].set()
             self._ready_agents.add(agent_id)
-            self._check_quorum()
+            await self._async_check_quorum()
 
-    def _check_quorum(self):
-        """Check if enough agents have reported (success or failure) to unblock deliberation."""
-        if len(self._ready_agents) >= self._required_quorum:
-            self.quorum_event.set()
+    async def _async_check_quorum(self):
+        """Thread-safe quorum check and event setting."""
+        async with self._quorum_lock:
+            if len(self._ready_agents) >= self._required_quorum:
+                self.quorum_event.set()
 
     async def wait_for_quorum(self, timeout: float = 60.0):
         """Wait until a quorum of agents is ready."""
@@ -281,6 +297,7 @@ class ForensicCouncilPipeline:
         self.run_deep_analysis_flag: bool = False
         self._awaiting_user_decision: bool = False
         self._arbiter_step: str = ""
+        self._session_id: "UUID | None" = None
 
         # Initialize infrastructure
         self._setup_infrastructure()
@@ -337,7 +354,7 @@ class ForensicCouncilPipeline:
                 data={"status": "initiating", "thinking": "Establishing secure neural bridge..."}
             ))
         except Exception:
-            pass
+            pass  # SSE channel may not be open yet; investigation continues unaffected.
 
         if self._qdrant is None:
             try:
@@ -350,7 +367,7 @@ class ForensicCouncilPipeline:
                         data={"status": "initiating", "thinking": "Syncing with Qdrant vector space..."}
                     ))
                 except Exception:
-                    pass
+                    pass  # Best-effort UI update; Qdrant connect proceeds regardless.
                 self._qdrant = await get_qdrant_client()
             except Exception as e:
                 logger.warning("Failed to connect to Qdrant", error=str(e))
@@ -370,11 +387,15 @@ class ForensicCouncilPipeline:
                         data={"status": "initiating", "thinking": "Securing Postgres persistence layer..."}
                     ))
                 except Exception:
-                    pass
+                    pass  # Best-effort UI update; Postgres connect proceeds regardless.
                 self._postgres = await get_postgres_client()
             except Exception as e:
                 logger.warning("Failed to connect to PostgreSQL", error=str(e))
                 self._postgres = None
+                self._degradation_flags.append(
+                    "PostgreSQL unavailable; custody log and report persistence disabled. "
+                    "Reports will exist in memory only for this session."
+                )
 
         # Initialize custody logger
         self.custody_logger = CustodyLogger(
@@ -489,6 +510,32 @@ class ForensicCouncilPipeline:
             config=self.config,
         )
 
+        # Step Hook: Forward arbiter deliberation steps to UI
+        async def _broadcast_arbiter_step(msg: str):
+            try:
+                from api.routes._session_state import (
+                    broadcast_update,
+                    get_active_pipeline_metadata,
+                    set_active_pipeline_metadata,
+                )
+                from api.schemas import BriefUpdate
+
+                await broadcast_update(
+                    str(session_id),
+                    BriefUpdate(
+                        type="AGENT_UPDATE",
+                        session_id=str(session_id),
+                        agent_id=None,
+                        message=msg,
+                        data={"status": "processing", "thinking": msg},
+                    ),
+                )
+                existing = await get_active_pipeline_metadata(str(session_id)) or {}
+                await set_active_pipeline_metadata(str(session_id), {**existing, "brief": msg})
+            except Exception:
+                pass  # Arbiter step broadcast is best-effort; deliberation continues regardless.
+        self.arbiter._step_hook = _broadcast_arbiter_step
+
     async def run_investigation(
         self,
         evidence_file_path: str,
@@ -509,6 +556,7 @@ class ForensicCouncilPipeline:
 
         # Step 1 & 2: Create session and ingest evidence
         session_id = session_id or uuid4()
+        self._session_id = session_id
         self._case_id = case_id
         self._started_at = datetime.now(UTC).isoformat()
         self._degradation_flags = []
@@ -562,7 +610,7 @@ class ForensicCouncilPipeline:
                 data={"status": "initiating", "thinking": "Securing evidence artifacts..."}
             ))
         except Exception:
-            pass
+            pass  # Best-effort UI update; evidence ingestion proceeds regardless.
 
         # Create evidence artifact
         evidence_artifact = await self._ingest_evidence(
@@ -583,7 +631,7 @@ class ForensicCouncilPipeline:
                 data={"status": "processing", "thinking": "Validating chain of custody..."}
             ))
         except Exception:
-            pass
+            pass  # Best-effort UI update; session setup proceeds regardless.
 
         # Set evidence artifact in factory and bus
         if hasattr(self, "agent_factory"):
@@ -611,7 +659,7 @@ class ForensicCouncilPipeline:
                 data={"status": "processing", "thinking": "Allocating neural resources..."}
             ))
         except Exception:
-            pass
+            pass  # Best-effort UI update; agent dispatch proceeds regardless.
 
         # Initialize signal bus
         self.signal_bus = SignalBus(all_agents)
@@ -810,22 +858,25 @@ class ForensicCouncilPipeline:
 
     async def _handle_global_abort(self, payload: dict | None = None) -> None:
         """Handle a GLOBAL_ABORT signal by cancelling the investigation."""
-        reason = payload.get("reason", "Unknown forensic violation") if payload else "Unknown forensic violation"
+        reason = (
+            payload.get("reason", "Unknown forensic violation")
+            if payload else "Unknown forensic violation"
+        )
         self._error = f"GLOBAL_ABORT: {reason}"
-        
-        # Broadcast quarantine state to UI
-        try:
-            from api.routes._session_state import broadcast_update
-            from api.schemas import BriefUpdate
-            await broadcast_update(str(self._session_id), BriefUpdate(
-                type="PIPELINE_QUARANTINED",
-                session_id=str(self._session_id),
-                message=f"CRITICAL: Pipeline quarantined. Reason: {reason}",
-                data={"status": "quarantined", "reason": reason}
-            ))
-        except Exception:
-            pass
-            
+
+        if self._session_id is not None:
+            try:
+                from api.routes._session_state import broadcast_update
+                from api.schemas import BriefUpdate
+                await broadcast_update(str(self._session_id), BriefUpdate(
+                    type="PIPELINE_QUARANTINED",
+                    session_id=str(self._session_id),
+                    message=f"CRITICAL: Pipeline quarantined. Reason: {reason}",
+                    data={"status": "quarantined", "reason": reason}
+                ))
+            except Exception:
+                pass  # Best-effort UI notification; quarantine and task cancellation proceed regardless.
+
         if self._current_run_task:
             self._current_run_task.cancel()
 
@@ -901,77 +952,6 @@ class ForensicCouncilPipeline:
         # Phase 1: Run all agents' INITIAL passes concurrently, then
         # Phase 2: Inject Agent 1's Gemini findings into Agent 3 and run all deep passes
 
-        async def run_agent_initial_only(
-            agent_class,
-            agent_id: str,
-            extra_kwargs: dict = None,
-        ) -> tuple:
-            """Run only the initial investigation pass. Returns (agent_instance, initial_findings)."""
-            agent = None
-            with _tracer.start_as_current_span(
-                f"agent.{agent_id}.initial_pass"
-            ) as span:
-                span.set_attribute("agent_id", agent_id)
-                try:
-                    kwargs = {
-                        "agent_id": agent_id,
-                        "session_id": session_id,
-                        "evidence_artifact": evidence_artifact,
-                        "config": self.config,
-                        "working_memory": self.working_memory,
-                        "episodic_memory": self.episodic_memory,
-                        "custody_logger": self.custody_logger,
-                        "evidence_store": self.evidence_store,
-                    }
-                    if extra_kwargs:
-                        kwargs.update(extra_kwargs)
-                    agent = agent_class(**kwargs)
-                    if self.inter_agent_bus is not None:
-                        self.inter_agent_bus.register_agent(agent_id, agent)
-                    if not agent.supports_uploaded_file:
-                        return agent, [], "unsupported"
-                    logger.info(f"Running {agent_id} initial investigation")
-                    initial_findings = await asyncio.wait_for(
-                        agent.run_investigation(),
-                        timeout=min(float(self.config.investigation_timeout), 300.0),
-                    )
-                    span.set_attribute("finding_count", len(initial_findings))
-                    # Signal the bus for early deliberation unblocking
-                    if self.signal_bus:
-                        self.signal_bus.signal_ready(agent_id, initial_findings)
-
-                    return agent, initial_findings, "complete"
-                except Exception as e:
-                    logger.error(
-                        f"{agent_id} initial pass failed", error=str(e), exc_info=True
-                    )
-                    findings = list(getattr(agent, "_findings", []) or []) if agent is not None else []
-                    try:
-                        from core.react_loop import AgentFinding
-
-                        findings.append(
-                            AgentFinding(
-                                agent_id=agent_id,
-                                agent_name=getattr(agent, "agent_name", agent_id),
-                                finding_type="Initial Analysis Incomplete",
-                                confidence_raw=0.0,
-                                raw_confidence_score=0.0,
-                                status="INCOMPLETE",
-                                evidence_verdict="ERROR",
-                                reasoning_summary=(
-                                    f"{agent_id} did not finish inside the initial-analysis guardrail: {e}. "
-                                    "Partial tool findings were preserved and the analyst may continue instead of being blocked."
-                                ),
-                                metadata={
-                                    "tool_name": "initial_analysis_guardrail",
-                                    "court_defensible": False,
-                                    "tool_error": str(e),
-                                },
-                            )
-                        )
-                    except Exception:
-                        pass
-                    return agent, findings, "error"
 
         async def run_agent_deep_only(
             agent,
@@ -1163,6 +1143,11 @@ class ForensicCouncilPipeline:
             else:
                 await _broadcast_agent_status(aid, "running", f"Agent {aid} active. Initializing scan...", agent_inst=inst)
 
+        # Update quorum based on applicable agents
+        applicable_ids = [aid for (inst, supported), aid in zip(agent_instances, registry.get_all_agent_ids()) if supported]
+        if self.signal_bus:
+            self.signal_bus.update_applicable_agents(applicable_ids)
+
         # Step 2: Run all supported initial passes concurrently
         async def _run_one(agent, aid, supported):
             if not supported:
@@ -1178,7 +1163,7 @@ class ForensicCouncilPipeline:
                 
                 # Signal for quorum
                 if self.signal_bus:
-                    self.signal_bus.signal_ready(aid, initial_findings)
+                    await self.signal_bus.signal_ready(aid, initial_findings)
 
                 message = f"{aid} initial analysis complete."
                 await _broadcast_agent_status(aid, "complete", message, findings=initial_findings, agent_inst=agent)
@@ -1188,7 +1173,7 @@ class ForensicCouncilPipeline:
                 findings = list(getattr(agent, "_findings", []) or [])
                 # Signal for quorum even on error to prevent deadlock
                 if self.signal_bus:
-                    self.signal_bus.signal_failure(aid)
+                    await self.signal_bus.signal_failure(aid)
                 
                 await _broadcast_agent_status(aid, "error", f"{aid} error: {e}", findings=findings, error=str(e), agent_inst=agent)
                 return agent, findings, "error"
@@ -1273,15 +1258,18 @@ class ForensicCouncilPipeline:
 
                 while (time.perf_counter() - start_time) < timeout:
                     try:
-                        decision = await redis.get_json(decision_key)
-                        if isinstance(decision, dict):
-                            self.run_deep_analysis_flag = bool(decision.get("deep_analysis"))
-                            logger.info(
-                                "Analyst decision received via Redis", 
-                                session_id=str(session_id), 
-                                deep_analysis=self.run_deep_analysis_flag
-                            )
-                            return self.run_deep_analysis_flag
+                        raw_decision = await redis.get(decision_key)
+                        if raw_decision:
+                            import json as _json
+                            decision = _json.loads(raw_decision)
+                            if isinstance(decision, dict):
+                                self.run_deep_analysis_flag = bool(decision.get("deep_analysis"))
+                                logger.info(
+                                    "Analyst decision received via Redis", 
+                                    session_id=str(session_id), 
+                                    deep_analysis=self.run_deep_analysis_flag
+                                )
+                                return self.run_deep_analysis_flag
                     except Exception as poll_err:
                         # Log error but don't crash the loop - Redis might be flickering
                         logger.debug("Decision polling flicker", error=str(poll_err))
@@ -1304,7 +1292,7 @@ class ForensicCouncilPipeline:
                 try:
                     await redis.delete(decision_key)
                 except Exception:
-                    pass
+                    pass  # Redis may be unavailable during cleanup; decision state is already consumed.
 
         if not await _await_deep_analysis_decision():
             logger.info("Deep analysis skipped by analyst decision", session_id=str(session_id))
@@ -1438,34 +1426,6 @@ class ForensicCouncilPipeline:
 
         return list(results)
 
-    async def _checkpoint_agent_result(
-        self,
-        session_id: UUID,
-        agent_id: str,
-        findings: list,
-    ) -> None:
-        """Issue 6.3: Checkpoint a completed agent's findings to Redis so the
-        work is not lost if the Uvicorn worker is killed mid-investigation."""
-        if self._redis is None:
-            return
-        import json as _json
-        key = f"forensic:checkpoint:{session_id}:{agent_id}"
-        ttl = self.config.session_ttl_hours * 3600
-        try:
-            serializable = [
-                f.model_dump(mode="json") if hasattr(f, "model_dump") else f
-                for f in findings
-            ]
-            await self._redis.set(key, _json.dumps(serializable), ex=ttl)
-            logger.debug(
-                "Checkpointed agent findings to Redis",
-                agent_id=agent_id,
-                count=len(findings),
-            )
-        except Exception as e:
-            logger.warning(
-                "Failed to checkpoint agent result", agent_id=agent_id, error=str(e)
-            )
 
     async def handle_hitl_decision(
         self,

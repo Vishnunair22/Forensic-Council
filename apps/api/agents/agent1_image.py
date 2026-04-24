@@ -24,10 +24,11 @@ import os
 from functools import cached_property
 
 from agents.base_agent import ForensicAgent
-from core.gemini_client import GeminiVisionClient
+
 from core.handlers.image import ImageHandlers
 from core.handlers.metadata import MetadataHandlers
 from core.image_utils import is_lossless_image
+from core.react_loop import AgentFinding
 from core.media_kind import is_digitally_created_image, is_screen_capture_like
 from core.structured_logging import get_logger
 from core.tool_registry import ToolRegistry
@@ -67,7 +68,9 @@ class Agent1Image(ForensicAgent):
 
     @property
     def iteration_ceiling(self) -> int:
-        return self._compute_ceiling(len(self.task_decomposition))
+        # Include both initial and deep tasks to prevent truncation of the forensic pipeline.
+        base_count = len(self.task_decomposition) + len(self.deep_task_decomposition)
+        return self._compute_ceiling(base_count)
 
     @property
     def task_decomposition(self) -> list[str]:
@@ -146,6 +149,8 @@ class Agent1Image(ForensicAgent):
         # ── Legacy/Compatibility mappings ─────────────────────────────────────
         # extract_evidence_text is used in some decomposition lists; map it to the unified OCR
         registry.register("extract_evidence_text", self.extract_text_from_image_handler, "Evidence text extraction (unified)")
+        
+
 
         # ── Gemini Vision Handler (Unified) ───────────────────────────────────
         async def gemini_deep_forensic_handler(input_data: dict) -> dict:
@@ -163,7 +168,7 @@ class Agent1Image(ForensicAgent):
 
             return await self._gemini_deep_forensic_handler(
                 input_data, 
-                model_hint="gemini-2.0-flash", 
+                model_hint="gemini-2.5-flash", 
                 signal_callback=_signal_cb
             )
 
@@ -205,35 +210,61 @@ class Agent1Image(ForensicAgent):
         )
     async def on_tool_result(self, finding: AgentFinding) -> None:
         """Reactive task expansion based on pixel and semantic signals."""
-        from core.working_memory import TaskStatus
+        try:
+            await self._on_tool_result_impl(finding)
+        except Exception as e:
+            logger.warning("on_tool_result failed", agent_id=self.agent_id, error=str(e))
 
-        # 1. If semantic analysis detects a person or AI-generation markers, escalate to deepfake check
-        if finding.metadata.get("tool_name") == "analyze_image_content":
-            image_type = finding.metadata.get("image_type", "").lower()
-            all_classes = finding.metadata.get("all_classifications", [])
+    async def _on_tool_result_impl(self, finding: AgentFinding) -> None:
+        """Implementation of reactive task expansion."""
+        tool_name = finding.metadata.get("tool_name")
+
+        # 1. [REACTIVE] analyze_image_content: Update sub-task with semantic context
+        if tool_name == "analyze_image_content":
+            image_type = (finding.metadata.get("image_type") or "unknown").lower()
+            all_classifications = finding.metadata.get("all_classifications", [])
             
-            # Check for person or AI markers in any top classification
-            has_person = "person" in image_type or any("person" in str(c[0]).lower() and c[1] > 0.4 for c in all_classes)
-            has_ai_marker = "ai image" in image_type or any("ai image" in str(c[0]).lower() and c[1] > 0.4 for c in all_classes)
+            # [RESTORED] Check for person, face, or AI markers for deepfake escalation
+            # Robust keyword matching for forensic semantic triggers
+            person_keywords = {"person", "people", "man", "woman", "face", "portrait", "selfie", "human"}
+            has_person = any(k in image_type for k in person_keywords) or any(
+                any(k in str(c.get("category", "")).lower() for k in person_keywords)
+                and (c.get("score") or 0.0) > 0.4 
+                for c in all_classifications
+            )
+            
+            ai_keywords = {"ai image", "digitally generated", "synthetic", "diffusion", "gan"}
+            has_ai_marker = any(k in image_type for k in ai_keywords) or any(
+                any(k in str(c.get("category", "")).lower() for k in ai_keywords)
+                and (c.get("score") or 0.0) > 0.4 
+                for c in all_classifications
+            )
 
             if has_person or has_ai_marker:
                 logger.info(f"Semantic trigger: {image_type}; injecting deepfake frequency audit", agent_id=self.agent_id)
-                await self.working_memory.create_task(
-                    session_id=self.session_id,
-                    agent_id=self.agent_id,
-                    description="Run deepfake_frequency_check for GAN/Diffusion artifacts",
-                    status=TaskStatus.PENDING,
-                    priority=15
-                )
+                await self.inject_task(description="Run deepfake_frequency_check for GAN/Diffusion artifacts", priority=15)
 
-        # 2. If neural ELA flags high-confidence manipulation, inject localized ROI extraction
-        if finding.metadata.get("tool_name") == "neural_ela":
-            if finding.evidence_verdict == "POSITIVE" and finding.confidence_raw > 0.8:
-                logger.info("High-confidence ELA signal; injecting ROI extraction", agent_id=self.agent_id)
-                await self.working_memory.create_task(
-                    session_id=self.session_id,
-                    agent_id=self.agent_id,
-                    description="Run roi_extract on anomalous regions identified by Neural ELA",
-                    status=TaskStatus.PENDING,
-                    priority=20
-                )
+            if any(k in image_type for k in ("social media", "screenshot", "document", "post")):
+                await self.update_sub_task(f"High-risk {image_type} identified — grounding metadata check...")
+            
+            # AI generation suspicion
+            if has_ai_marker or "digitally generated" in image_type:
+                # Force immediate deep analysis for AI suspicion
+                await self.inject_task(description="Run diffusion_artifact_detector to confirm AI generation", priority=20)
+            
+            # surveillance footage
+            if "surveillance" in image_type or "security" in image_type:
+                 await self.inject_task(description="Run noise_fingerprint to check sensor consistency in surveillance frame", priority=15)
+
+            await self.update_sub_task(f"Semantic Context: {image_type}")
+            await self._publish_agent_context("initial", [finding])
+            return
+
+        # 2. If neural forensic tools flag high-confidence manipulation, inject localized ROI extraction
+        if tool_name in {"neural_copy_move", "copy_move_detect", "neural_ela", "neural_splicing", "splicing_detect"}:
+            if finding.evidence_verdict == "POSITIVE" and (finding.confidence_raw or 0.0) > 0.75:
+                logger.info(f"High-confidence {tool_name} signal; injecting ROI extraction", agent_id=self.agent_id)
+                await self.inject_task(description="Run roi_extract for localized forensic region analysis", priority=20)
+            
+            await self._publish_agent_context("deep" if "neural" in tool_name else "initial", [finding])
+

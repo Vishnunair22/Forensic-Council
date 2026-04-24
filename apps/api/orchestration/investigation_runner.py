@@ -139,10 +139,10 @@ async def run_investigation_task(
         )
     finally:
         try:
-            if os.path.exists(evidence_file_path):
-                os.unlink(evidence_file_path)
+            from pathlib import Path
+            Path(evidence_file_path).unlink(missing_ok=True)
         except Exception:
-            logger.warning("Failed to remove temporary evidence file")
+            logger.warning("Failed to remove temporary evidence file", path=evidence_file_path)
         remove_active_pipeline(session_id)
         _active_tasks.pop(session_id, None)
         clear_session_websockets(session_id)

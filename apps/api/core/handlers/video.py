@@ -89,8 +89,10 @@ class VideoHandlers(BaseToolHandler):
         fallback = await self.frame_consistency_analysis_handler(input_data)
         result = {
             **fallback,
+            "vfi_artifact_detected": False, # Cannot confirm VFI from pixel delta alone
+            "interpolation_artifact_detected": False,
             "degraded": True,
-            "fallback_reason": "vfi_error_mapper unavailable; used frame consistency analysis",
+            "fallback_reason": "vfi_error_mapper unavailable; used frame consistency analysis (not motion-specific)",
         }
         await self.agent._record_tool_result("vfi_error_map", result)
         return result
@@ -429,15 +431,15 @@ class VideoHandlers(BaseToolHandler):
         result = {
             "available": True,
             "adversarial_pattern_detected": False,
-            "confidence": 0.75 if not errors else 0.45,
-            "court_defensible": not bool(errors),
+            "confidence": 0.75 if not errors and not degraded else 0.45,
+            "court_defensible": not bool(errors) and len(degraded) < 2, # Lose defensibility if multiple fallbacks
             "method": "cross-tool temporal stability audit",
             "degraded_inputs": degraded,
             "tool_errors": errors,
             "note": (
                 "Core temporal findings remained stable across available checks."
-                if not errors
-                else "One or more temporal checks failed; treat temporal conclusions as incomplete."
+                if not errors and not degraded
+                else "Multiple temporal checks are degraded or failed; treat temporal conclusions as inconclusive."
             ),
         }
         await self.agent._record_tool_result("adversarial_robustness_check", result)

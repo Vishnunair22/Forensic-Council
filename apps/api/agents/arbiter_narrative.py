@@ -95,7 +95,7 @@ class ArbiterNarrativeMixin:
         if not (self.config.llm_api_key and self.config.llm_provider != "none"):
             return ""
 
-        client = getattr(self, "_synthesis_client", None) or LLMClient(self.config)
+        client = getattr(self, "_synthesis_client", None) or LLMClient(self.config, use_arbiter_tier=True)
         if not client.is_available:
             return ""
 
@@ -268,7 +268,7 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
             return await client.generate_synthesis(
                 system_prompt=system_prompt,
                 user_content=user_content,
-                max_tokens=380,
+                max_tokens=600,
                 json_mode=False,
             )
         except Exception as e:
@@ -324,7 +324,7 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
         overall_verdict: str = "",
     ) -> str:
         """Generate executive summary using Groq LLM synthesis."""
-        client = getattr(self, "_synthesis_client", None) or LLMClient(self.config)
+        client = getattr(self, "_synthesis_client", None) or LLMClient(self.config, use_arbiter_tier=True)
 
         top_findings = sorted(
             [
@@ -509,7 +509,7 @@ Write the Executive Summary for this forensic report. Justify the {overall_verdi
         self, incomplete: int, contested: int, overall_error_rate: float = 0.0
     ) -> str:
         """Generate uncertainty statement using LLM."""
-        client = getattr(self, "_synthesis_client", None) or LLMClient(self.config)
+        client = getattr(self, "_synthesis_client", None) or LLMClient(self.config, use_arbiter_tier=True)
 
         system_prompt = """You are the Council Arbiter writing the Limitations and Uncertainty section of a forensic report.
 
@@ -590,7 +590,7 @@ Write 2-3 sentences only. Do not use bullet points."""
         analysis_coverage_note: str,
         has_deep_analysis: bool = False,
     ) -> tuple[str, list[str], str] | None:
-        client = getattr(self, "_synthesis_client", None) or LLMClient(self.config)
+        client = getattr(self, "_synthesis_client", None) or LLMClient(self.config, use_arbiter_tier=True)
 
         def _strip_rs_prefix(s: str) -> str:
             idx = s.find(":")
@@ -803,7 +803,7 @@ Rules:
         )
 
         if llm_enabled:
-            _client = LLMClient(self.config)
+            _client = LLMClient(self.config, use_arbiter_tier=True)
             if not _client.is_available:
                 llm_enabled = False
             else:
@@ -891,9 +891,15 @@ Rules:
         unc_s = self._template_uncertainty_statement(incomplete_count, cont, oer)
         return vs, kf, rn, {}, exec_s, unc_s
 
-    async def sign_report(self, report: ForensicReport) -> ForensicReport:
-        """Sign the forensic report with the Arbiter key."""
-        now = datetime.now(UTC)
+    async def sign_report(self, report: ForensicReport, completion_time: datetime | None = None) -> ForensicReport:
+        """Sign the forensic report with the Arbiter key.
+
+        Args:
+            report: The forensic report to sign.
+            completion_time: Optional pre-recorded investigation completion time.
+                        If not provided, uses current time.
+        """
+        now = completion_time or datetime.now(UTC)
         report_dict = report.model_dump(mode="json", exclude={"cryptographic_signature", "report_hash", "signed_utc"})
         report_json = json.dumps(report_dict, sort_keys=True)
         report_hash = hashlib.sha256(report_json.encode()).hexdigest()

@@ -22,6 +22,8 @@ services:
       RELOAD: "false"
       APP_ENV: production
       DEBUG: "false"
+    secrets:
+      - metrics_scrape_token
     volumes: !override
       - evidence_data:/app/storage/evidence:rw
       - signing_keys:/app/storage/keys:rw
@@ -41,6 +43,8 @@ services:
     restart: always
     build:
       target: runner
+      args:
+        NEXT_PUBLIC_API_URL: ""
     # Suppress direct port access — all traffic via Caddy in production
     ports: !reset []
     # Remove dev bind-mount (../apps/web:/app) — runner image is self-contained.
@@ -97,3 +101,5 @@ services:
 
   prometheus:
     ports: !reset []
+    secrets:
+      - metrics_scrape_token

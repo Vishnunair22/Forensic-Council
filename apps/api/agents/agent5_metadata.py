@@ -53,6 +53,7 @@ class Agent5Metadata(ForensicAgent):
         custody_logger: CustodyLogger,
         evidence_store: EvidenceStore,
         inter_agent_bus: Any | None = None,
+        heavy_tool_semaphore: asyncio.Semaphore | None = None,
     ) -> None:
         super().__init__(
             agent_id=agent_id,
@@ -64,6 +65,7 @@ class Agent5Metadata(ForensicAgent):
             custody_logger=custody_logger,
             evidence_store=evidence_store,
             inter_agent_bus=inter_agent_bus,
+            heavy_tool_semaphore=heavy_tool_semaphore,
         )
         self._agent1_context: dict = {}
         self._agent1_context_event: asyncio.Event = asyncio.Event()
@@ -183,33 +185,8 @@ class Agent5Metadata(ForensicAgent):
         metadata_h = MetadataHandlers(self)
         registry.register_domain_handler(metadata_h)
 
-        # AV Container Profiling (reusing Video domain) — only for video files
-        _mime = getattr(self.evidence_artifact, "mime_type", "") or ""
-        _fp = getattr(self.evidence_artifact, "file_path", "").lower()
-        _is_av = (
-            _mime.startswith("video/")
-            or _mime.startswith("audio/")
-            or any(
-                _fp.endswith(ext)
-                for ext in (
-                    ".mp4",
-                    ".avi",
-                    ".mov",
-                    ".mkv",
-                    ".webm",
-                    ".flv",
-                    ".wmv",
-                    ".m4v",
-                    ".mp3",
-                    ".wav",
-                    ".flac",
-                    ".ogg",
-                    ".aac",
-                    ".m4a",
-                )
-            )
-        )
-        if _is_av:
+        # AV Container Profiling (reusing Video domain) — only for AV media
+        if self._is_av_media:
             video_h = VideoHandlers(self)
             registry.register(
                 "mediainfo_profile",

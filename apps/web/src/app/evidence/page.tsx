@@ -129,9 +129,9 @@ export default function EvidencePage() {
             )}
 
             <ForensicErrorModal 
-              isVisible={!!(validationError || errorMessage)} 
-              message={validationError || errorMessage || "The analysis pipeline was interrupted."} 
-              errorCode={validationError ? "0xFC_VALIDATION_FAIL" : "0xFC_PIPELINE_HALT"}
+              isVisible={!!(errorMessage || validationError)} 
+              message={errorMessage || validationError || "The analysis pipeline was interrupted."} 
+              errorCode={errorMessage ? "0xFC_PIPELINE_HALT" : "0xFC_VALIDATION_FAIL"}
               onRetry={!!file ? () => triggerAnalysis(file as File) : undefined}
               onHome={handleNewUpload} 
             />

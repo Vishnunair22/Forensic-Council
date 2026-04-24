@@ -41,21 +41,46 @@ async def _event_generator(
     # Import the shared WebSocket connections registry
     from api.routes._session_state import _websocket_connections
 
-    # Create a queue to receive broadcasts
-    queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=100)
+    # Increase queue size from 100 → 500
+    queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=500)
+
+    _CRITICAL_TYPES = frozenset(
+        {"PIPELINE_COMPLETE", "ERROR", "PIPELINE_PAUSED", "HITL_CHECKPOINT", "PIPELINE_QUARANTINED"}
+    )
 
     # Register as a "pseudo-WebSocket" consumer
     class SSEConsumer:
-        """Minimal consumer that puts messages into a queue."""
+        """Priority-aware SSE consumer. Never drops critical terminal events."""
 
         def __init__(self, q: asyncio.Queue):
             self._queue = q
 
         async def send_json(self, data: dict) -> None:
-            try:
+            is_critical = data.get("type") in _CRITICAL_TYPES
+            if not self._queue.full():
                 self._queue.put_nowait(data)
-            except asyncio.QueueFull:
-                pass  # Drop oldest — client is too slow
+                return
+            if is_critical:
+                # Evict oldest non-critical item to make room
+                tmp: list = []
+                while not self._queue.empty():
+                    tmp.append(self._queue.get_nowait())
+                drop_idx = next(
+                    (i for i, m in enumerate(tmp) if m.get("type") not in _CRITICAL_TYPES),
+                    None,
+                )
+                if drop_idx is not None:
+                    tmp.pop(drop_idx)
+                for item in tmp:
+                    try:
+                        self._queue.put_nowait(item)
+                    except asyncio.QueueFull:
+                        break
+                try:
+                    self._queue.put_nowait(data)
+                except asyncio.QueueFull:
+                    pass  # queue is entirely critical messages; accept the drop
+            # else: non-critical dropped — safe
 
     consumer = SSEConsumer(queue)
 

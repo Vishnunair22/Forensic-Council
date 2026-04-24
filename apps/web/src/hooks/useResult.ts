@@ -57,12 +57,21 @@ export function useResult() {
     } catch { return []; }
   });
   
-  // Session ID — read once when mounted (stable for the lifetime of the result page)
-  const [sessionId] = useState<string | null>(() =>
+  // Session ID
+  const [sessionId, setSessionId] = useState<string | null>(() =>
     typeof window !== "undefined"
       ? storage.getItem<string>("forensic_session_id", false, null)
       : null
   );
+
+  const selectSession = useCallback((sid: string) => {
+    storage.setItem("forensic_session_id", sid);
+    setSessionId(sid);
+    setArbiterComplete(false);
+    setReport(null);
+    setState("arbiter");
+    setArbiterMsg("Council deliberating on evidence...");
+  }, []);
 
   // Set to true when the arbiter status polling confirms the investigation is done
   const [arbiterComplete, setArbiterComplete] = useState(false);
@@ -236,5 +245,6 @@ export function useResult() {
     handleNew,
     handleHome,
     handleExport,
+    selectSession,
   };
 }

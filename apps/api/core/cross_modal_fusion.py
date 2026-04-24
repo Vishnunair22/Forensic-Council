@@ -139,6 +139,10 @@ def _extract_signals(findings_by_agent: dict[str, list[dict]]) -> list[ModalityS
                     or meta.get("editing_software_detected", False)
                     or meta.get("adversarial_pattern_detected", False)
                     or meta.get("concern_flag", False)
+                    or meta.get("is_anomalous", False)
+                    or meta.get("scene_incongruent", False)
+                    or meta.get("prosody_anomaly", False)
+                    or meta.get("is_reliable") is False
                 )
 
             # Extract numeric metrics for correlation

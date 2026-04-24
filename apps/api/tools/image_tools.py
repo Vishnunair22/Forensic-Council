@@ -40,7 +40,7 @@ class BoundingBox:
         return {"x": self.x, "y": self.y, "w": self.w, "h": self.h}
 
 
-def ela_full_image(
+async def ela_full_image(
     artifact: EvidenceArtifact,
     evidence_store: EvidenceStore | None = None,
     quality: int = 95,
@@ -126,130 +126,111 @@ def ela_full_image(
                 "available": True,
             }
 
-        # ── blocking PIL/numpy multi-quality sweep ──────────
+        # Run the blocking PIL/numpy multi-quality sweep directly (runs in thread pool automatically via async)
+        quality_levels_used = [70, 80, 90, 95] if multi_quality else [quality]
 
-        # Capture parameters for the closure
-        _quality = quality
-        _multi_quality = multi_quality
-        _anomaly_threshold = anomaly_threshold
-        _evidence_store = evidence_store
-        _artifact = artifact
+        with Image.open(original_path) as _img:
+            original = _img.convert("RGB") if _img.mode != "RGB" else _img.copy()
+        original_array = np.array(original, dtype=np.float64)
 
-        def _blocking_ela_compute() -> dict:
-            quality_levels_used = [70, 80, 90, 95] if _multi_quality else [_quality]
+        ela_maps: list = []
+        temp_files_ela: list[str] = []
 
-            with Image.open(original_path) as _img:
-                original = _img.convert("RGB") if _img.mode != "RGB" else _img.copy()
-            original_array = np.array(original, dtype=np.float64)
+        try:
+            for q in quality_levels_used:
+                with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                    tmp_path_ela = tmp.name
+                    temp_files_ela.append(tmp_path_ela)
 
-            ela_maps: list = []
-            temp_files_ela: list[str] = []
+                original.save(tmp_path_ela, "JPEG", quality=q)
+                with Image.open(tmp_path_ela) as _resaved:
+                    resaved_array = np.array(_resaved, dtype=np.float64)
 
-            try:
-                for q in quality_levels_used:
-                    with tempfile.NamedTemporaryFile(
-                        suffix=".jpg", delete=False
-                    ) as tmp:
-                        tmp_path_ela = tmp.name
-                        temp_files_ela.append(tmp_path_ela)
+                ela_map = np.abs(original_array - resaved_array)
+                ela_gray = np.mean(ela_map, axis=2)
+                ela_maps.append(ela_gray)
 
-                    original.save(tmp_path_ela, "JPEG", quality=q)
-                    with Image.open(tmp_path_ela) as _resaved:
-                        resaved_array = np.array(_resaved, dtype=np.float64)
+            combined_ela = (
+                np.max(np.stack(ela_maps, axis=0), axis=0)
+                if len(ela_maps) > 1
+                else ela_maps[0]
+            )
 
-                    ela_map = np.abs(original_array - resaved_array)
-                    ela_gray = np.mean(ela_map, axis=2)
-                    ela_maps.append(ela_gray)
+            max_anomaly = float(np.max(combined_ela))
+            mean_ela = float(np.mean(combined_ela))
+            std_ela = float(np.std(combined_ela))
 
-                # Fuse: take max across quality levels — maximises sensitivity
-                combined_ela = (
-                    np.max(np.stack(ela_maps, axis=0), axis=0)
-                    if len(ela_maps) > 1
-                    else ela_maps[0]
+            anomaly_mask = combined_ela > anomaly_threshold
+            labeled_array, num_features = ndimage.label(anomaly_mask)
+
+            anomaly_regions: list[BoundingBox] = []
+            for i in range(1, num_features + 1):
+                region_mask = labeled_array == i
+                rows = np.any(region_mask, axis=1)
+                cols = np.any(region_mask, axis=0)
+                if np.any(rows) and np.any(cols):
+                    y_min, y_max = np.where(rows)[0][[0, -1]]
+                    x_min, x_max = np.where(cols)[0][[0, -1]]
+                    anomaly_regions.append(
+                        BoundingBox(
+                            x=int(x_min),
+                            y=int(y_min),
+                            w=int(x_max - x_min + 1),
+                            h=int(y_max - y_min + 1),
+                        )
+                    )
+
+            derivative_artifact = None
+            if evidence_store:
+                ela_image = Image.fromarray(
+                    (combined_ela / max(max_anomaly, 1) * 255).astype(np.uint8)
+                )
+                ela_path = os.path.join(
+                    os.path.dirname(original_path),
+                    f"ela_{artifact.artifact_id}.jpg",
+                )
+                ela_image.save(ela_path, "JPEG", quality=95)
+                with open(ela_path, "rb") as f:
+                    ela_hash = hashlib.sha256(f.read()).hexdigest()
+                derivative_artifact = EvidenceArtifact.create_derivative(
+                    parent=artifact,
+                    artifact_type=ArtifactType.ELA_OUTPUT,
+                    file_path=ela_path,
+                    content_hash=ela_hash,
+                    action="ela_analysis",
+                    agent_id="image_tools",
+                    metadata={
+                        "quality": quality,
+                        "quality_levels": quality_levels_used,
+                        "multi_quality_fusion": multi_quality,
+                        "max_anomaly": max_anomaly,
+                        "anomaly_threshold": anomaly_threshold,
+                    },
                 )
 
-                max_anomaly = float(np.max(combined_ela))
-                mean_ela = float(np.mean(combined_ela))
-                std_ela = float(np.std(combined_ela))
+            return {
+                "max_anomaly": max_anomaly,
+                "anomaly_regions": [r.to_dict() for r in anomaly_regions],
+                "num_anomaly_regions": len(anomaly_regions),
+                "mean_ela": mean_ela,
+                "std_ela": std_ela,
+                "ela_mean": mean_ela,
+                "quality_levels": quality_levels_used,
+                "multi_quality_fusion": multi_quality,
+                "derivative_artifact": derivative_artifact.to_dict()
+                if derivative_artifact
+                else None,
+                "court_defensible": True,
+                "available": True,
+            }
 
-                anomaly_mask = combined_ela > _anomaly_threshold
-                labeled_array, num_features = ndimage.label(anomaly_mask)
-
-                anomaly_regions: list[BoundingBox] = []
-                for i in range(1, num_features + 1):
-                    region_mask = labeled_array == i
-                    rows = np.any(region_mask, axis=1)
-                    cols = np.any(region_mask, axis=0)
-                    if np.any(rows) and np.any(cols):
-                        y_min, y_max = np.where(rows)[0][[0, -1]]
-                        x_min, x_max = np.where(cols)[0][[0, -1]]
-                        anomaly_regions.append(
-                            BoundingBox(
-                                x=int(x_min),
-                                y=int(y_min),
-                                w=int(x_max - x_min + 1),
-                                h=int(y_max - y_min + 1),
-                            )
-                        )
-
-                # Optional derivative artifact (sync-safe: just file write + object construction)
-                derivative_artifact = None
-                if _evidence_store:
-                    ela_image = Image.fromarray(
-                        (combined_ela / max(max_anomaly, 1) * 255).astype(np.uint8)
-                    )
-                    ela_path = os.path.join(
-                        os.path.dirname(original_path),
-                        f"ela_{_artifact.artifact_id}.jpg",
-                    )
-                    ela_image.save(ela_path, "JPEG", quality=95)
-                    with open(ela_path, "rb") as f:
-                        ela_hash = hashlib.sha256(f.read()).hexdigest()
-                    derivative_artifact = EvidenceArtifact.create_derivative(
-                        parent=_artifact,
-                        artifact_type=ArtifactType.ELA_OUTPUT,
-                        file_path=ela_path,
-                        content_hash=ela_hash,
-                        action="ela_analysis",
-                        agent_id="image_tools",
-                        metadata={
-                            "quality": _quality,
-                            "quality_levels": quality_levels_used,
-                            "multi_quality_fusion": _multi_quality,
-                            "max_anomaly": max_anomaly,
-                            "anomaly_threshold": _anomaly_threshold,
-                        },
-                    )
-
-                return {
-                    "max_anomaly": max_anomaly,
-                    "anomaly_regions": [r.to_dict() for r in anomaly_regions],
-                    "num_anomaly_regions": len(anomaly_regions),
-                    "mean_ela": mean_ela,
-                    "std_ela": std_ela,
-                    "ela_mean": mean_ela,
-                    "quality_levels": quality_levels_used,
-                    "multi_quality_fusion": _multi_quality,
-                    "derivative_artifact": derivative_artifact.to_dict()
-                    if derivative_artifact
-                    else None,
-                    "court_defensible": True,
-                    "available": True,
-                }
-
-            finally:
-                for _tp in temp_files_ela:
-                    try:
-                        if os.path.exists(_tp):
-                            os.unlink(_tp)
-                    except OSError:
-                        pass
-
-        # Use a thread executor for the heavy PIL/numpy re-compression sweep 
-        # to avoid blocking the main event loop.
-        import asyncio as _asyncio
-        loop = _asyncio.get_running_loop()
-        return await loop.run_in_executor(None, _blocking_ela_compute)
+        finally:
+            for _tp in temp_files_ela:
+                try:
+                    if os.path.exists(_tp):
+                        os.unlink(_tp)
+                except OSError:
+                    pass
 
     except Exception as e:
         if isinstance(e, ToolUnavailableError):

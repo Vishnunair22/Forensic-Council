@@ -73,11 +73,11 @@ class TestPasswordHashing:
         assert h.startswith("$2b$") or h.startswith("$2a$")
 
     def test_long_password_72_byte_bcrypt_limit(self):
-        """verify_password truncates at 72 bytes per the implementation."""
+        """verify_password raises ValueError for passwords >72 bytes."""
         base = "x" * 72
         h = get_password_hash(base)
-        result = verify_password(base + "extra", h)
-        assert isinstance(result, bool)  # Must not crash
+        with pytest.raises(ValueError, match="exceeds the 72-byte"):
+            verify_password(base + "extra", h)
 
 
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•

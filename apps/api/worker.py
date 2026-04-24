@@ -189,14 +189,14 @@ async def main() -> None:
                     },
                 )
             except Exception:
-                pass
+                pass  # Redis may be down in the error path; outer exception is re-raised regardless.
             raise
         finally:
             try:
                 if os.path.exists(evidence_file_path):
                     os.unlink(evidence_file_path)
             except Exception:
-                pass
+                pass  # File may have already been removed by the pipeline's own cleanup.
             _active_pipelines.pop(session_str, None)
             clear_session_websockets(session_str)
 
@@ -217,7 +217,7 @@ async def main() -> None:
             try:
                 await asyncio.wait_for(shutdown.wait(), timeout=24 * 3600)
             except TimeoutError:
-                pass
+                pass  # 24-hour timer expired normally; loop back for another cleanup cycle.
 
     cleanup_task = asyncio.create_task(periodic_cleanup())
 
@@ -229,7 +229,7 @@ async def main() -> None:
         try:
             await worker_task
         except (asyncio.CancelledError, Exception):
-            pass
+            pass  # Expected: task was just cancelled for graceful shutdown.
     except Exception as exc:
         logger.critical("Worker crashed", error=str(exc), exc_info=True)
     finally:
@@ -237,7 +237,7 @@ async def main() -> None:
         try:
             await cleanup_task
         except (asyncio.CancelledError, Exception):
-            pass
+            pass  # Expected: cleanup task was just cancelled for graceful shutdown.
         await worker.stop()
         logger.info("Worker stopped cleanly")
 

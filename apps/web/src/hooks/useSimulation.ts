@@ -95,9 +95,18 @@ export const useSimulation = ({
 
   // Connect WebSocket manually — returns a Promise that resolves once the WS is open.
   const connectWebSocket = useCallback(
-    (targetSessionId: string): Promise<void> => {
-      // Store session ID so resumeInvestigation can use it directly
+    (targetSessionId: string, isReconnect: boolean = false): Promise<void> => {
+      // Store session ID
       setSessionId(targetSessionId);
+      
+      if (!isReconnect) {
+        // Only reset state for a brand new investigation
+        setStatus("initiating");
+        setCompletedAgents([]);
+        completedAgentsRef.current = [];
+        setAgentUpdates({});
+        setErrorMessage(null);
+      }
 
       return new Promise((resolve, reject) => {
         // Disconnect existing
@@ -106,6 +115,7 @@ export const useSimulation = ({
           wsRef.current = null;
         }
 
+        // Use a persistent queue ref to avoid concurrent processing loops on reconnect
         const messageQueue: BriefUpdate[] = [];
         let isProcessingQueue = false;
         let wsConnectionReady = false;
@@ -372,6 +382,17 @@ export const useSimulation = ({
                   setErrorMessage(update.message || "Investigation failed");
                   setStatus("error");
                   break;
+
+                case "PIPELINE_QUARANTINED":
+                  dbg.error("[WebSocket] Pipeline quarantined:", update.message);
+                  expectingPipelineCompleteRef.current = false;
+                  setErrorMessage(
+                    update.message ||
+                      "CRITICAL: Investigation pipeline quarantined — forensic violation detected.",
+                  );
+                  setStatus("error");
+                  playSoundRef.current?.("error");
+                  break;
               }
             }
           } finally {
@@ -388,13 +409,26 @@ export const useSimulation = ({
 
             dbg.log("[WebSocket] Received update, adding to queue:", update);
 
-            const isCritical = ["PIPELINE_COMPLETE", "ERROR", "PIPELINE_PAUSED", "HITL_CHECKPOINT"].includes(update.type);
+            const isCritical = [
+              "PIPELINE_COMPLETE",
+              "ERROR",
+              "PIPELINE_PAUSED",
+              "HITL_CHECKPOINT",
+              "PIPELINE_QUARANTINED",
+            ].includes(update.type);
             // Proactive trim: keep queue under limit BEFORE pushing so
             // high-throughput bursts cannot accumulate thousands of items.
             const MAX_QUEUE = 500;
             while (messageQueue.length >= MAX_QUEUE) {
               const dropIdx = messageQueue.findIndex(
-                (m) => !["PIPELINE_COMPLETE", "ERROR", "PIPELINE_PAUSED", "HITL_CHECKPOINT"].includes(m.type),
+                (m) =>
+                  ![
+                    "PIPELINE_COMPLETE",
+                    "ERROR",
+                    "PIPELINE_PAUSED",
+                    "HITL_CHECKPOINT",
+                    "PIPELINE_QUARANTINED",
+                  ].includes(m.type),
               );
               if (dropIdx >= 0) {
                 messageQueue.splice(dropIdx, 1);
@@ -500,10 +534,11 @@ export const useSimulation = ({
               // Non-fatal — the live WS stream will update state normally
             }
           })
-          .catch(() => {
+          .catch((err: unknown) => {
             // connected promise settled (either onerror or onclose before open)
             if (!wsConnectionReady) {
-              reject(new Error("WebSocket connection failed"));
+              const msg = err instanceof Error ? err.message : "WebSocket connection failed";
+              reject(new Error(msg));
             }
           });
       });
@@ -552,7 +587,7 @@ export const useSimulation = ({
             } else {
               const currentSessionId = sessionId || storage.getItem<string>(SESSION_ID_KEY);
               if (currentSessionId) {
-                connectWebSocket(currentSessionId);
+                connectWebSocket(currentSessionId, true);
               }
               // Schedule next check
               scheduleTokenExpiryCheck();
@@ -744,7 +779,7 @@ export const useSimulation = ({
         onAgentCompleteRef.current?.(next);
 
         if (rest.length > 0) {
-          setTimeout(processNext, 3000); // 3s delay
+          setTimeout(processNext, 400); // 400ms — responsive but still feels like a 'scan'
         } else {
           isRevealingRef.current = false;
         }

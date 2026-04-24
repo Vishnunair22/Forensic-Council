@@ -3,6 +3,9 @@
 
 set -euo pipefail
 
+# Mandatory production-readiness: ensure script is run interactively
+[[ -t 0 ]] || { echo "Interactive terminal required for production secret generation"; exit 1; }
+
 if command -v python3 >/dev/null 2>&1; then
   PYTHON_BIN="python3"
 elif command -v python >/dev/null 2>&1; then

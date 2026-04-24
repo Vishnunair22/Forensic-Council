@@ -57,7 +57,7 @@ export class DuplicateInvestigationError extends Error {
 
 function extractDuplicateSessionId(detail: unknown): string | null {
   if (typeof detail !== "string") return null;
-  const match = detail.match(/Duplicate detected:\s*session\s+(?:b['"])?([0-9a-fA-F-]{36})/);
+  const match = detail.match(/Duplicate detected:\s*session\s+(?:b['"])?([0-9a-fA-F-]+)/);
   return match?.[1] ?? null;
 }
 
@@ -130,15 +130,17 @@ export async function autoLoginAsInvestigator(): Promise<TokenResponse> {
   }
 }
 
-async function handleAuthError<T>(operation: () => Promise<T>): Promise<T> {
+async function handleAuthError<T>(operation: () => Promise<T>, _retryCount = 0): Promise<T> {
   try {
     return await operation();
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    if (msg.includes("401") || msg.includes("Unauthorized") || msg.includes("authenticated")) {
+    const isAuthError = msg.includes("401") || msg.includes("Unauthorized") || msg.includes("authenticated");
+    
+    if (isAuthError && _retryCount < 2) {
       dbg.warn("Session invalid, re-authenticating...");
       await autoLoginAsInvestigator();
-      return await operation();
+      return await handleAuthError(operation, _retryCount + 1);
     }
     throw error;
   }
@@ -274,7 +276,7 @@ export function createLiveSocket(sessionId: string): { ws: WebSocket; connected:
 
     const handleMessage = (event: MessageEvent) => {
       try {
-        const payload = JSON.parse(event.data) as { type?: string };
+        const payload = JSON.parse(event.data) as { type?: string; message?: string };
         if (
           payload.type === "CONNECTED" ||
           payload.type === "AGENT_UPDATE" ||
@@ -284,7 +286,8 @@ export function createLiveSocket(sessionId: string): { ws: WebSocket; connected:
         ) {
           settle(resolve);
         } else if (payload.type === "ERROR") {
-          settle(() => reject(new Error("WebSocket connection error")));
+          const msg = payload.message || "WebSocket investigation error";
+          settle(() => reject(new Error(msg)));
         }
       } catch {
         // Runtime messages are processed by useSimulation.
@@ -367,3 +370,5 @@ export async function logout(): Promise<void> {
     await fetch(`${API_BASE}/api/v1/auth/logout`, { method: "POST", headers, credentials: "include" });
     clearAuthToken();
 }
+
+export { getAuthToken };

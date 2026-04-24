@@ -5,7 +5,7 @@ Provides async LLM API clients for OpenAI, Anthropic, and Groq,
 with a unified interface for generating ReAct reasoning steps.
 
     - groq      -> Groq API (Llama 3.3 70B, ~700 tok/s, recommended)
-    - gemini    -> Google Gemini API (Gemini 2.5 Pro/Flash)
+    - gemini    -> Google Gemini API (Gemini 2.5 Flash)
     - openai    -> OpenAI API (GPT-4o, GPT-4)
     - anthropic -> Anthropic API (Claude 3.5 Sonnet)
     - none      -> Disabled; task-decomposition driver handles all steps
@@ -56,16 +56,27 @@ class LLMClient:
     - Free tier supports full investigations in dev
     """
 
-    def __init__(self, config: Settings):
+    def __init__(self, config: Settings, use_arbiter_tier: bool = False):
         self.config = config
-        self.provider = config.llm_provider.lower()
-        self.api_key = config.llm_api_key
-        self.model = config.llm_model
-        self.fallback_models = [
-            model.strip()
-            for model in getattr(config, "llm_fallback_models", "").split(",")
-            if model.strip()
-        ]
+        self.use_arbiter_tier = use_arbiter_tier
+        
+        if use_arbiter_tier:
+            self.provider = config.arbiter_llm_provider.lower()
+            self.api_key = config.arbiter_llm_api_key or config.llm_api_key
+            self.model = config.arbiter_primary_model
+            self.fallback_models = [
+                m.strip() for m in config.arbiter_fallback_chain.split(",") if m.strip()
+            ]
+        else:
+            self.provider = config.llm_provider.lower()
+            self.api_key = config.llm_api_key
+            self.model = config.llm_model
+            self.fallback_models = [
+                model.strip()
+                for model in getattr(config, "llm_fallback_models", "").split(",")
+                if model.strip()
+            ]
+        
         self.temperature = config.llm_temperature
         self.max_tokens = config.llm_max_tokens
         self.timeout = config.llm_timeout
@@ -164,61 +175,60 @@ class LLMClient:
         available_tools: list[dict[str, Any]],
         current_task: str | None = None,
     ) -> LLMResponse:
-        """Generate the next reasoning step in a ReAct loop."""
+        """Generate the next reasoning step using model candidates with cross-provider support."""
         with _tracer.start_as_current_span("llm.generate_reasoning_step") as span:
-            span.set_attribute("provider", self.provider)
-            span.set_attribute("model", self.model)
-            span.set_attribute("chain_length", len(react_chain))
             if self.provider == "none" or not self.api_key or not self.is_available:
-                logger.debug("LLM not configured - skipping reasoning step")
                 return LLMResponse(content="", provider="none")
 
-            # Check circuit breaker
-            try:
-                state = self._circuit_breaker.state
-            except AttributeError as e:
-                logger.debug("Circuit breaker state inaccessible", provider=self.provider, error=str(e))
-                state = "CLOSED"
-            except Exception as e:
-                logger.warning("Circuit breaker state check failed", provider=self.provider, error=str(e))
-                state = "CLOSED"
-            if state == "OPEN":
+            if self._circuit_breaker.state == "OPEN":
                 logger.warning("LLM circuit breaker is OPEN — skipping reasoning step")
                 return LLMResponse(content="", provider=self.provider)
 
             messages = self._build_messages(system_prompt, react_chain, current_task)
-
             t0 = time.monotonic()
-            try:
-                return await self._execute_call(messages, available_tools, t0, span)
-            except Exception as exc:
-                self._circuit_breaker.record_failure()
-                logger.error(f"LLM call {self.provider} failed: {exc}")
+            candidates = self._get_model_candidates()
+            last_exc: Exception | None = None
 
-                # --- Fallback Logic ---
-                if self.fallback_enabled and self.provider != "gemini" and self.gemini_api_key:
-                    logger.info("Attempting fallback to Gemini...")
-                    original_provider = self.provider
-                    original_model = self.model
-                    original_key = self.api_key
+            for model_spec in candidates:
+                # Resolve provider and model from spec (e.g. "gemini/gemini-2.5-flash")
+                original_provider = self.provider
+                original_model = self.model
+                original_key = self.api_key
 
-                    try:
-                        self.provider = "gemini"
-                        self.model = self.gemini_model
-                        self.api_key = self.gemini_api_key
+                try:
+                    if "/" in model_spec:
+                        parts = model_spec.split("/", 1)
+                        self.provider = parts[0].lower()
+                        self.model = parts[1]
+                        # Update key for the target provider
+                        if self.provider == "gemini":
+                            self.api_key = self.gemini_api_key
+                        elif self.provider == "groq":
+                            self.api_key = self.config.llm_api_key
+                    else:
+                        self.model = model_spec
 
-                        resp = await self._execute_call(messages, available_tools, t0, span)
-                        resp.provider = f"{original_provider}_fallback_gemini"
-                        return resp
-                    except Exception as fallback_exc:
-                        logger.error(f"LLM fallback failed: {fallback_exc}")
-                    finally:
-                        # Restore original settings
-                        self.provider = original_provider
-                        self.model = original_model
-                        self.api_key = original_key
+                    if not self.api_key or self.api_key.startswith("REPLACE_"):
+                        continue
 
-                return LLMResponse(content="", provider=self.provider)
+                    resp = await self._execute_call(messages, available_tools, t0, span)
+                    if model_spec != candidates[0]:
+                        resp.provider = f"{original_provider}_fallback_{self.provider}"
+                    return resp
+                except Exception as exc:
+                    last_exc = exc
+                    self._circuit_breaker.record_failure()
+                    logger.warning(f"Reasoning candidate {model_spec} failed: {exc}")
+                finally:
+                    # Restore original settings for next candidate or next call
+                    self.provider = original_provider
+                    self.model = original_model
+                    self.api_key = original_key
+
+            if last_exc:
+                logger.error(f"All reasoning candidates failed: {last_exc}")
+            return LLMResponse(content="", provider=self.provider)
+
 
     async def _execute_call(
         self,
@@ -321,8 +331,8 @@ class LLMClient:
             last_response.raise_for_status()
         raise RuntimeError(f"LLM API failed after {_MAX_RETRIES} attempts")
 
-    def _groq_model_candidates(self) -> list[str]:
-        """Return primary Groq model followed by de-duplicated fallbacks."""
+    def _get_model_candidates(self) -> list[str]:
+        """Return primary model followed by de-duplicated fallbacks."""
         candidates: list[str] = []
         for model in [self.model, *self.fallback_models]:
             if model and model not in candidates:
@@ -334,16 +344,10 @@ class LLMClient:
         messages: list[dict[str, str]],
         available_tools: list[dict[str, Any]],
     ) -> LLMResponse:
-        """
-        Call Groq API.
-
-        Groq uses the OpenAI-compatible endpoint.
-        llama-3.3-70b-versatile supports full parallel tool calling.
-        """
+        """Call Groq API using model candidates, skipping cross-provider specs."""
         if not self.is_available:
-            raise RuntimeError(
-                "Groq API key is placeholder or missing — cannot call LLM"
-            )
+            raise RuntimeError("Groq API key is placeholder or missing")
+            
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -361,27 +365,27 @@ class LLMClient:
 
         client = await self._get_client()
         last_exc: Exception | None = None
-        for model in self._groq_model_candidates():
-            payload = {**base_payload, "model": model}
+        
+        for model in self._get_model_candidates():
+            # Skip candidates that specify a different provider (e.g. "gemini/...")
+            if "/" in model and not model.startswith("groq/"):
+                continue
+            
+            target_model = model.split("/", 1)[1] if "/" in model else model
+            payload = {**base_payload, "model": target_model}
+            
             try:
                 response = await self._with_retry(
-                    lambda payload=payload: client.post(
-                        url, headers=headers, json=payload
-                    )
+                    lambda p=payload: client.post(url, headers=headers, json=p)
                 )
                 response.raise_for_status()
-                if model != self.model:
-                    logger.warning(
-                        "Groq primary model failed; using fallback model",
-                        primary_model=self.model,
-                        fallback_model=model,
-                    )
                 return self._parse_openai_response(response.json())
             except Exception as exc:
                 last_exc = exc
-                logger.warning("Groq model call failed", model=model, error=str(exc))
+                logger.warning(f"Groq candidate {model} failed: {exc}")
 
-        raise RuntimeError("All configured Groq models failed") from last_exc
+        raise RuntimeError("All Groq candidates failed") from last_exc
+
 
     async def _call_gemini(
         self,
@@ -590,148 +594,70 @@ class LLMClient:
         timeout_override: float | None = None,
         json_mode: bool = True,
     ) -> str:
-        """
-        Single-shot text generation for Arbiter report synthesis.
-
-        No tool calling. Used to write the executive summary and uncertainty
-        statement from structured forensic findings. Low temperature (0.2)
-        for factual, consistent prose.
-        """
+        """Executive summary synthesis with cross-provider fallback support."""
         with _tracer.start_as_current_span("llm.generate_synthesis") as span:
-            span.set_attribute("provider", self.provider)
-            span.set_attribute("model", self.model)
-            span.set_attribute("json_mode", json_mode)
-            if self.provider == "none" or not self.api_key or not self.is_available:
+            if not self.is_available:
                 return ""
 
             tokens = max_tokens or min(self.max_tokens, 1500)
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content},
-            ]
+            candidates = self._get_model_candidates()
+            last_exc: Exception | None = None
 
-            try:
-                if self.provider in ("groq", "openai"):
-                    url = (
-                        "https://api.groq.com/openai/v1/chat/completions"
-                        if self.provider == "groq"
-                        else "https://api.openai.com/v1/chat/completions"
-                    )
-                    headers = {
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    }
-                    payload: dict[str, Any] = {
-                        "model": self.model,
-                        "messages": messages,
-                        "temperature": 0.2,
-                        "max_tokens": tokens,
-                    }
-                    if json_mode:
-                        payload["response_format"] = {"type": "json_object"}
-                    _synth_timeout = (
-                        timeout_override
-                        if timeout_override is not None
-                        else min(self.timeout, 12.0)
-                    )
-                    client = await self._get_client(timeout_override=_synth_timeout)
-                    models = (
-                        self._groq_model_candidates()
-                        if self.provider == "groq"
-                        else [self.model]
-                    )
-                    last_exc: Exception | None = None
-                    for model in models:
-                        payload["model"] = model
-                        try:
-                            resp = await self._with_retry(
-                                lambda: client.post(url, headers=headers, json=payload)
-                            )
-                            resp.raise_for_status()
-                            if model != self.model:
-                                logger.warning(
-                                    "LLM synthesis used fallback model",
-                                    primary_model=self.model,
-                                    fallback_model=model,
-                                )
-                            return (
-                                resp.json()["choices"][0]["message"]
-                                .get("content", "")
-                                .strip()
-                            )
-                        except Exception as exc:
-                            last_exc = exc
-                            logger.warning(
-                                "LLM synthesis model failed",
-                                model=model,
-                                error=str(exc),
-                            )
-                    raise RuntimeError("All configured LLM synthesis models failed") from last_exc
+            for model_spec in candidates:
+                # Resolve provider and model from spec (e.g. "gemini/gemini-2.5-flash")
+                target_provider = self.provider
+                target_model = model_spec
+                target_api_key = self.api_key
 
-                elif self.provider == "anthropic":
-                    url = "https://api.anthropic.com/v1/messages"
-                    headers = {
-                        "x-api-key": self.api_key,
-                        "Content-Type": "application/json",
-                        "anthropic-version": "2023-06-01",
-                    }
-                    payload = {
-                        "model": self.model,
-                        "max_tokens": tokens,
-                        "system": system_prompt,
-                        "messages": [{"role": "user", "content": user_content}],
-                        "temperature": 0.2,
-                    }
-                    _synth_timeout = (
-                        timeout_override
-                        if timeout_override is not None
-                        else min(self.timeout, 12.0)
-                    )
-                    client = await self._get_client(timeout_override=_synth_timeout)
-                    resp = await self._with_retry(
-                        lambda: client.post(url, headers=headers, json=payload)
-                    )
-                    resp.raise_for_status()
-                    data = resp.json()
-                    return "".join(
-                        b["text"]
-                        for b in data.get("content", [])
-                        if b["type"] == "text"
-                    ).strip()
+                if "/" in model_spec:
+                    parts = model_spec.split("/", 1)
+                    target_provider = parts[0].lower()
+                    target_model = parts[1]
+                    # Route to correct key if switching providers
+                    if target_provider == "gemini":
+                        target_api_key = self.gemini_api_key
+                    elif target_provider == "groq":
+                        target_api_key = self.config.llm_api_key
 
-                elif self.provider == "gemini":
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
-                    gemini_contents = [
-                        {"role": "user", "parts": [{"text": f"{system_prompt}\n\n{user_content}"}]}
-                    ]
-                    payload: dict[str, Any] = {
-                        "contents": gemini_contents,
-                        "generationConfig": {
-                            "temperature": 0.2,
-                            "maxOutputTokens": tokens,
-                        },
-                    }
-                    if json_mode:
-                        payload["generationConfig"]["responseMimeType"] = "application/json"
-                    _synth_timeout = (
-                        timeout_override
-                        if timeout_override is not None
-                        else min(self.timeout, 12.0)
-                    )
-                    client = await self._get_client(timeout_override=_synth_timeout)
-                    resp = await self._with_retry(
-                        lambda: client.post(url, json=payload)
-                    )
-                    resp.raise_for_status()
-                    data = resp.json()
-                    try:
-                        return data["candidates"][0]["content"]["parts"][0].get("text", "").strip()
-                    except (KeyError, IndexError):
-                        return ""
+                if not target_api_key or target_api_key.startswith("REPLACE_"):
+                    continue
 
-            except Exception as exc:
-                logger.error(f"LLM synthesis failed: {exc}")
+                try:
+                    # Dispatch to specific provider logic
+                    if target_provider in ("groq", "openai"):
+                        url = "https://api.groq.com/openai/v1/chat/completions" if target_provider == "groq" else "https://api.openai.com/v1/chat/completions"
+                        headers = {"Authorization": f"Bearer {target_api_key}", "Content-Type": "application/json"}
+                        payload = {
+                            "model": target_model,
+                            "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_content}],
+                            "temperature": 0.2, "max_tokens": tokens,
+                        }
+                        if json_mode: payload["response_format"] = {"type": "json_object"}
+                        
+                        client = await self._get_client(timeout_override=timeout_override or 15.0)
+                        resp = await self._with_retry(lambda: client.post(url, headers=headers, json=payload))
+                        resp.raise_for_status()
+                        return resp.json()["choices"][0]["message"].get("content", "").strip()
 
+                    elif target_provider == "gemini":
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={target_api_key}"
+                        payload = {
+                            "contents": [{"role": "user", "parts": [{"text": f"{system_prompt}\n\n{user_content}"}]}],
+                            "generationConfig": {"temperature": 0.2, "maxOutputTokens": tokens},
+                        }
+                        if json_mode: payload["generationConfig"]["responseMimeType"] = "application/json"
+                        
+                        client = await self._get_client(timeout_override=timeout_override or 15.0)
+                        resp = await self._with_retry(lambda: client.post(url, json=payload))
+                        resp.raise_for_status()
+                        return resp.json()["candidates"][0]["content"]["parts"][0].get("text", "").strip()
+
+                except Exception as exc:
+                    last_exc = exc
+                    logger.warning(f"Synthesis candidate {model_spec} failed: {exc}")
+
+            if last_exc:
+                logger.error(f"All synthesis candidates failed: {last_exc}")
             return ""
 
 
