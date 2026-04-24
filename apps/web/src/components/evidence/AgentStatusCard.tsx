@@ -9,7 +9,8 @@ import {
   Cpu,
   Scan,
   Microscope,
-  type LucideIcon
+  type LucideIcon,
+  CheckCircle2
 } from "lucide-react";
 import { clsx } from "clsx";
 import { fmtTool } from "@/lib/fmtTool";
@@ -40,19 +41,18 @@ interface AgentStatusCardProps {
 }
 
 const statusConfig = {
-  waiting:     { color: "text-white/50",   label: "Waiting"   },
-  checking:    { color: "text-primary",    label: "Connecting" },
-  running:     { color: "text-primary",    label: "Analyzing" },
-  complete:    { color: "text-emerald-500",label: "Complete"  },
-  error:       { color: "text-rose-500",   label: "Error"     },
-  unsupported: { color: "text-white/50",   label: "Skipped"   },
+  waiting:     { color: "text-white/40",   label: "Waiting"   },
+  checking:    { color: "text-primary",    label: "Syncing" },
+  running:     { color: "text-primary",    label: "Scanning" },
+  complete:    { color: "text-success",    label: "Verified"  },
+  error:       { color: "text-danger",     label: "Error"     },
+  unsupported: { color: "text-white/30",   label: "Bypassed"   },
 };
 
 const ALERT_VERDICTS = new Set(["FLAGGED", "SUSPICIOUS", "LIKELY_MANIPULATED", "LIKELY_AI_GENERATED", "LIKELY_SPOOFED"]);
 
 function normalizeVerdict(verdict?: string) {
   const value = (verdict || "INCONCLUSIVE").replace(/_/g, " ");
-  // Simple Title Case conversion
   return value.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
 
@@ -62,10 +62,10 @@ function isAlertFinding(finding: FindingPreview) {
 
 const AGENT_GRAPHICS: Record<string, { icon: LucideIcon; color: string; bg: string }> = {
   "Agent1": { icon: Scan, color: "text-primary", bg: "bg-primary/10" },
-  "Agent2": { icon: Activity, color: "text-emerald-400", bg: "bg-emerald-500/10" },
+  "Agent2": { icon: Activity, color: "text-primary", bg: "bg-primary/10" },
   "Agent3": { icon: Microscope, color: "text-primary", bg: "bg-primary/10" },
-  "Agent4": { icon: Cpu, color: "text-amber-400", bg: "bg-amber-500/10" },
-  "Agent5": { icon: ShieldAlert, color: "text-rose-400", bg: "bg-rose-500/10" },
+  "Agent4": { icon: Cpu, color: "text-primary", bg: "bg-primary/10" },
+  "Agent5": { icon: ShieldAlert, color: "text-primary", bg: "bg-primary/10" },
 };
 
 export function AgentStatusCard({
@@ -109,7 +109,6 @@ export function AgentStatusCard({
     currentToolIndex - 1,
   );
   const ProgressIcon = progressDescriptor.icon;
-  const isSkipped = status === "unsupported";
   
   const toggleFinding = (id: string) => {
     setExpandedFindings(prev => ({ ...prev, [id]: !prev[id] }));
@@ -118,86 +117,65 @@ export function AgentStatusCard({
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 20 }}
-      animate={{
-        opacity: isFadingOut ? 0 : isRevealed ? (status === "waiting" ? 0.3 : 1) : 0,
-        y: 0,
-        scale: isFadingOut ? 0.95 : 1,
-      }}
       className={clsx(
-        "bg-white/[0.04] backdrop-blur-xl border border-white/10 relative flex flex-col rounded-3xl overflow-hidden min-h-[520px] transition-all duration-300 shadow-[0_20px_50px_rgba(0,0,0,0.5)] hover:border-white/20",
-        status === "running" && "ring-2 ring-primary/40 shadow-[0_0_60px_rgba(var(--color-primary-rgb),0.15)]",
-        status === "complete" && (completedData?.verdict_score ?? 0) > 0.5 && "ring-2 ring-rose-500/30 shadow-[0_0_60px_rgba(244,63,94,0.15)]"
+        "horizon-card relative flex flex-col rounded-2xl overflow-hidden min-h-[540px] transition-all duration-500",
+        status === "running" && "ring-2 ring-primary/30",
+        status === "waiting" && "opacity-40 grayscale-[0.5]"
       )}
     >
-      
-      {/* ── Card Header ─────────────────────────────────────────────────── */}
+      {/* --- Card Header --- */}
       <div className="p-8 pb-6 border-b border-white/5 relative z-10">
-        <div className="flex items-start justify-between mb-6">
+        <div className="flex items-start justify-between mb-8">
           <div className="flex items-center gap-5">
-            <div className={clsx(
-              "w-16 h-16 rounded-2xl flex items-center justify-center relative overflow-hidden",
-              agentGraphic.bg
-            )}>
-              <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-50" />
-              <Icon className={clsx("w-8 h-8 relative z-10", agentGraphic.color)} />
+            {/* Aperture Icon */}
+            <div className="relative w-16 h-16 flex items-center justify-center">
+              <motion.div 
+                animate={{ rotate: 360 }}
+                transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+                className="absolute inset-0 rounded-full border border-primary/20 border-dashed"
+              />
+              <Icon className={clsx("w-6 h-6 relative z-10", agentGraphic.color)} />
             </div>
+
             <div>
-              <h3 className="text-xl font-black text-white tracking-tight mb-1">{name}</h3>
+              <h3 className="text-xl font-heading font-bold text-white mb-1">{name}</h3>
               <div className="flex items-center gap-2">
                 <span className={clsx(
-                  "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide border shadow-sm",
-                  (status === "running" || status === "checking") ? "bg-primary/[0.08] text-primary/80 border-primary/20 animate-pulse" :
-                  status === "complete" ? "bg-primary/[0.08] text-primary border-primary/20" :
-                  status === "error" ? "bg-danger/[0.06] text-danger border-danger/20" :
-                  "bg-white/[0.03] text-white/40 border-white/[0.06]"
+                  "px-2 py-0.5 rounded text-[10px] font-mono font-bold border",
+                  status === "complete" ? "bg-success/10 border-success/30 text-success" :
+                  status === "error" ? "bg-danger/10 border-danger/30 text-danger" :
+                  "bg-white/5 border-white/10 text-white/40"
                 )}>
-                  {cfg.label}
+                  {cfg.label.toUpperCase()}
                 </span>
-                {status === "complete" && completedData?.completed_at && (
-                  <span className="text-xs font-mono text-white/40">
-                    Phase Finalized
-                  </span>
-                )}
+                <span className="text-[10px] font-mono text-white/20 tracking-tighter uppercase">
+                  NODE_{agentId}
+                </span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* ── Live Progress Section ────────────────────────────────────────── */}
+        {/* --- Progress Section --- */}
         <AnimatePresence mode="wait">
-          {status === "running" && (
+          {(status === "running" || status === "checking") && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="flex items-center gap-4 bg-white/[0.02] border border-white/5 rounded-2xl p-4"
+              className="space-y-4"
             >
-              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                <motion.div
-                  key={liveUpdate?.tool_name || progressDescriptor.label}
-                  initial={{ scale: 0.86, opacity: 0.4 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ duration: 0.25 }}
-                >
-                  <ProgressIcon className="w-5 h-5 text-primary" />
-                </motion.div>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-white/80 truncate">
+              <div className="flex items-center gap-3 text-white/60">
+                <ProgressIcon className="w-4 h-4 text-primary" />
+                <span className="text-xs font-mono font-bold tracking-tight truncate">
                   {progressDescriptor.label}
-                </p>
-                <div className="flex items-center gap-2 mt-1">
-                  <div className="flex-1 h-[2px] bg-white/5 rounded-full overflow-hidden">
-                    <motion.div
-                      className="h-full bg-primary shadow-[0_0_10px_rgba(var(--color-primary-rgb),0.5)]"
-                      animate={{ width: `${(currentToolIndex / liveTotal) * 100}%` }}
-                    />
-                  </div>
-                  <span className="text-[9px] font-black text-primary/60 font-mono shrink-0">
-                    {currentToolIndex}/{liveTotal}
-                  </span>
-                </div>
+                </span>
+              </div>
+              <div className="relative w-full h-[2px] bg-white/5 rounded-full overflow-hidden">
+                <motion.div
+                  className="absolute top-0 bottom-0 bg-primary shadow-[0_0_10px_#00FFFF]"
+                  animate={{ width: `${(currentToolIndex / liveTotal) * 100}%` }}
+                />
               </div>
             </motion.div>
           )}
@@ -208,96 +186,54 @@ export function AgentStatusCard({
               animate={{ opacity: 1, y: 0 }}
               className="space-y-4"
             >
-              <div className="flex items-end justify-between px-1">
+              <div className="flex items-end justify-between">
                 <div>
-                  <span className="text-xs font-semibold text-white/40 tracking-wide block mb-1">Final Verdict</span>
+                  <span className="text-[10px] font-mono font-bold text-white/30 uppercase tracking-widest block mb-1">Final Verdict</span>
                   <span className={clsx(
-                    "text-2xl font-black tracking-tight",
-                    (completedData.verdict_score ?? 0) > 0.6 ? "text-rose-500" : "text-emerald-400"
+                    "text-xl font-heading font-bold tracking-tight",
+                    (completedData.verdict_score ?? 0) > 0.6 ? "text-danger" : "text-success"
                   )}>
                     {normalizeVerdict(completedData.agent_verdict)}
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs font-semibold text-white/40 tracking-wide block mb-1">Confidence</span>
-                  <span className="text-2xl font-black text-white font-mono">
+                  <span className="text-[10px] font-mono font-bold text-white/30 uppercase tracking-widest block mb-1">Confidence</span>
+                  <span className="text-xl font-mono font-bold text-white">
                     {Math.round(completedData.confidence * 100)}%
                   </span>
                 </div>
-              </div>
-              
-              <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5">
-                <p className="text-xs leading-relaxed text-white/60 font-medium">
-                  <span className="text-white font-bold">{name}</span> completed{" "}
-                  <span className="text-primary font-bold">{toolsRan || completedData.findings_count} checks</span>{" "}
-                  with <span className="text-white font-bold">{Math.round(completedData.confidence * 100)}%</span>{" "}
-                  confidence. Tool error rate was{" "}
-                  <span className="text-rose-400 font-bold">{Math.round((completedData.tool_error_rate || 0) * 100)}%</span>;
-                  the agent&apos;s manipulation signal is{" "}
-                  <span className={clsx("font-bold", (completedData.verdict_score ?? 0) > 0.5 ? "text-rose-500" : "text-emerald-400")}>
-                    {Math.round((completedData.verdict_score || 0) * 100)}%
-                  </span>.
-                </p>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* ── Findings List ────────────────────────────────────────────────── */}
+      {/* --- Findings Surface --- */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-8 pt-4 relative z-10">
         <AnimatePresence mode="wait">
           {status === "complete" && findings.length > 0 ? (
             <div className="space-y-4">
               {(showAllTools ? findings : findings.slice(0, 2)).map((f, i) => {
                 const isAlert = isAlertFinding(f);
-                const isExpanded = expandedFindings[`${f.tool}-${i}`];
                 return (
                   <motion.div
                     key={`${f.tool}-${i}`}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.1 }}
                     className={clsx(
-                      "group/finding rounded-2xl border transition-all duration-300",
-                      isAlert ? "bg-rose-500/[0.03] border-rose-500/10 hover:border-rose-500/30" : "bg-white/[0.01] border-white/5 hover:border-white/10"
+                      "p-4 rounded-xl border transition-all duration-300",
+                      isAlert ? "bg-danger/5 border-danger/20" : "bg-white/[0.02] border-white/5"
                     )}
                   >
-                    <div className="p-4 flex items-start gap-4">
-                      <div className={clsx(
-                        "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
-                        isAlert ? "bg-rose-500/10 text-rose-500" : "bg-white/5 text-white/40"
-                      )}>
-                        <Scan className="w-5 h-5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <span className="text-sm font-bold text-white/90 tracking-tight">
-                            {fmtTool(f.tool)}
-                          </span>
-                          <span className={clsx(
-                            "text-xs font-semibold font-mono",
-                            isAlert ? "text-rose-400" : "text-emerald-400"
-                          )}>
-                            {Math.round((f.confidence || 0) * 100)}% Match
-                          </span>
-                        </div>
-                        <p className={clsx(
-                          "text-sm leading-relaxed text-white/70 font-medium",
-                          !isExpanded && "line-clamp-2"
-                        )}>
-                          {f.summary}
-                        </p>
-                        {f.summary.length > 100 && (
-                          <button
-                            onClick={() => toggleFinding(`${f.tool}-${i}`)}
-                            className="text-xs font-bold text-primary/60 hover:text-primary mt-2 transition-colors tracking-wide hover:underline underline-offset-4"
-                          >
-                            {isExpanded ? "Show Less" : "Show More"}
-                          </button>
-                        )}
-                      </div>
+                    <div className="flex items-center justify-between mb-2">
+                       <span className="text-[10px] font-mono font-bold text-white/30">SIG_{i.toString().padStart(2, '0')}</span>
+                       <span className={clsx("text-[10px] font-mono font-bold", isAlert ? "text-danger" : "text-success")}>
+                         {Math.round((f.confidence || 0) * 100)}% Match
+                       </span>
                     </div>
+                    <p className="text-xs text-white/70 font-medium leading-relaxed mb-1">
+                      <span className="text-white font-bold">{fmtTool(f.tool)}:</span> {f.summary}
+                    </p>
                   </motion.div>
                 );
               })}
@@ -305,53 +241,34 @@ export function AgentStatusCard({
               {findings.length > 2 && (
                 <button
                   onClick={() => setShowAllTools(!showAllTools)}
-                  className="w-full py-4 rounded-2xl border border-dashed border-white/10 text-white/40 hover:text-white/80 hover:border-white/30 hover:bg-white/[0.03] transition-all text-xs font-semibold tracking-wide"
+                  className="w-full py-3 rounded-lg border border-dashed border-white/10 text-white/30 hover:text-white/60 hover:border-white/20 transition-all text-[10px] font-mono uppercase tracking-widest"
                 >
-                  {showAllTools ? "Collapse Findings" : `Show ${findings.length - 2} More Findings`}
+                  {showAllTools ? "Collapse_Logs" : `View_${findings.length - 2}_More_Signals`}
                 </button>
               )}
             </div>
           ) : status === "checking" ? (
-            <div className="flex flex-col items-center justify-center h-full gap-6 max-w-[280px] mx-auto">
-              <div className="relative">
-                <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full animate-pulse" />
-                <div className="w-20 h-20 rounded-2xl bg-primary/5 border border-primary/20 flex items-center justify-center text-primary animate-pulse">
-                  <Icon className="w-10 h-10" />
-                </div>
-              </div>
-              <div className="space-y-2 text-center">
-                <h3 className="text-[10px] font-black text-primary/60 tracking-[0.2em] uppercase">Syncing Neural Link</h3>
-                <p className="text-sm text-white/40 font-medium leading-relaxed">
-                  Establishing secure forensic bridge. Awaiting agent handshake...
-                </p>
-              </div>
+            <div className="flex flex-col items-center justify-center h-full text-center gap-4 py-12">
+               <div className="w-12 h-12 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-center text-primary animate-pulse">
+                  <Activity className="w-6 h-6" />
+               </div>
+               <span className="text-[10px] font-mono font-bold text-primary/40 uppercase tracking-[0.2em]">Syncing_Neural_Bridge</span>
             </div>
-          ) : status === "running" ? (
-            <div className="flex flex-col items-center justify-center h-full opacity-20 gap-4">
-              <div className="relative">
-                <div className="absolute inset-0 bg-primary blur-2xl opacity-20 animate-pulse" />
-                <Icon className="w-12 h-12 text-primary animate-pulse" />
-              </div>
-              <span className="text-xs font-semibold tracking-wide text-primary/80">Analyzing Stream...</span>
+          ) : status === "waiting" ? (
+            <div className="flex flex-col items-center justify-center h-full text-center opacity-20 py-12">
+               <span className="text-[10px] font-mono font-bold text-white tracking-[0.3em] uppercase">Awaiting_Payload</span>
             </div>
-          ) : isSkipped ? (
-            <div className="flex flex-col items-center justify-center h-full text-center p-8 gap-6 max-w-[280px] mx-auto">
-              <div className="relative">
-                <div className="absolute inset-0 bg-white/5 blur-3xl rounded-full" />
-                <div className="w-20 h-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/20 rotate-3 transition-transform hover:rotate-0">
-                  <Ban className="w-10 h-10" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-[10px] font-black text-white/40 tracking-[0.2em] uppercase">Module Bypassed</h3>
-                <p className="text-sm text-white/60 font-medium leading-relaxed">
-                  Incompatible file format detected. Agent has been safely decommissioned.
-                </p>
-              </div>
+          ) : status === "unsupported" ? (
+            <div className="flex flex-col items-center justify-center h-full text-center p-8 gap-4 opacity-40 py-12">
+               <Ban className="w-10 h-10 text-white/20" />
+               <span className="text-[10px] font-mono font-bold text-white uppercase tracking-widest">Incompatible_Format</span>
             </div>
           ) : null}
         </AnimatePresence>
       </div>
+
+      {/* Decorative Bezel Highlight */}
+      <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
     </motion.div>
   );
 }

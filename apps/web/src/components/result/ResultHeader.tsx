@@ -7,213 +7,174 @@ import type { VerdictConfig } from "@/lib/verdict";
 import { ArcGauge } from "./ArcGauge";
 import { EvidenceThumbnail } from "./EvidenceThumbnail";
 import { clsx } from "clsx";
+import { motion } from "framer-motion";
 
 interface ResultHeaderProps {
- report: ReportDTO;
- fileName: string;
- mimeType: string | null;
- thumbnail: string | null;
- isDeepPhase: boolean;
- vc: VerdictConfig;
- confPct: number;
- errPct: number;
- manipPct: number;
- activeAgentIds: string[];
- pipelineDuration: string | null;
+  report: ReportDTO;
+  fileName: string;
+  mimeType: string | null;
+  thumbnail: string | null;
+  isDeepPhase: boolean;
+  vc: VerdictConfig;
+  confPct: number;
+  errPct: number;
+  manipPct: number;
+  activeAgentIds: string[];
+  pipelineDuration: string | null;
 }
 
-const VERDICT_THEMES: Record<string, { border: string; glow: string; text: string; bg: string; icon: LucideIcon }> = {
- emerald: { 
-  border: "border-primary/20", 
-  glow: "shadow-[0_0_40px_rgba(var(--color-primary-rgb),0.1)]", 
-  text: "text-primary", 
-  bg: "bg-primary/5",
-  icon: ShieldCheck 
- },
- red: { 
-  border: "border-danger/20", 
-  glow: "shadow-[0_0_40px_rgba(244,63,94,0.1)]", 
-  text: "text-danger", 
-  bg: "bg-danger/5",
-  icon: ShieldAlert 
- },
- amber: { 
-  border: "border-warning/20", 
-  glow: "shadow-[0_0_40px_rgba(245,158,11,0.1)]", 
-  text: "text-warning", 
-  bg: "bg-warning/5",
-  icon: Shield 
- },
+const VERDICT_THEMES: Record<string, { color: string; icon: LucideIcon }> = {
+  emerald: { color: "#00FFFF", icon: ShieldCheck },
+  red:     { color: "#F43F5E", icon: ShieldAlert },
+  amber:   { color: "#F59E0B", icon: Shield },
 };
 
 export function ResultHeader({
- report,
- fileName,
- mimeType,
- thumbnail,
- isDeepPhase,
- vc,
- confPct,
- errPct,
- manipPct,
- activeAgentIds,
- pipelineDuration,
+  report,
+  fileName,
+  mimeType,
+  thumbnail,
+  isDeepPhase,
+  vc,
+  confPct,
+  errPct,
+  manipPct,
+  activeAgentIds,
+  pipelineDuration,
 }: ResultHeaderProps) {
- const theme = VERDICT_THEMES[vc.color] || VERDICT_THEMES.amber;
+  const theme = VERDICT_THEMES[vc.color] || VERDICT_THEMES.amber;
+  const discordPct = report.confidence_std_dev ? Math.round(report.confidence_std_dev * 100) : 0;
 
- // Calculate Neural Discord (Agreement vs Disagreement)
- const discordPct = report.confidence_std_dev ? Math.round(report.confidence_std_dev * 100) : 0;
+  return (
+    <section className="horizon-card p-1 relative overflow-hidden rounded-3xl">
+      <div className="bg-[#020617] rounded-[inherit] p-10 space-y-12">
+        
+        {/* --- Top Row: Identity & Verdict --- */}
+        <div className="flex flex-col lg:flex-row gap-12 items-center">
+          
+          {/* Thumbnail with Aperture */}
+          <div className="relative w-40 h-40 flex items-center justify-center shrink-0">
+            <motion.div 
+              animate={{ rotate: 360 }}
+              transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+              className="absolute inset-0 rounded-full border border-primary/20 border-dashed"
+            />
+            <div className="absolute inset-4 rounded-full border border-primary/5" />
+            <div className="w-24 h-24 relative z-10">
+              <EvidenceThumbnail
+                thumbnail={thumbnail}
+                mimeType={mimeType}
+                fileName={fileName}
+                className="w-full h-full rounded-xl border border-white/10 shadow-2xl"
+              />
+            </div>
+          </div>
 
- return (
-  <section 
-   aria-label="Forensic Verdict Summary"
-   className={clsx(
-    "rounded-3xl border overflow-hidden bg-black/50 backdrop-blur-xl transition-all duration-500",
-    theme.border,
-    theme.glow
-   )}
-  >
-   {/* Dynamic Status Bar */}
-   <div className={clsx("h-1 w-full bg-gradient-to-r from-transparent via-current to-transparent opacity-30", theme.text)} />
+          <div className="flex-1 flex flex-col items-center lg:items-start text-center lg:text-left">
+            <div className="flex items-center gap-3 mb-4">
+               <span className="text-[10px] font-mono font-bold text-primary border border-primary/20 px-2 py-0.5 rounded bg-primary/5">
+                 CASE_{report.case_id?.slice(-8) || "FC_ALPHA"}
+               </span>
+               <span className="text-[10px] font-mono text-white/30 uppercase tracking-[0.2em]">
+                 {isDeepPhase ? "Deep_Forensics_Active" : "Initial_Intake"}
+               </span>
+            </div>
 
-   <div className="p-10 space-y-12">
-    <div className="flex flex-col items-center text-center space-y-8">
-     
-     {/* Enhanced Thumbnail */}
-     <div className="w-32 h-32 shrink-0">
-      <EvidenceThumbnail
-       thumbnail={thumbnail}
-       mimeType={mimeType}
-       fileName={fileName}
-       className="w-full h-full rounded-2xl border-white/5 shadow-2xl bg-white/[0.02]"
-      />
-     </div>
+            <h2 className="text-xl font-heading font-bold text-white/60 mb-2 truncate max-w-md">{fileName}</h2>
+            
+            <motion.p 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-5xl md:text-7xl font-heading font-bold tracking-tight text-white mb-4"
+              style={{ color: theme.color }}
+            >
+              {vc.label.toUpperCase()}
+            </motion.p>
+            
+            <p className="text-sm font-medium text-white/40 max-w-lg italic">
+              {vc.desc}
+            </p>
+          </div>
 
-     {/* Verdict Intelligence */}
-     <div className="w-full space-y-6">
-      <div className="space-y-2">
-       <div className="flex items-center justify-center gap-3">
-         <span className="text-xs font-semibold tracking-wide text-white/40">Case Entry</span>
-         <span className="text-xs font-mono text-white/50">{report.case_id || "FC-DEFAULT"}</span>
-       </div>
-       <h2 className="text-lg font-bold text-white/50 truncate tracking-tight">{fileName}</h2>
-      </div>
-
-      <div className="flex flex-col items-center gap-5">
-       <div className={clsx("w-20 h-20 rounded-2xl flex items-center justify-center shrink-0 border shadow-2xl transition-transform hover:scale-110 duration-500", theme.bg, theme.border)}>
-        <theme.icon className={clsx("w-10 h-10", theme.text)} />
-       </div>
-       <div className="space-y-3">
-        <p className={clsx("text-5xl sm:text-7xl font-black tracking-tighter leading-none text-glow-green", theme.text)}>
-         {vc.label}
-        </p>
-        <p className="text-sm font-black text-white/50 tracking-wide">{vc.desc}</p>
-       </div>
-      </div>
-
-      <div className="flex flex-wrap gap-4 items-center justify-center pt-2">
-       <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-xs font-mono text-white/50 transition-colors hover:bg-white/[0.06]">
-        <Lock className="w-3.5 h-3.5 text-primary/30" />
-        <span>{activeAgentIds.length} Applicable Agents</span>
-       </div>
-       <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-xs font-mono text-white/50 transition-colors hover:bg-white/[0.06]">
-        <Fingerprint className="w-3.5 h-3.5 text-primary/30" />
-        <span>Pipeline: {pipelineDuration || "N/A"}</span>
-       </div>
-        <div className={clsx(
-         "px-3 py-1 rounded-full border text-xs font-mono text-white/50 tracking-wide transition-all",
-         isDeepPhase ? "bg-accent/10 border-accent/20 text-accent" : "bg-primary/10 border-primary/20 text-primary"
-        )}>
-         {isDeepPhase ? "Deep Analysis Active" : "Initial Intake Scan"}
+          {/* Quick Stats Pill */}
+          <div className="flex flex-col gap-3">
+             <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-white/[0.02] border border-white/5">
+                <Lock className="w-3.5 h-3.5 text-primary/40" />
+                <span className="text-[10px] font-mono font-bold text-white/60">{activeAgentIds.length} ACTIVE_NODES</span>
+             </div>
+             <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-white/[0.02] border border-white/5">
+                <Fingerprint className="w-3.5 h-3.5 text-primary/40" />
+                <span className="text-[10px] font-mono font-bold text-white/60">SCAN_TIME: {pipelineDuration}</span>
+             </div>
+          </div>
         </div>
-        {report.compression_penalty != null && report.compression_penalty < 1.0 && (
-         <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-xs font-mono text-amber-400 transition-colors">
-          <ShieldAlert className="w-3.5 h-3.5 text-amber-500/40" />
-          <span>Compression-Adjusted Verdict</span>
-         </div>
+
+        {/* --- Metrics Grid --- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pt-12 border-t border-white/5">
+          <ArcGauge value={confPct} label="Consensus" sublabel="Confidence Score" color="#00FFFF" />
+          
+          <div className="horizon-card p-6 flex flex-col items-center justify-center text-center">
+             <span className="text-[10px] font-mono font-bold text-white/30 uppercase tracking-[0.2em] mb-4">Neural_Discord</span>
+             <div className="text-3xl font-mono font-bold text-white mb-2">{discordPct}%</div>
+             <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }} animate={{ width: `${discordPct}%` }}
+                  className="h-full bg-primary shadow-[0_0_10px_#00FFFF]" 
+                />
+             </div>
+             <span className="text-[9px] font-mono text-white/20 mt-3 uppercase">Confidence Spread</span>
+          </div>
+
+          <div className="horizon-card p-6 flex flex-col items-center justify-center text-center">
+             <span className="text-[10px] font-mono font-bold text-white/30 uppercase tracking-[0.2em] mb-4">Integrity_Risk</span>
+             <div className="text-3xl font-mono font-bold text-white mb-2" style={{ color: manipPct > 50 ? '#F43F5E' : '#00FFFF' }}>{manipPct}%</div>
+             <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }} animate={{ width: `${manipPct}%` }}
+                  className="h-full bg-primary" 
+                  style={{ backgroundColor: manipPct > 50 ? '#F43F5E' : '#00FFFF' }}
+                />
+             </div>
+             <span className="text-[9px] font-mono text-white/20 mt-3 uppercase">Manipulation Prob.</span>
+          </div>
+
+          <div className="horizon-card p-6 flex flex-col items-center justify-center text-center">
+             <span className="text-[10px] font-mono font-bold text-white/30 uppercase tracking-[0.2em] mb-4">System_Noise</span>
+             <div className="text-3xl font-mono font-bold text-white mb-2" style={{ color: errPct > 20 ? '#F59E0B' : '#00FFFF' }}>{errPct}%</div>
+             <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }} animate={{ width: `${errPct}%` }}
+                  className="h-full bg-primary" 
+                  style={{ backgroundColor: errPct > 20 ? '#F59E0B' : '#00FFFF' }}
+                />
+             </div>
+             <span className="text-[9px] font-mono text-white/20 mt-3 uppercase">Error Variance</span>
+          </div>
+        </div>
+
+        {/* --- Digital Signature --- */}
+        {report.cryptographic_signature && (
+          <div className="p-6 rounded-xl border border-primary/20 bg-primary/5 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden group">
+            {/* Stamp Detail */}
+            <div className="absolute -right-4 -top-4 w-24 h-24 border border-primary/10 rounded-full flex items-center justify-center opacity-20">
+               <Fingerprint className="w-12 h-12 text-primary" />
+            </div>
+            
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-mono font-bold text-primary uppercase tracking-[0.2em]">ECDSA_P256_CERTIFIED</span>
+              <p className="text-[10px] font-mono text-white/40 truncate max-w-[200px] md:max-w-md">
+                {report.cryptographic_signature}
+              </p>
+            </div>
+            
+            <div className="px-4 py-2 rounded-full border border-success/30 bg-success/10 flex items-center gap-2">
+               <ShieldCheck className="w-3 h-3 text-success" />
+               <span className="text-[10px] font-mono font-bold text-success uppercase">Verified_Integrity</span>
+            </div>
+          </div>
         )}
-      </div>
-     </div>
-    </div>
 
-    {/* Metrics Row — centered flow, clear hierarchy */}
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-10 border-t border-white/5" role="group" aria-label="Analysis metrics">
-     {/* Confidence — primary metric */}
-     <div className="flex flex-col items-center justify-center gap-4 p-6 rounded-3xl bg-white/[0.01] border border-white/5 hover:bg-white/[0.02] transition-colors">
-      <ArcGauge
-       value={confPct}
-       size={110}
-       color={confPct >= 70 ? "#10b981" : confPct >= 40 ? "#f59e0b" : "#f43f5e"}
-       label="Confidence"
-       sublabel="Consensus"
-      />
-     </div>
-
-     {/* Neural Discord — consensus vs disagreement */}
-     <div className="flex flex-col items-center justify-center gap-4 p-6 rounded-3xl bg-white/[0.01] border border-white/5 hover:bg-white/[0.02] transition-colors">
-       <div className="space-y-1 text-center">
-        <span className="text-xs font-semibold tracking-wide text-white/40">Confidence Spread</span>
-        <div className={clsx(
-         "text-3xl font-bold font-mono",
-         discordPct > 30 ? "text-rose-400" : discordPct > 15 ? "text-amber-400" : "text-emerald-400"
-        )}>{discordPct}%</div>
-         <span className="text-xs font-medium text-white/60 tracking-wide">{isDeepPhase ? "Deep Analysis Complete" : "Initial Phase Complete"}</span>
-       </div>
-       <div className="w-16 h-1 w-full bg-white/5 rounded-full overflow-hidden">
-        <div 
-         className={clsx("h-full rounded-full transition-all duration-1000", discordPct > 30 ? "bg-rose-500" : "bg-primary")}
-         style={{ width: `${discordPct}%` }}
-        />
-       </div>
-     </div>
-
-     {/* Manipulation risk */}
-     <div className="flex flex-col justify-center items-center gap-4 p-6 rounded-3xl bg-white/[0.01] border border-white/5 hover:bg-white/[0.02] transition-colors">
-      <div className="space-y-1 text-center">
-       <span className="text-xs font-semibold tracking-wide text-white/40">Integrity Risk</span>
-       <div className={clsx(
-        "text-3xl font-bold font-mono",
-        manipPct > 60 ? "text-rose-400" : manipPct > 30 ? "text-amber-400" : "text-emerald-400"
-       )}>{manipPct}%</div>
-        <span className="text-xs font-medium text-white/60 tracking-wide">Manipulation Probability</span>
       </div>
-      <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-       <div
-        className={clsx("h-full rounded-full transition-all duration-1000",
-         manipPct > 60 ? "bg-rose-500" : manipPct > 30 ? "bg-amber-500" : "bg-emerald-500"
-        )}
-        style={{ width: `${manipPct}%` }}
-       />
-      </div>
-     </div>
-
-     {/* Error rate */}
-      <div className="flex flex-col justify-center items-center gap-2 p-6 premium-card rounded-3xl">
-      <span className="text-xs font-semibold tracking-wide text-white/40">System Noise</span>
-      <span className={clsx(
-       "text-3xl font-black font-mono",
-       errPct > 20 ? "text-danger" : "text-primary"
-      )}>{errPct}%</span>
-      <p className="text-xs font-medium text-white/50 tracking-wide">Error Rate</p>
-     </div>
-    </div>
-
-    {/* Cryptographic Signature Footer */}
-    {report.cryptographic_signature && (
-     <div className="px-8 py-5 rounded-2xl bg-[#000]/30 border border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4 group">
-      <div className="flex items-center gap-4 min-w-0">
-       <Fingerprint className="w-5 h-5 text-primary/30 group-hover:text-primary/60 transition-colors" />
-       <div className="min-w-0">
-        <p className="text-xs font-semibold tracking-wide text-white/40 mb-0.5">ECDSA P-256 Digital Signature</p>
-        <p className="text-xs font-mono text-white/50 truncate max-w-[200px] sm:max-w-md">{report.cryptographic_signature}</p>
-       </div>
-      </div>
-      <div className="shrink-0">
-       <span className="text-xs font-semibold tracking-wide text-emerald-500/60 border border-emerald-500/10 px-3 py-1 rounded-full bg-emerald-500/5">Verified Integrity</span>
-      </div>
-     </div>
-    )}
-   </div>
-  </section>
- );
+    </section>
+  );
 }

@@ -42,7 +42,7 @@ CACHE_DIRS = {
 }
 
 HF_MODEL_DIRS = {
-    "open_clip": "models--timm--vit_base_patch32_clip_224.openai",
+    "open_clip": "models--" + settings.siglip_model_name.replace("/", "--"),
     "speechbrain_ecapa": "models--speechbrain--spkrec-ecapa-voxceleb",
     "speechbrain_aasist": "models--" + settings.aasist_model_name.replace("/", "--"),
 }
@@ -88,7 +88,7 @@ def setup_dirs() -> None:
 def download_yolo(force: bool = False) -> bool:
     """YOLO11 object detection — Agent 3 primary."""
     yolo_dir = CACHE_DIRS["YOLO"]
-    model_name = os.getenv("YOLO_MODEL_NAME", "yolo11n.pt")
+    model_name = settings.yolo_model_name
     model_path = Path(yolo_dir) / model_name
     existing = [model_path] if model_path.exists() else []
     if existing and not force:
@@ -201,39 +201,44 @@ def download_easyocr(force: bool = False) -> bool:
 
 
 def download_open_clip(force: bool = False) -> bool:
-    """OpenCLIP ViT-B-32 — used by Agent 1 and Agent 3 for zero-shot classification."""
+    """OpenCLIP / SigLIP — used by Agent 1 and Agent 3 for zero-shot classification and neural fingerprints."""
     hf_dir = CACHE_DIRS["HF"]
-    # open_clip (via timm) caches to HF_HOME/hub/models--timm--vit_base_patch32_clip_224.openai
-    # The actual weights blob is a 578 MB content-addressed file in the blobs/ subdir.
-    timm_model_dir = (
-        Path(hf_dir) / "hub" / "models--timm--vit_base_patch32_clip_224.openai"
-    )
-    # Check for any blob > 100 MB (the actual model weights)
+    model_name = settings.siglip_model_name
+    pretrained = "webli" if "siglip" in model_name.lower() else "openai"
+    if "/" in model_name:
+        pretrained = "hf-hub"
+
+    # open_clip caches to HF_HOME/hub/models--...
+    model_slug = f"models--{model_name.replace('/', '--')}"
+    model_dir = Path(hf_dir) / "hub" / model_slug
+
+    # Robust check: look for any blob > 50 MB (the actual model weights)
     clip_cached = (
         [
             p
-            for p in (timm_model_dir / "blobs").glob("*")
-            if p.is_file() and p.stat().st_size > 100_000_000
+            for p in (model_dir / "blobs").glob("*")
+            if p.is_file() and p.stat().st_size > 50_000_000
         ]
-        if (timm_model_dir / "blobs").exists()
+        if (model_dir / "blobs").exists()
         else []
     )
 
     if clip_cached and not force:
         print(
-            f"  {GREEN}[SKIP]{RESET}  OpenCLIP ViT-B-32 — already cached ({clip_cached[0]})"
+            f"  {GREEN}[SKIP]{RESET}  OpenCLIP/SigLIP {model_name} — already cached ({clip_cached[0]})"
         )
         return True
 
-    print(f"  {CYAN}[DOWN]{RESET}  OpenCLIP ViT-B-32 (openai) → {hf_dir}")
+    print(f"  {CYAN}[DOWN]{RESET}  OpenCLIP/SigLIP {model_name} ({pretrained}) → {hf_dir}")
     try:
         import open_clip
 
-        open_clip.create_model_and_transforms("ViT-B-32", pretrained="openai")
-        print(f"  {GREEN}[OK  ]{RESET}  OpenCLIP downloaded.")
+        # Ensure we use the correct pretrained tag for SigLIP models
+        open_clip.create_model_and_transforms(model_name, pretrained=pretrained)
+        print(f"  {GREEN}[OK  ]{RESET}  OpenCLIP/SigLIP downloaded.")
         return True
     except Exception as exc:
-        print(f"  {YELLOW}[WARN]{RESET}  OpenCLIP download failed: {exc}")
+        print(f"  {YELLOW}[WARN]{RESET}  OpenCLIP/SigLIP download failed: {exc}")
         return False
 
 

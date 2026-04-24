@@ -9,30 +9,44 @@ interface ActionDockProps {
   onExport: () => void;
 }
 
+/**
+ * ActionDock: The high-fidelity forensic result action bar.
+ */
 export function ActionDock({ onHome, onNew, onExport }: ActionDockProps) {
   return (
-    <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-bottom-6 duration-1000">
-      <div className="flex items-center gap-2 p-2 rounded-full premium-glass border-border-subtle shadow-[0_20px_50px_rgba(0,0,0,0.8)]">
-        <button
-          onClick={onHome}
-          className="btn-outline border-none shadow-none text-xs font-semibold px-6 py-2.5 h-auto min-h-0 tracking-wide !normal-case"
-        >
-          <HomeIcon className="w-3.5 h-3.5" /> Back to Home
-        </button>
-        <div className="w-[1px] h-6 bg-white/5" />
-        <button
-          onClick={onNew}
-          className="btn-premium text-xs font-bold px-8 py-2.5 h-auto min-h-0 tracking-wide !normal-case"
-        >
-          <Activity className="w-3.5 h-3.5" /> New Analysis
-        </button>
-        <div className="w-[1px] h-6 bg-white/5" />
-        <button
-          onClick={onExport}
-          className="btn-outline border-none shadow-none text-xs font-semibold px-6 py-2.5 h-auto min-h-0 tracking-wide !normal-case"
-        >
-          <Download className="w-3.5 h-3.5" /> Export
-        </button>
+    <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-bottom-6 duration-1000 w-full max-w-xl px-6 pointer-events-none">
+      <div className="horizon-card p-2 rounded-[2rem] shadow-[0_40px_100px_rgba(0,0,0,0.8)] pointer-events-auto">
+        <div className="bg-[#020617] rounded-[1.8rem] p-2 flex items-center justify-between gap-2">
+          
+          <button
+            onClick={onHome}
+            className="flex-1 flex items-center justify-center gap-2 text-[10px] font-mono font-bold text-white/40 hover:text-white transition-colors"
+          >
+            <HomeIcon className="w-3.5 h-3.5" /> 
+            HOME
+          </button>
+
+          <div className="w-[1px] h-6 bg-white/5" />
+
+          <button
+            onClick={onNew}
+            className="flex-[2] btn-horizon-primary py-3 px-6 text-xs flex items-center justify-center gap-2"
+          >
+            <Activity className="w-3.5 h-3.5" /> 
+            NEW ANALYSIS
+          </button>
+
+          <div className="w-[1px] h-6 bg-white/5" />
+
+          <button
+            onClick={onExport}
+            className="flex-1 flex items-center justify-center gap-2 text-[10px] font-mono font-bold text-white/40 hover:text-primary transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" /> 
+            EXPORT
+          </button>
+
+        </div>
       </div>
     </div>
   );

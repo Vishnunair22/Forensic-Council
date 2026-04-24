@@ -5,6 +5,7 @@ import { Clock } from "lucide-react";
 import { clsx } from "clsx";
 import type { ReportDTO } from "@/lib/api";
 import type { AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
+import { motion } from "framer-motion";
 
 interface TimelineTabProps {
   report: ReportDTO;
@@ -13,12 +14,12 @@ interface TimelineTabProps {
   pipelineStartAt: string | null;
 }
 
-const AGENT_THEMES: Record<string, { dot: string; text: string; bg: string }> = {
-  Agent1: { dot: "bg-primary", text: "text-primary", bg: "bg-primary/5" },
-  Agent2: { dot: "bg-primary", text: "text-primary", bg: "bg-primary/5" },
-  Agent3: { dot: "bg-warning", text: "text-warning", bg: "bg-warning/5" },
-  Agent4: { dot: "bg-danger", text: "text-danger", bg: "bg-danger/5" },
-  Agent5: { dot: "bg-accent", text: "text-accent", bg: "bg-accent/5" },
+const AGENT_THEMES: Record<string, { color: string }> = {
+  Agent1: { color: "#00FFFF" },
+  Agent2: { color: "#00FFFF" },
+  Agent3: { color: "#F59E0B" },
+  Agent4: { color: "#F43F5E" },
+  Agent5: { color: "#8B5CF6" },
 };
 
 export function TimelineTab({
@@ -29,7 +30,6 @@ export function TimelineTab({
 }: TimelineTabProps) {
   const hasLiveTimeline = agentTimeline.length > 0;
 
-  // Derive Synthesis Phase (from the time the last agent finished to the time the report was signed)
   const lastAgentTime = useMemo(() => {
     if (agentTimeline.length === 0) return null;
     const comps = agentTimeline.map(u => u.completed_at).filter(Boolean) as string[];
@@ -38,119 +38,114 @@ export function TimelineTab({
   }, [agentTimeline]);
 
   return (
-    <section aria-label="Forensic Execution Timeline" className="space-y-6 pt-4">
-      <div className="flex items-center gap-3 px-1">
-        <Clock className="w-4 h-4 text-white/20" />
-        <h2 className="text-[10px] font-bold tracking-wide text-white/50">
-          Forensic Execution Lifecycle
-        </h2>
+    <section className="space-y-8">
+      <div className="flex items-center gap-4">
+         <span className="text-[10px] font-mono font-bold text-white/30 uppercase tracking-[0.3em]">Forensic_Execution_Lifecycle</span>
+         <div className="h-px flex-1 bg-white/5" />
       </div>
 
-      <div className="rounded-3xl border border-border-subtle overflow-hidden premium-glass">
-        {/* Timeline Header */}
-        <div className="px-10 py-8 border-b border-border-subtle bg-surface-low/50 flex items-center justify-between">
-          <div className="flex flex-col gap-1">
-            <h3 className="text-lg font-black text-white tracking-tighter">
-              Sequence Registry
-            </h3>
-            <p className="text-[10px] font-black text-white/20 tracking-wide">Atomic tool execution and consensus deliberation</p>
-          </div>
-          {pipelineStartAt && report.signed_utc && (
-            <div className="px-4 py-2 rounded-full bg-surface-1 border border-border-subtle text-[10px] font-black text-primary tracking-wide shadow-inner">
-              Cycle Time: {fmtDuration(pipelineStartAt, report.signed_utc)}
+      <div className="horizon-card p-1 rounded-3xl overflow-hidden">
+        <div className="bg-[#020617] rounded-[inherit]">
+          
+          {/* Header */}
+          <div className="px-10 py-8 border-b border-white/5 flex items-center justify-between gap-6">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-xl font-heading font-bold text-white tracking-tight">Sequence Registry</h3>
+              <p className="text-[10px] font-mono font-bold text-white/20 uppercase tracking-widest">Atomic_Tool_Execution_Logs</p>
             </div>
-          )}
-        </div>
-
-        <div className="p-10">
-          <div className="relative pl-10 border-l border-white/[0.05] space-y-16 ml-2">
-            
-            {/* 1. Evidence Ingress Phase */}
-            {pipelineStartAt && (
-              <div className="relative group">
-                <div className="absolute -left-[49px] top-1 w-4 h-4 rounded-full border border-border-subtle bg-surface-low shadow-xl transition-all group-hover:bg-primary/20" />
-                <div className="space-y-1">
-                  <span className="text-[10px] font-black text-primary/40 tracking-wide">Phase 01</span>
-                  <h4 className="text-sm font-black text-white/80 tracking-tighter">Evidence Ingress</h4>
-                  <p className="text-[11px] text-white/50 font-medium leading-relaxed max-w-xl">
-                    Secure intake of forensic evidence. Metadata extraction and integrity pre-check completed.
-                  </p>
-                  <div className="pt-2 text-[10px] font-mono text-white/10 tracking-tight">[{fmtTime(pipelineStartAt)}] Transmission Secured</div>
-                </div>
+            {pipelineStartAt && report.signed_utc && (
+              <div className="px-4 py-2 rounded-lg bg-primary/5 border border-primary/20 text-[10px] font-mono font-bold text-primary uppercase tracking-widest">
+                Cycle_Time: {fmtDuration(pipelineStartAt, report.signed_utc)}
               </div>
             )}
+          </div>
 
-            {/* 2. Tool Volley Phase */}
-            <div className="relative group">
-              <div className="absolute -left-[49px] top-1 w-4 h-4 rounded-full border border-primary/30 bg-primary/20 shadow-[0_0_20px_rgba(34,211,238,0.2)]" />
-              <div className="space-y-6">
-                <div className="space-y-1">
-                  <span className="text-[10px] font-black text-primary/40 tracking-wide">Phase 02</span>
-                  <h4 className="text-sm font-black text-white/80 tracking-tighter">Tool Volley</h4>
-                  <p className="text-[11px] text-white/50 font-medium leading-relaxed max-w-xl">
-                    Parallel execution of deep neural probes and investigative agents.
-                  </p>
+          <div className="p-12 relative">
+            {/* Timeline Line */}
+            <div className="absolute left-12 top-12 bottom-12 w-px bg-white/5" />
+
+            <div className="space-y-16">
+              
+              {/* 1. Evidence Ingress */}
+              {pipelineStartAt && (
+                <div className="relative pl-10">
+                  <div className="absolute left-[-5px] top-1.5 w-2.5 h-2.5 rounded-full bg-white/10 border border-white/20 shadow-[0_0_10px_rgba(255,255,255,0.1)]" />
+                  <div className="space-y-2">
+                    <span className="text-[9px] font-mono font-bold text-primary/40 uppercase tracking-[0.2em]">Phase_01</span>
+                    <h4 className="text-sm font-heading font-bold text-white/80">Evidence Ingress</h4>
+                    <p className="text-xs text-white/40 leading-relaxed max-w-xl italic">
+                      Secure intake of forensic evidence. Metadata extraction and integrity pre-check completed.
+                    </p>
+                    <div className="text-[10px] font-mono text-white/20">[{fmtTime(pipelineStartAt)}] Transmission_Secured</div>
+                  </div>
                 </div>
+              )}
 
-                <div className="grid gap-3">
-                  {hasLiveTimeline ? (
-                    agentTimeline.map((update, idx) => {
-                      const theme = AGENT_THEMES[update.agent_id ?? ""] || { dot: "bg-white/20", text: "text-white/40", bg: "bg-white/5" };
-                      // const isComplete = !!update.completed_at;
+              {/* 2. Tool Volley */}
+              <div className="relative pl-10">
+                <div className="absolute left-[-5px] top-1.5 w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_10px_#00FFFF]" />
+                <div className="space-y-8">
+                  <div className="space-y-2">
+                    <span className="text-[9px] font-mono font-bold text-primary/40 uppercase tracking-[0.2em]">Phase_02</span>
+                    <h4 className="text-sm font-heading font-bold text-white/80">Tool Volley</h4>
+                    <p className="text-xs text-white/40 leading-relaxed max-w-xl italic">
+                      Parallel execution of deep neural probes and investigative agents.
+                    </p>
+                  </div>
 
+                  <div className="grid gap-4 max-w-2xl">
+                    {(hasLiveTimeline ? agentTimeline : activeAgentIds.map(id => ({ agent_id: id }))).map((update: any, idx) => {
+                      const agentId = update.agent_id;
+                      const theme = AGENT_THEMES[agentId] || { color: "#00FFFF" };
                       return (
-                        <div key={idx} className="flex items-center gap-4 p-4 rounded-2xl premium-card group transition-colors">
-                          <div className={clsx("w-2 h-2 rounded-full", theme.dot)} />
-                          <div className="flex-1 min-w-0">
-                            <h5 className={clsx("text-[10px] font-black tracking-wide", theme.text)}>
-                              {update.agent_name || update.agent_id}
-                            </h5>
-                            <p className="text-[10px] font-mono font-black text-white/20 truncate tracking-tight">{update.message || "Executing investigative probe..."}</p>
+                        <motion.div 
+                          key={idx}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          className="flex items-center gap-4 p-4 rounded-xl horizon-card group"
+                        >
+                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: theme.color, boxShadow: `0 0 10px ${theme.color}` }} />
+                          <div className="flex-1">
+                            <span className="text-[10px] font-mono font-bold uppercase tracking-widest" style={{ color: theme.color }}>
+                              {update.agent_name || agentId}
+                            </span>
+                            <div className="text-[10px] font-mono text-white/20 mt-0.5 truncate uppercase">
+                              {update.message || "Verification Protocol Applied"}
+                            </div>
                           </div>
                           {update.completed_at && (
-                            <span className="text-[10px] font-mono text-white/10 shrink-0">
+                            <span className="text-[9px] font-mono text-white/10 shrink-0">
                               [{fmtTime(update.completed_at)}]
                             </span>
                           )}
-                        </div>
+                        </motion.div>
                       );
-                    })
-                  ) : (
-                    activeAgentIds.map((agentId) => {
-                      const metrics = report.per_agent_metrics?.[agentId];
-                      const theme = AGENT_THEMES[agentId] || { dot: "bg-white/20", text: "text-white/40", bg: "bg-white/5" };
-                      return (
-                        <div key={agentId} className="flex items-center gap-4 p-4 rounded-2xl bg-white/[0.01] border border-white/5">
-                           <div className={clsx("w-2 h-2 rounded-full", theme.dot)} />
-                           <span className={clsx("text-[11px] font-bold", theme.text)}>{metrics?.agent_name || agentId}</span>
-                           <span className="ml-auto text-[10px] font-mono text-white/10">Verification Protocol Applied</span>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* 3. Synthesis Phase */}
-            {report.signed_utc && (
-              <div className="relative group">
-                <div className="absolute -left-[49px] top-1 w-4 h-4 rounded-full border border-accent/30 bg-accent/20 shadow-[0_0_20px_rgba(139,92,246,0.2)]" />
-                <div className="space-y-1">
-                  <span className="text-[10px] font-black text-accent/40 tracking-wide">Phase 03</span>
-                  <h4 className="text-sm font-black text-white/80 tracking-tighter">Council Synthesis</h4>
-                  <p className="text-[11px] text-white/50 font-medium leading-relaxed max-w-xl">
-                    Arbiter consolidation of all agent findings. Final verdict calculation and cryptographic signing.
-                  </p>
-                  <div className="pt-2 text-[10px] font-mono text-white/10 tracking-tight">
-                    [{fmtTime(report.signed_utc)}] Consensus Reached 
-                    {lastAgentTime && ` // Deliberation: ${fmtDuration(lastAgentTime, report.signed_utc)}`}
+                    })}
                   </div>
                 </div>
               </div>
-            )}
 
+              {/* 3. Synthesis */}
+              {report.signed_utc && (
+                <div className="relative pl-10">
+                  <div className="absolute left-[-5px] top-1.5 w-2.5 h-2.5 rounded-full bg-accent shadow-[0_0_10px_#8B5CF6]" />
+                  <div className="space-y-2">
+                    <span className="text-[9px] font-mono font-bold text-accent/40 uppercase tracking-[0.2em]">Phase_03</span>
+                    <h4 className="text-sm font-heading font-bold text-white/80">Council Synthesis</h4>
+                    <p className="text-xs text-white/40 leading-relaxed max-w-xl italic">
+                      Arbiter consolidation of all agent findings. Final verdict calculation and cryptographic signing.
+                    </p>
+                    <div className="text-[10px] font-mono text-white/20">
+                      [{fmtTime(report.signed_utc)}] Consensus_Reached 
+                      {lastAgentTime && ` // Deliberation: ${fmtDuration(lastAgentTime, report.signed_utc)}`}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            </div>
           </div>
+
         </div>
       </div>
     </section>
@@ -160,7 +155,7 @@ export function TimelineTab({
 function fmtTime(iso: string): string {
   try {
     const d = new Date(iso);
-    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}:${d.getMilliseconds().toString().padStart(3, '0')}`;
+    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}.${d.getMilliseconds().toString().padStart(3, '0')}`;
   } catch { return iso; }
 }
 

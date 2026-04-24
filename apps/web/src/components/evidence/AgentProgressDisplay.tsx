@@ -206,126 +206,45 @@ export function AgentProgressDisplay({
  const skippedCount = skippedAgentIds.size;
 
  return (
-  <div className="flex flex-col w-full max-w-[1560px] mx-auto gap-6 pb-36">
+  <div className="flex flex-col w-full max-w-[1560px] mx-auto gap-8 pb-36 pt-24">
 
     {/* ── Evidence Analysis Title & Phase ────────────────────────────────── */}
-    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-8 w-full mb-8">
-      <div className="flex items-center gap-6">
-        <div className="flex flex-col gap-1">
-          <motion.h1
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="text-4xl font-black text-white tracking-tight"
-          >
-            Evidence Analysis
-          </motion.h1>
-          <div className="flex items-center gap-3">
-            <div className="relative flex items-center justify-center w-5 h-5">
-              <div className="absolute inset-0 bg-primary/20 rounded-full glow-pulse" />
-              <Loader2 className="w-4 h-4 text-primary animate-spin relative z-10" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <p className="text-[10px] font-bold text-primary tracking-wide">
-                {phase === "initial" ? "Initial Analysis" : "Deep Analysis"}
-              </p>
-              <p className="text-xs font-medium text-white/45" role="status" aria-live="polite">
-                {pipelineMessage || progressText || phaseStatusText}
-              </p>
-              <p className="sr-only">{phaseStatusText}</p>
-            </div>
+    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-10 w-full mb-12 px-2">
+      <div className="flex flex-col gap-2">
+        <motion.h1
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="text-4xl md:text-5xl font-heading font-bold text-white tracking-tight"
+        >
+          Evidence Analysis
+        </motion.h1>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_10px_#00FFFF]" />
+            <p className="text-[10px] font-mono font-bold text-primary tracking-[0.2em] uppercase">
+              {phase === "initial" ? "Initial_Pipeline" : "Deep_Pipeline"}
+            </p>
           </div>
+          <div className="w-[1px] h-3 bg-white/10" />
+          <p className="text-xs font-medium text-white/40 italic" role="status" aria-live="polite">
+            {pipelineMessage || progressText || phaseStatusText}
+          </p>
         </div>
       </div>
 
+      {/* Running Agents HUD */}
       <div className="flex items-center gap-4">
-        {/* Running Agents Summary */}
-        <div className="flex flex-col gap-2">
-          <button
-            onClick={() => setIsRunningExpanded(!isRunningExpanded)}
-            className="flex items-center gap-6 bg-white/[0.03] px-6 py-4 rounded-2xl border border-white/5 backdrop-blur-xl hover:bg-white/[0.06] transition-all group"
-          >
-            <div className="flex flex-col items-start">
-              <span className="text-[9px] font-bold text-white/30 tracking-wide mb-0.5">Status</span>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-black text-white font-mono">Running Agents</span>
-                <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-primary/10 text-primary text-xs font-black">
-                  {runningCount}
-                </span>
-              </div>
-            </div>
-            <div className="w-8 h-8 rounded-full border border-primary/20 flex items-center justify-center group-hover:border-primary/50 transition-colors">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-              >
-                <Activity className="w-4 h-4 text-primary" />
+        <div className="horizon-card px-6 py-4 rounded-xl flex items-center gap-6 border-primary/20">
+           <div className="flex flex-col items-start">
+             <span className="text-[9px] font-mono font-bold text-white/20 uppercase tracking-widest">Active_Nodes</span>
+             <span className="text-2xl font-mono font-bold text-white leading-none mt-1">0{runningCount}</span>
+           </div>
+           <div className="w-10 h-10 rounded-full border border-primary/20 flex items-center justify-center">
+              <motion.div animate={{ rotate: 360 }} transition={{ duration: 4, repeat: Infinity, ease: "linear" }}>
+                <Activity className="w-5 h-5 text-primary" />
               </motion.div>
-            </div>
-          </button>
-          
-          <AnimatePresence>
-            {isRunningExpanded && runningCount > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: -10, height: 0 }}
-                animate={{ opacity: 1, y: 0, height: "auto" }}
-                exit={{ opacity: 0, y: -10, height: 0 }}
-                className="overflow-hidden bg-white/[0.02] border border-white/5 rounded-xl p-3"
-              >
-                <div className="flex flex-wrap gap-2">
-                  {allValidAgents.filter(a => getAgentStatus(a.id) === "running").map(a => (
-                    <div key={a.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/5">
-                      <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                      <span className="text-[10px] font-bold text-white/80">{a.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+           </div>
         </div>
-
-        {/* Skipped Agents Summary */}
-        {skippedCount > 0 && (
-          <div className="flex flex-col gap-2">
-            <button
-              onClick={() => setIsSkippedExpanded(!isSkippedExpanded)}
-              className="flex items-center gap-6 bg-white/[0.03] px-6 py-4 rounded-2xl border border-white/5 backdrop-blur-xl hover:bg-white/[0.06] transition-all group"
-            >
-              <div className="flex flex-col items-start">
-                <span className="text-[9px] font-bold text-white/30 tracking-wide mb-0.5">System</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-black text-white/40 font-mono">Skipped Agents</span>
-                  <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-white/5 text-white/30 text-xs font-black">
-                    {skippedCount}
-                  </span>
-                </div>
-              </div>
-              <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center group-hover:border-white/30 transition-colors">
-                <Ban className="w-4 h-4 text-white/30" />
-              </div>
-            </button>
-
-            <AnimatePresence>
-              {isSkippedExpanded && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10, height: 0 }}
-                  animate={{ opacity: 1, y: 0, height: "auto" }}
-                  exit={{ opacity: 0, y: -10, height: 0 }}
-                  className="overflow-hidden bg-white/[0.02] border border-white/5 rounded-xl p-3"
-                >
-                  <div className="flex flex-wrap gap-2">
-                    {allValidAgents.filter(a => skippedAgentIds.has(a.id)).map(a => (
-                      <div key={a.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/5">
-                        <div className="w-2 h-2 rounded-full bg-white/20" />
-                        <span className="text-[10px] font-bold text-white/40">{a.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
       </div>
     </div>
 
@@ -373,47 +292,47 @@ export function AgentProgressDisplay({
        exit={{ opacity: 0, y: 100 }}
        className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-6 pointer-events-none"
       >
-       <div className="flex items-center gap-4 p-3 rounded-2xl bg-black/40 backdrop-blur-3xl border border-white/10 shadow-[0_32px_64px_rgba(0,0,0,0.6)] pointer-events-auto">
-        {showInitialDecision ? (
-         <>
-          <button
-           onClick={onAcceptAnalysis}
-           disabled={isNavigating}
-           className="flex-1 btn-outline h-auto py-4 rounded-2xl flex items-center justify-center gap-3 disabled:opacity-50 !normal-case"
-          >
-           {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-           Accept Analysis
-          </button>
-          <button
-           onClick={onDeepAnalysis}
-           disabled={isNavigating}
-           className="flex-[1.5] btn-premium h-auto py-4 rounded-2xl flex items-center justify-center gap-3 disabled:opacity-50 !normal-case"
-          >
-           <Microscope className="w-4 h-4" />
-           Deep Analysis
-           <ArrowRight className="w-4 h-4" />
-          </button>
-         </>
-        ) : (
-         <>
-          <button
-           onClick={onNewUpload}
-           className="flex-1 btn-outline h-auto py-4 rounded-2xl flex items-center justify-center gap-3 !normal-case"
-          >
-           <RotateCcw className="w-4 h-4 text-primary" />
-           New Upload
-          </button>
-          <button
-           onClick={onViewResults}
-           disabled={isNavigating}
-           className="flex-[1.5] btn-premium h-auto py-4 rounded-2xl flex items-center justify-center gap-3 disabled:opacity-50 !normal-case"
-          >
-           {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-           Generate Final Report
-           <ArrowRight className="w-4 h-4" />
-          </button>
-         </>
-        )}
+       <div className="horizon-card p-2 rounded-[2rem] shadow-[0_40px_100px_rgba(0,0,0,0.8)] pointer-events-auto">
+         <div className="bg-[#020617] rounded-[1.8rem] p-3 flex items-center gap-4">
+           {showInitialDecision ? (
+            <>
+             <button
+              onClick={onAcceptAnalysis}
+              disabled={isNavigating}
+              className="flex-1 btn-horizon-outline py-4 text-xs"
+             >
+              {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Accept Analysis"}
+             </button>
+             <button
+              onClick={onDeepAnalysis}
+              disabled={isNavigating}
+              className="flex-[1.5] btn-horizon-primary py-4 text-xs flex items-center justify-center gap-3"
+             >
+              <Microscope className="w-4 h-4" />
+              Deep Analysis
+              <ArrowRight className="w-4 h-4" />
+             </button>
+            </>
+           ) : (
+            <>
+             <button
+              onClick={onNewUpload}
+              className="flex-1 btn-horizon-outline py-4 text-xs"
+             >
+              New Upload
+             </button>
+             <button
+              onClick={onViewResults}
+              disabled={isNavigating}
+              className="flex-[1.5] btn-horizon-primary py-4 text-xs flex items-center justify-center gap-3"
+             >
+              {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+              Generate Report
+              <ArrowRight className="w-4 h-4" />
+             </button>
+            </>
+           )}
+         </div>
        </div>
       </motion.div>
     )}

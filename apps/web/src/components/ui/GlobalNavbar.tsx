@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useSound } from "@/hooks/useSound";
 import { ForensicResetOverlay } from "./ForensicResetOverlay";
 import { BrandLogo } from "./BrandLogo";
@@ -11,6 +11,7 @@ export function GlobalNavbar() {
   const router = useRouter();
   const pathname = usePathname();
   const [isResetting, setIsResetting] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const { playSound } = useSound();
 
   const handleLogoClick = useCallback(() => {
@@ -41,21 +42,28 @@ export function GlobalNavbar() {
   return (
     <nav
       aria-label="Main navigation"
-      className="fixed top-6 left-5 z-[200] flex items-center px-6 py-3 bg-black/50 backdrop-blur-xl border border-white/10 rounded-full shadow-[0_4px_24px_rgba(0,0,0,0.6)] w-fit whitespace-nowrap"
+      className="fixed top-8 left-8 z-[500]"
     >
       <AnimatePresence>
         {isResetting && <ForensicResetOverlay />}
       </AnimatePresence>
 
-      <button
+      <motion.button
         type="button"
-        className="flex items-center gap-2.5 cursor-pointer focus-visible:outline-none group bg-transparent border-none"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        className="horizon-glass flex items-center px-6 py-4 rounded-xl border border-white/10 group cursor-pointer transition-all duration-300 hover:border-primary/40 shadow-[0_20px_50px_rgba(0,0,0,0.5)] relative overflow-hidden"
         onClick={handleLogoClick}
         aria-label="Return to Forensic Council home"
         aria-current={pathname === "/" ? "page" : undefined}
       >
-        <BrandLogo size="sm" />
-      </button>
+        {/* Subtle Highlight Beam */}
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+        
+        <BrandLogo size="sm" isHovered={isHovered} />
+      </motion.button>
     </nav>
   );
 }

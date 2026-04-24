@@ -48,60 +48,74 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
 
   return createPortal(
     <motion.div
-      initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
-      animate={{ opacity: 1, backdropFilter: "blur(12px)" }}
-      exit={{ opacity: 0, backdropFilter: "blur(0px)", transition: { delay: 0.3 } }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 backdrop-blur-xl p-4"
       onClick={onClose}
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
     >
       <div 
         className="relative w-full max-w-xl" 
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Content */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
+          initial={{ opacity: 0, scale: 0.98, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.98, y: 10 }}
           transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-          className="relative z-30 bg-white/[0.04] backdrop-blur-xl border border-white/10 rounded-3xl p-10 shadow-[0_0_80px_rgba(0,0,0,0.9)] overflow-hidden"
+          className="horizon-card p-1 relative overflow-hidden"
         >
-          <button 
-            onClick={onClose}
-            className="absolute top-6 right-6 text-white/40 hover:text-white transition-colors z-50"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {/* Beveled Interior */}
+          <div className="bg-[#020617] rounded-[inherit] p-10 flex flex-col items-center text-center">
+            
+            <button 
+              onClick={onClose}
+              className="absolute top-6 right-6 text-white/20 hover:text-primary transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
 
-          <div className="flex flex-col items-center text-center gap-8">
-            {/* The fixed, robust dropzone */}
+            <h2 className="text-2xl font-heading font-bold text-white mb-8">Upload Evidence</h2>
+
             <div
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              className={`w-full border border-dashed rounded-3xl px-8 py-16 transition-all duration-300 cursor-pointer group flex flex-col items-center justify-center gap-6 relative overflow-hidden z-50 ${
+              className={`w-full border-2 border-dashed rounded-2xl p-16 transition-all duration-500 cursor-pointer group flex flex-col items-center justify-center gap-6 relative overflow-hidden ${
                 isDragging 
-                  ? "border-primary bg-primary/[0.05]" 
-                  : "border-white/[0.15] hover:border-primary/50 hover:bg-primary/[0.03] bg-white/[0.02]"
+                  ? "border-primary bg-primary/5 shadow-[0_0_40px_rgba(0,255,255,0.1)]" 
+                  : "border-white/5 hover:border-primary/40 hover:bg-white/[0.02]"
               }`}
             >
-              <div className="relative z-10 flex h-20 w-20 items-center justify-center rounded-2xl bg-white/[0.05] text-white/50 transition-all duration-300 group-hover:bg-primary/10 group-hover:text-primary">
-                <Upload className="h-10 w-10" strokeWidth={1.5} />
+              {/* Aperture Animation around icon */}
+              <div className="relative flex h-24 w-24 items-center justify-center">
+                <motion.div 
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+                  className="absolute inset-0 rounded-full border border-primary/20 border-dashed"
+                />
+                <div className="absolute inset-2 rounded-full border border-primary/10" />
+                <Upload className={`h-10 w-10 transition-colors duration-300 ${isDragging ? "text-primary" : "text-white/30 group-hover:text-primary"}`} strokeWidth={1.5} />
               </div>
 
-              <div className="flex flex-col items-center gap-2 z-10 pointer-events-none">
-                <span className={`text-xl font-bold transition-colors ${isDragging ? "text-primary" : "text-white/90 group-hover:text-primary"}`}>
-                  {isDragging ? "Release Payload" : "Upload Evidence"}
+              <div className="flex flex-col items-center gap-2 pointer-events-none">
+                <span className={`text-xl font-heading font-bold tracking-tight transition-colors ${isDragging ? "text-primary" : "text-white/80 group-hover:text-primary"}`}>
+                  {isDragging ? "Release Payload" : "Drop Evidence File"}
                 </span>
-                <p className="text-sm font-medium text-white/40 max-w-xs leading-relaxed">
-                  Upload image, audio, video for forensic analysis.
+                <p className="text-sm font-medium text-white/30 max-w-[240px] leading-relaxed">
+                  Select a forensic file for multi-agent neural verification.
                 </p>
+              </div>
+
+              {/* HUD Corner Marker */}
+              <div className="absolute bottom-4 right-4 text-[9px] font-mono text-primary/20 tracking-widest">
+                WAITING_FOR_DATA
               </div>
               
               <input
                 type="file" 
                 aria-label="Upload evidence file"
-                className="absolute inset-0 z-20 h-full w-full cursor-pointer opacity-0"
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                 accept="image/*,video/*,audio/*"
                 onChange={(e) => {
                   if (e.target.files?.[0]) onFileSelected(e.target.files[0]);

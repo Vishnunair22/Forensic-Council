@@ -64,18 +64,18 @@ export function ResultLayout() {
         />
       )}
 
-      {/* ── Minimalist Top Navigation ──────────────────────────────────── */}
-      <nav className="sticky top-[60px] z-[40] w-full bg-black/60 backdrop-blur-xl border-b border-white/[0.05]">
-        <div className="max-w-5xl mx-auto px-10 py-6 flex items-center justify-between gap-8">
+      {/* ── Horizon Navigation Dock ──────────────────────────────────── */}
+      <nav className="sticky top-[80px] z-[40] w-full px-6 mb-12">
+        <div className="max-w-5xl mx-auto horizon-card p-2 rounded-2xl flex items-center justify-between gap-8 bg-[#020617]/80 backdrop-blur-2xl">
           <button 
             onClick={rs.handleHome}
-            className="inline-flex items-center gap-2 text-sm font-medium text-white/50 hover:text-white transition-colors group"
+            className="px-6 py-2 text-[10px] font-mono font-bold text-white/30 hover:text-white transition-all uppercase tracking-widest flex items-center gap-3"
           >
-            <HomeIcon className="w-4 h-4 text-white/10 group-hover:text-primary/50 transition-colors" />
-            Back to Evidence Analysis
+            <HomeIcon className="w-3.5 h-3.5" />
+            Analysis_Hub
           </button>
 
-          <div role="tablist" aria-label="Report sections" className="bg-white/[0.02] border border-white/5 p-1 rounded-full flex gap-1 shadow-inner">
+          <div role="tablist" aria-label="Report sections" className="flex items-center gap-2 pr-2">
             {(["analysis", "history"] as Tab[]).map((tab) => (
               <button
                 key={tab}
@@ -85,13 +85,12 @@ export function ResultLayout() {
                 aria-controls={`tabpanel-${tab}`}
                 onClick={() => rs.setActiveTab(tab)}
                 className={clsx(
-                  "rounded-full px-5 py-2 text-sm transition-all duration-200 flex items-center gap-2 font-medium",
+                  "px-6 py-2 text-[10px] font-mono font-bold transition-all duration-300 rounded-lg uppercase tracking-widest",
                   rs.activeTab === tab 
-                    ? "bg-primary/15 border border-primary/20 text-primary font-semibold" 
-                    : "text-white/50 hover:text-white/80"
+                    ? "bg-primary/10 text-primary border border-primary/20" 
+                    : "text-white/30 hover:text-white/60"
                 )}
               >
-                {tab === "analysis" ? <Activity className="w-4 h-4" /> : <HistoryIcon className="w-4 h-4" />}
                 {tab === "analysis" ? "Overview" : "History"}
               </button>
             ))}

@@ -8,12 +8,14 @@ import {
   ArrowRight, 
   Clock,
   ShieldCheck,
-  Calendar
+  Calendar,
+  Lock
 } from "lucide-react";
 import clsx from "clsx";
 import { type HistoryItem } from "@/lib/types";
 import { EvidenceThumbnail } from "./EvidenceThumbnail";
 import { useSessionStorage } from "@/hooks/useSessionStorage";
+import { motion } from "framer-motion";
 
 interface HistoryPanelProps {
   onDismiss: () => void;
@@ -35,134 +37,139 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
 
   const getVerdictStyle = (verdict: string) => {
     const v = (verdict || "").toUpperCase();
-    if (v.includes("MANIPULATED")) return "text-rose-400 bg-rose-500/5 border-rose-500/10";
-    if (v.includes("SUSPICIOUS")) return "text-amber-400 bg-amber-500/5 border-amber-500/10";
-    if (v.includes("AUTHENTIC")) return "text-emerald-400 bg-emerald-500/5 border-emerald-500/10";
+    if (v.includes("MANIPULATED")) return "text-danger bg-danger/10 border-danger/30";
+    if (v.includes("SUSPICIOUS")) return "text-warning bg-warning/10 border-warning/30";
+    if (v.includes("AUTHENTIC")) return "text-success bg-success/10 border-success/30";
     return "text-white/40 bg-white/5 border-white/10";
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="glass-panel rounded-3xl border border-white/5 bg-white/[0.01] overflow-hidden shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between px-10 py-8 border-b border-white/5">
-          <div className="flex flex-col gap-1">
-             <h3 className="text-xl font-bold text-white flex items-center gap-3">
-               <HistoryIcon className="w-5 h-5 text-primary/50" />
-               Investigation Archive
-             </h3>
-             <p className="text-[11px] font-medium text-white/20 ml-8 tracking-wide">Historical Forensic Records and Session Logs</p>
-          </div>
+    <div className="w-full max-w-5xl mx-auto pb-32">
+      <div className="horizon-card p-1 rounded-3xl overflow-hidden">
+        <div className="bg-[#020617] rounded-[inherit]">
           
-          <div className="flex items-center gap-6">
-            {history.length > 0 && (
-              <button
-                onClick={clearAll}
-                className="group flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold text-rose-500/50 hover:text-rose-400 hover:bg-rose-500/10 transition-all outline-none"
-              >
-                <Trash2 className="w-3.5 h-3.5" /> Clear All
-              </button>
-            )}
-            <button 
-              onClick={onDismiss} 
-              className="text-xs font-semibold tracking-wide text-white/50 hover:text-primary transition-colors"
-            >
-              Back to Analysis
-            </button>
-          </div>
-        </div>
-
-        {/* List */}
-        <div className="p-8">
-          {history.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 gap-6 text-white/10">
-              <div className="w-24 h-24 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-center">
-                <HistoryIcon className="w-10 h-10 opacity-20" />
-              </div>
-              <div className="text-center">
-                <p className="text-base font-bold tracking-wide mb-2 text-white/80">Archive Empty</p>
-                <p className="text-xs text-white/50 max-w-xs">Completed forensic analyses will appear here. Upload evidence to begin your first investigation.</p>
-              </div>
+          {/* --- Header --- */}
+          <div className="flex flex-col md:flex-row items-center justify-between px-10 py-10 border-b border-white/5 gap-6">
+            <div className="flex flex-col gap-2">
+               <h3 className="text-3xl font-heading font-bold text-white flex items-center gap-4">
+                 <HistoryIcon className="w-6 h-6 text-primary" />
+                 Investigation Archive
+               </h3>
+               <p className="text-[10px] font-mono font-bold text-white/20 uppercase tracking-[0.3em]">
+                 Forensic_Registry // SECURE_STORAGE_V2
+               </p>
             </div>
-          ) : (
-            <div className="grid gap-6">
-              {history.sort((a,b) => b.timestamp - a.timestamp).map((item) => (
-                <div
-                  key={item.sessionId}
-                  onClick={() => onSelect(item.sessionId)}
-                  className="group relative flex flex-col gap-5 p-6 rounded-2xl bg-white/[0.01] border border-white/5 hover:border-white/10 hover:bg-white/[0.02] transition-all cursor-pointer"
+            
+            <div className="flex items-center gap-6">
+              {history.length > 0 && (
+                <button
+                  onClick={clearAll}
+                  className="btn-horizon-outline py-2 px-4 text-[10px] text-danger border-danger/20 hover:bg-danger/5"
                 >
-                  {/* Top Row: Visual + Title + Actions */}
-                  <div className="flex items-center gap-5">
-                    <div className="w-16 h-16 shrink-0 rounded-2xl overflow-hidden border border-white/5 shadow-xl">
-                      <EvidenceThumbnail
-                        thumbnail={item.thumbnail}
-                        mimeType={item.mime}
-                        fileName={item.fileName}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    
-                    <div className="flex-1 min-w-0 pr-24">
-                       <h4 className="text-lg font-bold text-white/80 break-words leading-tight group-hover:text-white transition-colors">
-                         {item.fileName}
-                       </h4>
-                    </div>
+                  Clear Archive
+                </button>
+              )}
+              <button 
+                onClick={onDismiss} 
+                className="text-[10px] font-mono font-bold text-white/40 hover:text-primary tracking-widest uppercase transition-colors"
+              >
+                Back To Analysis
+              </button>
+            </div>
+          </div>
 
-                    <div className="absolute top-6 right-8 flex items-center gap-3">
-                      <button
-                        onClick={(e) => removeItem(e, item.sessionId)}
-                        className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-white/20 hover:text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/20 transition-all"
-                        aria-label="Remove from history"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                      <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/20 text-primary group-hover:scale-110 transition-transform">
-                        <ArrowRight className="w-4 h-4" />
+          {/* --- List --- */}
+          <div className="p-10">
+            {history.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-32 gap-6">
+                <div className="relative w-24 h-24 flex items-center justify-center">
+                  <motion.div 
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+                    className="absolute inset-0 rounded-full border border-white/5 border-dashed"
+                  />
+                  <HistoryIcon className="w-10 h-10 text-white/5" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-heading font-bold text-white/40 mb-2 uppercase tracking-widest">Archive Empty</p>
+                  <p className="text-[10px] font-mono text-white/20 max-w-xs leading-relaxed">
+                    System awaiting initial analysis payloads for registry sync.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-6">
+                {history.sort((a,b) => b.timestamp - a.timestamp).map((item, i) => (
+                  <motion.div
+                    key={item.sessionId}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    onClick={() => onSelect(item.sessionId)}
+                    className="group relative horizon-card p-6 rounded-2xl cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all"
+                  >
+                    <div className="flex flex-col md:flex-row gap-6 items-center">
+                      
+                      {/* Aperture Preview */}
+                      <div className="relative w-16 h-16 shrink-0 flex items-center justify-center">
+                        <motion.div 
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+                          className="absolute inset-0 rounded-full border border-primary/10 border-dashed"
+                        />
+                        <div className="w-12 h-12 rounded-lg overflow-hidden border border-white/5">
+                          <EvidenceThumbnail
+                            thumbnail={item.thumbnail}
+                            mimeType={item.mime}
+                            fileName={item.fileName}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                         <div className="flex items-center gap-3 mb-2">
+                            <span className="text-[9px] font-mono font-bold text-primary/40 tracking-widest">SESSION_{item.sessionId.slice(-6)}</span>
+                            <span className="text-[9px] font-mono text-white/20 uppercase tracking-tighter">[{item.type}_ANALYSIS]</span>
+                         </div>
+                         <h4 className="text-lg font-heading font-bold text-white/80 truncate group-hover:text-white transition-colors">
+                           {item.fileName}
+                         </h4>
+                      </div>
+
+                      {/* Verdict Pill */}
+                      <div className={clsx(
+                        "px-4 py-1.5 rounded border text-[10px] font-mono font-bold uppercase tracking-widest",
+                        getVerdictStyle(item.verdict)
+                      )}>
+                        {item.verdict?.replace(/_/g, " ")}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-4">
+                        <div className="text-right hidden lg:block">
+                           <div className="text-[10px] font-mono text-white/20">TIMESTAMP</div>
+                           <div className="text-[10px] font-mono text-white/60">
+                             {new Date(item.timestamp).toLocaleDateString()} // {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                           </div>
+                        </div>
+                        <button
+                          onClick={(e) => removeItem(e, item.sessionId)}
+                          className="p-3 rounded-lg border border-white/5 text-white/20 hover:text-danger hover:border-danger/30 transition-all"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Bottom Row: Metadata Ribbon */}
-                  <div className="flex flex-wrap items-center gap-x-8 gap-y-3 pt-5 border-t border-white/[0.03]">
-                    <div className={clsx(
-                      "flex items-center gap-2 px-3 py-1 rounded-full border text-[10px] font-bold tracking-wide",
-                      getVerdictStyle(item.verdict)
-                    )}>
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      {(item.verdict ?? "Unknown").replace(/_/g, " ").replace(/\w\S*/g, (w) => (w.replace(/^\w/, (c) => c.toUpperCase())))}
+                    <div className="absolute top-0 right-0 p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                       <ArrowRight className="w-3 h-3 text-primary" />
                     </div>
-
-                    <div className="flex items-center gap-2 text-white/50 text-[11px] font-medium">
-                      <Clock className="w-3.5 h-3.5 text-white/10" />
-                      <span>{item.analysisTime || "Duration N/A"}</span>
-                    </div>
-
-                    {item.score !== undefined && (
-                       <div className="flex items-center gap-2 text-white/50 text-[11px] font-medium">
-                         <div className="w-1.5 h-1.5 rounded-full bg-primary/40" />
-                         <span>{item.score}% Confidence</span>
-                       </div>
-                    )}
-
-                    <div className="flex items-center gap-2 text-white/50 text-[11px] font-medium ml-auto">
-                      <Calendar className="w-3.5 h-3.5 text-white/10" />
-                      <span>
-                        {new Date(item.timestamp).toLocaleString(undefined, {
-                          month: "short", day: "numeric", year: "numeric",
-                          hour: "numeric", minute: "2-digit",
-                        })}
-                      </span>
-                    </div>
-
-                    <span className="text-[11px] font-semibold tracking-wide text-white/50 px-2 py-0.5 rounded-full border border-white/5 bg-white/[0.02]">
-                      {item.type} Analysis
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

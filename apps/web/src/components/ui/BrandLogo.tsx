@@ -1,84 +1,100 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 interface BrandLogoProps {
   className?: string;
   size?: "sm" | "md" | "lg";
-  isHero?: boolean;
+  isHovered?: boolean;
 }
 
-export function BrandLogo({ className, size = "md", isHero = false }: BrandLogoProps) {
+export function BrandLogo({ className, size = "md", isHovered = false }: BrandLogoProps) {
   const iconSizes = {
-    sm: "w-8 h-8",
-    md: "w-10 h-10",
-    lg: "w-14 h-14",
+    sm: "w-9 h-9",
+    md: "w-11 h-11",
+    lg: "w-16 h-16",
   };
 
   const textSizes = {
     sm: "text-lg",
-    md: "text-[1.35rem]",
+    md: "text-xl",
     lg: "text-3xl",
   };
 
   return (
-    <div className={cn("flex items-center gap-3", className)}>
+    <div className={cn("flex items-center gap-4", className)}>
+      {/* --- Horizon Aperture Icon --- */}
       <motion.div
         className={cn(
-          "relative flex items-center justify-center rounded-2xl bg-gradient-to-b from-white/20 to-white/5 p-[1px] shadow-lg overflow-hidden group-hover:shadow-[0_0_30px_rgba(var(--primary),0.3)] transition-all duration-500 ease-out",
+          "relative flex items-center justify-center rounded-xl bg-slate-900 border border-white/10 overflow-hidden",
           iconSizes[size]
         )}
       >
-        <div className="absolute inset-0 bg-black/90 backdrop-blur-xl rounded-[15px]" />
+        {/* Glow effect on hover */}
+        <motion.div 
+          animate={{ opacity: isHovered ? 0.3 : 0.1 }}
+          className="absolute inset-0 bg-primary blur-xl" 
+        />
         
-        {/* Technical crosshair/target effect */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-30">
-          <div className="w-[80%] h-[1px] bg-primary/40" />
-          <div className="h-[80%] w-[1px] bg-primary/40" />
-          <div className="absolute w-[60%] h-[60%] border border-primary/20 rounded-full" />
+        {/* Technical HUD Crosshair */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="w-[70%] h-[1px] bg-primary/30" />
+          <div className="h-[70%] w-[1px] bg-primary/30" />
+          <div className="absolute w-[50%] h-[50%] border border-primary/20 rounded-full" />
         </div>
 
-        <span className="relative text-white font-mono font-black text-sm tracking-wide z-10 group-hover:text-primary transition-colors duration-300">
+        {/* The "FC" Core */}
+        <span className="relative text-white font-mono font-bold text-xs z-10">
           FC
         </span>
 
-        {/* Scanning beam effect */}
+        {/* Rotating Tick Marks (Horizon Signature) */}
         <motion.div 
-          className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/10 to-transparent w-full h-[200%] -top-full"
-          animate={{ top: ["-100%", "100%"] }}
-          transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-        />
+          animate={{ rotate: 360 }}
+          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+          className="absolute inset-0 flex items-center justify-center"
+        >
+          <div className="absolute top-1 w-1 h-1 bg-primary/60 rounded-full" />
+          <div className="absolute bottom-1 w-1 h-1 bg-primary/60 rounded-full" />
+          <div className="absolute left-1 w-1 h-1 bg-primary/60 rounded-full" />
+          <div className="absolute right-1 w-1 h-1 bg-primary/60 rounded-full" />
+        </motion.div>
       </motion.div>
 
-      <div className="flex flex-col">
-        <div className="flex items-center gap-1.5">
+      {/* --- Horizon Name & Reset Context --- */}
+      <div className="flex flex-col justify-center">
+        <div className="flex items-center gap-1.5 leading-tight">
           <span className={cn(
-            "font-extrabold tracking-tight text-white/90 group-hover:text-white transition-colors duration-300",
+            "font-heading font-bold text-white tracking-wider",
             textSizes[size]
           )}>
             Forensic
           </span>
           <span className={cn(
-            "font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-primary via-primary/80 to-primary/60 drop-shadow-[0_0_15px_rgba(var(--primary),0.3)] transition-all duration-300",
+            "font-heading font-bold text-primary drop-shadow-[0_0_15px_rgba(0,255,255,0.4)] tracking-wider",
             textSizes[size]
           )}>
             Council
           </span>
         </div>
-        {isHero && (
-          <motion.div 
-            initial={{ opacity: 0, x: -5 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.5 }}
-            className="flex items-center gap-2 mt-0.5"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-            <span className="text-[10px] font-mono font-bold tracking-[0.15em] text-white/40">
-              Neural Forensic Protocol v4.0
-            </span>
-          </motion.div>
-        )}
+
+        {/* Back To Home Hint */}
+        <AnimatePresence mode="wait">
+          {isHovered && (
+            <motion.div
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.2 }}
+              className="absolute mt-10"
+            >
+              <span className="text-[10px] font-mono font-bold tracking-widest text-primary/60 uppercase">
+                Back To Home
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

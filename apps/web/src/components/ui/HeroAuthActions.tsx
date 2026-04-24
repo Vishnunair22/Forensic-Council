@@ -86,33 +86,27 @@ export function HeroAuthActions() {
 
   return (
     <>
-      <button
-        onClick={() => {
-          playSound("envelope-open");
-          setShowUpload(true);
-        }}
-        aria-label={isAuthenticating ? "Initializing..." : authError ? authError : "Upload a file to begin analysis"}
-        className="group relative inline-flex items-center gap-3 px-8 py-4 rounded-full 
-                   bg-info text-white font-bold text-base tracking-wide
-                   hover:bg-transparent hover:text-info border border-transparent hover:border-info
-                   active:scale-[0.98] transition-all duration-300
-                   shadow-[0_0_30px_rgba(0,163,255,0.25)] hover:shadow-[0_0_50px_rgba(0,163,255,0.4)]
-                   min-h-[52px] select-none"
-      >
-        <span className="relative z-10 flex items-center gap-3">
-          <span className="font-bold">
-            {isAuthenticating ? "Initializing..." : authError ? authError : "Begin Analysis"}
+      <div className="flex flex-col items-center gap-4">
+        <button
+          onClick={() => {
+            playSound("envelope-open");
+            setShowUpload(true);
+          }}
+          aria-label={isAuthenticating ? "Initializing..." : authError ? authError : "Upload a file to begin analysis"}
+          className="btn-horizon-primary group relative select-none"
+        >
+          <span className="relative z-10 flex items-center gap-3">
+            <span className="font-bold">
+              {isAuthenticating ? "Initializing..." : authError ? authError : "Begin Analysis"}
+            </span>
+            {isAuthenticating ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+            )}
           </span>
-          {isAuthenticating ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-          )}
-        </span>
-
-        {/* Outer Glow Update */}
-        <div className="absolute inset-0 bg-info opacity-0 group-hover:opacity-10 blur-xl transition-opacity duration-700" />
-      </button>
+        </button>
+      </div>
 
       <AnimatePresence>
         {(isAuthenticating || isNavigating) && (

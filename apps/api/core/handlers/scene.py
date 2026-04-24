@@ -193,7 +193,7 @@ class SceneHandlers(BaseToolHandler):
                     "detection_count": len(detections),
                     "classes_found":    classes_found,
                     "weapon_detections": weapon_detections,
-                    "backend":         "yolo11m",
+                    "backend":         model.ckpt_path if hasattr(model, "ckpt_path") else "yolo11",
                     "available":       True,
                     "confidence":      0.90 if detections else 0.70,
                     "court_defensible": True,

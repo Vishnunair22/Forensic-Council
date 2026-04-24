@@ -892,7 +892,7 @@ async def analyze_image_content(
             "semantic_context": semantic_context,
             "available": True,
             "court_defensible": True,
-            "method": "CLIP ViT-B-32 zero-shot classification",
+            "method": f"CLIP {analyzer._model_name} zero-shot classification",
             "error": None,
         }
 

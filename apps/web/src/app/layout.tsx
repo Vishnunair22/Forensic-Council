@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono, Orbitron } from "next/font/google";
 import { GlobalNavbar } from "@/components/ui/GlobalNavbar";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { RouteExperience } from "@/components/ui/RouteExperience";
@@ -12,6 +12,12 @@ import "./globals.css";
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
+  display: "swap",
+});
+
+const orbitron = Orbitron({
+  subsets: ["latin"],
+  variable: "--font-orbitron",
   display: "swap",
 });
 
@@ -36,7 +42,7 @@ export default function RootLayout({
   return (
     <html lang="en" dir="ltr" data-scroll-behavior="smooth" suppressHydrationWarning>
       <body
-        className={`${inter.variable} ${jetbrainsMono.variable} font-sans text-slate-100 antialiased min-h-screen flex flex-col`}
+        className={`${inter.variable} ${orbitron.variable} ${jetbrainsMono.variable} font-sans text-slate-100 antialiased min-h-screen flex flex-col`}
       >
         <MicroscopeBackground />
         <Suspense fallback={null}>
@@ -54,6 +60,9 @@ export default function RootLayout({
 
         <QueryProvider>
           <main className="flex-1 relative z-10" id="main-content">
+            {/* Navbar Safe Zone / Masking Gradient */}
+            <div className="fixed top-0 left-0 right-0 h-32 bg-gradient-to-b from-background via-background/80 to-transparent pointer-events-none z-[150] opacity-60" />
+            
             {children}
           </main>
 

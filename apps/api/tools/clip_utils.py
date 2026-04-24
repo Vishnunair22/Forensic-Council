@@ -82,8 +82,8 @@ class CLIPImageAnalyzer:
         self._preprocess = None
         self._tokenizer = None
         self._device = None
-        self._model_name = "ViT-B-32"
-        self._pretrained = "openai"
+        self._model_name = "unknown"
+        self._pretrained = "unknown"
 
     def _load_model(self) -> bool:
         """

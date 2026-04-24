@@ -11,44 +11,44 @@
 
 /* ── Theme Variables ──────────────────────────────────────────────────────── */
 @theme {
-  /* ── Core Branding (Liquid Glass Aesthetic) ── */
-  --color-primary: #00FF41;       /* Matrix Green — Forensic integrity */
-  --color-primary-rgb: 0, 255, 65;
+  /* ── Horizon Branding (Cyber-Forensics Aesthetic) ── */
+  --color-primary: #00FFFF;       /* Neon Cyan — Forensic clarity */
+  --color-primary-rgb: 0, 255, 255;
 
-  --color-accent: #FF3333;        /* Alert Red — Critical findings */
-  --color-accent-rgb: 255, 51, 51;
+  --color-accent: #0080FF;        /* Holographic Blue — Intelligence */
+  --color-accent-rgb: 0, 128, 255;
 
-  --color-success: #00FF41;       /* Authentic */
-  --color-success-rgb: 0, 255, 65;
+  --color-success: #10B981;       /* Emerald — Authenticity */
+  --color-success-rgb: 16, 185, 129;
 
-  --color-danger: #FF3333;        /* Manipulation */
-  --color-danger-rgb: 255, 51, 51;
+  --color-danger: #F43F5E;        /* Rose — Manipulation */
+  --color-danger-rgb: 244, 63, 94;
 
-  --color-warning: #FFD700;       /* Gold — Diagnostic */
-  --color-warning-rgb: 255, 215, 0;
+  --color-warning: #F59E0B;       /* Amber — Caution */
+  --color-warning-rgb: 245, 158, 11;
 
-  --color-info: #00A3FF;          /* Info Blue */
-  --color-info-rgb: 0, 163, 255;
+  --color-info: #0EA5E9;          /* Sky Blue */
+  --color-info-rgb: 14, 165, 233;
 
-  --color-background: #000000;    /* Pure Obsidian */
-  --color-foreground: #E0E0E0;    /* Muted Silver */
+  --color-background: #020617;    /* Deep Obsidian */
+  --color-foreground: #F8FAFC;    /* Slate-50 */
 
-  /* ── Surface Elevations (Liquid Glass) ── */
-  --color-surface-1: rgba(13, 13, 13, 0.4);
-  --color-surface-2: rgba(13, 13, 13, 0.6);
-  --color-surface-3: rgba(13, 13, 13, 0.8);
+  /* ── Surface Elevations (Horizon Glass) ── */
+  --color-surface-1: rgba(15, 23, 42, 0.4);
+  --color-surface-2: rgba(15, 23, 42, 0.6);
+  --color-surface-3: rgba(15, 23, 42, 0.8);
 
-  --color-surface-low:  #000000;
-  --color-surface-mid:  #0D0D0D;
-  --color-surface-high: #1A1A1A;
+  --color-surface-low:  #020617;
+  --color-surface-mid:  #0F172A;
+  --color-surface-high: #1E293B;
 
-  --color-border-subtle: rgba(0, 255, 65, 0.1);
-  --color-border-bold:   rgba(0, 255, 65, 0.2);
+  --color-border-subtle: rgba(56, 189, 248, 0.1);
+  --color-border-bold:   rgba(56, 189, 248, 0.2);
 
-  /* ── Typography (Spatial Technical) ── */
+  /* ── Typography (Technical Modern) ── */
   --font-sans:    var(--font-inter), system-ui, sans-serif;
   --font-mono:    var(--font-mono), monospace;
-  --font-heading: var(--font-inter), sans-serif;
+  --font-heading: var(--font-orbitron), sans-serif;
 
   /* ── Type Scale ── */
   --text-2xs: 0.625rem;
@@ -62,12 +62,12 @@
   --text-4xl: 2.25rem;
   --text-5xl: 3rem;
 
-  /* ── Border Radius (Technical) ── */
+  /* ── Border Radius (Technical Bevel) ── */
   --radius-sm: 0.25rem;
   --radius-md: 0.5rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.5rem;
-  --radius-2xl: 2.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
   --radius-full: 9999px;
 }
 
@@ -95,20 +95,22 @@
     outline-offset: 3px;
   }
 
-  /* Global Button & Interactive Elements — Consistent UX */
+  /* Global Interactive Elements — Technical Precision */
   button, a, [role="button"], label, input[type="checkbox"], input[type="radio"], select, summary {
     cursor: pointer;
   }
 
   button, [role="button"] {
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    text-transform: none;
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-heading);
-    font-weight: 600;
-    letter-spacing: -0.04em;
-    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    line-height: 1.2;
+    text-transform: none;
   }
 }
 
