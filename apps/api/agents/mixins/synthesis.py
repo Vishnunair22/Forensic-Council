@@ -62,7 +62,7 @@ class NeuralSynthesisMixin:
     async def _gemini_deep_forensic_handler(
         self,
         input_data: dict,
-        model_hint: str = "gemini-2.5-flash",
+        model_hint: str | None = None,
         signal_callback: Callable[[str], Any] | None = None,
     ) -> dict:
         """
@@ -109,7 +109,7 @@ class NeuralSynthesisMixin:
             )
 
             result = finding.to_finding_dict(self.agent_id)
-            result["analysis_source"] = f"gemini_{model_hint}"
+            result["analysis_source"] = f"gemini_{model_hint}" if model_hint else "gemini_vision"
 
             # Record result if method exists
             if hasattr(self, "_record_tool_result"):

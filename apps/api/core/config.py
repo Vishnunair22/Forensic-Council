@@ -191,16 +191,28 @@ class Settings(BaseSettings):
         description="YOLO model weight filename (default yolo11n.pt for speed; use yolo11m.pt for high precision)",
     )
     siglip_model_name: str = Field(
-        default="ViT-L-14",
-        description="OpenCLIP model name for vision-language analysis",
+        default="ViT-B-32",
+        description=(
+            "OpenCLIP model name for vision-language analysis. "
+            "Default ViT-B-32 (~150MB) keeps the Docker image small. "
+            "Set ViT-L-14 (~1.5GB) for high-precision deployments."
+        ),
     )
     aasist_model_name: str = Field(
-        default="clovaai/AASIST",
-        description="AASIST model for audio deepfake anti-spoofing detection",
+        default="MattyB95/AST-anti-spoofing",
+        description=(
+            "Primary model for audio deepfake anti-spoofing detection. "
+            "MattyB95/AST-anti-spoofing (Apache-2.0) is the permissive default. "
+            "Set clovaai/AASIST for the original research model (research-only license)."
+        ),
     )
     voice_clone_model_name: str = Field(
-        default="clovaai/AASIST",
-        description="Primary model for voice clone and AI speech synthesis detection (default AASIST)",
+        default="MattyB95/AST-anti-spoofing",
+        description=(
+            "Primary model for voice clone and AI speech synthesis detection. "
+            "Default MattyB95/AST-anti-spoofing (Apache-2.0). "
+            "Set clovaai/AASIST for research-grade accuracy (research-only license)."
+        ),
     )
     easyocr_model_dir: str = Field(
         default=os.getenv("EASYOCR_MODEL_DIR", "/app/cache/easyocr"),
@@ -502,6 +514,35 @@ class Settings(BaseSettings):
             "Maximum number of Gemini API calls that may be in-flight simultaneously "
             "across all agents. Prevents 5 concurrent agents from saturating the "
             "free-tier quota (10 RPM). Increase if you have a paid-tier key."
+        ),
+    )
+
+    # Per-provider free-tier quota limits — used by the quota guard before each call
+    # to decide whether to proceed or degrade gracefully.
+    gemini_rpm_limit: int = Field(
+        default=10,
+        description="Gemini free-tier requests-per-minute limit. Paid tier: set higher.",
+    )
+    gemini_rpd_limit: int = Field(
+        default=1500,
+        description="Gemini free-tier requests-per-day limit.",
+    )
+    groq_rpm_limit: int = Field(
+        default=30,
+        description="Groq free-tier RPM limit (varies by model; 30 is conservative).",
+    )
+    groq_tpm_limit: int = Field(
+        default=6000,
+        description="Groq free-tier tokens-per-minute limit.",
+    )
+
+    # Separate Arbiter Gemini key — isolates Arbiter quota from the 5 analysis agents.
+    arbiter_gemini_api_key: str | None = Field(
+        default=None,
+        description=(
+            "Dedicated Gemini API key for the Council Arbiter. "
+            "When set, Arbiter calls use this key and quota independently of agents. "
+            "Recommended for free-tier deployments so Arbiter is never starved."
         ),
     )
 

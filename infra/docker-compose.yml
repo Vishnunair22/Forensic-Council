@@ -133,6 +133,10 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    environment:
+      # QDRANT__SERVICE__API_KEY is Qdrant's native API key env var.
+      # Production deployments MUST set QDRANT_API_KEY in .env to enforce auth.
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:-}
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:

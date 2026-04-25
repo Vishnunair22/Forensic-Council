@@ -239,7 +239,7 @@ class Agent3Object(ForensicAgent):
                     logger.debug(f"{self.agent_id}: Gemini signal callback failed", error=str(e))
 
             return await self._gemini_deep_forensic_handler(
-                input_data, model_hint="gemini-2.5-flash", signal_callback=_gemini_signal_callback
+                input_data, signal_callback=_gemini_signal_callback
             )
 
         registry.register(

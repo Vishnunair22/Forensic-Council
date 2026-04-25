@@ -33,6 +33,22 @@ _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 _MAX_RETRIES = 5
 _BASE_BACKOFF = 2.0
 
+# Per-provider circuit breakers shared across all LLMClient instances.
+# Keyed by "provider:model" so a failing model on one provider does not
+# block the same model on a different provider (or a healthy fallback).
+_provider_circuit_breakers: dict[str, "CircuitBreaker"] = {}
+
+
+def _get_provider_breaker(provider: str, model: str) -> "CircuitBreaker":
+    key = f"{provider}:{model}"
+    if key not in _provider_circuit_breakers:
+        _provider_circuit_breakers[key] = CircuitBreaker(
+            failure_threshold=5,
+            recovery_timeout=60.0,
+            half_open_max_calls=2,
+        )
+    return _provider_circuit_breakers[key]
+
 
 @dataclass
 class LLMResponse:
@@ -91,13 +107,6 @@ class LLMClient:
         # Global semaphore to limit concurrency and avoid blasting API limits
         if not hasattr(LLMClient, "_global_semaphore"):
             LLMClient._global_semaphore = asyncio.Semaphore(4)
-
-        # Circuit breaker: opens after 5 consecutive failures, recovers after 60s
-        self._circuit_breaker = CircuitBreaker(
-            failure_threshold=5,
-            recovery_timeout=60.0,
-            half_open_max_calls=2,
-        )
 
     async def _get_client(self, timeout_override: float | None = None) -> httpx.AsyncClient:
         """Return a shared httpx.AsyncClient, creating it on first use.
@@ -182,10 +191,6 @@ class LLMClient:
             if self.provider == "none" or not self.api_key or not self.is_available:
                 return LLMResponse(content="", provider="none")
 
-            if self._circuit_breaker.state == "OPEN":
-                logger.warning("LLM circuit breaker is OPEN — skipping reasoning step")
-                return LLMResponse(content="", provider=self.provider)
-
             messages = self._build_messages(system_prompt, react_chain, current_task)
             t0 = time.monotonic()
             candidates = self._get_model_candidates()
@@ -213,13 +218,24 @@ class LLMClient:
                     if not self.api_key or self.api_key.startswith("REPLACE_"):
                         continue
 
+                    # Check per-provider circuit breaker before attempting the call
+                    cb = _get_provider_breaker(self.provider, self.model)
+                    if cb.state == "OPEN":
+                        logger.warning(
+                            "Circuit breaker OPEN — skipping candidate",
+                            provider=self.provider,
+                            model=self.model,
+                        )
+                        continue
+
                     resp = await self._execute_call(messages, available_tools, t0, span)
+                    cb.record_success()
                     if model_spec != candidates[0]:
                         resp.provider = f"{original_provider}_fallback_{self.provider}"
                     return resp
                 except Exception as exc:
                     last_exc = exc
-                    self._circuit_breaker.record_failure()
+                    _get_provider_breaker(self.provider, self.model).record_failure()
                     logger.warning(f"Reasoning candidate {model_spec} failed: {exc}")
                 finally:
                     # Restore original settings for next candidate or next call
@@ -253,7 +269,6 @@ class LLMClient:
         resp.latency_ms = (time.monotonic() - start_time) * 1000
         resp.provider = self.provider
         tool_name = resp.tool_call.get("name") if resp.tool_call else None
-        self._circuit_breaker.record_success()
         span.set_attribute("latency_ms", resp.latency_ms)
         span.set_attribute("tool_name", tool_name or "")
         return resp

@@ -28,6 +28,7 @@ from fastapi.responses import JSONResponse
 from api.routes import auth, hitl, investigation, metrics, sessions, sse
 from api.routes.metrics import (
     increment_error_count,
+    increment_rate_limit_redis_bypasses,
     increment_request_count,
     record_request_duration,
     set_active_sessions,
@@ -54,7 +55,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # IMPV-03: Initialize Managed ProcessPool for CPU-bound forensic analysis (ELA, FFT, etc.)
     max_workers = min(16, os.cpu_count() or 4)
     app.state.process_pool = concurrent.futures.ProcessPoolExecutor(max_workers=max_workers)
-    logger.info("Forensic ProcessPool initialized", max_workers=max_workers)
+    # Cap the number of in-flight + queued CPU tasks to 4× worker count.
+    # Callers must acquire this semaphore before submitting; reject with 503 on overflow.
+    app.state.process_pool_semaphore = asyncio.Semaphore(max_workers * 4)
+    logger.info("Forensic ProcessPool initialized", max_workers=max_workers, queue_cap=max_workers * 4)
 
     # Validate production settings BEFORE starting monitoring
     # to prevent resource leaks if validation aborts
@@ -67,6 +71,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if settings.signing_key.startswith("dev-"):
         logger.warning(
             "SIGNING_KEY is using a development placeholder. Never use this in production."
+        )
+
+    # Warn when RS256 is configured but private key is absent — dev falls back to HS256 silently
+    if settings.jwt_algorithm.startswith("RS") and not settings.jwt_private_key:
+        logger.warning(
+            "JWT_ALGORITHM=%s but JWT_PRIVATE_KEY is not set — "
+            "falling back to HS256 (HMAC symmetric). "
+            "Set JWT_PRIVATE_KEY + JWT_PUBLIC_KEY before production deployment.",
+            settings.jwt_algorithm,
         )
 
     # Startup
@@ -400,20 +413,22 @@ async def csrf_middleware(request: Request, call_next):
     The csrf_token cookie is set on every safe-method response so the
     frontend can read it and echo it back in subsequent requests.
     """
-    # Always set the CSRF cookie on safe methods so the client has it
+    # Set the CSRF cookie on safe methods only if the client doesn't already have one.
+    # Refreshing on every safe request is unnecessary and causes spurious Set-Cookie
+    # headers on every GET — one per session is sufficient.
     if request.method in _CSRF_SAFE_METHODS or request.url.path in _CSRF_EXEMPT_PATHS:
         response = await call_next(request)
-        # Always refresh the CSRF token on safe requests to prevent staleness
-        token = secrets.token_urlsafe(32)
-        response.set_cookie(
-            key="csrf_token",
-            value=token,
-            httponly=False,  # JS must read this to send X-CSRF-Token header
-            samesite="strict",
-            secure=settings.app_env == "production",
-            max_age=86400,
-            path="/",
-        )
+        if not request.cookies.get("csrf_token"):
+            token = secrets.token_urlsafe(32)
+            response.set_cookie(
+                key="csrf_token",
+                value=token,
+                httponly=False,  # JS must read this to send X-CSRF-Token header
+                samesite="strict",
+                secure=settings.app_env == "production",
+                max_age=86400,
+                path="/",
+            )
         return response
 
     # State-changing request — validate CSRF token
@@ -507,8 +522,9 @@ async def rate_limit_middleware(request: Request, call_next):
                 headers={"Retry-After": str(window)},
             )
     except Exception as e:
-        # Don't block requests if Redis is down, just log
-        logger.error("Rate limiting error (Redis)", error=str(e))
+        # Fail open — never block requests due to Redis unavailability, but record it.
+        logger.error("Rate limiting error (Redis) — failing open", error=str(e))
+        increment_rate_limit_redis_bypasses()
 
     return await call_next(request)
 

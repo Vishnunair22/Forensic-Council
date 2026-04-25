@@ -175,7 +175,7 @@ class Agent1Image(ForensicAgent):
                     logger.debug(f"{self.agent_id}: Gemini signal relay failed", error=str(_e))
 
             return await self._gemini_deep_forensic_handler(
-                input_data, model_hint="gemini-2.5-flash", signal_callback=_signal_cb
+                input_data, signal_callback=_signal_cb
             )
 
         registry.register(

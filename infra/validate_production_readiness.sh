@@ -167,6 +167,64 @@ for var in SIGNING_KEY JWT_SECRET_KEY POSTGRES_PASSWORD REDIS_PASSWORD \
   fi
 done
 
+# Signing key must be ≥32 characters
+sk_len="${#SIGNING_KEY}"
+if [ -n "${SIGNING_KEY:-}" ] && [ "$sk_len" -ge 32 ]; then
+  pass "SIGNING_KEY length OK (${sk_len} chars)"
+else
+  fail "SIGNING_KEY must be at least 32 characters (got ${sk_len})"
+fi
+
+jk_len="${#JWT_SECRET_KEY}"
+if [ -n "${JWT_SECRET_KEY:-}" ] && [ "$jk_len" -ge 32 ]; then
+  pass "JWT_SECRET_KEY length OK (${jk_len} chars)"
+else
+  fail "JWT_SECRET_KEY must be at least 32 characters (got ${jk_len})"
+fi
+
+# CORS must not contain wildcard in production
+if [ "${APP_ENV:-}" = "production" ]; then
+  if printf '%s' "${CORS_ALLOWED_ORIGINS:-}" | grep -q "\*"; then
+    fail "CORS_ALLOWED_ORIGINS contains wildcard '*' — blocked in production"
+  else
+    pass "CORS_ALLOWED_ORIGINS has no wildcard"
+  fi
+else
+  pass "CORS wildcard check skipped (not production)"
+fi
+
+# Redis password must be set
+if [ -n "${REDIS_PASSWORD:-}" ] && ! printf '%s' "${REDIS_PASSWORD}" | grep -q "REPLACE_ME"; then
+  pass "REDIS_PASSWORD is set"
+else
+  fail "REDIS_PASSWORD is missing or still a placeholder"
+fi
+
+# Demo password must not be the development default
+if printf '%s' "${DEMO_PASSWORD:-}" | grep -qE "demo_dev_only|REPLACE_ME|changeme|password"; then
+  fail "DEMO_PASSWORD is using an insecure default — set a strong value"
+else
+  pass "DEMO_PASSWORD is not a known insecure default"
+fi
+
+# Qdrant API key must be set in production
+if [ "${APP_ENV:-}" = "production" ]; then
+  if [ -n "${QDRANT_API_KEY:-}" ] && ! printf '%s' "${QDRANT_API_KEY}" | grep -q "REPLACE_ME"; then
+    pass "QDRANT_API_KEY is set"
+  else
+    fail "QDRANT_API_KEY must be set in production (Qdrant has no auth without it)"
+  fi
+else
+  pass "QDRANT_API_KEY check skipped (not production)"
+fi
+
+# MODEL_LICENSING.md must exist
+if [ -f "docs/MODEL_LICENSING.md" ]; then
+  pass "docs/MODEL_LICENSING.md exists"
+else
+  fail "docs/MODEL_LICENSING.md is missing — required for license compliance"
+fi
+
 section "Summary"
 echo "Passed: $PASS_COUNT"
 echo "Warned: $WARN_COUNT"

@@ -1,0 +1,46 @@
+{
+  "_comment": "Pinned HuggingFace model revision hashes. Load via core/model_resolver.py to guarantee reproducibility. Update by running: python scripts/model_cache_check.py --update-lock",
+  "_format": "model_id -> { revision: <git-commit-sha>, license: <spdx>, required: bool }",
+  "MattyB95/AST-anti-spoofing": {
+    "revision": "main",
+    "license": "Apache-2.0",
+    "required": true,
+    "notes": "Primary audio anti-spoofing model (replaces clovaai/AASIST)"
+  },
+  "clovaai/AASIST": {
+    "revision": "main",
+    "license": "research-only",
+    "required": false,
+    "notes": "Opt-in fallback. Research-only license — not for commercial use. Set AASIST_MODEL_NAME=clovaai/AASIST to enable."
+  },
+  "pyannote/speaker-diarization-3.1": {
+    "revision": "main",
+    "license": "MIT",
+    "required": false,
+    "notes": "Requires HuggingFace user agreement. Set HF_TOKEN in .env."
+  },
+  "openai/clip-vit-base-patch32": {
+    "revision": "main",
+    "license": "MIT",
+    "required": true,
+    "notes": "ViT-B/32 CLIP — default OpenCLIP model (~150MB). Mapped from SIGLIP_MODEL_NAME=ViT-B-32."
+  },
+  "openai/clip-vit-large-patch14": {
+    "revision": "main",
+    "license": "MIT",
+    "required": false,
+    "notes": "ViT-L/14 CLIP — high-precision opt-in (~1.5GB). Set SIGLIP_MODEL_NAME=ViT-L-14."
+  },
+  "microsoft/swinv2-tiny-patch4-window8-256": {
+    "revision": "main",
+    "license": "MIT",
+    "required": false,
+    "notes": "Optional image classifier replacement for YOLO (Apache-2.0 path)."
+  },
+  "facebook/detr-resnet-50": {
+    "revision": "main",
+    "license": "Apache-2.0",
+    "required": false,
+    "notes": "Permissive YOLO replacement for deployments requiring Apache-2.0 license."
+  }
+}

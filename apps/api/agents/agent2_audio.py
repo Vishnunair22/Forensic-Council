@@ -176,10 +176,8 @@ class Agent2Audio(ForensicAgent):
         # and a neural grounding signal for Agent 4 (Video).
         # ── Gemini Vision Handler (Unified) ───────────────────────────────────
         async def gemini_deep_forensic_handler(input_data: dict) -> dict:
-            """Neural audio forensic audit using Gemini Flash."""
-            return await self._gemini_deep_forensic_handler(
-                input_data, model_hint="gemini-2.5-flash"
-            )
+            """Neural audio forensic audit using Gemini."""
+            return await self._gemini_deep_forensic_handler(input_data)
 
         registry.register(
             "gemini_deep_forensic",

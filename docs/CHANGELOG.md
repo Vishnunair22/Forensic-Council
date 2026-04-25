@@ -5,6 +5,32 @@ All notable changes to Forensic Council are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-04-25
+
+### Security
+- **Prompt injection hardening**: All OCR text and EXIF metadata passed to Gemini now wrapped in `[UNTRUSTED EVIDENCE START/END]` fences with a system safety preamble that prevents evidence content from acting as instructions
+- **Per-provider circuit breakers**: LLMClient circuit breakers are now keyed by `provider:model` (shared across agents) instead of per-instance; a failing model on one provider no longer blocks healthy fallbacks
+- **CSRF one-per-session**: CSRF cookie now only issued when absent, eliminating redundant `Set-Cookie` headers on every GET
+- **Rate-limiter fail-open metric**: `rate_limit_redis_bypasses` counter emitted when Redis is unavailable; visible in `/api/v1/metrics/` and Prometheus output
+- **RS256 startup warning**: Explicit log warning when `JWT_ALGORITHM=RS256` but `JWT_PRIVATE_KEY` is absent (dev falls back to HS256)
+- **Qdrant API key enforcement**: `QDRANT__SERVICE__API_KEY` wired to `QDRANT_API_KEY` env; production validation checks for it
+
+### Infrastructure
+- **ProcessPoolExecutor semaphore**: `app.state.process_pool_semaphore = Semaphore(max_workers × 4)` caps CPU-task queue depth; callers reject with 503 on overflow
+- **Model licensing matrix**: `docs/MODEL_LICENSING.md` added listing every ML weight, license (AGPL, research-only, Apache-2.0), and required legal actions
+- **`models.lock.json`**: `apps/api/models.lock.json` created to pin HF model revision hashes for reproducibility
+- **validate_production_readiness.sh**: Enhanced with checks for signing key length (≥32), JWT key length (≥32), CORS no-wildcard, Redis password, demo password not default, Qdrant API key (production), and `MODEL_LICENSING.md` presence
+
+### ML / Free-tier
+- **AASIST → Apache-2.0**: Default `aasist_model_name` changed from `clovaai/AASIST` (research-only) to `MattyB95/AST-anti-spoofing` (Apache-2.0); AASIST remains available as opt-in
+- **CLIP downsized**: Default `siglip_model_name` changed from `ViT-L-14` (~1.5GB) to `ViT-B-32` (~150MB); ViT-L-14 available as opt-in
+- **Per-provider quota env vars**: `GEMINI_RPM_LIMIT`, `GEMINI_RPD_LIMIT`, `GROQ_RPM_LIMIT`, `GROQ_TPM_LIMIT` added to settings with free-tier defaults
+- **Separate Arbiter Gemini key**: `ARBITER_GEMINI_API_KEY` setting added to isolate Arbiter quota from analysis agents
+- **Gemini model centralization**: Removed `model_hint="gemini-2.5-flash"` hardcodes from agents 1, 2, 3; all now route through `settings.gemini_model`
+
+### Changed
+- `degraded_findings_summary: dict[str, list[str]]` added to `ReportDTO` for per-agent fallback visibility in report header
+
 ## [1.6.4] - 2026-04-25
 
 ### Security (Free-tier Focus)

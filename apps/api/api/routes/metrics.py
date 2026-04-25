@@ -36,6 +36,7 @@ _KEY_INV_STARTED = "metrics:investigations_started"
 _KEY_INV_COMPLETED = "metrics:investigations_completed"
 _KEY_INV_FAILED = "metrics:investigations_failed"
 _KEY_START_TIME = "metrics:start_time"
+_KEY_RATE_LIMIT_BYPASSES = "metrics:rate_limit_redis_bypasses"
 
 # ── Process-local fallback (used when Redis is unavailable) ──────────────────
 _local: dict[str, Any] = {
@@ -48,6 +49,7 @@ _local: dict[str, Any] = {
     "investigations_completed": 0,
     "investigations_failed": 0,
     "start_time": time.time(),
+    "rate_limit_redis_bypasses": 0,
 }
 
 
@@ -182,6 +184,15 @@ def increment_investigations_failed() -> None:
         _local["investigations_failed"] = _local.get("investigations_failed", 0) + 1
 
 
+def increment_rate_limit_redis_bypasses() -> None:
+    """Increment counter when rate limiting fails open due to Redis being unavailable."""
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_redis_incr(_KEY_RATE_LIMIT_BYPASSES))
+    except RuntimeError:
+        _local["rate_limit_redis_bypasses"] = _local.get("rate_limit_redis_bypasses", 0) + 1
+
+
 # ── Snapshot helper ───────────────────────────────────────────────────────────
 
 
@@ -200,6 +211,9 @@ async def _snapshot() -> dict:
     inv_started = await _redis_get_int(_KEY_INV_STARTED, "investigations_started")
     inv_completed = await _redis_get_int(_KEY_INV_COMPLETED, "investigations_completed")
     inv_failed = await _redis_get_int(_KEY_INV_FAILED, "investigations_failed")
+    rate_limit_bypasses = await _redis_get_int(
+        _KEY_RATE_LIMIT_BYPASSES, "rate_limit_redis_bypasses"
+    )
 
     avg_duration = duration_sum / duration_count if duration_count else 0.0
     error_rate = errors_total / requests_total if requests_total else 0.0
@@ -220,6 +234,7 @@ async def _snapshot() -> dict:
         "investigations_completed": inv_completed,
         "investigations_failed": inv_failed,
         "success_rate": success_rate,
+        "rate_limit_redis_bypasses": rate_limit_bypasses,
         "db_pool_size": pool_stats["size"],
         "db_pool_available": pool_stats["available"],
         "db_pool_in_use": pool_stats["in_use"],
@@ -264,6 +279,7 @@ class MetricsResponse(BaseModel):
     investigations_completed: int
     investigations_failed: int
     success_rate: float
+    rate_limit_redis_bypasses: int
     db_pool_size: int
     db_pool_available: int
     db_pool_in_use: int
