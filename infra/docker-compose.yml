@@ -245,7 +245,7 @@ services:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-forensic_user}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-forensic_pass}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       - POSTGRES_DB=${POSTGRES_DB:-forensic_council}
       - SIGNING_KEY=${SIGNING_KEY:?SIGNING_KEY must be set}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set}
@@ -332,7 +332,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp:nosuid,size=512m
-    stop_grace_period: 30s
+    stop_grace_period: 150s
     volumes:
       - evidence_data:/app/storage/evidence:rw
       - signing_keys:/app/storage/keys:rw

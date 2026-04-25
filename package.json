@@ -37,6 +37,9 @@
     "lint:fix": "npm run lint:fix:api && npm run lint:fix:web",
     "lint:fix:api": "cd apps/api && uv run ruff check . --fix && uv run ruff format .",
     "lint:fix:web": "cd apps/web && npm run lint -- --fix",
+    "format": "npm run format:api && npm run format:web",
+    "format:api": "cd apps/api && uv run ruff format .",
+    "format:web": "cd apps/web && npx prettier --write .",
     "prepare": "command -v pre-commit >/dev/null 2>&1 && pre-commit install || true"
   },
   "devDependencies": {
