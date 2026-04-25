@@ -51,6 +51,10 @@ export function ForensicErrorModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="forensic-error-title"
+          aria-describedby="forensic-error-desc"
           className="fixed inset-0 z-[20000] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-3xl"
         >
           <div className="relative w-full max-w-2xl">
@@ -84,10 +88,10 @@ export function ForensicErrorModal({
 
                   <div className="flex-1 space-y-8">
                     <div>
-                      <h2 className="text-4xl font-heading font-bold text-white tracking-tight mb-4">
+                      <h2 id="forensic-error-title" className="text-4xl font-heading font-bold text-white tracking-tight mb-4">
                         {title}
                       </h2>
-                      <p className="text-base font-medium text-white/40 leading-relaxed">
+                      <p id="forensic-error-desc" className="text-base font-medium text-white/40 leading-relaxed">
                         {message}
                       </p>
                     </div>
