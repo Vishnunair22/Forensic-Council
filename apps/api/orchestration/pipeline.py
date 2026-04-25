@@ -18,6 +18,9 @@ from uuid import UUID, uuid4
 from core.agent_registry import get_agent_registry
 from core.agents import AgentID
 from core.config import Settings, get_settings
+from core.structured_logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class SignalBus:
@@ -88,7 +91,6 @@ from core.working_memory import WorkingMemory
 from orchestration.session_manager import SessionManager, SessionStatus
 
 _tracer = get_tracer("forensic-council.pipeline")
-logger = get_logger(__name__)
 
 
 class AgentFactory:

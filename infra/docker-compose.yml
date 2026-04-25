@@ -320,9 +320,81 @@ services:
       - DAC_OVERRIDE
       - FOWNER
     read_only: true
-tmpfs:
+    tmpfs:
       - /tmp:nosuid,size=512m
-    stop_grace_period: 130s
+    stop_grace_period: 30s
+    volumes:
+      - evidence_data:/app/storage/evidence:rw
+      - signing_keys:/app/storage/keys:rw
+      - hf_cache:/app/cache/huggingface:rw
+      - torch_cache:/app/cache/torch:rw
+      - easyocr_cache:/app/cache/easyocr:rw
+      - numba_cache:/app/cache/numba_cache:rw
+      - yolo_cache:/app/cache/ultralytics:rw
+      - calibration_models_cache:/app/storage/calibration_models:rw
+    # SECURITY: infra_net for Redis/Postgres/Qdrant; external_net for Groq/Gemini outbound
+    networks:
+      - infra_net
+      - external_net
+
+  # --------------------------------------------------------------------------
+  # Forensic Worker — consumes and processes the task queue
+  # --------------------------------------------------------------------------
+  worker:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+      target: development
+      args:
+        PRELOAD_MODELS: ${PRELOAD_MODELS:-1}
+        YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-yolo11n.pt}
+        AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
+    container_name: forensic_worker
+    restart: unless-stopped
+    command: ["worker"]
+    environment:
+      <<: *backend-env
+      APP_NAME: forensic_worker
+      RELOAD: "false"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_SERVICE_NAME: forensic_worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import redis, os; r = redis.Redis(host=os.getenv('REDIS_HOST','redis'), port=int(os.getenv('REDIS_PORT', 6379)), password=os.getenv('REDIS_PASSWORD',''), socket_connect_timeout=3); r.ping()\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+      - FOWNER
+    read_only: true
+    tmpfs:
+      - /tmp:nosuid,size=512m
+    volumes:
+      - evidence_data:/app/storage/evidence:rw
+      - signing_keys:/app/storage/keys:rw
+      - hf_cache:/app/cache/huggingface:rw
+      - torch_cache:/app/cache/torch:rw
+      - easyocr_cache:/app/cache/easyocr:rw
+      - numba_cache:/app/cache/numba_cache:rw
+      - yolo_cache:/app/cache/ultralytics:rw
+      - calibration_models_cache:/app/storage/calibration_models:rw
     deploy:
       resources:
         limits:
@@ -331,7 +403,6 @@ tmpfs:
         reservations:
           memory: 2G
           cpus: "1.0"
-    # SECURITY: infra_net for Redis/Postgres/Qdrant; external_net for Groq/Gemini outbound
     networks:
       - infra_net
       - external_net
