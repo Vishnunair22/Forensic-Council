@@ -208,7 +208,7 @@ class Agent5Metadata(ForensicAgent):
                     )
 
             return await self._gemini_deep_forensic_handler(
-                input_data, model_hint="gemini-2.0-flash", signal_callback=_gemini_signal_callback
+                input_data, model_hint="gemini-2.5-flash", signal_callback=_gemini_signal_callback
             )
 
         registry.register(

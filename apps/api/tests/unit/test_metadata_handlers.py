@@ -16,7 +16,7 @@ class TestMetadataHandlers:
     def mock_agent(self):
         agent = MagicMock()
         agent.session_id = str(uuid4())
-        agent.agent_id = "gemini-vision"
+        agent.agent_id = "Agent5_MetadataContext"
         agent.evidence_artifact = MagicMock()
         agent.evidence_artifact.file_path = "/fake/path/image.jpg"
         agent.update_sub_task = AsyncMock()

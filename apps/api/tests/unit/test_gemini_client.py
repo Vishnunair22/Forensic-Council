@@ -104,7 +104,7 @@ class TestGeminiVisionFindingSchema:
     def test_manipulation_signals_in_metadata(self):
         finding = GeminiVisionFinding(
             analysis_type="file_content_identification",
-            model_used="gemini-2.0-flash",
+            model_used="gemini-2.5-flash",
             content_description="Splicing detected.",
             manipulation_signals=["edge discontinuity", "frequency artifact"],
         )
@@ -114,7 +114,7 @@ class TestGeminiVisionFindingSchema:
     def test_detected_objects_in_metadata(self):
         finding = GeminiVisionFinding(
             analysis_type="object_weapon_detection",
-            model_used="gemini-2.0-flash",
+            model_used="gemini-2.5-flash",
             content_description="Weapon detected.",
             detected_objects=["firearm"],
         )

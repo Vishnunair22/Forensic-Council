@@ -23,7 +23,7 @@ COPY package.json package-lock.json ./
 # dependencies (e.g. Radix UI primitives) may not yet have published updated
 # peer ranges. Once upstream releases resolve these, remove --legacy-peer-deps.
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci --legacy-peer-deps --prefer-offline --no-audit --no-fund
+    npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund
 
 # ── Stage 1: Development — hot-reload server ─────────────────────────────────
 FROM base AS development

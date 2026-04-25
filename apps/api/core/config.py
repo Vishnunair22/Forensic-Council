@@ -26,7 +26,6 @@ INSECURE_DEFAULTS = {
     "123456",
     "change-me",
     "changeme",
-    "forensic_user",
 }
 
 
@@ -199,18 +198,18 @@ class Settings(BaseSettings):
         ),
     )
     aasist_model_name: str = Field(
-        default="MattyB95/AST-anti-spoofing",
+        default="Vansh180/deepfake-audio-wav2vec2",
         description=(
             "Primary model for audio deepfake anti-spoofing detection. "
-            "MattyB95/AST-anti-spoofing (Apache-2.0) is the permissive default. "
+            "Vansh180/deepfake-audio-wav2vec2 (wav2vec2-based) is the default. "
             "Set clovaai/AASIST for the original research model (research-only license)."
         ),
     )
     voice_clone_model_name: str = Field(
-        default="MattyB95/AST-anti-spoofing",
+        default="Vansh180/deepfake-audio-wav2vec2",
         description=(
             "Primary model for voice clone and AI speech synthesis detection. "
-            "Default MattyB95/AST-anti-spoofing (Apache-2.0). "
+            "Default Vansh180/deepfake-audio-wav2vec2. "
             "Set clovaai/AASIST for research-grade accuracy (research-only license)."
         ),
     )
@@ -373,17 +372,20 @@ class Settings(BaseSettings):
             if len(v) < 32:
                 raise ValueError("JWT_SECRET_KEY must be at least 32 characters in production!")
 
-            # Entropy check - must have diversity
-            has_upper = any(c.isupper() for c in v)
-            has_lower = any(c.islower() for c in v)
-            has_digit = any(c.isdigit() for c in v)
-            has_special = any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in v)
-
-            entropy_score = sum([has_upper, has_lower, has_digit, has_special])
-            if entropy_score < 3:
-                raise ValueError(
-                    "JWT_SECRET_KEY must contain at least 3 of: uppercase, lowercase, digits, special chars"
-                )
+            # Entropy check: reject weak human-chosen keys.
+            # Exception: pure hex strings from secrets.token_hex() are cryptographically
+            # secure (256 bits for a 64-char key) despite using only 16 symbols — do not
+            # penalise them for lacking uppercase/special chars.
+            _is_hex = all(c in "0123456789abcdefABCDEF" for c in v)
+            if not _is_hex:
+                has_upper = any(c.isupper() for c in v)
+                has_lower = any(c.islower() for c in v)
+                has_digit = any(c.isdigit() for c in v)
+                has_special = any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in v)
+                if sum([has_upper, has_lower, has_digit, has_special]) < 3:
+                    raise ValueError(
+                        "JWT_SECRET_KEY must contain at least 3 of: uppercase, lowercase, digits, special chars"
+                    )
         return v
 
     # Agent Configuration
@@ -773,8 +775,12 @@ def validate_production_settings() -> None:
             "GEMINI_API_KEY placeholder detected in production! Please set a valid key or leave empty for local fallback."
         )
 
-    # Entropy check for both main secrets
+    # Entropy check for both main secrets.
+    # Pure hex strings (secrets.token_hex output) are exempt — they are cryptographically
+    # secure by construction and must not be rejected for lacking uppercase/special chars.
     for key_name, val in [("SIGNING_KEY", s.signing_key), ("JWT_SECRET_KEY", s.jwt_secret_key)]:
+        if all(c in "0123456789abcdefABCDEF" for c in val):
+            continue  # hex key — entropy is fine
         has_upper = any(c.isupper() for c in val)
         has_lower = any(c.islower() for c in val)
         has_digit = any(c.isdigit() for c in val)

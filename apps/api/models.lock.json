@@ -1,11 +1,11 @@
 {
   "_comment": "Pinned HuggingFace model revision hashes. Load via core/model_resolver.py to guarantee reproducibility. Update by running: python scripts/model_cache_check.py --update-lock",
   "_format": "model_id -> { revision: <git-commit-sha>, license: <spdx>, required: bool }",
-  "MattyB95/AST-anti-spoofing": {
+  "Vansh180/deepfake-audio-wav2vec2": {
     "revision": "main",
     "license": "Apache-2.0",
     "required": true,
-    "notes": "Primary audio anti-spoofing model (replaces clovaai/AASIST)"
+    "notes": "Primary audio deepfake detection model (wav2vec2-based). Controls AASIST_MODEL_NAME."
   },
   "clovaai/AASIST": {
     "revision": "main",

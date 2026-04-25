@@ -30,6 +30,7 @@ x-backend-env: &backend-env
   REDIS_HOST: redis
   REDIS_PORT: 6379
   REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+  QDRANT_API_KEY: ${QDRANT_API_KEY:-}
   QDRANT_HOST: qdrant
   QDRANT_PORT: 6333
   QDRANT_GRPC_PORT: 6334
@@ -70,7 +71,7 @@ x-backend-env: &backend-env
   EASYOCR_MODEL_DIR: /app/cache/easyocr
   YOLO_MODEL_DIR: /app/cache/ultralytics
   YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-yolo11n.pt}
-  AUDIO_DEEPFAKE_MODEL_NAME: ${AUDIO_DEEPFAKE_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
+  AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
   YOLO_CONFIG_DIR: /app/cache/ultralytics
   TORCH_HOME: /app/cache/torch
   HF_HOME: /app/cache/huggingface
@@ -95,7 +96,7 @@ services:
     # without credentials even if the port is accidentally exposed.
     command: >
       redis-server
-      --requirepass "*redis-pwd"
+      --requirepass "${REDIS_PASSWORD}"
       --loglevel warning
     # SECURITY: Run as non-root user, drop all capabilities
     user: redis
@@ -112,7 +113,7 @@ services:
       timeout: 3s
       retries: 5
     environment:
-      - REDISCLI_AUTH=*redis-pwd
+      - REDISCLI_AUTH=${REDIS_PASSWORD}
     deploy:
       resources:
         limits:
@@ -282,7 +283,7 @@ services:
       args:
         PRELOAD_MODELS: ${PRELOAD_MODELS:-true}
         YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-yolo11n.pt}
-        AUDIO_DEEPFAKE_MODEL_NAME: ${AUDIO_DEEPFAKE_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
+        AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
     container_name: forensic_api
     restart: unless-stopped
     ports:
@@ -296,7 +297,7 @@ services:
       BOOTSTRAP_INVESTIGATOR_PASSWORD: ${BOOTSTRAP_INVESTIGATOR_PASSWORD}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-["http://localhost:3000","http://127.0.0.1:3000"]}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-["http://localhost","http://localhost:3000","http://127.0.0.1","http://127.0.0.1:3000"]}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       OTEL_SERVICE_NAME: forensic_api
     depends_on:
@@ -346,10 +347,12 @@ services:
       - numba_cache:/app/cache/numba_cache:rw
       - yolo_cache:/app/cache/ultralytics:rw
       - calibration_models_cache:/app/storage/calibration_models:rw
-    # SECURITY: infra_net for Redis/Postgres/Qdrant; external_net for Groq/Gemini outbound
+    # SECURITY: infra_net for Redis/Postgres/Qdrant; external_net for Groq/Gemini outbound;
+    # backend_net so Caddy and frontend can resolve and proxy to backend:8000
     networks:
       - infra_net
       - external_net
+      - backend_net
 
   # --------------------------------------------------------------------------
   # Forensic Worker — consumes and processes the task queue
@@ -420,6 +423,7 @@ services:
     networks:
       - infra_net
       - external_net
+      - backend_net
 
   # --------------------------------------------------------------------------
   # Reverse Proxy (Caddy) — TLS termination, security headers, rate limiting
@@ -488,7 +492,7 @@ services:
       dockerfile: Dockerfile
       target: development
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
         INTERNAL_API_URL: "http://backend:8000"
     container_name: forensic_ui
     restart: unless-stopped
@@ -505,8 +509,9 @@ services:
       # and external traffic can reach it from outside the container.
       - HOSTNAME=0.0.0.0
       - PORT=3000
-      # NEXT_PUBLIC_API_URL below is redundant (baked at build), but kept for clarity.
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      # NEXT_PUBLIC_API_URL: empty → browser uses window.location.origin → Caddy (port 80).
+      # Set to https://forensic.yourdomain.com in production only.
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
       # DEMO_PASSWORD: server-side only — used by /api/auth/demo Next.js API route.
       # Do NOT use NEXT_PUBLIC_DEMO_PASSWORD — it bakes secrets into the client JS bundle.
       - DEMO_PASSWORD=${DEMO_PASSWORD:-demo_dev_only_not_for_production}

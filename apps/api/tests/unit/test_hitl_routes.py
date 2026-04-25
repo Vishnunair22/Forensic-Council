@@ -20,7 +20,7 @@ class TestSubmitDecision:
         return HITLDecisionRequest(
             session_id=str(uuid4()),
             checkpoint_id=str(uuid4()),
-            agent_id="gemini-vision",
+            agent_id="Agent1_ImageIntegrity",
             decision="APPROVE",
             note="Looks authentic",
         )

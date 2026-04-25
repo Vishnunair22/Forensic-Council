@@ -42,10 +42,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from typing import Any
 
 import numpy as np
+
+_DEFAULT_VOICE_CLONE_MODEL = os.environ.get(
+    "AASIST_MODEL_NAME",
+    os.environ.get("VOICE_CLONE_MODEL_NAME", "Vansh180/deepfake-audio-wav2vec2"),
+)
 
 # ── Feature extraction helpers ────────────────────────────────────────────────
 
@@ -224,7 +230,7 @@ def _speechbrain_detection(audio_path: str, **kwargs) -> dict[str, Any] | None:
         import torch
         from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
 
-        model_name = kwargs.get("model", "Vansh180/deepfake-audio-wav2vec2")
+        model_name = kwargs.get("model", _DEFAULT_VOICE_CLONE_MODEL)
         extractor = AutoFeatureExtractor.from_pretrained(model_name)
         model = AutoModelForAudioClassification.from_pretrained(model_name)
         model.eval()
@@ -426,7 +432,7 @@ def _run_worker() -> None:
                 sys.stdout.flush()
                 continue
             result = detect_voice_clone(
-                input_path, model=req.get("model", "Vansh180/deepfake-audio-wav2vec2")
+                input_path, model=req.get("model", _DEFAULT_VOICE_CLONE_MODEL)
             )
         except Exception as exc:
             result = {"error": str(exc), "available": False}
@@ -440,7 +446,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model",
         type=str,
-        default="Vansh180/deepfake-audio-wav2vec2",
+        default=_DEFAULT_VOICE_CLONE_MODEL,
         help="Audio deepfake model name",
     )
     parser.add_argument("--warmup", action="store_true", help="Warmup mode — preload dependencies")
