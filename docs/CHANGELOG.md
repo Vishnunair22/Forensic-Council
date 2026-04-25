@@ -5,6 +5,46 @@ All notable changes to Forensic Council are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.4] - 2026-04-25
+
+### Security (Free-tier Focus)
+- Prompt injection hardening in `_sanitize()` function
+- Cost quota default $0 for free tier
+
+### Fixed
+- Phase 4: Model licensing documentation added (MODEL_PINNING.md)
+
+## [1.6.3] - 2026-04-25
+
+### Fixed
+- OTEL endpoint consistency (4317 → 4318)
+- evidence_retention_days 7 → 30 days
+- use_redis_worker default False → True
+- validate_production_settings before start_monitoring
+
+## [1.6.0] - 2026-04-25
+
+### Security (Frontend/UI)
+- CSP tightened in Caddyfile
+- lucide-react updated to ^0.468.0
+- ForensicErrorModal accessibility (role=dialog, aria-*)
+
+## [1.5.2] - 2026-04-25
+
+### Security (Agents Part 1)
+- super().__init__() call added
+- _init_context assertion guard
+- Adversarial check status fix
+- copy.deepcopy for snapshot
+
+## [1.5.0] - 2026-04-22
+
+### Security (Root-level)
+- package.json: workspaces, dev kill-others, engines, prepare
+- .env.example: unique placeholders, QDRANT, Postgres
+- .gitignore: anchored patterns
+- .pre-commit-config.yaml: removed pycln, fixed eslint
+
 ## [1.4.0] - 2026-04-22
 
 ### Security

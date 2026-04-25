@@ -1,25 +1,26 @@
-# Phase: Production Hardening
+# Phase: Production Hardening Complete
 
-## Current Context
-We are refining the evidence pipeline to fix critical logic bugs and improve multimodal depth.
+## Current Status (v1.6.4)
+**All 5 audit phases complete as of 2026-04-25**
 
-## Active Task
-- **Phase 1 Structural Audit**: Completed — all fixes implemented, code verified.
+## Completed Audits
+- [x] Phase 1: Root-level hardening (H1-H11, M1-M19, L1-L15)
+- [x] Phase 2: Infrastructure/DevOps
+- [x] Phase 3: Backend Core App
+- [x] Phase 4: Free-tier AI/ML
+- [x] Phase 5: Final Project-Orchestrator
 
-## Todo
-- [x] Fix `arbiter.py` dead code (diffusion penalty) — Already done (was dead constant `_MANIP_TOP_K`, removed)
-- [x] Fix `agent2_audio.py` iteration ceiling — Covered by base_agent.py fix
-- [x] Fix `agent4_video.py` iteration ceiling — Covered by base_agent.py fix
-- [x] Add `try/except` guards to `agent3_object.py` Gemini calls — Fixed: wrapped in outer try/except
-- [x] Implement `_generate_spectrogram` in `gemini_client.py` — Already done (fully implemented)
-- [x] Migrate `sessionStorage` to `localStorage` — Fixed: all non-auth keys migrated to @/lib/storage
-- [x] Update Typography to Title Case — Already done (verdict.ts provides display labels)
+## v1.6.4 Release Notes (2026-04-25)
+- Frontend CSP tightened, lucide-react updated, ForensicErrorModal accessibility
+- Infrastructure: POSTGRES_PASSWORD required, stop_grace_period 150s
+- Backend: evidence_retention_days 30, use_redis_worker default True, OTEL fix
+- Free-tier: cost quota $0 default, prompt injection hardening
 
-## Done
-- [x] Create GSD Infrastructure (PROJECT.md, ROADMAP.md)
-- [x] Audit for logic gaps (Complete)
-- [x] Phase 1 Structural Audit (2026-04-15) — All fixes applied
+## Known Pending Items (Next Release)
+- [ ] AGPL YOLO license documentation for commercial use
+- [ ] DR automated backup testing
+- [ ] Per-session token metering UI
 
-## Blocked
-- None
-
+## Historical
+- Phase 1 claims "All fixes applied" — superseded by v1.6.x iterative releases
+- STATE.md tracks current state; KNOWN_ISSUES.md tracks open bugs
