@@ -1,42 +1,36 @@
 # ============================================================================
-# Forensic Council — Infrastructure-Only Overlay
+# Forensic Council — Infrastructure-Only Overlay (DEPRECATED)
 # ============================================================================
-# Starts only Postgres, Redis, and Qdrant — zeros out backend/frontend/caddy.
+# ⚠️  WARNING: This file is DEPRECATED and will be removed in v1.6.0.
 #
-# ⚠️  This is a COMPOSE OVERRIDE FILE, not a standalone file.
-#    It MUST always be combined with docker-compose.yml.
-#    DO NOT run: docker compose -f docker-compose.infra.yml up  ← starts nothing
+# The deploy.replicas: 0 directive only works in Docker Swarm mode.
+# In standalone docker compose, this file has NO EFFECT.
 #
-# Correct usage:
-#   docker compose -f infra/docker-compose.yml \
-#                  -f infra/docker-compose.infra.yml \
-#                  --env-file .env up -d
+# Instead, use profiles. Edit docker-compose.yml to add profiles to services:
+#   backend:    { profiles: ["app", "default"] }
+#   frontend:  { profiles: ["app", "default"] }
+#   caddy:      { profiles: ["app", "default"] }
+#   worker:     { profiles: ["app", "default"] }
+#   migration:  { profiles: ["app", "default"] }
+#   jaeger:     { profiles: ["observability", "default"] }
+#   prometheus: { profiles: ["observability", "default"] }
+#
+# Then to run infra-only:
+#   docker compose -f infra/docker-compose.yml up -d redis postgres qdrant
 # ============================================================================
 
 services:
   backend:
-    ports: !reset []
-    deploy:
-      replicas: 0
+    profiles: []
   frontend:
-    ports: !reset []
-    deploy:
-      replicas: 0
+    profiles: []
   caddy:
-    ports: !reset []
-    deploy:
-      replicas: 0
+    profiles: []
   worker:
-    deploy:
-      replicas: 0
+    profiles: []
   migration:
-    deploy:
-      replicas: 0
+    profiles: []
   jaeger:
-    ports: !reset []
-    deploy:
-      replicas: 0
+    profiles: []
   prometheus:
-    ports: !reset []
-    deploy:
-      replicas: 0
+    profiles: []

@@ -40,12 +40,20 @@ section() {
 run_check() {
   local label="$1"
   shift
-  if "$@" >/dev/null 2>&1; then
+  local log_file="${SCRIPT_DIR}/.validate_log_${PASS_COUNT:-0}.tmp"
+  if "$@" >"$log_file" 2>&1; then
     pass "$label"
   else
-    fail "$label"
+    fail "$label (see $log_file)"
   fi
 }
+
+# Auto-source .env if present (critical for production secret checks)
+if [ -f .env ]; then
+  set -a
+  . ./.env
+  set +a
+fi
 
 echo "Forensic Council production readiness validation"
 
@@ -105,23 +113,26 @@ fi
 
 section "3. Tests"
 if command -v uv >/dev/null 2>&1; then
-  if (cd apps/api && uv run pytest tests/unit -q --tb=short); then
-    pass "Backend unit tests pass"
-  else
-    warn "Backend unit tests failed or dependencies are missing"
-  fi
+  run_check "Backend unit tests pass" cd apps/api && uv run pytest tests/unit -q --tb=short
 else
   warn "uv not found; skipped backend unit tests"
 fi
 
 if command -v npm >/dev/null 2>&1; then
-  if (cd apps/web && npm test -- --watchAll=false --passWithNoTests); then
-    pass "Frontend tests pass"
-  else
-    warn "Frontend tests failed or dependencies are missing"
-  fi
+  run_check "Frontend tests pass" cd apps/web && npm test -- --watchAll=false --passWithNoTests
 else
   warn "npm not found; skipped frontend tests"
+fi
+
+# Validate all compose overlays
+if command -v docker >/dev/null 2>&1; then
+  for overlay in dev test infra; do
+    if docker compose -f infra/docker-compose.yml -f "infra/docker-compose.${overlay}.yml" config >/dev/null 2>&1; then
+      pass "Compose ${overlay} overlay renders"
+    else
+      fail "Compose ${overlay} overlay failed to render"
+    fi
+  done
 fi
 
 section "4. Security Checks"
@@ -143,19 +154,18 @@ else
   fail "Prometheus scrape token wiring is incomplete"
 fi
 
-if [ "${APP_ENV:-}" = "production" ]; then
-  for var in SIGNING_KEY JWT_SECRET_KEY POSTGRES_PASSWORD REDIS_PASSWORD \
-             METRICS_SCRAPE_TOKEN BOOTSTRAP_ADMIN_PASSWORD \
-             BOOTSTRAP_INVESTIGATOR_PASSWORD DEMO_PASSWORD; do
-    if [ -n "${!var:-}" ] && ! printf '%s' "${!var}" | grep -q "REPLACE_ME"; then
-      pass "$var is set"
-    else
-      fail "$var is missing or still a placeholder"
-    fi
-  done
-else
-  warn "APP_ENV is not production; skipped live secret validation"
-fi
+# Always validate secrets (not just in production mode)
+# This check runs regardless of APP_ENV - operators MUST source .env before running
+for var in SIGNING_KEY JWT_SECRET_KEY POSTGRES_PASSWORD REDIS_PASSWORD \
+           METRICS_SCRAPE_TOKEN BOOTSTRAP_ADMIN_PASSWORD \
+           BOOTSTRAP_INVESTIGATOR_PASSWORD DEMO_PASSWORD; do
+  val="${!var:-}"
+  if [ -n "$val" ] && ! printf '%s' "$val" | grep -q "REPLACE_ME"; then
+    pass "$var is set"
+  else
+    fail "$var is missing or still a placeholder"
+  fi
+done
 
 section "Summary"
 echo "Passed: $PASS_COUNT"

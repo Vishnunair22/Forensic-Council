@@ -5,12 +5,14 @@
 #
 # Production:
 #   DOMAIN=forensic.yourdomain.com
+#   ACME_EMAIL=admin@yourdomain.com
 #
 # Caddy obtains and renews Let's Encrypt certificates automatically when DOMAIN
 # is a real public hostname. The DOMAIN value is provided by docker-compose.yml.
 
 {
     admin off
+    email {$ACME_EMAIL}
 
     log {
         output file /var/log/caddy/access.log {
@@ -69,6 +71,8 @@
 {$DOMAIN:localhost} {
     encode zstd gzip
 
+    # NOTE: Content-Security-Policy uses 'unsafe-inline' for Next.js 15 compatibility.
+    # For stricter security, switch to nonces (requires Next.js server-side nonce generation).
     header {
         Strict-Transport-Security  "max-age=31536000; includeSubDomains; preload"
         X-Content-Type-Options     "nosniff"
@@ -77,7 +81,7 @@
         X-Frame-Options            "DENY"
         Referrer-Policy            "strict-origin-when-cross-origin"
         Permissions-Policy         "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
-        Content-Security-Policy    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' fonts.gstatic.com data:; connect-src 'self' ws://{$DOMAIN:localhost} wss://{$DOMAIN:localhost}; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+        Content-Security-Policy    "default-src 'self'; script-src 'self' 'unsafe-inline' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' fonts.gstatic.com data:; connect-src 'self' 'unsafe-eval' ws://localhost wss://localhost http://localhost:8000; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
         -Server
         -X-Powered-By
     }

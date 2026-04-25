@@ -29,17 +29,17 @@ x-backend-env: &backend-env
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   REDIS_HOST: redis
   REDIS_PORT: 6379
-  REDIS_PASSWORD: ${REDIS_PASSWORD:-forensic_redis_dev_password}
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
   QDRANT_HOST: qdrant
   QDRANT_PORT: 6333
   QDRANT_GRPC_PORT: 6334
   POSTGRES_HOST: postgres
   POSTGRES_PORT: 5432
   POSTGRES_USER: ${POSTGRES_USER:-forensic_user}
-  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forensic_pass}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
   POSTGRES_DB: ${POSTGRES_DB:-forensic_council}
-  SIGNING_KEY: ${SIGNING_KEY}
-  JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+  SIGNING_KEY: ${SIGNING_KEY:?SIGNING_KEY must be set}
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set}
   JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
   LLM_PROVIDER: ${LLM_PROVIDER:-none}
   LLM_API_KEY: ${LLM_API_KEY:-}
@@ -64,18 +64,24 @@ x-backend-env: &backend-env
   RATE_LIMIT_INVESTIGATION_PER_5MIN: ${RATE_LIMIT_INVESTIGATION_PER_5MIN:-5}
   EVIDENCE_STORAGE_PATH: /app/storage/evidence
   CALIBRATION_MODELS_PATH: /app/storage/calibration_models
-  NUMBA_DISABLE_JIT: ${NUMBA_DISABLE_JIT:-1}
+  NUMBA_DISABLE_JIT: ${NUMBA_DISABLE_JIT:-true}
+  NUMBA_CACHE_DIR: /app/cache/numba_cache
   HOME: /app/cache/easyocr
   EASYOCR_MODEL_DIR: /app/cache/easyocr
   YOLO_MODEL_DIR: /app/cache/ultralytics
   YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-yolo11n.pt}
-  AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
+  AUDIO_DEEPFAKE_MODEL_NAME: ${AUDIO_DEEPFAKE_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
   YOLO_CONFIG_DIR: /app/cache/ultralytics
   TORCH_HOME: /app/cache/torch
   HF_HOME: /app/cache/huggingface
   TRANSFORMERS_CACHE: /app/cache/huggingface/transformers
   OTEL_ENABLED: ${OTEL_ENABLED:-true}
-  METRICS_SCRAPE_TOKEN: ${METRICS_SCRAPE_TOKEN:-}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318}
+  OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
+  OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-forensic-council-api}
+  METRICS_SCRAPE_TOKEN: ${METRICS_SCRAPE_TOKEN:?METRICS_SCRAPE_TOKEN must be set}
+
+x-redis-pwd: &redis-pwd ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
 
 services:
   # --------------------------------------------------------------------------
@@ -89,7 +95,7 @@ services:
     # without credentials even if the port is accidentally exposed.
     command: >
       redis-server
-      --requirepass "${REDIS_PASSWORD:-forensic_redis_dev_password}"
+      --requirepass "*redis-pwd"
       --loglevel warning
     # SECURITY: Run as non-root user, drop all capabilities
     user: redis
@@ -106,7 +112,7 @@ services:
       timeout: 3s
       retries: 5
     environment:
-      - REDISCLI_AUTH=${REDIS_PASSWORD:-forensic_redis_dev_password}
+      - REDISCLI_AUTH=*redis-pwd
     deploy:
       resources:
         limits:
@@ -159,10 +165,14 @@ services:
       -c max_connections=200
       -c shared_buffers=256MB
       -c idle_in_transaction_session_timeout=30000
+      -c data_directory=/var/lib/postgresql/data
+      -c fsync=on
+      -c synchronous_commit=on
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-forensic_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forensic_pass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       POSTGRES_DB: ${POSTGRES_DB:-forensic_council}
+      POSTGRES_INITDB_ARGS: --data-checksums --auth-host=scram-sha-256
     # SECURITY: Run as non-root (postgres), drop unnecessary capabilities
     user: postgres
     security_opt:
@@ -237,10 +247,10 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-forensic_user}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-forensic_pass}
       - POSTGRES_DB=${POSTGRES_DB:-forensic_council}
-      - SIGNING_KEY=${SIGNING_KEY}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - BOOTSTRAP_ADMIN_PASSWORD=${BOOTSTRAP_ADMIN_PASSWORD:-bootstrap_admin_dev_secret}
-      - BOOTSTRAP_INVESTIGATOR_PASSWORD=${BOOTSTRAP_INVESTIGATOR_PASSWORD:-bootstrap_investigator_dev_secret}
+      - SIGNING_KEY=${SIGNING_KEY:?SIGNING_KEY must be set}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set}
+      - BOOTSTRAP_ADMIN_PASSWORD=${BOOTSTRAP_ADMIN_PASSWORD:?BOOTSTRAP_ADMIN_PASSWORD must be set}
+      - BOOTSTRAP_INVESTIGATOR_PASSWORD=${BOOTSTRAP_INVESTIGATOR_PASSWORD:?BOOTSTRAP_INVESTIGATOR_PASSWORD must be set}
       - SKIP_MODEL_DOWNLOAD=1
       - SKIP_CACHE_CHECK=1
     depends_on:
@@ -266,9 +276,9 @@ services:
       dockerfile: Dockerfile
       target: development
       args:
-        PRELOAD_MODELS: ${PRELOAD_MODELS:-1}
+        PRELOAD_MODELS: ${PRELOAD_MODELS:-true}
         YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-yolo11n.pt}
-        AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
+        AUDIO_DEEPFAKE_MODEL_NAME: ${AUDIO_DEEPFAKE_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
     container_name: forensic_api
     restart: unless-stopped
     ports:
@@ -388,7 +398,7 @@ services:
       - /tmp:nosuid,size=512m
     volumes:
       - evidence_data:/app/storage/evidence:rw
-      - signing_keys:/app/storage/keys:rw
+      - signing_keys:/app/storage/keys:ro
       - hf_cache:/app/cache/huggingface:rw
       - torch_cache:/app/cache/torch:rw
       - easyocr_cache:/app/cache/easyocr:rw
