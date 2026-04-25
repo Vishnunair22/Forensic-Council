@@ -18,10 +18,10 @@ repos:
 
   - repo: local
     hooks:
-      - id: mypy-api
-        name: mypy apps/api
+      - id: pyright-api
+        name: pyright apps/api
         language: system
-        entry: python -c "import os, subprocess; os.chdir('apps/api'); subprocess.run(['uv', 'run', 'mypy', 'core/', 'agents/', 'api/', 'tools/', 'orchestration/'], check=True)"
+        entry: python -c "import os, subprocess; os.chdir('apps/api'); subprocess.run(['uv', 'run', 'pyright', 'core/', 'agents/', 'api/', 'tools/', 'orchestration/'], check=True)"
         pass_filenames: false
         files: ^apps/api/.*\.py$
         types: [python]

@@ -11,7 +11,6 @@
 
 {
     admin off
-    auto_https off
 
     log {
         output file /var/log/caddy/access.log {
@@ -24,6 +23,7 @@
 }
 
 :80 {
+    auto_https off
     encode zstd gzip
 
     @production_domain not host localhost 127.0.0.1

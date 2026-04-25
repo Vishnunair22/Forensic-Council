@@ -30,8 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Agent 5: `inject_agent1_context` method reordered to follow `__init__`, preventing
   the context attribute from being silently overwritten on construction.
 - Caddyfile: HTTP block now includes `encode zstd gzip` for dev/localhost responses.
-- Config: removed module-level `settings = get_settings()` alias to prevent import-time
-  side effects that break test isolation.
+- Config: get_settings() is LRU-cached for performance; note that module-level
+  calls require env vars to be set before first import (or use lazy initialization).
 
 ## [1.3.0] - 2026-04-13
 

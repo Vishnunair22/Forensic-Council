@@ -218,10 +218,10 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build backend image
-        run: docker buildx build --target production -t forensic-council-backend:test apps/api/
+        run: docker buildx build --target production -t forensic-council-backend:test --build-arg PRELOAD_MODELS=0 apps/api/
 
       - name: Build backend migration image
-        run: docker buildx build --target migration -t forensic-council-migration:test apps/api/
+        run: docker buildx build --target migration -t forensic-council-migration:test --build-arg PRELOAD_MODELS=0 apps/api/
 
       - name: Build frontend image
         run: >

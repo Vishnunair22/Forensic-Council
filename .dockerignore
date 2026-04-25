@@ -5,6 +5,7 @@
 .gitattributes
 
 # Assistant / local tool metadata
+.agent/
 .claude/
 .cursor/
 .planning/

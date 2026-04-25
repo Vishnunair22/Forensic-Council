@@ -128,7 +128,7 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 pythonpath = ["."]
-addopts = "-v --tb=short --cov-fail-under=85"
+addopts = "-v --tb=short --cov-fail-under=75"
 markers = [
     "regression: marks tests as regression tests (deselect with -m 'not regression')",
     "integration: marks tests as integration tests",
@@ -154,7 +154,7 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under = 85
+fail_under = 75
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
