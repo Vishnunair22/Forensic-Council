@@ -100,8 +100,8 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      # SECURITY: Use REDISCLI_AUTH env var and test without password on command line
-      test: ["CMD", "redis-cli", "ping"]
+      # Use CMD-SHELL form so REDISCLI_AUTH env var is in scope
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -194,7 +194,7 @@ services:
       - infra_net
 
   jaeger:
-    image: jaegertracing/all-in-one:1.62.0
+    image: jaegertracing/all-in-one:1.66.0
     container_name: forensic_jaeger
     restart: unless-stopped
     ports:
@@ -534,7 +534,7 @@ services:
   # Observability — Prometheus metrics scraping
   # --------------------------------------------------------------------------
   prometheus:
-    image: prom/prometheus:v2.51.2
+    image: prom/prometheus:v3.1.0
     container_name: forensic_prometheus
     restart: unless-stopped
     command:

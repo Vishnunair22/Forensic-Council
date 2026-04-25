@@ -51,7 +51,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 # Install uv (fast Python package manager).
 # Pinned for reproducible builds; using pip to avoid ghcr.io TLS issues.
-RUN pip install --no-cache-dir uv==0.6.5
+ARG UV_VERSION=0.7.2
+RUN pip install --no-cache-dir "uv==${UV_VERSION}"
 
 WORKDIR /app
 

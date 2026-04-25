@@ -1,4 +1,5 @@
 export const isBrowser = typeof window !== "undefined";
+const isDev = process.env.NODE_ENV !== "production";
 
 function createStorage(store: Storage) {
   return {
@@ -10,7 +11,7 @@ function createStorage(store: Storage) {
         if (parseJson) return JSON.parse(val) as T;
         return val as unknown as T;
       } catch (e: unknown) {
-        console.warn(`[storage] Error reading key "${key}":`, e);
+        if (isDev) console.warn(`[storage] Error reading key "${key}":`, e);
         return fallback;
       }
     },
@@ -24,7 +25,7 @@ function createStorage(store: Storage) {
           new CustomEvent("fc_storage_update", { detail: { key, value: val } })
         );
       } catch (e: unknown) {
-        console.warn(`[storage] Error writing key "${key}":`, e);
+        if (isDev) console.warn(`[storage] Error writing key "${key}":`, e);
       }
     },
 
@@ -36,7 +37,7 @@ function createStorage(store: Storage) {
           new CustomEvent("fc_storage_update", { detail: { key, value: null } })
         );
       } catch (e: unknown) {
-        console.warn(`[storage] Error removing key "${key}":`, e);
+        if (isDev) console.warn(`[storage] Error removing key "${key}":`, e);
       }
     },
   };

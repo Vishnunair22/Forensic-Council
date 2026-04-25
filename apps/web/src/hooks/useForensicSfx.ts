@@ -2,6 +2,8 @@
 
 import { useCallback, useRef } from "react";
 
+const isDev = process.env.NODE_ENV !== "production";
+
 /**
  * useForensicSfx: Crystalline Audio Synthesis
  * 
@@ -64,7 +66,7 @@ export function useForensicSfx() {
       ping.stop(now + 0.2);
 
     } catch (error) {
-      console.warn("Forensic Audio synthesis failed:", error);
+      if (isDev) console.warn("Forensic Audio synthesis failed:", error);
     }
   }, [initAudio]);
 
@@ -104,7 +106,7 @@ export function useForensicSfx() {
       osc2.stop(now + 0.4);
 
     } catch (error) {
-      console.warn("Forensic Success SFX failed:", error);
+      if (isDev) console.warn("Forensic Success SFX failed:", error);
     }
   }, [initAudio]);
 
