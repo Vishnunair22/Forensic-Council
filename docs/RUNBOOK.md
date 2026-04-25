@@ -173,7 +173,7 @@ docker compose -f infra/docker-compose.yml restart backend
 
 # 6. To switch permanently to local-only mode (no Gemini):
 #    Remove GEMINI_API_KEY from .env and restart.
-#    All reports will carry the degradation flag — communicate this to investigators.
+#    All reports will carry the degradation flag ï¿½ communicate this to investigators.
 ```
 
 **Impact on report quality**: Without Gemini, cross-modal semantic grounding is
@@ -225,14 +225,14 @@ logs are written per-tool and are durable. Completed investigations are unaffect
 ## Evidence File Cleanup
 
 Evidence files are retained for `EVIDENCE_RETENTION_DAYS` (default 7) days.
-There is no automated scheduler — cleanup must be triggered manually until a
+There is no automated scheduler ï¿½ cleanup must be triggered manually until a
 cron job is added.
 
 ```bash
 # 1. Check current evidence storage size
 docker compose exec backend du -sh /app/storage/evidence/
 
-# 2. Preview what would be deleted (dry run) — files older than retention period
+# 2. Preview what would be deleted (dry run) ï¿½ files older than retention period
 docker compose exec backend python scripts/cleanup_storage.py --dry-run
 
 # 3. Run cleanup
@@ -298,6 +298,46 @@ docker compose exec postgres pg_restore -U forensic_user -d forensic_council /ba
 2. If unresolved in 30 minutes â†’ **Team lead** notified
 3. If data integrity suspected â†’ **Security team** engaged
 4. If legal/compliance impact â†’ **Legal counsel** notified
+
+---
+
+## Maintenance Tasks
+
+### Automated Backups (Postgres)
+
+The system includes a backup cron task for Postgres:
+
+```bash
+# Run manual backup
+docker compose exec backend python scripts/backup_db.py
+
+# Restore from backup
+docker compose exec -T postgres pg_restore -U forensic_user -d forensic_council < backup_file.dump
+```
+
+**Note**: Configure a scheduled job outside Docker (cron, kubernetes cronjob) to run `backup_db.py` daily.
+
+### Evidence Retention
+
+The system includes an evidence retention enforcer:
+
+```bash
+# Runs with EVIDENCE_RETENTION_DAYS env var (default: 7)
+docker compose exec worker python scripts/enforce_retention.py
+```
+
+**Note**: Configure a scheduled job outside Docker to run `enforce_retention.py` daily.
+Evidence older than `EVIDENCE_RETENTION_DAYS` is deleted from the evidence store.
+
+### Zero-Downtime Deploys (Swarm/K8s)
+
+Current `docker-compose` deployment does NOT support zero-downtime rolling updates.
+For production deployments requiring zero-downtime, migrate to:
+
+- **Docker Swarm**: Use `deploy.update_config` in compose
+- **Kubernetes**: Use rolling update strategy with readiness probes
+
+See `docs/DEPLOYMENT_MIGRATION.md` for migration steps.
 
 ---
 
