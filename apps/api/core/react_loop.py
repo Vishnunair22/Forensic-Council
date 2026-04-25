@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from core.config import Settings
 from core.custody_logger import CustodyLogger, EntryType
@@ -106,6 +106,8 @@ class AgentFinding(BaseModel):
     finding_type: str = Field(..., description="Type of finding")
     confidence_raw: float | None = Field(
         default=None,
+        ge=0.0,
+        le=1.0,
         description=(
             "Raw confidence score (0-1).  MUST be None when "
             "evidence_verdict is NOT_APPLICABLE or ERROR.  Nullable "
@@ -165,6 +167,15 @@ class AgentFinding(BaseModel):
     @classmethod
     def ensure_metadata_is_dict(cls, v: Any) -> dict[str, Any]:
         return v if v is not None else {}
+
+    @model_validator(mode="after")
+    def enforce_confidence_verdict_contract(self) -> "AgentFinding":
+        no_confidence_verdicts = {"NOT_APPLICABLE", "ERROR"}
+        if self.evidence_verdict in no_confidence_verdicts and self.confidence_raw is not None:
+            raise ValueError(
+                f"confidence_raw must be None when evidence_verdict is {self.evidence_verdict!r}"
+            )
+        return self
 
 
 class ReActLoopResult(BaseModel):
@@ -391,6 +402,10 @@ def _get_available_tools_for_llm(state: WorkingMemoryState) -> list[dict[str, An
     if registry_snapshot:
         return registry_snapshot
 
+    logger.warning(
+        "tool_registry_snapshot not injected by base agent — falling back to static "
+        "tool catalogue; LLM may suggest tools that are not registered for this agent"
+    )
     # Comprehensive fallback catalogue — covers all real tools across all 5 agents
     return [
         # Agent 1 — Image
@@ -1036,10 +1051,10 @@ class ReActLoopEngine:
             except TimeoutError:
                 try:
                     if self.custody_logger is not None:
-                        await self.custody_logger.log(
-                            entry_type="SYSTEM_EVENT",
+                        await self.custody_logger.log_entry(
+                            entry_type=EntryType.HITL_CHECKPOINT,
                             agent_id=self.agent_id,
-                            session_id=str(self.session_id),
+                            session_id=self.session_id,
                             content={
                                 "event": "HITL_TIMEOUT",
                                 "checkpoint_id": str(checkpoint.checkpoint_id),
@@ -1055,6 +1070,7 @@ class ReActLoopEngine:
                         error=str(exc),
                     )
                 self._terminated = True
+                self._resume_event.clear()
                 return True
 
         if self._pending_decision is not None:
@@ -1116,6 +1132,7 @@ class ReActLoopEngine:
                         if task.status == TaskStatus.IN_PROGRESS:
                             task.status = TaskStatus.COMPLETE
                             task.result_ref = step.tool_name
+                            _wm_updated = True
                     key = self.working_memory._get_key(self.session_id, self.agent_id)
                     self.working_memory._local_cache[key] = cache_state.model_dump_json()
             except Exception as exc:
@@ -1124,6 +1141,15 @@ class ReActLoopEngine:
                     agent_id=self.agent_id,
                     error=str(exc),
                 )
+
+        if not _wm_updated:
+            logger.error(
+                "All task-completion fallbacks exhausted — task remains IN_PROGRESS; "
+                "next iteration may re-run the same tool and produce duplicate findings",
+                agent_id=self.agent_id,
+                task_id=_task_id_str,
+                tool=step.tool_name,
+            )
 
     async def run(
         self,

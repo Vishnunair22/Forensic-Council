@@ -6,10 +6,13 @@ Pydantic Settings-based configuration loading from environment variables.
 All configuration is centralized and validated at startup.
 """
 
+import logging
 import os
 import warnings
 from functools import lru_cache
 from urllib.parse import quote_plus
+
+_config_logger = logging.getLogger(__name__)
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -536,19 +539,19 @@ class Settings(BaseSettings):
             v = None
 
         if v is None:
-            warnings.warn(
+            msg = (
                 "GEMINI_API_KEY not set. Agents 1, 3, and 5 will use local fallback analysis "
-                "instead of Gemini vision. Get a free key at https://aistudio.google.com/apikey",
-                UserWarning,
-                stacklevel=2,
+                "instead of Gemini vision. Get a free key at https://aistudio.google.com/apikey"
             )
+            warnings.warn(msg, UserWarning, stacklevel=2)
+            _config_logger.warning(msg)
         elif len(v) < 20:
-            warnings.warn(
+            msg = (
                 "GEMINI_API_KEY appears too short (< 20 chars). Agents 1, 3, and 5 may skip "
-                "Gemini vision deep analysis — verify the key at https://aistudio.google.com/apikey",
-                UserWarning,
-                stacklevel=2,
+                "Gemini vision deep analysis — verify the key at https://aistudio.google.com/apikey"
             )
+            warnings.warn(msg, UserWarning, stacklevel=2)
+            _config_logger.warning(msg)
         return v
 
     @field_validator("llm_api_key")
@@ -660,6 +663,12 @@ class Settings(BaseSettings):
             if not self.redis_password:
                 raise ValueError("REDIS_PASSWORD must be set in production")
         return self
+
+
+    @property
+    def gemini_available(self) -> bool:
+        """True when a plausible Gemini API key is configured."""
+        return bool(self.gemini_api_key and len(self.gemini_api_key) >= 20)
 
 
 @lru_cache

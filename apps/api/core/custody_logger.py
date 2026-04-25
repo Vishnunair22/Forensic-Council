@@ -364,6 +364,7 @@ class CustodyLogger:
             logger.warning(f"Custody WAL: Persisted entry {entry_id} to Redis for later flush.")
         except Exception as e:
             logger.critical(f"FATAL CUSTODY GAP: Redis WAL failed for entry {entry_id} - {e}")
+            raise
 
     async def _flush_retry_queue(self) -> None:
         """Attempt to persist any queued entries in the Redis WAL."""
