@@ -10,12 +10,11 @@
 *.pfx
 *.jks
 *.keystore
-*Keys*.txt
-*keys*.txt
-*secrets*
-*credentials*
-*token*.txt
-*api_key*
+/secrets/
+/keys/
+*.private.key
+/*-api-key.txt
+/*-token.txt
 *.json_report
 bandit_security_report.json
 eslint_frontend_report.json
@@ -26,7 +25,6 @@ tracked_files.txt
 
 # ── Python ──────────────────────────────────────────────────────────────────
 __pycache__/
-**/__pycache__/
 *.py[cod]
 *.sqlite
 *.sqlite3
@@ -40,29 +38,21 @@ build/
 .venv/
 venv/
 .pytest_cache/
-**/.pytest_cache/
 .mypy_cache/
-**/.mypy_cache/
 .ruff_cache/
-**/.ruff_cache/
 .pyright/
-**/.pyright/
 htmlcov/
-.coverage
-coverage.xml
+.overlay/coverage.xml
+
 
 # ── Node / Next.js ───────────────────────────────────────────────────────────
 node_modules/
-**/node_modules/
 .next/
-**/.next/
 apps/web/out/
 apps/web/.npm
 apps/web/.cache
 .cache/
-**/.cache/
 .turbo/
-**/.turbo/
 .nyc_output/
 .eslintcache
 apps/web/coverage/
@@ -70,6 +60,7 @@ apps/web/test-results/
 apps/web/lint_output*.txt
 *.tsbuildinfo
 .pnpm-store/
+
 
 # ── Docker build artefacts ───────────────────────────────────────────────────
 /apps/api/storage/evidence/*
@@ -80,18 +71,22 @@ apps/web/lint_output*.txt
 /apps/api/reports/*.jsonl
 apps/web/.swc/
 
+
 # ── ML model caches (large binary files) ─────────────────────────────────────
 /apps/api/cache/
 /apps/api/storage/calibration_models/
 *.pt
 *.pth
 *.onnx
-*.bin
+apps/api/cache/**/*.bin
+apps/api/storage/**/*.bin
 *.safetensors
+
 
 # ── Logs ─────────────────────────────────────────────────────────────────────
 *.log
 logs/
+
 
 # ── OS artefacts ─────────────────────────────────────────────────────────────
 .DS_Store
@@ -99,22 +94,26 @@ Thumbs.db
 desktop.ini
 nul
 
+
 # ── Pytest shard / temp dirs (prevent root pollution) ───────────────────────
 pytest-cache-files-*
 tmp_*
 
+
 # ── Test fixtures ─────────────────────────────────────────────────────────────
 # Small fixture images are committed for CI reproducibility.
 # Large or generated fixtures remain excluded:
-tests/fixtures/*.mp4
-tests/fixtures/*.wav
-tests/fixtures/*.avi
+**/tests/fixtures/*.mp4
+**/tests/fixtures/*.wav
+**/tests/fixtures/*.avi
+
 
 # ── Designated Junk/Temp Dirs (Rules in AGENTS.md) ───────────────────────────
 /apps/api/scratch/*
 !/apps/api/scratch/.gitkeep
 /apps/web/public/temp/*
 !/apps/web/public/temp/.gitkeep
+
 
 # ── IDEs, Editors & Tooling ──────────────────────────────────────────────────
 .idea/
@@ -126,7 +125,7 @@ tests/fixtures/*.avi
 *.swm
 .netrwhist
 *~
-\#*\#
+\#*#
 /.emacs.desktop
 /.emacs.desktop.lock
 *.elc
@@ -137,13 +136,12 @@ tests/fixtures/*.avi
 .cursor/
 .uv-cache/
 .uv_cache/
-**/.uv_cache/
-**/.uv-cache/
 .mcp.json
 .opencode.json
 CLAUDE.md
 MASTER_FIX_*.md
 .ipynb_checkpoints/
+
 
 # ── Agent & Plugin Local State ───────────────────────────────────────────────
 **/agent_state/
@@ -157,9 +155,12 @@ agent_memory.db
 agent_interaction_*.json
 plugin_test_*.tmp
 
+
 # Added by code-review-graph
 .code-review-graph/
 
+
 # ── Test Scripts (never commit) ────────────────────────────────────────────────
 test_*.ps1
+/test_*.ps1
 test_gemini_body.json

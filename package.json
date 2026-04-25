@@ -3,8 +3,20 @@
   "version": "1.4.0",
   "description": "Multi-Agent Forensic Evidence Analysis System",
   "private": true,
+  "workspaces": ["apps/web"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Vishnunair22/Forensic-Council.git"
+  },
+  "license": "MIT",
+  "author": "Forensic Council Contributors",
+  "engines": {
+    "node": ">=20.10.0",
+    "npm": ">=10"
+  },
+  "packageManager": "npm@10.9.0",
   "scripts": {
-    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev": "concurrently -k -n api,web -c blue,green \"npm run dev:api\" \"npm run dev:web\"",
     "dev:api": "cd apps/api && uv run python scripts/run_api.py",
     "dev:web": "cd apps/web && npm run dev",
     "build:web": "cd apps/web && npm run build",
@@ -17,9 +29,15 @@
     "docker:dev": "docker compose -f infra/docker-compose.yml --env-file .env up --build",
     "docker:prod": "docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file .env up --build -d",
     "docker:down": "docker compose -f infra/docker-compose.yml down",
+    "docker:logs": "docker compose -f infra/docker-compose.yml logs -f",
+    "docker:stop": "docker compose -f infra/docker-compose.yml down",
     "lint": "npm run lint:api && npm run lint:web",
     "lint:api": "cd apps/api && uv run ruff check .",
-    "lint:web": "cd apps/web && npm run lint"
+    "lint:web": "cd apps/web && npm run lint",
+    "lint:fix": "npm run lint:fix:api && npm run lint:fix:web",
+    "lint:fix:api": "cd apps/api && uv run ruff check . --fix && uv run ruff format .",
+    "lint:fix:web": "cd apps/web && npm run lint -- --fix",
+    "prepare": "command -v pre-commit >/dev/null 2>&1 && pre-commit install || true"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

@@ -16,38 +16,33 @@ repos:
         args: [--fix]
       - id: ruff-format
 
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
   - repo: local
     hooks:
       - id: pyright-api
         name: pyright apps/api
         language: system
-        entry: python -c "import os, subprocess; os.chdir('apps/api'); subprocess.run(['uv', 'run', 'pyright', 'core/', 'agents/', 'api/', 'tools/', 'orchestration/'], check=True)"
+        entry: bash -c 'cd apps/api && uv run pyright core/ agents/ api/ tools/ orchestration/'
         pass_filenames: false
         files: ^apps/api/.*\.py$
         types: [python]
 
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        files: ^infra/.*\.sh$
+
   - repo: local
     hooks:
-      - id: pyright-tools
-        name: pyright tools/
+      - id: eslint-web
+        name: eslint apps/web
         language: system
-        entry: python -c "import os, subprocess; os.chdir('apps/api'); subprocess.run(['uv', 'run', 'pyright', 'tools/'], check=True)"
-        pass_filenames: false
-        files: ^apps/api/tools/.*\.py$
-        types: [python]
-
-  - repo: https://github.com/hadialqattan/pycln
-    rev: v2.5.0
-    hooks:
-      - id: pycln
-        args: [--all]
-
-  - repo: https://github.com/pre-commit/mirrors-eslint
-    rev: v9.2.0
-    hooks:
-      - id: eslint
-        files: \.(tsx?|jsx?)$
-        additional_dependencies:
-          - eslint@9
-          - eslint-config-next@15
-          - "@eslint/eslintrc@3"
+        entry: bash -c 'cd apps/web && npx --no -- eslint --config eslint.config.js "$@"'
+        pass_filenames: true
+        files: ^apps/web/.*\.(tsx?|jsx?)$
+        types: [javascript, typescript]

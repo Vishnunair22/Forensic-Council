@@ -10,6 +10,7 @@
 .cursor/
 .planning/
 .uv-cache/
+.uv_cache/
 .mcp.json
 .opencode.json
 CLAUDE.md
@@ -20,7 +21,6 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.py[cod]
 *$py.class
 *.egg-info/
 .venv/
@@ -66,15 +66,28 @@ Thumbs.db
 *.swp
 *.swo
 
-# Storage
-apps/api/storage/evidence/
-apps/api/storage/keys/
+# Storage (note: dirs are excluded but .gitkeep files are preserved in git — ensure Dockerfile creates them)
+/apps/api/storage/evidence/*
+!/apps/api/storage/evidence/.gitkeep
+/apps/api/storage/keys/*
+!/apps/api/storage/keys/.gitkeep
 
 # ML Caches
-apps/api/cache/
+/apps/api/cache/
 *.pt
 *.pth
 *.onnx
 *.bin
 *.h5
 *.weights
+
+# Additional symmetry with .gitignore
+.eslintcache
+.pnpm-store/
+*.tsbuildinfo
+apps/web/coverage/
+apps/web/.swc/
+apps/api/tests/fixtures/*.mp4
+apps/api/tests/fixtures/*.wav
+apps/api/tests/fixtures/*.avi
+.history/

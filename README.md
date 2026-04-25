@@ -93,7 +93,13 @@ For a full-scale, production-ready deployment, follow these steps. For more gran
 
 ### 1. Initialize Environment
 Copy the example environment file to create your local `.env`:
+
+```bash
+# bash / zsh
+cp .env.example .env
+```
 ```powershell
+# PowerShell
 Copy-Item .env.example .env
 ```
 
@@ -111,6 +117,14 @@ Edit `.env` and provide your API keys for the analysis engines:
 
 ### 4. Deploy the Stack
 Start the production stack using the primary and production override files. This ensures build-time optimizations and security hardening are applied:
+
+```bash
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.prod.yml \
+  --env-file .env \
+  up --build -d
+```
 ```powershell
 docker compose `
   -f infra/docker-compose.yml `
@@ -129,18 +143,48 @@ Once the containers are healthy, run the production readiness check:
 
 If you prefer to run services directly on your host machine:
 
+### Prerequisites
+- Node.js >= 20.10.0
+- Python 3.12
+- uv (install: `curl -LsSf https://astral.sh/uv/install.sh | sh`)
+- Docker >= 24 with Compose v2
+
 ### Backend
+```bash
+# bash / zsh
+cd apps/api
+uv sync
+uv run python scripts/run_api.py
+```
 ```powershell
+# PowerShell
 cd apps/api
 uv sync
 uv run python scripts/run_api.py
 ```
 
 ### Frontend
-```powershell
+```bash
+# bash / zsh
 cd apps/web
 npm install
 npm run dev
+```
+```powershell
+# PowerShell
+cd apps/web
+npm install
+npm run dev
+```
+
+### Install Pre-Commit Hooks
+```bash
+# bash / zsh
+npm run prepare
+```
+```powershell
+# PowerShell
+npm run prepare
 ```
 
 ## Common Commands
@@ -160,7 +204,8 @@ Backend-only:
 ```powershell
 cd apps/api
 uv run ruff check .
-uv run pyright core/ agents/ api/ tools/
+uv run ruff format .
+uv run pyright core/ agents/ api/ tools/ orchestration/
 uv run pytest tests/ -v
 ```
 
@@ -199,7 +244,7 @@ Never commit `.env` or real secrets.
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [API Reference](docs/API.md)
-- [Agent Capabilities](docs/agent_capabilities.md)
+- [Agent Capabilities](docs/AGENT_CAPABILITIES.md)
 - [Chain of Custody](docs/CHAIN_OF_CUSTODY.md)
 - [Security](docs/SECURITY.md)
 - [Testing](docs/TESTING.md)
