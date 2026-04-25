@@ -99,7 +99,11 @@ class LLMClient:
 
         # Fallback settings
         self.fallback_enabled = True
-        self.gemini_api_key = config.gemini_api_key
+        # Arbiter gets its own Gemini key if configured — isolates Arbiter quota from agents.
+        if use_arbiter_tier and getattr(config, "arbiter_gemini_api_key", None):
+            self.gemini_api_key = config.arbiter_gemini_api_key
+        else:
+            self.gemini_api_key = config.gemini_api_key
         self.gemini_model = config.gemini_model
 
         self._client: httpx.AsyncClient | None = None
