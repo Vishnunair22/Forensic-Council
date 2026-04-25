@@ -169,8 +169,8 @@ class Settings(BaseSettings):
         description="Path for calibration models",
     )
     evidence_retention_days: int = Field(
-        default=7,
-        description="Number of days to retain forensic evidence files before automated purging.",
+        default=30,
+        description="Number of days to retain forensic evidence files before automated purging. Legal forensics typically requires 30-90 days minimum.",
     )
 
     # ML Cache Configuration (must match Docker volumes)
@@ -606,9 +606,9 @@ class Settings(BaseSettings):
     # IMPORTANT: never set both use_redis_worker=True and run the in-process
     # worker simultaneously — the same investigation would execute twice.
     use_redis_worker: bool = Field(
-        default=False,
+        default=True,
         description="Submit investigations to Redis queue for external worker (worker.py). "
-        "Leave False when running investigations in-process (default).",
+        "Set False when running investigations in-process.",
     )
 
     @field_validator("log_level")

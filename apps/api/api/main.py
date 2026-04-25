@@ -51,19 +51,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     Initializes infrastructure on startup and closes on shutdown.
     """
-    # Startup
-    await start_monitoring(app.state)
-    logger.info(
-        "Starting Forensic Council API server...",
-        debug=settings.debug,
-    )
-
     # IMPV-03: Initialize Managed ProcessPool for CPU-bound forensic analysis (ELA, FFT, etc.)
     max_workers = min(16, os.cpu_count() or 4)
     app.state.process_pool = concurrent.futures.ProcessPoolExecutor(max_workers=max_workers)
     logger.info("Forensic ProcessPool initialized", max_workers=max_workers)
 
-    # Harden production deployments — abort if demo credentials are still set
+    # Validate production settings BEFORE starting monitoring
+    # to prevent resource leaks if validation aborts
     try:
         validate_production_settings()
     except ValueError as e:
@@ -74,6 +68,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.warning(
             "SIGNING_KEY is using a development placeholder. Never use this in production."
         )
+
+    # Startup
+    await start_monitoring(app.state)
+    logger.info(
+        "Starting Forensic Council API server...",
+        debug=settings.debug,
+    )
 
     if settings.use_redis_worker:
         logger.info("Worker queue mode enabled — ensure worker.py is running")

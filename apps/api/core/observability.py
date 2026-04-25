@@ -1,6 +1,6 @@
 """
 Observability Module
-====================
+===================
 
 OpenTelemetry distributed tracing setup.
 
@@ -10,15 +10,17 @@ OTel Python distribution in v1.21).  Any OTLP-compatible backend
 (Jaeger ≥ 1.35, Grafana Tempo, Honeycomb, …) accepts OTLP natively.
 
 Environment variables (set alongside APP_ENV=production):
-  OTEL_EXPORTER_OTLP_ENDPOINT   – gRPC collector endpoint
-                                   default: http://otel-collector:4317
+  OTEL_EXPORTER_OTLP_ENDPOINT   – http/protobuf collector endpoint
+                                   default: http://jaeger:4318
+  OTEL_EXPORTER_OTLP_PROTOCOL  – protocol (http/protobuf or grpc)
+                                   default: http/protobuf
   OTEL_SERVICE_NAME             – service label in traces
                                    default: forensic-council-api
 """
 
 try:
     from opentelemetry import trace
-    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
     from opentelemetry.sdk.resources import Resource
     from opentelemetry.sdk.trace import TracerProvider
@@ -52,7 +54,8 @@ def setup_observability(app, settings) -> None:
 
     import os
 
-    endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317")
+    endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "http://jaeger:4318")
+    protocol = os.environ.get("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf")
     service_name = os.environ.get("OTEL_SERVICE_NAME", "forensic-council-api")
 
     resource = Resource.create({"service.name": service_name})
