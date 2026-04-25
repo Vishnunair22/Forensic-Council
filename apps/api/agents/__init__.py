@@ -10,6 +10,13 @@ Specialist agents:
 
 Base class: ForensicAgent (modular mixin architecture)
 Synthesis: CouncilArbiter (deliberation, challenge loops, report signing)
+
+Modular mixins (package-private):
+- agents.mixins.context
+- agents.mixins.memory
+- agents.mixins.investigation
+- agents.mixins.reflection
+- agents.mixins.synthesis
 """
 
 from agents.agent1_image import Agent1Image

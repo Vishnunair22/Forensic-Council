@@ -3,6 +3,7 @@ Shared tool handler utilities for forensic agents.
 Contains reusable forensic tool logic wrappers.
 """
 
+import random
 from typing import Any
 
 import numpy as np
@@ -38,9 +39,17 @@ async def audio_adversarial_check(artifact: EvidenceArtifact) -> dict[str, Any]:
     """Adversarial robustness check for audio anti-spoofing evasion."""
     try:
         import librosa
+        import soundfile as sf
         from scipy.signal import butter, sosfilt
 
-        y, sr = librosa.load(artifact.file_path, sr=None, mono=True, duration=10.0)
+        # Get file duration to sample from a random offset
+        file_info = sf.info(artifact.file_path)
+        total_duration = file_info.duration
+        # Sample from random offset (10 second window)
+        offset = 0.0
+        if total_duration > 10.0:
+            offset = random.uniform(0, total_duration - 10.0)
+        y, sr = librosa.load(artifact.file_path, sr=None, mono=True, offset=offset, duration=10.0)
 
         def _get_feats(signal, sample_rate):
             flux = float(np.mean(np.diff(np.abs(librosa.stft(signal)), axis=1) ** 2))
@@ -70,9 +79,10 @@ async def audio_adversarial_check(artifact: EvidenceArtifact) -> dict[str, Any]:
 
         evasion_detected = any(v > 0.50 for v in deltas.values())
 
+        status = "real" if not evasion_detected else "adversarial_evasion_suspected"
         return {
-            "status": "real",
-            "court_defensible": True,
+            "status": status,
+            "court_defensible": not evasion_detected,
             "adversarial_pattern_detected": evasion_detected,
             "perturbation_deltas": deltas,
             "confidence": 0.70 if evasion_detected else 0.88,

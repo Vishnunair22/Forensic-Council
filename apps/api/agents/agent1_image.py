@@ -188,14 +188,12 @@ class Agent1Image(ForensicAgent):
 
     async def extract_text_from_image_handler(self, input_data: dict) -> dict:
         """Compatibility proxy for ImageHandlers' OCR."""
-        handler = (
-            self._tool_registry.get_handler("extract_text_from_image")
-            if self._tool_registry is not None
-            else None
-        )
-        if handler:
-            return await handler(input_data)
-        return {"error": "OCR handler not found", "available": False}
+        if self._tool_registry is None:
+            return {"error": "registry not built", "available": False}
+        handler = self._tool_registry.get_handler("extract_text_from_image")
+        if handler is None or handler is self.extract_text_from_image_handler:
+            return {"error": "OCR handler not found or aliased to self", "available": False}
+        return await handler(input_data)
 
     async def build_initial_thought(self) -> str:
         name = os.path.basename(getattr(self.evidence_artifact, "file_path", "unknown"))

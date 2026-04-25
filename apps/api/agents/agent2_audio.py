@@ -10,6 +10,8 @@ signal and must not influence forensic verdicts.
 
 from __future__ import annotations
 
+import copy
+
 from agents.base_agent import ForensicAgent
 from core.handlers.audio import AudioHandlers
 from core.inter_agent_bus import InterAgentCall, InterAgentCallType
@@ -98,7 +100,7 @@ class Agent2Audio(ForensicAgent):
 
         async def voice_clone_deep_ensemble_handler(input_data: dict) -> dict:
             # Snapshot Phase 1 result NOW — before the deep re-run overwrites the key.
-            initial_result = self._tool_context.get("voice_clone_detect", {})
+            initial_result = copy.deepcopy(self._tool_context.get("voice_clone_detect", {}))
 
             if not self._has_audio_suspicious_signal():
                 result = {

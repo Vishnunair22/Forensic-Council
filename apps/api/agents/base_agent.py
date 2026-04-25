@@ -46,6 +46,14 @@ class ForensicAgent(
 
     Inherits from specialized mixins to handle distinct aspects of the
     agent's lifecycle and mandated workflow.
+
+    MRO contract:
+    - AgentContextMixin       supplies _tool_context, _tool_registry, _init_context
+    - AgentMemoryMixin        depends on context; consumes _record_tool_result
+    - AgentInvestigationMixin depends on memory; defines run_initial_pass / run_deep_pass
+    - AgentReflectionMixin   depends on investigation; uses self._react_chain
+    - NeuralSynthesisMixin  depends on context; defines _gemini_deep_forensic_handler
+    Mixins must NOT override each other's methods. Add new behaviour to the most specific mixin.
     """
 
     def __init__(
@@ -74,7 +82,10 @@ class ForensicAgent(
         self.heavy_tool_semaphore = heavy_tool_semaphore
 
         # Initialize mixin-provided state containers
+        if not hasattr(self, "_init_context"):
+            raise AttributeError("AgentContextMixin missing from MRO - _init_context not found")
         self._init_context()
+        super().__init__()
 
     # ── Abstract properties that must be overridden by Specialists ───────────
 
@@ -128,9 +139,9 @@ class ForensicAgent(
     # ── Concrete Infrastructure Logic ────────────────────────────────────────
 
     @staticmethod
-    def _compute_ceiling(task_count: int) -> int:
-        """Dynamic iteration ceiling: base task count + 25% buffer."""
-        return task_count + max(3, math.ceil(task_count * 0.25))
+    def _compute_ceiling(initial_n: int, deep_n: int = 0) -> int:
+        """Dynamic iteration ceiling: base task count + 30% buffer, minimum 3."""
+        return initial_n + deep_n + max(3, math.ceil((initial_n + deep_n) * 0.30))
 
     @property
     def supports_uploaded_file(self) -> bool:
