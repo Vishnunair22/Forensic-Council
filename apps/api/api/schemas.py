@@ -47,22 +47,18 @@ class AgentFindingDTO(BaseModel):
     finding_type: str
     status: str
     confidence_raw: float | None = None
-    evidence_verdict: Literal[
-        "POSITIVE", "NEGATIVE", "INCONCLUSIVE", "NOT_APPLICABLE", "ERROR"
-    ] = "INCONCLUSIVE"
-    calibrated: bool
-    calibrated_probability: float | None = (
-        None  # DEPRECATED — use raw_confidence_score
+    evidence_verdict: Literal["POSITIVE", "NEGATIVE", "INCONCLUSIVE", "NOT_APPLICABLE", "ERROR"] = (
+        "INCONCLUSIVE"
     )
+    calibrated: bool
+    calibrated_probability: float | None = None  # DEPRECATED — use raw_confidence_score
     raw_confidence_score: float | None = None
     calibration_status: str = "UNCALIBRATED"  # TRAINED or UNCALIBRATED
     court_statement: str | None = None
     robustness_caveat: bool
     robustness_caveat_detail: str | None = None
     reasoning_summary: str
-    metadata: dict[str, Any] | None = (
-        None  # includes analysis_phase, analysis_source, etc.
-    )
+    metadata: dict[str, Any] | None = None  # includes analysis_phase, analysis_source, etc.
     severity_tier: str = "LOW"  # INFO / LOW / MEDIUM / HIGH / CRITICAL
 
 

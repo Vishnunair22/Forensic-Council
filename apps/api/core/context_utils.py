@@ -8,17 +8,18 @@ Eliminates code duplication and ensures consistent forensic visibility.
 
 from typing import Any
 
+
 def aggregate_tool_context(tool_context: dict[str, Any], agent_id: str = "") -> dict[str, Any]:
     """
     Collect all successful tool results from an agent's context.
-    
+
     This provides a unified forensic narrative for the AI, ensuring that
     signals from one tool are visible to others.
-    
+
     Args:
         tool_context: The raw _tool_context dictionary from an agent.
         agent_id: Optional agent ID to handle agent-specific summarization.
-        
+
     Returns:
         A dictionary mapping tool names to their successful findings.
     """
@@ -28,7 +29,7 @@ def aggregate_tool_context(tool_context: dict[str, Any], agent_id: str = "") -> 
             continue
         if result.get("available") is False:
             continue
-        
+
         # Extract high-value forensic keys for Gemini
         # Filter out large raw data (detections, full artifacts, etc.)
         findings[tool_name] = {
@@ -47,9 +48,9 @@ def aggregate_tool_context(tool_context: dict[str, Any], agent_id: str = "") -> 
                 }
                 for d in result.get("detections", [])[:20]
             ]
-        
+
         if tool_name == "extract_text_from_image" and "extracted_text" in result:
-             # Limit lines of text to prevent context saturation
-             findings[tool_name]["text_sample"] = result["extracted_text"][:30]
+            # Limit lines of text to prevent context saturation
+            findings[tool_name]["text_sample"] = result["extracted_text"][:30]
 
     return findings

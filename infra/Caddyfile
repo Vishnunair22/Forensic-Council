@@ -11,6 +11,7 @@
 
 {
     admin off
+    auto_https off
 
     log {
         output file /var/log/caddy/access.log {
@@ -76,7 +77,7 @@
         X-Frame-Options            "DENY"
         Referrer-Policy            "strict-origin-when-cross-origin"
         Permissions-Policy         "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
-        Content-Security-Policy    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' fonts.gstatic.com data:; connect-src 'self' ws://{$DOMAIN:localhost} wss://{$DOMAIN:localhost}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;"
+        Content-Security-Policy    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' fonts.gstatic.com data:; connect-src 'self' ws://{$DOMAIN:localhost} wss://{$DOMAIN:localhost}; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
         -Server
         -X-Powered-By
     }

@@ -39,6 +39,7 @@ from core.signing import (
 
 # ── SignedEntry ────────────────────────────────────────────────────────────────
 
+
 class TestSignedEntry:
     def test_creation(self):
         entry = SignedEntry(
@@ -75,6 +76,7 @@ class TestSignedEntry:
 
 
 # ── AgentKeyPair ───────────────────────────────────────────────────────────────
+
 
 class TestAgentKeyPair:
     def test_generate_random(self):
@@ -113,6 +115,7 @@ class TestAgentKeyPair:
 
 
 # ── KeyStore ───────────────────────────────────────────────────────────────────
+
 
 class TestKeyStore:
     def test_instantiation(self):
@@ -160,12 +163,15 @@ class TestKeyStore:
     @pytest.mark.asyncio
     async def test_load_keys_from_db_when_unavailable(self):
         ks = KeyStore()
-        with patch("core.persistence.postgres_client.get_postgres_client", new=AsyncMock(return_value=None)):
+        with patch(
+            "core.persistence.postgres_client.get_postgres_client", new=AsyncMock(return_value=None)
+        ):
             # Should not raise
             await ks._load_keys_from_db()
 
 
 # ── sign_content / verify_entry ───────────────────────────────────────────────
+
 
 class TestSignVerify:
     def test_sign_and_verify_roundtrip(self):

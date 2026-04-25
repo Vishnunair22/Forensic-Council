@@ -32,11 +32,13 @@ import pytest
 # 1. CalibrationLayer
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestCalibrationLayer:
     """Tests for core/calibration.py — CalibrationLayer and helpers."""
 
     def _make_layer(self, tmp_path: Path) -> CalibrationLayer:  # noqa: F821
         from core.calibration import CalibrationLayer
+
         return CalibrationLayer(models_path=str(tmp_path))
 
     # ── fit_default_model ────────────────────────────────────────────────────
@@ -244,6 +246,7 @@ class TestCalibrationLayer:
 # 2. CrossModalFusion
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestCrossModalFusion:
     """Tests for core/cross_modal_fusion.py — fuse() and helpers."""
 
@@ -319,14 +322,20 @@ class TestCrossModalFusion:
         from core.cross_modal_fusion import Modality, ModalitySignal, _find_corroboration
 
         sig_a = ModalitySignal(
-            modality=Modality.IMAGE, agent_id="Agent1",
-            finding_type="ela", confidence=0.8,
-            status="CONFIRMED", manipulation_detected=True,
+            modality=Modality.IMAGE,
+            agent_id="Agent1",
+            finding_type="ela",
+            confidence=0.8,
+            status="CONFIRMED",
+            manipulation_detected=True,
         )
         sig_b = ModalitySignal(
-            modality=Modality.OBJECT, agent_id="Agent3",
-            finding_type="scene_incon", confidence=0.7,
-            status="CONFIRMED", manipulation_detected=True,
+            modality=Modality.OBJECT,
+            agent_id="Agent3",
+            finding_type="scene_incon",
+            confidence=0.7,
+            status="CONFIRMED",
+            manipulation_detected=True,
         )
         result = _find_corroboration(sig_a, sig_b)
         assert result is not None
@@ -336,14 +345,20 @@ class TestCrossModalFusion:
         from core.cross_modal_fusion import Modality, ModalitySignal, _find_corroboration
 
         sig_a = ModalitySignal(
-            modality=Modality.IMAGE, agent_id="Agent1",
-            finding_type="ela", confidence=0.8,
-            status="CONFIRMED", manipulation_detected=False,
+            modality=Modality.IMAGE,
+            agent_id="Agent1",
+            finding_type="ela",
+            confidence=0.8,
+            status="CONFIRMED",
+            manipulation_detected=False,
         )
         sig_b = ModalitySignal(
-            modality=Modality.AUDIO, agent_id="Agent2",
-            finding_type="voice", confidence=0.7,
-            status="CONFIRMED", manipulation_detected=False,
+            modality=Modality.AUDIO,
+            agent_id="Agent2",
+            finding_type="voice",
+            confidence=0.7,
+            status="CONFIRMED",
+            manipulation_detected=False,
         )
         result = _find_corroboration(sig_a, sig_b)
         assert result is None
@@ -352,14 +367,20 @@ class TestCrossModalFusion:
         from core.cross_modal_fusion import Modality, ModalitySignal, _find_corroboration
 
         sig_a = ModalitySignal(
-            modality=Modality.IMAGE, agent_id="Agent1",
-            finding_type="ela", confidence=0.8,
-            status="CONTESTED", manipulation_detected=True,
+            modality=Modality.IMAGE,
+            agent_id="Agent1",
+            finding_type="ela",
+            confidence=0.8,
+            status="CONTESTED",
+            manipulation_detected=True,
         )
         sig_b = ModalitySignal(
-            modality=Modality.OBJECT, agent_id="Agent3",
-            finding_type="scene", confidence=0.7,
-            status="CONFIRMED", manipulation_detected=True,
+            modality=Modality.OBJECT,
+            agent_id="Agent3",
+            finding_type="scene",
+            confidence=0.7,
+            status="CONFIRMED",
+            manipulation_detected=True,
         )
         assert _find_corroboration(sig_a, sig_b) is None
 
@@ -369,14 +390,20 @@ class TestCrossModalFusion:
         from core.cross_modal_fusion import Modality, ModalitySignal, _find_contradiction
 
         sig_a = ModalitySignal(
-            modality=Modality.IMAGE, agent_id="Agent1",
-            finding_type="ela", confidence=0.9,
-            status="CONFIRMED", manipulation_detected=True,
+            modality=Modality.IMAGE,
+            agent_id="Agent1",
+            finding_type="ela",
+            confidence=0.9,
+            status="CONFIRMED",
+            manipulation_detected=True,
         )
         sig_b = ModalitySignal(
-            modality=Modality.METADATA, agent_id="Agent5",
-            finding_type="exif", confidence=0.8,
-            status="CONFIRMED", manipulation_detected=False,
+            modality=Modality.METADATA,
+            agent_id="Agent5",
+            finding_type="exif",
+            confidence=0.8,
+            status="CONFIRMED",
+            manipulation_detected=False,
         )
         result = _find_contradiction(sig_a, sig_b)
         assert result is not None
@@ -387,14 +414,20 @@ class TestCrossModalFusion:
         from core.cross_modal_fusion import Modality, ModalitySignal, _find_contradiction
 
         sig_a = ModalitySignal(
-            modality=Modality.AUDIO, agent_id="Agent2",
-            finding_type="voice", confidence=0.7,
-            status="CONFIRMED", manipulation_detected=True,
+            modality=Modality.AUDIO,
+            agent_id="Agent2",
+            finding_type="voice",
+            confidence=0.7,
+            status="CONFIRMED",
+            manipulation_detected=True,
         )
         sig_b = ModalitySignal(
-            modality=Modality.VIDEO, agent_id="Agent4",
-            finding_type="frame", confidence=0.8,
-            status="CONFIRMED", manipulation_detected=True,
+            modality=Modality.VIDEO,
+            agent_id="Agent4",
+            finding_type="frame",
+            confidence=0.8,
+            status="CONFIRMED",
+            manipulation_detected=True,
         )
         assert _find_contradiction(sig_a, sig_b) is None
 
@@ -423,7 +456,8 @@ class TestCrossModalFusion:
         }
         result = fuse(findings)
         assert result.verdict in (
-            CrossModalVerdict.CORROBORATED, CrossModalVerdict.PARTIALLY_CORROBORATED
+            CrossModalVerdict.CORROBORATED,
+            CrossModalVerdict.PARTIALLY_CORROBORATED,
         )
         assert len(result.corroborations) >= 1
 
@@ -460,9 +494,9 @@ class TestCrossModalFusion:
             ],
         }
         result = fuse(findings)
-        assert any(
-            "initial vs deep" in c.get("agents", "") for c in result.contradictions
-        ), "Intra-agent phase contradiction must be flagged"
+        assert any("initial vs deep" in c.get("agents", "") for c in result.contradictions), (
+            "Intra-agent phase contradiction must be flagged"
+        )
 
     def test_fuse_intra_agent_phase_corroboration(self):
         from core.cross_modal_fusion import fuse
@@ -474,9 +508,9 @@ class TestCrossModalFusion:
             ],
         }
         result = fuse(findings)
-        assert any(
-            "initial + deep" in c.get("agents", "") for c in result.corroborations
-        ), "Intra-agent phase agreement must be recorded as corroboration"
+        assert any("initial + deep" in c.get("agents", "") for c in result.corroborations), (
+            "Intra-agent phase agreement must be recorded as corroboration"
+        )
 
     def test_fuse_confidence_within_bounds(self):
         from core.cross_modal_fusion import fuse
@@ -502,6 +536,7 @@ class TestCrossModalFusion:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 3. SynthesisService
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestSynthesisService:
     """Tests for core/synthesis.py — SynthesisService.synthesize_findings."""
@@ -555,14 +590,20 @@ class TestSynthesisService:
 
         service = SynthesisService(get_settings())
 
-        llm_response = json.dumps({
-            "verdict": "AUTHENTIC",
-            "narrative_summary": "Evidence appears authentic based on ELA results.",
-            "sections": [
-                {"id": "pixel_integrity", "label": "Pixel-Level Integrity",
-                 "opinion": "Consistent.", "severity": "LOW"}
-            ]
-        })
+        llm_response = json.dumps(
+            {
+                "verdict": "AUTHENTIC",
+                "narrative_summary": "Evidence appears authentic based on ELA results.",
+                "sections": [
+                    {
+                        "id": "pixel_integrity",
+                        "label": "Pixel-Level Integrity",
+                        "opinion": "Consistent.",
+                        "severity": "LOW",
+                    }
+                ],
+            }
+        )
 
         with patch("core.synthesis.LLMClient") as MockLLM:
             mock_instance = AsyncMock()
@@ -623,9 +664,7 @@ class TestSynthesisService:
 
         with patch("core.synthesis.LLMClient") as MockLLM:
             mock_instance = AsyncMock()
-            mock_instance.generate_synthesis = AsyncMock(
-                side_effect=RuntimeError("forced failure")
-            )
+            mock_instance.generate_synthesis = AsyncMock(side_effect=RuntimeError("forced failure"))
             MockLLM.return_value = mock_instance
 
             # Low confidence (< 0.5) should produce SUSPICIOUS verdict
@@ -690,11 +729,13 @@ class TestSynthesisService:
         with patch("core.synthesis.LLMClient") as MockLLM:
             mock_instance = AsyncMock()
             mock_instance.generate_synthesis = AsyncMock(
-                return_value=json.dumps({
-                    "verdict": "SUSPICIOUS",
-                    "narrative_summary": "Voice cloning detected.",
-                    "sections": [],
-                })
+                return_value=json.dumps(
+                    {
+                        "verdict": "SUSPICIOUS",
+                        "narrative_summary": "Voice cloning detected.",
+                        "sections": [],
+                    }
+                )
             )
             MockLLM.return_value = mock_instance
 
@@ -720,11 +761,11 @@ class TestSynthesisService:
             status="CONFIRMED",
             reasoning_summary="ELA analysis complete.",
             metadata={
-                "tool_name": "ela_full_image",        # SKIP_META
-                "llm_synthesis": "some text",         # SKIP_META
-                "anomaly_score": 0.42,                # keep
-                "nested_dict": {"a": 1},              # skip (dict not in allowed types)
-                "flag": True,                         # keep
+                "tool_name": "ela_full_image",  # SKIP_META
+                "llm_synthesis": "some text",  # SKIP_META
+                "anomaly_score": 0.42,  # keep
+                "nested_dict": {"a": 1},  # skip (dict not in allowed types)
+                "flag": True,  # keep
             },
         )
         result = service._compact_metrics(finding)

@@ -22,11 +22,11 @@ from core.config import Settings
 from core.custody_logger import CustodyLogger
 from core.episodic_memory import EpisodicMemory
 from core.evidence import EvidenceArtifact
-from core.gemini_client import GeminiVisionClient
 from core.handlers.metadata import MetadataHandlers
 from core.handlers.video import VideoHandlers
 from core.media_kind import is_digitally_created_image, is_screen_capture_like
 from core.persistence.evidence_store import EvidenceStore
+from core.react_loop import AgentFinding
 from core.structured_logging import get_logger
 from core.tool_registry import ToolRegistry
 from core.working_memory import WorkingMemory
@@ -87,25 +87,22 @@ class Agent5Metadata(ForensicAgent):
     def _is_av_media(self) -> bool:
         mime = getattr(self.evidence_artifact, "mime_type", "") or ""
         file_path = getattr(self.evidence_artifact, "file_path", "").lower()
-        return (
-            mime.startswith(("audio/", "video/"))
-            or file_path.endswith(
-                (
-                    ".mp4",
-                    ".avi",
-                    ".mov",
-                    ".mkv",
-                    ".webm",
-                    ".flv",
-                    ".wmv",
-                    ".m4v",
-                    ".mp3",
-                    ".wav",
-                    ".flac",
-                    ".ogg",
-                    ".aac",
-                    ".m4a",
-                )
+        return mime.startswith(("audio/", "video/")) or file_path.endswith(
+            (
+                ".mp4",
+                ".avi",
+                ".mov",
+                ".mkv",
+                ".webm",
+                ".flv",
+                ".wmv",
+                ".m4v",
+                ".mp3",
+                ".wav",
+                ".flac",
+                ".ogg",
+                ".aac",
+                ".m4a",
             )
         )
 
@@ -211,9 +208,7 @@ class Agent5Metadata(ForensicAgent):
                     )
 
             return await self._gemini_deep_forensic_handler(
-                input_data,
-                model_hint="gemini-2.0-flash",
-                signal_callback=_gemini_signal_callback
+                input_data, model_hint="gemini-2.0-flash", signal_callback=_gemini_signal_callback
             )
 
         registry.register(
@@ -221,6 +216,7 @@ class Agent5Metadata(ForensicAgent):
         )
 
         return registry
+
     async def on_tool_result(self, finding: AgentFinding) -> None:
         """Reactive task expansion based on metadata signals."""
         from core.working_memory import TaskStatus
@@ -228,26 +224,40 @@ class Agent5Metadata(ForensicAgent):
         # 1. If EXIF detects editing software, escalate to deep file structure audit
         if finding.metadata.get("tool_name") == "exif_extract":
             software = str(finding.metadata.get("software", "")).lower()
-            editing_tools = {"photoshop", "gimp", "lightroom", "picsart", "snapseed", "canva", "capcut"}
-            
+            editing_tools = {
+                "photoshop",
+                "gimp",
+                "lightroom",
+                "picsart",
+                "snapseed",
+                "canva",
+                "capcut",
+            }
+
             if any(tool in software for tool in editing_tools):
-                logger.info(f"Editing software signature detected: {software}; injecting hex audit", agent_id=self.agent_id)
+                logger.info(
+                    f"Editing software signature detected: {software}; injecting hex audit",
+                    agent_id=self.agent_id,
+                )
                 await self.working_memory.create_task(
                     session_id=self.session_id,
                     agent_id=self.agent_id,
                     description="Run file_structure_analysis for hidden hex-level manipulation artifacts",
                     status=TaskStatus.PENDING,
-                    priority=15
+                    priority=15,
                 )
 
         # 2. If metadata anomaly score is high, trigger manual provenance chain verification
         if finding.metadata.get("tool_name") == "metadata_anomaly_score":
             if finding.evidence_verdict == "POSITIVE" and finding.confidence_raw > 0.7:
-                logger.info("High metadata anomaly score; injecting provenance chain audit", agent_id=self.agent_id)
+                logger.info(
+                    "High metadata anomaly score; injecting provenance chain audit",
+                    agent_id=self.agent_id,
+                )
                 await self.working_memory.create_task(
                     session_id=self.session_id,
                     agent_id=self.agent_id,
                     description="Run provenance_chain_verify for C2PA/JUMBF integrity check",
                     status=TaskStatus.PENDING,
-                    priority=10
+                    priority=10,
                 )

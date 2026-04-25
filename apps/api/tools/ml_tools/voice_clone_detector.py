@@ -49,6 +49,7 @@ import numpy as np
 
 # ── Feature extraction helpers ────────────────────────────────────────────────
 
+
 def _spectral_flatness(audio: np.ndarray, sr: int) -> float:
     """
     Wiener entropy: geometric mean / arithmetic mean of power spectrum.
@@ -71,6 +72,7 @@ def _f0_variation(audio: np.ndarray, sr: int) -> float:
     """
     try:
         import librosa
+
         f0, voiced_flag, _ = librosa.pyin(
             audio,
             fmin=librosa.note_to_hz("C2"),
@@ -94,6 +96,7 @@ def _mfcc_delta_smoothness(audio: np.ndarray, sr: int) -> float:
     """
     try:
         import librosa
+
         mfcc = librosa.feature.mfcc(y=audio, sr=sr, n_mfcc=13)
         delta = librosa.feature.delta(mfcc)
         mean_abs_delta = float(np.abs(delta).mean())
@@ -112,7 +115,6 @@ def _formant_bandwidth(audio: np.ndarray, sr: int, lpc_order: int = 12) -> float
     Returns normalised score [0, 1]: 0 = wide (natural), 1 = narrow (synthetic).
     """
     try:
-
         # LPC via autocorrelation / scipy.signal.lfilter
         # Use 25 ms frames
         frame_len = int(sr * 0.025)
@@ -120,17 +122,18 @@ def _formant_bandwidth(audio: np.ndarray, sr: int, lpc_order: int = 12) -> float
         bandwidths = []
 
         for start in range(0, len(audio) - frame_len, hop * 10):  # sparse sampling
-            frame = audio[start: start + frame_len]
+            frame = audio[start : start + frame_len]
             frame = frame * np.hamming(len(frame))
 
             # Autocorrelation-based LPC
-            autocorr = np.correlate(frame, frame, "full")[len(frame) - 1:]
+            autocorr = np.correlate(frame, frame, "full")[len(frame) - 1 :]
             if autocorr[0] < 1e-10:
                 continue
             # Build Toeplitz system (Durbin's method approximation via numpy)
             try:
                 from scipy.linalg import solve_toeplitz
-                coeffs = solve_toeplitz(autocorr[:lpc_order], -autocorr[1: lpc_order + 1])
+
+                coeffs = solve_toeplitz(autocorr[:lpc_order], -autocorr[1 : lpc_order + 1])
             except Exception:
                 continue
 
@@ -161,10 +164,10 @@ def _energy_cv(audio: np.ndarray, sr: int) -> float:
     """RMS energy coefficient of variation across 30 ms frames."""
     frame_len = int(sr * 0.030)
     hop = int(sr * 0.010)
-    frames = [audio[i: i + frame_len] for i in range(0, len(audio) - frame_len, hop)]
+    frames = [audio[i : i + frame_len] for i in range(0, len(audio) - frame_len, hop)]
     if not frames:
         return 0.5
-    rms = np.array([float(np.sqrt(np.mean(f ** 2))) for f in frames])
+    rms = np.array([float(np.sqrt(np.mean(f**2))) for f in frames])
     return float(np.std(rms) / (np.mean(rms) + 1e-10))
 
 
@@ -172,6 +175,7 @@ def _zcr_std(audio: np.ndarray, sr: int) -> float:
     """Standard deviation of per-frame zero-crossing rate."""
     try:
         import librosa
+
         zcr = librosa.feature.zero_crossing_rate(audio, frame_length=2048, hop_length=512)[0]
         return float(np.std(zcr))
     except Exception:
@@ -179,12 +183,13 @@ def _zcr_std(audio: np.ndarray, sr: int) -> float:
         hop = 512
         zcrs = []
         for i in range(0, len(audio) - frame_len, hop):
-            frame = audio[i: i + frame_len]
+            frame = audio[i : i + frame_len]
             zcrs.append(float(np.mean(np.abs(np.diff(np.sign(frame))) > 0)))
         return float(np.std(zcrs)) if zcrs else 0.0
 
 
 # ── SpeechBrain primary path ──────────────────────────────────────────────────
+
 
 def _spoof_probability_from_logits(logits: Any, id2label: dict[int, str]) -> float:
     import torch
@@ -215,8 +220,8 @@ def _speechbrain_detection(audio_path: str, **kwargs) -> dict[str, Any] | None:
     feature-ensemble path.
     """
     try:
-        import torch
         import librosa
+        import torch
         from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
 
         model_name = kwargs.get("model", "Vansh180/deepfake-audio-wav2vec2")
@@ -266,8 +271,10 @@ def _speechbrain_detection(audio_path: str, **kwargs) -> dict[str, Any] | None:
 
         mean_spoof_prob = float(np.mean(spoof_probs))
         verdict = (
-            "LIKELY_SYNTHETIC" if mean_spoof_prob > 0.7
-            else "SUSPICIOUS" if mean_spoof_prob > 0.3
+            "LIKELY_SYNTHETIC"
+            if mean_spoof_prob > 0.7
+            else "SUSPICIOUS"
+            if mean_spoof_prob > 0.3
             else "LIKELY_GENUINE"
         )
 
@@ -288,12 +295,14 @@ def _speechbrain_detection(audio_path: str, **kwargs) -> dict[str, Any] | None:
 
 # ── Fallback feature-ensemble path ───────────────────────────────────────────
 
+
 def _feature_ensemble_detection(audio_path: str) -> dict[str, Any]:
     """
     Fallback: handcrafted forensic feature ensemble (no deep learning required).
     """
     try:
         import soundfile as sf
+
         audio, sr = sf.read(audio_path, dtype="float32", always_2d=False)
     except Exception as exc:
         return {"error": f"Cannot read audio: {exc}", "available": False}
@@ -361,9 +370,7 @@ def _feature_ensemble_detection(audio_path: str) -> dict[str, Any]:
         score += 0.05
 
     verdict = (
-        "LIKELY_SYNTHETIC" if score >= 0.55
-        else "SUSPICIOUS" if score >= 0.35
-        else "LIKELY_GENUINE"
+        "LIKELY_SYNTHETIC" if score >= 0.55 else "SUSPICIOUS" if score >= 0.35 else "LIKELY_GENUINE"
     )
 
     return {
@@ -390,6 +397,7 @@ def _feature_ensemble_detection(audio_path: str) -> dict[str, Any]:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+
 def detect_voice_clone(audio_path: str, **kwargs) -> dict[str, Any]:
     """Try SpeechBrain primary, fall back to feature ensemble."""
     result = _speechbrain_detection(audio_path, **kwargs)
@@ -399,6 +407,7 @@ def detect_voice_clone(audio_path: str, **kwargs) -> dict[str, Any]:
 
 
 # ── Worker protocol (persistent process for run_ml_tool) ─────────────────────
+
 
 def _run_worker() -> None:
     """
@@ -416,7 +425,9 @@ def _run_worker() -> None:
                 print(json.dumps({"error": "Missing input path", "available": False}))
                 sys.stdout.flush()
                 continue
-            result = detect_voice_clone(input_path, model=req.get("model", "Vansh180/deepfake-audio-wav2vec2"))
+            result = detect_voice_clone(
+                input_path, model=req.get("model", "Vansh180/deepfake-audio-wav2vec2")
+            )
         except Exception as exc:
             result = {"error": str(exc), "available": False}
         print(json.dumps(result))
@@ -426,22 +437,37 @@ def _run_worker() -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Voice clone / TTS detector")
     parser.add_argument("--input", type=str, help="Input audio file path")
-    parser.add_argument("--model", type=str, default="Vansh180/deepfake-audio-wav2vec2", help="Audio deepfake model name")
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="Vansh180/deepfake-audio-wav2vec2",
+        help="Audio deepfake model name",
+    )
     parser.add_argument("--warmup", action="store_true", help="Warmup mode — preload dependencies")
-    parser.add_argument("--worker", action="store_true", help="Worker mode — persistent stdin/stdout")
+    parser.add_argument(
+        "--worker", action="store_true", help="Worker mode — persistent stdin/stdout"
+    )
     args = parser.parse_args()
 
     if args.warmup:
         try:
             import soundfile  # noqa: F401
             from scipy import signal  # noqa: F401
+
             try:
                 import librosa  # noqa: F401
             except ImportError:
                 pass
-            print(json.dumps({"status": "warmed_up", "available": True,
-                              "dependencies": ["soundfile", "scipy"],
-                              "message": "Voice clone detector ready"}))
+            print(
+                json.dumps(
+                    {
+                        "status": "warmed_up",
+                        "available": True,
+                        "dependencies": ["soundfile", "scipy"],
+                        "message": "Voice clone detector ready",
+                    }
+                )
+            )
         except ImportError as exc:
             print(json.dumps({"status": "warmup_failed", "error": str(exc), "available": False}))
         sys.exit(0)

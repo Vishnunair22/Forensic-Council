@@ -184,17 +184,19 @@ if __name__ == "__main__":
             import cv2
             import numpy as np
             from skimage.metrics import structural_similarity as ssim
-            print(json.dumps({
-                "status": "warmed_up",
-                "dependencies": ["skimage", "cv2", "numpy"],
-                "message": "Anomaly classifier ready"
-            }))
+
+            print(
+                json.dumps(
+                    {
+                        "status": "warmed_up",
+                        "dependencies": ["skimage", "cv2", "numpy"],
+                        "message": "Anomaly classifier ready",
+                    }
+                )
+            )
             sys.exit(0)
         except Exception as e:
-            print(json.dumps({
-                "status": "warmup_failed",
-                "error": str(e)
-            }))
+            print(json.dumps({"status": "warmup_failed", "error": str(e)}))
             sys.exit(1)
 
     # Worker mode - persistent process reading from stdin

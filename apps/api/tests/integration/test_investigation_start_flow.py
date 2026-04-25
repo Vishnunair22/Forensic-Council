@@ -11,7 +11,9 @@ from orchestration import investigation_runner
 
 @pytest.mark.asyncio
 async def test_start_investigation_continues_when_queue_handoff_fails(monkeypatch):
-    file_obj = io.BytesIO(b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9")
+    file_obj = io.BytesIO(
+        b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9"
+    )
     upload = UploadFile(filename="evidence.jpg", file=file_obj)
     upload.size = len(file_obj.getvalue())
     upload.headers = {"content-type": "image/jpeg"}
@@ -33,15 +35,9 @@ async def test_start_investigation_continues_when_queue_handoff_fails(monkeypatc
         coro.close()
         return SimpleNamespace(name="fake-task")
 
-    monkeypatch.setattr(
-        investigation_routes, "check_investigation_rate_limit", AsyncMock()
-    )
-    monkeypatch.setattr(
-        investigation_routes, "check_daily_cost_quota", AsyncMock()
-    )
-    monkeypatch.setattr(
-        investigation_routes, "ForensicCouncilPipeline", lambda: DummyPipeline()
-    )
+    monkeypatch.setattr(investigation_routes, "check_investigation_rate_limit", AsyncMock())
+    monkeypatch.setattr(investigation_routes, "check_daily_cost_quota", AsyncMock())
+    monkeypatch.setattr(investigation_routes, "ForensicCouncilPipeline", lambda: DummyPipeline())
     monkeypatch.setattr(
         investigation_routes,
         "set_active_pipeline",
@@ -149,5 +145,3 @@ async def test_run_investigation_task_awaits_final_report_cache(monkeypatch):
     )
 
     investigation_runner.set_final_report.assert_awaited_once()
-
-

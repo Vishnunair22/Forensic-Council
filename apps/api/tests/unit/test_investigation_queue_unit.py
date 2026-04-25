@@ -51,6 +51,7 @@ def _make_redis_mock():
 
 # ── InvestigationStatus ────────────────────────────────────────────────────────
 
+
 class TestInvestigationStatus:
     def test_all_values(self):
         vals = {s.value for s in InvestigationStatus}
@@ -62,6 +63,7 @@ class TestInvestigationStatus:
 
 
 # ── InvestigationTask model ────────────────────────────────────────────────────
+
 
 class TestInvestigationTask:
     def test_creation_defaults(self):
@@ -101,6 +103,7 @@ class TestInvestigationTask:
 
 
 # ── InvestigationQueue ─────────────────────────────────────────────────────────
+
 
 class TestInvestigationQueue:
     def _make_queue_with_redis(self):
@@ -191,12 +194,16 @@ class TestInvestigationQueue:
     async def test_get_redis_initializes_lazily(self):
         queue = InvestigationQueue()
         mock_redis = _make_redis_mock()
-        with patch("orchestration.investigation_queue.get_redis_client", new=AsyncMock(return_value=mock_redis)):
+        with patch(
+            "orchestration.investigation_queue.get_redis_client",
+            new=AsyncMock(return_value=mock_redis),
+        ):
             result = await queue._get_redis()
         assert result is mock_redis
 
 
 # ── InvestigationWorker ────────────────────────────────────────────────────────
+
 
 class TestInvestigationWorker:
     def test_set_handler(self):
@@ -238,10 +245,12 @@ class TestInvestigationWorker:
             evidence_file_path="/tmp/file.jpg",
         )
         # blpop returns task_id, then CancelledError to stop
-        redis.client.blpop = AsyncMock(side_effect=[
-            (None, str(sid)),
-            asyncio.CancelledError(),
-        ])
+        redis.client.blpop = AsyncMock(
+            side_effect=[
+                (None, str(sid)),
+                asyncio.CancelledError(),
+            ]
+        )
         redis.hget = AsyncMock(return_value=task.to_dict())
         redis.hset = AsyncMock()
 
@@ -262,10 +271,12 @@ class TestInvestigationWorker:
         redis = _make_redis_mock()
         sid = uuid4()
         # blpop returns session_id, but hget returns None (no metadata)
-        redis.client.blpop = AsyncMock(side_effect=[
-            (None, str(sid)),
-            asyncio.CancelledError(),
-        ])
+        redis.client.blpop = AsyncMock(
+            side_effect=[
+                (None, str(sid)),
+                asyncio.CancelledError(),
+            ]
+        )
         redis.hget = AsyncMock(return_value=None)
 
         queue = InvestigationQueue()
@@ -284,10 +295,12 @@ class TestInvestigationWorker:
             investigator_id="inv1",
             evidence_file_path="/tmp/file.jpg",
         )
-        redis.client.blpop = AsyncMock(side_effect=[
-            (None, str(sid)),
-            asyncio.CancelledError(),
-        ])
+        redis.client.blpop = AsyncMock(
+            side_effect=[
+                (None, str(sid)),
+                asyncio.CancelledError(),
+            ]
+        )
         redis.hget = AsyncMock(return_value=task.to_dict())
         redis.hset = AsyncMock()
 
@@ -309,10 +322,12 @@ class TestInvestigationWorker:
             investigator_id="inv1",
             evidence_file_path="/tmp/file.jpg",
         )
-        redis.client.blpop = AsyncMock(side_effect=[
-            (None, str(sid)),
-            asyncio.CancelledError(),
-        ])
+        redis.client.blpop = AsyncMock(
+            side_effect=[
+                (None, str(sid)),
+                asyncio.CancelledError(),
+            ]
+        )
         redis.hget = AsyncMock(return_value=task.to_dict())
         redis.hset = AsyncMock()
 
@@ -339,9 +354,11 @@ class TestInvestigationWorker:
 
 # ── Singleton ─────────────────────────────────────────────────────────────────
 
+
 class TestGetInvestigationQueue:
     def test_returns_same_instance(self):
         import orchestration.investigation_queue as iq_mod
+
         iq_mod._queue = None  # Reset singleton
         q1 = get_investigation_queue()
         q2 = get_investigation_queue()
@@ -349,6 +366,7 @@ class TestGetInvestigationQueue:
 
     def test_returns_investigation_queue_instance(self):
         import orchestration.investigation_queue as iq_mod
+
         iq_mod._queue = None
         q = get_investigation_queue()
         assert isinstance(q, InvestigationQueue)

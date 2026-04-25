@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 async def test_groq():
     api_key = os.getenv("LLM_API_KEY")
     if not api_key:
@@ -17,7 +18,7 @@ async def test_groq():
         try:
             response = await client.get(
                 "https://api.groq.com/openai/v1/models",
-                headers={"Authorization": f"Bearer {api_key}"}
+                headers={"Authorization": f"Bearer {api_key}"},
             )
 
             if response.status_code == 200:
@@ -33,6 +34,8 @@ async def test_groq():
             print(f"❌ Connection error: {e}")
             return False
 
+
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(test_groq())

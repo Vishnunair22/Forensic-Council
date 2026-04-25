@@ -1,9 +1,10 @@
 """End-to-end integration test for complete forensic investigation flow."""
 
-import pytest
 from uuid import uuid4
-from httpx import AsyncClient
+
+import pytest
 from fastapi import status
+from httpx import AsyncClient
 
 
 @pytest.mark.asyncio

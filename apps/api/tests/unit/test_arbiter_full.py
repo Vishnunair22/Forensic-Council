@@ -1,4 +1,4 @@
-﻿"""
+"""
 Comprehensive unit tests for the CouncilArbiter.
 
 Extends the smoke tests with:
@@ -42,6 +42,7 @@ from agents.arbiter import (
 from core.config import Settings
 
 # â”€â”€ Shared helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 def _settings() -> Settings:
     return Settings(
@@ -91,6 +92,7 @@ def _results(*agent_ids: str, **kwargs) -> dict[str, dict[str, Any]]:
 
 # â”€â”€ FindingVerdict enum â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestFindingVerdictEnum:
     def test_agreement_value(self):
         assert FindingVerdict.AGREEMENT == "AGREEMENT"
@@ -106,6 +108,7 @@ class TestFindingVerdictEnum:
 
 
 # â”€â”€ FindingComparison model â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 class TestFindingComparison:
     def test_agreement_comparison(self):
@@ -136,6 +139,7 @@ class TestFindingComparison:
 
 
 # â”€â”€ ChallengeResult model â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 class TestChallengeResult:
     def test_challenge_id_is_uuid(self):
@@ -171,6 +175,7 @@ class TestChallengeResult:
 
 
 # â”€â”€ TribunalCase model â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 class TestTribunalCase:
     def test_tribunal_id_is_uuid(self):
@@ -215,6 +220,7 @@ class TestTribunalCase:
 
 # â”€â”€ AgentMetrics model â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestAgentMetrics:
     def _make(self, **kwargs) -> AgentMetrics:
         defaults = {"agent_id": "Agent1", "agent_name": "Image Expert"}
@@ -250,6 +256,7 @@ class TestAgentMetrics:
 
 
 # â”€â”€ ForensicReport model â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 class TestForensicReportModel:
     def _make(self) -> ForensicReport:
@@ -296,6 +303,7 @@ class TestForensicReportModel:
 
 
 # â”€â”€ Arbiter deliberation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 class TestArbiterDeliberation:
     @pytest.mark.asyncio
@@ -362,7 +370,13 @@ class TestArbiterDeliberation:
 
     @pytest.mark.asyncio
     async def test_report_has_valid_overall_verdict(self):
-        valid = {"AUTHENTIC", "LIKELY_AUTHENTIC", "INCONCLUSIVE", "LIKELY_MANIPULATED", "MANIPULATED"}
+        valid = {
+            "AUTHENTIC",
+            "LIKELY_AUTHENTIC",
+            "INCONCLUSIVE",
+            "LIKELY_MANIPULATED",
+            "MANIPULATED",
+        }
         arbiter = _arbiter()
         report = await arbiter.deliberate(_results("Agent1"))
         assert report.overall_verdict in valid
@@ -389,5 +403,3 @@ class TestArbiterDeliberation:
         results = _results("Agent1", confidence=0.0)
         report = await arbiter.deliberate(results)
         assert isinstance(report, ForensicReport)
-
-

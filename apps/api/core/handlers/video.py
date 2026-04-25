@@ -42,27 +42,74 @@ from tools.video_tools import (
 
 logger = get_logger(__name__)
 
+
 class VideoHandlers(BaseToolHandler):
     """Handles temporal consistency, face swap, and interframe forgery."""
 
     def register_tools(self, registry) -> None:
         """Register tools with the agent's ToolRegistry."""
-        registry.register("optical_flow_analysis", self.optical_flow_analysis_handler, "Optical flow analysis")
-        registry.register("frame_extraction", self.frame_extraction_handler, "Frame window extraction")
-        registry.register("frame_consistency_analysis", self.frame_consistency_analysis_handler, "Inter-frame consistency check")
-        registry.register("face_swap_detection", self.face_swap_detection_handler, "Face swap detection")
-        registry.register("video_metadata", self.video_metadata_handler, "Advanced video metadata extraction")
-        registry.register("interframe_forgery_detector", self.interframe_forgery_detector_handler, "Interframe forgery detection")
-        registry.register("compression_artifact_analysis", self.compression_artifact_analysis_handler, "Video compression analysis")
-        registry.register("rolling_shutter_validation", self.rolling_shutter_validation_handler, "Rolling shutter signature validation")
-        registry.register("mediainfo_profile", self.mediainfo_profile_handler, "Deep AV container profiling")
-        registry.register("av_file_identity", self.av_file_identity_handler, "Lightweight AV file identity pre-screen")
+        registry.register(
+            "optical_flow_analysis", self.optical_flow_analysis_handler, "Optical flow analysis"
+        )
+        registry.register(
+            "frame_extraction", self.frame_extraction_handler, "Frame window extraction"
+        )
+        registry.register(
+            "frame_consistency_analysis",
+            self.frame_consistency_analysis_handler,
+            "Inter-frame consistency check",
+        )
+        registry.register(
+            "face_swap_detection", self.face_swap_detection_handler, "Face swap detection"
+        )
+        registry.register(
+            "video_metadata", self.video_metadata_handler, "Advanced video metadata extraction"
+        )
+        registry.register(
+            "interframe_forgery_detector",
+            self.interframe_forgery_detector_handler,
+            "Interframe forgery detection",
+        )
+        registry.register(
+            "compression_artifact_analysis",
+            self.compression_artifact_analysis_handler,
+            "Video compression analysis",
+        )
+        registry.register(
+            "rolling_shutter_validation",
+            self.rolling_shutter_validation_handler,
+            "Rolling shutter signature validation",
+        )
+        registry.register(
+            "mediainfo_profile", self.mediainfo_profile_handler, "Deep AV container profiling"
+        )
+        registry.register(
+            "av_file_identity",
+            self.av_file_identity_handler,
+            "Lightweight AV file identity pre-screen",
+        )
 
         # New Refinement Tools
-        registry.register("vfi_error_map", self.vfi_error_map_handler, "VFI error mapping for motion inconsistencies")
-        registry.register("thumbnail_coherence", self.thumbnail_coherence_handler, "Video thumbnail metadata coherence check")
-        registry.register("deepfake_frequency_check", self.deepfake_frequency_check_handler, "Sampled-frame GAN/deepfake frequency analysis")
-        registry.register("adversarial_robustness_check", self.adversarial_robustness_check_handler, "Temporal finding stability check")
+        registry.register(
+            "vfi_error_map",
+            self.vfi_error_map_handler,
+            "VFI error mapping for motion inconsistencies",
+        )
+        registry.register(
+            "thumbnail_coherence",
+            self.thumbnail_coherence_handler,
+            "Video thumbnail metadata coherence check",
+        )
+        registry.register(
+            "deepfake_frequency_check",
+            self.deepfake_frequency_check_handler,
+            "Sampled-frame GAN/deepfake frequency analysis",
+        )
+        registry.register(
+            "adversarial_robustness_check",
+            self.adversarial_robustness_check_handler,
+            "Temporal finding stability check",
+        )
 
     # ── Refinement: VFI Error Map ──────────────────────────────────────
 
@@ -78,18 +125,22 @@ class VideoHandlers(BaseToolHandler):
                 result.setdefault("vfi_artifact_detected", suspected)
                 result.setdefault("interpolation_artifact_detected", suspected)
                 result.setdefault("inconsistency_detected", suspected)
-                result.setdefault("flagged_frame_count", len(flagged) if isinstance(flagged, list) else 0)
+                result.setdefault(
+                    "flagged_frame_count", len(flagged) if isinstance(flagged, list) else 0
+                )
                 await self.agent._record_tool_result("vfi_error_map", result)
                 return result
         except Exception as exc:
             logger.debug("VFI error mapper unavailable", error=str(exc))
 
         # Fallback to standard frame consistency
-        await self.agent.update_sub_task("VFI audit unavailable — falling back to frame consistency...")
+        await self.agent.update_sub_task(
+            "VFI audit unavailable — falling back to frame consistency..."
+        )
         fallback = await self.frame_consistency_analysis_handler(input_data)
         result = {
             **fallback,
-            "vfi_artifact_detected": False, # Cannot confirm VFI from pixel delta alone
+            "vfi_artifact_detected": False,  # Cannot confirm VFI from pixel delta alone
             "interpolation_artifact_detected": False,
             "degraded": True,
             "fallback_reason": "vfi_error_mapper unavailable; used frame consistency analysis (not motion-specific)",
@@ -102,7 +153,9 @@ class VideoHandlers(BaseToolHandler):
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         await self.agent.update_sub_task("Auditing stream thumbnails against content hash...")
         try:
-            result = await run_ml_tool("thumbnail_coherence_checker.py", artifact.file_path, timeout=10.0)
+            result = await run_ml_tool(
+                "thumbnail_coherence_checker.py", artifact.file_path, timeout=10.0
+            )
             if not result.get("error") and result.get("available"):
                 await self.agent._record_tool_result("thumbnail_coherence", result)
                 return result
@@ -129,7 +182,7 @@ class VideoHandlers(BaseToolHandler):
             result = await real_optical_flow_analyze(
                 artifact=artifact,
                 flow_threshold=flow_threshold,
-                progress_callback=self.agent.update_sub_task
+                progress_callback=self.agent.update_sub_task,
             )
         except Exception as e:
             result = {"error": str(e)}
@@ -179,7 +232,7 @@ class VideoHandlers(BaseToolHandler):
                 "degraded": True,
                 "available": True,
                 "note": "OpenCV Farneback sampled fallback. Scientific variance audit completed.",
-                "court_defensible": False
+                "court_defensible": False,
             }
         except Exception as e:
             return {"error": f"Optical flow fallback failed: {e}", "available": False}
@@ -188,8 +241,12 @@ class VideoHandlers(BaseToolHandler):
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         start = input_data.get("start_frame", 0)
         end = input_data.get("end_frame", 100)
-        await self.agent.update_sub_task(f"Extracting temporal evidence window: frames {start} to {end}...")
-        result = await real_frame_window_extract(artifact=artifact, start_frame=start, end_frame=end)
+        await self.agent.update_sub_task(
+            f"Extracting temporal evidence window: frames {start} to {end}..."
+        )
+        result = await real_frame_window_extract(
+            artifact=artifact, start_frame=start, end_frame=end
+        )
         await self.agent._record_tool_result("frame_extraction", result)
         return result
 
@@ -197,7 +254,9 @@ class VideoHandlers(BaseToolHandler):
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         await self.agent.update_sub_task("Auditing inter-frame pixel consistency...")
         loop = asyncio.get_running_loop()
-        frame_dir = await loop.run_in_executor(None, self._extract_sample_frame_dir, artifact.file_path)
+        frame_dir = await loop.run_in_executor(
+            None, self._extract_sample_frame_dir, artifact.file_path
+        )
         if not frame_dir:
             result = {
                 "available": False,
@@ -228,7 +287,9 @@ class VideoHandlers(BaseToolHandler):
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         await self.agent.update_sub_task("Scanning frames for neural face-swap artifacts...")
         loop = asyncio.get_running_loop()
-        frame_paths = await loop.run_in_executor(None, self._extract_sample_frame_dir, artifact.file_path)
+        frame_paths = await loop.run_in_executor(
+            None, self._extract_sample_frame_dir, artifact.file_path
+        )
         if not frame_paths:
             result = {
                 "available": False,
@@ -243,8 +304,7 @@ class VideoHandlers(BaseToolHandler):
                     os.replace(source, os.path.join(tmpdir, os.path.basename(source)))
                 frames_artifact = SimpleNamespace(file_path=tmpdir)
                 result = await real_face_swap_detect(
-                    frames_artifact=frames_artifact,
-                    progress_callback=self.agent.update_sub_task
+                    frames_artifact=frames_artifact, progress_callback=self.agent.update_sub_task
                 )
                 result.setdefault("available", True)
                 result.setdefault("court_defensible", True)
@@ -290,25 +350,35 @@ class VideoHandlers(BaseToolHandler):
     async def interframe_forgery_detector_handler(self, input_data: dict) -> dict:
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         await self.agent.update_sub_task("Auditing temporal forgery (motion ghosting)...")
-        result = await run_ml_tool("interframe_forgery_detector.py", artifact.file_path, timeout=20.0)
+        result = await run_ml_tool(
+            "interframe_forgery_detector.py", artifact.file_path, timeout=20.0
+        )
         await self.agent._record_tool_result("interframe_forgery_detector", result)
         return result
 
     async def compression_artifact_analysis_handler(self, input_data: dict) -> dict:
         """OpenCV heuristic I-frame/P-frame bitrate variance analysis."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
-        await self.agent.update_sub_task("Auditing codec compression (P-frame/I-frame incongruence)...")
+        await self.agent.update_sub_task(
+            "Auditing codec compression (P-frame/I-frame incongruence)..."
+        )
         loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(None, self._compression_artifact_sync, artifact.file_path)
+        result = await loop.run_in_executor(
+            None, self._compression_artifact_sync, artifact.file_path
+        )
         await self.agent._record_tool_result("compression_artifact_analysis", result)
         return result
 
     async def deepfake_frequency_check_handler(self, input_data: dict) -> dict:
         """Run image-frequency synthetic artifact checks on representative frames."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
-        await self.agent.update_sub_task("Sampling key frames for frequency-domain synthetic-media checks...")
+        await self.agent.update_sub_task(
+            "Sampling key frames for frequency-domain synthetic-media checks..."
+        )
         loop = asyncio.get_running_loop()
-        frame_paths = await loop.run_in_executor(None, self._extract_frequency_sample_frames, artifact.file_path)
+        frame_paths = await loop.run_in_executor(
+            None, self._extract_frequency_sample_frames, artifact.file_path
+        )
         if not frame_paths:
             result = {
                 "available": False,
@@ -327,7 +397,9 @@ class VideoHandlers(BaseToolHandler):
                 frame_result = await run_ml_tool("deepfake_frequency.py", frame_path, timeout=12.0)
                 if frame_result.get("error") or not frame_result.get("available", True):
                     continue
-                score = float(frame_result.get("anomaly_score", frame_result.get("confidence", 0.0)) or 0.0)
+                score = float(
+                    frame_result.get("anomaly_score", frame_result.get("confidence", 0.0)) or 0.0
+                )
                 scores.append(max(0.0, min(1.0, score)))
                 if frame_result.get("gan_artifact_detected") or score >= 0.55:
                     positives += 1
@@ -347,7 +419,9 @@ class VideoHandlers(BaseToolHandler):
                     "positive_frame_count": positives,
                     "anomaly_score": round(mean_score, 3),
                     "gan_artifact_detected": positives >= max(1, len(scores) // 2 + 1),
-                    "confidence": round(mean_score if positives else max(0.65, 1.0 - mean_score), 3),
+                    "confidence": round(
+                        mean_score if positives else max(0.65, 1.0 - mean_score), 3
+                    ),
                     "court_defensible": True,
                     "backend": "sampled-frame-deepfake-frequency",
                 }
@@ -412,27 +486,38 @@ class VideoHandlers(BaseToolHandler):
 
     async def adversarial_robustness_check_handler(self, input_data: dict) -> dict:
         """Assess whether temporal findings are stable enough to trust."""
-        await self.agent.update_sub_task("Checking temporal findings for stability under degraded tool paths...")
+        await self.agent.update_sub_task(
+            "Checking temporal findings for stability under degraded tool paths..."
+        )
         flow = self.agent._tool_context.get("optical_flow_analysis", {})
         frame = self.agent._tool_context.get("frame_consistency_analysis", {})
         compression = self.agent._tool_context.get("compression_artifact_analysis", {})
 
-        degraded = [name for name, ctx in (
-            ("optical_flow_analysis", flow),
-            ("frame_consistency_analysis", frame),
-            ("compression_artifact_analysis", compression),
-        ) if isinstance(ctx, dict) and ctx.get("degraded")]
-        errors = [name for name, ctx in (
-            ("optical_flow_analysis", flow),
-            ("frame_consistency_analysis", frame),
-            ("compression_artifact_analysis", compression),
-        ) if isinstance(ctx, dict) and ctx.get("error")]
+        degraded = [
+            name
+            for name, ctx in (
+                ("optical_flow_analysis", flow),
+                ("frame_consistency_analysis", frame),
+                ("compression_artifact_analysis", compression),
+            )
+            if isinstance(ctx, dict) and ctx.get("degraded")
+        ]
+        errors = [
+            name
+            for name, ctx in (
+                ("optical_flow_analysis", flow),
+                ("frame_consistency_analysis", frame),
+                ("compression_artifact_analysis", compression),
+            )
+            if isinstance(ctx, dict) and ctx.get("error")
+        ]
 
         result = {
             "available": True,
             "adversarial_pattern_detected": False,
             "confidence": 0.75 if not errors and not degraded else 0.45,
-            "court_defensible": not bool(errors) and len(degraded) < 2, # Lose defensibility if multiple fallbacks
+            "court_defensible": not bool(errors)
+            and len(degraded) < 2,  # Lose defensibility if multiple fallbacks
             "method": "cross-tool temporal stability audit",
             "degraded_inputs": degraded,
             "tool_errors": errors,
@@ -481,7 +566,9 @@ class VideoHandlers(BaseToolHandler):
     async def rolling_shutter_validation_handler(self, input_data: dict) -> dict:
         """Rolling shutter signature validation against claimed device metadata."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
-        await self.agent.update_sub_task("Validating rolling shutter signatures against device metadata...")
+        await self.agent.update_sub_task(
+            "Validating rolling shutter signatures against device metadata..."
+        )
         result = await run_ml_tool("rolling_shutter_validator.py", artifact.file_path, timeout=15.0)
         await self.agent._record_tool_result("rolling_shutter_validation", result)
         return result

@@ -58,11 +58,13 @@ def load_univfd_model():
 
     try:
         from core.config import get_settings
+
         settings = get_settings()
 
         # Enforce local-only mode if configured
         if settings.offline_mode:
             import torch.hub
+
             torch.hub.set_dir(settings.torch_home)
             # torchvision models check the hub dir; if weights are missing and
             # we are offline, it will raise an error rather than downloading.
@@ -142,16 +144,12 @@ def compute_frequency_features(image_path: str) -> dict:
 
     # Compare to overall high-frequency energy (vectorized — avoids O(h×w) Python loops)
     _ys, _xs = np.ogrid[:h, :w]
-    high_freq_mask = (
-        np.sqrt((_ys - center_y) ** 2 + (_xs - center_x) ** 2) > min(h, w) * 0.25
-    )
+    high_freq_mask = np.sqrt((_ys - center_y) ** 2 + (_xs - center_x) ** 2) > min(h, w) * 0.25
 
     overall_high_freq = float(np.mean(magnitude[high_freq_mask]))
     checkerboard_score = min(
         1.0,
-        max(
-            0.0, (checkerboard_energy - overall_high_freq) / (overall_high_freq + 1e-6)
-        ),
+        max(0.0, (checkerboard_energy - overall_high_freq) / (overall_high_freq + 1e-6)),
     )
 
     # --- 1/f spectral deviation (diffusion model signal) ---
@@ -174,9 +172,7 @@ def compute_frequency_features(image_path: str) -> dict:
 
     expected = [radial[0] / (i + 1) for i in range(num_bands)]
     spectral_dev = float(
-        np.mean(
-            np.abs(np.array(radial) - np.array(expected)) / (np.array(expected) + 1e-6)
-        )
+        np.mean(np.abs(np.array(radial) - np.array(expected)) / (np.array(expected) + 1e-6))
     )
     spectral_anomaly_score = min(1.0, spectral_dev / 5.0)
 
@@ -193,9 +189,7 @@ def compute_frequency_features(image_path: str) -> dict:
             pass
 
     # Combined score with weighted contributions
-    combined = (
-        checkerboard_score * 0.4 + spectral_anomaly_score * 0.4 + pytorch_score * 0.2
-    )
+    combined = checkerboard_score * 0.4 + spectral_anomaly_score * 0.4 + pytorch_score * 0.2
 
     # Determine verdict
     if combined > 0.4:
@@ -230,17 +224,19 @@ if __name__ == "__main__":
         try:
             import cv2
             import numpy as np
-            print(json.dumps({
-                "status": "warmed_up",
-                "dependencies": ["torch", "torchvision", "cv2", "numpy"],
-                "message": "Deepfake frequency detector ready"
-            }))
+
+            print(
+                json.dumps(
+                    {
+                        "status": "warmed_up",
+                        "dependencies": ["torch", "torchvision", "cv2", "numpy"],
+                        "message": "Deepfake frequency detector ready",
+                    }
+                )
+            )
             sys.exit(0)
         except Exception as e:
-            print(json.dumps({
-                "status": "warmup_failed",
-                "error": str(e)
-            }))
+            print(json.dumps({"status": "warmup_failed", "error": str(e)}))
             sys.exit(1)
 
     # Worker mode - persistent process reading from stdin

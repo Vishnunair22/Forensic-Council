@@ -26,6 +26,7 @@ from core.tool_registry import ToolRegistry
 
 logger = get_logger(__name__)
 
+
 class Agent4Video(ForensicAgent):
     """
     Agent 4 - Temporal Video Analysis Agent.
@@ -119,22 +120,27 @@ class Agent4Video(ForensicAgent):
                             self.session_id,
                             "agent4_initial_signal",
                             {
-                                "progress": msg, 
-                                "anomalies_detected": self._tool_context.get("optical_flow_analysis", {}).get("anomaly_count", 0)
-                            }
+                                "progress": msg,
+                                "anomalies_detected": self._tool_context.get(
+                                    "optical_flow_analysis", {}
+                                ).get("anomaly_count", 0),
+                            },
                         )
                 except Exception as e:
                     logger.debug(f"{self.agent_id}: Gemini signal callback failed", error=str(e))
 
             return await self._gemini_deep_forensic_handler(
-                input_data,
-                model_hint="gemini-2.5-flash",
-                signal_callback=_gemini_signal_callback
+                input_data, model_hint="gemini-2.5-flash", signal_callback=_gemini_signal_callback
             )
 
-        registry.register("gemini_deep_forensic", gemini_deep_forensic_handler, "Gemini deep forensic analysis for video frames")
+        registry.register(
+            "gemini_deep_forensic",
+            gemini_deep_forensic_handler,
+            "Gemini deep forensic analysis for video frames",
+        )
 
         return registry
+
     async def on_tool_result(self, finding: AgentFinding) -> None:
         """Reactive task expansion based on temporal signals."""
         try:
@@ -148,11 +154,16 @@ class Agent4Video(ForensicAgent):
 
         # 1. If frame consistency shows discontinuities, escalate to face swap check
         if tool_name == "frame_consistency_analysis":
-            if finding.evidence_verdict == "POSITIVE" or finding.metadata.get("discontinuity_detected"):
-                logger.info("Temporal discontinuity detected; injecting face-swap audit", agent_id=self.agent_id)
+            if finding.evidence_verdict == "POSITIVE" or finding.metadata.get(
+                "discontinuity_detected"
+            ):
+                logger.info(
+                    "Temporal discontinuity detected; injecting face-swap audit",
+                    agent_id=self.agent_id,
+                )
                 await self.inject_task(
                     description="Run face_swap_detection on frames near detected discontinuities",
-                    priority=20 # High priority
+                    priority=20,  # High priority
                 )
 
         # 2. Reactive trigger for VFI (Video Frame Interpolation) artifacts
@@ -160,11 +171,14 @@ class Agent4Video(ForensicAgent):
             vfi_signals = [
                 finding.metadata.get("vfi_artifact_detected"),
                 finding.metadata.get("interpolation_artifact_detected"),
-                finding.metadata.get("manipulation_detected")
+                finding.metadata.get("manipulation_detected"),
             ]
             if any(vfi_signals) or finding.evidence_verdict == "POSITIVE":
-                logger.info("VFI motion interpolation artifact detected; injecting deep optical flow audit", agent_id=self.agent_id)
+                logger.info(
+                    "VFI motion interpolation artifact detected; injecting deep optical flow audit",
+                    agent_id=self.agent_id,
+                )
                 await self.inject_task(
                     description="Run deep optical_flow_analysis on VFI-flagged segments to verify motion continuity",
-                    priority=15
+                    priority=15,
                 )

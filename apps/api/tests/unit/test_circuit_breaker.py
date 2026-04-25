@@ -1,4 +1,4 @@
-﻿"""
+"""
 Unit tests for the CircuitBreaker pattern.
 
 Covers:
@@ -32,6 +32,7 @@ from core.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitSt
 
 # â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 def _breaker(
     failure_threshold: int = 3,
     success_threshold: int = 2,
@@ -47,6 +48,7 @@ def _breaker(
 
 async def _fail(breaker: CircuitBreaker, n: int) -> None:
     """Fire n failing calls through the breaker (ignoring exceptions)."""
+
     async def boom():
         raise RuntimeError("simulated failure")
 
@@ -59,6 +61,7 @@ async def _fail(breaker: CircuitBreaker, n: int) -> None:
 
 async def _succeed(breaker: CircuitBreaker, n: int = 1) -> None:
     """Fire n successful calls through the breaker."""
+
     async def ok():
         return "ok"
 
@@ -67,6 +70,7 @@ async def _succeed(breaker: CircuitBreaker, n: int = 1) -> None:
 
 
 # â”€â”€ Initial state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 class TestCircuitBreakerInitial:
     def test_starts_closed(self):
@@ -89,6 +93,7 @@ class TestCircuitBreakerInitial:
 
 
 # â”€â”€ CLOSED â†’ OPEN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 class TestCircuitBreakerOpens:
     @pytest.mark.asyncio
@@ -120,6 +125,7 @@ class TestCircuitBreakerOpens:
 
 # â”€â”€ OPEN â†’ HALF_OPEN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestCircuitBreakerHalfOpen:
     @pytest.mark.asyncio
     async def test_transitions_to_half_open_after_timeout(self):
@@ -150,6 +156,7 @@ class TestCircuitBreakerHalfOpen:
 
 # â”€â”€ HALF_OPEN â†’ CLOSED â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestCircuitBreakerCloses:
     @pytest.mark.asyncio
     async def test_closes_after_success_threshold(self):
@@ -174,6 +181,7 @@ class TestCircuitBreakerCloses:
 
 # â”€â”€ Config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestCircuitBreakerConfig:
     def test_default_failure_threshold_is_5(self):
         cfg = CircuitBreakerConfig()
@@ -190,5 +198,3 @@ class TestCircuitBreakerConfig:
     def test_default_timeout_seconds(self):
         cfg = CircuitBreakerConfig()
         assert cfg.timeout_seconds == 60
-
-

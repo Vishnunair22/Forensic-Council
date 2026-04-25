@@ -130,15 +130,14 @@ def download_easyocr(force: bool = False) -> bool:
         orig_home = os.environ.get("HOME", "")
         try:
             os.environ["EASYOCR_MODEL_DIR"] = easyocr_dir
-            with tempfile.TemporaryDirectory(prefix="easyocr_") as temp_home, log_path.open(
-                "w", encoding="utf-8"
-            ) as log_file:
+            with (
+                tempfile.TemporaryDirectory(prefix="easyocr_") as temp_home,
+                log_path.open("w", encoding="utf-8") as log_file,
+            ):
                 os.environ["HOME"] = temp_home
                 import easyocr
 
-                with contextlib.redirect_stdout(log_file), contextlib.redirect_stderr(
-                    log_file
-                ):
+                with contextlib.redirect_stdout(log_file), contextlib.redirect_stderr(log_file):
                     easyocr.Reader(
                         ["en"],
                         gpu=False,
@@ -158,10 +157,7 @@ def download_easyocr(force: bool = False) -> bool:
             if orig_home:
                 os.environ["HOME"] = orig_home
 
-    print(
-        f"  {YELLOW}[WARN]{RESET}  EasyOCR download failed: {last_error} "
-        f"(details: {log_path})"
-    )
+    print(f"  {YELLOW}[WARN]{RESET}  EasyOCR download failed: {last_error} (details: {log_path})")
     return False
     if count >= 2 and not force:
         print(f"  {GREEN}[SKIP]{RESET}  EasyOCR — already cached ({count} files)")
@@ -173,15 +169,14 @@ def download_easyocr(force: bool = False) -> bool:
         # EasyOCR tries to write a metadata dir under $HOME/.EasyOCR regardless
         # of model_storage_directory. Create a secure temporary directory.
         orig_home = os.environ.get("HOME", "")
-        with tempfile.TemporaryDirectory(prefix="easyocr_") as temp_home, log_path.open(
-            "w", encoding="utf-8"
-        ) as log_file:
+        with (
+            tempfile.TemporaryDirectory(prefix="easyocr_") as temp_home,
+            log_path.open("w", encoding="utf-8") as log_file,
+        ):
             os.environ["HOME"] = temp_home
             import easyocr
 
-            with contextlib.redirect_stdout(log_file), contextlib.redirect_stderr(
-                log_file
-            ):
+            with contextlib.redirect_stdout(log_file), contextlib.redirect_stderr(log_file):
                 easyocr.Reader(
                     ["en"],
                     gpu=False,
@@ -193,10 +188,7 @@ def download_easyocr(force: bool = False) -> bool:
         print(f"  {GREEN}[OK  ]{RESET}  EasyOCR downloaded.")
         return True
     except Exception as exc:
-        print(
-            f"  {YELLOW}[WARN]{RESET}  EasyOCR download failed: {exc} "
-            f"(details: {log_path})"
-        )
+        print(f"  {YELLOW}[WARN]{RESET}  EasyOCR download failed: {exc} (details: {log_path})")
         return False
 
 
@@ -269,11 +261,7 @@ def download_speechbrain(force: bool = False) -> bool:
     hf_dir = CACHE_DIRS["HF"]
     sb_dir = Path(hf_dir) / "hub" / "models--speechbrain--spkrec-ecapa-voxceleb"
     cached = (
-        [
-            p
-            for p in (sb_dir / "blobs").glob("*")
-            if p.is_file() and p.stat().st_size > 10_000_000
-        ]
+        [p for p in (sb_dir / "blobs").glob("*") if p.is_file() and p.stat().st_size > 10_000_000]
         if (sb_dir / "blobs").exists()
         else []
     )
@@ -284,7 +272,10 @@ def download_speechbrain(force: bool = False) -> bool:
     print(f"  {CYAN}[DOWN]{RESET}  SpeechBrain ECAPA-TDNN → {hf_dir}")
     try:
         from speechbrain.inference.speaker import EncoderClassifier
-        EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb", run_opts={"device": "cpu"})
+
+        EncoderClassifier.from_hparams(
+            source="speechbrain/spkrec-ecapa-voxceleb", run_opts={"device": "cpu"}
+        )
         print(f"  {GREEN}[OK  ]{RESET}  SpeechBrain downloaded.")
         return True
     except Exception as exc:
@@ -303,14 +294,12 @@ def download_audio_deepfake(force: bool = False) -> bool:
         Path(hf_dir) / "hub" / HF_MODEL_DIRS["speechbrain_aasist"],
         Path(hf_dir) / "transformers" / HF_MODEL_DIRS["speechbrain_aasist"],
     ]
-    cached = (
-        [
-            p
-            for model_dir in model_dirs
-            for p in (model_dir / "blobs").glob("*")
-            if p.is_file() and p.stat().st_size > 1_000_000
-        ]
-    )
+    cached = [
+        p
+        for model_dir in model_dirs
+        for p in (model_dir / "blobs").glob("*")
+        if p.is_file() and p.stat().st_size > 1_000_000
+    ]
     if cached and not force:
         print(f"  {GREEN}[SKIP]{RESET}  Audio deepfake detector - already cached ({cached[0]})")
         return True
@@ -369,9 +358,7 @@ def main() -> None:
             count = _file_count(path)
             size = _dir_size_mb(path)
             marker = GREEN + "populated" if count > 0 else YELLOW + "empty"
-            print(
-                f"  {marker}{RESET}  {name:<10}  {size:>7.1f} MB  ({count} files)  {path}"
-            )
+            print(f"  {marker}{RESET}  {name:<10}  {size:>7.1f} MB  ({count} files)  {path}")
         print()
         return
 
@@ -397,9 +384,7 @@ def main() -> None:
         print(f"{GREEN}{BOLD}  All {total} models ready. ({elapsed:.0f}s){RESET}")
     else:
         failed = total - passed
-        print(
-            f"{YELLOW}{BOLD}  {failed} model(s) failed — will retry lazily on first use.{RESET}"
-        )
+        print(f"{YELLOW}{BOLD}  {failed} model(s) failed — will retry lazily on first use.{RESET}")
         print(f"  {passed}/{total} succeeded in {elapsed:.0f}s.")
         failed_names = ", ".join(name for name, ok in results if not ok)
         print(f"  Failed: {failed_names}")

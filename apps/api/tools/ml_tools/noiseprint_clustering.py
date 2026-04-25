@@ -48,14 +48,15 @@ import cv2
 import numpy as np
 from scipy.signal import wiener
 
-_REGION_SIZE = 64   # pixels; each region is 64×64
-_MIN_REGIONS = 6    # need at least this many to cluster meaningfully
+_REGION_SIZE = 64  # pixels; each region is 64×64
+_MIN_REGIONS = 6  # need at least this many to cluster meaningfully
 _MIN_OUTLIER_CLUSTER_SIZE = 1
 
 
 # ---------------------------------------------------------------------------
 # Noise residual extraction
 # ---------------------------------------------------------------------------
+
 
 def _extract_noise_residual(gray: np.ndarray) -> np.ndarray:
     """
@@ -88,7 +89,7 @@ def _dct_suppress(noise: np.ndarray) -> np.ndarray:
         for c in range(0, w - 7, 8):
             tile = out[r : r + 8, c : c + 8].astype(np.float32)
             dct_tile = cv2.dct(tile)
-            dct_tile[:2, :2] = 0.0   # zero DC + lowest AC components
+            dct_tile[:2, :2] = 0.0  # zero DC + lowest AC components
             out[r : r + 8, c : c + 8] = cv2.idct(dct_tile)
     return out
 
@@ -96,6 +97,7 @@ def _dct_suppress(noise: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # Per-region fingerprint (16-dimensional)
 # ---------------------------------------------------------------------------
+
 
 def _region_fingerprint(noise_patch: np.ndarray) -> np.ndarray:
     """
@@ -126,20 +128,28 @@ def _region_fingerprint(noise_patch: np.ndarray) -> np.ndarray:
     skewness = float(np.mean(((p - mean) / std) ** 3))
     kurtosis = float(np.mean(((p - mean) / std) ** 4))
     mean_abs = float(np.mean(np.abs(p)))
-    noise_power = float(np.mean(p ** 2))
+    noise_power = float(np.mean(p**2))
 
     # Spatial correlations (use 2-D patch)
     patch2d = noise_patch.astype(np.float32)
     h2, w2 = patch2d.shape
-    h_corr = float(np.corrcoef(patch2d[:, :-1].flatten(), patch2d[:, 1:].flatten())[0, 1]) if w2 > 1 else 0.0
-    v_corr = float(np.corrcoef(patch2d[:-1, :].flatten(), patch2d[1:, :].flatten())[0, 1]) if h2 > 1 else 0.0
+    h_corr = (
+        float(np.corrcoef(patch2d[:, :-1].flatten(), patch2d[:, 1:].flatten())[0, 1])
+        if w2 > 1
+        else 0.0
+    )
+    v_corr = (
+        float(np.corrcoef(patch2d[:-1, :].flatten(), patch2d[1:, :].flatten())[0, 1])
+        if h2 > 1
+        else 0.0
+    )
 
     # Spectral energies
     spectrum = np.abs(np.fft.fft2(patch2d))
     sh, sw = spectrum.shape
-    low = float(np.mean(spectrum[:sh // 4, :sw // 4]))
-    mid = float(np.mean(spectrum[sh // 4:sh // 2, sw // 4:sw // 2]))
-    high = float(np.mean(spectrum[sh // 2:, sw // 2:]))
+    low = float(np.mean(spectrum[: sh // 4, : sw // 4]))
+    mid = float(np.mean(spectrum[sh // 4 : sh // 2, sw // 4 : sw // 2]))
+    high = float(np.mean(spectrum[sh // 2 :, sw // 2 :]))
     ratio = float(high / (low + 1e-9))
 
     p10 = float(np.percentile(p, 10))
@@ -148,8 +158,24 @@ def _region_fingerprint(noise_patch: np.ndarray) -> np.ndarray:
     val_range = float(p.max() - p.min())
 
     return np.array(
-        [mean, std, skewness, kurtosis, mean_abs, noise_power,
-         h_corr, v_corr, low, mid, high, ratio, p10, p90, pos_frac, val_range],
+        [
+            mean,
+            std,
+            skewness,
+            kurtosis,
+            mean_abs,
+            noise_power,
+            h_corr,
+            v_corr,
+            low,
+            mid,
+            high,
+            ratio,
+            p10,
+            p90,
+            pos_frac,
+            val_range,
+        ],
         dtype=np.float32,
     )
 
@@ -157,6 +183,7 @@ def _region_fingerprint(noise_patch: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # Core analysis
 # ---------------------------------------------------------------------------
+
 
 def analyze(image_path: str) -> dict[str, Any]:
     from sklearn.cluster import KMeans
@@ -245,8 +272,12 @@ def analyze(image_path: str) -> dict[str, Any]:
     minority_idx = [i for i, lbl in enumerate(cluster_labels) if lbl != dominant]
 
     inconsistent_regions = [
-        {"x": region_coords[i][0], "y": region_coords[i][1],
-         "w": region_coords[i][2], "h": region_coords[i][3]}
+        {
+            "x": region_coords[i][0],
+            "y": region_coords[i][1],
+            "w": region_coords[i][2],
+            "h": region_coords[i][3],
+        }
         for i in minority_idx
     ]
 
@@ -264,9 +295,9 @@ def analyze(image_path: str) -> dict[str, Any]:
 
     # Confidence: weighted by silhouette quality, cluster ratio, and outlier density
     outlier_ratio = outlier_count / max(len(fingerprints), 1)
-    conf_sil = max(0.0, best_score)                       # how well-separated the clusters are
-    conf_ratio = min(outlier_ratio / 0.30, 1.0)            # fraction of anomalous regions
-    conf_k = 1.0 if best_k >= 2 else 0.0                   # multi-source indicator
+    conf_sil = max(0.0, best_score)  # how well-separated the clusters are
+    conf_ratio = min(outlier_ratio / 0.30, 1.0)  # fraction of anomalous regions
+    conf_k = 1.0 if best_k >= 2 else 0.0  # multi-source indicator
     confidence = round(float(0.40 * conf_sil + 0.35 * conf_ratio + 0.25 * conf_k), 3)
     if not manipulation_detected:
         confidence = 0.0
@@ -291,6 +322,7 @@ def analyze(image_path: str) -> dict[str, Any]:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def _run_worker() -> None:
     for line in sys.stdin:
         line = line.strip()
@@ -314,7 +346,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Noiseprint++ — sensor noise clustering")
     parser.add_argument("--input", type=str, help="Path to input image")
     parser.add_argument("--warmup", action="store_true", help="Warmup mode")
-    parser.add_argument("--worker", action="store_true", help="Worker mode (persistent stdin/stdout)")
+    parser.add_argument(
+        "--worker", action="store_true", help="Worker mode (persistent stdin/stdout)"
+    )
     args = parser.parse_args()
 
     if args.warmup:
@@ -324,11 +358,16 @@ if __name__ == "__main__":
             from scipy.signal import wiener  # noqa: F401
             from sklearn.cluster import KMeans  # noqa: F401
             from sklearn.metrics import silhouette_score  # noqa: F401
-            print(json.dumps({
-                "status": "warmed_up",
-                "dependencies": ["cv2", "numpy", "scipy", "sklearn"],
-                "message": "Noiseprint clustering ready",
-            }))
+
+            print(
+                json.dumps(
+                    {
+                        "status": "warmed_up",
+                        "dependencies": ["cv2", "numpy", "scipy", "sklearn"],
+                        "message": "Noiseprint clustering ready",
+                    }
+                )
+            )
             sys.exit(0)
         except Exception as exc:
             print(json.dumps({"status": "warmup_failed", "error": str(exc)}))

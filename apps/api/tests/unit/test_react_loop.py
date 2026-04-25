@@ -1,4 +1,4 @@
-﻿"""
+"""
 Unit tests for the ReAct loop models and HITL checkpoint system.
 
 Covers:
@@ -41,6 +41,7 @@ from core.react_loop import (
 
 # â”€â”€ ReActStepType â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestReActStepType:
     def test_thought_value(self):
         assert ReActStepType.THOUGHT == "THOUGHT"
@@ -56,6 +57,7 @@ class TestReActStepType:
 
 
 # â”€â”€ ReActStep model â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 class TestReActStep:
     def _thought(self, iteration: int = 1) -> ReActStep:
@@ -123,6 +125,7 @@ class TestReActStep:
 
 # â”€â”€ HITLCheckpointReason â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestHITLCheckpointReason:
     EXPECTED_REASONS = [
         "ITERATION_CEILING_50PCT",
@@ -142,6 +145,7 @@ class TestHITLCheckpointReason:
 
 
 # â”€â”€ HITLCheckpointState â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 class TestHITLCheckpointState:
     def _make(self, **kwargs) -> HITLCheckpointState:
@@ -192,6 +196,7 @@ class TestHITLCheckpointState:
 
 # â”€â”€ HumanDecisionType â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestHumanDecisionType:
     EXPECTED_TYPES = ["APPROVE", "REDIRECT", "OVERRIDE", "TERMINATE", "ESCALATE"]
 
@@ -206,6 +211,7 @@ class TestHumanDecisionType:
 # â”€â”€ HumanDecision model â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # HumanDecision fields: decision_type (Literal), investigator_id (str), notes (str),
 # override_finding (dict|None), redirect_context (str|None)
+
 
 class TestHumanDecision:
     def test_approve_decision_fields(self):
@@ -247,6 +253,7 @@ class TestHumanDecision:
 
 # â”€â”€ AgentFinding status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestAgentFinding:
     EXPECTED_STATUSES = ["CONFIRMED", "CONTESTED", "INCONCLUSIVE", "INCOMPLETE"]
 
@@ -283,5 +290,3 @@ class TestAgentFinding:
             court_statement="test",
         )
         assert f.finding_id is not None
-
-

@@ -14,6 +14,7 @@ from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
+
 class GroundingService:
     """Service for cross-verifying ML anomalies against semantic scene context."""
 
@@ -22,10 +23,7 @@ class GroundingService:
         self._shared_gemini = shared_gemini
 
     async def verify_with_vision_llm(
-        self,
-        agent_id: str,
-        artifact: EvidenceArtifact,
-        finding: AgentFinding
+        self, agent_id: str, artifact: EvidenceArtifact, finding: AgentFinding
     ) -> dict[str, Any] | None:
         """
         Perform SEMANTIC GROUNDING on a suspicious finding.
@@ -36,6 +34,7 @@ class GroundingService:
             return None
 
         from core.gemini_client import GeminiVisionClient
+
         _gemini = self._shared_gemini or GeminiVisionClient(self.config)
 
         # Extract ROI if finding has coordinates
@@ -58,9 +57,7 @@ class GroundingService:
 
         try:
             res = await _gemini._run_vision_analysis(
-                file_path=artifact.file_path,
-                prompt=prompt,
-                analysis_type="semantic_grounding"
+                file_path=artifact.file_path, prompt=prompt, analysis_type="semantic_grounding"
             )
 
             if res.error:
@@ -73,8 +70,10 @@ class GroundingService:
                     grounded_data = json.loads(match.group(0))
                     return {
                         "verdict": grounded_data.get("verdict", "CANNOT_DETERMINE"),
-                        "reasoning": grounded_data.get("reasoning", "Semantic grounding performed."),
-                        "confidence": grounded_data.get("confidence", 0.8)
+                        "reasoning": grounded_data.get(
+                            "reasoning", "Semantic grounding performed."
+                        ),
+                        "confidence": grounded_data.get("confidence", 0.8),
                     }
                 except json.JSONDecodeError:
                     pass
@@ -82,7 +81,7 @@ class GroundingService:
             return {
                 "verdict": "CONFIRMED",
                 "reasoning": res.content_description[:200],
-                "confidence": res.confidence
+                "confidence": res.confidence,
             }
         except Exception as e:
             logger.error(f"Semantic Grounding failed: {e}", agent_id=agent_id)

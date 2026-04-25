@@ -30,13 +30,9 @@ class SessionPersistence:
         """Ensure database client is connected — always reuse the singleton pool."""
         if self.client is None:
             try:
-                self.client = await asyncio.wait_for(
-                    get_postgres_client(), timeout=10.0
-                )
+                self.client = await asyncio.wait_for(get_postgres_client(), timeout=10.0)
             except TimeoutError:
-                raise RuntimeError(
-                    "Database connection timed out after 10s in session persistence"
-                )
+                raise RuntimeError("Database connection timed out after 10s in session persistence")
 
     async def close(self):
         """No-op: we don't own the singleton client."""
@@ -94,9 +90,7 @@ class SessionPersistence:
             return True
 
         except Exception as e:
-            logger.error(
-                "Failed to save session state", session_id=session_id, error=str(e)
-            )
+            logger.error("Failed to save session state", session_id=session_id, error=str(e))
             return False
 
     async def get_session_state(self, session_id: str) -> dict | None:
@@ -144,9 +138,7 @@ class SessionPersistence:
             return None
 
         except Exception as e:
-            logger.error(
-                "Failed to get session state", session_id=session_id, error=str(e)
-            )
+            logger.error("Failed to get session state", session_id=session_id, error=str(e))
             return None
 
     async def save_report(
@@ -271,7 +263,9 @@ class SessionPersistence:
         """
         await self._ensure_client()
         if self.client is None:
-            logger.warning("SessionPersistence.update_session_status: database client not available")
+            logger.warning(
+                "SessionPersistence.update_session_status: database client not available"
+            )
             return False
 
         try:
@@ -360,12 +354,8 @@ class SessionPersistence:
                     "case_id": row["case_id"],
                     "investigator_id": row["investigator_id"],
                     "status": row["status"],
-                    "created_at": row["created_at"].isoformat()
-                    if row["created_at"]
-                    else None,
-                    "updated_at": row["updated_at"].isoformat()
-                    if row["updated_at"]
-                    else None,
+                    "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                    "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
                 }
                 for row in result
             ]
@@ -383,7 +373,9 @@ class SessionPersistence:
         """
         await self._ensure_client()
         if self.client is None:
-            logger.warning("SessionPersistence.cleanup_expired_sessions: database client not available")
+            logger.warning(
+                "SessionPersistence.cleanup_expired_sessions: database client not available"
+            )
             return 0
 
         try:

@@ -95,7 +95,9 @@ class ArbiterNarrativeMixin:
         if not (self.config.llm_api_key and self.config.llm_provider != "none"):
             return ""
 
-        client = getattr(self, "_synthesis_client", None) or LLMClient(self.config, use_arbiter_tier=True)
+        client = getattr(self, "_synthesis_client", None) or LLMClient(
+            self.config, use_arbiter_tier=True
+        )
         if not client.is_available:
             return ""
 
@@ -111,11 +113,7 @@ class ArbiterNarrativeMixin:
             for f in findings
             if (f.get("metadata") or {}).get("analysis_phase", "initial") == "initial"
         ]
-        deep_f = [
-            f
-            for f in findings
-            if (f.get("metadata") or {}).get("analysis_phase") == "deep"
-        ]
+        deep_f = [f for f in findings if (f.get("metadata") or {}).get("analysis_phase") == "deep"]
 
         _NOT_APPLICABLE_FLAGS = ("ela_not_applicable", "ghost_not_applicable")
         _NOT_APPLICABLE_KEYS = {
@@ -142,9 +140,7 @@ class ArbiterNarrativeMixin:
             sorted_findings = sorted(
                 findings_list,
                 key=lambda x: (
-                    1
-                    if (x.get("metadata") or {}).get("analysis_phase") == "deep"
-                    else 0,
+                    1 if (x.get("metadata") or {}).get("analysis_phase") == "deep" else 0,
                     _finding_importance(x),
                 ),
                 reverse=True,
@@ -191,15 +187,15 @@ class ArbiterNarrativeMixin:
         comparison_section = ""
         initial_vs_deep_comparison = ""
         if has_deep:
-            comparison_section = f"\n\nDeep analysis findings ({len(deep_f)} tool scans):\n{_fmt(deep_f)}"
+            comparison_section = (
+                f"\n\nDeep analysis findings ({len(deep_f)} tool scans):\n{_fmt(deep_f)}"
+            )
             _comparison_pairs = []
             for df in deep_f:
                 d_meta = df.get("metadata") or {}
                 d_tool = d_meta.get("tool_name", "")
                 matching_initial = [
-                    f
-                    for f in initial_f
-                    if (f.get("metadata") or {}).get("tool_name") == d_tool
+                    f for f in initial_f if (f.get("metadata") or {}).get("tool_name") == d_tool
                 ]
                 if matching_initial:
                     mf = matching_initial[0]
@@ -210,16 +206,12 @@ class ArbiterNarrativeMixin:
                             "deep_confidence": round(confidence_of(df, default=0.0) or 0.0, 3),
                             "initial_evidence_verdict": evidence_verdict_of(mf),
                             "deep_evidence_verdict": evidence_verdict_of(df),
-                            "initial_verdict": (mf.get("metadata") or {}).get(
-                                "verdict", ""
-                            ),
+                            "initial_verdict": (mf.get("metadata") or {}).get("verdict", ""),
                             "deep_verdict": d_meta.get("verdict", ""),
                             "initial_manipulation": (mf.get("metadata") or {}).get(
                                 "manipulation_detected", False
                             ),
-                            "deep_manipulation": d_meta.get(
-                                "manipulation_detected", False
-                            ),
+                            "deep_manipulation": d_meta.get("manipulation_detected", False),
                         }
                     )
             if _comparison_pairs:
@@ -272,9 +264,7 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
                 json_mode=False,
             )
         except Exception as e:
-            logger.debug(
-                f"Per-agent narrative Groq parsing/call failed for {agent_id}: {e}"
-            )
+            logger.debug(f"Per-agent narrative Groq parsing/call failed for {agent_id}: {e}")
             return ""
 
     async def _generate_executive_summary(
@@ -324,7 +314,9 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
         overall_verdict: str = "",
     ) -> str:
         """Generate executive summary using Groq LLM synthesis."""
-        client = getattr(self, "_synthesis_client", None) or LLMClient(self.config, use_arbiter_tier=True)
+        client = getattr(self, "_synthesis_client", None) or LLMClient(
+            self.config, use_arbiter_tier=True
+        )
 
         top_findings = sorted(
             [
@@ -377,31 +369,26 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
 
         metrics_summary = ""
         if active_agent_metrics:
-            metrics_summary = (
-                "\n\nAgent performance metrics (active agents only):\n"
-                + json.dumps(
-                    [
-                        {
-                            "agent": m.get("agent_name", m.get("agent_id", "")),
-                            "confidence": f"{m.get('confidence_score', 0) * 100:.0f}%",
-                            "error_rate": f"{m.get('error_rate', 0) * 100:.0f}%",
-                            "tools_ran": m.get("tools_succeeded", 0),
-                            "tools_failed": m.get("tools_failed", 0),
-                            "not_applicable": m.get("tools_not_applicable", 0),
-                            "total_tools": m.get("total_tools_called", 0),
-                            "findings": m.get("finding_count", 0),
-                        }
-                        for m in active_agent_metrics
-                        if not m.get("skipped")
-                    ],
-                    indent=2,
-                )
+            metrics_summary = "\n\nAgent performance metrics (active agents only):\n" + json.dumps(
+                [
+                    {
+                        "agent": m.get("agent_name", m.get("agent_id", "")),
+                        "confidence": f"{m.get('confidence_score', 0) * 100:.0f}%",
+                        "error_rate": f"{m.get('error_rate', 0) * 100:.0f}%",
+                        "tools_ran": m.get("tools_succeeded", 0),
+                        "tools_failed": m.get("tools_failed", 0),
+                        "not_applicable": m.get("tools_not_applicable", 0),
+                        "total_tools": m.get("total_tools_called", 0),
+                        "findings": m.get("finding_count", 0),
+                    }
+                    for m in active_agent_metrics
+                    if not m.get("skipped")
+                ],
+                indent=2,
             )
 
         verdict_line = (
-            f"\n\nCouncil Arbiter computed verdict: {overall_verdict}"
-            if overall_verdict
-            else ""
+            f"\n\nCouncil Arbiter computed verdict: {overall_verdict}" if overall_verdict else ""
         )
 
         system_prompt = f"""You are the Council Arbiter writing the Executive Summary of a court-admissible forensic evidence report.
@@ -463,14 +450,8 @@ Write the Executive Summary for this forensic report. Justify the {overall_verdi
                 "review or tribunal resolution."
             )
         if all_findings:
-            top = sorted(
-                all_findings, key=_finding_importance, reverse=True
-            )[:3]
-            highlights = [
-                f.get("reasoning_summary", "")
-                for f in top
-                if f.get("reasoning_summary")
-            ]
+            top = sorted(all_findings, key=_finding_importance, reverse=True)[:3]
+            highlights = [f.get("reasoning_summary", "") for f in top if f.get("reasoning_summary")]
             if highlights:
                 lines.append("Key findings include: " + " ".join(highlights[:2]))
         lines.append(
@@ -497,19 +478,17 @@ Write the Executive Summary for this forensic report. Justify the {overall_verdi
                 if result:
                     return result
             except Exception as exc:
-                logger.warning(
-                    f"LLM uncertainty statement failed, using template: {exc}"
-                )
+                logger.warning(f"LLM uncertainty statement failed, using template: {exc}")
 
-        return self._template_uncertainty_statement(
-            incomplete, contested, overall_error_rate
-        )
+        return self._template_uncertainty_statement(incomplete, contested, overall_error_rate)
 
     async def _llm_uncertainty_statement(
         self, incomplete: int, contested: int, overall_error_rate: float = 0.0
     ) -> str:
         """Generate uncertainty statement using LLM."""
-        client = getattr(self, "_synthesis_client", None) or LLMClient(self.config, use_arbiter_tier=True)
+        client = getattr(self, "_synthesis_client", None) or LLMClient(
+            self.config, use_arbiter_tier=True
+        )
 
         system_prompt = """You are the Council Arbiter writing the Limitations and Uncertainty section of a forensic report.
 
@@ -590,7 +569,9 @@ Write 2-3 sentences only. Do not use bullet points."""
         analysis_coverage_note: str,
         has_deep_analysis: bool = False,
     ) -> tuple[str, list[str], str] | None:
-        client = getattr(self, "_synthesis_client", None) or LLMClient(self.config, use_arbiter_tier=True)
+        client = getattr(self, "_synthesis_client", None) or LLMClient(
+            self.config, use_arbiter_tier=True
+        )
 
         def _strip_rs_prefix(s: str) -> str:
             idx = s.find(":")
@@ -694,9 +675,7 @@ Rules:
             "MANIPULATED": "Strong manipulation indicators detected (multiple independent signals).",
             "ABSTAIN": "Insufficient evidence to render a verdict.",
         }
-        verdict_sentence = _VERDICT_PHRASES.get(
-            overall_verdict, f"Verdict: {overall_verdict}."
-        )
+        verdict_sentence = _VERDICT_PHRASES.get(overall_verdict, f"Verdict: {overall_verdict}.")
 
         def _strip_rs_prefix(s: str) -> str:
             idx = s.find(":")
@@ -718,11 +697,7 @@ Rules:
             return s[:max_len].rsplit(" ", 1)[0] + ("…" if len(s) > max_len else "")
 
         top = sorted(
-            [
-                f
-                for f in all_findings
-                if not f.get("stub_result") and f.get("reasoning_summary")
-            ],
+            [f for f in all_findings if not f.get("stub_result") and f.get("reasoning_summary")],
             key=_finding_importance,
             reverse=True,
         )[:5]
@@ -786,6 +761,7 @@ Rules:
         step_hook: Any = None,
     ) -> dict[str, Any]:
         """Orchestrate all LLM synthesis tasks in parallel."""
+
         async def _step(msg: str):
             if step_hook:
                 await step_hook(msg)
@@ -798,8 +774,7 @@ Rules:
         )
 
         has_deep_analysis = any(
-            (f.get("metadata") or {}).get("analysis_phase") == "deep"
-            for f in all_findings
+            (f.get("metadata") or {}).get("analysis_phase") == "deep" for f in all_findings
         )
 
         if llm_enabled:
@@ -818,9 +793,15 @@ Rules:
 
         if not llm_enabled:
             v_sent, kf_list, r_note, p_anal, exec_sum, unc_stmt = self._template_all(
-                overall_verdict, overall_confidence, overall_error_rate,
-                manipulation_probability, applicable_agent_count, all_findings,
-                cross_modal_confirmed_count, len(contested_findings), analysis_coverage_note,
+                overall_verdict,
+                overall_confidence,
+                overall_error_rate,
+                manipulation_probability,
+                applicable_agent_count,
+                all_findings,
+                cross_modal_confirmed_count,
+                len(contested_findings),
+                analysis_coverage_note,
                 active_agent_results,
                 incomplete_count=len(incomplete_findings),
             )
@@ -829,26 +810,38 @@ Rules:
 
             async def t_structured():
                 return await self._generate_structured_summary(
-                    overall_verdict, overall_confidence, overall_error_rate,
-                    manipulation_probability, applicable_agent_count, all_findings,
-                    cross_modal_confirmed_count, len(contested_findings),
-                    analysis_coverage_note, has_deep_analysis=has_deep_analysis
+                    overall_verdict,
+                    overall_confidence,
+                    overall_error_rate,
+                    manipulation_probability,
+                    applicable_agent_count,
+                    all_findings,
+                    cross_modal_confirmed_count,
+                    len(contested_findings),
+                    analysis_coverage_note,
+                    has_deep_analysis=has_deep_analysis,
                 )
 
             async def t_narratives():
                 sem = asyncio.Semaphore(3)
+
                 async def _one(aid, res):
                     async with sem:
                         try:
                             await _step(f"Synthesizing {AGENT_NAMES.get(aid, aid)} narrative...")
                             narr = await asyncio.wait_for(
-                                self._generate_agent_narrative(aid, res.get("findings", []), per_agent_metrics.get(aid, {})),
-                                timeout=40.0
+                                self._generate_agent_narrative(
+                                    aid, res.get("findings", []), per_agent_metrics.get(aid, {})
+                                ),
+                                timeout=40.0,
                             )
                             return aid, narr or ""
                         except Exception:
                             return aid, ""
-                pairs = await asyncio.gather(*[_one(aid, res) for aid, res in active_agent_results.items()])
+
+                pairs = await asyncio.gather(
+                    *[_one(aid, res) for aid, res in active_agent_results.items()]
+                )
                 return {p[0]: p[1] for p in pairs if isinstance(p, tuple) and p[1]}
 
             async def t_executive():
@@ -856,23 +849,42 @@ Rules:
                     await _step("Generating cross-modal executive summary...")
                     return await asyncio.wait_for(
                         self._generate_executive_summary(
-                            len(active_agent_results), len(all_findings),
-                            cross_modal_confirmed_count, len(contested_findings),
-                            all_findings=all_findings, gemini_findings=gemini_vision_findings,
+                            len(active_agent_results),
+                            len(all_findings),
+                            cross_modal_confirmed_count,
+                            len(contested_findings),
+                            all_findings=all_findings,
+                            gemini_findings=gemini_vision_findings,
                             active_agent_metrics=list(per_agent_metrics.values()),
-                            overall_verdict=overall_verdict
-                        ), timeout=45.0
+                            overall_verdict=overall_verdict,
+                        ),
+                        timeout=45.0,
                     )
                 except Exception:
-                    return self._template_executive_summary(len(active_agent_results), len(all_findings), cross_modal_confirmed_count, len(contested_findings), all_findings)
+                    return self._template_executive_summary(
+                        len(active_agent_results),
+                        len(all_findings),
+                        cross_modal_confirmed_count,
+                        len(contested_findings),
+                        all_findings,
+                    )
 
             async def t_uncertainty():
                 try:
-                    return await asyncio.wait_for(self._generate_uncertainty_statement(len(incomplete_findings), len(contested_findings), overall_error_rate), timeout=30.0)
+                    return await asyncio.wait_for(
+                        self._generate_uncertainty_statement(
+                            len(incomplete_findings), len(contested_findings), overall_error_rate
+                        ),
+                        timeout=30.0,
+                    )
                 except Exception:
-                    return self._template_uncertainty_statement(len(incomplete_findings), len(contested_findings), overall_error_rate)
+                    return self._template_uncertainty_statement(
+                        len(incomplete_findings), len(contested_findings), overall_error_rate
+                    )
 
-            (v_sent, kf_list, r_note), p_anal, exec_sum, unc_stmt = await asyncio.gather(t_structured(), t_narratives(), t_executive(), t_uncertainty())
+            (v_sent, kf_list, r_note), p_anal, exec_sum, unc_stmt = await asyncio.gather(
+                t_structured(), t_narratives(), t_executive(), t_uncertainty()
+            )
 
         self._synthesis_client = None
         return {
@@ -882,16 +894,20 @@ Rules:
             "per_agent_analysis": p_anal,
             "executive_summary": exec_sum,
             "uncertainty_statement": unc_stmt,
-            "llm_used": llm_enabled
+            "llm_used": llm_enabled,
         }
 
-    def _template_all(self, ov, oc, oer, mp, aac, af, cmc, cont, acn, aar, incomplete_count: int = 0):
+    def _template_all(
+        self, ov, oc, oer, mp, aac, af, cmc, cont, acn, aar, incomplete_count: int = 0
+    ):
         vs, kf, rn = self._template_structured_summary(ov, oc, oer, mp, aac, af, cmc, cont, acn)
         exec_s = self._template_executive_summary(len(aar), len(af), cmc, cont, af)
         unc_s = self._template_uncertainty_statement(incomplete_count, cont, oer)
         return vs, kf, rn, {}, exec_s, unc_s
 
-    async def sign_report(self, report: ForensicReport, completion_time: datetime | None = None) -> ForensicReport:
+    async def sign_report(
+        self, report: ForensicReport, completion_time: datetime | None = None
+    ) -> ForensicReport:
         """Sign the forensic report with the Arbiter key.
 
         Args:
@@ -900,10 +916,14 @@ Rules:
                         If not provided, uses current time.
         """
         now = completion_time or datetime.now(UTC)
-        report_dict = report.model_dump(mode="json", exclude={"cryptographic_signature", "report_hash", "signed_utc"})
+        report_dict = report.model_dump(
+            mode="json", exclude={"cryptographic_signature", "report_hash", "signed_utc"}
+        )
         report_json = json.dumps(report_dict, sort_keys=True)
         report_hash = hashlib.sha256(report_json.encode()).hexdigest()
-        signed_entry = sign_content(agent_id="Arbiter", content={"hash": report_hash, "timestamp": now.isoformat()})
+        signed_entry = sign_content(
+            agent_id="Arbiter", content={"hash": report_hash, "timestamp": now.isoformat()}
+        )
         report.report_hash = report_hash
         report.cryptographic_signature = signed_entry.signature
         report.signed_utc = now

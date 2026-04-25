@@ -13,6 +13,7 @@ from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
+
 class BaseToolHandler(ABC):
     """
     Abstract base class for domain-specific tool handlers.
@@ -38,16 +39,19 @@ class BaseToolHandler(ABC):
         """
         try:
             from core.working_memory import TaskStatus
+
             await self.agent.working_memory.create_task(
                 session_id=self.agent.session_id,
                 agent_id=self.agent.agent_id,
                 description=description,
                 status=TaskStatus.PENDING,
-                priority=priority
+                priority=priority,
             )
             logger.info("Dynamic task injected", agent_id=self.agent.agent_id, task=description)
         except Exception as e:
-            logger.error("Failed to inject dynamic task", agent_id=self.agent.agent_id, error=str(e))
+            logger.error(
+                "Failed to inject dynamic task", agent_id=self.agent.agent_id, error=str(e)
+            )
 
     @abstractmethod
     def register_tools(self, registry) -> None:

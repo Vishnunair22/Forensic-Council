@@ -6,9 +6,7 @@ import sys
 
 sys.path.insert(
     0,
-    os.environ.get(
-        "APP_DIR", os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    ),
+    os.environ.get("APP_DIR", os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
 )
 from passlib.context import CryptContext
 

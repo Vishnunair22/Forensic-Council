@@ -95,7 +95,9 @@ class InvestigationQueue:
             # Push to queue
             await redis.client.rpush(self.QUEUE_KEY, str(session_id))
         except Exception as e:
-            logger.error("Failed to submit investigation to Redis", session_id=str(session_id), error=str(e))
+            logger.error(
+                "Failed to submit investigation to Redis", session_id=str(session_id), error=str(e)
+            )
             # Attempt to clean up metadata if queue push failed
             await redis.hdel(self.METADATA_KEY, str(session_id))
             raise
@@ -185,7 +187,9 @@ class InvestigationWorker:
                     )
 
                     task.status = InvestigationStatus.COMPLETED
-                    task.result = result.model_dump(mode="json") if hasattr(result, "model_dump") else result
+                    task.result = (
+                        result.model_dump(mode="json") if hasattr(result, "model_dump") else result
+                    )
                     task.completed_at = time.time()
                 except Exception as e:
                     task.status = InvestigationStatus.FAILED

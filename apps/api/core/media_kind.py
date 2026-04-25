@@ -75,7 +75,11 @@ def is_screen_capture_like(artifact: Any) -> bool:
     mime = _artifact_mime(artifact)
     if is_camera_still_candidate(artifact):
         return False
-    if ext not in {".png", ".webp", ".bmp"} and mime not in {"image/png", "image/webp", "image/bmp"}:
+    if ext not in {".png", ".webp", ".bmp"} and mime not in {
+        "image/png",
+        "image/webp",
+        "image/bmp",
+    }:
         return False
 
     probe = _image_probe(file_path)
@@ -90,10 +94,11 @@ def is_screen_capture_like(artifact: Any) -> bool:
     aspect = width / max(height, 1)
     monitor_like = 1.15 <= aspect <= 2.5
     metadata_hint = bool(
-        set(probe.get("info_keys") or ())
-        & {"software", "source", "screen", "creation time", "dpi"}
+        set(probe.get("info_keys") or ()) & {"software", "source", "screen", "creation time", "dpi"}
     )
-    common_axis = any(v in {720, 768, 800, 900, 1024, 1080, 1200, 1440, 1600, 2160} for v in (width, height))
+    common_axis = any(
+        v in {720, 768, 800, 900, 1024, 1080, 1200, 1440, 1600, 2160} for v in (width, height)
+    )
     return monitor_like and (metadata_hint or common_axis or width >= 1000)
 
 

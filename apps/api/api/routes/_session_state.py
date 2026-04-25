@@ -40,8 +40,8 @@ AGENT_NAMES = {
 }
 
 # Session TTLs (IMPV-01)
-_METADATA_TTL_SECONDS = 14400    # 4 Hours (Transient state)
-_REPORT_TTL_SECONDS = 604800     # 7 Days (Hot cache for review)
+_METADATA_TTL_SECONDS = 14400  # 4 Hours (Transient state)
+_REPORT_TTL_SECONDS = 604800  # 7 Days (Hot cache for review)
 
 # ── In-process state stores ────────────────────────────────────────────────────
 # These must remain in-memory because they hold live Python objects (pipeline
@@ -54,6 +54,7 @@ _active_tasks: dict[str, Any] = {}  # session_id → asyncio.Task
 
 async def _get_redis():
     from core.persistence.redis_client import get_redis_client
+
     return await get_redis_client()
 
 
@@ -138,7 +139,12 @@ async def set_final_report(session_id: str, report: Any) -> None:
     ts_key = f"{REPORT_CACHE_KEY_PREFIX}{session_id}:created_at"
     data = report.model_dump(mode="json") if hasattr(report, "model_dump") else report
     import json as _json
-    await redis.set(key, _json.dumps(data, default=str) if isinstance(data, dict) else data, ex=_REPORT_TTL_SECONDS)
+
+    await redis.set(
+        key,
+        _json.dumps(data, default=str) if isinstance(data, dict) else data,
+        ex=_REPORT_TTL_SECONDS,
+    )
     # Issue 9.2: Store the real creation timestamp alongside the report data
     await redis.set(ts_key, datetime.now(UTC).isoformat(), ex=_REPORT_TTL_SECONDS)
 

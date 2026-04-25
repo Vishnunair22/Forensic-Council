@@ -69,9 +69,7 @@ class QdrantClient:
         self._port = port or settings.qdrant_port
         self._grpc_port = grpc_port or settings.qdrant_grpc_port
         self._api_key = api_key or settings.qdrant_api_key
-        self._https = getattr(
-            settings, "qdrant_https", settings.app_env == "production"
-        )
+        self._https = getattr(settings, "qdrant_https", settings.app_env == "production")
 
         self._client: QdrantAsyncClient | None = None
 
@@ -124,9 +122,7 @@ class QdrantClient:
     def client(self) -> QdrantAsyncClient:
         """Get the underlying Qdrant client."""
         if self._client is None:
-            raise QdrantConnectionError(
-                "Qdrant client not connected. Call connect() first."
-            )
+            raise QdrantConnectionError("Qdrant client not connected. Call connect() first.")
         return self._client
 
     async def health_check(self) -> bool:
@@ -136,9 +132,7 @@ class QdrantClient:
             return True
         except Exception as e:
             logger.error("Qdrant health check failed", error=str(e))
-            raise QdrantConnectionError(
-                "Qdrant health check failed", details={"error": str(e)}
-            )
+            raise QdrantConnectionError("Qdrant health check failed", details={"error": str(e)})
 
     async def collection_exists(self, collection_name: str) -> bool:
         """

@@ -8,9 +8,9 @@ tribunal escalation, and generates court-admissible reports.
 
 from __future__ import annotations
 
+import uuid as _uuid
 from typing import Any
 from uuid import UUID
-import uuid as _uuid
 
 from agents.arbiter_narrative import ArbiterNarrativeMixin
 from agents.arbiter_verdict import (
@@ -109,8 +109,11 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 active_results[aid] = {**res, "findings": deduped}
                 all_findings.extend(deduped)
                 af_gemini = [
-                    f for f in deduped
-                    if str((f.get("metadata") or {}).get("analysis_source", "")).startswith("gemini")
+                    f
+                    for f in deduped
+                    if str((f.get("metadata") or {}).get("analysis_source", "")).startswith(
+                        "gemini"
+                    )
                 ]
                 if af_gemini:
                     gemini_findings_by_agent[aid] = af_gemini
@@ -119,16 +122,30 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             return self._empty_report(case_id, per_agent_findings, per_agent_metrics)
 
         # ── 2. Reliability & Scoring ─────────────────────────────────────
-        active_metrics = [m for m in per_agent_metrics.values() if not m.get("skipped") and m.get("total_tools_called", 0) > 0]
+        active_metrics = [
+            m
+            for m in per_agent_metrics.values()
+            if not m.get("skipped") and m.get("total_tools_called", 0) > 0
+        ]
 
         # Weighted stats
         overall_confidence, overall_error_rate = self._calculate_weighted_stats(active_metrics)
 
         # Confidence range
-        conf_scores = [m["confidence_score"] for m in active_metrics if m.get("confidence_score", 0) > 0]
+        conf_scores = [
+            m["confidence_score"] for m in active_metrics if m.get("confidence_score", 0) > 0
+        ]
         c_min = min(conf_scores) if conf_scores else 0.0
         c_max = max(conf_scores) if conf_scores else 0.0
-        c_std = (sum((x - (sum(conf_scores)/len(conf_scores)))**2 for x in conf_scores)/len(conf_scores))**0.5 if conf_scores else 0.0
+        c_std = (
+            (
+                sum((x - (sum(conf_scores) / len(conf_scores))) ** 2 for x in conf_scores)
+                / len(conf_scores)
+            )
+            ** 0.5
+            if conf_scores
+            else 0.0
+        )
 
         # Manipulation detection
         comp_penalty = self._get_compression_penalty(all_findings)
@@ -142,19 +159,42 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         contested = await self._run_challenges(comparisons)
 
         # Final verdict mapping
-        overall_verdict = self._compute_verdict(man_prob, man_signals, overall_confidence, overall_error_rate, len(contested), active_metrics, all_findings)
+        overall_verdict = self._compute_verdict(
+            man_prob,
+            man_signals,
+            overall_confidence,
+            overall_error_rate,
+            len(contested),
+            active_metrics,
+            all_findings,
+        )
 
         # ── 4. Narrative Synthesis ────────────────────────────────────────
         await _step(f"Verdict: {overall_verdict} — synthesising report…")
         analysis_cov = self._get_coverage_note(active_metrics, all_findings)
 
         narratives = await self.deliberate_narratives(
-            overall_verdict, overall_confidence, overall_error_rate, man_prob,
-            len(active_results), all_findings, active_results, per_agent_metrics,
+            overall_verdict,
+            overall_confidence,
+            overall_error_rate,
+            man_prob,
+            len(active_results),
+            all_findings,
+            active_results,
+            per_agent_metrics,
             [f for fl in gemini_findings_by_agent.values() for f in fl],
-            len([c for c in comparisons if c.verdict == FindingVerdict.AGREEMENT and c.cross_modal_confirmed]),
-            contested, [f for f in all_findings if f.get("status") == "INCOMPLETE"],
-            analysis_cov, use_llm=use_llm, step_hook=self._step_hook
+            len(
+                [
+                    c
+                    for c in comparisons
+                    if c.verdict == FindingVerdict.AGREEMENT and c.cross_modal_confirmed
+                ]
+            ),
+            contested,
+            [f for f in all_findings if f.get("status") == "INCOMPLETE"],
+            analysis_cov,
+            use_llm=use_llm,
+            step_hook=self._step_hook,
         )
 
         # ── 5. Case Finalisation ───────────────────────────────────────────
@@ -166,20 +206,40 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             logger.debug("Cross-modal fusion failed", error=str(exc))
 
         report = ForensicReport(
-            session_id=self.session_id, case_id=case_id or f"case_{self.session_id}",
-            executive_summary=narratives["executive_summary"], per_agent_findings=per_agent_findings,
-            per_agent_metrics=per_agent_metrics, per_agent_analysis=narratives["per_agent_analysis"],
-            overall_confidence=overall_confidence, overall_error_rate=overall_error_rate,
-            overall_verdict=overall_verdict, cross_modal_confirmed=[c.finding_a for c in comparisons if c.verdict == FindingVerdict.AGREEMENT and c.cross_modal_confirmed],
-            contested_findings=contested, incomplete_findings=[f for f in all_findings if f.get("status") == "INCOMPLETE"],
-            stub_findings=[f for f in all_findings if f.get("stub_result")], gemini_vision_findings=[f for fl in gemini_findings_by_agent.values() for f in fl],
-            uncertainty_statement=narratives["uncertainty_statement"], verdict_sentence=narratives["verdict_sentence"],
-            key_findings=narratives["key_findings"], reliability_note=narratives["reliability_note"],
-            manipulation_probability=man_prob, confidence_min=c_min, confidence_max=c_max, confidence_std_dev=c_std,
+            session_id=self.session_id,
+            case_id=case_id or f"case_{self.session_id}",
+            executive_summary=narratives["executive_summary"],
+            per_agent_findings=per_agent_findings,
+            per_agent_metrics=per_agent_metrics,
+            per_agent_analysis=narratives["per_agent_analysis"],
+            overall_confidence=overall_confidence,
+            overall_error_rate=overall_error_rate,
+            overall_verdict=overall_verdict,
+            cross_modal_confirmed=[
+                c.finding_a
+                for c in comparisons
+                if c.verdict == FindingVerdict.AGREEMENT and c.cross_modal_confirmed
+            ],
+            contested_findings=contested,
+            incomplete_findings=[f for f in all_findings if f.get("status") == "INCOMPLETE"],
+            stub_findings=[f for f in all_findings if f.get("stub_result")],
+            gemini_vision_findings=[f for fl in gemini_findings_by_agent.values() for f in fl],
+            uncertainty_statement=narratives["uncertainty_statement"],
+            verdict_sentence=narratives["verdict_sentence"],
+            key_findings=narratives["key_findings"],
+            reliability_note=narratives["reliability_note"],
+            manipulation_probability=man_prob,
+            confidence_min=c_min,
+            confidence_max=c_max,
+            confidence_std_dev=c_std,
             per_agent_summary=self._get_agent_summary(per_agent_metrics, per_agent_findings),
-            degradation_flags=self._get_degradation_flags(narratives["llm_used"], comp_penalty, all_findings, active_metrics),
-            applicable_agent_count=len(active_results), skipped_agents=skipped_agents,
-            analysis_coverage_note=analysis_cov, cross_modal_fusion=_fusion,
+            degradation_flags=self._get_degradation_flags(
+                narratives["llm_used"], comp_penalty, all_findings, active_metrics
+            ),
+            applicable_agent_count=len(active_results),
+            skipped_agents=skipped_agents,
+            analysis_coverage_note=analysis_cov,
+            cross_modal_fusion=_fusion,
             compression_penalty=comp_penalty,
         )
         return await self.sign_report(report)
@@ -187,7 +247,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
     def _deduplicate_findings(self, findings: list[dict]) -> list[dict]:
         """
         Deduplicate findings while preserving forensic contradictions.
-        
+
         If the same tool produces different verdicts (e.g. POSITIVE and NEGATIVE),
         both are preserved so the tribunal can deliberate on the inconsistency.
         Otherwise, the highest-confidence finding for a given key is kept.
@@ -195,23 +255,25 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         seen, out = {}, []
         for f in findings:
             if not isinstance(f, dict):
-                logger.warning("Skipping non-dict finding during deduplication", type=type(f).__name__)
+                logger.warning(
+                    "Skipping non-dict finding during deduplication", type=type(f).__name__
+                )
                 continue
-                
+
             if "severity_tier" not in f:
                 f["severity_tier"] = assign_severity_tier(f)
-            
+
             meta = f.get("metadata") or {}
             verdict = evidence_verdict_of(f)
-            
+
             # Key now includes verdict to ensure contradictions are not deduped away
             key = (
-                str(f.get("agent_id", "")), 
-                str(f.get("finding_type", "")), 
+                str(f.get("agent_id", "")),
+                str(f.get("finding_type", "")),
                 str(meta.get("tool_name", "")),
-                verdict
+                verdict,
             )
-            
+
             if key in seen:
                 idx = seen[key]
                 old = out[idx]
@@ -220,7 +282,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 if conf_new > conf_old:
                     out[idx] = f
                 continue
-                
+
             seen[key] = len(out)
             out.append(f)
         return out
@@ -229,7 +291,12 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         name = AGENT_NAMES.get(aid, aid)
         if skipped:
             return AgentMetrics(agent_id=aid, agent_name=name, skipped=True)
-        real = [f for f in findings if str(f.get("finding_type", "")).lower() not in {"file type not applicable", "format not supported"}]
+        real = [
+            f
+            for f in findings
+            if str(f.get("finding_type", "")).lower()
+            not in {"file type not applicable", "format not supported"}
+        ]
 
         def _is_na(f):
             return evidence_verdict_of(f) == "NOT_APPLICABLE"
@@ -256,16 +323,16 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         avg_conf = round(sum(conf) / len(conf), 3) if conf else 0.0
         deep = sum(1 for f in real if (f.get("metadata") or {}).get("analysis_phase") == "deep")
         return AgentMetrics(
-            agent_id=aid, 
-            agent_name=name, 
-            total_tools_called=len(real), 
-            tools_succeeded=app-fail, 
-            tools_failed=fail, 
-            tools_not_applicable=na, 
-            error_rate=err, 
-            confidence_score=avg_conf, 
+            agent_id=aid,
+            agent_name=name,
+            total_tools_called=len(real),
+            tools_succeeded=app - fail,
+            tools_failed=fail,
+            tools_not_applicable=na,
+            error_rate=err,
+            confidence_score=avg_conf,
             finding_count=len(real),
-            deep_finding_count=deep
+            deep_finding_count=deep,
         )
 
     def _calculate_weighted_stats(self, active_metrics: list[dict]) -> tuple[float, float]:
@@ -275,12 +342,22 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             if app <= 0:
                 continue
             rel = max(0.0, 1.0 - m.get("error_rate", 0.0))
-            weight = rel * app * (ForensicPolicy.DEEP_ANALYSIS_BONUS if m.get("deep_finding_count", 0) > 0 else 1.0)
+            weight = (
+                rel
+                * app
+                * (
+                    ForensicPolicy.DEEP_ANALYSIS_BONUS
+                    if m.get("deep_finding_count", 0) > 0
+                    else 1.0
+                )
+            )
             wc_sum += m["confidence_score"] * weight
             w_sum += weight
             we_num += m["error_rate"] * max(1, app)
             we_den += max(1, app)
-        return (round(wc_sum / w_sum, 3) if w_sum > 0 else 0.0), (round(we_num / we_den, 3) if we_den > 0 else 0.0)
+        return (round(wc_sum / w_sum, 3) if w_sum > 0 else 0.0), (
+            round(we_num / we_den, 3) if we_den > 0 else 0.0
+        )
 
     def _get_compression_penalty(self, findings: list[dict]) -> float:
         """Retrieve compression penalty from Agent 5's audit finding."""
@@ -291,7 +368,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 or meta.get("tool_name") == "compression_risk_audit"
             ):
                 return float(meta.get("compression_penalty", 1.0))
-        
+
         # Agent 5 ran but produced no audit — apply a small conservative penalty
         # to prevent overconfident AUTHENTIC verdicts without compression evidence.
         agent5_active = any(
@@ -311,26 +388,45 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         active_metrics: list[dict],
         all_findings: list[dict],
     ) -> str:
-        if manipulation_probability >= ForensicPolicy.MANIPULATED_PROB_THRESHOLD and manipulation_signals >= ForensicPolicy.MANIP_SIGNAL_MIN_REQUIRED:
+        if (
+            manipulation_probability >= ForensicPolicy.MANIPULATED_PROB_THRESHOLD
+            and manipulation_signals >= ForensicPolicy.MANIP_SIGNAL_MIN_REQUIRED
+        ):
             return "MANIPULATED"
 
         elif manipulation_probability >= ForensicPolicy.LIKELY_MANIPULATED_PROB_THRESHOLD and (
             manipulation_signals >= ForensicPolicy.MANIP_SIGNAL_MIN_REQUIRED
-            or (manipulation_signals == 1 and manipulation_probability >= ForensicPolicy.SINGLE_SIGNAL_MANIP_THRESHOLD)
+            or (
+                manipulation_signals == 1
+                and manipulation_probability >= ForensicPolicy.SINGLE_SIGNAL_MANIP_THRESHOLD
+            )
         ):
             return "LIKELY_MANIPULATED"
 
-        elif manipulation_probability >= ForensicPolicy.SUSPICIOUS_PROB_THRESHOLD and manipulation_signals >= 1:
+        elif (
+            manipulation_probability >= ForensicPolicy.SUSPICIOUS_PROB_THRESHOLD
+            and manipulation_signals >= 1
+        ):
             return "SUSPICIOUS"
 
-        elif (manipulation_signals == 0 and overall_confidence >= ForensicPolicy.AUTHENTIC_CONF_THRESHOLD
-            and overall_error_rate <= ForensicPolicy.AUTHENTIC_ERROR_MAX and contested_count == 0):
+        elif (
+            manipulation_signals == 0
+            and overall_confidence >= ForensicPolicy.AUTHENTIC_CONF_THRESHOLD
+            and overall_error_rate <= ForensicPolicy.AUTHENTIC_ERROR_MAX
+            and contested_count == 0
+        ):
             return "AUTHENTIC"
 
-        elif manipulation_signals == 0 and overall_confidence >= ForensicPolicy.LIKELY_AUTHENTIC_CONF_THRESHOLD and overall_error_rate <= ForensicPolicy.LIKELY_AUTHENTIC_ERROR_MAX:
+        elif (
+            manipulation_signals == 0
+            and overall_confidence >= ForensicPolicy.LIKELY_AUTHENTIC_CONF_THRESHOLD
+            and overall_error_rate <= ForensicPolicy.LIKELY_AUTHENTIC_ERROR_MAX
+        ):
             return "LIKELY_AUTHENTIC"
 
-        elif (len(active_metrics) <= 1 and overall_confidence < ForensicPolicy.ABSTAIN_CONF_FLOOR) or overall_error_rate > ForensicPolicy.ABSTAIN_ERROR_CEILING:
+        elif (
+            len(active_metrics) <= 1 and overall_confidence < ForensicPolicy.ABSTAIN_CONF_FLOOR
+        ) or overall_error_rate > ForensicPolicy.ABSTAIN_ERROR_CEILING:
             return "ABSTAIN"
 
         else:
@@ -416,8 +512,16 @@ class CouncilArbiter(ArbiterNarrativeMixin):
 
             agent_findings = findings.get(aid, [])
             from agents.arbiter_verdict import MIN_CONFIDENCE_THRESHOLD, confidence_of
-            positive = sum(1 for f in agent_findings if evidence_verdict_of(f) == "POSITIVE" and (confidence_of(f) or 0) >= MIN_CONFIDENCE_THRESHOLD)
-            inconclusive = sum(1 for f in agent_findings if evidence_verdict_of(f) == "INCONCLUSIVE")
+
+            positive = sum(
+                1
+                for f in agent_findings
+                if evidence_verdict_of(f) == "POSITIVE"
+                and (confidence_of(f) or 0) >= MIN_CONFIDENCE_THRESHOLD
+            )
+            inconclusive = sum(
+                1 for f in agent_findings if evidence_verdict_of(f) == "INCONCLUSIVE"
+            )
 
             if positive > 0:
                 v = "SUSPICIOUS"
@@ -430,7 +534,11 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 v = "SUSPICIOUS"
             else:
                 # Default to AUTHENTIC if confidence is high and no suspicious signals found
-                v = "AUTHENTIC" if conf >= ForensicPolicy.AUTHENTIC_CONF_THRESHOLD else "INCONCLUSIVE"
+                v = (
+                    "AUTHENTIC"
+                    if conf >= ForensicPolicy.AUTHENTIC_CONF_THRESHOLD
+                    else "INCONCLUSIVE"
+                )
 
             if m.get("skipped"):
                 v = "NOT_APPLICABLE"
@@ -440,7 +548,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 "verdict": v,
                 "confidence_pct": round(conf * 100),
                 "error_rate_pct": round(err * 100),
-                "skipped": m.get("skipped", False)
+                "skipped": m.get("skipped", False),
             }
         return summary
 
@@ -449,7 +557,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         if self.config.llm_enable_post_synthesis and not llm_ok:
             flags.append("LLM synthesis bypassed")
         if penalty < 1.0:
-            flags.append(f"Compression penalty applied ({round((1-penalty)*100)}%)")
+            flags.append(f"Compression penalty applied ({round((1 - penalty) * 100)}%)")
         if not any(
             str((f.get("metadata") or {}).get("analysis_source", "")).startswith("gemini")
             for f in findings
@@ -458,4 +566,12 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         return flags
 
     def _empty_report(self, case_id, findings, metrics) -> ForensicReport:
-        return ForensicReport(session_id=self.session_id, case_id=case_id or f"case_{self.session_id}", executive_summary="No active agents produced findings.", per_agent_findings=findings, per_agent_metrics=metrics, uncertainty_statement="Analysis was skipped for all agents.", overall_verdict="INCONCLUSIVE")
+        return ForensicReport(
+            session_id=self.session_id,
+            case_id=case_id or f"case_{self.session_id}",
+            executive_summary="No active agents produced findings.",
+            per_agent_findings=findings,
+            per_agent_metrics=metrics,
+            uncertainty_statement="Analysis was skipped for all agents.",
+            overall_verdict="INCONCLUSIVE",
+        )

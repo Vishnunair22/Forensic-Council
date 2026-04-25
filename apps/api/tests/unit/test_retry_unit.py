@@ -27,6 +27,7 @@ from core.retry import RetryConfig, calculate_delay
 
 # ── RetryConfig ────────────────────────────────────────────────────────────────
 
+
 class TestRetryConfig:
     def test_defaults(self):
         cfg = RetryConfig()
@@ -48,13 +49,16 @@ class TestRetryConfig:
 
     def test_on_retry_callback(self):
         calls = []
+
         def on_retry(exc, attempt):
             calls.append(attempt)
+
         cfg = RetryConfig(on_retry=on_retry)
         assert cfg.on_retry is on_retry
 
 
 # ── calculate_delay ────────────────────────────────────────────────────────────
+
 
 class TestCalculateDelay:
     def test_first_attempt_returns_base_delay(self):
@@ -92,15 +96,19 @@ class TestCalculateDelay:
 
 # ── retry_async ───────────────────────────────────────────────────────────────
 
+
 class TestRetryAsync:
     @pytest.mark.asyncio
     async def test_succeeds_on_first_try(self):
         from core.retry import retry_async
+
         call_count = 0
+
         async def succeeding():
             nonlocal call_count
             call_count += 1
             return "success"
+
         cfg = RetryConfig(max_retries=3)
         result = await retry_async(succeeding, config=cfg)
         assert result == "success"
@@ -109,13 +117,16 @@ class TestRetryAsync:
     @pytest.mark.asyncio
     async def test_retries_on_failure(self):
         from core.retry import retry_async
+
         call_count = 0
+
         async def fails_twice_then_succeeds():
             nonlocal call_count
             call_count += 1
             if call_count < 3:
                 raise RuntimeError(f"fail {call_count}")
             return "eventual_success"
+
         cfg = RetryConfig(max_retries=3, base_delay=0.001, jitter=False)
         result = await retry_async(fails_twice_then_succeeds, config=cfg)
         assert result == "eventual_success"
@@ -124,11 +135,14 @@ class TestRetryAsync:
     @pytest.mark.asyncio
     async def test_raises_after_max_retries(self):
         from core.retry import retry_async
+
         call_count = 0
+
         async def always_fails():
             nonlocal call_count
             call_count += 1
             raise RuntimeError("always fails")
+
         cfg = RetryConfig(max_retries=2, base_delay=0.001, jitter=False)
         with pytest.raises(RuntimeError, match="always fails"):
             await retry_async(always_fails, config=cfg)
@@ -137,16 +151,21 @@ class TestRetryAsync:
     @pytest.mark.asyncio
     async def test_on_retry_callback_called(self):
         from core.retry import retry_async
+
         attempts = []
+
         def on_retry(exc, attempt):
             attempts.append(attempt)
+
         call_count = 0
+
         async def fails_once():
             nonlocal call_count
             call_count += 1
             if call_count == 1:
                 raise RuntimeError("first failure")
             return "ok"
+
         cfg = RetryConfig(max_retries=2, base_delay=0.001, jitter=False, on_retry=on_retry)
         result = await retry_async(fails_once, config=cfg)
         assert result == "ok"
@@ -156,8 +175,10 @@ class TestRetryAsync:
     @pytest.mark.asyncio
     async def test_does_not_retry_non_matching_exception(self):
         from core.retry import retry_async
+
         async def raises_value_error():
             raise ValueError("not retried")
+
         cfg = RetryConfig(
             max_retries=3,
             base_delay=0.001,
@@ -170,10 +191,12 @@ class TestRetryAsync:
 
 # ── with_retry decorator ──────────────────────────────────────────────────────
 
+
 class TestWithRetryDecorator:
     @pytest.mark.asyncio
     async def test_decorator_wraps_function(self):
         from core.retry import with_retry
+
         call_count = 0
 
         @with_retry(max_retries=1, base_delay=0.001, jitter=False)

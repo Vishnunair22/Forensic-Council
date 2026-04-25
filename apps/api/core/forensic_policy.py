@@ -29,7 +29,6 @@ class ForensicPolicy:
         "noise_fingerprint": 1.0,
         "frequency_domain_analysis": 1.0,
         "codec_fingerprint": 1.0,
-
         # ML-based / Neural (medium-high weight)
         "voice_clone_detect": 0.85,
         "anti_spoofing_detect": 0.85,
@@ -51,7 +50,6 @@ class ForensicPolicy:
         "thumbnail_coherence": 0.75,
         "av_sync_verify": 0.80,
         "compression_risk_audit": 0.85,
-
         # Heuristic / metadata (lower weight)
         "exif_extract": 0.5,
         "metadata_anomaly_score": 0.65,
@@ -84,7 +82,9 @@ class ForensicPolicy:
     LIKELY_MANIPULATED_PROB_THRESHOLD = 0.55
     SUSPICIOUS_PROB_THRESHOLD = 0.45
     MANIP_SIGNAL_MIN_REQUIRED = 2  # Min direct signals for "MANIPULATED"
-    SINGLE_SIGNAL_MANIP_THRESHOLD = 0.85 # Confidence floor for a single signal to trigger LIKELY_MANIPULATED
+    SINGLE_SIGNAL_MANIP_THRESHOLD = (
+        0.85  # Confidence floor for a single signal to trigger LIKELY_MANIPULATED
+    )
 
     AUTHENTIC_CONF_THRESHOLD = 0.75  # Higher bar for absolute "AUTHENTIC"
     AUTHENTIC_ERROR_MAX = 0.15

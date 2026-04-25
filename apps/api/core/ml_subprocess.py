@@ -35,13 +35,13 @@ _WARMUP_SCRIPTS = {
     "deepfake_frequency.py",
     "noise_fingerprint.py",
     # ── Phase 1 neural image tools ────────────────────────────────────────
-    "neural_ela_transformer.py",    # ViT-style multi-quality ELA
-    "noiseprint_clustering.py",     # PRNU sensor noise K-means clustering
+    "neural_ela_transformer.py",  # ViT-style multi-quality ELA
+    "noiseprint_clustering.py",  # PRNU sensor noise K-means clustering
     # ── Phase 2 SOTA image tools ──────────────────────────────────────────
-    "trufor_analyzer.py",           # TruFor SRM-feature splicing detector
-    "busternet_v2.py",              # BusterNet dual-branch copy-move detector
-    "mantra_net_tracer.py",         # ManTra-Net universal anomaly tracer
-    "f3net_freq.py",                # F3-Net frequency GAN/AI artifact detector
+    "trufor_analyzer.py",  # TruFor SRM-feature splicing detector
+    "busternet_v2.py",  # BusterNet dual-branch copy-move detector
+    "mantra_net_tracer.py",  # ManTra-Net universal anomaly tracer
+    "f3net_freq.py",  # F3-Net frequency GAN/AI artifact detector
     "diffusion_artifact_detector.py",
     # ── Audio / video tools ───────────────────────────────────────────────
     "audio_splice_detector.py",
@@ -110,9 +110,7 @@ class _MLWorker:
         except Exception:
             pass
 
-    async def call(
-        self, input_path: str, extra_args: list[str] | None, timeout: float
-    ) -> dict:
+    async def call(self, input_path: str, extra_args: list[str] | None, timeout: float) -> dict:
         """Send a call to the worker and return the JSON result."""
         async with self._lock:
             await self._ensure_started()
@@ -125,9 +123,7 @@ class _MLWorker:
                 self._proc.stdin.write((request + "\n").encode())
                 await asyncio.wait_for(self._proc.stdin.drain(), timeout=5.0)
 
-                raw = await asyncio.wait_for(
-                    self._proc.stdout.readline(), timeout=timeout
-                )
+                raw = await asyncio.wait_for(self._proc.stdout.readline(), timeout=timeout)
                 if not raw:
                     raise RuntimeError(f"Worker for {self.tool_name} closed stdout")
                 return json.loads(raw.decode().strip())
@@ -247,9 +243,7 @@ async def warmup_all_tools(timeout_per_tool: float = 60.0) -> dict[str, bool]:
     Call this at application startup (in lifespan) so the first investigation
     doesn't incur 30-50s of cold-start model loading.
     """
-    tasks = {
-        name: warmup_ml_tool(name, timeout=timeout_per_tool) for name in _WARMUP_SCRIPTS
-    }
+    tasks = {name: warmup_ml_tool(name, timeout=timeout_per_tool) for name in _WARMUP_SCRIPTS}
     results = {}
     for name, coro in tasks.items():
         try:
@@ -353,22 +347,26 @@ async def run_ml_tool(
         return r
 
     if not script_path.exists():
-        return _normalize_result({
-            "error": f"Script not found: {script_name}",
-            "available": False,
-            "tool_name": tool_name,
-        })
+        return _normalize_result(
+            {
+                "error": f"Script not found: {script_name}",
+                "available": False,
+                "tool_name": tool_name,
+            }
+        )
 
     # Use the smaller of explicit timeout and remaining budget
     effective_timeout = timeout
     if timeout_budget is not None and timeout_budget > 0:
         effective_timeout = min(timeout, timeout_budget)
         if effective_timeout < 2.0:
-            return _normalize_result({
-                "error": f"Insufficient timeout budget ({effective_timeout:.1f}s) for {tool_name}",
-                "available": False,
-                "tool_name": tool_name,
-            })
+            return _normalize_result(
+                {
+                    "error": f"Insufficient timeout budget ({effective_timeout:.1f}s) for {tool_name}",
+                    "available": False,
+                    "tool_name": tool_name,
+                }
+            )
 
     # Try persistent worker first (faster — no Python startup cost)
     try:
@@ -388,9 +386,7 @@ async def run_ml_tool(
                 f"Worker {tool_name} returned error, falling back to subprocess: {result.get('error', '')[:100]}"
             )
     except Exception as _worker_err:
-        logger.debug(
-            f"Worker unavailable for {tool_name}, using subprocess: {_worker_err}"
-        )
+        logger.debug(f"Worker unavailable for {tool_name}, using subprocess: {_worker_err}")
 
     # Subprocess fallback — spawn a fresh process
     cmd = [sys.executable, str(script_path), "--input", input_path]
@@ -405,9 +401,7 @@ async def run_ml_tool(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=effective_timeout
-        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=effective_timeout)
 
         elapsed = time.monotonic() - t0
 
@@ -419,13 +413,15 @@ async def run_ml_tool(
                 elapsed_s=round(elapsed, 2),
                 stderr=err[:200],
             )
-            return _normalize_result({
-                "error": err,
-                "available": False,
-                "returncode": proc.returncode,
-                "tool_name": tool_name,
-                "elapsed_s": round(elapsed, 2),
-            })
+            return _normalize_result(
+                {
+                    "error": err,
+                    "available": False,
+                    "returncode": proc.returncode,
+                    "tool_name": tool_name,
+                    "elapsed_s": round(elapsed, 2),
+                }
+            )
 
         raw = stdout.decode("utf-8", errors="replace").strip()
         result = json.loads(raw)
@@ -450,25 +446,31 @@ async def run_ml_tool(
             f"ML tool {tool_name} timed out after {elapsed:.1f}s (limit: {effective_timeout:.1f}s)",
             tool=tool_name,
         )
-        return _normalize_result({
-            "error": f"Tool timed out after {effective_timeout:.1f}s",
-            "available": False,
-            "tool_name": tool_name,
-            "elapsed_s": round(elapsed, 2),
-        })
+        return _normalize_result(
+            {
+                "error": f"Tool timed out after {effective_timeout:.1f}s",
+                "available": False,
+                "tool_name": tool_name,
+                "elapsed_s": round(elapsed, 2),
+            }
+        )
     except json.JSONDecodeError as e:
         elapsed = time.monotonic() - t0
-        return _normalize_result({
-            "error": f"Invalid JSON output from {tool_name}: {e}",
-            "available": False,
-            "tool_name": tool_name,
-            "elapsed_s": round(elapsed, 2),
-        })
+        return _normalize_result(
+            {
+                "error": f"Invalid JSON output from {tool_name}: {e}",
+                "available": False,
+                "tool_name": tool_name,
+                "elapsed_s": round(elapsed, 2),
+            }
+        )
     except Exception as e:
         elapsed = time.monotonic() - t0
-        return _normalize_result({
-            "error": f"{tool_name} failed: {e}",
-            "available": False,
-            "tool_name": tool_name,
-            "elapsed_s": round(elapsed, 2),
-        })
+        return _normalize_result(
+            {
+                "error": f"{tool_name} failed: {e}",
+                "available": False,
+                "tool_name": tool_name,
+                "elapsed_s": round(elapsed, 2),
+            }
+        )

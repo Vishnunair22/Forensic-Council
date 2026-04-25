@@ -225,9 +225,7 @@ def _profile_av_sync(file_path: str) -> dict[str, Any]:
 
             # MediaInfo dates are typically "UTC 2024-01-15 10:30:00"
             enc_date_clean = enc_date.replace("UTC ", "").strip()
-            dt_enc = datetime.strptime(enc_date_clean, "%Y-%m-%d %H:%M:%S").replace(
-                tzinfo=UTC
-            )
+            dt_enc = datetime.strptime(enc_date_clean, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
             if dt_enc > datetime.now(UTC):
                 flags.append(
                     {
@@ -341,9 +339,7 @@ async def profile_av_container(
         raise ToolUnavailableError(f"File not found: {artifact.file_path}")
 
     loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(
-        _MI_EXECUTOR, _profile_av_sync, artifact.file_path
-    )
+    result = await loop.run_in_executor(_MI_EXECUTOR, _profile_av_sync, artifact.file_path)
 
     result["court_defensible"] = result.get("available", False)
     result["summary"] = _build_av_summary(result)
@@ -390,9 +386,7 @@ async def get_av_file_identity(
 
     primary_codec = vt.get("codec") or at.get("codec") or "unknown"
 
-    high_flags = [
-        f for f in full.get("forensic_flags", []) if f.get("severity") == "high"
-    ]
+    high_flags = [f for f in full.get("forensic_flags", []) if f.get("severity") == "high"]
 
     return {
         "available": True,
@@ -436,9 +430,7 @@ def _build_av_summary(result: dict[str, Any]) -> str:
 
     if at:
         a = at[0]
-        parts.append(
-            f"{a.get('codec', 'unknown audio')} {a.get('sample_rate_hz', '?')}Hz"
-        )
+        parts.append(f"{a.get('codec', 'unknown audio')} {a.get('sample_rate_hz', '?')}Hz")
 
     writing_app = g.get("writing_application")
     if writing_app:

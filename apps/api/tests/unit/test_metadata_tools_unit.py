@@ -65,6 +65,7 @@ def _save_image_to_bytes(img: Image.Image, fmt="JPEG") -> bytes:
 
 # ── EXPECTED_EXIF_FIELDS constant ────────────────────────────────────────────
 
+
 class TestExpectedExifFields:
     def test_is_list(self):
         assert isinstance(EXPECTED_EXIF_FIELDS, list)
@@ -82,6 +83,7 @@ class TestExpectedExifFields:
 
 
 # ── _convert_to_degrees() ─────────────────────────────────────────────────────
+
 
 class TestConvertToDegrees:
     def test_valid_gps_tuple(self):
@@ -118,6 +120,7 @@ class TestConvertToDegrees:
 
 # ── _get_exif_data() ──────────────────────────────────────────────────────────
 
+
 class TestGetExifData:
     def test_image_without_exif_returns_fallback(self, tmp_path):
         """PNG images typically have no EXIF → should return OS stats fallback."""
@@ -149,11 +152,13 @@ class TestGetExifData:
 
 # ── exif_extract() ────────────────────────────────────────────────────────────
 
+
 class TestExifExtract:
     @pytest.mark.asyncio
     async def test_exif_extract_missing_file_returns_error(self):
         from core.exceptions import ToolUnavailableError
         from tools.metadata_tools import exif_extract
+
         artifact = _make_artifact("/nonexistent/path/file.jpg")
         try:
             result = await exif_extract(artifact=artifact)
@@ -164,6 +169,7 @@ class TestExifExtract:
     @pytest.mark.asyncio
     async def test_exif_extract_valid_jpeg(self, tmp_path):
         from tools.metadata_tools import exif_extract
+
         img = _make_rgb_image()
         path = str(tmp_path / "test.jpg")
         img.save(path, format="JPEG")
@@ -175,10 +181,12 @@ class TestExifExtract:
 
 # ── gps_timezone_validate() ───────────────────────────────────────────────────
 
+
 class TestGpsTimezoneValidate:
     @pytest.mark.asyncio
     async def test_returns_dict_with_mocked_timezone(self):
         from tools.metadata_tools import gps_timezone_validate
+
         with patch("tools.metadata_tools.TimezoneFinder") as mock_tf_cls:
             mock_tf = MagicMock()
             mock_tf.timezone_at = MagicMock(return_value="Europe/London")
@@ -202,6 +210,7 @@ class TestGpsTimezoneValidate:
         from geopy.exc import GeocoderTimedOut
 
         from tools.metadata_tools import gps_timezone_validate
+
         with patch("tools.metadata_tools.TimezoneFinder") as mock_tf_cls:
             mock_tf = MagicMock()
             mock_tf.timezone_at = MagicMock(return_value="UTC")
@@ -220,11 +229,13 @@ class TestGpsTimezoneValidate:
 
 # ── steganography_scan() ──────────────────────────────────────────────────────
 
+
 class TestSteganographyScan:
     @pytest.mark.asyncio
     async def test_scan_missing_file_handled(self):
         from core.exceptions import ToolUnavailableError
         from tools.metadata_tools import steganography_scan
+
         artifact = _make_artifact("/nonexistent/steg.jpg")
         try:
             result = await steganography_scan(artifact=artifact)
@@ -235,6 +246,7 @@ class TestSteganographyScan:
     @pytest.mark.asyncio
     async def test_scan_valid_image(self, tmp_path):
         from tools.metadata_tools import steganography_scan
+
         img = _make_rgb_image(64, 64)
         path = str(tmp_path / "clean.png")
         img.save(path, format="PNG")
@@ -248,11 +260,13 @@ class TestSteganographyScan:
 
 # ── timestamp_analysis() ─────────────────────────────────────────────────────
 
+
 class TestTimestampAnalysis:
     @pytest.mark.asyncio
     async def test_missing_file_handled(self):
         from core.exceptions import ToolUnavailableError
         from tools.metadata_tools import timestamp_analysis
+
         artifact = _make_artifact("/nonexistent/ts.jpg")
         try:
             result = await timestamp_analysis(artifact=artifact)
@@ -263,6 +277,7 @@ class TestTimestampAnalysis:
     @pytest.mark.asyncio
     async def test_valid_image_returns_dict(self, tmp_path):
         from tools.metadata_tools import timestamp_analysis
+
         img = _make_rgb_image()
         path = str(tmp_path / "ts.jpg")
         img.save(path, format="JPEG")
@@ -273,10 +288,12 @@ class TestTimestampAnalysis:
 
 # ── camera_profile_match() ────────────────────────────────────────────────────
 
+
 class TestCameraProfileMatch:
     @pytest.mark.asyncio
     async def test_missing_file_returns_gracefully(self):
         from tools.metadata_tools import camera_profile_match
+
         artifact = _make_artifact("/nonexistent/cam.jpg")
         result = await camera_profile_match(artifact=artifact)
         assert isinstance(result, dict)
@@ -284,6 +301,7 @@ class TestCameraProfileMatch:
     @pytest.mark.asyncio
     async def test_valid_image_returns_dict(self, tmp_path):
         from tools.metadata_tools import camera_profile_match
+
         img = _make_rgb_image()
         path = str(tmp_path / "cam.jpg")
         img.save(path, format="JPEG")
@@ -294,10 +312,12 @@ class TestCameraProfileMatch:
 
 # ── provenance_chain_verify() ─────────────────────────────────────────────────
 
+
 class TestProvenanceChainVerify:
     @pytest.mark.asyncio
     async def test_missing_file_returns_gracefully(self):
         from tools.metadata_tools import provenance_chain_verify
+
         artifact = _make_artifact("/nonexistent/prov.jpg")
         result = await provenance_chain_verify(artifact=artifact)
         assert isinstance(result, dict)
@@ -305,6 +325,7 @@ class TestProvenanceChainVerify:
     @pytest.mark.asyncio
     async def test_valid_image_returns_dict(self, tmp_path):
         from tools.metadata_tools import provenance_chain_verify
+
         img = _make_rgb_image()
         path = str(tmp_path / "prov.jpg")
         img.save(path, format="JPEG")

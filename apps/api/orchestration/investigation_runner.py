@@ -8,7 +8,6 @@ The external Redis worker has its own process entry point in ``worker.py``.
 
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -140,6 +139,7 @@ async def run_investigation_task(
     finally:
         try:
             from pathlib import Path
+
             Path(evidence_file_path).unlink(missing_ok=True)
         except Exception:
             logger.warning("Failed to remove temporary evidence file", path=evidence_file_path)

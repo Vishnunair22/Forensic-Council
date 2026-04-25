@@ -1,4 +1,4 @@
-﻿"""
+"""
 Tool-Level Integration Tests
 ============================
 
@@ -49,6 +49,7 @@ def _create_minimal_jpeg(width: int = 8, height: int = 8) -> bytes:
     """Create a minimal valid JPEG file using PIL (if available)."""
     try:
         from PIL import Image
+
         buf = io.BytesIO()
         img = Image.new("RGB", (width, height), color=(128, 128, 128))
         img.save(buf, format="JPEG", quality=85)
@@ -174,7 +175,9 @@ class TestAudioToolStructure:
         from tools.audio_tools import codec_fingerprint
 
         wav_header = b"RIFF" + struct.pack("<I", 36) + b"WAVE"
-        wav_header += b"fmt " + struct.pack("<I", 16) + struct.pack("<HHIIHH", 1, 1, 8000, 8000, 1, 8)
+        wav_header += (
+            b"fmt " + struct.pack("<I", 16) + struct.pack("<HHIIHH", 1, 1, 8000, 8000, 1, 8)
+        )
         wav_header += b"data" + struct.pack("<I", 0)
 
         test_file = tmp_path / "test.wav"
@@ -184,6 +187,9 @@ class TestAudioToolStructure:
         result = await codec_fingerprint(artifact)
 
         assert isinstance(result, dict)
-        assert "codec_chain" in result or "format_info" in result or "status" in result or "error" in result
-
-
+        assert (
+            "codec_chain" in result
+            or "format_info" in result
+            or "status" in result
+            or "error" in result
+        )

@@ -27,6 +27,10 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["sse"])
 
+CRITICAL_TYPES = frozenset(
+    {"PIPELINE_COMPLETE", "ERROR", "PIPELINE_PAUSED", "HITL_CHECKPOINT", "PIPELINE_QUARANTINED"}
+)
+
 
 async def _event_generator(
     session_id: str,
@@ -44,10 +48,6 @@ async def _event_generator(
     # Increase queue size from 100 → 500
     queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=500)
 
-    _CRITICAL_TYPES = frozenset(
-        {"PIPELINE_COMPLETE", "ERROR", "PIPELINE_PAUSED", "HITL_CHECKPOINT", "PIPELINE_QUARANTINED"}
-    )
-
     # Register as a "pseudo-WebSocket" consumer
     class SSEConsumer:
         """Priority-aware SSE consumer. Never drops critical terminal events."""
@@ -56,7 +56,7 @@ async def _event_generator(
             self._queue = q
 
         async def send_json(self, data: dict) -> None:
-            is_critical = data.get("type") in _CRITICAL_TYPES
+            is_critical = data.get("type") in CRITICAL_TYPES
             if not self._queue.full():
                 self._queue.put_nowait(data)
                 return
@@ -66,7 +66,7 @@ async def _event_generator(
                 while not self._queue.empty():
                     tmp.append(self._queue.get_nowait())
                 drop_idx = next(
-                    (i for i, m in enumerate(tmp) if m.get("type") not in _CRITICAL_TYPES),
+                    (i for i, m in enumerate(tmp) if m.get("type") not in CRITICAL_TYPES),
                     None,
                 )
                 if drop_idx is not None:

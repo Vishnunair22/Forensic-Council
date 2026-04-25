@@ -265,7 +265,9 @@ def main() -> None:
     else:
         empty = total - populated
         print(f"{YELLOW}{BOLD}  {empty} of {total} cache directories are empty.{RESET}")
-        print(f"  {YELLOW}Model seed cache is incomplete; startup fallback may retry downloads.{RESET}")
+        print(
+            f"  {YELLOW}Model seed cache is incomplete; startup fallback may retry downloads.{RESET}"
+        )
         print(
             f"  {YELLOW}Expect slower first-run analysis unless the Docker build preloaded models.{RESET}"
         )

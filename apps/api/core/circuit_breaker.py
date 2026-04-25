@@ -24,14 +24,16 @@ logger = get_logger(__name__)
 
 class CircuitState(Enum):
     """Circuit breaker states."""
-    CLOSED = "closed"      # Normal operation
-    OPEN = "open"          # Failing, reject requests
+
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Failing, reject requests
     HALF_OPEN = "half_open"  # Testing recovery
 
 
 @dataclass
 class CircuitBreakerConfig:
     """Configuration for circuit breaker behavior."""
+
     failure_threshold: int = 5
     success_threshold: int = 2
     timeout_seconds: int = 60
@@ -78,8 +80,7 @@ class CircuitBreaker:
                     self.state = CircuitState.HALF_OPEN
                     self.success_count = 0
                     logger.info(
-                        "Circuit breaker transitioning to HALF_OPEN",
-                        service=self.service_name
+                        "Circuit breaker transitioning to HALF_OPEN", service=self.service_name
                     )
                 else:
                     wait_time = self._time_until_recovery()
@@ -105,10 +106,7 @@ class CircuitBreaker:
                 if self.success_count >= self.config.success_threshold:
                     self.state = CircuitState.CLOSED
                     self.last_state_change = datetime.now()
-                    logger.info(
-                        "Circuit breaker CLOSED (recovered)",
-                        service=self.service_name
-                    )
+                    logger.info("Circuit breaker CLOSED (recovered)", service=self.service_name)
 
     async def _on_failure(self, exception: Exception):
         """Handle failed call."""
@@ -119,17 +117,14 @@ class CircuitBreaker:
             if self.state == CircuitState.HALF_OPEN:
                 self.state = CircuitState.OPEN
                 self.last_state_change = datetime.now()
-                logger.warning(
-                    "Circuit breaker OPEN (recovery failed)",
-                    service=self.service_name
-                )
+                logger.warning("Circuit breaker OPEN (recovery failed)", service=self.service_name)
             elif self.failure_count >= self.config.failure_threshold:
                 self.state = CircuitState.OPEN
                 self.last_state_change = datetime.now()
                 logger.warning(
                     "Circuit breaker OPEN (threshold exceeded)",
                     service=self.service_name,
-                    failures=self.failure_count
+                    failures=self.failure_count,
                 )
 
     def _should_attempt_recovery(self) -> bool:
@@ -154,8 +149,12 @@ class CircuitBreaker:
             "state": self.state.value,
             "failure_count": self.failure_count,
             "success_count": self.success_count,
-            "last_failure_time": self.last_failure_time.isoformat() if self.last_failure_time else None,
-            "time_until_recovery": self._time_until_recovery() if self.state == CircuitState.OPEN else 0
+            "last_failure_time": self.last_failure_time.isoformat()
+            if self.last_failure_time
+            else None,
+            "time_until_recovery": self._time_until_recovery()
+            if self.state == CircuitState.OPEN
+            else 0,
         }
 
     def reset(self):
@@ -170,6 +169,7 @@ class CircuitBreaker:
 
 class CircuitBreakerOpenError(Exception):
     """Raised when a call is blocked by an open circuit breaker."""
+
     pass
 
 
@@ -197,10 +197,7 @@ class CircuitBreakerRegistry:
     @classmethod
     def get_all_states(cls) -> dict[str, dict]:
         """Get states of all registered circuit breakers."""
-        return {
-            name: breaker.get_state()
-            for name, breaker in cls._breakers.items()
-        }
+        return {name: breaker.get_state() for name, breaker in cls._breakers.items()}
 
     @classmethod
     def reset_all(cls):
@@ -220,7 +217,7 @@ async def with_retry(
     initial_backoff: float = 1.0,
     max_backoff: float = 60.0,
     exponential_base: float = 2.0,
-    retryable_exceptions: tuple = (Exception,)
+    retryable_exceptions: tuple = (Exception,),
 ) -> Any:
     """
     Execute a function with exponential backoff retry logic.
@@ -248,18 +245,14 @@ async def with_retry(
             last_exception = e
 
             if attempt == max_retries:
-                logger.error(
-                    "All retry attempts exhausted",
-                    attempts=attempt + 1,
-                    error=str(e)
-                )
+                logger.error("All retry attempts exhausted", attempts=attempt + 1, error=str(e))
                 raise
 
-            backoff = min(initial_backoff * (exponential_base ** attempt), max_backoff)
+            backoff = min(initial_backoff * (exponential_base**attempt), max_backoff)
             logger.warning(
                 f"Retry attempt {attempt + 1}/{max_retries} failed, backing off",
                 backoff_seconds=backoff,
-                error=str(e)
+                error=str(e),
             )
             await asyncio.sleep(backoff)
 

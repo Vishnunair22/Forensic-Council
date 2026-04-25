@@ -73,6 +73,7 @@ def _make_state():
 
 # ── ReActLoopResult model ─────────────────────────────────────────────────────
 
+
 class TestReActLoopResult:
     def test_defaults(self):
         sid = uuid4()
@@ -98,6 +99,7 @@ class TestReActLoopResult:
 
 # ── AgentFindingStatus enum ───────────────────────────────────────────────────
 
+
 class TestAgentFindingStatus:
     def test_all_values(self):
         statuses = {s.value for s in AgentFindingStatus}
@@ -110,6 +112,7 @@ class TestAgentFindingStatus:
 
 
 # ── ReActLoopEngine instantiation ────────────────────────────────────────────
+
 
 class TestReActLoopEngineInit:
     def test_can_be_instantiated(self):
@@ -136,6 +139,7 @@ class TestReActLoopEngineInit:
 
 
 # ── ReActLoopEngine.run() ─────────────────────────────────────────────────────
+
 
 class TestReActLoopEngineRun:
     @pytest.mark.asyncio
@@ -202,6 +206,7 @@ class TestReActLoopEngineRun:
 
 # ── ReActLoopEngine.check_hitl_triggers() ────────────────────────────────────
 
+
 class TestCheckHitlTriggers:
     @pytest.mark.asyncio
     async def test_returns_none_with_no_triggers(self):
@@ -227,6 +232,7 @@ class TestCheckHitlTriggers:
 
 # ── ReActLoopEngine.pause_for_hitl() ─────────────────────────────────────────
 
+
 class TestPauseForHitl:
     @pytest.mark.asyncio
     async def test_pause_returns_checkpoint(self):
@@ -242,6 +248,7 @@ class TestPauseForHitl:
 
 
 # ── ReActLoopEngine.resume_from_hitl() ───────────────────────────────────────
+
 
 class TestResumeFromHitl:
     @pytest.mark.asyncio
@@ -283,6 +290,7 @@ class TestResumeFromHitl:
 
 # ── parse_llm_step() ─────────────────────────────────────────────────────────
 
+
 class TestParseLlmStep:
     def test_parse_thought_content(self):
         result = parse_llm_step("THOUGHT: I should run ELA analysis.", None)
@@ -311,11 +319,13 @@ class TestParseLlmStep:
 
 # ── create_llm_step_generator() ──────────────────────────────────────────────
 
+
 class TestCreateLlmStepGenerator:
     @pytest.mark.asyncio
     async def test_returns_none_when_llm_disabled(self):
         """When LLM is disabled (llm_api_key is None), generator returns None."""
         from core.config import Settings
+
         config = Settings(
             app_env="testing",
             signing_key="test-signing-key-" + "x" * 32,
@@ -347,6 +357,7 @@ class TestCreateLlmStepGenerator:
     async def test_returns_none_when_react_reasoning_disabled(self):
         """When llm_enable_react_reasoning is False, generator returns None."""
         from core.config import Settings
+
         config = Settings(
             app_env="testing",
             signing_key="test-signing-key-" + "x" * 32,
@@ -378,9 +389,11 @@ class TestCreateLlmStepGenerator:
 
 # ── _build_forensic_system_prompt() ──────────────────────────────────────────
 
+
 class TestBuildForensicSystemPrompt:
     def test_prompt_contains_agent_name(self):
         from core.react_loop import _build_forensic_system_prompt
+
         prompt = _build_forensic_system_prompt(
             agent_name="Agent1",
             evidence_context={"mime_type": "image/jpeg", "file_name": "test.jpg"},
@@ -390,6 +403,7 @@ class TestBuildForensicSystemPrompt:
 
     def test_prompt_contains_tasks(self):
         from core.react_loop import _build_forensic_system_prompt
+
         prompt = _build_forensic_system_prompt(
             agent_name="Agent5",
             evidence_context={"mime_type": "image/jpeg"},
@@ -400,6 +414,7 @@ class TestBuildForensicSystemPrompt:
 
     def test_prompt_contains_mime_type(self):
         from core.react_loop import _build_forensic_system_prompt
+
         prompt = _build_forensic_system_prompt(
             agent_name="Agent2",
             evidence_context={"mime_type": "audio/wav", "file_name": "audio.wav"},
@@ -409,6 +424,7 @@ class TestBuildForensicSystemPrompt:
 
     def test_prompt_handles_unknown_agent(self):
         from core.react_loop import _build_forensic_system_prompt
+
         prompt = _build_forensic_system_prompt(
             agent_name="UnknownAgent",
             evidence_context={},
@@ -418,6 +434,7 @@ class TestBuildForensicSystemPrompt:
 
     def test_prompt_sanitizes_control_chars(self):
         from core.react_loop import _build_forensic_system_prompt
+
         # Inject control characters in file_name
         prompt = _build_forensic_system_prompt(
             agent_name="Agent1",
@@ -430,6 +447,7 @@ class TestBuildForensicSystemPrompt:
 
     def test_prompt_includes_hash_when_present(self):
         from core.react_loop import _build_forensic_system_prompt
+
         prompt = _build_forensic_system_prompt(
             agent_name="Agent1",
             evidence_context={"sha256": "abc123def456"},
@@ -440,9 +458,11 @@ class TestBuildForensicSystemPrompt:
 
 # ── _get_available_tools_for_llm() ───────────────────────────────────────────
 
+
 class TestGetAvailableToolsForLlm:
     def test_returns_list_from_registry_snapshot(self):
         from core.react_loop import _get_available_tools_for_llm
+
         state = _make_state()
         state.tool_registry_snapshot = [
             {"name": "ela_full_image", "description": "ELA analysis"},
@@ -454,6 +474,7 @@ class TestGetAvailableToolsForLlm:
 
     def test_falls_back_to_static_catalogue(self):
         from core.react_loop import _get_available_tools_for_llm
+
         state = _make_state()
         state.tool_registry_snapshot = None
         tools = _get_available_tools_for_llm(state)

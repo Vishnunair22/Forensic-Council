@@ -5,7 +5,7 @@ import { GlobalNavbar } from "@/components/ui/GlobalNavbar";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { RouteExperience } from "@/components/ui/RouteExperience";
 import { Toaster } from "@/components/ui/Toaster";
-import { MicroscopeBackground } from "@/components/ui/MicroscopeBackground";
+import { DarkBackgroundAnimation } from "@/components/ui/DarkBackgroundAnimation";
 import { QueryProvider } from "@/components/ui/QueryProvider";
 import "./globals.css";
 
@@ -44,7 +44,7 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${orbitron.variable} ${jetbrainsMono.variable} font-sans text-slate-100 antialiased min-h-screen flex flex-col`}
       >
-        <MicroscopeBackground />
+        <DarkBackgroundAnimation />
         <Suspense fallback={null}>
           <RouteExperience />
         </Suspense>

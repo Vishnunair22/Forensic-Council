@@ -63,8 +63,7 @@ async def check_investigation_rate_limit(user_id: str) -> None:
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail=(
-                        f"Too many investigations started. "
-                        f"Try again in {max(ttl, 1)} seconds."
+                        f"Too many investigations started. Try again in {max(ttl, 1)} seconds."
                     ),
                     headers={"Retry-After": str(max(ttl, 1))},
                 )
@@ -99,8 +98,7 @@ async def check_investigation_rate_limit(user_id: str) -> None:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=(
-                f"Too many investigations started. "
-                f"Try again in {max(retry_after, 1)} seconds."
+                f"Too many investigations started. Try again in {max(retry_after, 1)} seconds."
             ),
             headers={"Retry-After": str(max(retry_after, 1))},
         )
@@ -149,8 +147,7 @@ async def check_daily_cost_quota(user_id: str, user_role: str = "investigator") 
         redis = await get_redis_client()
         if redis:
             result = await redis.client.eval(
-                _lua_quota, 1, key,
-                _COST_CENTS, _QUOTA_CENTS, _COST_QUOTA_WINDOW_SECS
+                _lua_quota, 1, key, _COST_CENTS, _QUOTA_CENTS, _COST_QUOTA_WINDOW_SECS
             )
             allowed, current_cents, ttl = int(result[0]), int(result[1]), int(result[2])
             if not allowed:
@@ -180,10 +177,7 @@ async def check_daily_cost_quota(user_id: str, user_role: str = "investigator") 
     # ── In-memory fallback ────────────────────────────────────────────────────
     now = time.time()
 
-    if (
-        user_id not in _mem_cost_tracker
-        and len(_mem_cost_tracker) >= _MEM_COST_MAX_USERS
-    ):
+    if user_id not in _mem_cost_tracker and len(_mem_cost_tracker) >= _MEM_COST_MAX_USERS:
         oldest = next(iter(_mem_cost_tracker))
         _mem_cost_tracker.pop(oldest, None)
 

@@ -10,6 +10,7 @@ Validates Docker Compose, Dockerfiles, and Project Manifests for:
 
 Run: pytest tests/infra/test_infra_standards.py -v
 """
+
 import json
 import re
 from pathlib import Path
@@ -29,34 +30,42 @@ ENV_EXAMPLE = ROOT / ".env.example"
 
 # ── Helper Functions ──────────────────────────────────────────────────────────
 
+
 def load_yaml(path: Path) -> dict:
     if not path.exists():
         return {}
     with open(path) as f:
         return yaml.safe_load(f) or {}
 
+
 def read_text(path: Path) -> str:
     if not path.exists():
         return ""
     return path.read_text(encoding="utf-8")
 
+
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture(scope="module")
 def compose():
     return load_yaml(COMPOSE_FILE)
 
+
 @pytest.fixture(scope="module")
 def dev_compose():
     return load_yaml(DEV_COMPOSE)
+
 
 @pytest.fixture(scope="module")
 def prod_compose():
     return load_yaml(PROD_COMPOSE)
 
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # DOCKER COMPOSE STANDARDS (ORCHESTRATION)
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestDockerCompose:
     REQUIRED_SERVICES = ["frontend", "backend", "postgres", "redis", "qdrant", "caddy"]
@@ -117,9 +126,11 @@ class TestDockerCompose:
         res = backend.get("deploy", {}).get("resources", {})
         assert "limits" in res or "reservations" in res or "mem_limit" in backend
 
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # DOCKERFILE STANDARDS (IMAGERY)
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestDockerfiles:
     def test_frontend_multi_stage_and_security(self):
@@ -146,16 +157,22 @@ class TestDockerfiles:
             # but our own images should be versioned.
             assert ":latest" not in content or "redis" in content or "postgres" in content
 
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # ENVIRONMENT & MANIFESTS
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestManifestsAndEnv:
     def test_env_example_documentation_coverage(self):
         text = read_text(ENV_EXAMPLE)
         required = [
-            "SIGNING_KEY", "APP_ENV", "POSTGRES_PASSWORD", "REDIS_PASSWORD",
-            "LLM_API_KEY", "NEXT_PUBLIC_API_URL"
+            "SIGNING_KEY",
+            "APP_ENV",
+            "POSTGRES_PASSWORD",
+            "REDIS_PASSWORD",
+            "LLM_API_KEY",
+            "NEXT_PUBLIC_API_URL",
         ]
         for var in required:
             assert var in text, f"Env var {var} not documented in .env.example"
@@ -175,7 +192,9 @@ class TestManifestsAndEnv:
         )
 
     def test_frontend_jest_config_exists(self):
-        assert (FRONTEND_DIR / "jest.config.ts").exists() or (FRONTEND_DIR / "jest.config.mjs").exists()
+        assert (FRONTEND_DIR / "jest.config.ts").exists() or (
+            FRONTEND_DIR / "jest.config.mjs"
+        ).exists()
 
     def test_backend_dependencies_exist(self):
         toml = read_text(BACKEND_DIR / "pyproject.toml")

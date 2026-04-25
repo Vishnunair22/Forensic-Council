@@ -87,9 +87,7 @@ def score_metadata(image_path: str) -> dict:
 
     # Rule 1: Editing software in hex
     if hex_sigs:
-        violations.append(
-            f"Editing software signature found in file bytes: {', '.join(hex_sigs)}"
-        )
+        violations.append(f"Editing software signature found in file bytes: {', '.join(hex_sigs)}")
         score += 0.35
 
     # Rule 2: Missing mandatory camera fields
@@ -107,8 +105,7 @@ def score_metadata(image_path: str) -> dict:
     # Rule 3: Software field in EXIF
     software = exif.get("Software", "")
     if software and any(
-        s.lower() in str(software).lower()
-        for s in ["photoshop", "gimp", "lightroom", "affinity"]
+        s.lower() in str(software).lower() for s in ["photoshop", "gimp", "lightroom", "affinity"]
     ):
         violations.append(f"EXIF Software field indicates editing: '{software}'")
         score += 0.25
@@ -136,17 +133,13 @@ def score_metadata(image_path: str) -> dict:
     if exposure is not None:
         try:
             exp_val = (
-                float(exposure)
-                if not isinstance(exposure, tuple)
-                else exposure[0] / exposure[1]
+                float(exposure) if not isinstance(exposure, tuple) else exposure[0] / exposure[1]
             )
             if exp_val == 0.0 or exp_val > 30.0:
                 violations.append(f"Suspicious exposure time: {exp_val}s")
                 score += 0.10
         except Exception:
             pass
-
-
 
     score = min(1.0, score)
 
@@ -180,17 +173,19 @@ if __name__ == "__main__":
     if args.warmup:
         try:
             import json
-            print(json.dumps({
-                "status": "warmed_up",
-                "dependencies": ["PIL", "json"],
-                "message": "Metadata anomaly scorer ready"
-            }))
+
+            print(
+                json.dumps(
+                    {
+                        "status": "warmed_up",
+                        "dependencies": ["PIL", "json"],
+                        "message": "Metadata anomaly scorer ready",
+                    }
+                )
+            )
             sys.exit(0)
         except Exception as e:
-            print(json.dumps({
-                "status": "warmup_failed",
-                "error": str(e)
-            }))
+            print(json.dumps({"status": "warmup_failed", "error": str(e)}))
             sys.exit(1)
 
     # Worker mode - persistent process reading from stdin

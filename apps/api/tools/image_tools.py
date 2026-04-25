@@ -151,9 +151,7 @@ async def ela_full_image(
                 ela_maps.append(ela_gray)
 
             combined_ela = (
-                np.max(np.stack(ela_maps, axis=0), axis=0)
-                if len(ela_maps) > 1
-                else ela_maps[0]
+                np.max(np.stack(ela_maps, axis=0), axis=0) if len(ela_maps) > 1 else ela_maps[0]
             )
 
             max_anomaly = float(np.max(combined_ela))
@@ -313,9 +311,7 @@ async def roi_extract(
         )
 
         return {
-            "roi_artifact": derivative_artifact.to_dict()
-            if derivative_artifact
-            else None,
+            "roi_artifact": derivative_artifact.to_dict() if derivative_artifact else None,
             "roi_path": roi_path,
             "dimensions": {"width": w, "height": h},
         }
@@ -406,17 +402,13 @@ async def jpeg_ghost_detect(
 
             try:
                 for quality in quality_levels:
-                    with tempfile.NamedTemporaryFile(
-                        suffix=".jpg", delete=False
-                    ) as tmp:
+                    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
                         tmp_path_inner = tmp.name
                         temp_files_inner.append(tmp_path_inner)
 
                     original.save(tmp_path_inner, "JPEG", quality=quality)
                     with Image.open(tmp_path_inner) as _compressed:
-                        compressed_arrays.append(
-                            np.array(_compressed, dtype=np.float64)
-                        )
+                        compressed_arrays.append(np.array(_compressed, dtype=np.float64))
 
                 # Stack all compressed versions
                 stacked = np.stack(compressed_arrays, axis=0)
@@ -633,9 +625,7 @@ async def frequency_domain_analysis(
             # concentrates in the inscribed-circle low-frequency region.
             # Empirically the corners contain ~5–15% for real photos.
             center = np.array(magnitude_spectrum.shape) // 2
-            y, x = np.ogrid[
-                : magnitude_spectrum.shape[0], : magnitude_spectrum.shape[1]
-            ]
+            y, x = np.ogrid[: magnitude_spectrum.shape[0], : magnitude_spectrum.shape[1]]
             distances = np.sqrt((x - center[1]) ** 2 + (y - center[0]) ** 2)
 
             low_freq_mask = distances < min(center)
@@ -694,7 +684,9 @@ async def extract_text_from_image(
     Runs blocking OCR in a thread executor with a timeout to prevent hangs.
     """
     import asyncio as _asyncio
+
     from core.config import get_settings
+
     _timeout = timeout or get_settings().ocr_tool_timeout
 
     def _run_ocr():
@@ -748,9 +740,7 @@ async def extract_text_from_image(
             "word_count": word_count,
             "has_text": word_count > 0,
             "success": True,
-            "confidence": round(avg_confidence / 100, 4)
-            if avg_confidence > 0
-            else None,
+            "confidence": round(avg_confidence / 100, 4) if avg_confidence > 0 else None,
         }
 
     try:
@@ -826,6 +816,7 @@ async def analyze_image_content(
     """
     try:
         from core.config import get_settings
+
         _timeout = timeout or get_settings().clip_analysis_timeout
         from tools.clip_utils import get_clip_analyzer
 

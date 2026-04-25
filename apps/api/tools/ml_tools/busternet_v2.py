@@ -55,6 +55,7 @@ from scipy.signal import wiener
 # Branch A: ORB + RANSAC similarity branch
 # ---------------------------------------------------------------------------
 
+
 def _branch_similarity(gray: np.ndarray) -> dict[str, Any]:
     """
     Find self-similar (copy-moved) region pairs via ORB + RANSAC.
@@ -105,31 +106,35 @@ def _branch_similarity(gray: np.ndarray) -> dict[str, Any]:
     for m_list in matches:
         if len(m_list) < 2:
             continue
-        for m in m_list[1:]:           # skip self-match
-            if m.distance > 60:        # ORB Hamming threshold
+        for m in m_list[1:]:  # skip self-match
+            if m.distance > 60:  # ORB Hamming threshold
                 continue
             pt1 = np.array(kp[m.queryIdx].pt)
             pt2 = np.array(kp[m.trainIdx].pt)
             spatial_dist = float(np.linalg.norm(pt1 - pt2))
             if spatial_dist > min_spatial_dist:
-                candidate_pairs.append({
-                    "from": [int(pt1[0]), int(pt1[1])],
-                    "to":   [int(pt2[0]), int(pt2[1])],
-                    "distance": round(float(m.distance), 2),
-                    "spatial_dist": round(spatial_dist, 1),
-                })
+                candidate_pairs.append(
+                    {
+                        "from": [int(pt1[0]), int(pt1[1])],
+                        "to": [int(pt2[0]), int(pt2[1])],
+                        "distance": round(float(m.distance), 2),
+                        "spatial_dist": round(spatial_dist, 1),
+                    }
+                )
 
     # RANSAC homography to weed out random matches
     inlier_count = 0
     if len(candidate_pairs) >= 4:
         pts1 = np.float32([p["from"] for p in candidate_pairs])
-        pts2 = np.float32([p["to"]   for p in candidate_pairs])
+        pts2 = np.float32([p["to"] for p in candidate_pairs])
         try:
             _, mask = cv2.findHomography(pts1, pts2, cv2.RANSAC, 5.0)
             if mask is not None:
                 inlier_count = int(mask.sum())
                 # Keep only RANSAC inliers
-                candidate_pairs = [p for p, m in zip(candidate_pairs, mask.flatten(), strict=False) if m]
+                candidate_pairs = [
+                    p for p, m in zip(candidate_pairs, mask.flatten(), strict=False) if m
+                ]
         except Exception:
             pass
 
@@ -152,6 +157,7 @@ def _branch_similarity(gray: np.ndarray) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Branch B: Noise self-correlation manipulation branch
 # ---------------------------------------------------------------------------
+
 
 def _branch_manipulation(gray: np.ndarray) -> dict[str, Any]:
     """
@@ -215,6 +221,7 @@ def _branch_manipulation(gray: np.ndarray) -> dict[str, Any]:
 # Core analysis
 # ---------------------------------------------------------------------------
 
+
 def analyze(image_path: str) -> dict[str, Any]:
     img = cv2.imread(image_path)
     if img is None:
@@ -252,7 +259,9 @@ def analyze(image_path: str) -> dict[str, Any]:
     elif det_a:
         branch_agreement = "SIMILARITY_ONLY"
         confidence = round(float(a["confidence_a"] * 0.75), 3)
-        copy_move_detected = a["homography_inliers"] >= 8  # require more evidence when single branch
+        copy_move_detected = (
+            a["homography_inliers"] >= 8
+        )  # require more evidence when single branch
     elif det_b:
         branch_agreement = "NOISE_ONLY"
         confidence = round(float(b["confidence_b"] * 0.65), 3)
@@ -280,6 +289,7 @@ def analyze(image_path: str) -> dict[str, Any]:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def _run_worker() -> None:
     for line in sys.stdin:
         line = line.strip()
@@ -303,7 +313,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="BusterNet v2 — dual-branch copy-move detector")
     parser.add_argument("--input", type=str, help="Path to input image")
     parser.add_argument("--warmup", action="store_true", help="Warmup mode")
-    parser.add_argument("--worker", action="store_true", help="Worker mode (persistent stdin/stdout)")
+    parser.add_argument(
+        "--worker", action="store_true", help="Worker mode (persistent stdin/stdout)"
+    )
     args = parser.parse_args()
 
     if args.warmup:
@@ -311,11 +323,16 @@ if __name__ == "__main__":
             import cv2  # noqa: F401
             import numpy  # noqa: F401
             from scipy.signal import wiener  # noqa: F401
-            print(json.dumps({
-                "status": "warmed_up",
-                "dependencies": ["cv2", "numpy", "scipy"],
-                "message": "BusterNet v2 ready",
-            }))
+
+            print(
+                json.dumps(
+                    {
+                        "status": "warmed_up",
+                        "dependencies": ["cv2", "numpy", "scipy"],
+                        "message": "BusterNet v2 ready",
+                    }
+                )
+            )
             sys.exit(0)
         except Exception as exc:
             print(json.dumps({"status": "warmup_failed", "error": str(exc)}))

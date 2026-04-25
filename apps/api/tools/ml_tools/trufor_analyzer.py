@@ -58,6 +58,7 @@ from scipy.ndimage import uniform_filter
 # These are a subset of the 30 SRM filters used in Fridrich & Kodovsky 2012.
 # ---------------------------------------------------------------------------
 
+
 def _build_srm_filters() -> list[np.ndarray]:
     """Return a list of 5×5 SRM-style high-pass kernels."""
     filters = []
@@ -66,19 +67,27 @@ def _build_srm_filters() -> list[np.ndarray]:
     for order in range(1, 4):
         k = np.zeros((5, 5), dtype=np.float32)
         if order == 1:
-            k[2, 1] = -1; k[2, 3] = 1
+            k[2, 1] = -1
+            k[2, 3] = 1
         elif order == 2:
-            k[2, 1] = -1; k[2, 2] = 2; k[2, 3] = -1
+            k[2, 1] = -1
+            k[2, 2] = 2
+            k[2, 3] = -1
         else:
-            k[2, 0] = -1; k[2, 1] = 3; k[2, 3] = -3; k[2, 4] = 1
+            k[2, 0] = -1
+            k[2, 1] = 3
+            k[2, 3] = -3
+            k[2, 4] = 1
         filters.append(k)
         filters.append(k.T)
 
     # Diagonal differences
     d1 = np.zeros((5, 5), dtype=np.float32)
-    d1[1, 1] = -1; d1[3, 3] = 1
+    d1[1, 1] = -1
+    d1[3, 3] = 1
     d2 = np.zeros((5, 5), dtype=np.float32)
-    d2[1, 3] = -1; d2[3, 1] = 1
+    d2[1, 3] = -1
+    d2[3, 1] = 1
     filters += [d1, d2]
 
     # Laplacian variants
@@ -90,8 +99,10 @@ def _build_srm_filters() -> list[np.ndarray]:
     # Sobel-based
     sx = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=np.float32)
     sy = sx.T
-    sx5 = np.zeros((5, 5), dtype=np.float32); sx5[1:4, 1:4] = sx
-    sy5 = np.zeros((5, 5), dtype=np.float32); sy5[1:4, 1:4] = sy
+    sx5 = np.zeros((5, 5), dtype=np.float32)
+    sx5[1:4, 1:4] = sx
+    sy5 = np.zeros((5, 5), dtype=np.float32)
+    sy5[1:4, 1:4] = sy
     filters += [sx5, sy5]
 
     # Padded identity-minus-mean filters (mimic SRM's "spam" filters)
@@ -119,6 +130,7 @@ _SRM_FILTERS = _build_srm_filters()
 # Core stages
 # ---------------------------------------------------------------------------
 
+
 def _apply_srm(gray: np.ndarray) -> np.ndarray:
     """
     Apply SRM filter bank to a grayscale image.
@@ -129,7 +141,7 @@ def _apply_srm(gray: np.ndarray) -> np.ndarray:
     for filt in _SRM_FILTERS:
         res = cv2.filter2D(g, -1, filt)
         residuals.append(res)
-    return np.stack(residuals, axis=2)   # (H, W, 30)
+    return np.stack(residuals, axis=2)  # (H, W, 30)
 
 
 def _block_statistics(
@@ -166,21 +178,24 @@ def _block_statistics(
             ch0 = patch[:, :, 0]
             fft_mag = np.abs(np.fft.fft2(ch0))
             sh, sw = fft_mag.shape
-            hf_energy = float(np.mean(fft_mag[sh // 2:, sw // 2:]))
+            hf_energy = float(np.mean(fft_mag[sh // 2 :, sw // 2 :]))
 
             # Gradient magnitude (boundary sharpness proxy)
             gx = cv2.Sobel(ch0.astype(np.float32), cv2.CV_32F, 1, 0, ksize=3)
             gy = cv2.Sobel(ch0.astype(np.float32), cv2.CV_32F, 0, 1, ksize=3)
-            grad_mag = float(np.mean(np.sqrt(gx ** 2 + gy ** 2)))
+            grad_mag = float(np.mean(np.sqrt(gx**2 + gy**2)))
 
-            feat = np.array([
-                float(np.mean(ch_vars)),
-                float(np.std(ch_vars)),
-                float(np.mean(np.abs(kurt))),
-                float(np.max(np.abs(flat.mean(axis=0)))),
-                hf_energy,
-                grad_mag,
-            ], dtype=np.float32)
+            feat = np.array(
+                [
+                    float(np.mean(ch_vars)),
+                    float(np.std(ch_vars)),
+                    float(np.mean(np.abs(kurt))),
+                    float(np.max(np.abs(flat.mean(axis=0)))),
+                    hf_energy,
+                    grad_mag,
+                ],
+                dtype=np.float32,
+            )
             features.append(feat)
             coords.append((c, r, block_size, block_size))
 
@@ -301,6 +316,7 @@ def analyze(image_path: str) -> dict[str, Any]:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def _run_worker() -> None:
     for line in sys.stdin:
         line = line.strip()
@@ -324,7 +340,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="TruFor SRM splicing detector")
     parser.add_argument("--input", type=str, help="Path to input image")
     parser.add_argument("--warmup", action="store_true", help="Warmup mode")
-    parser.add_argument("--worker", action="store_true", help="Worker mode (persistent stdin/stdout)")
+    parser.add_argument(
+        "--worker", action="store_true", help="Worker mode (persistent stdin/stdout)"
+    )
     args = parser.parse_args()
 
     if args.warmup:
@@ -333,11 +351,16 @@ if __name__ == "__main__":
             import numpy  # noqa: F401
             from scipy.ndimage import uniform_filter  # noqa: F401
             from sklearn.ensemble import IsolationForest  # noqa: F401
-            print(json.dumps({
-                "status": "warmed_up",
-                "dependencies": ["cv2", "numpy", "scipy", "sklearn"],
-                "message": "TruFor SRM analyzer ready",
-            }))
+
+            print(
+                json.dumps(
+                    {
+                        "status": "warmed_up",
+                        "dependencies": ["cv2", "numpy", "scipy", "sklearn"],
+                        "message": "TruFor SRM analyzer ready",
+                    }
+                )
+            )
             sys.exit(0)
         except Exception as exc:
             print(json.dumps({"status": "warmup_failed", "error": str(exc)}))

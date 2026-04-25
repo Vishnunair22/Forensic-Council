@@ -157,9 +157,9 @@ async def optical_flow_analyze(
 
         # Normalize heatmap
         if np.max(heatmap_accumulator) > 0:
-            heatmap_normalized = (
-                heatmap_accumulator / np.max(heatmap_accumulator) * 255
-            ).astype(np.uint8)
+            heatmap_normalized = (heatmap_accumulator / np.max(heatmap_accumulator) * 255).astype(
+                np.uint8
+            )
         else:
             heatmap_normalized = np.zeros((height, width), dtype=np.uint8)
 
@@ -258,9 +258,7 @@ async def frame_window_extract(
             end_frame = min(total_frames, end_frame)
 
             if start_frame >= end_frame:
-                raise ToolUnavailableError(
-                    f"Invalid frame range: {start_frame} >= {end_frame}"
-                )
+                raise ToolUnavailableError(f"Invalid frame range: {start_frame} >= {end_frame}")
 
             # Create output directory for frames
             output_dir = os.path.join(
@@ -313,9 +311,7 @@ async def frame_window_extract(
         )
 
         return {
-            "frames_artifact": derivative_artifact.to_dict()
-            if derivative_artifact
-            else None,
+            "frames_artifact": derivative_artifact.to_dict() if derivative_artifact else None,
             "frame_count": frame_count,
             "output_path": output_dir,
         }
@@ -358,11 +354,7 @@ async def frame_consistency_analyze(
 
         # Get list of frame files
         frame_files = sorted(
-            [
-                f
-                for f in os.listdir(frames_path)
-                if f.endswith((".png", ".jpg", ".jpeg"))
-            ]
+            [f for f in os.listdir(frames_path) if f.endswith((".png", ".jpg", ".jpeg"))]
         )
 
         if len(frame_files) < 2:
@@ -394,18 +386,14 @@ async def frame_consistency_analyze(
             # Compute edges
             edges = cv2.Canny(gray, 50, 150)
 
-            if (
-                prev_frame is not None
-                and prev_hist is not None
-                and prev_edges is not None
-            ):
+            if prev_frame is not None and prev_hist is not None and prev_edges is not None:
                 # Compute histogram difference
                 hist_diff = cv2.compareHist(prev_hist, hist, cv2.HISTCMP_BHATTACHARYYA)
 
                 # Compute edge difference
-                edge_diff = np.sum(
-                    np.abs(prev_edges.astype(float) - edges.astype(float))
-                ) / (edges.shape[0] * edges.shape[1] * 255.0)
+                edge_diff = np.sum(np.abs(prev_edges.astype(float) - edges.astype(float))) / (
+                    edges.shape[0] * edges.shape[1] * 255.0
+                )
 
                 # Check for inconsistencies
                 if hist_diff > histogram_threshold:
@@ -434,12 +422,8 @@ async def frame_consistency_analyze(
         classification_hint = "natural"
 
         if len(inconsistencies) > 0:
-            hist_issues = sum(
-                1 for i in inconsistencies if i.type == "histogram_discontinuity"
-            )
-            edge_issues = sum(
-                1 for i in inconsistencies if i.type == "edge_discontinuity"
-            )
+            hist_issues = sum(1 for i in inconsistencies if i.type == "histogram_discontinuity")
+            edge_issues = sum(1 for i in inconsistencies if i.type == "edge_discontinuity")
 
             if hist_issues > edge_issues:
                 classification_hint = "possible_color_grading_change"
@@ -457,9 +441,7 @@ async def frame_consistency_analyze(
                 "histogram_issues": sum(
                     1 for i in inconsistencies if i.type == "histogram_discontinuity"
                 ),
-                "edge_issues": sum(
-                    1 for i in inconsistencies if i.type == "edge_discontinuity"
-                ),
+                "edge_issues": sum(1 for i in inconsistencies if i.type == "edge_discontinuity"),
             },
         }
 
@@ -507,11 +489,7 @@ async def face_swap_detect(
 
         # Get list of frame files
         frame_files = sorted(
-            [
-                f
-                for f in os.listdir(frames_path)
-                if f.endswith((".png", ".jpg", ".jpeg"))
-            ]
+            [f for f in os.listdir(frames_path) if f.endswith((".png", ".jpg", ".jpeg"))]
         )
 
         if len(frame_files) == 0:
@@ -532,7 +510,7 @@ async def face_swap_detect(
         total_faces = 0
         deepfake_scores = []
 
-        # Optimization: Target ~300 samples for the whole video to stay within 
+        # Optimization: Target ~300 samples for the whole video to stay within
         # deep analysis latency budgets on CPU-bound environments.
         total_frame_count = len(frame_files)
         skip_rate = max(1, total_frame_count // 300)
@@ -541,7 +519,7 @@ async def face_swap_detect(
             # Apply skipping
             if frame_idx % skip_rate != 0:
                 continue
-                
+
             if progress_callback and frame_idx % 10 == 0:
                 await progress_callback(
                     f"Scanning frame {frame_idx}/{len(frame_files)} for face anomalies..."
@@ -593,12 +571,8 @@ async def face_swap_detect(
                 # GAN faces may have unusual high-frequency patterns
 
                 center = np.array(magnitude_norm.shape) // 2
-                y_coords, x_coords = np.ogrid[
-                    : magnitude_norm.shape[0], : magnitude_norm.shape[1]
-                ]
-                distances = np.sqrt(
-                    (x_coords - center[1]) ** 2 + (y_coords - center[0]) ** 2
-                )
+                y_coords, x_coords = np.ogrid[: magnitude_norm.shape[0], : magnitude_norm.shape[1]]
+                distances = np.sqrt((x_coords - center[1]) ** 2 + (y_coords - center[0]) ** 2)
 
                 # Compute energy in different frequency bands
                 low_freq_mask = distances < 10
@@ -624,9 +598,7 @@ async def face_swap_detect(
         else:
             confidence = 0.0
 
-        deepfake_suspected = (
-            confidence > confidence_threshold and len(flagged_frames) > 0
-        )
+        deepfake_suspected = confidence > confidence_threshold and len(flagged_frames) > 0
 
         return {
             "deepfake_suspected": deepfake_suspected,
@@ -680,9 +652,7 @@ async def video_metadata_extract(artifact: EvidenceArtifact) -> dict[str, Any]:
 
             # Convert fourcc to string
             fourcc = int(metadata["fourcc"])
-            metadata["fourcc_str"] = "".join(
-                [chr((fourcc >> 8 * i) & 0xFF) for i in range(4)]
-            )
+            metadata["fourcc_str"] = "".join([chr((fourcc >> 8 * i) & 0xFF) for i in range(4)])
 
             # Compute duration
             if metadata["fps"] > 0:
@@ -821,11 +791,7 @@ async def face_swap_detect_deepface(
         confidence = min(
             0.95,
             len(discontinuities) * 0.3
-            + (
-                max(d["cosine_distance"] for d in discontinuities)
-                if discontinuities
-                else 0.0
-            )
+            + (max(d["cosine_distance"] for d in discontinuities) if discontinuities else 0.0)
             * 0.5,
         )
 

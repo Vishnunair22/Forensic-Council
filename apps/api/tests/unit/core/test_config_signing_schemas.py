@@ -1,9 +1,10 @@
-﻿"""
+"""
 Backend Unit Tests â€” core/config.py & core/signing.py & api/schemas.py
 ========================================================================
 Tests application configuration loading, secure defaults detection,
 ECDSA cryptographic signing, and Pydantic DTO validation.
 """
+
 from datetime import datetime
 
 import pytest
@@ -12,12 +13,14 @@ import pytest
 # CONFIG TESTS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+
 class TestSettings:
     """Test that configuration loads correctly from environment."""
 
     def test_settings_importable(self):
         try:
             from core.config import get_settings
+
             settings = get_settings()
             assert settings is not None
         except ImportError:
@@ -26,6 +29,7 @@ class TestSettings:
     def test_app_env_is_testing(self):
         try:
             from core.config import get_settings
+
             settings = get_settings()
             assert settings.app_env in ("testing", "development", "production")
         except ImportError:
@@ -34,6 +38,7 @@ class TestSettings:
     def test_signing_key_present(self):
         try:
             from core.config import get_settings
+
             settings = get_settings()
             assert settings.signing_key
             assert len(settings.signing_key) > 0
@@ -44,6 +49,7 @@ class TestSettings:
         """JWT expire should be <= 120 minutes (not 7 days = 10080 from old bug)."""
         try:
             from core.config import get_settings
+
             settings = get_settings()
             assert hasattr(settings, "jwt_access_token_expire_minutes")
             assert settings.jwt_access_token_expire_minutes <= 120, (
@@ -56,6 +62,7 @@ class TestSettings:
     def test_cors_origins_is_list(self):
         try:
             from core.config import get_settings
+
             settings = get_settings()
             if hasattr(settings, "cors_origins"):
                 assert isinstance(settings.cors_origins, (list, tuple))
@@ -65,6 +72,7 @@ class TestSettings:
     def test_debug_is_bool(self):
         try:
             from core.config import get_settings
+
             settings = get_settings()
             assert isinstance(settings.debug, bool)
         except ImportError:
@@ -73,15 +81,23 @@ class TestSettings:
     def test_log_level_is_valid(self):
         try:
             from core.config import get_settings
+
             settings = get_settings()
             if hasattr(settings, "log_level"):
-                assert settings.log_level.upper() in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+                assert settings.log_level.upper() in (
+                    "DEBUG",
+                    "INFO",
+                    "WARNING",
+                    "ERROR",
+                    "CRITICAL",
+                )
         except ImportError:
             pytest.skip()
 
     def test_llm_provider_set(self):
         try:
             from core.config import get_settings
+
             settings = get_settings()
             if hasattr(settings, "llm_provider"):
                 assert settings.llm_provider in ("groq", "openai", "anthropic", "none", "test")
@@ -92,6 +108,7 @@ class TestSettings:
         """get_settings() should return the same instance (lru_cache)."""
         try:
             from core.config import get_settings
+
             s1 = get_settings()
             s2 = get_settings()
             assert s1 is s2
@@ -102,6 +119,7 @@ class TestSettings:
         """The dev signing key placeholder should be flagged as insecure."""
         try:
             from core.config import get_settings
+
             settings = get_settings()
             key = settings.signing_key
             # Known dev placeholder from .env.example
@@ -117,16 +135,24 @@ class TestSettings:
     def test_postgres_config_present(self):
         try:
             from core.config import get_settings
+
             s = get_settings()
-            assert hasattr(s, "postgres_user") or hasattr(s, "postgres_host") or hasattr(s, "postgres_db")
+            assert (
+                hasattr(s, "postgres_user")
+                or hasattr(s, "postgres_host")
+                or hasattr(s, "postgres_db")
+            )
         except ImportError:
             pytest.skip()
 
     def test_redis_config_present(self):
         try:
             from core.config import get_settings
+
             s = get_settings()
-            assert hasattr(s, "redis_password") or hasattr(s, "redis_host") or hasattr(s, "redis_url")
+            assert (
+                hasattr(s, "redis_password") or hasattr(s, "redis_host") or hasattr(s, "redis_url")
+            )
         except ImportError:
             pytest.skip()
 
@@ -135,6 +161,7 @@ class TestSettings:
 # SIGNING TESTS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+
 class TestSignContent:
     """Tests for core/signing.py â€” ECDSA P-256 / SHA-256."""
 
@@ -142,6 +169,7 @@ class TestSignContent:
     def skip_if_missing(self):
         try:
             from core.signing import SignedEntry, sign_content, verify_entry
+
             self.sign_content = sign_content
             self.verify_entry = verify_entry
             self.SignedEntry = SignedEntry
@@ -154,9 +182,20 @@ class TestSignContent:
 
     def test_signed_entry_has_required_fields(self):
         entry = self.sign_content("agent-img", {"result": "clean"})
-        d = entry if isinstance(entry, dict) else entry.to_dict() if hasattr(entry, "to_dict") else vars(entry)
+        d = (
+            entry
+            if isinstance(entry, dict)
+            else entry.to_dict()
+            if hasattr(entry, "to_dict")
+            else vars(entry)
+        )
         assert "agent_id" in d or hasattr(entry, "agent_id")
-        assert "hash" in d or "content_hash" in d or hasattr(entry, "hash") or hasattr(entry, "content_hash")
+        assert (
+            "hash" in d
+            or "content_hash" in d
+            or hasattr(entry, "hash")
+            or hasattr(entry, "content_hash")
+        )
         assert "signature" in d or hasattr(entry, "signature")
         assert "timestamp_utc" in d or hasattr(entry, "timestamp_utc")
 
@@ -237,6 +276,7 @@ class TestSignedEntry:
     def skip_if_missing(self):
         try:
             from core.signing import SignedEntry
+
             self.SignedEntry = SignedEntry
         except ImportError:
             pytest.skip("SignedEntry not importable")
@@ -244,6 +284,7 @@ class TestSignedEntry:
     def test_to_dict_roundtrip(self):
         try:
             from core.signing import sign_content
+
             entry = sign_content("agent-img", {"x": 1})
             if hasattr(entry, "to_dict") and hasattr(entry.__class__, "from_dict"):
                 d = entry.to_dict()
@@ -255,6 +296,7 @@ class TestSignedEntry:
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # PYDANTIC SCHEMA TESTS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
 
 class TestSchemas:
     """Tests for api/schemas.py Pydantic models."""
@@ -268,6 +310,7 @@ class TestSchemas:
                 InvestigationRequest,
                 ReportDTO,
             )
+
             self.InvestigationRequest = InvestigationRequest
             self.AgentFindingDTO = AgentFindingDTO
             self.ReportDTO = ReportDTO
@@ -283,11 +326,13 @@ class TestSchemas:
 
     def test_investigation_request_missing_case_id_raises(self):
         import pydantic
+
         with pytest.raises((pydantic.ValidationError, TypeError)):
             self.InvestigationRequest(investigator_id="REQ-12345")
 
     def test_investigation_request_missing_investigator_id_raises(self):
         import pydantic
+
         with pytest.raises((pydantic.ValidationError, TypeError)):
             self.InvestigationRequest(case_id="CASE-1234567890")
 
@@ -299,9 +344,21 @@ class TestSchemas:
         assert obj.confidence_raw == 0.88
 
     def test_agent_finding_optional_fields_default_none(self, sample_agent_finding):
-        minimal = {k: v for k, v in sample_agent_finding.items()
-                   if k in ("finding_id", "agent_id", "agent_name", "finding_type",
-                             "status", "confidence_raw", "calibrated", "robustness_caveat")}
+        minimal = {
+            k: v
+            for k, v in sample_agent_finding.items()
+            if k
+            in (
+                "finding_id",
+                "agent_id",
+                "agent_name",
+                "finding_type",
+                "status",
+                "confidence_raw",
+                "calibrated",
+                "robustness_caveat",
+            )
+        }
         # Should accept with optional fields absent
         try:
             obj = self.AgentFindingDTO(**minimal)
@@ -333,9 +390,8 @@ class TestSchemas:
 
     def test_hitl_invalid_decision_raises(self):
         import pydantic
+
         with pytest.raises((pydantic.ValidationError, ValueError)):
             self.HITLDecisionRequest(
                 session_id="s", checkpoint_id="c", agent_id="a", decision="INVALID_GARBAGE"
             )
-
-

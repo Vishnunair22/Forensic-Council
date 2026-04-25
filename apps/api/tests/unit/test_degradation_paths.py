@@ -34,6 +34,7 @@ os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-key-abcdefghijklmnopqrstuvwxyz
 
 # ── 1. bcrypt password length enforcement ────────────────────────────────────
 
+
 class TestPasswordLengthEnforcement:
     """
     Regression tests for the bcrypt silent-truncation fix.
@@ -89,6 +90,7 @@ class TestPasswordLengthEnforcement:
 
 # ── 2. JWT RS256 production hardening ────────────────────────────────────────
 
+
 class TestJWTRS256Hardening:
     """
     In production, RS256 selected but private key absent must raise ValueError.
@@ -139,6 +141,7 @@ class TestJWTRS256Hardening:
 
 
 # ── 3. Gemini circuit breaker degradation ───────────────────────────────────
+
 
 class TestGeminiCircuitBreaker:
     """
@@ -261,6 +264,7 @@ class TestGeminiCircuitBreaker:
 
 # ── 4. Redis client bytes decoding ───────────────────────────────────────────
 
+
 class TestRedisClientDecoding:
     """
     Regression guard: redis-py returns bytes; the client wrapper must decode
@@ -312,6 +316,7 @@ class TestRedisClientDecoding:
 
 # ── 5. Agent1 lossless cache — no type: ignore required ──────────────────────
 
+
 class TestAgent1LosslessCache:
     """
     Verify that _is_lossless caches correctly via __dict__ without
@@ -353,7 +358,7 @@ class TestAgent1LosslessCache:
             _ = agent._is_lossless  # Second access should use cache
 
         # cached_property stores in __dict__ via descriptor, verify it works
-        assert hasattr(agent, '_is_lossless')
+        assert hasattr(agent, "_is_lossless")
 
 
 class TestAgent1SignalContracts:

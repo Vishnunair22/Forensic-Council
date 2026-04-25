@@ -281,9 +281,7 @@ class WorkingMemory:
             iteration_ceiling: Maximum iterations allowed
         """
         # Create task objects
-        task_objects = [
-            Task(description=desc, status=TaskStatus.PENDING) for desc in tasks
-        ]
+        task_objects = [Task(description=desc, status=TaskStatus.PENDING) for desc in tasks]
 
         # Create initial state
         state = WorkingMemoryState(
@@ -310,9 +308,7 @@ class WorkingMemory:
                     error=str(e),
                 )
         else:
-            logger.warning(
-                "WorkingMemory.initialize: Redis unavailable, using in-memory fallback"
-            )
+            logger.warning("WorkingMemory.initialize: Redis unavailable, using in-memory fallback")
 
         # Log to custody logger
         if self._custody_logger:
@@ -374,13 +370,9 @@ class WorkingMemory:
 
                 if result_json:
                     self._local_cache[key] = result_json
-                    logger.debug(
-                        "Updated task atomically via Redis Lua", task_id=str(task_id)
-                    )
+                    logger.debug("Updated task atomically via Redis Lua", task_id=str(task_id))
                 else:
-                    logger.warning(
-                        "Task not found during atomic update", task_id=str(task_id)
-                    )
+                    logger.warning("Task not found during atomic update", task_id=str(task_id))
                     # Fallback to legacy behavior if task not found in Redis (might be in local cache only)
                     await self._legacy_update_task(
                         session_id,
@@ -767,9 +759,7 @@ class WorkingMemory:
             try:
                 await self._redis.set(key, state_json, ex=86400)
             except Exception as e:
-                logger.warning(
-                    "WorkingMemory.restore_from_json: Redis write failed", error=str(e)
-                )
+                logger.warning("WorkingMemory.restore_from_json: Redis write failed", error=str(e))
         else:
             logger.warning(
                 "WorkingMemory.restore_from_json: Redis unavailable, using in-memory fallback"

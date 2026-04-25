@@ -20,6 +20,7 @@ WAL_DIR_NAME = "forensic_council_wal"
 RETENTION_HOURS = 24
 RETENTION_SECONDS = RETENTION_HOURS * 3600
 
+
 def purge_wal():
     """Purges the file-based WAL for expired sessions."""
     wal_dir = Path(tempfile.gettempdir()) / WAL_DIR_NAME
@@ -47,17 +48,16 @@ def purge_wal():
             logger.error(f"Failed to purge {wal_file}: {e}")
 
     logger.info(
-        "WAL Cleanup Complete",
-        files_removed=purged_count,
-        bytes_freed=total_size,
-        status="SECURE"
+        "WAL Cleanup Complete", files_removed=purged_count, bytes_freed=total_size, status="SECURE"
     )
+
 
 def main():
     try:
         purge_wal()
     except Exception as e:
         logger.critical(f"Dead Man's Switch cleanup failed: {e}")
+
 
 if __name__ == "__main__":
     main()

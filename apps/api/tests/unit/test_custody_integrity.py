@@ -40,15 +40,18 @@ import pytest
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def _fresh_keystore():
     """Return a new, isolated KeyStore (not the global singleton)."""
     from core.signing import KeyStore
+
     return KeyStore()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 1. Hash Determinism
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestHashDeterminism:
     """compute_content_hash must be stable and order-independent."""
@@ -109,6 +112,7 @@ class TestHashDeterminism:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 2. Sign + Verify Golden Path
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestSignAndVerify:
     """Valid entries must verify correctly."""
@@ -178,14 +182,13 @@ class TestSignAndVerify:
 
         for agent_id in ("Agent1", "Agent2", "Agent3", "Agent4", "Agent5"):
             entry = sign_content(agent_id, content, keystore=ks)
-            assert verify_entry(entry, keystore=ks) is True, (
-                f"Verification failed for {agent_id}"
-            )
+            assert verify_entry(entry, keystore=ks) is True, f"Verification failed for {agent_id}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 3. Forgery Detection
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestForgeryDetection:
     """Tampered content or forged signatures must be rejected."""
@@ -283,6 +286,7 @@ class TestForgeryDetection:
 # 4. Key Determinism
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestKeyDeterminism:
     """Seeded key generation must be stable across calls."""
 
@@ -342,23 +346,25 @@ class TestKeyDeterminism:
 # 5. Per-Agent Key Independence
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestPerAgentKeyIndependence:
     """Different agent IDs must produce different keys."""
 
     def test_different_agents_different_seeds(self):
         ks = _fresh_keystore()
-        seeds = {a: ks._derive_seed(a) for a in ("Agent1", "Agent2", "Agent3", "Agent4", "Agent5", "Arbiter")}
+        seeds = {
+            a: ks._derive_seed(a)
+            for a in ("Agent1", "Agent2", "Agent3", "Agent4", "Agent5", "Arbiter")
+        }
         # All seeds must be distinct
-        assert len(set(seeds.values())) == len(seeds), (
-            "Each agent must derive a unique seed"
-        )
+        assert len(set(seeds.values())) == len(seeds), "Each agent must derive a unique seed"
 
     def test_different_agents_different_private_keys(self):
         ks = _fresh_keystore()
-        pems = {a: ks.get_or_create(a).get_private_key_pem() for a in ("Agent1", "Agent2", "Agent3")}
-        assert len(set(pems.values())) == 3, (
-            "Each agent must have a distinct private key"
-        )
+        pems = {
+            a: ks.get_or_create(a).get_private_key_pem() for a in ("Agent1", "Agent2", "Agent3")
+        }
+        assert len(set(pems.values())) == 3, "Each agent must have a distinct private key"
 
     def test_agent1_cannot_verify_agent2_signature(self):
         """An entry signed by Agent1 should NOT be claimable as Agent2's work."""
@@ -376,6 +382,7 @@ class TestPerAgentKeyIndependence:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 6. PEM Round-Trip
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPEMRoundTrip:
     """Key pairs must survive PEM serialization and deserialization."""
@@ -427,6 +434,7 @@ class TestPEMRoundTrip:
 # 7. Key Rotation
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestKeyRotation:
     """rotate_key must produce a new distinct key; old entries remain accessible."""
 
@@ -441,6 +449,7 @@ class TestKeyRotation:
         # Patch DB methods to be no-ops so we don't need a real DB
         ks._db_available = False  # forces in-memory only path
         from unittest.mock import AsyncMock
+
         ks._retire_key_in_db = AsyncMock()
         ks._save_key_to_db = AsyncMock()
 
@@ -467,6 +476,7 @@ class TestKeyRotation:
         # Rotate
         ks._db_available = False
         from unittest.mock import AsyncMock
+
         ks._retire_key_in_db = AsyncMock()
         ks._save_key_to_db = AsyncMock()
         await ks.rotate_key("Agent1")
@@ -487,6 +497,7 @@ class TestKeyRotation:
 
         ks._db_available = False
         from unittest.mock import AsyncMock
+
         ks._retire_key_in_db = AsyncMock()
         ks._save_key_to_db = AsyncMock()
         await ks.rotate_key("Agent1")
@@ -502,6 +513,7 @@ class TestKeyRotation:
         ks = _fresh_keystore()
         ks._db_available = False
         from unittest.mock import AsyncMock
+
         ks._retire_key_in_db = AsyncMock()
         ks._save_key_to_db = AsyncMock()
 
@@ -513,6 +525,7 @@ class TestKeyRotation:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 8. KeyStore.clear
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestKeyStoreClear:
     """clear() must wipe all in-memory keys."""

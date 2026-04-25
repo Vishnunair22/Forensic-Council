@@ -134,9 +134,7 @@ class EpisodicMemory:
     async def ensure_collection(self) -> bool:
         """Ensure the collection exists. Returns False if Qdrant is unavailable."""
         if self._qdrant is None:
-            logger.warning(
-                "EpisodicMemory: Qdrant unavailable, skipping ensure_collection"
-            )
+            logger.warning("EpisodicMemory: Qdrant unavailable, skipping ensure_collection")
             return False
         try:
             await self._qdrant.create_collection(
@@ -257,9 +255,7 @@ class EpisodicMemory:
                 entry_type=EntryType.MEMORY_READ,
                 content={
                     "operation": "query_episodic",
-                    "signature_type_filter": signature_type.value
-                    if signature_type
-                    else None,
+                    "signature_type_filter": signature_type.value if signature_type else None,
                     "top_k": top_k,
                     "result_count": len(entries),
                 },
@@ -330,9 +326,7 @@ class EpisodicMemory:
         """
         # Ensure collection exists — return empty list if Qdrant is unavailable
         if not await self.ensure_collection():
-            logger.warning(
-                "EpisodicMemory.get_by_session: skipped — Qdrant unavailable"
-            )
+            logger.warning("EpisodicMemory.get_by_session: skipped — Qdrant unavailable")
             return []
 
         # Query with session_id filter using scroll (filter-only query)
@@ -395,24 +389,17 @@ class EpisodicMemory:
                 limit=top_k * 3,  # Over-fetch to account for filtering
             )
         except Exception as e:
-            logger.debug(
-                "EpisodicMemory.retrieve_similar_cases: scroll failed", error=str(e)
-            )
+            logger.debug("EpisodicMemory.retrieve_similar_cases: scroll failed", error=str(e))
             return []
 
         entries = []
         for result in results:
             payload = result.get("payload", {})
             # Skip entries from current session
-            if exclude_session_id and payload.get("session_id") == str(
-                exclude_session_id
-            ):
+            if exclude_session_id and payload.get("session_id") == str(exclude_session_id):
                 continue
             # Optional finding_type substring match
-            if (
-                finding_type
-                and finding_type.lower() not in payload.get("finding_type", "").lower()
-            ):
+            if finding_type and finding_type.lower() not in payload.get("finding_type", "").lower():
                 continue
             try:
                 entries.append(EpisodicEntry.from_dict(payload))

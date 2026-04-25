@@ -129,7 +129,7 @@ class EvidenceStore:
         def _hash_sync():
             sha256 = hashlib.sha256()
             with open(file_path, "rb") as f:
-                for chunk in iter(lambda: f.read(1024 * 1024), b""): # 1MB chunks
+                for chunk in iter(lambda: f.read(1024 * 1024), b""):  # 1MB chunks
                     sha256.update(chunk)
             return sha256.hexdigest()
 
@@ -147,7 +147,7 @@ class EvidenceStore:
         """
         Ingest a file as evidence.
 
-        Computes hash using streaming, copies to immutable storage, 
+        Computes hash using streaming, copies to immutable storage,
         creates artifact record, and logs to chain of custody.
         """
         try:
@@ -157,7 +157,7 @@ class EvidenceStore:
             # Create artifact record placeholder (path updated after storage)
             artifact = EvidenceArtifact.create_root(
                 artifact_type=artifact_type,
-                file_path="", 
+                file_path="",
                 content_hash=content_hash,
                 action=action,
                 agent_id=agent_id,
@@ -208,7 +208,7 @@ class EvidenceStore:
                 file_path=file_path,
                 error=str(e),
                 error_type=type(e).__name__,
-                exc_info=True
+                exc_info=True,
             )
             raise EvidenceStoreError(
                 f"Storage I/O failed for {file_path}",
@@ -216,15 +216,13 @@ class EvidenceStore:
                     "file_path": file_path,
                     "error_type": type(e).__name__,
                     "recoverable": True,
-                    "error": str(e)
+                    "error": str(e),
                 },
             )
         except PermissionError as e:
             # Permission denied - critical security issue
             logger.critical(
-                "Permission denied during evidence ingest",
-                file_path=file_path,
-                error=str(e)
+                "Permission denied during evidence ingest", file_path=file_path, error=str(e)
             )
             raise EvidenceStoreError(
                 f"Permission denied: {file_path}",
@@ -232,7 +230,7 @@ class EvidenceStore:
                     "file_path": file_path,
                     "error_type": "PermissionError",
                     "recoverable": False,
-                    "error": str(e)
+                    "error": str(e),
                 },
             )
         except EvidenceStoreError:
@@ -245,7 +243,7 @@ class EvidenceStore:
                 file_path=file_path,
                 error=str(e),
                 error_type=type(e).__name__,
-                exc_info=True
+                exc_info=True,
             )
             raise EvidenceStoreError(
                 f"Failed to ingest evidence: {file_path}. Cause: {repr(e)}",
@@ -253,7 +251,7 @@ class EvidenceStore:
                     "file_path": file_path,
                     "error_type": type(e).__name__,
                     "recoverable": False,
-                    "error": str(e)
+                    "error": str(e),
                 },
             )
 
@@ -557,7 +555,6 @@ class EvidenceStore:
                 error=str(e),
             )
             return False
-
 
     async def get_all_for_session(self, session_id: UUID) -> list[EvidenceArtifact]:
         """

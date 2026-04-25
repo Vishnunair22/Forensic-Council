@@ -171,9 +171,7 @@ def increment_investigations_completed() -> None:
         loop = asyncio.get_running_loop()
         loop.create_task(_redis_incr(_KEY_INV_COMPLETED))
     except RuntimeError:
-        _local["investigations_completed"] = (
-            _local.get("investigations_completed", 0) + 1
-        )
+        _local["investigations_completed"] = _local.get("investigations_completed", 0) + 1
 
 
 def increment_investigations_failed() -> None:
@@ -337,9 +335,7 @@ async def get_raw_metrics(request: Request):
         from fastapi.responses import JSONResponse as _JR
 
         return _JR(
-            {
-                "detail": "Metrics scrape endpoint disabled — set METRICS_SCRAPE_TOKEN to enable"
-            },
+            {"detail": "Metrics scrape endpoint disabled — set METRICS_SCRAPE_TOKEN to enable"},
             status_code=503,
         )
 

@@ -66,18 +66,13 @@ async def _run_pipeline_probe(sample: str) -> dict[str, Any]:
         for agent_id, findings in report.per_agent_findings.items()
     }
     active_agents = [
-        agent_id
-        for agent_id, counts in agent_counts.items()
-        if counts["initial"] or counts["deep"]
+        agent_id for agent_id, counts in agent_counts.items() if counts["initial"] or counts["deep"]
     ]
-    report_findings = sum(
-        counts["initial"] + counts["deep"] for counts in agent_counts.values()
-    )
+    report_findings = sum(counts["initial"] + counts["deep"] for counts in agent_counts.values())
     deep_findings = sum(counts["deep"] for counts in agent_counts.values())
     incomplete_findings = sum(counts["incomplete"] for counts in agent_counts.values())
     llm_bypassed = any(
-        "LLM synthesis bypassed" in str(flag)
-        or "LLM synthesis timed out" in str(flag)
+        "LLM synthesis bypassed" in str(flag) or "LLM synthesis timed out" in str(flag)
         for flag in report.degradation_flags
     )
 

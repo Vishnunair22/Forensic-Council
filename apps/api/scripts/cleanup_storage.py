@@ -16,6 +16,7 @@ from core.structured_logging import get_logger
 logger = get_logger(__name__)
 settings = get_settings()
 
+
 def cleanup_evidence():
     """
     Purge evidence files older than EVIDENCE_RETENTION_DAYS.
@@ -41,12 +42,14 @@ def cleanup_evidence():
             if (now - mtime) > retention_seconds:
                 try:
                     # Calculate size before deletion for logging
-                    dir_size = sum(f.stat().st_size for f in item.glob('**/*') if f.is_file())
+                    dir_size = sum(f.stat().st_size for f in item.glob("**/*") if f.is_file())
 
                     shutil.rmtree(item)
                     purged_count += 1
                     purged_bytes += dir_size
-                    logger.info(f"Purged expired evidence session: {item.name}", size_kb=dir_size//1024)
+                    logger.info(
+                        f"Purged expired evidence session: {item.name}", size_kb=dir_size // 1024
+                    )
                 except Exception as e:
                     logger.error(f"Failed to purge {item}: {e}")
 
@@ -54,10 +57,11 @@ def cleanup_evidence():
         logger.info(
             "Evidence cleanup complete",
             purged_sessions=purged_count,
-            freed_mb=purged_bytes // (1024 * 1024)
+            freed_mb=purged_bytes // (1024 * 1024),
         )
     else:
         logger.info("No expired evidence sessions found.")
+
 
 if __name__ == "__main__":
     cleanup_evidence()

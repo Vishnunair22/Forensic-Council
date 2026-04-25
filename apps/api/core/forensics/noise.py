@@ -13,6 +13,7 @@ from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
+
 def analyze_noise_consistency(file_path: str, regions: int = 4) -> dict:
     """
     Analyze regional noise consistency (PRNU-lite heuristic).
@@ -65,6 +66,7 @@ def analyze_noise_consistency(file_path: str, regions: int = 4) -> dict:
             "backend": "core-prnu-lite-engine",
             "court_defensible": False,
         }
+
 
 def prnu_sensor_heuristic(file_path: str) -> dict:
     """

@@ -135,9 +135,7 @@ async def retry_async(
     raise last_exception or Exception("Retry failed without exception")
 
 
-def retry_sync(
-    func: Callable[..., Any], *args, config: RetryConfig | None = None, **kwargs
-) -> Any:
+def retry_sync(func: Callable[..., Any], *args, config: RetryConfig | None = None, **kwargs) -> Any:
     """
     Execute a sync function with retry logic.
 

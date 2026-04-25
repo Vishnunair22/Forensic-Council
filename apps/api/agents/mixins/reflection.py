@@ -28,9 +28,7 @@ class AgentReflectionMixin:
     custody_logger: Any
     evidence_artifact: Any
 
-    async def self_reflection_pass(
-        self, findings: list[AgentFinding]
-    ) -> SelfReflectionReport:
+    async def self_reflection_pass(self, findings: list[AgentFinding]) -> SelfReflectionReport:
         """Perform self-reflection on investigation findings."""
         logger.info("Running self-reflection pass", agent_id=self.agent_id)
 
@@ -67,9 +65,7 @@ class AgentReflectionMixin:
         )
 
         # RT5: Check if confidence is court-defensible
-        court_defensible = (
-            all_tasks_complete and not overconfident_findings and findings
-        )
+        court_defensible = all_tasks_complete and not overconfident_findings and findings
 
         reflection_notes = []
         if incomplete_tasks:

@@ -119,8 +119,7 @@ def assign_severity_tier(f: Any) -> str:
         meta.get("anomaly_detected") is True
         or meta.get("inconsistency_detected") is True
         or meta.get("is_anomalous") is True
-        or str(meta.get("verdict", "")).upper()
-        in ("TAMPERED", "SUSPICIOUS", "MANIPULATED")
+        or str(meta.get("verdict", "")).upper() in ("TAMPERED", "SUSPICIOUS", "MANIPULATED")
     )
 
     if has_manip:

@@ -18,9 +18,7 @@ from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
-_CONFIG_PATH = (
-    Path(__file__).resolve().parent.parent / "config" / "task_tool_overrides.yaml"
-)
+_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "task_tool_overrides.yaml"
 
 # Loaded once at module import; cached for the process lifetime.
 _task_tool_overrides: dict[str, str] | None = None

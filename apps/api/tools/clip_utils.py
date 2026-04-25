@@ -112,7 +112,7 @@ class CLIPImageAnalyzer:
             self._model_name = settings.siglip_model_name
             # Handle both open_clip names and HuggingFace hub names
             _pretrained = "webli" if "siglip" in self._model_name.lower() else self._pretrained
-            if "/" in self._model_name: # Handle HF names like "google/siglip-..."
+            if "/" in self._model_name:  # Handle HF names like "google/siglip-..."
                 _pretrained = "hf-hub"
 
             logger.info(f"Loading Vision-Language model {self._model_name}...")
@@ -190,9 +190,7 @@ class CLIPImageAnalyzer:
                 text_features = self._model.encode_text(text_tokens)
 
                 # Normalize features
-                image_features = image_features / image_features.norm(
-                    dim=-1, keepdim=True
-                )
+                image_features = image_features / image_features.norm(dim=-1, keepdim=True)
                 text_features = text_features / text_features.norm(dim=-1, keepdim=True)
 
                 # Compute similarity scores
@@ -211,17 +209,13 @@ class CLIPImageAnalyzer:
             concern_flag = False
             if check_concerns:
                 concern_scores = [
-                    (cat, score)
-                    for cat, score in scores
-                    if cat in self.CONCERN_CATEGORIES
+                    (cat, score) for cat, score in scores if cat in self.CONCERN_CATEGORIES
                 ]
                 if concern_scores:
                     top_concern, concern_score = max(concern_scores, key=lambda x: x[1])
                     # Flag if top concern is not "safe everyday object" and score is significantly
                     # above the mean concern score (relative threshold instead of absolute 0.4)
-                    concern_mean = sum(s for _, s in concern_scores) / len(
-                        concern_scores
-                    )
+                    concern_mean = sum(s for _, s in concern_scores) / len(concern_scores)
                     if (
                         top_concern != "a safe everyday object"
                         and concern_score > concern_mean * 1.15
@@ -258,9 +252,7 @@ class CLIPImageAnalyzer:
         Returns:
             String description of the image type
         """
-        result = self.analyze_image(
-            image_path, categories=self.DEFAULT_IMAGE_CATEGORIES
-        )
+        result = self.analyze_image(image_path, categories=self.DEFAULT_IMAGE_CATEGORIES)
         if result.available:
             return result.top_match
         return "unknown"

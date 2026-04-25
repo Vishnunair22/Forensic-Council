@@ -22,8 +22,8 @@ def mock_artifact():
     artifact.artifact_id = "test_id"
     return artifact
 
-class TestOCRTools:
 
+class TestOCRTools:
     def test_is_pdf_valid(self):
         with patch("builtins.open", mock_open(read_data=b"%PDF-1.5")):
             assert _is_pdf("dummy.pdf") is True
@@ -45,7 +45,7 @@ class TestOCRTools:
         mock_doc = MagicMock()
         mock_page = MagicMock()
         mock_page.get_text.return_value = "Extracted Text"
-        mock_page.get_images.return_value = [1, 2] # 2 images
+        mock_page.get_images.return_value = [1, 2]  # 2 images
         mock_doc.__iter__.return_value = [mock_page]
         mock_doc.page_count = 1
         mock_doc.metadata = {"title": "Test PDF"}
@@ -65,6 +65,7 @@ class TestOCRTools:
     async def test_extract_text_from_pdf_async(self, mock_exists, mock_is_pdf, mock_artifact):
         # We need to mock the loop to return an asyncio.Future
         import asyncio
+
         async_future = asyncio.Future()
         async_future.set_result({"pymupdf_available": True, "full_text": "Async Text"})
 
@@ -81,7 +82,7 @@ class TestOCRTools:
         # format: [([x1,y1], [x2,y1], [x2,y2], [x1,y2]), text, confidence]
         mock_reader.readtext.return_value = [
             ([[0, 0], [10, 0], [10, 10], [0, 10]], "Hello", 0.95),
-            ([[20, 0], [30, 0], [30, 10], [20, 10]], "World", 0.85)
+            ([[20, 0], [30, 0], [30, 10], [20, 10]], "World", 0.85),
         ]
         mock_get_reader.return_value = mock_reader
 
@@ -117,12 +118,7 @@ class TestOCRTools:
         assert result["method"] == "skipped"
 
     def test_build_summary_pdf(self):
-        result = {
-            "has_text": True,
-            "word_count": 100,
-            "method": "pymupdf",
-            "page_count": 5
-        }
+        result = {"has_text": True, "word_count": 100, "method": "pymupdf", "page_count": 5}
         summary = _build_summary(result, "pdf_document")
         assert "PDF document: 100 words" in summary
         assert "5 page(s)" in summary
@@ -133,7 +129,7 @@ class TestOCRTools:
             "word_count": 10,
             "method": "easyocr",
             "avg_confidence": 0.92,
-            "lines": ["Line 1", "Line 2", "Line 3", "Line 4"]
+            "lines": ["Line 1", "Line 2", "Line 3", "Line 4"],
         }
         summary = _build_summary(result, "image")
         assert "Image text: 10 words" in summary
@@ -144,6 +140,7 @@ class TestOCRTools:
     @pytest.mark.asyncio
     async def test_extract_text_from_pdf_file_not_found(self, mock_exists, mock_artifact):
         from core.exceptions import ToolUnavailableError
+
         with pytest.raises(ToolUnavailableError, match="File not found"):
             await extract_text_from_pdf(mock_artifact)
 
@@ -158,7 +155,9 @@ class TestOCRTools:
     @patch("tools.ocr_tools._get_easyocr_reader", return_value=None)
     @patch("os.path.exists", return_value=True)
     @pytest.mark.asyncio
-    async def test_extract_text_easyocr_unavailable_fallback(self, mock_exists, mock_get_reader, mock_artifact):
+    async def test_extract_text_easyocr_unavailable_fallback(
+        self, mock_exists, mock_get_reader, mock_artifact
+    ):
         with patch("tools.ocr_tools._extract_text_tesseract_fallback") as mock_fallback:
             mock_fallback.return_value = {"method": "tesseract_fallback", "has_text": True}
             result = await extract_text_easyocr(mock_artifact)

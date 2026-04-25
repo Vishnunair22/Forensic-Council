@@ -159,3 +159,7 @@ plugin_test_*.tmp
 
 # Added by code-review-graph
 .code-review-graph/
+
+# ── Test Scripts (never commit) ────────────────────────────────────────────────
+test_*.ps1
+test_gemini_body.json

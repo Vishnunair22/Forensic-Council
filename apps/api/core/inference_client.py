@@ -18,6 +18,7 @@ from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
+
 class InferenceClient:
     """
     Unified client for ML model inference.
@@ -76,12 +77,21 @@ class InferenceClient:
 
                 # Configure Ultralytics settings
                 from ultralytics import settings as yolo_settings
+
                 if self.settings.offline_mode:
                     os.environ["ULTRALYTICS_OFFLINE"] = "True"
                     os.environ["HF_HUB_OFFLINE"] = "1"
 
-                valid_keys = set(yolo_settings.keys()) if hasattr(yolo_settings, "keys") else set(dict(yolo_settings).keys())
-                safe_updates = {k: v for k, v in {"weights_dir": yolo_cache, "datasets_dir": yolo_cache}.items() if k in valid_keys}
+                valid_keys = (
+                    set(yolo_settings.keys())
+                    if hasattr(yolo_settings, "keys")
+                    else set(dict(yolo_settings).keys())
+                )
+                safe_updates = {
+                    k: v
+                    for k, v in {"weights_dir": yolo_cache, "datasets_dir": yolo_cache}.items()
+                    if k in valid_keys
+                }
                 if safe_updates:
                     yolo_settings.update(safe_updates)
 
@@ -110,6 +120,7 @@ class InferenceClient:
         async with self._load_locks["siglip"]:
             if "siglip" not in self._models:
                 from tools.clip_utils import get_clip_analyzer
+
                 logger.info("Initializing SigLIP analyzer...")
                 self._models["siglip"] = get_clip_analyzer()
             return self._models["siglip"]
@@ -122,7 +133,10 @@ class InferenceClient:
             if "aasist" not in self._models:
                 try:
                     from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
-                    logger.info(f"Loading audio deepfake model {self.settings.aasist_model_name}...")
+
+                    logger.info(
+                        f"Loading audio deepfake model {self.settings.aasist_model_name}..."
+                    )
 
                     if self.settings.offline_mode:
                         os.environ["HF_HUB_OFFLINE"] = "1"
@@ -151,11 +165,15 @@ class InferenceClient:
         # Run in thread pool as YOLO inference is CPU/GPU intensive and blocking
         return await asyncio.to_thread(model, image_path, **kwargs)
 
-    async def predict_siglip(self, image_path: str, categories: list = None, check_concerns: bool = False):
+    async def predict_siglip(
+        self, image_path: str, categories: list = None, check_concerns: bool = False
+    ):
         """Run SigLIP inference."""
         analyzer = await self.get_siglip_analyzer()
         # analyzer.analyze_image is synchronous
-        return await asyncio.to_thread(analyzer.analyze_image, image_path, categories, check_concerns)
+        return await asyncio.to_thread(
+            analyzer.analyze_image, image_path, categories, check_concerns
+        )
 
     async def get_neural_fingerprint(self, image_path: str):
         """[SOTA] Generate a robust neural embedding fingerprint using SigLIP 2."""
@@ -196,15 +214,17 @@ class InferenceClient:
     async def _run_phase2_model(self, model_id: str, image_path: str):
         """Generic runner for Phase 2 neural tools via ml_subprocess."""
         from core.ml_subprocess import run_ml_tool
+
         # Note: These are heavy operations run as separate processes
         # to ensure memory isolation while sharing VRAM if configured.
         script_map = {
             "trufor": "trufor_analyzer.py",
             "busternet": "busternet_v2.py",
             "mantra": "mantra_net_tracer.py",
-            "f3net": "f3net_freq.py"
+            "f3net": "f3net_freq.py",
         }
         return await run_ml_tool(script_map[model_id], image_path, timeout=30.0)
+
 
 async def get_inference_client() -> InferenceClient:
     """Helper to get the inference client singleton."""

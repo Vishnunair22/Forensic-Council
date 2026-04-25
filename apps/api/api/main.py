@@ -754,7 +754,9 @@ async def ml_tools_health():
         "tools_total": tools_total,
         "warmup_status": "managed_by_worker",
         "tools_warmed_in_process": tools_warmed,
-        "presence_percentage": round((tools_present / tools_total * 100) if tools_total > 0 else 0, 1),
+        "presence_percentage": round(
+            (tools_present / tools_total * 100) if tools_total > 0 else 0, 1
+        ),
         "details": script_status,
         "warmup_details": warmup_status,
         "cache_dirs": {

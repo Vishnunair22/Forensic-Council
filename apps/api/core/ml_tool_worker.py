@@ -119,26 +119,34 @@ def run_warmup_mode(model_loader: Callable, timeout: float = 60.0):
         elapsed = time.time() - start_time
 
         if model is None:
-            print(json.dumps({
-                "status": "warmup_failed",
-                "error": "Model loader returned None",
-                "elapsed_seconds": round(elapsed, 2)
-            }))
+            print(
+                json.dumps(
+                    {
+                        "status": "warmup_failed",
+                        "error": "Model loader returned None",
+                        "elapsed_seconds": round(elapsed, 2),
+                    }
+                )
+            )
             sys.exit(1)
 
         logger.info(f"Model warmup completed in {elapsed:.1f}s")
-        print(json.dumps({
-            "status": "warmed_up",
-            "elapsed_seconds": round(elapsed, 2),
-            "model_type": type(model).__name__
-        }))
+        print(
+            json.dumps(
+                {
+                    "status": "warmed_up",
+                    "elapsed_seconds": round(elapsed, 2),
+                    "model_type": type(model).__name__,
+                }
+            )
+        )
 
     except Exception as e:
         elapsed = time.time() - start_time
         logger.error("Model warmup failed", error=str(e), exc_info=True)
-        print(json.dumps({
-            "status": "warmup_failed",
-            "error": str(e),
-            "elapsed_seconds": round(elapsed, 2)
-        }))
+        print(
+            json.dumps(
+                {"status": "warmup_failed", "error": str(e), "elapsed_seconds": round(elapsed, 2)}
+            )
+        )
         sys.exit(1)

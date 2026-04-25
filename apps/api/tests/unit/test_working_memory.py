@@ -1,4 +1,4 @@
-﻿"""
+"""
 Unit tests for WorkingMemory and Task state management.
 
 Covers:
@@ -29,11 +29,10 @@ from core.working_memory import Task, TaskStatus, WorkingMemoryState
 
 # â”€â”€ TaskStatus enum â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestTaskStatusEnum:
     def test_all_statuses_defined(self):
-        assert {s.value for s in TaskStatus} == {
-            "PENDING", "IN_PROGRESS", "COMPLETE", "BLOCKED"
-        }
+        assert {s.value for s in TaskStatus} == {"PENDING", "IN_PROGRESS", "COMPLETE", "BLOCKED"}
 
     def test_status_values_are_strings(self):
         for s in TaskStatus:
@@ -41,6 +40,7 @@ class TestTaskStatusEnum:
 
 
 # â”€â”€ Task model â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 class TestTask:
     def test_default_status_is_pending(self):
@@ -109,6 +109,7 @@ class TestTask:
 
 # â”€â”€ WorkingMemoryState model â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestWorkingMemoryState:
     def _make(self, **kwargs) -> WorkingMemoryState:
         defaults = {"session_id": uuid4(), "agent_id": "Agent1"}
@@ -159,5 +160,3 @@ class TestWorkingMemoryState:
         tasks = [Task(description=f"task {i}") for i in range(5)]
         s = self._make(tasks=tasks)
         assert len(s.tasks) == 5
-
-

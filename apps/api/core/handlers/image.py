@@ -74,32 +74,96 @@ class ImageHandlers(BaseToolHandler):
     def register_tools(self, registry) -> None:
         """Register tools with the agent's ToolRegistry."""
         # ── Phase 1: Initial Analysis ────────────────────────────────────────
-        registry.register("neural_ela",               self.neural_ela_handler,               "Neural ELA Transformer manipulation detection")
-        registry.register("noiseprint_cluster",       self.noiseprint_cluster_handler,       "Noiseprint++ sensor-region consistency clustering")
+        registry.register(
+            "neural_ela", self.neural_ela_handler, "Neural ELA Transformer manipulation detection"
+        )
+        registry.register(
+            "noiseprint_cluster",
+            self.noiseprint_cluster_handler,
+            "Noiseprint++ sensor-region consistency clustering",
+        )
 
         # ── Phase 2: Deep Neural Forensics ───────────────────────────────────
-        registry.register("neural_copy_move",         self.neural_copy_move_handler,         "BusterNet dual-branch copy-move detection")
-        registry.register("neural_splicing",          self.neural_splicing_handler,          "TruFor ViT-based splicing detection")
-        registry.register("anomaly_tracer",           self.anomaly_tracer_handler,           "ManTra-Net universal anomaly tracing")
-        registry.register("f3_net_frequency",         self.f3_net_frequency_handler,         "F3-Net frequency artifact analysis")
-        registry.register("neural_fingerprint",       self.neural_fingerprint_handler,       "SigLIP2 neural perceptual fingerprint")
-        registry.register("diffusion_artifact_detector", self.diffusion_artifact_detector_handler, "Diffusion/AI-generation artifact detection")
+        registry.register(
+            "neural_copy_move",
+            self.neural_copy_move_handler,
+            "BusterNet dual-branch copy-move detection",
+        )
+        registry.register(
+            "neural_splicing", self.neural_splicing_handler, "TruFor ViT-based splicing detection"
+        )
+        registry.register(
+            "anomaly_tracer", self.anomaly_tracer_handler, "ManTra-Net universal anomaly tracing"
+        )
+        registry.register(
+            "f3_net_frequency", self.f3_net_frequency_handler, "F3-Net frequency artifact analysis"
+        )
+        registry.register(
+            "neural_fingerprint",
+            self.neural_fingerprint_handler,
+            "SigLIP2 neural perceptual fingerprint",
+        )
+        registry.register(
+            "diffusion_artifact_detector",
+            self.diffusion_artifact_detector_handler,
+            "Diffusion/AI-generation artifact detection",
+        )
 
         # ── Global Semantic & Content Tools ──────────────────────────────────
-        registry.register("analyze_image_content",   self.analyze_image_content_handler,   "CLIP ViT-B-32 semantic classification")
-        registry.register("extract_text_from_image", self.extract_text_from_image_handler, "Tiered OCR (EasyOCR -> Tesseract)")
-        registry.register("frequency_domain_analysis", self.frequency_domain_analysis_handler, "FFT frequency-domain anomaly analysis")
+        registry.register(
+            "analyze_image_content",
+            self.analyze_image_content_handler,
+            "CLIP ViT-B-32 semantic classification",
+        )
+        registry.register(
+            "extract_text_from_image",
+            self.extract_text_from_image_handler,
+            "Tiered OCR (EasyOCR -> Tesseract)",
+        )
+        registry.register(
+            "frequency_domain_analysis",
+            self.frequency_domain_analysis_handler,
+            "FFT frequency-domain anomaly analysis",
+        )
 
         # ── Supplementary (used as follow-up targets) ────────────────────────
-        registry.register("roi_extract",              self.roi_extract_handler,              "Region of interest extraction")
-        registry.register("ela_anomaly_classify",     self.ela_anomaly_classify_handler,     "ELA anomaly block classification")
-        registry.register("adversarial_robustness_check", self.adversarial_robustness_check_handler, "Anti-forensics perturbation stability check")
-        registry.register("ela_full_image",           self.ela_full_image_handler,           "Classical multi-quality ELA sweep")
-        registry.register("jpeg_ghost_detect",        self.jpeg_ghost_detect_handler,        "JPEG ghost / double-compression artifact detection")
-        registry.register("splicing_detect",          self.splicing_detect_handler,          "Heuristic image splicing detection")
-        registry.register("copy_move_detect",         self.copy_move_detect_handler,         "SIFT-based copy-move clone detection")
-        registry.register("noise_fingerprint",        self.noise_fingerprint_handler,        "Heuristic PRNU noise consistency analysis")
-        registry.register("deepfake_frequency_check", self.deepfake_frequency_check_handler, "Heuristic frequency-band GAN artifact analysis")
+        registry.register("roi_extract", self.roi_extract_handler, "Region of interest extraction")
+        registry.register(
+            "ela_anomaly_classify",
+            self.ela_anomaly_classify_handler,
+            "ELA anomaly block classification",
+        )
+        registry.register(
+            "adversarial_robustness_check",
+            self.adversarial_robustness_check_handler,
+            "Anti-forensics perturbation stability check",
+        )
+        registry.register(
+            "ela_full_image", self.ela_full_image_handler, "Classical multi-quality ELA sweep"
+        )
+        registry.register(
+            "jpeg_ghost_detect",
+            self.jpeg_ghost_detect_handler,
+            "JPEG ghost / double-compression artifact detection",
+        )
+        registry.register(
+            "splicing_detect", self.splicing_detect_handler, "Heuristic image splicing detection"
+        )
+        registry.register(
+            "copy_move_detect",
+            self.copy_move_detect_handler,
+            "SIFT-based copy-move clone detection",
+        )
+        registry.register(
+            "noise_fingerprint",
+            self.noise_fingerprint_handler,
+            "Heuristic PRNU noise consistency analysis",
+        )
+        registry.register(
+            "deepfake_frequency_check",
+            self.deepfake_frequency_check_handler,
+            "Heuristic frequency-band GAN artifact analysis",
+        )
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -110,61 +174,74 @@ class ImageHandlers(BaseToolHandler):
         """
         ctx = self.agent._tool_context
         freq = ctx.get("frequency_domain_analysis", {})
-        
+
         # Local signals
-        local_signal = any([
-            ctx.get("neural_ela", {}).get("manipulation_detected", False),
-            (ctx.get("neural_ela") or ctx.get("ela_full_image", {})).get("num_anomaly_regions", 0) > 2,
-            ctx.get("noiseprint_cluster", {}).get("manipulation_detected", False),
-            ctx.get("neural_splicing", {}).get("splicing_detected", False),
-            ctx.get("neural_copy_move", {}).get("copy_move_detected", False),
-            ctx.get("f3_net_frequency", {}).get("gan_artifact_detected", False),
-            ctx.get("diffusion_artifact_detector", {}).get("is_ai_generated", False),
-            ctx.get("diffusion_artifact_detector", {}).get("diffusion_detected", False),
-            freq.get("anomaly_detected", False),
-            freq.get("num_anomaly_regions", 0) > 2,
-        ])
+        local_signal = any(
+            [
+                ctx.get("neural_ela", {}).get("manipulation_detected", False),
+                (ctx.get("neural_ela") or ctx.get("ela_full_image", {})).get(
+                    "num_anomaly_regions", 0
+                )
+                > 2,
+                ctx.get("noiseprint_cluster", {}).get("manipulation_detected", False),
+                ctx.get("neural_splicing", {}).get("splicing_detected", False),
+                ctx.get("neural_copy_move", {}).get("copy_move_detected", False),
+                ctx.get("f3_net_frequency", {}).get("gan_artifact_detected", False),
+                ctx.get("diffusion_artifact_detector", {}).get("is_ai_generated", False),
+                ctx.get("diffusion_artifact_detector", {}).get("diffusion_detected", False),
+                freq.get("anomaly_detected", False),
+                freq.get("num_anomaly_regions", 0) > 2,
+            ]
+        )
         if local_signal:
             return True
 
         # Cross-agent signals from Agent 3 (Object & Context)
         try:
             from core.agents import AgentID
+
             shared_ctx = await self.agent.working_memory.get_agent_context(
                 self.agent.session_id, AgentID.AGENT3
             )
             a3_tools = shared_ctx.get("tool_context", {})
-            return any([
-                a3_tools.get("lighting_consistency", {}).get("inconsistency_detected", False),
-                a3_tools.get("scene_incongruence", {}).get("scene_incongruent", False),
-            ])
+            return any(
+                [
+                    a3_tools.get("lighting_consistency", {}).get("inconsistency_detected", False),
+                    a3_tools.get("scene_incongruence", {}).get("scene_incongruent", False),
+                ]
+            )
         except Exception:
             return False
 
     async def _has_splice_or_copy_move_signal(self) -> bool:
         """Return True when anti-forensic robustness analysis is warranted."""
         ctx = self.agent._tool_context
-        local_signal = any([
-            ctx.get("neural_splicing", {}).get("splicing_detected", False),
-            ctx.get("splicing_detect", {}).get("splicing_detected", False),
-            ctx.get("neural_copy_move", {}).get("copy_move_detected", False),
-            ctx.get("copy_move_detect", {}).get("copy_move_detected", False),
-        ])
+        local_signal = any(
+            [
+                ctx.get("neural_splicing", {}).get("splicing_detected", False),
+                ctx.get("splicing_detect", {}).get("splicing_detected", False),
+                ctx.get("neural_copy_move", {}).get("copy_move_detected", False),
+                ctx.get("copy_move_detect", {}).get("copy_move_detected", False),
+            ]
+        )
         if local_signal:
             return True
 
         # Cross-agent signals from Agent 3
         try:
             from core.agents import AgentID
+
             shared_ctx = await self.agent.working_memory.get_agent_context(
                 self.agent.session_id, AgentID.AGENT3
             )
             a3_tools = shared_ctx.get("tool_context", {})
-            return any([
-                a3_tools.get("vector_contraband_search", {}).get("concern_flag", False),
-                a3_tools.get("scene_incongruence", {}).get("scene_incongruent", False),
-                a3_tools.get("lighting_consistency", {}).get("inconsistency_detected", False),
-            ])
+            return any(
+                [
+                    a3_tools.get("vector_contraband_search", {}).get("concern_flag", False),
+                    a3_tools.get("scene_incongruence", {}).get("scene_incongruent", False),
+                    a3_tools.get("lighting_consistency", {}).get("inconsistency_detected", False),
+                ]
+            )
         except Exception:
             return False
 
@@ -291,11 +368,12 @@ class ImageHandlers(BaseToolHandler):
             if not obj_ctx:
                 # Fallback: check shared context from Agent 3 (Object Detection)
                 from core.agents import AgentID
+
                 shared_ctx = await self.agent.working_memory.get_agent_context(
                     self.agent.session_id, AgentID.AGENT3
                 )
                 obj_ctx = shared_ctx.get("tool_context", {}).get("object_detection", {})
-            
+
             detections = obj_ctx.get("detections", [])
             if detections:
                 box = detections[0].get("box", {})
@@ -309,9 +387,8 @@ class ImageHandlers(BaseToolHandler):
 
         # Priority 2: First ELA anomaly region
         if not bounding_box:
-            ela_ctx = (
-                self.agent._tool_context.get("neural_ela")
-                or self.agent._tool_context.get("ela_full_image", {})
+            ela_ctx = self.agent._tool_context.get("neural_ela") or self.agent._tool_context.get(
+                "ela_full_image", {}
             )
             anomaly_regions = ela_ctx.get("anomaly_regions", [])
             if anomaly_regions:
@@ -408,7 +485,9 @@ class ImageHandlers(BaseToolHandler):
     async def diffusion_artifact_detector_handler(self, input_data: dict) -> dict:
         """Diffusion model / AI-generation artifact detection."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
-        result = await run_ml_tool("diffusion_artifact_detector.py", artifact.file_path, timeout=12.0)
+        result = await run_ml_tool(
+            "diffusion_artifact_detector.py", artifact.file_path, timeout=12.0
+        )
 
         diffusion_probability = result.get("diffusion_probability")
         if diffusion_probability is not None:
@@ -463,6 +542,7 @@ class ImageHandlers(BaseToolHandler):
         """BusterNet dual-branch copy-move detection. Falls back to SIFT."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         from core.inference_client import get_inference_client
+
         client = await get_inference_client()
 
         # No outer wait_for here — predict_busternet delegates to run_ml_tool which
@@ -485,6 +565,7 @@ class ImageHandlers(BaseToolHandler):
         """TruFor ViT-based splicing detection. Falls back to heuristic splicing."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         from core.inference_client import get_inference_client
+
         client = await get_inference_client()
 
         # No outer wait_for — run_ml_tool inside handles timeout + proc.kill().
@@ -527,6 +608,7 @@ class ImageHandlers(BaseToolHandler):
             return result
 
         from core.inference_client import get_inference_client
+
         client = await get_inference_client()
 
         # No outer wait_for — run_ml_tool inside handles timeout + proc.kill().
@@ -545,6 +627,7 @@ class ImageHandlers(BaseToolHandler):
         """F3-Net frequency artifact analysis. Falls back to heuristic frequency bands."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         from core.inference_client import get_inference_client
+
         client = await get_inference_client()
 
         # No outer wait_for — run_ml_tool inside handles timeout + proc.kill().
@@ -564,6 +647,7 @@ class ImageHandlers(BaseToolHandler):
         """SigLIP 2 neural perceptual fingerprinting. Falls back to pHash suite."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         from core.inference_client import get_inference_client
+
         client = await get_inference_client()
 
         try:
@@ -579,7 +663,9 @@ class ImageHandlers(BaseToolHandler):
                 "available": True,
             }
             # Alias to perceptual_hash for backward compatibility
-            await self._store("neural_fingerprint", result, "compute_perceptual_hash", "perceptual_hash")
+            await self._store(
+                "neural_fingerprint", result, "compute_perceptual_hash", "perceptual_hash"
+            )
             return result
         except Exception as e:
             if isinstance(e, asyncio.TimeoutError):
@@ -589,11 +675,16 @@ class ImageHandlers(BaseToolHandler):
 
         # Fallback: pHash / aHash / dHash / wHash suite
         from tools.image_tools import compute_perceptual_hash as legacy_phash
+
         fallback = await legacy_phash(artifact=artifact)
         fallback["degraded"] = True
-        fallback["fallback_reason"] = "SigLIP2 neural fingerprint unavailable or timed out; used perceptual hash suite"
+        fallback["fallback_reason"] = (
+            "SigLIP2 neural fingerprint unavailable or timed out; used perceptual hash suite"
+        )
         # Alias to perceptual_hash for backward compatibility
-        await self._store("neural_fingerprint", fallback, "compute_perceptual_hash", "perceptual_hash")
+        await self._store(
+            "neural_fingerprint", fallback, "compute_perceptual_hash", "perceptual_hash"
+        )
         return fallback
 
     # ── Global Semantic & Content Handlers ───────────────────────────────────

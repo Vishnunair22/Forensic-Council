@@ -6,20 +6,20 @@ Common constants, MIME maps, and phrase tables for the Forensic Council API.
 # Maps each accepted magic-detected MIME type to the file extensions that are
 # legitimately associated with it.
 _EXACT_MIME_EXT_MAP: dict[str, frozenset] = {
-    "image/jpeg":      frozenset({".jpg", ".jpeg"}),
-    "image/png":       frozenset({".png"}),
-    "image/gif":       frozenset({".gif"}),
-    "image/webp":      frozenset({".webp"}),
-    "image/bmp":       frozenset({".bmp"}),
-    "image/tiff":      frozenset({".tif", ".tiff"}),
-    "video/mp4":       frozenset({".mp4"}),
+    "image/jpeg": frozenset({".jpg", ".jpeg"}),
+    "image/png": frozenset({".png"}),
+    "image/gif": frozenset({".gif"}),
+    "image/webp": frozenset({".webp"}),
+    "image/bmp": frozenset({".bmp"}),
+    "image/tiff": frozenset({".tif", ".tiff"}),
+    "video/mp4": frozenset({".mp4"}),
     "video/quicktime": frozenset({".mov"}),
     "video/x-msvideo": frozenset({".avi"}),
-    "audio/wav":       frozenset({".wav"}),
-    "audio/x-wav":     frozenset({".wav"}),
-    "audio/mpeg":      frozenset({".mp3"}),
-    "audio/mp4":       frozenset({".m4a"}),
-    "audio/flac":      frozenset({".flac"}),
+    "audio/wav": frozenset({".wav"}),
+    "audio/x-wav": frozenset({".wav"}),
+    "audio/mpeg": frozenset({".mp3"}),
+    "audio/mp4": frozenset({".m4a"}),
+    "audio/flac": frozenset({".flac"}),
 }
 
 # ── Task humaniser phrase map ──────────────────────────

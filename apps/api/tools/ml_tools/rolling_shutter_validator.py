@@ -94,9 +94,7 @@ def validate_rolling_shutter(video_path: str, sample_seconds: float = 5.0) -> di
     skew_arr = np.array(skew_measurements)
 
     # Real RS cameras: skew direction consistent with horizontal motion direction
-    skew_consistency = float(
-        1.0 - np.std(skew_arr) / (np.abs(np.mean(skew_arr)) + 1e-6)
-    )
+    skew_consistency = float(1.0 - np.std(skew_arr) / (np.abs(np.mean(skew_arr)) + 1e-6))
     skew_consistency = max(0.0, min(1.0, skew_consistency))
 
     return {
@@ -197,17 +195,19 @@ if __name__ == "__main__":
         try:
             import cv2
             import numpy as np
-            print(json.dumps({
-                "status": "warmed_up",
-                "dependencies": ["cv2", "numpy"],
-                "message": "Rolling shutter validator ready"
-            }))
+
+            print(
+                json.dumps(
+                    {
+                        "status": "warmed_up",
+                        "dependencies": ["cv2", "numpy"],
+                        "message": "Rolling shutter validator ready",
+                    }
+                )
+            )
             sys.exit(0)
         except Exception as e:
-            print(json.dumps({
-                "status": "warmup_failed",
-                "error": str(e)
-            }))
+            print(json.dumps({"status": "warmup_failed", "error": str(e)}))
             sys.exit(1)
 
     # Worker mode - persistent process reading from stdin
@@ -219,7 +219,9 @@ if __name__ == "__main__":
             try:
                 request = json.loads(line)
                 input_path = request.get("input")
-                sample_secs = request.get("extra_args", [5.0])[0] if request.get("extra_args") else 5.0
+                sample_secs = (
+                    request.get("extra_args", [5.0])[0] if request.get("extra_args") else 5.0
+                )
 
                 if not input_path:
                     print(json.dumps({"error": "Missing input path", "available": False}))

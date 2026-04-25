@@ -55,14 +55,18 @@ async def audio_adversarial_check(artifact: EvidenceArtifact) -> dict[str, Any]:
         sos = butter(6, 4000.0 / (sr / 2), btype="low", output="sos")
         lp_y = sosfilt(sos, y).astype(np.float32)
         lp_feats = _get_feats(lp_y, sr)
-        deltas["low_pass_4khz"] = round(abs(lp_feats["flux"] - orig["flux"]) / (orig["flux"] + 1e-9), 4)
+        deltas["low_pass_4khz"] = round(
+            abs(lp_feats["flux"] - orig["flux"]) / (orig["flux"] + 1e-9), 4
+        )
 
         # Noise injection
         rng = np.random.default_rng(_ADVERSARIAL_RNG_SEED)
         noise_power = float(np.mean(y**2)) / (10**4)
         noisy_y = (y + rng.normal(0, np.sqrt(noise_power), y.shape)).astype(np.float32)
         noisy_feats = _get_feats(noisy_y, sr)
-        deltas["white_noise_-40db"] = round(abs(noisy_feats["zcr"] - orig["zcr"]) / (orig["zcr"] + 1e-9), 4)
+        deltas["white_noise_-40db"] = round(
+            abs(noisy_feats["zcr"] - orig["zcr"]) / (orig["zcr"] + 1e-9), 4
+        )
 
         evasion_detected = any(v > 0.50 for v in deltas.values())
 
@@ -71,7 +75,7 @@ async def audio_adversarial_check(artifact: EvidenceArtifact) -> dict[str, Any]:
             "court_defensible": True,
             "adversarial_pattern_detected": evasion_detected,
             "perturbation_deltas": deltas,
-            "confidence": 0.70 if evasion_detected else 0.88
+            "confidence": 0.70 if evasion_detected else 0.88,
         }
     except Exception as e:
         return {"error": str(e), "available": False}
@@ -80,4 +84,5 @@ async def audio_adversarial_check(artifact: EvidenceArtifact) -> dict[str, Any]:
 async def image_ela_handler(artifact: EvidenceArtifact, quality: int = 95) -> dict[str, Any]:
     """Common ELA handler wrapper."""
     from tools.image_tools import ela_full_image
+
     return await ela_full_image(artifact=artifact, quality=quality)

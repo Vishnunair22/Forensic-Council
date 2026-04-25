@@ -10,8 +10,6 @@ signal and must not influence forensic verdicts.
 
 from __future__ import annotations
 
-import asyncio
-
 from agents.base_agent import ForensicAgent
 from core.handlers.audio import AudioHandlers
 from core.inter_agent_bus import InterAgentCall, InterAgentCallType
@@ -20,6 +18,7 @@ from core.structured_logging import get_logger
 from core.tool_registry import ToolRegistry
 
 logger = get_logger(__name__)
+
 
 class Agent2Audio(ForensicAgent):
     """
@@ -68,14 +67,17 @@ class Agent2Audio(ForensicAgent):
     def _has_audio_suspicious_signal(self) -> bool:
         """Gate expensive Phase-2 ensemble tools on Phase-1 suspicious signals."""
         ctx = self._tool_context
-        return any([
-            ctx.get("neural_prosody", {}).get("manipulation_detected", False),
-            ctx.get("voice_clone_detect", {}).get("verdict") in ("CLONE", "SYNTHETIC", "SUSPICIOUS"),
-            ctx.get("anti_spoofing_detect", {}).get("verdict") in ("SPOOF", "SUSPICIOUS"),
-            ctx.get("audio_splice_detect", {}).get("splice_detected", False),
-            ctx.get("audio_gen_signature", {}).get("synthetic_detected", False),
-            ctx.get("codec_fingerprinting", {}).get("re_encoding_detected", False),
-        ])
+        return any(
+            [
+                ctx.get("neural_prosody", {}).get("manipulation_detected", False),
+                ctx.get("voice_clone_detect", {}).get("verdict")
+                in ("CLONE", "SYNTHETIC", "SUSPICIOUS"),
+                ctx.get("anti_spoofing_detect", {}).get("verdict") in ("SPOOF", "SUSPICIOUS"),
+                ctx.get("audio_splice_detect", {}).get("splice_detected", False),
+                ctx.get("audio_gen_signature", {}).get("synthetic_detected", False),
+                ctx.get("codec_fingerprinting", {}).get("re_encoding_detected", False),
+            ]
+        )
 
     @property
     def iteration_ceiling(self) -> int:
@@ -156,8 +158,17 @@ class Agent2Audio(ForensicAgent):
                 await self._record_tool_error("anti_spoofing_deep_ensemble", str(e))
                 return {"error": str(e), "available": False, "deep_ensemble": True}
 
-        registry.register("voice_clone_deep_ensemble", voice_clone_deep_ensemble_handler, "Deep ensemble voice clone detection")
-        registry.register("anti_spoofing_deep_ensemble", anti_spoofing_deep_ensemble_handler, "Deep ensemble audio anti-spoofing")
+        registry.register(
+            "voice_clone_deep_ensemble",
+            voice_clone_deep_ensemble_handler,
+            "Deep ensemble voice clone detection",
+        )
+        registry.register(
+            "anti_spoofing_deep_ensemble",
+            anti_spoofing_deep_ensemble_handler,
+            "Deep ensemble audio anti-spoofing",
+        )
+
         # ── Gemini Vision Handler (Audio Forensic synthesis) ───────────────────
         # Note: Even for audio, Gemini Vision acts as a multi-modal synthesis engine
         # and a neural grounding signal for Agent 4 (Video).
@@ -165,11 +176,14 @@ class Agent2Audio(ForensicAgent):
         async def gemini_deep_forensic_handler(input_data: dict) -> dict:
             """Neural audio forensic audit using Gemini Flash."""
             return await self._gemini_deep_forensic_handler(
-                input_data,
-                model_hint="gemini-2.5-flash"
+                input_data, model_hint="gemini-2.5-flash"
             )
 
-        registry.register("gemini_deep_forensic", gemini_deep_forensic_handler, "Gemini Flash neural audio forensic audit")
+        registry.register(
+            "gemini_deep_forensic",
+            gemini_deep_forensic_handler,
+            "Gemini Flash neural audio forensic audit",
+        )
 
         # ── Agent-Specific Handlers ──────────────────────────────────────────
         async def inter_agent_call_handler(input_data: dict) -> dict:
@@ -213,20 +227,30 @@ class Agent2Audio(ForensicAgent):
 
         # 1. If voice clone detected at high confidence, escalate to deep ensemble
         if tool_name == "voice_clone_detect":
-            if finding.evidence_verdict in ("CLONE", "SYNTHETIC") and (finding.confidence_raw or 0.0) > 0.7:
-                logger.info("Voice clone detected; escalating to deep ensemble", agent_id=self.agent_id)
+            if (
+                finding.evidence_verdict in ("CLONE", "SYNTHETIC")
+                and (finding.confidence_raw or 0.0) > 0.7
+            ):
+                logger.info(
+                    "Voice clone detected; escalating to deep ensemble", agent_id=self.agent_id
+                )
                 await self.inject_task(
                     description="Run voice_clone_deep_ensemble for validated AI speech synthesis detection",
-                    priority=20
+                    priority=20,
                 )
 
         # 2. If anti-spoofing flags spoofing, escalate
         if tool_name == "anti_spoofing_detect":
-            if finding.evidence_verdict in ("SPOOF", "SUSPICIOUS") and (finding.confidence_raw or 0.0) > 0.6:
-                logger.info("Spoofing detected; escalating to deep ensemble", agent_id=self.agent_id)
+            if (
+                finding.evidence_verdict in ("SPOOF", "SUSPICIOUS")
+                and (finding.confidence_raw or 0.0) > 0.6
+            ):
+                logger.info(
+                    "Spoofing detected; escalating to deep ensemble", agent_id=self.agent_id
+                )
                 await self.inject_task(
                     description="Run anti_spoofing_deep_ensemble for reinforced anti-spoofing analysis",
-                    priority=18
+                    priority=18,
                 )
 
         # 3. If audio splice detected, inject ENF analysis
@@ -235,7 +259,7 @@ class Agent2Audio(ForensicAgent):
                 logger.info("Audio splice detected; injecting ENF analysis", agent_id=self.agent_id)
                 await self.inject_task(
                     description="Run enf_analysis to verify electrical network frequency splice markers",
-                    priority=15
+                    priority=15,
                 )
 
         # 4. Signal to inter-agent bus if AV sync is relevant

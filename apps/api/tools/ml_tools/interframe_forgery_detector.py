@@ -54,7 +54,7 @@ def analyze_interframe_consistency(video_path: str, max_frames: int = 150) -> di
 
     for i in range(len(frames) - 1):
         f1 = frames[i][y1:y2, x1:x2]
-        f2 = frames[i+1][y1:y2, x1:x2]
+        f2 = frames[i + 1][y1:y2, x1:x2]
         s = ssim(f1, f2)
         ssims.append(float(s))
 
@@ -67,7 +67,9 @@ def analyze_interframe_consistency(video_path: str, max_frames: int = 150) -> di
     flows = []
     for i in range(len(frames) - 2):
         # Calculate Farneback optical flow (standard, robust)
-        flow = cv2.calcOpticalFlowFarneback(frames[i], frames[i+1], None, 0.5, 3, 15, 3, 5, 1.2, 0)
+        flow = cv2.calcOpticalFlowFarneback(
+            frames[i], frames[i + 1], None, 0.5, 3, 15, 3, 5, 1.2, 0
+        )
         mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])
         flows.append(np.mean(mag))
 
@@ -108,7 +110,7 @@ def analyze_interframe_consistency(video_path: str, max_frames: int = 150) -> di
         "frames_analyzed": len(frames),
         "available": True,
         "court_defensible": True,
-        "technology": "Temporal-Spatial Flow Analysis"
+        "technology": "Temporal-Spatial Flow Analysis",
     }
 
 
@@ -124,11 +126,16 @@ if __name__ == "__main__":
         try:
             import cv2
             import numpy as np
-            print(json.dumps({
-                "status": "warmed_up",
-                "dependencies": ["cv2", "numpy", "skimage"],
-                "message": "Interframe forgery detector ready"
-            }))
+
+            print(
+                json.dumps(
+                    {
+                        "status": "warmed_up",
+                        "dependencies": ["cv2", "numpy", "skimage"],
+                        "message": "Interframe forgery detector ready",
+                    }
+                )
+            )
             sys.exit(0)
         except Exception as e:
             print(json.dumps({"status": "warmup_failed", "error": str(e)}))

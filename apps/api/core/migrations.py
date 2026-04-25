@@ -463,9 +463,7 @@ class MigrationManager:
                     # Validate before committing using the SAME connection (conn).
                     # This ensures the validation SQL can see the uncommitted tables.
                     if not await self.validate_migration(migration, conn=conn):
-                        raise RuntimeError(
-                            f"Migration {migration.version} validation failed"
-                        )
+                        raise RuntimeError(f"Migration {migration.version} validation failed")
 
                     execution_time = int((time.time() - start_time) * 1000)
 
@@ -605,9 +603,7 @@ class MigrationManager:
         try:
             applied = await self.get_applied_migrations()
             to_rollback = [
-                m
-                for m in MIGRATIONS
-                if m.version in applied and m.version > target_version
+                m for m in MIGRATIONS if m.version in applied and m.version > target_version
             ]
             # Rollback in reverse order
             to_rollback.reverse()

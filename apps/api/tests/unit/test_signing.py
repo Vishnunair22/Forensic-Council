@@ -38,6 +38,7 @@ from core.signing import (
 # Fixtures
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 @pytest.fixture
 def keystore() -> KeyStore:
     """
@@ -50,6 +51,7 @@ def keystore() -> KeyStore:
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Round-trip / verification
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 def test_sign_and_verify_roundtrip(keystore: KeyStore) -> None:
     """Signing content and then verifying it must return True."""
@@ -71,7 +73,7 @@ def test_tampered_content_fails_verification(keystore: KeyStore) -> None:
     # Tamper: replace the content with something different
     tampered_entry = SignedEntry(
         content={"finding": "ela_analysis", "confidence": 0.99},  # changed
-        content_hash=entry.content_hash,   # original hash â€” will mismatch
+        content_hash=entry.content_hash,  # original hash â€” will mismatch
         signature=entry.signature,
         agent_id=entry.agent_id,
         timestamp_utc=entry.timestamp_utc,
@@ -114,6 +116,7 @@ def test_unknown_agent_fails_verification() -> None:
 # Determinism
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 def test_deterministic_keys_same_signing_key() -> None:
     """
     Two KeyStore instances initialized from the same SIGNING_KEY env variable
@@ -128,9 +131,7 @@ def test_deterministic_keys_same_signing_key() -> None:
     pem1 = kp1.get_public_key_pem()
     pem2 = kp2.get_public_key_pem()
 
-    assert pem1 == pem2, (
-        "Two KeyStores with the same signing_key must derive identical keys"
-    )
+    assert pem1 == pem2, "Two KeyStores with the same signing_key must derive identical keys"
 
 
 def test_deterministic_keys_cross_keystore_verification() -> None:
@@ -144,6 +145,7 @@ def test_deterministic_keys_cross_keystore_verification() -> None:
     itself â€” so we test cross-keystore verification rather than byte equality.
     """
     from datetime import datetime
+
     ts = datetime(2025, 1, 1, 0, 0, 0, tzinfo=UTC)
 
     ks1 = KeyStore()
@@ -177,6 +179,7 @@ def test_different_agents_different_keys() -> None:
 # compute_content_hash
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 def test_compute_content_hash_is_deterministic() -> None:
     """The same dict must always produce the same hex hash."""
     content = {"alpha": 1, "beta": "two", "gamma": [3, 4]}
@@ -193,12 +196,15 @@ def test_compute_content_hash_is_hex_string() -> None:
     assert all(c in "0123456789abcdef" for c in h)
 
 
-@pytest.mark.parametrize(("content_a", "content_b"), [
-    ({"key": "value1"}, {"key": "value2"}),
-    ({"a": 1}, {"b": 1}),
-    ({"nested": {"x": 1}}, {"nested": {"x": 2}}),
-    ({}, {"key": "nonempty"}),
-])
+@pytest.mark.parametrize(
+    ("content_a", "content_b"),
+    [
+        ({"key": "value1"}, {"key": "value2"}),
+        ({"a": 1}, {"b": 1}),
+        ({"nested": {"x": 1}}, {"nested": {"x": 2}}),
+        ({}, {"key": "nonempty"}),
+    ],
+)
 def test_compute_content_hash_different_for_different_content(
     content_a: dict[str, Any],
     content_b: dict[str, Any],
@@ -220,6 +226,7 @@ def test_compute_content_hash_key_order_independent() -> None:
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # SignedEntry structure
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 def test_signed_entry_has_expected_fields(keystore: KeyStore) -> None:
     """sign_content must return a SignedEntry with all required fields populated."""
@@ -262,5 +269,3 @@ def test_agent_key_pair_generate_from_same_seed_is_identical() -> None:
     kp1 = AgentKeyPair.generate("agent_s", seed=seed)
     kp2 = AgentKeyPair.generate("agent_s", seed=seed)
     assert kp1.get_public_key_pem() == kp2.get_public_key_pem()
-
-

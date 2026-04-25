@@ -1,4 +1,4 @@
-﻿"""
+"""
 Unit tests for the EvidenceArtifact model.
 
 Covers:
@@ -29,6 +29,7 @@ from core.evidence import ArtifactType, EvidenceArtifact
 
 # â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 def _root(session_id: UUID | None = None) -> EvidenceArtifact:
     return EvidenceArtifact.create_root(
         artifact_type=ArtifactType.ORIGINAL,
@@ -54,6 +55,7 @@ def _derivative(parent: EvidenceArtifact) -> EvidenceArtifact:
 
 
 # â”€â”€ Root artifact â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 class TestRootArtifact:
     def test_root_parent_id_is_none(self):
@@ -91,6 +93,7 @@ class TestRootArtifact:
 
     def test_root_timestamp_is_set(self):
         from datetime import datetime
+
         a = _root()
         assert isinstance(a.timestamp_utc, datetime)
 
@@ -119,6 +122,7 @@ class TestRootArtifact:
 
 
 # â”€â”€ Derivative artifact â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 class TestDerivativeArtifact:
     def test_derivative_parent_id_equals_parent_artifact_id(self):
@@ -169,6 +173,7 @@ class TestDerivativeArtifact:
 
 # â”€â”€ ArtifactType enum â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestArtifactTypeEnum:
     EXPECTED_TYPES = [
         "ORIGINAL",
@@ -189,5 +194,3 @@ class TestArtifactTypeEnum:
     def test_all_types_are_strings(self):
         for t in ArtifactType:
             assert isinstance(t.value, str)
-
-

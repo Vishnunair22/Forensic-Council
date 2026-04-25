@@ -1,4 +1,3 @@
-﻿
 import pytest
 
 from core.config import get_settings
@@ -12,9 +11,8 @@ async def test_pipeline_creation():
     assert pipeline is not None
     assert pipeline.config is not None
 
+
 @pytest.mark.asyncio
 async def test_pipeline_error_handling():
     pipeline = ForensicCouncilPipeline()
     assert pipeline is not None
-
-

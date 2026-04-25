@@ -167,13 +167,16 @@ class TestGeminiGenerateSpectrogram:
 class TestGeminiEncodeFile:
     def test_encode_image_returns_base64_and_mime(self, tmp_path):
         img_file = tmp_path / "test.jpg"
-        img_file.write_bytes(b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9")
+        img_file.write_bytes(
+            b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9"
+        )
 
         data, mime = GeminiVisionClient._encode_file(str(img_file))
 
         assert mime == "image/jpeg"
         assert isinstance(data, str)
         import base64
+
         decoded = base64.b64decode(data)
         assert len(decoded) > 0
 
@@ -181,11 +184,14 @@ class TestGeminiEncodeFile:
         mp3_file = tmp_path / "test.mp3"
         mp3_file.write_bytes(b"ID3" + b"\x00" * 10)
 
-        with patch.object(GeminiVisionClient, "_generate_spectrogram", return_value=(b"fake_png", "image/png")) as mock_spec:
+        with patch.object(
+            GeminiVisionClient, "_generate_spectrogram", return_value=(b"fake_png", "image/png")
+        ) as mock_spec:
             data, mime = GeminiVisionClient._encode_file(str(mp3_file))
 
         assert mime == "image/png"
         import base64
+
         assert base64.b64decode(data) == b"fake_png"
         mock_spec.assert_called_once()
 

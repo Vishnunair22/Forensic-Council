@@ -107,9 +107,7 @@ async def _record_failed_attempt(ip: str) -> None:
             await pipe.execute()
             return
     except Exception as e:
-        logger.warning(
-            "Redis pipeline failure for rate limiting", error=str(e), exc_info=True
-        )
+        logger.warning("Redis pipeline failure for rate limiting", error=str(e), exc_info=True)
     _failed_attempts[ip].append(time.time())
 
 
@@ -168,8 +166,8 @@ if _settings.app_env != "production":
     _DEV_ADMIN_PASSWORD = _os.environ.get("BOOTSTRAP_ADMIN_PASSWORD", "")
     _DEV_INV_PASSWORD = _os.environ.get("BOOTSTRAP_INVESTIGATOR_PASSWORD", "")
 else:
-    _DEV_ADMIN_PASSWORD = "" # nosec: B105
-    _DEV_INV_PASSWORD = "" # nosec: B105
+    _DEV_ADMIN_PASSWORD = ""  # nosec: B105
+    _DEV_INV_PASSWORD = ""  # nosec: B105
 
 
 def _build_dev_fallback() -> dict:
@@ -259,15 +257,11 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
         user = _DEMO_USERS_FALLBACK.get(form_data.username)
 
     fallback_user = (
-        _DEMO_USERS_FALLBACK.get(form_data.username)
-        if settings.app_env != "production"
-        else None
+        _DEMO_USERS_FALLBACK.get(form_data.username) if settings.app_env != "production" else None
     )
 
     try:
-        password_valid = bool(
-            user and verify_password(form_data.password, user["hashed_password"])
-        )
+        password_valid = bool(user and verify_password(form_data.password, user["hashed_password"]))
     except ValueError:
         # Password exceeds 72-byte bcrypt limit — can never match a valid hash.
         # Return generic 401 rather than 400 to avoid leaking implementation detail.
@@ -283,9 +277,7 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
 
     if not user or not password_valid:
         await _record_failed_attempt(client_ip)
-        logger.warning(
-            "Failed login attempt", username=form_data.username, ip=client_ip
-        )
+        logger.warning("Failed login attempt", username=form_data.username, ip=client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -298,9 +290,7 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
             detail="User account is disabled",
         )
 
-    access_token_expires = timedelta(
-        minutes=get_settings().jwt_access_token_expire_minutes
-    )
+    access_token_expires = timedelta(minutes=get_settings().jwt_access_token_expire_minutes)
     access_token = create_access_token(
         user_id=user["user_id"],
         role=user["role"],
@@ -309,14 +299,12 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
     )
 
     await _clear_failed_attempts(client_ip)
-    logger.info(
-        "User logged in successfully", user_id=user["user_id"], role=user["role"].value
-    )
+    logger.info("User logged in successfully", user_id=user["user_id"], role=user["role"].value)
 
     response = JSONResponse(
         content=TokenResponse(
             access_token=access_token,
-            token_type="bearer", # nosec: B106
+            token_type="bearer",  # nosec: B106
             expires_in=get_settings().jwt_access_token_expire_minutes * 60,
             user_id=user["user_id"],
             role=user["role"].value,
@@ -424,13 +412,9 @@ async def logout(
                 expires_in = int(token_data.exp.timestamp() - time.time())
                 if expires_in > 0:
                     await blacklist_token(token, expires_in)
-                    logger.info(
-                        "Token blacklisted on logout", user_id=current_user.user_id
-                    )
+                    logger.info("Token blacklisted on logout", user_id=current_user.user_id)
         except Exception as e:
-            logger.warning(
-                "Failed to blacklist token on logout", error=str(e), exc_info=True
-            )
+            logger.warning("Failed to blacklist token on logout", error=str(e), exc_info=True)
 
     logger.info("User logged out", user_id=current_user.user_id)
 

@@ -118,9 +118,7 @@ class RedisClient:
     def client(self) -> Redis:
         """Get the underlying Redis client."""
         if self._client is None:
-            raise RedisConnectionError(
-                "Redis client not connected. Call connect() first."
-            )
+            raise RedisConnectionError("Redis client not connected. Call connect() first.")
         return self._client
 
     @client.setter

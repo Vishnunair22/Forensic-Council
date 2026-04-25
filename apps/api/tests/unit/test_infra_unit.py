@@ -1,4 +1,4 @@
-﻿"""
+"""
 Infrastructure Layer Unit Tests
 ================================
 Covers:
@@ -11,6 +11,7 @@ Covers:
 
 Run: pytest apps/api/tests/unit/test_infra_unit.py -v
 """
+
 import asyncio
 import time
 import uuid
@@ -23,6 +24,7 @@ import pytest
 # SESSION STATE â€” WebSocket management
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+
 class TestSessionStateWebSockets:
     """_session_state.py WebSocket bookkeeping."""
 
@@ -34,7 +36,14 @@ class TestSessionStateWebSockets:
             register_websocket,
             unregister_websocket,
         )
-        return register_websocket, unregister_websocket, get_session_websockets, clear_session_websockets, _websocket_connections
+
+        return (
+            register_websocket,
+            unregister_websocket,
+            get_session_websockets,
+            clear_session_websockets,
+            _websocket_connections,
+        )
 
     def test_register_and_retrieve(self):
         reg, unreg, get, clear, store = self._import()
@@ -91,6 +100,7 @@ class TestSessionStateWebSockets:
 # SESSION STATE â€” pipeline CRUD
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+
 class TestSessionStatePipelines:
     def test_set_and_get_active_pipeline(self):
         from api.routes._session_state import (
@@ -98,6 +108,7 @@ class TestSessionStatePipelines:
             remove_active_pipeline,
             set_active_pipeline,
         )
+
         sid = str(uuid.uuid4())
         pipeline = MagicMock()
         set_active_pipeline(sid, pipeline)
@@ -106,10 +117,12 @@ class TestSessionStatePipelines:
 
     def test_get_missing_pipeline_returns_none(self):
         from api.routes._session_state import get_active_pipeline
+
         assert get_active_pipeline(str(uuid.uuid4())) is None
 
     def test_remove_pipeline_is_idempotent(self):
         from api.routes._session_state import remove_active_pipeline
+
         sid = str(uuid.uuid4())
         # Should not raise even if it doesn't exist
         remove_active_pipeline(sid)
@@ -121,6 +134,7 @@ class TestSessionStatePipelines:
             remove_active_pipeline,
             set_active_pipeline,
         )
+
         sid = str(uuid.uuid4())
         p = MagicMock()
         set_active_pipeline(sid, p)
@@ -130,6 +144,7 @@ class TestSessionStatePipelines:
 
     def test_active_task_crud(self):
         from api.routes._session_state import pop_active_task, set_active_task
+
         sid = str(uuid.uuid4())
         task = MagicMock()
         set_active_task(sid, task)
@@ -142,6 +157,7 @@ class TestSessionStatePipelines:
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # RATE LIMITING â€” in-memory fallback paths
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
 
 class TestInvestigationRateLimit:
     """Test the in-memory fallback path (Redis unavailable scenario)."""
@@ -161,6 +177,7 @@ class TestInvestigationRateLimit:
             _user_investigation_times,
             check_investigation_rate_limit,
         )
+
         uid = str(uuid.uuid4())
         _user_investigation_times.pop(uid, None)
         with self._patch_redis_unavailable():
@@ -174,6 +191,7 @@ class TestInvestigationRateLimit:
             _user_investigation_times,
             check_investigation_rate_limit,
         )
+
         uid = str(uuid.uuid4())
         # Fill with timestamps older than the window
         old_time = time.time() - _USER_RATE_WINDOW_SECS - 1
@@ -192,6 +210,7 @@ class TestInvestigationRateLimit:
             _user_investigation_times,
             check_investigation_rate_limit,
         )
+
         uid = str(uuid.uuid4())
         now = time.time()
         _user_investigation_times[uid] = [now] * _MAX_INVESTIGATIONS_PER_USER
@@ -210,6 +229,7 @@ class TestInvestigationRateLimit:
             _user_investigation_times,
             check_investigation_rate_limit,
         )
+
         uid = str(uuid.uuid4())
         now = time.time()
         _user_investigation_times[uid] = [now] * _MAX_INVESTIGATIONS_PER_USER
@@ -236,6 +256,7 @@ class TestDailyCostQuota:
             _mem_cost_tracker,
             check_daily_cost_quota,
         )
+
         uid = str(uuid.uuid4())
         _mem_cost_tracker.pop(uid, None)
         with self._patch_redis_unavailable():
@@ -250,6 +271,7 @@ class TestDailyCostQuota:
             _mem_cost_tracker,
             check_daily_cost_quota,
         )
+
         uid = str(uuid.uuid4())
         quota = _DAILY_COST_QUOTA_USD.get("investigator", 50.0)
         # Set cost to just below quota so one more pushes over
@@ -268,6 +290,7 @@ class TestDailyCostQuota:
             _mem_cost_tracker,
             check_daily_cost_quota,
         )
+
         uid = str(uuid.uuid4())
         quota = _DAILY_COST_QUOTA_USD.get("investigator", 50.0)
         # Set cost at quota but window started long ago (expired)
@@ -283,6 +306,7 @@ class TestDailyCostQuota:
         from api.routes._rate_limiting import (
             _DAILY_COST_QUOTA_USD,
         )
+
         assert _DAILY_COST_QUOTA_USD["admin"] > _DAILY_COST_QUOTA_USD["investigator"]
 
 
@@ -290,11 +314,13 @@ class TestDailyCostQuota:
 # METRICS â€” counter helpers and Prometheus format
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+
 class TestMetricsCounters:
     """Verify counter helpers fire without exceptions."""
 
     def test_increment_request_count(self):
         from api.routes.metrics import _local, increment_request_count
+
         before = _local.get("request_count", 0)
         # Call without an event loop â†’ uses local fallback
         with patch("api.routes.metrics.asyncio.get_running_loop", side_effect=RuntimeError):
@@ -304,6 +330,7 @@ class TestMetricsCounters:
 
     def test_increment_investigations_started(self):
         from api.routes.metrics import _local, increment_investigations_started
+
         before = _local.get("investigations_started", 0)
         with patch("api.routes.metrics.asyncio.get_running_loop", side_effect=RuntimeError):
             increment_investigations_started()
@@ -311,6 +338,7 @@ class TestMetricsCounters:
 
     def test_increment_investigations_completed(self):
         from api.routes.metrics import _local, increment_investigations_completed
+
         before = _local.get("investigations_completed", 0)
         with patch("api.routes.metrics.asyncio.get_running_loop", side_effect=RuntimeError):
             increment_investigations_completed()
@@ -318,6 +346,7 @@ class TestMetricsCounters:
 
     def test_increment_investigations_failed(self):
         from api.routes.metrics import _local, increment_investigations_failed
+
         before = _local.get("investigations_failed", 0)
         with patch("api.routes.metrics.asyncio.get_running_loop", side_effect=RuntimeError):
             increment_investigations_failed()
@@ -325,27 +354,40 @@ class TestMetricsCounters:
 
     def test_record_request_duration(self):
         from api.routes.metrics import _local, record_request_duration
+
         with patch("api.routes.metrics.asyncio.get_running_loop", side_effect=RuntimeError):
             record_request_duration(42.5)
         assert _local["request_duration_sum"] > 0
 
     def test_snapshot_returns_all_required_keys(self):
         required = {
-            "uptime_seconds", "requests_total", "request_duration_avg_ms",
-            "errors_total", "error_rate", "active_sessions",
-            "investigations_started", "investigations_completed",
-            "investigations_failed", "success_rate",
-            "db_pool_size", "db_pool_available", "db_pool_in_use", "db_pool_max",
+            "uptime_seconds",
+            "requests_total",
+            "request_duration_avg_ms",
+            "errors_total",
+            "error_rate",
+            "active_sessions",
+            "investigations_started",
+            "investigations_completed",
+            "investigations_failed",
+            "success_rate",
+            "db_pool_size",
+            "db_pool_available",
+            "db_pool_in_use",
+            "db_pool_max",
         }
         from api.routes.metrics import _snapshot
 
         async def run():
-            with patch(
-                "core.persistence.redis_client.get_redis_client",
-                new=AsyncMock(side_effect=ConnectionError("no redis")),
-            ), patch(
-                "core.persistence.postgres_client.get_postgres_client",
-                new=AsyncMock(side_effect=ConnectionError("no pg")),
+            with (
+                patch(
+                    "core.persistence.redis_client.get_redis_client",
+                    new=AsyncMock(side_effect=ConnectionError("no redis")),
+                ),
+                patch(
+                    "core.persistence.postgres_client.get_postgres_client",
+                    new=AsyncMock(side_effect=ConnectionError("no pg")),
+                ),
             ):
                 return await _snapshot()
 
@@ -359,12 +401,15 @@ class TestMetricsCounters:
         from api.routes.metrics import _snapshot
 
         async def _get_snap():
-            with patch(
-                "core.persistence.redis_client.get_redis_client",
-                new=AsyncMock(side_effect=ConnectionError),
-            ), patch(
-                "core.persistence.postgres_client.get_postgres_client",
-                new=AsyncMock(side_effect=ConnectionError),
+            with (
+                patch(
+                    "core.persistence.redis_client.get_redis_client",
+                    new=AsyncMock(side_effect=ConnectionError),
+                ),
+                patch(
+                    "core.persistence.postgres_client.get_postgres_client",
+                    new=AsyncMock(side_effect=ConnectionError),
+                ),
             ):
                 return await _snapshot()
 
@@ -383,17 +428,21 @@ class TestMetricsCounters:
         from api.routes.metrics import _snapshot
 
         async def run():
-            with patch(
-                "core.persistence.redis_client.get_redis_client",
-                new=AsyncMock(side_effect=ConnectionError),
-            ), patch(
-                "core.persistence.postgres_client.get_postgres_client",
-                new=AsyncMock(side_effect=ConnectionError),
+            with (
+                patch(
+                    "core.persistence.redis_client.get_redis_client",
+                    new=AsyncMock(side_effect=ConnectionError),
+                ),
+                patch(
+                    "core.persistence.postgres_client.get_postgres_client",
+                    new=AsyncMock(side_effect=ConnectionError),
+                ),
             ):
                 return await _snapshot()
 
         # Reset local counters to 0
         from api.routes import metrics as _m
+
         _m._local["investigations_completed"] = 0
         _m._local["investigations_failed"] = 0
         snap = asyncio.run(run())
@@ -401,18 +450,22 @@ class TestMetricsCounters:
 
     def test_error_rate_is_0_when_no_requests(self):
         from api.routes import metrics as _m
+
         _m._local["request_count"] = 0
         _m._local["error_count"] = 0
 
         from api.routes.metrics import _snapshot
 
         async def run():
-            with patch(
-                "core.persistence.redis_client.get_redis_client",
-                new=AsyncMock(side_effect=ConnectionError),
-            ), patch(
-                "core.persistence.postgres_client.get_postgres_client",
-                new=AsyncMock(side_effect=ConnectionError),
+            with (
+                patch(
+                    "core.persistence.redis_client.get_redis_client",
+                    new=AsyncMock(side_effect=ConnectionError),
+                ),
+                patch(
+                    "core.persistence.postgres_client.get_postgres_client",
+                    new=AsyncMock(side_effect=ConnectionError),
+                ),
             ):
                 return await _snapshot()
 
@@ -423,6 +476,7 @@ class TestMetricsCounters:
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # SESSIONS ROUTE â€” _forensic_report_to_dto & _is_real_finding
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
 
 class TestForensicReportHelpers:
     """Test the sessions.py internal helpers in isolation."""
@@ -448,6 +502,7 @@ class TestForensicReportHelpers:
 
     def test_is_real_finding_passes_normal(self):
         from api.routes.sessions import _forensic_report_to_dto
+
         report = MagicMock()
         report.report_id = uuid.uuid4()
         report.session_id = uuid.uuid4()
@@ -521,8 +576,7 @@ class TestForensicReportHelpers:
         report.executive_summary = ""
         report.signed_utc = None
         na_finding = self._make_finding(
-            finding_type="file type not applicable",
-            reasoning_summary="Not applicable."
+            finding_type="file type not applicable", reasoning_summary="Not applicable."
         )
         report.per_agent_findings = {"agent-audio": [na_finding]}
         report.per_agent_metrics = {}
@@ -585,12 +639,14 @@ class TestForensicReportHelpers:
 # Ensures JSONResponse receives a dict, not a raw Pydantic model.
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+
 class TestDownloadReportSerialization:
     """Regression test for the bug where model_dump() was not called."""
 
     def test_report_dto_model_dump_produces_dict(self):
         """ReportDTO.model_dump() returns a plain dict (JSONResponse-safe)."""
         from api.schemas import ReportDTO
+
         dto = ReportDTO(
             report_id=str(uuid.uuid4()),
             session_id=str(uuid.uuid4()),
@@ -614,6 +670,7 @@ class TestDownloadReportSerialization:
         import json
 
         from api.schemas import ReportDTO
+
         dto = ReportDTO(
             report_id=str(uuid.uuid4()),
             session_id=str(uuid.uuid4()),
@@ -638,9 +695,11 @@ class TestDownloadReportSerialization:
 # PROXY ROUTE â€” header stripping and structure
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+
 def _proxy_route_path():
     """Resolve the Next.js proxy route file relative to the repo root."""
     import pathlib
+
     # Walk up: tests/unit/ -> tests/ -> apps/api/ -> apps/ -> repo root
     repo_root = pathlib.Path(__file__).parents[4]
     return repo_root / "apps" / "web" / "src" / "app" / "api" / "v1" / "[...path]" / "route.ts"
@@ -649,6 +708,7 @@ def _proxy_route_path():
 def _sessions_route_path():
     """Resolve the backend sessions route (WebSocket auth, rate limiting)."""
     import pathlib
+
     # Walk up: tests/unit/ -> tests/ -> apps/api/
     api_root = pathlib.Path(__file__).parents[2]
     return api_root / "api" / "routes" / "sessions.py"
@@ -657,6 +717,7 @@ def _sessions_route_path():
 def _metrics_route_path():
     """Resolve the backend metrics route."""
     import pathlib
+
     api_root = pathlib.Path(__file__).parents[2]
     return api_root / "api" / "routes" / "metrics.py"
 
@@ -667,9 +728,16 @@ class TestProxyRouteHeaderStripping:
     def test_hop_by_hop_set_contains_connection(self):
         text = _proxy_route_path().read_text(encoding="utf-8")
         hop_by_hop = [
-            "connection", "content-length", "host", "keep-alive",
-            "proxy-authenticate", "proxy-authorization", "te",
-            "trailer", "transfer-encoding", "upgrade",
+            "connection",
+            "content-length",
+            "host",
+            "keep-alive",
+            "proxy-authenticate",
+            "proxy-authorization",
+            "te",
+            "trailer",
+            "transfer-encoding",
+            "upgrade",
         ]
         for header in hop_by_hop:
             assert f'"{header}"' in text, f"HOP_BY_HOP missing: {header}"
@@ -699,6 +767,7 @@ class TestProxyRouteHeaderStripping:
 # AUTH ROUTE â€” brute-force protection in-memory path
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+
 class TestAuthBruteForceProtection:
     """Test the in-memory fallback of _is_rate_limited and _record_failed_attempt."""
 
@@ -717,6 +786,7 @@ class TestAuthBruteForceProtection:
             _failed_attempts,
             _record_failed_attempt,
         )
+
         ip = f"10.0.0.{uuid.uuid4().int % 254}"
         _failed_attempts.pop(ip, None)
 
@@ -737,6 +807,7 @@ class TestAuthBruteForceProtection:
             _failed_attempts,
             _is_rate_limited,
         )
+
         ip = f"192.168.1.{uuid.uuid4().int % 254}"
         now = time.time()
         _failed_attempts[ip] = [now] * _MAX_LOGIN_ATTEMPTS
@@ -758,6 +829,7 @@ class TestAuthBruteForceProtection:
             _failed_attempts,
             _is_rate_limited,
         )
+
         ip = f"172.16.0.{uuid.uuid4().int % 254}"
         old_time = time.time() - _LOCKOUT_WINDOW_SECS - 1
         _failed_attempts[ip] = [old_time] * _MAX_LOGIN_ATTEMPTS
@@ -774,6 +846,7 @@ class TestAuthBruteForceProtection:
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # SESSIONS ROUTE â€” WebSocket auth handling (logic level)
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
 
 class TestWebSocketAuthLogic:
     """Test the token-extraction logic used in the WebSocket handler."""
@@ -812,7 +885,7 @@ class TestWebSocketAuthLogic:
         text = _sessions_route_path().read_text(encoding="utf-8")
         # Find the _redis_subscriber finally block
         finally_idx = text.find("finally:")
-        subscriber_section = text[finally_idx: finally_idx + 600]
+        subscriber_section = text[finally_idx : finally_idx + 600]
         # Count occurrences of 'pubsub.close()' in this section
         count = subscriber_section.count("await pubsub.close()")
         assert count == 1, f"Expected 1 pubsub.close() call, found {count}"
@@ -821,6 +894,7 @@ class TestWebSocketAuthLogic:
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # METRICS.PY â€” pool stats uses public API
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
 
 class TestMetricsPoolStats:
     """Verify _get_pool_stats uses public asyncpg pool API."""
@@ -850,4 +924,3 @@ class TestMetricsPoolStats:
 
         stats = asyncio.run(run())
         assert stats == {"size": 0, "available": 0, "in_use": 0, "max": 0}
-

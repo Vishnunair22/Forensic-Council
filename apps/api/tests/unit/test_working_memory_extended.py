@@ -40,6 +40,7 @@ from core.working_memory import (
 
 # ── Task model ─────────────────────────────────────────────────────────────────
 
+
 class TestTaskModel:
     def test_task_defaults(self):
         t = Task(description="Run ELA")
@@ -86,6 +87,7 @@ class TestTaskStatus:
 
 
 # ── WorkingMemoryState model ───────────────────────────────────────────────────
+
 
 class TestWorkingMemoryState:
     def test_state_defaults(self):
@@ -143,6 +145,7 @@ class TestWorkingMemoryState:
 
 
 # ── WorkingMemory with no Redis ────────────────────────────────────────────────
+
 
 class TestWorkingMemoryNoRedis:
     """Tests run without Redis – uses local in-memory cache as fallback."""
@@ -235,6 +238,7 @@ class TestWorkingMemoryNoRedis:
 
 
 # ── WorkingMemory with mocked Redis ───────────────────────────────────────────
+
 
 class TestWorkingMemoryWithRedis:
     def _make_wm_with_redis(self):
@@ -335,6 +339,7 @@ class TestWorkingMemoryWithRedis:
 
 # ── WAL read/write ─────────────────────────────────────────────────────────────
 
+
 class TestWorkingMemoryWAL:
     def test_wal_write_and_read(self, tmp_path):
         wm = WorkingMemory(redis_client=None)
@@ -356,12 +361,16 @@ class TestWorkingMemoryWAL:
         wm._wal_dir = tmp_path
         # Patch write_text to raise PermissionError
         from pathlib import Path
-        monkeypatch.setattr(Path, "write_text", lambda *a, **kw: (_ for _ in ()).throw(PermissionError("no write")))
+
+        monkeypatch.setattr(
+            Path, "write_text", lambda *a, **kw: (_ for _ in ()).throw(PermissionError("no write"))
+        )
         # Should not raise
         wm._wal_write("key", "data")
 
 
 # ── Async context manager ──────────────────────────────────────────────────────
+
 
 class TestWorkingMemoryContextManager:
     @pytest.mark.asyncio
@@ -388,6 +397,7 @@ class TestWorkingMemoryContextManager:
 
 
 # ── get_key helper ──────────────────────────────────────────────────────────────
+
 
 class TestGetKey:
     def test_get_key_format(self):

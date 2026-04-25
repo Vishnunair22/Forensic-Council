@@ -1,7 +1,20 @@
 """Shared image utility functions."""
 
 _LOSSLESS_EXTS = frozenset(
-    {".png", ".bmp", ".tiff", ".tif", ".gif", ".webp", ".heic", ".heif", ".avif", ".dng", ".nef", ".cr2"}
+    {
+        ".png",
+        ".bmp",
+        ".tiff",
+        ".tif",
+        ".gif",
+        ".webp",
+        ".heic",
+        ".heif",
+        ".avif",
+        ".dng",
+        ".nef",
+        ".cr2",
+    }
 )
 _LOSSLESS_PIL_FORMATS = frozenset({"PNG", "BMP", "TIFF", "GIF", "WEBP", "HEIC", "AVIF", "DNG"})
 _LOSSLESS_MIMES = frozenset(

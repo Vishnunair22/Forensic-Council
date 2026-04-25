@@ -62,6 +62,7 @@ def _make_finding(
 
 def _make_arbiter(session_id=None) -> CouncilArbiter:
     from core.config import Settings
+
     config = Settings(
         app_env="testing",
         signing_key="test-signing-key-" + "x" * 32,
@@ -87,6 +88,7 @@ def _make_arbiter(session_id=None) -> CouncilArbiter:
 
 # ── Enum tests ─────────────────────────────────────────────────────────────────
 
+
 class TestFindingVerdict:
     def test_all_values(self):
         vals = {v.value for v in FindingVerdict}
@@ -96,6 +98,7 @@ class TestFindingVerdict:
 
 
 # ── Model tests ────────────────────────────────────────────────────────────────
+
 
 class TestFindingComparison:
     def test_creation(self):
@@ -163,6 +166,7 @@ class TestForensicReport:
 
 # ── CouncilArbiter instantiation ───────────────────────────────────────────────
 
+
 class TestCouncilArbiterInit:
     def test_can_instantiate(self):
         arbiter = _make_arbiter()
@@ -189,11 +193,14 @@ class TestCouncilArbiterInit:
 
 # ── CouncilArbiter.deliberate() ────────────────────────────────────────────────
 
+
 class TestCouncilArbiterDeliberate:
     @pytest.mark.asyncio
     async def test_deliberate_empty_results_returns_report(self):
         arbiter = _make_arbiter()
-        with patch("agents.arbiter.cross_modal_fuse", return_value={"verdict": "INSUFFICIENT_DATA"}):
+        with patch(
+            "agents.arbiter.cross_modal_fuse", return_value={"verdict": "INSUFFICIENT_DATA"}
+        ):
             report = await arbiter.deliberate({}, case_id="CASE001", use_llm=False)
         assert isinstance(report, ForensicReport)
         assert report.case_id == "CASE001"
@@ -208,7 +215,9 @@ class TestCouncilArbiterDeliberate:
                 "self_reflection": None,
             }
         }
-        with patch("agents.arbiter.cross_modal_fuse", return_value={"verdict": "INSUFFICIENT_DATA"}):
+        with patch(
+            "agents.arbiter.cross_modal_fuse", return_value={"verdict": "INSUFFICIENT_DATA"}
+        ):
             report = await arbiter.deliberate(agent_results, case_id="CASE002", use_llm=False)
         assert isinstance(report, ForensicReport)
         assert "Agent1" in report.per_agent_findings
@@ -228,7 +237,9 @@ class TestCouncilArbiterDeliberate:
                 "self_reflection": None,
             },
         }
-        with patch("agents.arbiter.cross_modal_fuse", return_value={"verdict": "CROSS_MODAL_CONFIRMED"}):
+        with patch(
+            "agents.arbiter.cross_modal_fuse", return_value={"verdict": "CROSS_MODAL_CONFIRMED"}
+        ):
             report = await arbiter.deliberate(agent_results, case_id="CASE003", use_llm=False)
         assert isinstance(report, ForensicReport)
         assert len(report.per_agent_findings) == 2
@@ -243,19 +254,23 @@ class TestCouncilArbiterDeliberate:
                 "self_reflection": None,
             },
             "Agent2": {
-                "findings": [{
-                    "agent_id": "Agent2",
-                    "finding_type": "file type not applicable",
-                    "status": "NOT_APPLICABLE",
-                    "confidence_raw": 0.0,
-                    "reasoning_summary": "Audio agent not applicable to image.",
-                    "metadata": {},
-                }],
+                "findings": [
+                    {
+                        "agent_id": "Agent2",
+                        "finding_type": "file type not applicable",
+                        "status": "NOT_APPLICABLE",
+                        "confidence_raw": 0.0,
+                        "reasoning_summary": "Audio agent not applicable to image.",
+                        "metadata": {},
+                    }
+                ],
                 "react_chain": [],
                 "self_reflection": None,
             },
         }
-        with patch("agents.arbiter.cross_modal_fuse", return_value={"verdict": "INSUFFICIENT_DATA"}):
+        with patch(
+            "agents.arbiter.cross_modal_fuse", return_value={"verdict": "INSUFFICIENT_DATA"}
+        ):
             report = await arbiter.deliberate(agent_results, case_id="CASE004", use_llm=False)
         assert isinstance(report, ForensicReport)
         assert "Agent2" in report.per_agent_findings
@@ -270,7 +285,9 @@ class TestCouncilArbiterDeliberate:
                 "self_reflection": None,
             },
         }
-        with patch("agents.arbiter.cross_modal_fuse", return_value={"verdict": "CROSS_MODAL_CONFIRMED"}):
+        with patch(
+            "agents.arbiter.cross_modal_fuse", return_value={"verdict": "CROSS_MODAL_CONFIRMED"}
+        ):
             report = await arbiter.deliberate(agent_results, case_id="CASE005", use_llm=False)
         assert isinstance(report, ForensicReport)
         assert report.overall_confidence >= 0.0
@@ -290,7 +307,9 @@ class TestCouncilArbiterDeliberate:
                 "self_reflection": None,
             }
         }
-        with patch("agents.arbiter.cross_modal_fuse", return_value={"verdict": "INSUFFICIENT_DATA"}):
+        with patch(
+            "agents.arbiter.cross_modal_fuse", return_value={"verdict": "INSUFFICIENT_DATA"}
+        ):
             report = await arbiter.deliberate(agent_results, case_id="CASE006", use_llm=False)
         # Should have deduplicated
         assert len(report.per_agent_findings.get("Agent1", [])) <= 2
@@ -306,7 +325,9 @@ class TestCouncilArbiterDeliberate:
                 "self_reflection": None,
             }
         }
-        with patch("agents.arbiter.cross_modal_fuse", return_value={"verdict": "INSUFFICIENT_DATA"}):
+        with patch(
+            "agents.arbiter.cross_modal_fuse", return_value={"verdict": "INSUFFICIENT_DATA"}
+        ):
             report = await arbiter.deliberate(agent_results, case_id="CASE007", use_llm=False)
         assert isinstance(report, ForensicReport)
 
@@ -324,7 +345,9 @@ class TestCouncilArbiterDeliberate:
                 "self_reflection": None,
             }
         }
-        with patch("agents.arbiter.cross_modal_fuse", return_value={"verdict": "INSUFFICIENT_DATA"}):
+        with patch(
+            "agents.arbiter.cross_modal_fuse", return_value={"verdict": "INSUFFICIENT_DATA"}
+        ):
             report = await arbiter.deliberate(agent_results, case_id="CASE008", use_llm=False)
         # Error rate should be 0 since NOT_APPLICABLE is not a failure
         if "Agent1" in report.per_agent_metrics:
@@ -345,7 +368,9 @@ class TestCouncilArbiterDeliberate:
                 "self_reflection": {"report": "ELA shows signs of manipulation."},
             }
         }
-        with patch("agents.arbiter.cross_modal_fuse", return_value={"verdict": "INSUFFICIENT_DATA"}):
+        with patch(
+            "agents.arbiter.cross_modal_fuse", return_value={"verdict": "INSUFFICIENT_DATA"}
+        ):
             report = await arbiter.deliberate(agent_results, case_id="CASE009", use_llm=False)
         assert isinstance(report, ForensicReport)
         # React chains should be stored in the report

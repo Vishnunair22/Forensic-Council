@@ -8,6 +8,7 @@ Implements the inter-agent communication protocol with anti-circular dependency 
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, Literal
@@ -64,9 +65,7 @@ class InterAgentCall(BaseModel):
             "response": self.response,
             "status": self.status,
             "created_utc": self.created_utc.isoformat(),
-            "completed_utc": self.completed_utc.isoformat()
-            if self.completed_utc
-            else None,
+            "completed_utc": self.completed_utc.isoformat() if self.completed_utc else None,
         }
 
 
@@ -119,7 +118,7 @@ class InterAgentBus:
         self._registered_agents: dict[str, Any] = {}
         # Lock to make circular-dependency check + _active_calls registration atomic
         self._dispatch_lock = asyncio.Lock()
-        
+
         # Redis Pub/Sub integration
         self._listener_task: asyncio.Task | None = None
         self._pubsub: Any = None
@@ -133,19 +132,21 @@ class InterAgentBus:
         """Start the Redis Pub/Sub listener for distributed signaling."""
         if self._working_memory is None or not hasattr(self._working_memory, "_redis"):
             return
-            
+
         redis = self._working_memory._redis
         if redis is None:
             return
-            
+
         self._pubsub = redis.get_pubsub()
         channel = f"forensic:signal:{self._session_id}"
         await self._pubsub.subscribe(channel)
-        
+
         async def _listen():
             try:
                 while True:
-                    message = await self._pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                    message = await self._pubsub.get_message(
+                        ignore_subscribe_messages=True, timeout=1.0
+                    )
                     if message:
                         data = message.get("data")
                         if isinstance(data, str):
@@ -155,7 +156,9 @@ class InterAgentBus:
                                 if event_name:
                                     self._set_local_event(event_name)
                                     if event_name == "GLOBAL_ABORT" and self._on_abort:
-                                        logger.warning(f"GLOBAL_ABORT received for session {self._session_id}")
+                                        logger.warning(
+                                            f"GLOBAL_ABORT received for session {self._session_id}"
+                                        )
                                         if asyncio.iscoroutinefunction(self._on_abort):
                                             await self._on_abort(payload.get("payload"))
                                         else:
@@ -185,7 +188,7 @@ class InterAgentBus:
 
     def _set_local_event(self, event_name: str) -> None:
         """Set a local event and wake up any waiters."""
-        key = event_name # Local key in _events is just name now
+        key = event_name  # Local key in _events is just name now
         if key not in self._events:
             self._events[key] = asyncio.Event()
         self._events[key].set()
@@ -194,20 +197,28 @@ class InterAgentBus:
         """Signal an event to any waiting agents. Broadcasts via Redis if available."""
         # 1. Trigger locally
         self._set_local_event(event_name)
-        
+
         # 2. Broadcast to other workers
-        if self._working_memory and hasattr(self._working_memory, "_redis") and self._working_memory._redis:
+        if (
+            self._working_memory
+            and hasattr(self._working_memory, "_redis")
+            and self._working_memory._redis
+        ):
             channel = f"forensic:signal:{session_id}"
             asyncio.create_task(
-                self._working_memory._redis.publish(channel, {"event": event_name, "payload": payload})
+                self._working_memory._redis.publish(
+                    channel, {"event": event_name, "payload": payload}
+                )
             )
 
         if payload and "note" in event_name.lower():
-            self._broadcast_history.append({
-                "timestamp": datetime.now(UTC).isoformat(),
-                "event": event_name,
-                "payload": payload
-            })
+            self._broadcast_history.append(
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "event": event_name,
+                    "payload": payload,
+                }
+            )
 
     def broadcast_note(self, agent_id: str, note_type: str, content: dict) -> None:
         """
@@ -216,9 +227,7 @@ class InterAgentBus:
         """
         logger.info(f"Agent {agent_id} broadcasting forensic note: {note_type}")
         self.signal_event(
-            self._session_id,
-            f"note:{note_type}",
-            {"sender": agent_id, "content": content}
+            self._session_id, f"note:{note_type}", {"sender": agent_id, "content": content}
         )
 
     def register_agent(self, agent_id: str, agent_instance: Any) -> None:
@@ -238,7 +247,7 @@ class InterAgentBus:
         try:
             await asyncio.wait_for(evt.wait(), timeout=timeout)
             return True
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             return False
 
     def is_call_permitted(self, caller: str, callee: str) -> bool:
@@ -246,9 +255,7 @@ class InterAgentBus:
         permitted_callees = get_agent_registry().get_permitted_callees(caller)
         return callee in permitted_callees
 
-    def is_circular_call(
-        self, caller: str, callee: str, artifact_id: UUID | None
-    ) -> bool:
+    def is_circular_call(self, caller: str, callee: str, artifact_id: UUID | None) -> bool:
         """
         Check if a call would create a circular dependency.
 
@@ -268,7 +275,9 @@ class InterAgentBus:
         if reverse_call in self._active_calls:
             return True
 
-        session_completed = self._completed_calls.get(str(self._session_id), set()) if self._session_id else set()
+        session_completed = (
+            self._completed_calls.get(str(self._session_id), set()) if self._session_id else set()
+        )
         if reverse_call in session_completed:
             return True
 
@@ -281,12 +290,14 @@ class InterAgentBus:
 
         return False
 
-    def is_arbiter_rechallenge(
-        self, caller: str, call_type: InterAgentCallType
-    ) -> bool:
+    def is_arbiter_rechallenge(self, caller: str, call_type: InterAgentCallType) -> bool:
         """Check if this is an invalid re-challenge to Arbiter."""
         if call_type == InterAgentCallType.CHALLENGE:
-            session_challenges = self._arbiter_challenges.get(str(self._session_id), set()) if self._session_id else set()
+            session_challenges = (
+                self._arbiter_challenges.get(str(self._session_id), set())
+                if self._session_id
+                else set()
+            )
             return caller in session_challenges
         return False
 
@@ -315,16 +326,12 @@ class InterAgentBus:
         artifact_str = str(call.artifact_id) if call.artifact_id else None
 
         if not self.is_call_permitted(call.caller_agent_id, call.callee_agent_id):
-            raise PermittedCallViolationError(
-                call.caller_agent_id, call.callee_agent_id
-            )
+            raise PermittedCallViolationError(call.caller_agent_id, call.callee_agent_id)
 
         # Atomically check circular dependency + arbiter re-challenge + register active call
         # under a single lock to prevent TOCTOU races between concurrent coroutines.
         async with self._dispatch_lock:
-            if self.is_circular_call(
-                call.caller_agent_id, call.callee_agent_id, call.artifact_id
-            ):
+            if self.is_circular_call(call.caller_agent_id, call.callee_agent_id, call.artifact_id):
                 raise CircularCallError(
                     call.caller_agent_id, call.callee_agent_id, call.artifact_id
                 )
@@ -336,9 +343,7 @@ class InterAgentBus:
                     raise ArbiterRechallengeError(call.caller_agent_id)
                 session_challenges.add(call.callee_agent_id)
 
-            self._active_calls.add(
-                (call.caller_agent_id, call.callee_agent_id, artifact_str)
-            )
+            self._active_calls.add((call.caller_agent_id, call.callee_agent_id, artifact_str))
 
         try:
             # 5. Log INTER_AGENT_CALL to caller's custody chain
@@ -354,9 +359,7 @@ class InterAgentBus:
                         "direction": "OUTGOING",
                         "callee_agent_id": call.callee_agent_id,
                         "call_type": call.call_type.value,
-                        "artifact_id": str(call.artifact_id)
-                        if call.artifact_id
-                        else None,
+                        "artifact_id": str(call.artifact_id) if call.artifact_id else None,
                         "payload": call.payload,
                     },
                 )
@@ -372,9 +375,7 @@ class InterAgentBus:
                         "direction": "INCOMING",
                         "caller_agent_id": call.caller_agent_id,
                         "call_type": call.call_type.value,
-                        "artifact_id": str(call.artifact_id)
-                        if call.artifact_id
-                        else None,
+                        "artifact_id": str(call.artifact_id) if call.artifact_id else None,
                         "payload": call.payload,
                     },
                 )
@@ -406,9 +407,7 @@ class InterAgentBus:
 
         finally:
             # 10. Remove from active calls
-            self._active_calls.discard(
-                (call.caller_agent_id, call.callee_agent_id, artifact_str)
-            )
+            self._active_calls.discard((call.caller_agent_id, call.callee_agent_id, artifact_str))
 
     async def send(
         self,

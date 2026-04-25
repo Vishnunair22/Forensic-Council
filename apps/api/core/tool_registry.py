@@ -36,7 +36,7 @@ TOOL_TIMEOUTS: dict[str, float] = {
 }
 
 DEFAULT_TOOL_TIMEOUT = 60.0
- 
+
 # Tools that are CPU/GPU intensive and should be throttled by a semaphore.
 # API-based tools (like Gemini) or light metadata tools are excluded.
 HEAVY_TOOLS: set[str] = {
@@ -73,15 +73,12 @@ HEAVY_TOOLS: set[str] = {
 }
 
 
-
 class Tool(BaseModel):
     """Represents a tool available to an agent."""
 
     name: str = Field(..., description="Unique tool name")
     description: str = Field(default="", description="Tool description for LLM")
-    available: bool = Field(
-        default=True, description="Whether tool is currently available"
-    )
+    available: bool = Field(default=True, description="Whether tool is currently available")
 
 
 class ToolResult(BaseModel):
@@ -97,20 +94,23 @@ class ToolResult(BaseModel):
 # Type for tool handlers - async function that takes input dict and returns dict
 ToolHandler = Callable[[dict[str, Any]], Coroutine[Any, Any, dict[str, Any]]]
 
+
 def tool(name: str, description: str):
     """
     Decorator to mark a method as a tool handler.
-    
+
     Usage:
         @tool(name="my_tool", description="Does something cool")
         async def my_handler(self, input_data: dict) -> dict:
             ...
     """
+
     def decorator(func):
         func._is_tool = True
         func._tool_name = name
         func._tool_description = description
         return func
+
     return decorator
 
 
@@ -127,9 +127,7 @@ class ToolRegistry:
         self._tools: dict[str, Tool] = {}
         self._handlers: dict[str, ToolHandler] = {}
 
-    def register(
-        self, tool_name: str, handler: ToolHandler, description: str = ""
-    ) -> None:
+    def register(self, tool_name: str, handler: ToolHandler, description: str = "") -> None:
         """
         Register a tool with its handler.
 
@@ -138,15 +136,13 @@ class ToolRegistry:
             handler: Async function that handles tool execution
             description: Description of what the tool does
         """
-        self._tools[tool_name] = Tool(
-            name=tool_name, description=description, available=True
-        )
+        self._tools[tool_name] = Tool(name=tool_name, description=description, available=True)
         self._handlers[tool_name] = handler
 
     def register_domain_handler(self, handler_instance: BaseToolHandler) -> None:
         """
         Register all tools defined by a domain-specific handler.
-        
+
         Detects methods decorated with @tool and also calls the legacy
         register_tools() for manual registration.
         """
@@ -155,12 +151,15 @@ class ToolRegistry:
 
         # 2. Automatic registration via @tool decorator
         import inspect
-        for name, method in inspect.getmembers(handler_instance, predicate=inspect.ismethod):
+
+        for _name, method in inspect.getmembers(handler_instance, predicate=inspect.ismethod):
             if getattr(method, "_is_tool", False):
-                t_name = getattr(method, "_tool_name")
-                t_desc = getattr(method, "_tool_description")
+                t_name = method._tool_name
+                t_desc = method._tool_description
                 self.register(t_name, method, t_desc)
-                logger.debug(f"Auto-registered tool: {t_name} from {handler_instance.__class__.__name__}")
+                logger.debug(
+                    f"Auto-registered tool: {t_name} from {handler_instance.__class__.__name__}"
+                )
 
     def get_handler(self, name: str) -> ToolHandler | None:
         """Return the callable handler for a registered tool, or None."""
@@ -292,7 +291,9 @@ class ToolRegistry:
             # Apply semaphore gating for heavy CPU/GPU tools
             if semaphore and tool_name in HEAVY_TOOLS:
                 async with semaphore:
-                    logger.debug(f"Acquired heavy tool semaphore for {tool_name}", agent_id=agent_id)
+                    logger.debug(
+                        f"Acquired heavy tool semaphore for {tool_name}", agent_id=agent_id
+                    )
                     output = await asyncio.wait_for(handler(input_data), timeout=timeout_s)
             else:
                 output = await asyncio.wait_for(handler(input_data), timeout=timeout_s)
@@ -302,7 +303,7 @@ class ToolRegistry:
             logger.warning(
                 f"Tool '{tool_name}' timed out",
                 tool_name=tool_name,
-                timeout=TOOL_TIMEOUTS.get(tool_name, 45.0)
+                timeout=TOOL_TIMEOUTS.get(tool_name, 45.0),
             )
             result = ToolResult(
                 tool_name=tool_name,
@@ -316,7 +317,7 @@ class ToolRegistry:
                 tool_name=tool_name,
                 error=str(e),
                 error_type=type(e).__name__,
-                exc_info=True
+                exc_info=True,
             )
             result = ToolResult(tool_name=tool_name, success=False, error=str(e))
         except Exception as e:
@@ -328,7 +329,7 @@ class ToolRegistry:
                 tool_name=tool_name,
                 error=str(e),
                 error_type=type(e).__name__,
-                exc_info=True
+                exc_info=True,
             )
             result = ToolResult(tool_name=tool_name, success=False, error=str(e))
 

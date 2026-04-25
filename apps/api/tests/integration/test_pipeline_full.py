@@ -51,6 +51,7 @@ def _settings() -> Settings:
 
 def _mock_agent_result(agent_id: str) -> dict[str, Any]:
     from core.react_loop import AgentFinding
+
     finding = AgentFinding(
         agent_id=agent_id,
         finding_type="test_analysis",
@@ -64,29 +65,35 @@ def _mock_agent_result(agent_id: str) -> dict[str, Any]:
 
 # â”€â”€ Pipeline instantiation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestPipelineInstantiation:
     def test_pipeline_can_be_instantiated_no_args(self):
         from orchestration.pipeline import ForensicCouncilPipeline
+
         pipeline = ForensicCouncilPipeline()
         assert pipeline is not None
 
     def test_pipeline_can_be_instantiated_with_config(self):
         from orchestration.pipeline import ForensicCouncilPipeline
+
         pipeline = ForensicCouncilPipeline(config=_settings())
         assert pipeline is not None
 
     def test_pipeline_has_run_investigation_method(self):
         from orchestration.pipeline import ForensicCouncilPipeline
+
         pipeline = ForensicCouncilPipeline()
         assert callable(pipeline.run_investigation)
 
     def test_pipeline_has_config(self):
         from orchestration.pipeline import ForensicCouncilPipeline
+
         pipeline = ForensicCouncilPipeline(config=_settings())
         assert pipeline.config is not None
 
 
 # â”€â”€ Pipeline run (mocked agents) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 class TestPipelineRun:
     @pytest.mark.asyncio
@@ -152,9 +159,11 @@ class TestPipelineRun:
 
 # â”€â”€ AgentFactory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestAgentFactory:
     def _make_factory(self):
         from orchestration.pipeline import AgentFactory
+
         wm = AsyncMock()
         em = AsyncMock()
         cl = AsyncMock()
@@ -200,6 +209,7 @@ class TestAgentFactory:
         factory = self._make_factory()
         sid = uuid4()
         from core.react_loop import AgentFinding
+
         ev = EvidenceArtifact.create_root(
             artifact_type=ArtifactType.ORIGINAL,
             file_path="/tmp/test.jpg",
@@ -210,16 +220,20 @@ class TestAgentFactory:
         )
         factory.set_evidence_artifact(ev)
         # run_challenge() returns a list of AgentFinding objects
-        mock_findings = [AgentFinding(
-            agent_id="Agent1",
-            finding_type="test",
-            status="CONFIRMED",
-            confidence_raw=0.9,
-            reasoning_summary="test",
-            court_statement="No manipulation.",
-        )]
-        with patch("agents.agent1_image.Agent1Image.run_investigation",
-                   new=AsyncMock(return_value=mock_findings)):
+        mock_findings = [
+            AgentFinding(
+                agent_id="Agent1",
+                finding_type="test",
+                status="CONFIRMED",
+                confidence_raw=0.9,
+                reasoning_summary="test",
+                court_statement="No manipulation.",
+            )
+        ]
+        with patch(
+            "agents.agent1_image.Agent1Image.run_investigation",
+            new=AsyncMock(return_value=mock_findings),
+        ):
             result = await factory.reinvoke_agent(
                 agent_id="Agent1",
                 session_id=sid,
@@ -230,15 +244,18 @@ class TestAgentFactory:
 
 # â”€â”€ Session state transitions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestSessionManager:
     def test_session_manager_can_be_instantiated(self):
         from orchestration.session_manager import SessionManager
+
         sm = SessionManager()
         assert sm is not None
 
     @pytest.mark.asyncio
     async def test_create_session_returns_state(self):
         from orchestration.session_manager import SessionManager
+
         sm = SessionManager()
         sid = uuid4()
         state = await sm.create_session(
@@ -252,6 +269,7 @@ class TestSessionManager:
     @pytest.mark.asyncio
     async def test_get_session_returns_state_after_create(self):
         from orchestration.session_manager import SessionManager
+
         sm = SessionManager()
         sid = uuid4()
         await sm.create_session(
@@ -266,6 +284,7 @@ class TestSessionManager:
     @pytest.mark.asyncio
     async def test_get_session_nonexistent_returns_none(self):
         from orchestration.session_manager import SessionManager
+
         sm = SessionManager()
         result = await sm.get_session(uuid4())
         assert result is None
@@ -273,6 +292,7 @@ class TestSessionManager:
     @pytest.mark.asyncio
     async def test_session_initial_status(self):
         from orchestration.session_manager import SessionManager, SessionStatus
+
         sm = SessionManager()
         sid = uuid4()
         state = await sm.create_session(
@@ -285,5 +305,3 @@ class TestSessionManager:
             SessionStatus.INITIALIZING,
             SessionStatus.RUNNING,
         )
-
-

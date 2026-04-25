@@ -84,9 +84,7 @@ class AdversarialChecker:
             },
         }
 
-    def check_anti_ela_evasion(
-        self, image_data: dict[str, Any]
-    ) -> list[RobustnessCaveat]:
+    def check_anti_ela_evasion(self, image_data: dict[str, Any]) -> list[RobustnessCaveat]:
         """
         Check for anti-ELA evasion techniques.
 
@@ -134,9 +132,7 @@ class AdversarialChecker:
 
         return caveats
 
-    def check_anti_spoofing_evasion(
-        self, audio_data: dict[str, Any]
-    ) -> list[RobustnessCaveat]:
+    def check_anti_spoofing_evasion(self, audio_data: dict[str, Any]) -> list[RobustnessCaveat]:
         """
         Check for anti-spoofing evasion techniques.
 
@@ -184,9 +180,7 @@ class AdversarialChecker:
 
         return caveats
 
-    def check_object_detection_evasion(
-        self, image_data: dict[str, Any]
-    ) -> list[RobustnessCaveat]:
+    def check_object_detection_evasion(self, image_data: dict[str, Any]) -> list[RobustnessCaveat]:
         """
         Check for object detection evasion techniques.
 
@@ -234,9 +228,7 @@ class AdversarialChecker:
 
         return caveats
 
-    def check_optical_flow_evasion(
-        self, video_data: dict[str, Any]
-    ) -> list[RobustnessCaveat]:
+    def check_optical_flow_evasion(self, video_data: dict[str, Any]) -> list[RobustnessCaveat]:
         """
         Check for optical flow evasion techniques.
 
@@ -284,9 +276,7 @@ class AdversarialChecker:
 
         return caveats
 
-    def check_metadata_spoofing(
-        self, metadata: dict[str, Any]
-    ) -> list[RobustnessCaveat]:
+    def check_metadata_spoofing(self, metadata: dict[str, Any]) -> list[RobustnessCaveat]:
         """
         Check for metadata spoofing techniques.
 

@@ -3,6 +3,7 @@ Shared pytest fixtures for the Forensic Council backend test suite.
 Provides mocked infrastructure (Redis, Postgres, Qdrant), auth helpers,
 sample data, and a preconfigured TestClient.
 """
+
 import io
 import logging
 import os
@@ -36,6 +37,7 @@ os.environ.setdefault("NEXT_PUBLIC_API_URL", "http://localhost:8000")
 
 # -- Pytest configuration --
 
+
 def pytest_configure(config):
     """Register custom marks to avoid warnings."""
     config.addinivalue_line("markers", "slow: marks tests as slow")
@@ -44,6 +46,7 @@ def pytest_configure(config):
 
 
 # -- Simple ID fixtures --
+
 
 @pytest.fixture
 def sample_session_id() -> str:
@@ -67,13 +70,11 @@ def sample_user_id() -> str:
 
 # -- Sample files --
 
+
 @pytest.fixture
 def sample_jpeg_bytes() -> bytes:
     """Minimal valid JPEG bytes (SOI + EOI markers)."""
-    return (
-        b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
-        b"\xff\xd9"
-    )
+    return b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9"
 
 
 @pytest.fixture
@@ -96,6 +97,7 @@ def sample_pdf_file(sample_pdf_bytes) -> io.BytesIO:
 
 
 # -- JWT / auth fixtures --
+
 
 @pytest.fixture
 def valid_investigator_payload(sample_user_id) -> dict:
@@ -136,6 +138,7 @@ def admin_auth_headers() -> dict:
 
 
 # -- Infrastructure mocks --
+
 
 @pytest.fixture
 def mock_redis():
@@ -184,6 +187,7 @@ def mock_qdrant():
 
 
 # -- Domain fixtures --
+
 
 @pytest.fixture
 def sample_agent_finding() -> dict:

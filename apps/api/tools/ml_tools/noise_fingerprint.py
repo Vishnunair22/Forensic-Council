@@ -149,17 +149,19 @@ if __name__ == "__main__":
             import cv2
             import numpy as np
             from scipy.signal import wiener
-            print(json.dumps({
-                "status": "warmed_up",
-                "dependencies": ["scipy", "numpy", "cv2"],
-                "message": "Noise fingerprint analyzer ready"
-            }))
+
+            print(
+                json.dumps(
+                    {
+                        "status": "warmed_up",
+                        "dependencies": ["scipy", "numpy", "cv2"],
+                        "message": "Noise fingerprint analyzer ready",
+                    }
+                )
+            )
             sys.exit(0)
         except Exception as e:
-            print(json.dumps({
-                "status": "warmup_failed",
-                "error": str(e)
-            }))
+            print(json.dumps({"status": "warmup_failed", "error": str(e)}))
             sys.exit(1)
 
     # Worker mode - persistent process reading from stdin

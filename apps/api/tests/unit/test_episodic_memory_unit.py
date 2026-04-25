@@ -61,6 +61,7 @@ def _make_qdrant() -> AsyncMock:
 
 # ── ForensicSignatureType ──────────────────────────────────────────────────────
 
+
 class TestForensicSignatureType:
     def test_all_values(self):
         types = {t.value for t in ForensicSignatureType}
@@ -73,6 +74,7 @@ class TestForensicSignatureType:
 
 
 # ── EpisodicEntry model ────────────────────────────────────────────────────────
+
 
 class TestEpisodicEntry:
     def test_creation_defaults(self):
@@ -108,6 +110,7 @@ class TestEpisodicEntry:
 
 
 # ── EpisodicMemory with no Qdrant ──────────────────────────────────────────────
+
 
 class TestEpisodicMemoryNoQdrant:
     def _make_em(self):
@@ -149,6 +152,7 @@ class TestEpisodicMemoryNoQdrant:
 
 
 # ── EpisodicMemory with mocked Qdrant ─────────────────────────────────────────
+
 
 class TestEpisodicMemoryWithQdrant:
     def _make_em(self):
@@ -263,6 +267,7 @@ class TestEpisodicMemoryWithQdrant:
 
 
 # ── Async context manager ──────────────────────────────────────────────────────
+
 
 class TestEpisodicMemoryContextManager:
     @pytest.mark.asyncio

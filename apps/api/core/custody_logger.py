@@ -31,6 +31,7 @@ _session_chain_locks: defaultdict[UUID, asyncio.Lock] = defaultdict(asyncio.Lock
 def _json_safe(value: Any) -> Any:
     """Return a PostgreSQL JSON-safe copy, replacing non-finite floats and numpy types."""
     import numpy as np
+
     if isinstance(value, (float, np.floating)):
         f_val = float(value)
         return f_val if math.isfinite(f_val) else None
@@ -289,7 +290,9 @@ class CustodyLogger:
         prior_entry_ref = await self._get_last_entry_hash(session_id)
 
         if self._postgres is None:
-            await self._queue_to_wal(entry_id, agent_id, session_id, entry_type, content, signed, prior_entry_ref)
+            await self._queue_to_wal(
+                entry_id, agent_id, session_id, entry_type, content, signed, prior_entry_ref
+            )
             return None
 
         # Insert into database
@@ -333,12 +336,16 @@ class CustodyLogger:
                 entry_id=str(entry_id),
                 error=str(db_err),
             )
-            await self._queue_to_wal(entry_id, agent_id, session_id, entry_type, content, signed, prior_entry_ref)
+            await self._queue_to_wal(
+                entry_id, agent_id, session_id, entry_type, content, signed, prior_entry_ref
+            )
             return None
 
         return entry_id
 
-    async def _queue_to_wal(self, entry_id, agent_id, session_id, entry_type, content, signed, prior_entry_ref):
+    async def _queue_to_wal(
+        self, entry_id, agent_id, session_id, entry_type, content, signed, prior_entry_ref
+    ):
         """Persist entry to Redis WAL."""
         try:
             redis = await self._get_redis()
@@ -396,7 +403,9 @@ class CustodyLogger:
                     # If it fails again, push it back to the head of the queue (or just log and put back at end)
                     # For safety, we push it back to the START of the list
                     await redis.client.lpush(self._wal_key, item_raw)
-                    logger.error(f"Custody WAL: Flush failed for item {item['entry_id']}, put back in queue: {e}")
+                    logger.error(
+                        f"Custody WAL: Flush failed for item {item['entry_id']}, put back in queue: {e}"
+                    )
                     break  # Stop flushing if DB is still unhappy
 
         except Exception as e:

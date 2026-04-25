@@ -180,13 +180,9 @@ class CalibrationLayer:
                         data = json.load(f)
                         model = CalibrationModel(**data)
                 else:
-                    raise FileNotFoundError(
-                        f"No calibration model found for {agent_id}"
-                    )
+                    raise FileNotFoundError(f"No calibration model found for {agent_id}")
             else:
-                raise FileNotFoundError(
-                    f"Calibration model directory not found for {agent_id}"
-                )
+                raise FileNotFoundError(f"Calibration model directory not found for {agent_id}")
 
         self._loaded_models[cache_key] = model
         return model
@@ -407,9 +403,7 @@ class CalibrationLayer:
             A = params.get("A", 2.0)
             B = params.get("B", -1.0)
             # Perturbation std: 20% of parameter value for uncalibrated, 10% for trained
-            is_uncal = (
-                params.get("calibration_status", "UNCALIBRATED") == "UNCALIBRATED"
-            )
+            is_uncal = params.get("calibration_status", "UNCALIBRATED") == "UNCALIBRATED"
             scale = 0.20 if is_uncal else 0.10
             A_std = abs(A) * scale
             B_std = abs(B) * scale
@@ -492,9 +486,7 @@ class CalibrationLayer:
         tpr = baseline_tpr + (1.0 - baseline_tpr) * calibrated_prob
         fpr = baseline_fpr * (1.0 - calibrated_prob)
 
-        cal_status = (
-            CalibrationStatus.UNCALIBRATED if is_default else model.calibration_status
-        )
+        cal_status = CalibrationStatus.UNCALIBRATED if is_default else model.calibration_status
 
         if cal_status == CalibrationStatus.UNCALIBRATED:
             court_statement = (

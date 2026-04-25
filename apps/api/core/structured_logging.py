@@ -14,9 +14,7 @@ import sys
 from datetime import UTC, datetime
 from typing import Any
 
-request_id_ctx: contextvars.ContextVar[str] = contextvars.ContextVar(
-    "request_id", default=""
-)
+request_id_ctx: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="")
 
 
 class StructuredFormatter(logging.Formatter):
@@ -32,7 +30,14 @@ class StructuredFormatter(logging.Formatter):
     """
 
     SENSITIVE_KEYS = {
-        "password", "secret", "key", "token", "auth", "credential", "private", "signing"
+        "password",
+        "secret",
+        "key",
+        "token",
+        "auth",
+        "credential",
+        "private",
+        "signing",
     }
     SENSITIVE_VALUE_PATTERNS = (
         re.compile(

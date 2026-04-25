@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import hashlib
 import os
 import struct
@@ -34,7 +34,14 @@ def _create_test_wav(path: str) -> str:
         wf.setsampwidth(sampwidth)
         wf.setframerate(framerate)
         frames = b"".join(
-            struct.pack("<h", int(32767 * 0.3 * __import__("math").sin(2 * __import__("math").pi * 440 * i / framerate)))
+            struct.pack(
+                "<h",
+                int(
+                    32767
+                    * 0.3
+                    * __import__("math").sin(2 * __import__("math").pi * 440 * i / framerate)
+                ),
+            )
             for i in range(n_frames)
         )
         wf.writeframes(frames)
@@ -44,6 +51,7 @@ def _create_test_wav(path: str) -> str:
 def _create_test_mp4(path: str) -> str:
     try:
         import cv2
+
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         out = cv2.VideoWriter(path, fourcc, 10.0, (64, 64))
         for _ in range(10):
@@ -76,9 +84,14 @@ async def _run_file_analysis(file_path, mime_type, label):
     with open(file_path, "rb") as f:
         ch = hashlib.sha256(f.read()).hexdigest()
     artifact = EvidenceArtifact.create_root(
-        artifact_type=ArtifactType.ORIGINAL, file_path=file_path,
-        content_hash=ch, action="upload", agent_id="ingestion",
-        session_id=sid, metadata={"mime_type": mime_type, "original_filename": os.path.basename(file_path)})
+        artifact_type=ArtifactType.ORIGINAL,
+        file_path=file_path,
+        content_hash=ch,
+        action="upload",
+        agent_id="ingestion",
+        session_id=sid,
+        metadata={"mime_type": mime_type, "original_filename": os.path.basename(file_path)},
+    )
     cl = CustodyLogger()
     es = EvidenceStore()
     bus = InterAgentBus()
@@ -97,9 +110,16 @@ async def _run_file_analysis(file_path, mime_type, label):
         kw = {"inter_agent_bus": ibus} if ibus else {}
         try:
             agent = acls(
-                agent_id=aid, session_id=sid, evidence_artifact=artifact, config=settings,
-                working_memory=WorkingMemory(), episodic_memory=EpisodicMemory(),
-                custody_logger=cl, evidence_store=es, **kw)
+                agent_id=aid,
+                session_id=sid,
+                evidence_artifact=artifact,
+                config=settings,
+                working_memory=WorkingMemory(),
+                episodic_memory=EpisodicMemory(),
+                custody_logger=cl,
+                evidence_store=es,
+                **kw,
+            )
             if not agent.supports_uploaded_file:
                 findings_all[aid] = []
                 details[aid] = "SKIP"
@@ -107,13 +127,23 @@ async def _run_file_analysis(file_path, mime_type, label):
             fs = await asyncio.wait_for(agent.run_investigation(), timeout=180.0)
             nf = [f.model_dump(mode="json") if hasattr(f, "model_dump") else f for f in fs]
             findings_all[aid] = nf
-            cv = [f.get("confidence_raw", 0) for f in nf if isinstance(f, dict) and f.get("confidence_raw") is not None]
+            cv = [
+                f.get("confidence_raw", 0)
+                for f in nf
+                if isinstance(f, dict) and f.get("confidence_raw") is not None
+            ]
             tn = {(f.get("metadata") or {}).get("tool_name", "") for f in nf if isinstance(f, dict)}
-            dg = sum(1 for f in nf if isinstance(f, dict) and (f.get("metadata") or {}).get("degraded"))
-            avg_c = sum(cv)/len(cv) if cv else 0
-            details[aid] = f"{len(nf)}f/{len(tn)}t/conf={avg_c:.2f}/deg={dg}/{time.perf_counter()-t0:.0f}s"
+            dg = sum(
+                1 for f in nf if isinstance(f, dict) and (f.get("metadata") or {}).get("degraded")
+            )
+            avg_c = sum(cv) / len(cv) if cv else 0
+            details[aid] = (
+                f"{len(nf)}f/{len(tn)}t/conf={avg_c:.2f}/deg={dg}/{time.perf_counter() - t0:.0f}s"
+            )
         except Exception as e:
-            findings_all[aid] = [{"finding_type": "error", "status": "INCOMPLETE", "confidence_raw": 0.0}]
+            findings_all[aid] = [
+                {"finding_type": "error", "status": "INCOMPLETE", "confidence_raw": 0.0}
+            ]
             details[aid] = f"ERR:{str(e)[:80]}"
 
     ar = {aid: {"findings": fs} for aid, fs in findings_all.items() if fs}
@@ -125,18 +155,24 @@ async def _run_file_analysis(file_path, mime_type, label):
     groq = len(report.per_agent_analysis) > 0 and len(report.executive_summary) > 50
     errs = [f"{aid}: {d}" for aid, d in details.items() if d.startswith("ERR")]
 
-    print(f"\n{'='*55}")
+    print(f"\n{'=' * 55}")
     print(f"  {label} ({mime_type})")
-    print(f"{'='*55}")
+    print(f"{'=' * 55}")
     for aid in ["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"]:
         print(f"  {aid}: {details.get(aid, '?')}")
-    print(f"  ARBITER: {report.overall_verdict} conf={report.overall_confidence:.3f} manip={report.manipulation_probability:.3f}")
-    print(f"  GROQ: {'YES' if groq else 'NO'} narr={len(report.per_agent_analysis)} exec={len(report.executive_summary)}ch")
+    print(
+        f"  ARBITER: {report.overall_verdict} conf={report.overall_confidence:.3f} manip={report.manipulation_probability:.3f}"
+    )
+    print(
+        f"  GROQ: {'YES' if groq else 'NO'} narr={len(report.per_agent_analysis)} exec={len(report.executive_summary)}ch"
+    )
     print(f"  VERDICT: {report.verdict_sentence}")
     print(f"  KEY FINDINGS: {report.key_findings[:3]}")
     for aid, s in report.per_agent_summary.items():
         if not s.get("skipped"):
-            print(f"    {aid}: {s['verdict']} ({s['confidence_pct']}% conf, {s['error_rate_pct']}% err)")
+            print(
+                f"    {aid}: {s['verdict']} ({s['confidence_pct']}% conf, {s['error_rate_pct']}% err)"
+            )
 
     return ac >= 2 and tf >= 5 and groq and not errs
 
@@ -159,18 +195,19 @@ async def main():
         results.append((lb, ok))
 
     import shutil
+
     shutil.rmtree(tmpdir, ignore_errors=True)
 
-    print(f"\n\n{'='*55}")
+    print(f"\n\n{'=' * 55}")
     print("  INITIAL ANALYSIS - FINAL VERDICT")
-    print(f"{'='*55}")
+    print(f"{'=' * 55}")
     all_ok = all(ok for _, ok in results)
     for lb, ok in results:
         print(f"  {lb:<6} {'PASS' if ok else 'FAIL'}")
-    print(f"\n  OVERALL: {'GREEN' if all_ok else 'RED'} - Initial analysis pipeline {'is solid and ready' if all_ok else 'has issues'}")
+    print(
+        f"\n  OVERALL: {'GREEN' if all_ok else 'RED'} - Initial analysis pipeline {'is solid and ready' if all_ok else 'has issues'}"
+    )
 
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-

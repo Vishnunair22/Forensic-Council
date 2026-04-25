@@ -3,7 +3,7 @@ Video Handlers Unit Tests
 ========================
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -45,8 +45,8 @@ class TestVideoHandlers:
 
     def test_handler_has_base_class(self, mock_agent):
         """Test handler inherits from BaseToolHandler."""
-        from core.handlers.video import VideoHandlers
         from core.handlers.base import BaseToolHandler
+        from core.handlers.video import VideoHandlers
 
         handler = VideoHandlers(mock_agent)
         assert isinstance(handler, BaseToolHandler)

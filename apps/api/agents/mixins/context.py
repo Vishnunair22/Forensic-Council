@@ -114,7 +114,7 @@ class AgentContextMixin:
                 del self._tool_context[key]
 
         # Truncate large string/list payloads
-        for key, val in self._tool_context.items():
+        for _key, val in self._tool_context.items():
             if isinstance(val, dict):
                 for k in list(val.keys()):
                     # Check for large string or list payloads that don't need full persistence
@@ -123,7 +123,7 @@ class AgentContextMixin:
                             val[k] = val[k][:max_payload_bytes] + "...[truncated]"
                         else:
                             # For lists, preserve the structure but limit elements
-                            val[k] = val[k][:100] + [f"...[truncated {len(val[k])-100} items]"]
+                            val[k] = val[k][:100] + [f"...[truncated {len(val[k]) - 100} items]"]
 
     async def query_episodic_memory(
         self,
@@ -134,6 +134,7 @@ class AgentContextMixin:
         """Query episodic memory for similar forensic signatures."""
         if self.custody_logger:
             from core.custody_logger import EntryType
+
             await self.custody_logger.log_entry(
                 agent_id=self.agent_id,
                 session_id=self.session_id,
@@ -149,12 +150,11 @@ class AgentContextMixin:
             signature_type=signature_type, query_embedding=query_embedding, top_k=limit
         )
 
-    async def store_episodic_finding(
-        self, entry: EpisodicEntry, embedding: list[float]
-    ) -> None:
+    async def store_episodic_finding(self, entry: EpisodicEntry, embedding: list[float]) -> None:
         """Store a finding in episodic memory."""
         if self.custody_logger:
             from core.custody_logger import EntryType
+
             await self.custody_logger.log_entry(
                 agent_id=self.agent_id,
                 session_id=self.session_id,

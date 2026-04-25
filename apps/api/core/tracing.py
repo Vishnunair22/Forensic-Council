@@ -88,7 +88,9 @@ class PipelineTrace:
                 duration_ms,
             )
         except Exception as e:
-            logger.warning("Failed to persist trace completion", trace_id=self.trace_id, error=str(e))
+            logger.warning(
+                "Failed to persist trace completion", trace_id=self.trace_id, error=str(e)
+            )
 
     async def fail(self, error: str, metadata_update: dict[str, Any] | None = None) -> None:
         """Mark the trace as failed and persist error details."""

@@ -55,9 +55,7 @@ class ReActStep(BaseModel):
     )
     content: str = Field(..., description="The content of the step")
     tool_name: str | None = Field(default=None, description="Tool name if ACTION step")
-    tool_input: dict[str, Any] | None = Field(
-        default=None, description="Tool input if ACTION step"
-    )
+    tool_input: dict[str, Any] | None = Field(default=None, description="Tool input if ACTION step")
     tool_output: dict[str, Any] | None = Field(
         default=None, description="Tool output if OBSERVATION step"
     )
@@ -121,9 +119,7 @@ class AgentFinding(BaseModel):
         le=1.0,
         description="Rescaled confidence score (Platt sigmoid), None if not rescaled",
     )
-    calibrated: bool = Field(
-        default=False, description="Whether confidence has been calibrated"
-    )
+    calibrated: bool = Field(default=False, description="Whether confidence has been calibrated")
     calibration_status: str = Field(
         default="UNCALIBRATED",
         description="TRAINED if parameters were fitted to data, UNCALIBRATED if engineering defaults",
@@ -138,11 +134,13 @@ class AgentFinding(BaseModel):
         ),
     )
     status: Literal[
-        "CONFIRMED", "CONTESTED", "INCONCLUSIVE", "INCOMPLETE",
-        "NOT_APPLICABLE", "ABSTAIN",
-    ] = Field(
-        default="CONFIRMED", description="Finding status"
-    )
+        "CONFIRMED",
+        "CONTESTED",
+        "INCONCLUSIVE",
+        "INCOMPLETE",
+        "NOT_APPLICABLE",
+        "ABSTAIN",
+    ] = Field(default="CONFIRMED", description="Finding status")
     robustness_caveat: bool = Field(
         default=False, description="Whether finding has robustness caveat"
     )
@@ -174,22 +172,16 @@ class ReActLoopResult(BaseModel):
 
     session_id: uuid.UUID = Field(..., description="Session ID")
     agent_id: str = Field(..., description="Agent ID")
-    completed: bool = Field(
-        default=False, description="Whether loop completed normally"
-    )
+    completed: bool = Field(default=False, description="Whether loop completed normally")
     terminated_by_human: bool = Field(
         default=False, description="Whether loop was terminated by human"
     )
-    findings: list[AgentFinding] = Field(
-        default_factory=list, description="Findings produced"
-    )
+    findings: list[AgentFinding] = Field(default_factory=list, description="Findings produced")
     hitl_checkpoints: list[HITLCheckpointState] = Field(
         default_factory=list, description="HITL checkpoints encountered"
     )
     total_iterations: int = Field(default=0, description="Total iterations run")
-    react_chain: list[ReActStep] = Field(
-        default_factory=list, description="Full reasoning chain"
-    )
+    react_chain: list[ReActStep] = Field(default_factory=list, description="Full reasoning chain")
 
 
 # Type for LLM step generators - async function that returns next ReActStep
@@ -239,9 +231,7 @@ def create_llm_step_generator(
         system_prompt = _build_forensic_system_prompt(
             agent_name=agent_name,
             evidence_context=evidence_context,
-            available_tasks=[
-                t.description for t in state.tasks if t.status != "COMPLETE"
-            ],
+            available_tasks=[t.description for t in state.tasks if t.status != "COMPLETE"],
         )
 
         # Get available tools from state/tool registry context
@@ -320,6 +310,7 @@ def _build_forensic_system_prompt(
         s = str(val) if val is not None else ""
         s = s.replace("\r", " ").replace("\n", " ")
         import re as _re
+
         s = _re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", s)
         return s
 
@@ -337,9 +328,7 @@ def _build_forensic_system_prompt(
         "Arbiter": "cross-modal deliberation — synthesising all agent findings into a court-admissible verdict",
     }
     agent_key = next((k for k in mandates if k.lower() in agent_name.lower()), None)
-    mandate = mandates.get(
-        agent_key, "multi-modal forensic analysis of the submitted evidence"
-    )
+    mandate = mandates.get(agent_key, "multi-modal forensic analysis of the submitted evidence")
 
     size_line = f"  File size: {file_size} bytes\n" if file_size else ""
     hash_line = f"  SHA-256:   {file_hash}\n" if file_hash else ""
@@ -398,9 +387,7 @@ def _get_available_tools_for_llm(state: WorkingMemoryState) -> list[dict[str, An
     so the LLM always has accurate tool names even without a live registry.
     """
     # Use live registry snapshot if the base agent injected it
-    registry_snapshot: list[dict] | None = getattr(
-        state, "tool_registry_snapshot", None
-    )
+    registry_snapshot: list[dict] | None = getattr(state, "tool_registry_snapshot", None)
     if registry_snapshot:
         return registry_snapshot
 
@@ -718,7 +705,7 @@ class ReActLoopEngine:
     ) -> None:
         """
         Initialize the ReAct loop engine.
- 
+
         Args:
             agent_id: ID of the agent running this loop
             session_id: Session ID for this analysis
@@ -762,16 +749,26 @@ class ReActLoopEngine:
             if raw_conf is None and "confidence" in output:
                 raw_conf = 0.50
             if raw_conf is None:
-                for key in ("anomaly_score", "tampering_score", "synthetic_probability",
-                            "forgery_score", "diffusion_probability"):
+                for key in (
+                    "anomaly_score",
+                    "tampering_score",
+                    "synthetic_probability",
+                    "forgery_score",
+                    "diffusion_probability",
+                ):
                     val = output.get(key)
                     if isinstance(val, (int, float)):
                         raw_conf = 1.0 - max(0.0, min(1.0, float(val)))
                         break
             if raw_conf is None:
-                for key in ("noise_consistency_score", "consistency_score",
-                            "overall_consistency", "avg_confidence", "confidence_score",
-                            "trace_continuity"):
+                for key in (
+                    "noise_consistency_score",
+                    "consistency_score",
+                    "overall_consistency",
+                    "avg_confidence",
+                    "confidence_score",
+                    "trace_continuity",
+                ):
                     val = output.get(key)
                     if isinstance(val, (int, float)):
                         raw_conf = max(0.0, min(1.0, float(val)))
@@ -791,11 +788,24 @@ class ReActLoopEngine:
                     raw_conf = 0.40
                 elif "verdict" in output:
                     v = str(output.get("verdict", "")).upper()
-                    if v in ("CONSISTENT", "AUTHENTIC", "CLEAN", "NATURAL_OR_CLEAN",
-                             "LIKELY_AUTHENTIC", "LIKELY_GENUINE", "CONTENT_CREDENTIALS_PRESENT",
-                             "NO_CONTENT_CREDENTIALS"):
+                    if v in (
+                        "CONSISTENT",
+                        "AUTHENTIC",
+                        "CLEAN",
+                        "NATURAL_OR_CLEAN",
+                        "LIKELY_AUTHENTIC",
+                        "LIKELY_GENUINE",
+                        "CONTENT_CREDENTIALS_PRESENT",
+                        "NO_CONTENT_CREDENTIALS",
+                    ):
                         raw_conf = 0.85
-                    elif v in ("INCONSISTENT", "SUSPICIOUS", "TAMPERED", "SPLICE_SUSPECTED", "SPLICE_DETECTED"):
+                    elif v in (
+                        "INCONSISTENT",
+                        "SUSPICIOUS",
+                        "TAMPERED",
+                        "SPLICE_SUSPECTED",
+                        "SPLICE_DETECTED",
+                    ):
                         raw_conf = 0.40
                     elif v in ("INCONCLUSIVE", "ERROR", "NO_ENF_SIGNAL", "TOO_SHORT"):
                         raw_conf = 0.50
@@ -821,9 +831,15 @@ class ReActLoopEngine:
                     raw_conf = max(0.40, 1.0 - (num_anomalies * 0.15))
                 elif output.get("num_anomaly_regions") is not None:
                     raw_conf = 0.85 if int(output["num_anomaly_regions"]) == 0 else 0.40
-                elif output.get("anomaly_detected") is True or output.get("inconsistency_detected") is True:
+                elif (
+                    output.get("anomaly_detected") is True
+                    or output.get("inconsistency_detected") is True
+                ):
                     raw_conf = 0.40
-                elif output.get("anomaly_detected") is False or output.get("inconsistency_detected") is False:
+                elif (
+                    output.get("anomaly_detected") is False
+                    or output.get("inconsistency_detected") is False
+                ):
                     raw_conf = 0.85
                 elif output.get("header_valid") is not None:
                     anomalies = output.get("anomalies", [])
@@ -853,7 +869,9 @@ class ReActLoopEngine:
                 "Unrecognised tool output format — confidence fallback to 0.50",
                 tool=tool_name,
                 agent_id=self.agent_id,
-                output_keys=list(output.keys()) if isinstance(output, dict) else type(output).__name__,
+                output_keys=list(output.keys())
+                if isinstance(output, dict)
+                else type(output).__name__,
             )
         return confidence, from_fallback
 
@@ -950,7 +968,15 @@ class ReActLoopEngine:
         if int(output.get("anomaly_count", 0) or 0) > 0:
             return True
         verdict = str(output.get("verdict", "")).upper()
-        return verdict in {"SUSPICIOUS", "TAMPERED", "MANIPULATED", "INCONSISTENT", "ANOMALOUS", "SPLICE_DETECTED", "SPLICE_SUSPECTED"}
+        return verdict in {
+            "SUSPICIOUS",
+            "TAMPERED",
+            "MANIPULATED",
+            "INCONSISTENT",
+            "ANOMALOUS",
+            "SPLICE_DETECTED",
+            "SPLICE_SUSPECTED",
+        }
 
     def _classify_tool_output(
         self,
@@ -1046,6 +1072,7 @@ class ReActLoopEngine:
         if _task_id_str:
             try:
                 from uuid import UUID as _UUID
+
                 await self.working_memory.update_task(
                     session_id=self.session_id,
                     agent_id=self.agent_id,
@@ -1055,13 +1082,15 @@ class ReActLoopEngine:
                 )
                 _wm_updated = True
             except Exception as err:
-                logger.warning(f"Direct task COMPLETE failed for {_task_id_str}: {err}",
-                               agent_id=self.agent_id)
+                logger.warning(
+                    f"Direct task COMPLETE failed for {_task_id_str}: {err}", agent_id=self.agent_id
+                )
 
         if not _wm_updated:
             try:
                 fresh_state = await self.working_memory.get_state(
-                    session_id=self.session_id, agent_id=self.agent_id)
+                    session_id=self.session_id, agent_id=self.agent_id
+                )
                 if fresh_state:
                     for task in fresh_state.tasks:
                         if task.status == TaskStatus.IN_PROGRESS:
@@ -1080,7 +1109,8 @@ class ReActLoopEngine:
         if not _wm_updated:
             try:
                 cache_state = await self.working_memory.get_state(
-                    session_id=self.session_id, agent_id=self.agent_id)
+                    session_id=self.session_id, agent_id=self.agent_id
+                )
                 if cache_state:
                     for task in cache_state.tasks:
                         if task.status == TaskStatus.IN_PROGRESS:
@@ -1119,10 +1149,19 @@ class ReActLoopEngine:
                 session_id=self.session_id, agent_id=self.agent_id
             )
         except (ConnectionError, TimeoutError, OSError) as e:
-            logger.debug("Working memory read failed on init (transient?)", agent_id=self.agent_id, error=str(e))
+            logger.debug(
+                "Working memory read failed on init (transient?)",
+                agent_id=self.agent_id,
+                error=str(e),
+            )
             state = None
         except Exception as e:
-            logger.warning("Working memory read failed on init (unexpected)", agent_id=self.agent_id, error=str(e), exc_info=True)
+            logger.warning(
+                "Working memory read failed on init (unexpected)",
+                agent_id=self.agent_id,
+                error=str(e),
+                exc_info=True,
+            )
             state = None
 
         with _tracer.start_as_current_span("react_loop.run") as _loop_span:
@@ -1131,9 +1170,7 @@ class ReActLoopEngine:
             _loop_span.set_attribute("iteration_ceiling", self.iteration_ceiling)
 
             # Create initial THOUGHT step
-            initial_step = ReActStep(
-                step_type="THOUGHT", content=initial_thought, iteration=0
-            )
+            initial_step = ReActStep(step_type="THOUGHT", content=initial_thought, iteration=0)
             self._react_chain.append(initial_step)
             self._thought_buffer.append(initial_thought)  # M1: Seed buffer with initial context
             await self._log_step(initial_step)
@@ -1149,10 +1186,21 @@ class ReActLoopEngine:
                     session_id=self.session_id, agent_id=self.agent_id
                 )
             except (ConnectionError, TimeoutError, OSError) as e:
-                logger.debug("Working memory read failed in loop (transient?)", agent_id=self.agent_id, iteration=self._current_iteration, error=str(e))
+                logger.debug(
+                    "Working memory read failed in loop (transient?)",
+                    agent_id=self.agent_id,
+                    iteration=self._current_iteration,
+                    error=str(e),
+                )
                 state = None
             except Exception as e:
-                logger.warning("Working memory read failed in loop (unexpected)", agent_id=self.agent_id, iteration=self._current_iteration, error=str(e), exc_info=True)
+                logger.warning(
+                    "Working memory read failed in loop (unexpected)",
+                    agent_id=self.agent_id,
+                    iteration=self._current_iteration,
+                    error=str(e),
+                    exc_info=True,
+                )
                 state = None
             if state is None:
                 break
@@ -1191,9 +1239,7 @@ class ReActLoopEngine:
 
             # Handle ACTION steps
             if next_step.step_type == "ACTION" and next_step.tool_name:
-                with _tracer.start_as_current_span(
-                    "react_loop.tool_call"
-                ) as _tool_span:
+                with _tracer.start_as_current_span("react_loop.tool_call") as _tool_span:
                     _tool_span.set_attribute("tool_name", next_step.tool_name)
                     _tool_span.set_attribute("agent_id", self.agent_id)
                     _tool_span.set_attribute("iteration", self._current_iteration)
@@ -1203,7 +1249,10 @@ class ReActLoopEngine:
                         session_id=self.session_id,
                         agent_id=self.agent_id,
                         operation=f"tool_call:{next_step.tool_name}",
-                        metadata={"iteration": self._current_iteration, "input": next_step.tool_input}
+                        metadata={
+                            "iteration": self._current_iteration,
+                            "input": next_step.tool_input,
+                        },
                     )
                     await trace.start()
 
@@ -1227,9 +1276,7 @@ class ReActLoopEngine:
                     except Exception as tool_exc:
                         await trace.fail(str(tool_exc))
                         raise
-                    _tool_span.set_attribute(
-                        "tool_unavailable", tool_result.unavailable
-                    )
+                    _tool_span.set_attribute("tool_unavailable", tool_result.unavailable)
 
                 # --- Generate AgentFinding from Tool Result ---
                 if tool_result.success:
@@ -1309,26 +1356,22 @@ class ReActLoopEngine:
                             llm_reasoning=llm_reasoning,
                         ),
                         metadata={
-                            **(
-                                output
-                                if isinstance(output, dict)
-                                else {"raw_output": str(output)}
-                            ),
+                            **(output if isinstance(output, dict) else {"raw_output": str(output)}),
                             "tool_name": next_step.tool_name,
                             "court_defensible": court_defensible and not is_stub,
-                            "raw_tool_status": str(output.get("status", "")) if isinstance(output, dict) else "",
+                            "raw_tool_status": str(output.get("status", ""))
+                            if isinstance(output, dict)
+                            else "",
                             "stub_warning": output.get("warning")
                             if isinstance(output, dict) and is_stub
                             else None,
                             "confidence_interval": _ci_dict,
-                            "uncertainty": _uncertainty.model_dump()
-                            if _uncertainty
-                            else None,
+                            "uncertainty": _uncertainty.model_dump() if _uncertainty else None,
                             "llm_reasoning": llm_reasoning,  # [M1] Injected trace data
                         },
                     )
                     self._findings.append(finding)
-                    
+
                     # [INT-DECOMP] Reactive hook: Allow agent to inject tasks based on finding
                     if self.agent is not None:
                         try:
@@ -1480,9 +1523,7 @@ class ReActLoopEngine:
 
         return None
 
-    async def check_hitl_triggers(
-        self, state: WorkingMemoryState
-    ) -> HITLCheckpointReason | None:
+    async def check_hitl_triggers(self, state: WorkingMemoryState) -> HITLCheckpointReason | None:
         """
         Check if any HITL trigger conditions are met.
 
@@ -1517,9 +1558,7 @@ class ReActLoopEngine:
 
         return None
 
-    async def pause_for_hitl(
-        self, reason: HITLCheckpointReason, brief: str
-    ) -> HITLCheckpointState:
+    async def pause_for_hitl(self, reason: HITLCheckpointReason, brief: str) -> HITLCheckpointState:
         """
         Pause the loop for Human-in-the-Loop intervention.
 
@@ -1536,10 +1575,19 @@ class ReActLoopEngine:
                 session_id=self.session_id, agent_id=self.agent_id
             )
         except (ConnectionError, TimeoutError, OSError) as e:
-            logger.debug("Working memory read failed at HITL checkpoint (transient?)", agent_id=self.agent_id, error=str(e))
+            logger.debug(
+                "Working memory read failed at HITL checkpoint (transient?)",
+                agent_id=self.agent_id,
+                error=str(e),
+            )
             state = None
         except Exception as e:
-            logger.warning("Working memory read failed at HITL checkpoint (unexpected)", agent_id=self.agent_id, error=str(e), exc_info=True)
+            logger.warning(
+                "Working memory read failed at HITL checkpoint (unexpected)",
+                agent_id=self.agent_id,
+                error=str(e),
+                exc_info=True,
+            )
             state = None
         if state is None:
             serialized_state = {
@@ -1578,16 +1626,12 @@ class ReActLoopEngine:
         # Store checkpoint in Redis
         if self.redis_client is not None:
             key = f"hitl:{self.session_id}:{self.agent_id}"
-            await self.redis_client.set(
-                key, json.dumps(checkpoint.model_dump(), default=str)
-            )
+            await self.redis_client.set(key, json.dumps(checkpoint.model_dump(), default=str))
 
         self._current_checkpoint = checkpoint
         return checkpoint
 
-    async def resume_from_hitl(
-        self, checkpoint_id: uuid.UUID, decision: HumanDecision
-    ) -> None:
+    async def resume_from_hitl(self, checkpoint_id: uuid.UUID, decision: HumanDecision) -> None:
         """
         Resume the loop after a HITL decision.
 
@@ -1969,11 +2013,7 @@ class ReActLoopEngine:
             ):
                 err = err.replace(prefix, "").strip()
             # Classify error type for a cleaner message
-            if (
-                "ModuleNotFoundError" in err
-                or "ImportError" in err
-                or "No module named" in err
-            ):
+            if "ModuleNotFoundError" in err or "ImportError" in err or "No module named" in err:
                 dep_name = err.split("'")[1] if "'" in err else "required dependency"
                 err_msg = f"ML dependency '{dep_name}' not installed — tool skipped."
             elif "Timeout" in err or "timeout" in err:
@@ -2016,7 +2056,11 @@ class ReActLoopEngine:
                 )
 
             if output.get("available") is False and not output.get("error"):
-                reason = output.get("note") or output.get("reason") or "Tool unavailable in this environment."
+                reason = (
+                    output.get("note")
+                    or output.get("reason")
+                    or "Tool unavailable in this environment."
+                )
                 return (
                     f"{tool_label}: Incomplete: {str(reason)[:220]} "
                     "This is reported as a limitation, not as a forensic signal."

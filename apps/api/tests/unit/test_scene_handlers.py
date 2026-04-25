@@ -3,7 +3,7 @@ Scene Handlers Unit Tests
 ========================
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -45,8 +45,8 @@ class TestSceneHandlers:
 
     def test_handler_has_base_class(self, mock_agent):
         """Test handler inherits from BaseToolHandler."""
-        from core.handlers.scene import SceneHandlers
         from core.handlers.base import BaseToolHandler
+        from core.handlers.scene import SceneHandlers
 
         handler = SceneHandlers(mock_agent)
         assert isinstance(handler, BaseToolHandler)

@@ -1,8 +1,10 @@
 """Tests for Redis client infrastructure."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
-from core.persistence.redis_client import get_redis_client, RedisClient
+
+import pytest
+
+from core.persistence.redis_client import get_redis_client
 
 
 @pytest.mark.asyncio

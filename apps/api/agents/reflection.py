@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from core.react_loop import AgentFinding
 
+
 class SelfReflectionReport(BaseModel):
     """
     Report from self-reflection pass.
@@ -38,9 +39,7 @@ class SelfReflectionReport(BaseModel):
     court_defensible: bool = Field(
         default=False, description="Whether findings are defensible in court"
     )
-    reflection_notes: str = Field(
-        default="", description="Additional notes from reflection"
-    )
+    reflection_notes: str = Field(default="", description="Additional notes from reflection")
 
 
 # Module-level constant — list of terms that indicate forensic anomaly signals
@@ -100,20 +99,12 @@ def _attach_llm_reasoning_to_findings(
     thought_before_action: list[tuple[str, str]] = []
     prev_thought = ""
     for step in react_chain:
-        stype = (
-            step.step_type if hasattr(step, "step_type") else step.get("step_type", "")
-        )
+        stype = step.step_type if hasattr(step, "step_type") else step.get("step_type", "")
         if stype == "THOUGHT":
-            content = (
-                step.content if hasattr(step, "content") else step.get("content", "")
-            )
+            content = step.content if hasattr(step, "content") else step.get("content", "")
             prev_thought = content
         elif stype == "ACTION" and prev_thought:
-            tool = (
-                step.tool_name
-                if hasattr(step, "tool_name")
-                else step.get("tool_name", "")
-            )
+            tool = step.tool_name if hasattr(step, "tool_name") else step.get("tool_name", "")
             if tool:
                 thought_before_action.append((prev_thought, tool))
             prev_thought = ""
@@ -127,11 +118,7 @@ def _attach_llm_reasoning_to_findings(
     tool_usage: dict[str, int] = {}
 
     for finding in findings:
-        tool_name = (
-            finding.metadata.get("tool_name", "")
-            if hasattr(finding, "metadata")
-            else ""
-        )
+        tool_name = finding.metadata.get("tool_name", "") if hasattr(finding, "metadata") else ""
         if not tool_name:
             continue
 
@@ -153,22 +140,16 @@ def _attach_llm_reasoning_to_findings(
             if has_anomaly_signal and thought_text.strip():
                 # Take the most relevant sentence (the one with the signal word)
                 sentences = [
-                    s.strip()
-                    for s in thought_text.replace("\n", " ").split(".")
-                    if s.strip()
+                    s.strip() for s in thought_text.replace("\n", " ").split(".") if s.strip()
                 ]
                 relevant = [
-                    s
-                    for s in sentences
-                    if any(sig in s.lower() for sig in _ANOMALY_SIGNALS)
+                    s for s in sentences if any(sig in s.lower() for sig in _ANOMALY_SIGNALS)
                 ]
                 if relevant:
                     insight = relevant[0][:200]
                     if hasattr(finding, "reasoning_summary"):
                         existing = finding.reasoning_summary or ""
                         if insight not in existing:
-                            finding.reasoning_summary = (
-                                f"[LLM] {insight}. {existing}".strip()
-                            )
+                            finding.reasoning_summary = f"[LLM] {insight}. {existing}".strip()
 
     return findings

@@ -116,7 +116,9 @@ def _build_summary(result: dict[str, Any], file_type_hint: str) -> str:
             preview = " Preview: " + " | ".join(lines[:3])
             if len(lines) > 3:
                 preview += " ..."
-        return f"Image text: {word_count} words via {method} ({confidence_pct}% confidence).{preview}"
+        return (
+            f"Image text: {word_count} words via {method} ({confidence_pct}% confidence).{preview}"
+        )
     if file_type_hint == "audio_video":
         return "Audio/video file: OCR skipped; no static image text layer to extract."
     return f"OCR text extraction: {word_count} words via {method}."
@@ -331,9 +333,7 @@ def _extract_text_tesseract_sync(file_path: str) -> dict[str, Any]:
         thresh_adaptive = cv2.adaptiveThreshold(
             gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
         )
-        _, thresh_otsu = cv2.threshold(
-            gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
-        )
+        _, thresh_otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
         cfg = r"--oem 3 --psm 6 -l eng"
         text_a = pytesseract.image_to_string(thresh_adaptive, config=cfg)

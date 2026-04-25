@@ -13,6 +13,7 @@ from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
+
 def detect_splicing(file_path: str) -> dict:
     """
     Detect image splicing via DCT block analysis.

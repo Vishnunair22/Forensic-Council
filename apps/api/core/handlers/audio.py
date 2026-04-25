@@ -118,37 +118,63 @@ class AudioHandlers(BaseToolHandler):
 
     def register_tools(self, registry) -> None:
         """Register tools with the agent's ToolRegistry."""
-        registry.register("speaker_diarize",         self.speaker_diarization_handler,     "Speaker diarization")
-        registry.register("anti_spoofing_detect",    self.anti_spoofing_detection_handler,  "Anti-spoofing detection")
-        registry.register("prosody_analyze",         self.prosody_analysis_handler,         "Prosody analysis")
-        registry.register("audio_splice_detect",     self.audio_splice_detect_handler,      "ML splice detection")
-        registry.register("background_noise_analysis", self.background_noise_analysis_handler, "Noise consistency")
-        registry.register("codec_fingerprinting",    self.codec_fingerprinting_handler,     "Codec fingerprinting")
-        registry.register("audio_visual_sync",       self.audio_visual_sync_handler,        "AV sync verification")
-        registry.register("voice_clone_detect",      self.voice_clone_detect_handler,       "Voice clone detection")
-        registry.register("enf_analysis",            self.enf_analysis_handler,             "ENF analysis")
-        registry.register("neural_prosody",          self.neural_prosody_handler,           "Wav2Vec 2.0 based semantic prosody analysis")
-        registry.register("audio_gen_signature",     self.audio_gen_signature_handler,      "Generative audio artifact signature analysis")
+        registry.register(
+            "speaker_diarize", self.speaker_diarization_handler, "Speaker diarization"
+        )
+        registry.register(
+            "anti_spoofing_detect", self.anti_spoofing_detection_handler, "Anti-spoofing detection"
+        )
+        registry.register("prosody_analyze", self.prosody_analysis_handler, "Prosody analysis")
+        registry.register(
+            "audio_splice_detect", self.audio_splice_detect_handler, "ML splice detection"
+        )
+        registry.register(
+            "background_noise_analysis", self.background_noise_analysis_handler, "Noise consistency"
+        )
+        registry.register(
+            "codec_fingerprinting", self.codec_fingerprinting_handler, "Codec fingerprinting"
+        )
+        registry.register(
+            "audio_visual_sync", self.audio_visual_sync_handler, "AV sync verification"
+        )
+        registry.register(
+            "voice_clone_detect", self.voice_clone_detect_handler, "Voice clone detection"
+        )
+        registry.register("enf_analysis", self.enf_analysis_handler, "ENF analysis")
+        registry.register(
+            "neural_prosody",
+            self.neural_prosody_handler,
+            "Wav2Vec 2.0 based semantic prosody analysis",
+        )
+        registry.register(
+            "audio_gen_signature",
+            self.audio_gen_signature_handler,
+            "Generative audio artifact signature analysis",
+        )
 
     # ── Refinement: Neural Prosody ────────────────────────────────────────────
 
     async def neural_prosody_handler(self, input_data: dict) -> dict:
         """Neural prosody analysis. Falls back to acoustic prosody."""
         artifact = input_data.get("artifact") or await self._audio_artifact()
-        
+
         try:
-            result = await run_ml_tool("neural_prosody_classifier.py", artifact.file_path, timeout=15.0)
+            result = await run_ml_tool(
+                "neural_prosody_classifier.py", artifact.file_path, timeout=15.0
+            )
             if not result.get("error") and result.get("available"):
                 await self.agent._record_tool_result("neural_prosody", result)
                 return result
         except Exception as exc:
             logger.warning("Neural prosody execution failed", error=str(exc))
-        
+
         # Fallback — record result from prosody_analysis_handler
         fallback = await self.prosody_analysis_handler(input_data)
         fallback["degraded"] = True
-        fallback["fallback_reason"] = "neural_prosody_classifier failed; used acoustic prosody analysis"
-        
+        fallback["fallback_reason"] = (
+            "neural_prosody_classifier failed; used acoustic prosody analysis"
+        )
+
         # Ensure fallback path is recorded in metrics
         await self.agent._record_tool_result("neural_prosody", fallback)
         return fallback
@@ -158,10 +184,14 @@ class AudioHandlers(BaseToolHandler):
     async def audio_gen_signature_handler(self, input_data: dict) -> dict:
         """Detection of spectral artifacts specific to generative TTS engines."""
         artifact = input_data.get("artifact") or await self._audio_artifact()
-        result = await run_ml_tool("audio_gen_signature_scanner.py", artifact.file_path, timeout=10.0)
+        result = await run_ml_tool(
+            "audio_gen_signature_scanner.py", artifact.file_path, timeout=10.0
+        )
         if not result.get("error") and result.get("available"):
             result.setdefault("is_ai_generated", bool(result.get("synthetic_detected")))
-            result.setdefault("verdict", "LIKELY_SYNTHETIC" if result.get("is_ai_generated") else "NATURAL")
+            result.setdefault(
+                "verdict", "LIKELY_SYNTHETIC" if result.get("is_ai_generated") else "NATURAL"
+            )
             result.setdefault("court_defensible", True)
             await self.agent._record_tool_result("audio_gen_signature", result)
             return result
@@ -203,7 +233,9 @@ class AudioHandlers(BaseToolHandler):
                 "degraded": True,
             }
         if result.get("error") or result.get("available") is False:
-            result = await self._diarization_fallback(artifact.file_path, min_speakers, max_speakers)
+            result = await self._diarization_fallback(
+                artifact.file_path, min_speakers, max_speakers
+            )
         else:
             result.setdefault("available", True)
             result.setdefault("court_defensible", True)
@@ -261,8 +293,7 @@ class AudioHandlers(BaseToolHandler):
         artifact = input_data.get("artifact") or await self._audio_artifact()
         try:
             result = await real_anti_spoofing_detect(
-                artifact=artifact,
-                progress_callback=self.agent.update_sub_task
+                artifact=artifact, progress_callback=self.agent.update_sub_task
             )
         except Exception as exc:
             result = {"error": str(exc), "degraded": True, "available": False, "confidence": 0.0}
@@ -270,7 +301,9 @@ class AudioHandlers(BaseToolHandler):
             result.setdefault("available", True)
             result.setdefault("court_defensible", True)
             result.setdefault("is_spoofed", bool(result.get("spoof_detected")))
-            result.setdefault("verdict", "LIKELY_SPOOFED" if result.get("is_spoofed") else "GENUINE")
+            result.setdefault(
+                "verdict", "LIKELY_SPOOFED" if result.get("is_spoofed") else "GENUINE"
+            )
         # Store under the registered tool name
         await self.agent._record_tool_result("anti_spoofing_detect", result)
         return result
@@ -410,7 +443,7 @@ class AudioHandlers(BaseToolHandler):
             "voice_clone_detector.py",
             artifact.file_path,
             timeout=30.0,
-            model=self.agent.config.voice_clone_model_name
+            model=self.agent.config.voice_clone_model_name,
         )
         if not result.get("error") and result.get("available"):
             await self.agent._record_tool_result("voice_clone_detect", result)

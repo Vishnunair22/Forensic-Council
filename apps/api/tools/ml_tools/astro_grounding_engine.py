@@ -12,7 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -21,13 +21,13 @@ def _parse_timestamp(value: str) -> datetime:
     for fmt in ("%Y:%m:%d %H:%M:%S", "%Y-%m-%d %H:%M:%S"):
         try:
             dt = datetime.strptime(cleaned, fmt)
-            return dt.replace(tzinfo=timezone.utc)
+            return dt.replace(tzinfo=UTC)
         except ValueError:
             pass
     dt = datetime.fromisoformat(cleaned)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 def _image_gradient_angle(path: str) -> float | None:
@@ -44,7 +44,9 @@ def _image_gradient_angle(path: str) -> float | None:
             return None
         angle = np.degrees(np.arctan2(gy[strong], gx[strong]))
         doubled = np.radians(angle * 2.0)
-        return float(0.5 * np.degrees(np.arctan2(np.mean(np.sin(doubled)), np.mean(np.cos(doubled)))))
+        return float(
+            0.5 * np.degrees(np.arctan2(np.mean(np.sin(doubled)), np.mean(np.cos(doubled))))
+        )
     except Exception:
         return None
 
@@ -61,7 +63,9 @@ def analyze(path: str, lat: float, lon: float, timestamp: str) -> dict[str, Any]
         }
 
     dt = _parse_timestamp(timestamp)
-    location = LocationInfo(name="Evidence GPS", region="", timezone="UTC", latitude=lat, longitude=lon)
+    location = LocationInfo(
+        name="Evidence GPS", region="", timezone="UTC", latitude=lat, longitude=lon
+    )
     sun_azimuth = float(azimuth(location.observer, dt))
     sun_elevation = float(elevation(location.observer, dt))
     daylight = sun_elevation > 0.0
@@ -119,7 +123,11 @@ def _worker() -> None:
             req = json.loads(line)
             input_path = req.get("input")
             extra = req.get("extra_args") or []
-            result = _run_from_args(["--input", input_path, *extra]) if input_path else {"error": "Missing input path", "available": False}
+            result = (
+                _run_from_args(["--input", input_path, *extra])
+                if input_path
+                else {"error": "Missing input path", "available": False}
+            )
         except Exception as exc:
             result = {"error": str(exc), "available": False}
         print(json.dumps(result), flush=True)

@@ -60,8 +60,7 @@ async def run_stress_test():
                     print(f"❌ {res.agent_id} CRASHED: {res.error}")
                 else:
                     tools_run = [
-                        f.get("metadata", {}).get("tool_name", "Unknown")
-                        for f in res.findings
+                        f.get("metadata", {}).get("tool_name", "Unknown") for f in res.findings
                     ]
                     print(f"✅ {res.agent_id} OK. Tools: {', '.join(tools_run)}")
 
@@ -99,9 +98,7 @@ async def run_stress_test():
                 if gemini_found:
                     print(f"✨ {aid} Deep Pass: Gemini results verified.")
                 else:
-                    print(
-                        f"⚠️ {aid} Deep Pass: No Gemini findings detected (using fallbacks)."
-                    )
+                    print(f"⚠️ {aid} Deep Pass: No Gemini findings detected (using fallbacks).")
 
                 # Audit finding content
                 for f in findings:
@@ -118,9 +115,7 @@ async def run_stress_test():
                             # Tiny images might legitimately have sparse descriptions
                             pass
                         else:
-                            print(
-                                f"🚨 ALERT: Empty/Sparse intelligence in {tool}: '{desc}'"
-                            )
+                            print(f"🚨 ALERT: Empty/Sparse intelligence in {tool}: '{desc}'")
 
             print("-" * 40 + "\n")
 

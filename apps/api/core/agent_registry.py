@@ -13,6 +13,7 @@ from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
+
 class AgentRegistry:
     """Registry for discovering and instantiating Forensic Agents."""
 
@@ -34,11 +35,35 @@ class AgentRegistry:
         from agents.agent4_video import Agent4Video
         from agents.agent5_metadata import Agent5Metadata
 
-        self.register(AgentID.AGENT1, Agent1Image, {"modality": "IMAGE", "name": "Image Integrity", "permitted_callees": [AgentID.AGENT5]})
-        self.register(AgentID.AGENT2, Agent2Audio, {"modality": "AUDIO", "name": "Audio Forensics", "permitted_callees": [AgentID.AGENT4]})
-        self.register(AgentID.AGENT3, Agent3Object, {"modality": "OBJECT", "name": "Object & Scene", "permitted_callees": [AgentID.AGENT1, AgentID.AGENT5]})
-        self.register(AgentID.AGENT4, Agent4Video, {"modality": "VIDEO", "name": "Video Forensics", "permitted_callees": [AgentID.AGENT2]})
-        self.register(AgentID.AGENT5, Agent5Metadata, {"modality": "METADATA", "name": "Metadata & Provenance", "permitted_callees": []})
+        self.register(
+            AgentID.AGENT1,
+            Agent1Image,
+            {"modality": "IMAGE", "name": "Image Integrity", "permitted_callees": [AgentID.AGENT5]},
+        )
+        self.register(
+            AgentID.AGENT2,
+            Agent2Audio,
+            {"modality": "AUDIO", "name": "Audio Forensics", "permitted_callees": [AgentID.AGENT4]},
+        )
+        self.register(
+            AgentID.AGENT3,
+            Agent3Object,
+            {
+                "modality": "OBJECT",
+                "name": "Object & Scene",
+                "permitted_callees": [AgentID.AGENT1, AgentID.AGENT5],
+            },
+        )
+        self.register(
+            AgentID.AGENT4,
+            Agent4Video,
+            {"modality": "VIDEO", "name": "Video Forensics", "permitted_callees": [AgentID.AGENT2]},
+        )
+        self.register(
+            AgentID.AGENT5,
+            Agent5Metadata,
+            {"modality": "METADATA", "name": "Metadata & Provenance", "permitted_callees": []},
+        )
 
     def register(self, agent_id: str, agent_class: type, metadata: dict[str, Any] = None):
         """Register a new agent."""
@@ -59,8 +84,9 @@ class AgentRegistry:
     def get_permitted_callees(self, agent_id: str) -> list[str]:
         """Get list of agents this agent is permitted to call."""
         if agent_id == AgentID.ARBITER:
-             return self.get_all_agent_ids()
+            return self.get_all_agent_ids()
         return self._metadata.get(agent_id, {}).get("permitted_callees", [])
+
 
 # Singleton accessor
 def get_agent_registry() -> AgentRegistry:

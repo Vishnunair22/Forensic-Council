@@ -201,17 +201,19 @@ if __name__ == "__main__":
     if args.warmup:
         try:
             import numpy as np
-            print(json.dumps({
-                "status": "warmed_up",
-                "dependencies": ["librosa", "numpy", "sklearn"],
-                "message": "Audio splice detector ready"
-            }))
+
+            print(
+                json.dumps(
+                    {
+                        "status": "warmed_up",
+                        "dependencies": ["librosa", "numpy", "sklearn"],
+                        "message": "Audio splice detector ready",
+                    }
+                )
+            )
             sys.exit(0)
         except Exception as e:
-            print(json.dumps({
-                "status": "warmup_failed",
-                "error": str(e)
-            }))
+            print(json.dumps({"status": "warmup_failed", "error": str(e)}))
             sys.exit(1)
 
     # Worker mode - persistent process reading from stdin
@@ -223,7 +225,9 @@ if __name__ == "__main__":
             try:
                 request = json.loads(line)
                 input_path = request.get("input")
-                window_size = request.get("extra_args", [1.0])[0] if request.get("extra_args") else 1.0
+                window_size = (
+                    request.get("extra_args", [1.0])[0] if request.get("extra_args") else 1.0
+                )
 
                 if not input_path:
                     print(json.dumps({"error": "Missing input path", "available": False}))

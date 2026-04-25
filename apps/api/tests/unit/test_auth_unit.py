@@ -61,7 +61,8 @@ from core.auth import (
 )
 from core.config import get_settings
 
-get_settings.cache_clear() # Force reload with environment variables
+get_settings.cache_clear()  # Force reload with environment variables
+
 
 class TestRS256Auth:
     @pytest.mark.asyncio
@@ -85,7 +86,7 @@ class TestRS256Auth:
                 "role": UserRole.INVESTIGATOR,
                 "username": "tester",
                 "aud": "wrong-audience",
-                "exp": datetime.now(UTC) + timedelta(minutes=30)
+                "exp": datetime.now(UTC) + timedelta(minutes=30),
             }
             token = jwt.encode(payload, TEST_PRIVATE_KEY, algorithm="RS256")
 
@@ -104,7 +105,7 @@ class TestRS256Auth:
                 "sub": "user_123",
                 "role": UserRole.INVESTIGATOR,
                 "aud": "forensic-council-api",
-                "exp": datetime.now(UTC) + timedelta(minutes=30)
+                "exp": datetime.now(UTC) + timedelta(minutes=30),
             }
             token = jwt.encode(payload, "dummy-secret", algorithm="HS256")
 
@@ -158,7 +159,10 @@ class TestRS256Auth:
     @patch("core.persistence.postgres_client.get_postgres_client")
     async def test_get_current_user_success(self, mock_pg, mock_decode):
         from core.auth import TokenData, get_current_user
-        mock_decode.return_value = TokenData(user_id="u1", username="test", role=UserRole.INVESTIGATOR)
+
+        mock_decode.return_value = TokenData(
+            user_id="u1", username="test", role=UserRole.INVESTIGATOR
+        )
 
         # Mock postgres return (is_disabled = False)
         mock_conn = AsyncMock()
@@ -177,7 +181,10 @@ class TestRS256Auth:
     @patch("core.persistence.postgres_client.get_postgres_client")
     async def test_get_current_user_disabled(self, mock_pg, mock_decode):
         from core.auth import TokenData, get_current_user
-        mock_decode.return_value = TokenData(user_id="u1", username="test", role=UserRole.INVESTIGATOR)
+
+        mock_decode.return_value = TokenData(
+            user_id="u1", username="test", role=UserRole.INVESTIGATOR
+        )
 
         # Mock postgres return (is_disabled = True)
         mock_conn = AsyncMock()
@@ -227,11 +234,14 @@ class TestRS256Auth:
     @patch("core.persistence.postgres_client.get_postgres_client")
     async def test_get_current_user_cookie_fallback(self, mock_pg):
         from core.auth import TokenData, get_current_user
+
         mock_request = MagicMock()
         mock_request.cookies = {"access_token": "cookie-token"}
 
         with patch("core.auth.decode_token") as mock_decode:
-            mock_decode.return_value = TokenData(user_id="u1", username="test", role=UserRole.INVESTIGATOR)
+            mock_decode.return_value = TokenData(
+                user_id="u1", username="test", role=UserRole.INVESTIGATOR
+            )
             mock_conn = AsyncMock()
             mock_conn.fetch_one.return_value = {"is_disabled": False}
             mock_pg.return_value = mock_conn
@@ -250,7 +260,8 @@ class TestRS256Auth:
         # Authenticated
         mock_creds = MagicMock(credentials="token")
         with patch("core.auth.decode_token") as mock_decode:
-            mock_decode.return_value = TokenData(user_id="u1", username="test", role=UserRole.INVESTIGATOR)
+            mock_decode.return_value = TokenData(
+                user_id="u1", username="test", role=UserRole.INVESTIGATOR
+            )
             user = await get_current_user_optional(mock_creds)
             assert user.user_id == "u1"
-

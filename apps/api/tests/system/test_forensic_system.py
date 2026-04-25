@@ -7,6 +7,7 @@ Flags issues and reports results.
 NOTE: These are standalone async scripts, NOT pytest-compatible test functions.
 Run with: python -m tests.test_forensic_system (requires full Docker stack)
 """
+
 import asyncio
 import json
 import os
@@ -56,11 +57,25 @@ class C:
     END = "\033[0m"
 
 
-def ok(msg): print(f"  {C.GREEN}[PASS]{C.END} {msg}")
-def fail(msg): print(f"  {C.RED}[FAIL]{C.END} {msg}")
-def warn(msg): print(f"  {C.YELLOW}[WARN]{C.END} {msg}")
-def header(msg): print(f"\n{C.BOLD}{C.CYAN}{'='*60}\n{msg}\n{'='*60}{C.END}")
-def section(msg): print(f"\n{C.BOLD}--- {msg} ---{C.END}")
+def ok(msg):
+    print(f"  {C.GREEN}[PASS]{C.END} {msg}")
+
+
+def fail(msg):
+    print(f"  {C.RED}[FAIL]{C.END} {msg}")
+
+
+def warn(msg):
+    print(f"  {C.YELLOW}[WARN]{C.END} {msg}")
+
+
+def header(msg):
+    print(f"\n{C.BOLD}{C.CYAN}{'=' * 60}\n{msg}\n{'=' * 60}{C.END}")
+
+
+def section(msg):
+    print(f"\n{C.BOLD}--- {msg} ---{C.END}")
+
 
 issues = []
 
@@ -79,6 +94,7 @@ def flag(severity, location, msg):
 # ── Test fixtures ─────────────────────────────────────────────────────────
 TEST_IMAGE_PATH = str(Path(__file__).parent / "fixtures" / "test_image.webp")
 
+
 async def create_evidence_artifact(config):
     """Create evidence artifact from test image."""
     file_path = Path(TEST_IMAGE_PATH)
@@ -90,12 +106,14 @@ async def create_evidence_artifact(config):
                 break
 
     import hashlib
+
     with open(file_path, "rb") as f:
         content = f.read()
 
     sha256 = hashlib.sha256(content).hexdigest()
 
     from core.evidence import ArtifactType
+
     artifact = EvidenceArtifact.create_root(
         artifact_type=ArtifactType.ORIGINAL,
         file_path=str(file_path),
@@ -115,6 +133,7 @@ async def create_test_infrastructure():
     episodic_memory = EpisodicMemory(qdrant_client=None, custody_logger=None)
     custody_logger = CustodyLogger(postgres_client=None)
     from core.persistence.storage import LocalStorageBackend
+
     evidence_store = EvidenceStore(
         postgres_client=None,
         storage_backend=LocalStorageBackend(storage_path="./storage/evidence"),
@@ -152,7 +171,7 @@ async def test_agent1_initial():
         tasks = agent.task_decomposition
         ok(f"Task decomposition: {len(tasks)} tasks")
         for i, t in enumerate(tasks):
-            ok(f"  Task {i+1}: {t}")
+            ok(f"  Task {i + 1}: {t}")
     except Exception as e:
         flag("CRITICAL", "Agent1.init", str(e))
         return
@@ -166,8 +185,13 @@ async def test_agent1_initial():
         ok(f"  Tools: {', '.join(tool_names)}")
 
         # Check required tools (Modernized Neural-First Registry)
-        required = ["neural_ela", "frequency_domain_analysis", "noiseprint_cluster",
-                     "analyze_image_content", "gemini_deep_forensic"]
+        required = [
+            "neural_ela",
+            "frequency_domain_analysis",
+            "noiseprint_cluster",
+            "analyze_image_content",
+            "gemini_deep_forensic",
+        ]
         for req in required:
             if req in tool_names:
                 ok(f"  Required tool '{req}' registered")
@@ -187,10 +211,14 @@ async def test_agent1_initial():
         ok(f"Findings count: {len(findings)}")
 
         for i, f in enumerate(findings):
-            fname = f.metadata.get("tool_name", f.finding_type) if hasattr(f, "metadata") else f.finding_type
+            fname = (
+                f.metadata.get("tool_name", f.finding_type)
+                if hasattr(f, "metadata")
+                else f.finding_type
+            )
             conf = getattr(f, "confidence_raw", 0) or 0
             status = getattr(f, "status", "UNKNOWN")
-            ok(f"  Finding {i+1}: {fname} | confidence={conf:.3f} | status={status}")
+            ok(f"  Finding {i + 1}: {fname} | confidence={conf:.3f} | status={status}")
 
             # Validate finding structure
             if not hasattr(f, "finding_type"):
@@ -202,7 +230,9 @@ async def test_agent1_initial():
 
             # Check for tool errors
             if f.metadata.get("error") and f.metadata.get("court_defensible") is False:
-                flag("WARNING", f"Agent1.{fname}", f"Tool error: {f.metadata.get('error', '')[:100]}")
+                flag(
+                    "WARNING", f"Agent1.{fname}", f"Tool error: {f.metadata.get('error', '')[:100]}"
+                )
 
         if not findings:
             flag("CRITICAL", "Agent1.initial", "No findings produced!")
@@ -213,12 +243,16 @@ async def test_agent1_initial():
 
     section("1.4 Check ELA Handling for WEBP")
     try:
-        ela_findings = [f for f in findings if "ela" in str(f.metadata.get("tool_name", "")).lower()]
+        ela_findings = [
+            f for f in findings if "ela" in str(f.metadata.get("tool_name", "")).lower()
+        ]
         if ela_findings:
             for ef in ela_findings:
                 is_na = ef.metadata.get("ela_not_applicable", False)
                 if is_na:
-                    ok(f"ELA correctly marked not applicable for WEBP: {ef.metadata.get('ela_limitation_note', '')[:80]}")
+                    ok(
+                        f"ELA correctly marked not applicable for WEBP: {ef.metadata.get('ela_limitation_note', '')[:80]}"
+                    )
                 else:
                     ok(f"ELA ran: mean={ef.metadata.get('ela_mean', 'N/A')}")
         else:
@@ -240,7 +274,7 @@ async def test_agent1_deep(agent=None):
         deep_tasks = agent.deep_task_decomposition
         ok(f"Deep tasks: {len(deep_tasks)}")
         for i, t in enumerate(deep_tasks):
-            ok(f"  Deep Task {i+1}: {t[:80]}...")
+            ok(f"  Deep Task {i + 1}: {t[:80]}...")
     except Exception as e:
         flag("CRITICAL", "Agent1.deep_tasks", str(e))
         return
@@ -254,23 +288,34 @@ async def test_agent1_deep(agent=None):
         ok(f"Deep findings count: {len(deep_findings)}")
 
         for i, f in enumerate(deep_findings):
-            fname = f.metadata.get("tool_name", f.finding_type) if hasattr(f, "metadata") else f.finding_type
+            fname = (
+                f.metadata.get("tool_name", f.finding_type)
+                if hasattr(f, "metadata")
+                else f.finding_type
+            )
             conf = getattr(f, "confidence_raw", 0) or 0
             phase = f.metadata.get("analysis_phase", "unknown")
-            ok(f"  Deep Finding {i+1}: {fname} | confidence={conf:.3f} | phase={phase}")
+            ok(f"  Deep Finding {i + 1}: {fname} | confidence={conf:.3f} | phase={phase}")
 
             if phase != "deep":
-                flag("WARNING", f"Agent1.deep[{i}]", f"Expected analysis_phase='deep', got '{phase}'")
+                flag(
+                    "WARNING", f"Agent1.deep[{i}]", f"Expected analysis_phase='deep', got '{phase}'"
+                )
 
         # Check Gemini finding
-        gemini_findings = [f for f in deep_findings
-                          if f.metadata.get("tool_name") == "gemini_deep_forensic"
-                          or f.metadata.get("analysis_source") == "gemini_vision"]
+        gemini_findings = [
+            f
+            for f in deep_findings
+            if f.metadata.get("tool_name") == "gemini_deep_forensic"
+            or f.metadata.get("analysis_source") == "gemini_vision"
+        ]
         if gemini_findings:
             ok(f"Gemini vision findings: {len(gemini_findings)}")
             gf = gemini_findings[0]
             model = gf.metadata.get("model_used", "unknown")
-            content_type = gf.metadata.get("gemini_content_type", gf.metadata.get("file_type_assessment", ""))
+            content_type = gf.metadata.get(
+                "gemini_content_type", gf.metadata.get("file_type_assessment", "")
+            )
             ok(f"  Model used: {model}")
             ok(f"  Content type: {content_type}")
             if gf.metadata.get("error"):
@@ -285,7 +330,9 @@ async def test_agent1_deep(agent=None):
     section("2.3 Combined Findings (Initial + Deep)")
     try:
         all_findings = agent._findings
-        initial_count = len([f for f in all_findings if f.metadata.get("analysis_phase", "initial") == "initial"])
+        initial_count = len(
+            [f for f in all_findings if f.metadata.get("analysis_phase", "initial") == "initial"]
+        )
         deep_count = len([f for f in all_findings if f.metadata.get("analysis_phase") == "deep"])
         ok(f"Combined: {len(all_findings)} total ({initial_count} initial + {deep_count} deep)")
     except Exception as e:
@@ -309,7 +356,7 @@ async def test_other_agents():
     }
 
     for agent_id, (agent_class, name) in agent_classes.items():
-        section(f"3.{list(agent_classes.keys()).index(agent_id)+1} Agent {name}")
+        section(f"3.{list(agent_classes.keys()).index(agent_id) + 1} Agent {name}")
         try:
             agent = agent_class(
                 agent_id=agent_id,
@@ -334,7 +381,11 @@ async def test_other_agents():
             ok(f"  Investigation completed in {elapsed:.1f}s, findings: {len(findings)}")
 
             for f in findings[:5]:
-                fname = f.metadata.get("tool_name", f.finding_type) if hasattr(f, "metadata") else f.finding_type
+                fname = (
+                    f.metadata.get("tool_name", f.finding_type)
+                    if hasattr(f, "metadata")
+                    else f.finding_type
+                )
                 conf = getattr(f, "confidence_raw", 0) or 0
                 ok(f"    {fname}: confidence={conf:.3f}")
 
@@ -616,9 +667,11 @@ async def test_arbiter():
         if report.per_agent_metrics:
             ok(f"Per-agent metrics: {list(report.per_agent_metrics.keys())}")
             for agent_id, metrics in report.per_agent_metrics.items():
-                ok(f"  {agent_id}: tools={metrics.get('total_tools_called',0)}, "
-                   f"success={metrics.get('tools_succeeded',0)}, "
-                   f"confidence={metrics.get('confidence_score',0):.3f}")
+                ok(
+                    f"  {agent_id}: tools={metrics.get('total_tools_called', 0)}, "
+                    f"success={metrics.get('tools_succeeded', 0)}, "
+                    f"confidence={metrics.get('confidence_score', 0):.3f}"
+                )
         else:
             flag("WARNING", "Arbiter.metrics", "No per-agent metrics")
 
@@ -657,7 +710,9 @@ async def test_arbiter():
             ok(f"Uncertainty: {report.uncertainty_statement[:100]}")
 
         # Confidence range
-        ok(f"Confidence range: [{report.confidence_min:.3f}, {report.confidence_max:.3f}], std={report.confidence_std_dev:.3f}")
+        ok(
+            f"Confidence range: [{report.confidence_min:.3f}, {report.confidence_max:.3f}], std={report.confidence_std_dev:.3f}"
+        )
 
         # Coverage
         ok(f"Applicable agents: {report.applicable_agent_count}")
@@ -699,6 +754,7 @@ async def test_full_pipeline():
     em = EpisodicMemory(qdrant_client=None, custody_logger=None)
     cl = CustodyLogger(postgres_client=None)
     from core.persistence.storage import LocalStorageBackend
+
     es = EvidenceStore(
         postgres_client=None,
         storage_backend=LocalStorageBackend(storage_path="./storage/evidence"),
@@ -789,7 +845,9 @@ async def test_full_pipeline():
 
         # Sign
         signed = await arbiter.sign_report(report)
-        ok(f"Signed: hash={signed.report_hash[:16]}..., sig={signed.cryptographic_signature[:32]}...")
+        ok(
+            f"Signed: hash={signed.report_hash[:16]}..., sig={signed.cryptographic_signature[:32]}..."
+        )
 
     except TimeoutError:
         flag("CRITICAL", "Pipeline.arbiter", "Arbiter timed out after 150s")
@@ -811,7 +869,7 @@ async def main():
         # Try to find it
         for root, dirs, files in os.walk(str(Path(__file__).parent)):
             for f in files:
-                if f.endswith(('.webp', '.jpg', '.png', '.jpeg')):
+                if f.endswith((".webp", ".jpg", ".png", ".jpeg")):
                     found = os.path.join(root, f)
                     print(f"  Found: {found}")
 

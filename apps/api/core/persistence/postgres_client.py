@@ -65,14 +65,10 @@ class PostgresClient:
         self._password = password or settings.postgres_password
         self._database = database or settings.postgres_db
         self._min_pool_size = (
-            min_pool_size
-            if min_pool_size is not None
-            else settings.postgres_min_pool_size
+            min_pool_size if min_pool_size is not None else settings.postgres_min_pool_size
         )
         self._max_pool_size = (
-            max_pool_size
-            if max_pool_size is not None
-            else settings.postgres_max_pool_size
+            max_pool_size if max_pool_size is not None else settings.postgres_max_pool_size
         )
 
         self._pool: Pool | None = None
@@ -89,7 +85,10 @@ class PostgresClient:
     async def _init_connection(self, conn: Connection) -> None:
         """Initialize a connection with JSON codec."""
         from functools import partial
-        deterministic_dumps = partial(json.dumps, sort_keys=True, allow_nan=False, separators=(",", ":"))
+
+        deterministic_dumps = partial(
+            json.dumps, sort_keys=True, allow_nan=False, separators=(",", ":")
+        )
         await conn.set_type_codec(
             "jsonb", encoder=deterministic_dumps, decoder=json.loads, schema="pg_catalog"
         )
@@ -143,9 +142,7 @@ class PostgresClient:
     def pool(self) -> Pool:
         """Get the connection pool."""
         if self._pool is None:
-            raise DatabaseConnectionError(
-                "PostgreSQL pool not connected. Call connect() first."
-            )
+            raise DatabaseConnectionError("PostgreSQL pool not connected. Call connect() first.")
         return self._pool
 
     def _process_args(self, args: tuple[Any, ...]) -> list[Any]:
@@ -198,9 +195,7 @@ class PostgresClient:
             args_list: List of parameter tuples
         """
         async with self.pool.acquire() as conn:
-            processed_args_list = [
-                tuple(self._process_args(args)) for args in args_list
-            ]
+            processed_args_list = [tuple(self._process_args(args)) for args in args_list]
             try:
                 await conn.executemany(query, processed_args_list)
             except Exception as e:
@@ -212,9 +207,7 @@ class PostgresClient:
                     error=str(e),
                 )
                 raise
-            logger.debug(
-                "Executed batch query", query=query[:100], count=len(args_list)
-            )
+            logger.debug("Executed batch query", query=query[:100], count=len(args_list))
 
     async def fetch(
         self,
@@ -255,9 +248,7 @@ class PostgresClient:
         async with self.pool.acquire() as conn:
             processed_args = self._process_args(args)
             result = await conn.fetchrow(query, *processed_args)
-            logger.debug(
-                "Fetched single row", query=query[:100], found=result is not None
-            )
+            logger.debug("Fetched single row", query=query[:100], found=result is not None)
             return result
 
     async def fetch_val(
@@ -370,10 +361,7 @@ async def get_postgres_client() -> PostgresClient:
         PostgresClient instance
     """
     global _postgres_client
-    if (
-        _postgres_client is not None
-        and getattr(_postgres_client, "_pool", None) is not None
-    ):
+    if _postgres_client is not None and getattr(_postgres_client, "_pool", None) is not None:
         return _postgres_client
     async with _get_postgres_lock():
         # Double-checked locking

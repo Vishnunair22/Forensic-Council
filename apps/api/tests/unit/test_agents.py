@@ -1,4 +1,4 @@
-﻿"""
+"""
 Unit tests for all five forensic specialist agents.
 
 Covers:
@@ -33,6 +33,7 @@ from core.config import Settings
 from core.evidence import ArtifactType, EvidenceArtifact
 
 # â”€â”€ Minimal Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 def _settings() -> Settings:
     return Settings(
@@ -101,10 +102,12 @@ def _make_agent(cls, agent_id: str = "Agent1"):
 
 # â”€â”€ Agent1 Image â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestAgent1Image:
     @pytest.fixture
     def agent(self):
         from agents.agent1_image import Agent1Image
+
         return _make_agent(Agent1Image, "Agent1")
 
     def test_agent_name_nonempty(self, agent):
@@ -127,6 +130,7 @@ class TestAgent1Image:
     @pytest.mark.asyncio
     async def test_build_tool_registry_returns_registry(self, agent):
         from core.tool_registry import ToolRegistry
+
         registry = await agent.build_tool_registry()
         assert isinstance(registry, ToolRegistry)
 
@@ -139,10 +143,12 @@ class TestAgent1Image:
 
 # â”€â”€ Agent2 Audio â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestAgent2Audio:
     @pytest.fixture
     def agent(self):
         from agents.agent2_audio import Agent2Audio
+
         return _make_agent(Agent2Audio, "Agent2")
 
     def test_agent_name_nonempty(self, agent):
@@ -165,10 +171,12 @@ class TestAgent2Audio:
 
 # â”€â”€ Agent3 Object â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestAgent3Object:
     @pytest.fixture
     def agent(self):
         from agents.agent3_object import Agent3Object
+
         return _make_agent(Agent3Object, "Agent3")
 
     def test_agent_name_nonempty(self, agent):
@@ -188,10 +196,12 @@ class TestAgent3Object:
 
 # â”€â”€ Agent4 Video â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestAgent4Video:
     @pytest.fixture
     def agent(self):
         from agents.agent4_video import Agent4Video
+
         return _make_agent(Agent4Video, "Agent4")
 
     def test_agent_name_nonempty(self, agent):
@@ -211,10 +221,12 @@ class TestAgent4Video:
 
 # â”€â”€ Agent5 Metadata â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestAgent5Metadata:
     @pytest.fixture
     def agent(self):
         from agents.agent5_metadata import Agent5Metadata
+
         return _make_agent(Agent5Metadata, "Agent5")
 
     def test_agent_name_nonempty(self, agent):
@@ -233,6 +245,7 @@ class TestAgent5Metadata:
 
 
 # â”€â”€ Agent names are unique â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 class TestAgentUniqueness:
     def _make_all(self):
@@ -263,6 +276,7 @@ class TestAgentUniqueness:
 
 # â”€â”€ SelfReflectionReport model â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class TestSelfReflectionReport:
     def test_defaults_all_tasks_incomplete(self):
         r = SelfReflectionReport()
@@ -289,4 +303,3 @@ class TestSelfReflectionReport:
         assert r.all_tasks_complete is True
         assert r.court_defensible is True
         assert "cross-validated" in r.reflection_notes
-

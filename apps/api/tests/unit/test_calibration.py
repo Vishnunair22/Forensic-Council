@@ -38,6 +38,7 @@ from core.calibration import (
 # Fixtures
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 @pytest.fixture
 def layer(tmp_path: Path) -> CalibrationLayer:
     """A CalibrationLayer backed by a temporary directory."""
@@ -48,14 +49,18 @@ def layer(tmp_path: Path) -> CalibrationLayer:
 # Tests
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-@pytest.mark.parametrize(("agent_id", "raw_score"), [
-    ("agent1_image", 0.0),
-    ("agent1_image", 0.5),
-    ("agent1_image", 1.0),
-    ("agent2_audio", 0.3),
-    ("agent3_object", 0.7),
-    ("unknown_agent", 0.5),
-])
+
+@pytest.mark.parametrize(
+    ("agent_id", "raw_score"),
+    [
+        ("agent1_image", 0.0),
+        ("agent1_image", 0.5),
+        ("agent1_image", 1.0),
+        ("agent2_audio", 0.3),
+        ("agent3_object", 0.7),
+        ("unknown_agent", 0.5),
+    ],
+)
 def test_calibrate_returns_float_in_range(
     layer: CalibrationLayer,
     agent_id: str,
@@ -137,6 +142,7 @@ def test_trained_model_produces_calibrated_true(
     # Write a model file that does NOT carry the 'is_default' flag
     from datetime import datetime
     from uuid import uuid4 as _uuid4
+
     model_data: dict[str, Any] = {
         "model_id": str(_uuid4()),
         "agent_id": agent_id,
@@ -233,5 +239,3 @@ def test_calibrated_confidence_has_required_fields(layer: CalibrationLayer) -> N
     assert hasattr(result, "uncertainty")
     assert isinstance(result.court_statement, str)
     assert len(result.court_statement) > 0
-
-

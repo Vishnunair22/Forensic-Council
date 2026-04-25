@@ -51,6 +51,7 @@ def _make_sp(with_client=True):
 
 # ── close ──────────────────────────────────────────────────────────────────────
 
+
 class TestSessionPersistenceClose:
     @pytest.mark.asyncio
     async def test_close_is_noop(self):
@@ -60,6 +61,7 @@ class TestSessionPersistenceClose:
 
 
 # ── save_session_state ─────────────────────────────────────────────────────────
+
 
 class TestSaveSessionState:
     @pytest.mark.asyncio
@@ -79,9 +81,11 @@ class TestSaveSessionState:
         sp, _ = _make_sp(with_client=False)
         # Manually test the None-client path
         sp.client = None
+
         # Patch _ensure_client to not initialize
         async def noop_ensure():
             pass
+
         sp._ensure_client = noop_ensure
         result = await sp.save_session_state(
             session_id=str(uuid4()),
@@ -117,6 +121,7 @@ class TestSaveSessionState:
 
 
 # ── get_session_state ──────────────────────────────────────────────────────────
+
 
 class TestGetSessionState:
     @pytest.mark.asyncio
@@ -157,14 +162,17 @@ class TestGetSessionState:
     async def test_returns_none_when_no_client(self):
         sp, _ = _make_sp(with_client=False)
         sp.client = None
+
         async def noop():
             pass
+
         sp._ensure_client = noop
         result = await sp.get_session_state(str(uuid4()))
         assert result is None
 
 
 # ── save_report ────────────────────────────────────────────────────────────────
+
 
 class TestSaveReport:
     @pytest.mark.asyncio
@@ -194,8 +202,10 @@ class TestSaveReport:
     async def test_save_report_returns_false_when_no_client(self):
         sp, _ = _make_sp(with_client=False)
         sp.client = None
+
         async def noop():
             pass
+
         sp._ensure_client = noop
         result = await sp.save_report(
             session_id=str(uuid4()),
@@ -207,6 +217,7 @@ class TestSaveReport:
 
 
 # ── get_report ─────────────────────────────────────────────────────────────────
+
 
 class TestGetReport:
     @pytest.mark.asyncio
@@ -244,6 +255,7 @@ class TestGetReport:
 
 # ── update_session_status ──────────────────────────────────────────────────────
 
+
 class TestUpdateSessionStatus:
     @pytest.mark.asyncio
     async def test_update_status_returns_true(self):
@@ -272,8 +284,10 @@ class TestUpdateSessionStatus:
     async def test_update_status_returns_false_when_no_client(self):
         sp, _ = _make_sp(with_client=False)
         sp.client = None
+
         async def noop():
             pass
+
         sp._ensure_client = noop
         result = await sp.update_session_status(str(uuid4()), "failed")
         assert result is False
@@ -281,18 +295,24 @@ class TestUpdateSessionStatus:
 
 # ── _ensure_client ─────────────────────────────────────────────────────────────
 
+
 class TestEnsureClient:
     @pytest.mark.asyncio
     async def test_ensure_client_initializes_when_none(self):
         sp = SessionPersistence(client=None)
         mock_pg = _make_postgres_mock()
-        with patch("core.session_persistence.get_postgres_client", new=AsyncMock(return_value=mock_pg)):
+        with patch(
+            "core.session_persistence.get_postgres_client", new=AsyncMock(return_value=mock_pg)
+        ):
             await sp._ensure_client()
         assert sp.client is mock_pg
 
     @pytest.mark.asyncio
     async def test_ensure_client_raises_on_timeout(self):
         sp = SessionPersistence(client=None)
-        with patch("core.session_persistence.get_postgres_client", new=AsyncMock(side_effect=TimeoutError())):
+        with patch(
+            "core.session_persistence.get_postgres_client",
+            new=AsyncMock(side_effect=TimeoutError()),
+        ):
             with pytest.raises(RuntimeError, match="timed out"):
                 await sp._ensure_client()

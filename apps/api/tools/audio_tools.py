@@ -46,7 +46,9 @@ def _frame_rms(y: np.ndarray, frame_size: int, hop: int) -> np.ndarray:
     if len(y) < frame_size:
         frames = np.pad(y, (0, frame_size - len(y)))[None, :]
     else:
-        frames = np.stack([y[start : start + frame_size] for start in range(0, len(y) - frame_size + 1, hop)])
+        frames = np.stack(
+            [y[start : start + frame_size] for start in range(0, len(y) - frame_size + 1, hop)]
+        )
     return np.sqrt(np.mean(frames**2, axis=1))
 
 
@@ -214,9 +216,7 @@ async def speaker_diarize(
                     return {
                         "speaker_count": 1,
                         "segments": [
-                            AudioSegment(
-                                speaker_id="SPEAKER_00", start=0.0, end=duration
-                            ).to_dict()
+                            AudioSegment(speaker_id="SPEAKER_00", start=0.0, end=duration).to_dict()
                         ],
                         "duration": duration,
                         "analysis_source": "speechbrain_ecapa_diarizer",
@@ -232,7 +232,7 @@ async def speaker_diarize(
 
                     if progress_callback:
                         p = min(100, int((start_idx / total_samples) * 100))
-                        await progress_callback(f"Scanning segment {len(embeddings)+1} [{p}%]...")
+                        await progress_callback(f"Scanning segment {len(embeddings) + 1} [{p}%]...")
 
                     chunk = signal[:, start_idx:end_idx]
 
@@ -250,9 +250,7 @@ async def speaker_diarize(
                     return {
                         "speaker_count": 1,
                         "segments": [
-                            AudioSegment(
-                                speaker_id="SPEAKER_00", start=0.0, end=duration
-                            ).to_dict()
+                            AudioSegment(speaker_id="SPEAKER_00", start=0.0, end=duration).to_dict()
                         ],
                         "duration": duration,
                         "analysis_source": "speechbrain_ecapa_diarizer",
@@ -329,15 +327,14 @@ async def speaker_diarize(
                 _w.warn(
                     f"SpeechBrain diarization failed ({_sb_err}), "
                     "falling back to librosa spectral clustering.",
-                    RuntimeWarning, stacklevel=2,
+                    RuntimeWarning,
+                    stacklevel=2,
                 )
 
         # ── Librosa fallback (spectral energy clustering) ────────────────────
 
         # Load audio with librosa
-        y, sr = await loop.run_in_executor(
-            None, lambda: librosa.load(audio_path, sr=None)
-        )
+        y, sr = await loop.run_in_executor(None, lambda: librosa.load(audio_path, sr=None))
         # Compute short-time energy
         frame_length = int(sr * 0.025)  # 25ms frames
         hop_length = int(sr * 0.010)  # 10ms hop
@@ -495,15 +492,14 @@ async def anti_spoofing_detect(
             _w.warn(
                 f"Audio deepfake model failed ({_model_err}), "
                 "falling back to heuristic spectral analysis.",
-                RuntimeWarning, stacklevel=2,
+                RuntimeWarning,
+                stacklevel=2,
             )
         # ── Heuristic spectral fallback ───────────────────────────────────────
 
         # Load audio
         loop = asyncio.get_event_loop()
-        y, sr = await loop.run_in_executor(
-            None, lambda: librosa.load(audio_path, sr=None)
-        )
+        y, sr = await loop.run_in_executor(None, lambda: librosa.load(audio_path, sr=None))
 
         # Extract segment if specified
         if segment:
@@ -611,14 +607,10 @@ async def prosody_analyze(
         loop = asyncio.get_event_loop()
         used_librosa = True
         try:
-            y, sr = await loop.run_in_executor(
-                None, lambda: librosa.load(audio_path, sr=None)
-            )
+            y, sr = await loop.run_in_executor(None, lambda: librosa.load(audio_path, sr=None))
         except Exception:
             used_librosa = False
-            y, sr = await loop.run_in_executor(
-                None, lambda: _load_audio_with_soundfile(audio_path)
-            )
+            y, sr = await loop.run_in_executor(None, lambda: _load_audio_with_soundfile(audio_path))
         len(y) / sr
 
         anomalies = []
@@ -655,19 +647,23 @@ async def prosody_analyze(
                 voiced_times = np.where(~np.isnan(f0))[0]
                 if jump_idx < len(voiced_times):
                     frame_idx = voiced_times[jump_idx]
-                    time = float(frame_idx * 512 / sr) if used_librosa else float(frame_idx * hop / sr)
+                    time = (
+                        float(frame_idx * 512 / sr) if used_librosa else float(frame_idx * hop / sr)
+                    )
                     anomalies.append(
                         ProsodyAnomaly(
                             timestamp=time,
                             type="pitch_discontinuity",
-                            severity=min(
-                                1.0, abs(f0_diff[jump_idx]) / pitch_threshold / 3
-                            ),
+                            severity=min(1.0, abs(f0_diff[jump_idx]) / pitch_threshold / 3),
                         )
                     )
 
         # 2. Extract energy (RMS)
-        rms = librosa.feature.rms(y=y)[0] if used_librosa else _frame_rms(y, min(2048, len(y)), max(128, min(2048, len(y)) // 4))
+        rms = (
+            librosa.feature.rms(y=y)[0]
+            if used_librosa
+            else _frame_rms(y, min(2048, len(y)), max(128, min(2048, len(y)) // 4))
+        )
         rms_diff = np.diff(rms)
         energy_threshold = np.std(rms_diff) * 3
 
@@ -675,7 +671,11 @@ async def prosody_analyze(
         energy_jumps = np.where(np.abs(rms_diff) > energy_threshold)[0]
 
         for jump_idx in energy_jumps:
-            time = float(librosa.frames_to_time(jump_idx, sr=sr)) if used_librosa else float(jump_idx * max(128, min(2048, len(y)) // 4) / sr)
+            time = (
+                float(librosa.frames_to_time(jump_idx, sr=sr))
+                if used_librosa
+                else float(jump_idx * max(128, min(2048, len(y)) // 4) / sr)
+            )
             # Check if this anomaly is already recorded
             existing_times = [a.timestamp for a in anomalies]
             if not any(abs(t - time) < 0.1 for t in existing_times):
@@ -683,9 +683,7 @@ async def prosody_analyze(
                     ProsodyAnomaly(
                         timestamp=time,
                         type="energy_discontinuity",
-                        severity=min(
-                            1.0, abs(rms_diff[jump_idx]) / energy_threshold / 3
-                        ),
+                        severity=min(1.0, abs(rms_diff[jump_idx]) / energy_threshold / 3),
                     )
                 )
 
@@ -779,9 +777,7 @@ async def background_noise_consistency(
 
         # Load audio without relying on librosa's numba-backed lazy imports.
         loop = asyncio.get_event_loop()
-        y, sr = await loop.run_in_executor(
-            None, lambda: _load_audio_with_soundfile(audio_path)
-        )
+        y, sr = await loop.run_in_executor(None, lambda: _load_audio_with_soundfile(audio_path))
         len(y) / sr
 
         # Segment the audio
@@ -829,8 +825,7 @@ async def background_noise_consistency(
         for i in range(1, len(noise_floors)):
             rms_diff = abs(noise_floors[i]["rms"] - noise_floors[i - 1]["rms"])
             centroid_diff = abs(
-                noise_floors[i]["spectral_centroid"]
-                - noise_floors[i - 1]["spectral_centroid"]
+                noise_floors[i]["spectral_centroid"] - noise_floors[i - 1]["spectral_centroid"]
             )
 
             if rms_diff > shift_threshold or centroid_diff > 1000:
@@ -859,9 +854,7 @@ async def background_noise_consistency(
     except Exception as e:
         if isinstance(e, ToolUnavailableError):
             raise
-        raise ToolUnavailableError(
-            f"Background noise consistency analysis failed: {str(e)}"
-        )
+        raise ToolUnavailableError(f"Background noise consistency analysis failed: {str(e)}")
 
 
 async def codec_fingerprint(
@@ -933,12 +926,15 @@ async def codec_fingerprint(
         energy_per_freq = np.mean(spectrum, axis=0)
         peak_energy = float(np.max(energy_per_freq)) if energy_per_freq.size else 0.0
         spectral_complexity = (
-            float(np.count_nonzero(energy_per_freq > peak_energy * 0.05)) / float(len(energy_per_freq))
+            float(np.count_nonzero(energy_per_freq > peak_energy * 0.05))
+            / float(len(energy_per_freq))
             if peak_energy > 0 and len(energy_per_freq) > 0
             else 0.0
         )
         cumulative = np.cumsum(energy_per_freq)
-        rolloff_idx = int(np.searchsorted(cumulative, cumulative[-1] * 0.85)) if cumulative[-1] > 0 else 0
+        rolloff_idx = (
+            int(np.searchsorted(cumulative, cumulative[-1] * 0.85)) if cumulative[-1] > 0 else 0
+        )
         max_freq = float(freqs[min(rolloff_idx, len(freqs) - 1)])
         nyquist = sr / 2
 
@@ -1021,15 +1017,11 @@ _speechbrain_classifier_instance: Any | None = None
 _speechbrain_lock: asyncio.Lock | None = None
 
 
-
-
 def _get_speechbrain_lock() -> asyncio.Lock:
     global _speechbrain_lock
     if _speechbrain_lock is None:
         _speechbrain_lock = asyncio.Lock()
     return _speechbrain_lock
-
-
 
 
 async def _get_speechbrain_classifier_async() -> Any:
@@ -1045,16 +1037,13 @@ async def _get_speechbrain_classifier_async() -> Any:
             from speechbrain.inference.classifiers import (
                 EncoderClassifier,  # type: ignore[import-untyped]
             )
-            return EncoderClassifier.from_hparams(
-                source="speechbrain/spkrec-ecapa-voxceleb"
-            )
 
-        _speechbrain_classifier_instance = await asyncio.get_event_loop().run_in_executor(None, _load)
+            return EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb")
+
+        _speechbrain_classifier_instance = await asyncio.get_event_loop().run_in_executor(
+            None, _load
+        )
         return _speechbrain_classifier_instance
-
-
-
-
 
 
 async def prosody_praat(
@@ -1106,9 +1095,7 @@ async def prosody_praat(
 
         # Jitter (cycle-to-cycle F0 variation) — elevated in synthetic voices
         point_process = call(snd, "To PointProcess (periodic, cc)", 75, 600)
-        jitter_local = call(
-            point_process, "Get jitter (local)", 0, 0, 0.0001, 0.02, 1.3
-        )
+        jitter_local = call(point_process, "Get jitter (local)", 0, 0, 0.0001, 0.02, 1.3)
 
         # Shimmer (cycle-to-cycle amplitude variation)
         shimmer_local = call(
@@ -1123,13 +1110,9 @@ async def prosody_praat(
         prosody_anomaly = jitter_local > 0.01 or shimmer_local > 0.05
 
         return {
-            "f0_mean_hz": round(float(f0_voiced.mean()), 2)
-            if len(f0_voiced) > 0
-            else 0,
+            "f0_mean_hz": round(float(f0_voiced.mean()), 2) if len(f0_voiced) > 0 else 0,
             "f0_std_hz": round(float(f0_voiced.std()), 2) if len(f0_voiced) > 0 else 0,
-            "f0_range_hz": round(float(f0_voiced.ptp()), 2)
-            if len(f0_voiced) > 0
-            else 0,
+            "f0_range_hz": round(float(f0_voiced.ptp()), 2) if len(f0_voiced) > 0 else 0,
             "jitter_local": round(float(jitter_local), 5),
             "shimmer_local": round(float(shimmer_local), 5),
             "hnr_db": round(float(hnr), 2),
@@ -1292,9 +1275,7 @@ async def av_sync_verify(
         ]
 
         min_len = min(len(video_activity), len(audio_energy_per_sec))
-        corr = float(
-            np.corrcoef(video_activity[:min_len], audio_energy_per_sec[:min_len])[0, 1]
-        )
+        corr = float(np.corrcoef(video_activity[:min_len], audio_energy_per_sec[:min_len])[0, 1])
 
         return {
             "av_sync": "IN_SYNC" if corr > 0.3 else "DESYNC_SUSPECTED",

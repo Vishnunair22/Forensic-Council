@@ -9,6 +9,7 @@ This conftest documents that invariant and provides a safe fallback.
 
 import os
 import sys
+
 import pytest
 from asyncpg import Connection
 

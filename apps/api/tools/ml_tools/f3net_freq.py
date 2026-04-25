@@ -65,6 +65,7 @@ import numpy as np
 # Branch 1: FAD — Discrete Wavelet Transform sub-band analysis
 # ---------------------------------------------------------------------------
 
+
 def _haar_dwt2(img: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     One-level 2D Haar DWT.
@@ -72,7 +73,7 @@ def _haar_dwt2(img: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.
     """
     h, w = img.shape
     # Ensure even dimensions
-    img = img[:h - h % 2, :w - w % 2].astype(np.float32)
+    img = img[: h - h % 2, : w - w % 2].astype(np.float32)
     # Row-wise
     lo = (img[:, 0::2] + img[:, 1::2]) * 0.5
     hi = (img[:, 0::2] - img[:, 1::2]) * 0.5
@@ -134,6 +135,7 @@ def _fad_analysis(gray: np.ndarray) -> dict[str, Any]:
 # Branch 2: LFS — Local Frequency Statistics
 # ---------------------------------------------------------------------------
 
+
 def _lfs_analysis(gray: np.ndarray, tile_size: int = 64) -> dict[str, Any]:
     """
     LFS: Tile-level spectral centroid and variance analysis.
@@ -189,6 +191,7 @@ def _lfs_analysis(gray: np.ndarray, tile_size: int = 64) -> dict[str, Any]:
 # Branch 3: Phase consistency
 # ---------------------------------------------------------------------------
 
+
 def _phase_consistency(gray: np.ndarray) -> dict[str, Any]:
     """
     Phase spectrum discontinuity analysis.
@@ -209,7 +212,7 @@ def _phase_consistency(gray: np.ndarray) -> dict[str, Any]:
     gy = (gy + np.pi) % (2 * np.pi) - np.pi
     gx = (gx + np.pi) % (2 * np.pi) - np.pi
 
-    grad_mag = np.sqrt(gy[:, :gx.shape[1]] ** 2 + gx[:gy.shape[0], :] ** 2)
+    grad_mag = np.sqrt(gy[:, : gx.shape[1]] ** 2 + gx[: gy.shape[0], :] ** 2)
     phase_inconsistency = float(np.std(grad_mag) / (np.mean(grad_mag) + 1e-9))
 
     # AI images: phase inconsistency tends to be LOWER (unnaturally smooth)
@@ -224,6 +227,7 @@ def _phase_consistency(gray: np.ndarray) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Core analysis
 # ---------------------------------------------------------------------------
+
 
 def analyze(image_path: str) -> dict[str, Any]:
     img = cv2.imread(image_path)
@@ -259,8 +263,12 @@ def analyze(image_path: str) -> dict[str, Any]:
     signal_count = sum(1 for s in signals if s)
 
     # Confidence blending
-    conf_fad = min(fad["hh_spike"] / 0.10 * 0.3 + (1.0 if fad["periodic_score"] > 12 else 0.0) * 0.2, 0.5)
-    conf_lfs = (1.0 - min(lfs["lfs_variance"] / 0.15, 1.0)) * 0.3 if lfs.get("tile_count", 0) >= 4 else 0.0
+    conf_fad = min(
+        fad["hh_spike"] / 0.10 * 0.3 + (1.0 if fad["periodic_score"] > 12 else 0.0) * 0.2, 0.5
+    )
+    conf_lfs = (
+        (1.0 - min(lfs["lfs_variance"] / 0.15, 1.0)) * 0.3 if lfs.get("tile_count", 0) >= 4 else 0.0
+    )
     conf_phase = (1.0 - min(phase["phase_inconsistency"] / 0.5, 1.0)) * 0.2
     confidence = round(float(conf_fad + conf_lfs + conf_phase), 3)
 
@@ -307,6 +315,7 @@ def analyze(image_path: str) -> dict[str, Any]:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def _run_worker() -> None:
     for line in sys.stdin:
         line = line.strip()
@@ -330,18 +339,25 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="F3-Net frequency artifact detector")
     parser.add_argument("--input", type=str, help="Path to input image")
     parser.add_argument("--warmup", action="store_true", help="Warmup mode")
-    parser.add_argument("--worker", action="store_true", help="Worker mode (persistent stdin/stdout)")
+    parser.add_argument(
+        "--worker", action="store_true", help="Worker mode (persistent stdin/stdout)"
+    )
     args = parser.parse_args()
 
     if args.warmup:
         try:
             import cv2  # noqa: F401
             import numpy  # noqa: F401
-            print(json.dumps({
-                "status": "warmed_up",
-                "dependencies": ["cv2", "numpy"],
-                "message": "F3-Net frequency detector ready",
-            }))
+
+            print(
+                json.dumps(
+                    {
+                        "status": "warmed_up",
+                        "dependencies": ["cv2", "numpy"],
+                        "message": "F3-Net frequency detector ready",
+                    }
+                )
+            )
             sys.exit(0)
         except Exception as exc:
             print(json.dumps({"status": "warmup_failed", "error": str(exc)}))

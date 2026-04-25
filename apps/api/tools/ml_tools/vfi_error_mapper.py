@@ -37,7 +37,11 @@ def map_vfi_errors(path: str, max_triplets: int = 48) -> dict[str, Any]:
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
     if total < 5:
         cap.release()
-        return {"available": False, "not_applicable": True, "reason": "Too few frames for VFI analysis."}
+        return {
+            "available": False,
+            "not_applicable": True,
+            "reason": "Too few frames for VFI analysis.",
+        }
 
     positions = np.linspace(1, max(1, total - 2), num=min(max_triplets, total - 2), dtype=int)
     residuals: list[float] = []
@@ -51,7 +55,9 @@ def map_vfi_errors(path: str, max_triplets: int = 48) -> dict[str, Any]:
                 if not ok or frame is None:
                     frames = []
                     break
-                gray = cv2.cvtColor(cv2.resize(frame, (160, 90)), cv2.COLOR_BGR2GRAY).astype(np.float32)
+                gray = cv2.cvtColor(cv2.resize(frame, (160, 90)), cv2.COLOR_BGR2GRAY).astype(
+                    np.float32
+                )
                 frames.append(gray)
             if len(frames) != 3:
                 continue
@@ -70,7 +76,9 @@ def map_vfi_errors(path: str, max_triplets: int = 48) -> dict[str, Any]:
     low_residual_ratio = float(np.mean(arr < 0.018))
     spike_ratio = float(np.mean(arr > mean_res + max(0.025, 2.0 * std_res)))
 
-    score = min(1.0, low_residual_ratio * 0.65 + spike_ratio * 0.55 + max(0.0, 0.03 - mean_res) * 4.0)
+    score = min(
+        1.0, low_residual_ratio * 0.65 + spike_ratio * 0.55 + max(0.0, 0.03 - mean_res) * 4.0
+    )
     suspected = score >= 0.35
     for i, value in enumerate(arr):
         if value < 0.018 or value > mean_res + max(0.025, 2.0 * std_res):
@@ -101,7 +109,11 @@ def _worker() -> None:
         try:
             req = json.loads(line)
             path = req.get("input")
-            result = map_vfi_errors(path) if path else {"error": "Missing input path", "available": False}
+            result = (
+                map_vfi_errors(path)
+                if path
+                else {"error": "Missing input path", "available": False}
+            )
         except Exception as exc:
             result = {"error": str(exc), "available": False}
         print(json.dumps(result), flush=True)

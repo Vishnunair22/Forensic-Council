@@ -22,6 +22,7 @@ from core.config import Settings, get_settings
 
 class SignalBus:
     """Async signal bus for cross-agent coordination and early deliberation."""
+
     def __init__(self, agent_ids: list[str]):
         self.events = {aid: asyncio.Event() for aid in agent_ids}
         self.findings = {aid: [] for aid in agent_ids}
@@ -72,6 +73,8 @@ class SignalBus:
             return True
         except TimeoutError:
             return False
+
+
 from agents.arbiter import CouncilArbiter, ForensicReport
 from core.custody_logger import CustodyLogger, EntryType
 from core.episodic_memory import EpisodicMemory
@@ -136,9 +139,7 @@ class AgentFactory:
             Agent results including findings and reflection report
         """
         if self._evidence_artifact is None:
-            raise ValueError(
-                "Evidence artifact not set - call set_evidence_artifact first"
-            )
+            raise ValueError("Evidence artifact not set - call set_evidence_artifact first")
 
         logger.info(
             "Re-invoking agent for challenge loop",
@@ -195,8 +196,7 @@ class AgentFactory:
         findings = await maybe_findings if inspect.isawaitable(maybe_findings) else maybe_findings
 
         serialized_findings = [
-            f.model_dump(mode="json") if hasattr(f, "model_dump") else f
-            for f in findings
+            f.model_dump(mode="json") if hasattr(f, "model_dump") else f for f in findings
         ]
 
         reflection_report = (
@@ -243,12 +243,8 @@ class AgentLoopResult:
         self.react_chain = react_chain
         self.error = error
         self.agent_active = agent_active  # Whether agent actually ran
-        self.supports_file_type = (
-            supports_file_type  # Whether agent supports this file type
-        )
-        self.deep_findings_count = (
-            deep_findings_count  # Number of findings from deep analysis
-        )
+        self.supports_file_type = supports_file_type  # Whether agent supports this file type
+        self.deep_findings_count = deep_findings_count  # Number of findings from deep analysis
 
 
 def _serialize_react_chain(react_chain: list[Any]) -> list[dict[str, Any]]:
@@ -297,7 +293,7 @@ class ForensicCouncilPipeline:
         self.run_deep_analysis_flag: bool = False
         self._awaiting_user_decision: bool = False
         self._arbiter_step: str = ""
-        self._session_id: "UUID | None" = None
+        self._session_id: UUID | None = None
 
         # Initialize infrastructure
         self._setup_infrastructure()
@@ -311,8 +307,8 @@ class ForensicCouncilPipeline:
         self.session_manager: SessionManager | None = None
         self.arbiter: CouncilArbiter | None = None
         self.signal_bus: SignalBus | None = None
-        
-        # Concurrency Control: Cap simultaneous heavy neural/math tools 
+
+        # Concurrency Control: Cap simultaneous heavy neural/math tools
         # to prevent CPU starvation on systems without dedicated GPUs.
         self.heavy_tool_semaphore = asyncio.Semaphore(
             max(1, (self.config.max_parallel_heavy_tools or 2))
@@ -327,14 +323,15 @@ class ForensicCouncilPipeline:
 
     async def _initialize_components(self, session_id: UUID) -> None:
         """Initialize all components for a session."""
-        from core.persistence.postgres_client import get_postgres_client
-        from core.persistence.qdrant_client import get_qdrant_client
         from api.routes._session_state import broadcast_update
         from api.schemas import BriefUpdate
+        from core.persistence.postgres_client import get_postgres_client
+        from core.persistence.qdrant_client import get_qdrant_client
 
         if self._redis is None:
             try:
                 from core.persistence.redis_client import get_redis_client
+
                 self._redis = await get_redis_client()
             except Exception as e:
                 logger.warning("Failed to connect to Redis", error=str(e))
@@ -346,26 +343,38 @@ class ForensicCouncilPipeline:
 
         # Broadcast initial startup
         try:
-            await broadcast_update(str(session_id), BriefUpdate(
-                type="AGENT_UPDATE",
-                session_id=str(session_id),
-                agent_id=None,
-                message="Initializing forensic core...",
-                data={"status": "initiating", "thinking": "Establishing secure neural bridge..."}
-            ))
+            await broadcast_update(
+                str(session_id),
+                BriefUpdate(
+                    type="AGENT_UPDATE",
+                    session_id=str(session_id),
+                    agent_id=None,
+                    message="Initializing forensic core...",
+                    data={
+                        "status": "initiating",
+                        "thinking": "Establishing secure neural bridge...",
+                    },
+                ),
+            )
         except Exception:
             pass  # SSE channel may not be open yet; investigation continues unaffected.
 
         if self._qdrant is None:
             try:
                 try:
-                    await broadcast_update(str(session_id), BriefUpdate(
-                        type="AGENT_UPDATE",
-                        session_id=str(session_id),
-                        agent_id=None,
-                        message="Establishing episodic link...",
-                        data={"status": "initiating", "thinking": "Syncing with Qdrant vector space..."}
-                    ))
+                    await broadcast_update(
+                        str(session_id),
+                        BriefUpdate(
+                            type="AGENT_UPDATE",
+                            session_id=str(session_id),
+                            agent_id=None,
+                            message="Establishing episodic link...",
+                            data={
+                                "status": "initiating",
+                                "thinking": "Syncing with Qdrant vector space...",
+                            },
+                        ),
+                    )
                 except Exception:
                     pass  # Best-effort UI update; Qdrant connect proceeds regardless.
                 self._qdrant = await get_qdrant_client()
@@ -379,13 +388,19 @@ class ForensicCouncilPipeline:
         if self._postgres is None:
             try:
                 try:
-                    await broadcast_update(str(session_id), BriefUpdate(
-                        type="AGENT_UPDATE",
-                        session_id=str(session_id),
-                        agent_id=None,
-                        message="Connecting to custody ledger...",
-                        data={"status": "initiating", "thinking": "Securing Postgres persistence layer..."}
-                    ))
+                    await broadcast_update(
+                        str(session_id),
+                        BriefUpdate(
+                            type="AGENT_UPDATE",
+                            session_id=str(session_id),
+                            agent_id=None,
+                            message="Connecting to custody ledger...",
+                            data={
+                                "status": "initiating",
+                                "thinking": "Securing Postgres persistence layer...",
+                            },
+                        ),
+                    )
                 except Exception:
                     pass  # Best-effort UI update; Postgres connect proceeds regardless.
                 self._postgres = await get_postgres_client()
@@ -421,27 +436,56 @@ class ForensicCouncilPipeline:
 
                     if type_val == "HITL_CHECKPOINT" and isinstance(content, dict):
                         agent_name = AGENT_NAMES.get(agent_id, agent_id)
-                        await broadcast_update(ws_session_id, BriefUpdate(
-                            type="HITL_CHECKPOINT", session_id=ws_session_id, agent_id=agent_id, agent_name=agent_name,
-                            message=f"HITL checkpoint: {content.get('reason', 'Review required')}",
-                            data={"status": "paused", "checkpoint": {"id": content.get("checkpoint_id"), "agent_id": agent_id, "reason": content.get("reason"), "brief": content.get("brief")}}
-                        ))
+                        await broadcast_update(
+                            ws_session_id,
+                            BriefUpdate(
+                                type="HITL_CHECKPOINT",
+                                session_id=ws_session_id,
+                                agent_id=agent_id,
+                                agent_name=agent_name,
+                                message=f"HITL checkpoint: {content.get('reason', 'Review required')}",
+                                data={
+                                    "status": "paused",
+                                    "checkpoint": {
+                                        "id": content.get("checkpoint_id"),
+                                        "agent_id": agent_id,
+                                        "reason": content.get("reason"),
+                                        "brief": content.get("brief"),
+                                    },
+                                },
+                            ),
+                        )
                     elif type_val in ("THOUGHT", "ACTION") and isinstance(content, dict):
-                        if content.get("action") == "session_start": return result
+                        if content.get("action") == "session_start":
+                            return result
                         agent_name = AGENT_NAMES.get(agent_id, agent_id)
                         raw_tool_name = content.get("tool_name") if type_val == "ACTION" else None
                         tool_name = raw_tool_name if isinstance(raw_tool_name, str) else None
-                        thinking_text = f"Calling {tool_name.replace('_', ' ').title()}..." if tool_name else content.get("content", "Analyzing...")
+                        thinking_text = (
+                            f"Calling {tool_name.replace('_', ' ').title()}..."
+                            if tool_name
+                            else content.get("content", "Analyzing...")
+                        )
                         iteration = content.get("iteration")
-                        tools_done = iteration if isinstance(iteration, int) and iteration > 0 else None
-                        await broadcast_update(ws_session_id, BriefUpdate(
-                            type="AGENT_UPDATE", session_id=ws_session_id, agent_id=agent_id, agent_name=agent_name, message=thinking_text, data={
-                                "status": "running",
-                                "thinking": thinking_text,
-                                "tool_name": tool_name,
-                                "tools_done": tools_done,
-                            }
-                        ))
+                        tools_done = (
+                            iteration if isinstance(iteration, int) and iteration > 0 else None
+                        )
+                        await broadcast_update(
+                            ws_session_id,
+                            BriefUpdate(
+                                type="AGENT_UPDATE",
+                                session_id=ws_session_id,
+                                agent_id=agent_id,
+                                agent_name=agent_name,
+                                message=thinking_text,
+                                data={
+                                    "status": "running",
+                                    "thinking": thinking_text,
+                                    "tool_name": tool_name,
+                                    "tools_done": tools_done,
+                                },
+                            ),
+                        )
                 except Exception as e:
                     logger.debug("Broadcast failed", error=str(e))
                 return result
@@ -534,6 +578,7 @@ class ForensicCouncilPipeline:
                 await set_active_pipeline_metadata(str(session_id), {**existing, "brief": msg})
             except Exception:
                 pass  # Arbiter step broadcast is best-effort; deliberation continues regardless.
+
         self.arbiter._step_hook = _broadcast_arbiter_step
 
     async def run_investigation(
@@ -579,7 +624,7 @@ class ForensicCouncilPipeline:
         except asyncio.CancelledError:
             logger.warning("Investigation cancelled (Global Abort)")
             if self._error:
-                 raise RuntimeError(f"Investigation aborted: {self._error}")
+                raise RuntimeError(f"Investigation aborted: {self._error}") from None
             raise
         finally:
             self._current_run_task = None
@@ -602,13 +647,17 @@ class ForensicCouncilPipeline:
         try:
             from api.routes._session_state import broadcast_update
             from api.schemas import BriefUpdate
-            await broadcast_update(str(session_id), BriefUpdate(
-                type="AGENT_UPDATE",
-                session_id=str(session_id),
-                agent_id=None,
-                message="Forensic pipeline initialized. Ingesting evidence...",
-                data={"status": "initiating", "thinking": "Securing evidence artifacts..."}
-            ))
+
+            await broadcast_update(
+                str(session_id),
+                BriefUpdate(
+                    type="AGENT_UPDATE",
+                    session_id=str(session_id),
+                    agent_id=None,
+                    message="Forensic pipeline initialized. Ingesting evidence...",
+                    data={"status": "initiating", "thinking": "Securing evidence artifacts..."},
+                ),
+            )
         except Exception:
             pass  # Best-effort UI update; evidence ingestion proceeds regardless.
 
@@ -623,13 +672,17 @@ class ForensicCouncilPipeline:
         try:
             from api.routes._session_state import broadcast_update
             from api.schemas import BriefUpdate
-            await broadcast_update(str(session_id), BriefUpdate(
-                type="AGENT_UPDATE",
-                session_id=str(session_id),
-                agent_id=None,
-                message="Evidence secured. Initializing forensic session...",
-                data={"status": "processing", "thinking": "Validating chain of custody..."}
-            ))
+
+            await broadcast_update(
+                str(session_id),
+                BriefUpdate(
+                    type="AGENT_UPDATE",
+                    session_id=str(session_id),
+                    agent_id=None,
+                    message="Evidence secured. Initializing forensic session...",
+                    data={"status": "processing", "thinking": "Validating chain of custody..."},
+                ),
+            )
         except Exception:
             pass  # Best-effort UI update; session setup proceeds regardless.
 
@@ -651,13 +704,17 @@ class ForensicCouncilPipeline:
         try:
             from api.routes._session_state import broadcast_update
             from api.schemas import BriefUpdate
-            await broadcast_update(str(session_id), BriefUpdate(
-                type="AGENT_UPDATE",
-                session_id=str(session_id),
-                agent_id=None,
-                message="Session active. Dispatching specialist agents...",
-                data={"status": "processing", "thinking": "Allocating neural resources..."}
-            ))
+
+            await broadcast_update(
+                str(session_id),
+                BriefUpdate(
+                    type="AGENT_UPDATE",
+                    session_id=str(session_id),
+                    agent_id=None,
+                    message="Session active. Dispatching specialist agents...",
+                    data={"status": "processing", "thinking": "Allocating neural resources..."},
+                ),
+            )
         except Exception:
             pass  # Best-effort UI update; agent dispatch proceeds regardless.
 
@@ -756,9 +813,7 @@ class ForensicCouncilPipeline:
         use_llm = bool(self.config.llm_enable_post_synthesis)
         try:
             report = await asyncio.wait_for(
-                self.arbiter.deliberate(
-                    arbiter_results, case_id=case_id, use_llm=use_llm
-                ),
+                self.arbiter.deliberate(arbiter_results, case_id=case_id, use_llm=use_llm),
                 timeout=90.0,
             )
         except TimeoutError:
@@ -797,19 +852,23 @@ class ForensicCouncilPipeline:
             self._get_custody_log(session_id),
             self._get_version_trees(artifact.artifact_id),
         ]
-        results = await asyncio.gather(*[asyncio.wait_for(t, timeout=15.0) for t in tasks], return_exceptions=True)
+        results = await asyncio.gather(
+            *[asyncio.wait_for(t, timeout=15.0) for t in tasks], return_exceptions=True
+        )
 
         report.case_linking_flags = results[0] if not isinstance(results[0], BaseException) else []
-        report.chain_of_custody_log = results[1] if not isinstance(results[1], BaseException) else []
-        report.evidence_version_trees = results[2] if not isinstance(results[2], BaseException) else []
+        report.chain_of_custody_log = (
+            results[1] if not isinstance(results[1], BaseException) else []
+        )
+        report.evidence_version_trees = (
+            results[2] if not isinstance(results[2], BaseException) else []
+        )
 
         if any(isinstance(r, (Exception, asyncio.TimeoutError)) for r in results):
             logger.warning("One or more enrichment tasks failed or timed out")
 
         # 3. Add agent-specific fields
-        report.react_chains = {
-            r.agent_id: r.react_chain for r in agent_results if r.error is None
-        }
+        report.react_chains = {r.agent_id: r.react_chain for r in agent_results if r.error is None}
         report.self_reflection_outputs = {
             r.agent_id: r.reflection_report for r in agent_results if r.error is None
         }
@@ -834,7 +893,10 @@ class ForensicCouncilPipeline:
             )
         elif all(self._is_gemini_error(f) for f in gemini_findings):
             # Check if reason is refusal (safety)
-            is_refusal = any("safety" in str(f.get("metadata", {}).get("error", "")).lower() for f in gemini_findings)
+            is_refusal = any(
+                "safety" in str(f.get("metadata", {}).get("error", "")).lower()
+                for f in gemini_findings
+            )
             if is_refusal:
                 self._degradation_flags.append(
                     "FORENSIC_SIGNAL_REFUSED: Gemini vision API refused to analyze content due to safety filters. "
@@ -860,7 +922,8 @@ class ForensicCouncilPipeline:
         """Handle a GLOBAL_ABORT signal by cancelling the investigation."""
         reason = (
             payload.get("reason", "Unknown forensic violation")
-            if payload else "Unknown forensic violation"
+            if payload
+            else "Unknown forensic violation"
         )
         self._error = f"GLOBAL_ABORT: {reason}"
 
@@ -868,12 +931,16 @@ class ForensicCouncilPipeline:
             try:
                 from api.routes._session_state import broadcast_update
                 from api.schemas import BriefUpdate
-                await broadcast_update(str(self._session_id), BriefUpdate(
-                    type="PIPELINE_QUARANTINED",
-                    session_id=str(self._session_id),
-                    message=f"CRITICAL: Pipeline quarantined. Reason: {reason}",
-                    data={"status": "quarantined", "reason": reason}
-                ))
+
+                await broadcast_update(
+                    str(self._session_id),
+                    BriefUpdate(
+                        type="PIPELINE_QUARANTINED",
+                        session_id=str(self._session_id),
+                        message=f"CRITICAL: Pipeline quarantined. Reason: {reason}",
+                        data={"status": "quarantined", "reason": reason},
+                    ),
+                )
             except Exception:
                 pass  # Best-effort UI notification; quarantine and task cancellation proceed regardless.
 
@@ -883,11 +950,15 @@ class ForensicCouncilPipeline:
     async def _verify_custody_integrity(self, session_id: UUID) -> None:
         """Verify chain-of-custody integrity."""
         if not (self.custody_logger and self.custody_logger._postgres):
-            self._degradation_flags.append("Chain-of-custody verification skipped - DB unavailable.")
+            self._degradation_flags.append(
+                "Chain-of-custody verification skipped - DB unavailable."
+            )
             return
 
         try:
-            chain_report = await asyncio.wait_for(self.custody_logger.verify_chain(session_id), timeout=15.0)
+            chain_report = await asyncio.wait_for(
+                self.custody_logger.verify_chain(session_id), timeout=15.0
+            )
             if not chain_report.valid:
                 self._degradation_flags.append(
                     f"CRITICAL: Custody integrity FAILED (entry {chain_report.broken_at}). Report may be tampered."
@@ -952,7 +1023,6 @@ class ForensicCouncilPipeline:
         # Phase 1: Run all agents' INITIAL passes concurrently, then
         # Phase 2: Inject Agent 1's Gemini findings into Agent 3 and run all deep passes
 
-
         async def run_agent_deep_only(
             agent,
             agent_id: str,
@@ -984,7 +1054,7 @@ class ForensicCouncilPipeline:
                 try:
                     initial_count = len(initial_findings)
                     logger.info(f"Running {agent_id} deep investigation")
-                    
+
                     # Execution logic moved to agent.run_deep_investigation()
                     # which now uses internal semaphore gating for heavy tools.
                     await asyncio.wait_for(
@@ -1009,9 +1079,7 @@ class ForensicCouncilPipeline:
                         deep_findings_count=max(0, deep_count),
                     )
                 except Exception as e:
-                    logger.error(
-                        f"{agent_id} deep pass failed", error=str(e), exc_info=True
-                    )
+                    logger.error(f"{agent_id} deep pass failed", error=str(e), exc_info=True)
                     return AgentLoopResult(
                         agent_id=agent_id,
                         findings=[f.model_dump(mode="json") for f in initial_findings],
@@ -1031,7 +1099,9 @@ class ForensicCouncilPipeline:
                 extra = {"inter_agent_bus": self.inter_agent_bus}
             agent_def_list.append((registry.get_agent_class(aid), aid, extra))
 
-        async def _broadcast_agent_status(aid: str, status: str, message: str, findings=None, error=None, agent_inst=None):
+        async def _broadcast_agent_status(
+            aid: str, status: str, message: str, findings=None, error=None, agent_inst=None
+        ):
             try:
                 from api.routes._session_state import AGENT_NAMES, broadcast_update
                 from api.schemas import BriefUpdate
@@ -1039,12 +1109,28 @@ class ForensicCouncilPipeline:
 
                 aname = AGENT_NAMES.get(aid, aid)
                 preview = []
-                synthesis = getattr(agent_inst, "_agent_synthesis", None) if agent_inst is not None else None
+                synthesis = (
+                    getattr(agent_inst, "_agent_synthesis", None)
+                    if agent_inst is not None
+                    else None
+                )
                 if findings:
                     for f in findings:
-                        m = f.metadata if hasattr(f, "metadata") else f.get("metadata", {}) if isinstance(f, dict) else {}
-                        tool = m.get("tool_name") or (f.finding_type if hasattr(f, "finding_type") else f.get("finding_type"))
-                        s = f.reasoning_summary if hasattr(f, "reasoning_summary") else f.get("reasoning_summary", "")
+                        m = (
+                            f.metadata
+                            if hasattr(f, "metadata")
+                            else f.get("metadata", {})
+                            if isinstance(f, dict)
+                            else {}
+                        )
+                        tool = m.get("tool_name") or (
+                            f.finding_type if hasattr(f, "finding_type") else f.get("finding_type")
+                        )
+                        s = (
+                            f.reasoning_summary
+                            if hasattr(f, "reasoning_summary")
+                            else f.get("reasoning_summary", "")
+                        )
                         if not s:
                             continue
                         sev = assign_severity_tier(f)
@@ -1060,46 +1146,80 @@ class ForensicCouncilPipeline:
                         ).upper()
                         if evidence_verdict == "ERROR" or finding_status == "INCOMPLETE":
                             tv = "NEEDS_REVIEW"
-                        elif evidence_verdict in ("POSITIVE", "TAMPERED", "SUSPICIOUS", "MANIPULATED") or sev in ("CRITICAL", "HIGH", "MEDIUM"):
+                        elif evidence_verdict in (
+                            "POSITIVE",
+                            "TAMPERED",
+                            "SUSPICIOUS",
+                            "MANIPULATED",
+                        ) or sev in ("CRITICAL", "HIGH", "MEDIUM"):
                             tv = "FLAGGED"
-                        elif evidence_verdict == "NOT_APPLICABLE" or finding_status == "NOT_APPLICABLE":
+                        elif (
+                            evidence_verdict == "NOT_APPLICABLE"
+                            or finding_status == "NOT_APPLICABLE"
+                        ):
                             tv = "NOT_APPLICABLE"
                         else:
                             tv = "CLEAN"
-                        preview.append({
-                            "tool": tool,
-                            "summary": s[:320],
-                            "severity": sev,
-                            "verdict": tv,
-                            "key_signal": m.get("section_key_signal") or m.get("raw_tool_summary") or "",
-                            "confidence": getattr(f, "confidence_raw", None) if hasattr(f, "confidence_raw") else f.get("confidence_raw"),
-                            "section": m.get("section") or "",
-                        })
+                        preview.append(
+                            {
+                                "tool": tool,
+                                "summary": s[:320],
+                                "severity": sev,
+                                "verdict": tv,
+                                "key_signal": m.get("section_key_signal")
+                                or m.get("raw_tool_summary")
+                                or "",
+                                "confidence": getattr(f, "confidence_raw", None)
+                                if hasattr(f, "confidence_raw")
+                                else f.get("confidence_raw"),
+                                "section": m.get("section") or "",
+                            }
+                        )
                 if isinstance(synthesis, dict) and not preview:
                     summary = str(synthesis.get("narrative_summary") or "").strip()
                     if summary:
-                        preview.append({
-                            "tool": "agent_synthesis",
-                            "summary": summary[:420],
-                            "severity": "LOW",
-                            "verdict": str(synthesis.get("verdict") or "INCONCLUSIVE"),
-                        })
+                        preview.append(
+                            {
+                                "tool": "agent_synthesis",
+                                "summary": summary[:420],
+                                "severity": "LOW",
+                                "verdict": str(synthesis.get("verdict") or "INCONCLUSIVE"),
+                            }
+                        )
 
-                await broadcast_update(str(session_id), BriefUpdate(
-                    type="AGENT_COMPLETE" if status in ("complete", "error", "skipped") else "AGENT_UPDATE",
-                    session_id=str(session_id), agent_id=aid, agent_name=aname, message=message,
-                    data={
-                        "status": status,
-                        "findings_count": len(findings) if findings else 0,
-                        "error": error,
-                        "findings_preview": preview,
-                        "agent_verdict": synthesis.get("verdict") if isinstance(synthesis, dict) else None,
-                        "tool_error_rate": getattr(agent_inst, "_agent_error_rate", None) if agent_inst is not None else None,
-                        "tools_ran": getattr(agent_inst, "_tool_success_count", None) if agent_inst is not None else None,
-                        "tools_failed": getattr(agent_inst, "_tool_error_count", None) if agent_inst is not None else None,
-                        "section_flags": synthesis.get("sections") if isinstance(synthesis, dict) else None,
-                    }
-                ))
+                await broadcast_update(
+                    str(session_id),
+                    BriefUpdate(
+                        type="AGENT_COMPLETE"
+                        if status in ("complete", "error", "skipped")
+                        else "AGENT_UPDATE",
+                        session_id=str(session_id),
+                        agent_id=aid,
+                        agent_name=aname,
+                        message=message,
+                        data={
+                            "status": status,
+                            "findings_count": len(findings) if findings else 0,
+                            "error": error,
+                            "findings_preview": preview,
+                            "agent_verdict": synthesis.get("verdict")
+                            if isinstance(synthesis, dict)
+                            else None,
+                            "tool_error_rate": getattr(agent_inst, "_agent_error_rate", None)
+                            if agent_inst is not None
+                            else None,
+                            "tools_ran": getattr(agent_inst, "_tool_success_count", None)
+                            if agent_inst is not None
+                            else None,
+                            "tools_failed": getattr(agent_inst, "_tool_error_count", None)
+                            if agent_inst is not None
+                            else None,
+                            "section_flags": synthesis.get("sections")
+                            if isinstance(synthesis, dict)
+                            else None,
+                        },
+                    ),
+                )
             except Exception as exc:
                 logger.debug("Agent status broadcast failed", agent_id=aid, error=str(exc))
 
@@ -1113,7 +1233,7 @@ class ForensicCouncilPipeline:
             extra = {}
             if aid in (AgentID.AGENT2.value, AgentID.AGENT3.value, AgentID.AGENT4.value):
                 extra = {"inter_agent_bus": self.inter_agent_bus}
-            
+
             cls = registry.get_agent_class(aid)
             kwargs = {
                 "agent_id": aid,
@@ -1125,26 +1245,37 @@ class ForensicCouncilPipeline:
                 "custody_logger": self.custody_logger,
                 "evidence_store": self.evidence_store,
                 "heavy_tool_semaphore": self.heavy_tool_semaphore,
-                **extra
+                **extra,
             }
-            
+
             inst = cls(**kwargs)
             if self.inter_agent_bus is not None:
                 self.inter_agent_bus.register_agent(aid, inst)
-            
+
             supported = inst.supports_uploaded_file
             agent_instances.append((inst, supported))
 
             if not supported:
                 await _broadcast_agent_status(
-                    aid, "skipped", f"{aid} bypassed: file type not supported.", 
-                    error="Unsupported file type.", agent_inst=inst
+                    aid,
+                    "skipped",
+                    f"{aid} bypassed: file type not supported.",
+                    error="Unsupported file type.",
+                    agent_inst=inst,
                 )
             else:
-                await _broadcast_agent_status(aid, "running", f"Agent {aid} active. Initializing scan...", agent_inst=inst)
+                await _broadcast_agent_status(
+                    aid, "running", f"Agent {aid} active. Initializing scan...", agent_inst=inst
+                )
 
         # Update quorum based on applicable agents
-        applicable_ids = [aid for (inst, supported), aid in zip(agent_instances, registry.get_all_agent_ids()) if supported]
+        applicable_ids = [
+            aid
+            for (inst, supported), aid in zip(
+                agent_instances, registry.get_all_agent_ids(), strict=True
+            )
+            if supported
+        ]
         if self.signal_bus:
             self.signal_bus.update_applicable_agents(applicable_ids)
 
@@ -1152,7 +1283,7 @@ class ForensicCouncilPipeline:
         async def _run_one(agent, aid, supported):
             if not supported:
                 return agent, [], "unsupported"
-            
+
             try:
                 # We already broadcasted "running", but agents might broadcast again during loop
                 logger.info(f"Running {aid} initial investigation")
@@ -1160,13 +1291,15 @@ class ForensicCouncilPipeline:
                     agent.run_investigation(),
                     timeout=min(float(self.config.investigation_timeout), 300.0),
                 )
-                
+
                 # Signal for quorum
                 if self.signal_bus:
                     await self.signal_bus.signal_ready(aid, initial_findings)
 
                 message = f"{aid} initial analysis complete."
-                await _broadcast_agent_status(aid, "complete", message, findings=initial_findings, agent_inst=agent)
+                await _broadcast_agent_status(
+                    aid, "complete", message, findings=initial_findings, agent_inst=agent
+                )
                 return agent, initial_findings, "complete"
             except Exception as e:
                 logger.error(f"{aid} initial pass failed", error=str(e))
@@ -1174,19 +1307,35 @@ class ForensicCouncilPipeline:
                 # Signal for quorum even on error to prevent deadlock
                 if self.signal_bus:
                     await self.signal_bus.signal_failure(aid)
-                
-                await _broadcast_agent_status(aid, "error", f"{aid} error: {e}", findings=findings, error=str(e), agent_inst=agent)
+
+                await _broadcast_agent_status(
+                    aid,
+                    "error",
+                    f"{aid} error: {e}",
+                    findings=findings,
+                    error=str(e),
+                    agent_inst=agent,
+                )
                 return agent, findings, "error"
 
         raw_initial = await asyncio.gather(
-            *[_run_one(inst, aid, supported) for (inst, supported), aid in zip(agent_instances, registry.get_all_agent_ids())],
+            *[
+                _run_one(inst, aid, supported)
+                for (inst, supported), aid in zip(
+                    agent_instances, registry.get_all_agent_ids(), strict=True
+                )
+            ],
             return_exceptions=True,
         )
 
         # Mapping results back to instances (index-aligned with registry order)
         agent_map = {}
         for i, aid in enumerate(registry.get_all_agent_ids()):
-            res = raw_initial[i] if not isinstance(raw_initial[i], BaseException) else (None, [], "error")
+            res = (
+                raw_initial[i]
+                if not isinstance(raw_initial[i], BaseException)
+                else (None, [], "error")
+            )
             agent_map[aid] = res
 
         agent1, a1_init, a1_ok = agent_map[AgentID.AGENT1.value]
@@ -1198,7 +1347,9 @@ class ForensicCouncilPipeline:
         initial_results = [
             AgentLoopResult(
                 agent_id=aid,
-                findings=[f.model_dump(mode="json") if hasattr(f, "model_dump") else f for f in findings],
+                findings=[
+                    f.model_dump(mode="json") if hasattr(f, "model_dump") else f for f in findings
+                ],
                 reflection_report=(
                     getattr(agent, "_reflection_report", None).model_dump(mode="json")
                     if getattr(agent, "_reflection_report", None)
@@ -1261,13 +1412,14 @@ class ForensicCouncilPipeline:
                         raw_decision = await redis.get(decision_key)
                         if raw_decision:
                             import json as _json
+
                             decision = _json.loads(raw_decision)
                             if isinstance(decision, dict):
                                 self.run_deep_analysis_flag = bool(decision.get("deep_analysis"))
                                 logger.info(
-                                    "Analyst decision received via Redis", 
-                                    session_id=str(session_id), 
-                                    deep_analysis=self.run_deep_analysis_flag
+                                    "Analyst decision received via Redis",
+                                    session_id=str(session_id),
+                                    deep_analysis=self.run_deep_analysis_flag,
                                 )
                                 return self.run_deep_analysis_flag
                     except Exception as poll_err:
@@ -1275,16 +1427,19 @@ class ForensicCouncilPipeline:
                         logger.debug("Decision polling flicker", error=str(poll_err))
 
                     if self.deep_analysis_decision_event.is_set():
-                        logger.info("Analyst decision received via internal event", session_id=str(session_id))
+                        logger.info(
+                            "Analyst decision received via internal event",
+                            session_id=str(session_id),
+                        )
                         return bool(self.run_deep_analysis_flag)
-                    
+
                     # 2s poll is plenty responsive for a human decision
                     await asyncio.sleep(2.0)
-                
+
                 logger.warning(
                     "HITL decision timed out; defaulting to skip deep analysis",
                     session_id=str(session_id),
-                    timeout_seconds=timeout
+                    timeout_seconds=timeout,
                 )
                 return False
             finally:
@@ -1312,7 +1467,11 @@ class ForensicCouncilPipeline:
             try:
                 meta = {}
                 if hasattr(producer_finding, "metadata"):
-                    meta = producer_finding.metadata if isinstance(producer_finding.metadata, dict) else {}
+                    meta = (
+                        producer_finding.metadata
+                        if isinstance(producer_finding.metadata, dict)
+                        else {}
+                    )
                 elif isinstance(producer_finding, dict):
                     meta = producer_finding.get("metadata", {}) or producer_finding
 
@@ -1331,7 +1490,7 @@ class ForensicCouncilPipeline:
                 logger.warning(f"Early signal callback failed: {_cb_err}")
 
         # Configure producers and consumers
-        producer_id = AgentID.AGENT1.value # Primary vision producer
+        producer_id = AgentID.AGENT1.value  # Primary vision producer
         producer_inst = agent_map.get(producer_id, (None, None, "error"))[0]
 
         if producer_inst:
@@ -1361,9 +1520,21 @@ class ForensicCouncilPipeline:
             result = await run_agent_deep_only(a_inst, aid, a_init, a_supported)
 
             if result.error:
-                await _broadcast_agent_status(aid, "error", f"{aid} error: {result.error}", error=result.error, agent_inst=a_inst)
+                await _broadcast_agent_status(
+                    aid,
+                    "error",
+                    f"{aid} error: {result.error}",
+                    error=result.error,
+                    agent_inst=a_inst,
+                )
             else:
-                await _broadcast_agent_status(aid, "complete", f"{aid} analysis complete.", findings=result.findings, agent_inst=a_inst)
+                await _broadcast_agent_status(
+                    aid,
+                    "complete",
+                    f"{aid} analysis complete.",
+                    findings=result.findings,
+                    agent_inst=a_inst,
+                )
 
             # Fallback for producers: if early signal didn't fire, ensure event is set
             if aid == producer_id:
@@ -1371,7 +1542,10 @@ class ForensicCouncilPipeline:
                     # Scan findings for the tool result if callback never fired
                     gemini_res = {}
                     for f in result.findings or []:
-                        if isinstance(f, dict) and f.get("metadata", {}).get("tool_name") == "gemini_deep_forensic":
+                        if (
+                            isinstance(f, dict)
+                            and f.get("metadata", {}).get("tool_name") == "gemini_deep_forensic"
+                        ):
                             gemini_res = f.get("metadata", {})
                             break
 
@@ -1426,7 +1600,6 @@ class ForensicCouncilPipeline:
 
         return list(results)
 
-
     async def handle_hitl_decision(
         self,
         session_id: UUID,
@@ -1450,9 +1623,7 @@ class ForensicCouncilPipeline:
 
         # Get checkpoint info
         checkpoints = await self.session_manager.get_active_checkpoints(session_id)
-        checkpoint = next(
-            (cp for cp in checkpoints if cp.checkpoint_id == checkpoint_id), None
-        )
+        checkpoint = next((cp for cp in checkpoints if cp.checkpoint_id == checkpoint_id), None)
 
         if not checkpoint:
             raise ValueError(f"Checkpoint {checkpoint_id} not found")

@@ -52,12 +52,13 @@ from PIL import Image
 _QUALITY_LEVELS = [70, 80, 90, 95, 98]
 _BLOCK_SIZE = 16
 _ANOMALY_THRESHOLD_ELA = 10.0  # ELA pixel value; above this = suspicious block
-_MIN_CLUSTER_BLOCKS = 3        # minimum contiguous blocks to form a region
+_MIN_CLUSTER_BLOCKS = 3  # minimum contiguous blocks to form a region
 
 
 # ---------------------------------------------------------------------------
 # Core analysis
 # ---------------------------------------------------------------------------
+
 
 def _ela_at_quality(pil_img: Image.Image, quality: int) -> np.ndarray:
     """Return mean-channel ELA map at a single quality level."""
@@ -117,7 +118,8 @@ def _dct_block_features(block: np.ndarray) -> np.ndarray:
     """
     if block.shape != (_BLOCK_SIZE, _BLOCK_SIZE):
         block = cv2.resize(
-            block.astype(np.float32), (_BLOCK_SIZE, _BLOCK_SIZE),
+            block.astype(np.float32),
+            (_BLOCK_SIZE, _BLOCK_SIZE),
             interpolation=cv2.INTER_LINEAR,
         )
     b = block.astype(np.float32)
@@ -142,7 +144,7 @@ def _dct_block_features(block: np.ndarray) -> np.ndarray:
 
 
 def _cluster_anomalous_blocks(
-    anomaly_mask: np.ndarray,   # (num_row_blocks, num_col_blocks) bool
+    anomaly_mask: np.ndarray,  # (num_row_blocks, num_col_blocks) bool
     block_size: int,
 ) -> list[dict[str, int]]:
     """
@@ -242,8 +244,8 @@ def analyze(image_path: str) -> dict[str, Any]:
     mean_ela = float(ela_map.mean())
 
     # Confidence: blended signal from region count, ELA max, and block ratio
-    conf_ela = min(max_anomaly / 40.0, 1.0)          # ELA magnitude signal
-    conf_ratio = min(block_anomaly_ratio / 0.20, 1.0) # block contamination rate
+    conf_ela = min(max_anomaly / 40.0, 1.0)  # ELA magnitude signal
+    conf_ratio = min(block_anomaly_ratio / 0.20, 1.0)  # block contamination rate
     conf_regions = min(len(anomaly_regions) / 5.0, 1.0)
     confidence = round(float(0.45 * conf_ela + 0.35 * conf_ratio + 0.20 * conf_regions), 3)
     manipulation_detected = len(anomaly_regions) >= 1 and max_anomaly >= _ANOMALY_THRESHOLD_ELA
@@ -267,6 +269,7 @@ def analyze(image_path: str) -> dict[str, Any]:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def _run_worker() -> None:
     for line in sys.stdin:
         line = line.strip()
@@ -287,10 +290,14 @@ def _run_worker() -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Neural ELA Transformer — ViT-style multi-quality ELA")
+    parser = argparse.ArgumentParser(
+        description="Neural ELA Transformer — ViT-style multi-quality ELA"
+    )
     parser.add_argument("--input", type=str, help="Path to input image")
     parser.add_argument("--warmup", action="store_true", help="Warmup mode")
-    parser.add_argument("--worker", action="store_true", help="Worker mode (persistent stdin/stdout)")
+    parser.add_argument(
+        "--worker", action="store_true", help="Worker mode (persistent stdin/stdout)"
+    )
     args = parser.parse_args()
 
     if args.warmup:
@@ -299,11 +306,16 @@ if __name__ == "__main__":
             import numpy  # noqa: F401
             from PIL import Image  # noqa: F401
             from sklearn.ensemble import IsolationForest  # noqa: F401
-            print(json.dumps({
-                "status": "warmed_up",
-                "dependencies": ["cv2", "numpy", "PIL", "sklearn"],
-                "message": "Neural ELA Transformer ready",
-            }))
+
+            print(
+                json.dumps(
+                    {
+                        "status": "warmed_up",
+                        "dependencies": ["cv2", "numpy", "PIL", "sklearn"],
+                        "message": "Neural ELA Transformer ready",
+                    }
+                )
+            )
             sys.exit(0)
         except Exception as exc:
             print(json.dumps({"status": "warmup_failed", "error": str(exc)}))

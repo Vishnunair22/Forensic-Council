@@ -50,12 +50,13 @@ class AgentInvestigationMixin:
         """
         try:
             from core.working_memory import TaskStatus
+
             await self.working_memory.create_task(
                 session_id=self.session_id,
                 agent_id=self.agent_id,
                 description=description,
                 status=TaskStatus.PENDING,
-                priority=priority
+                priority=priority,
             )
             logger.info("Dynamic task injected", agent_id=self.agent_id, task=description)
         except Exception as e:
@@ -74,6 +75,7 @@ class AgentInvestigationMixin:
             )
             if self.custody_logger:
                 from core.custody_logger import EntryType
+
                 await self.custody_logger.log_entry(
                     agent_id=self.agent_id,
                     session_id=self.session_id,
@@ -84,6 +86,7 @@ class AgentInvestigationMixin:
                         "note": "Degraded mode — these tools will produce INCOMPLETE findings",
                     },
                 )
+
     async def _retrieve_episodic_context(self) -> str: ...
     async def self_reflection_pass(self, findings: list[AgentFinding]) -> Any: ...
 
@@ -92,10 +95,7 @@ class AgentInvestigationMixin:
         registry = getattr(self, "_tool_registry", None)
         if registry is None:
             return
-        snapshot = [
-            tool.model_dump()
-            for tool in registry.list_tools()
-        ]
+        snapshot = [tool.model_dump() for tool in registry.list_tools()]
         try:
             await self.working_memory.update_state(
                 session_id=self.session_id,
@@ -154,7 +154,11 @@ class AgentInvestigationMixin:
                                     f.metadata["section_label"] = section.get("label")
                                     # Map severity to frontend-friendly flags
                                     sev = section.get("severity", "LOW")
-                                    f.metadata["section_flag"] = "bad" if sev in ("HIGH", "CRITICAL") else ("warn" if sev == "MEDIUM" else "ok")
+                                    f.metadata["section_flag"] = (
+                                        "bad"
+                                        if sev in ("HIGH", "CRITICAL")
+                                        else ("warn" if sev == "MEDIUM" else "ok")
+                                    )
                                     # Also store the section-level opinion for context
                                     f.metadata["llm_synthesis"] = section.get("opinion")
 
@@ -245,11 +249,11 @@ class AgentInvestigationMixin:
             and f.status != "INCOMPLETE"
             and f.evidence_verdict != "ERROR"
         ]
-        confidence = round(sum(confidence_values) / len(confidence_values), 3) if confidence_values else 0.0
+        confidence = (
+            round(sum(confidence_values) / len(confidence_values), 3) if confidence_values else 0.0
+        )
         error_count = sum(
-            1
-            for f in actionable
-            if f.status == "INCOMPLETE" or f.evidence_verdict == "ERROR"
+            1 for f in actionable if f.status == "INCOMPLETE" or f.evidence_verdict == "ERROR"
         )
         error_rate = round(error_count / len(actionable), 3) if actionable else 0.0
         positive_count = sum(1 for f in actionable if f.evidence_verdict == "POSITIVE")
@@ -260,9 +264,7 @@ class AgentInvestigationMixin:
         elif positive_count == 1 or error_rate > 0.25:
             verdict = "SUSPICIOUS"
         elif (
-            error_rate == 0
-            and actionable
-            and negative_count >= max(1, int(len(actionable) * 0.75))
+            error_rate == 0 and actionable and negative_count >= max(1, int(len(actionable) * 0.75))
         ):
             verdict = "AUTHENTIC"
             if confidence < 0.7:
@@ -338,7 +340,9 @@ class AgentInvestigationMixin:
                     llm_client=llm_client,
                     config=self.config,
                     agent_name=self.agent_name,
-                    evidence_context={"mime_type": getattr(self.evidence_artifact, "mime_type", "")},
+                    evidence_context={
+                        "mime_type": getattr(self.evidence_artifact, "mime_type", "")
+                    },
                 )
 
         loop_result = await loop_engine.run(
@@ -351,7 +355,9 @@ class AgentInvestigationMixin:
         self._react_chain = loop_result.react_chain
         self._loop_result = loop_result
 
-        synthesis = await self._synthesize_findings_once(self._findings, phase="initial", timeout_s=15.0)
+        synthesis = await self._synthesize_findings_once(
+            self._findings, phase="initial", timeout_s=15.0
+        )
 
         if synthesis is None:
             synthesis = self._build_deterministic_synthesis(self._findings, phase="initial")
@@ -415,7 +421,9 @@ class AgentInvestigationMixin:
             f.metadata["analysis_phase"] = "deep"
 
         self._findings = self._findings + deep_findings
-        synthesis = await self._synthesize_findings_once(self._findings, phase="deep", timeout_s=20.0)
+        synthesis = await self._synthesize_findings_once(
+            self._findings, phase="deep", timeout_s=20.0
+        )
         if synthesis is None:
             synthesis = self._build_deterministic_synthesis(self._findings, phase="deep")
             self._agent_confidence = synthesis["agent_confidence"]
@@ -427,14 +435,13 @@ class AgentInvestigationMixin:
         return deep_findings
 
     async def run_challenge(
-        self,
-        contradicting_finding: dict[str, Any],
-        context: dict[str, Any]
+        self, contradicting_finding: dict[str, Any], context: dict[str, Any]
     ) -> list[AgentFinding]:
         """Re-invokes the agent's ReAct loop to resolve a contradiction."""
         logger.info(f"Agent {self.agent_id} challenged by Arbiter")
 
         from core.custody_logger import EntryType
+
         if self.custody_logger:
             await self.custody_logger.log_entry(
                 agent_id=self.agent_id,
@@ -444,7 +451,7 @@ class AgentInvestigationMixin:
                     "action": "run_challenge",
                     "contradicting_agent": contradicting_finding.get("agent_id"),
                     "contradiction_type": contradicting_finding.get("finding_type"),
-                }
+                },
             )
 
         challenge_thought = (
@@ -469,7 +476,7 @@ class AgentInvestigationMixin:
                 llm_client=llm_client,
                 config=self.config,
                 agent_name=self.agent_name,
-                evidence_context={"challenge_mode": True, "contradiction": contradicting_finding}
+                evidence_context={"challenge_mode": True, "contradiction": contradicting_finding},
             )
 
         if self._tool_registry is None:
@@ -478,7 +485,7 @@ class AgentInvestigationMixin:
         loop_result = await loop_engine.run(
             initial_thought=challenge_thought,
             tool_registry=self._tool_registry,
-            llm_generator=llm_generator
+            llm_generator=llm_generator,
         )
 
         self._findings = loop_result.findings
@@ -489,6 +496,7 @@ class AgentInvestigationMixin:
         logger.warning(f"HITL checkpoint flagged: {reason.value} - {brief}")
         if self.custody_logger:
             from core.custody_logger import EntryType
+
             await self.custody_logger.log_entry(
                 agent_id=self.agent_id,
                 session_id=self.session_id,
@@ -501,6 +509,7 @@ class AgentInvestigationMixin:
         logger.info(f"Handling inter-agent call from {call.caller_agent_id}")
         if self.custody_logger:
             from core.custody_logger import EntryType
+
             await self.custody_logger.log_entry(
                 agent_id=self.agent_id,
                 session_id=self.session_id,

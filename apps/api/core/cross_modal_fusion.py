@@ -179,9 +179,7 @@ def _extract_signals(findings_by_agent: dict[str, list[dict]]) -> list[ModalityS
     return signals
 
 
-def _find_corroboration(
-    sig_a: ModalitySignal, sig_b: ModalitySignal
-) -> dict[str, str] | None:
+def _find_corroboration(sig_a: ModalitySignal, sig_b: ModalitySignal) -> dict[str, str] | None:
     """
     Check if two signals corroborate each other.
 
@@ -202,9 +200,7 @@ def _find_corroboration(
     return None
 
 
-def _find_contradiction(
-    sig_a: ModalitySignal, sig_b: ModalitySignal
-) -> dict[str, str] | None:
+def _find_contradiction(sig_a: ModalitySignal, sig_b: ModalitySignal) -> dict[str, str] | None:
     """
     Check if two signals contradict each other.
 
@@ -288,25 +284,29 @@ def fuse(
         for ini in initial_sigs:
             for dep in deep_sigs:
                 if ini.manipulation_detected and not dep.manipulation_detected:
-                    contradictions.append({
-                        "agents": f"{agent_id} initial vs deep",
-                        "modalities": f"{ini.modality.value} initial vs deep",
-                        "detail": (
-                            f"{ini.finding_type} (initial) detects manipulation "
-                            f"while {dep.finding_type} (deep) indicates authenticity "
-                            f"within the same agent"
-                        ),
-                    })
+                    contradictions.append(
+                        {
+                            "agents": f"{agent_id} initial vs deep",
+                            "modalities": f"{ini.modality.value} initial vs deep",
+                            "detail": (
+                                f"{ini.finding_type} (initial) detects manipulation "
+                                f"while {dep.finding_type} (deep) indicates authenticity "
+                                f"within the same agent"
+                            ),
+                        }
+                    )
                 elif ini.manipulation_detected and dep.manipulation_detected:
-                    corroborations.append({
-                        "agents": f"{agent_id} initial + deep",
-                        "modalities": f"{ini.modality.value} initial + deep",
-                        "direction": "manipulation",
-                        "detail": (
-                            f"{ini.finding_type} (initial) and {dep.finding_type} (deep) "
-                            f"both detect manipulation within the same agent"
-                        ),
-                    })
+                    corroborations.append(
+                        {
+                            "agents": f"{agent_id} initial + deep",
+                            "modalities": f"{ini.modality.value} initial + deep",
+                            "direction": "manipulation",
+                            "detail": (
+                                f"{ini.finding_type} (initial) and {dep.finding_type} (deep) "
+                                f"both detect manipulation within the same agent"
+                            ),
+                        }
+                    )
 
     # Determine independent modalities (no corroboration or contradiction)
     involved_agents: set[str] = set()
@@ -331,9 +331,8 @@ def fuse(
             for corr in corroborations:
                 if s.agent_id in corr.get("agents", ""):
                     for other_s in signals:
-                        if (
-                            other_s.agent_id != s.agent_id
-                            and other_s.agent_id in corr.get("agents", "")
+                        if other_s.agent_id != s.agent_id and other_s.agent_id in corr.get(
+                            "agents", ""
                         ):
                             pk = frozenset({s.modality, other_s.modality})
                             max_weight = max(
@@ -342,10 +341,10 @@ def fuse(
                             )
 
             # Weighted Power Mean calculation
-            weighted_power_sum += (s.confidence ** p) * max_weight
+            weighted_power_sum += (s.confidence**p) * max_weight
             weight_sum += max_weight
 
-        fused_confidence = (weighted_power_sum / weight_sum) ** (1/p) if weight_sum > 0 else 0.5
+        fused_confidence = (weighted_power_sum / weight_sum) ** (1 / p) if weight_sum > 0 else 0.5
     else:
         # No corroboration — use simple max confidence to represent "strongest hint"
         fused_confidence = max(s.confidence for s in signals)
@@ -384,9 +383,7 @@ def fuse(
         )
 
     rationale = (
-        " ".join(rationale_parts)
-        if rationale_parts
-        else "No cross-modal relationships detected."
+        " ".join(rationale_parts) if rationale_parts else "No cross-modal relationships detected."
     )
 
     logger.info(

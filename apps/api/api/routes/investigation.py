@@ -199,12 +199,13 @@ async def start_investigation(
             logger.debug("Evidence deduplication skipped", error=str(exc))
 
         import magic
+
         with open(tmp_path, "rb") as _f:
             head = _f.read(2048)
-        
+
         # Use to_thread to prevent blocking the event loop on MIME detection
         mime = await asyncio.to_thread(magic.from_buffer, head, mime=True)
-        
+
         valid_exts = _EXACT_MIME_EXT_MAP.get(mime, frozenset())
         if not valid_exts or raw_suffix not in valid_exts:
             tmp_path.unlink(missing_ok=True)
@@ -223,7 +224,7 @@ async def start_investigation(
                         img.verify()
                     with Image.open(path) as img2:
                         return img2.size
-                
+
                 size = await asyncio.to_thread(_verify_image, str(tmp_path))
                 w, h = size
                 if w * h > 100_000_000:
@@ -253,12 +254,15 @@ async def start_investigation(
 
             try:
                 # Signal immediately that the task is in the queue
-                await broadcast_update(session_id, BriefUpdate(
-                    type="AGENT_UPDATE",
-                    session_id=session_id,
-                    message="Investigation enqueued. Awaiting available forensic worker...",
-                    data={"status": "initiating", "thinking": "Queueing forensic task..."}
-                ))
+                await broadcast_update(
+                    session_id,
+                    BriefUpdate(
+                        type="AGENT_UPDATE",
+                        session_id=session_id,
+                        message="Investigation enqueued. Awaiting available forensic worker...",
+                        data={"status": "initiating", "thinking": "Queueing forensic task..."},
+                    ),
+                )
 
                 await get_investigation_queue().submit(
                     session_id=UUID(session_id),

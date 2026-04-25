@@ -62,9 +62,7 @@ class AgentMetrics(BaseModel):
     total_tools_called: int = 0
     tools_succeeded: int = 0
     tools_failed: int = 0
-    tools_not_applicable: int = (
-        0  # tools that don't apply to this file type (not errors)
-    )
+    tools_not_applicable: int = 0  # tools that don't apply to this file type (not errors)
     error_rate: float = 0.0  # 0.0–1.0 (failed / applicable tools run)
     confidence_score: float = 0.0  # avg confidence across real applicable findings
     finding_count: int = 0
@@ -265,9 +263,21 @@ def confidence_of(finding: dict[str, Any], default: float | None = None) -> floa
     calibration_status = str(finding.get("calibration_status") or "").upper()
     use_calibrated = bool(finding.get("calibrated")) or calibration_status == "TRAINED"
     keys = (
-        ("calibrated_probability", "tool_reliability", "raw_confidence_score", "confidence_raw", "manipulation_confidence")
+        (
+            "calibrated_probability",
+            "tool_reliability",
+            "raw_confidence_score",
+            "confidence_raw",
+            "manipulation_confidence",
+        )
         if use_calibrated
-        else ("tool_reliability", "confidence_raw", "manipulation_confidence", "raw_confidence_score", "calibrated_probability")
+        else (
+            "tool_reliability",
+            "confidence_raw",
+            "manipulation_confidence",
+            "raw_confidence_score",
+            "calibrated_probability",
+        )
     )
     for key in keys:
         value = finding.get(key)
@@ -287,8 +297,6 @@ MIN_CONFIDENCE_THRESHOLD = 0.15
 
 
 def _has_legacy_positive_signal(finding: dict[str, Any]) -> bool:
-
-
 
     meta = finding.get("metadata") or {}
     return (
@@ -327,10 +335,7 @@ def _has_legacy_positive_signal(finding: dict[str, Any]) -> bool:
             "INCONSISTENT" in str(meta.get("verdict", "")).upper()
             and meta.get("verdict") is not None
         )
-        or (
-            "TAMPERED" in str(meta.get("verdict", "")).upper()
-            and meta.get("verdict") is not None
-        )
+        or ("TAMPERED" in str(meta.get("verdict", "")).upper() and meta.get("verdict") is not None)
     )
 
 
@@ -363,7 +368,6 @@ def calculate_manipulation_probability(
         if _is_direct_manip:
             _c = confidence_of(_f, default=0.5) or 0.5
             if _c >= MIN_CONFIDENCE_THRESHOLD:
-
                 _tool = (
                     str(_meta.get("tool_name", _f.get("finding_type", "")))
                     .lower()
@@ -423,6 +427,7 @@ def calculate_manipulation_probability(
         final_prob = round(min(ForensicPolicy.MANIP_PROBABILITY_CAP, _base_prob + _volume_bonus), 3)
         return final_prob, signals_count
 
+
 def _get_finding_category(finding_type: str, agent_id: str = "") -> str | None:
     """Map a finding_type to its semantic category, or None."""
     ft = finding_type.lower().replace(" ", "_")
@@ -437,9 +442,7 @@ def _get_finding_category(finding_type: str, agent_id: str = "") -> str | None:
     return None
 
 
-async def cross_agent_comparison(
-    all_findings: list[dict[str, Any]]
-) -> list[FindingComparison]:
+async def cross_agent_comparison(all_findings: list[dict[str, Any]]) -> list[FindingComparison]:
     """Compare findings across agents using category-indexed comparison."""
     comparisons: list[FindingComparison] = []
     real_findings = [f for f in all_findings if not f.get("stub_result")]
@@ -480,7 +483,10 @@ async def cross_agent_comparison(
                             continue
                         verdict_a = evidence_verdict_of(fa)
                         verdict_b = evidence_verdict_of(fb)
-                        if "ERROR" in {verdict_a, verdict_b} or "NOT_APPLICABLE" in {verdict_a, verdict_b}:
+                        if "ERROR" in {verdict_a, verdict_b} or "NOT_APPLICABLE" in {
+                            verdict_a,
+                            verdict_b,
+                        }:
                             continue
                         conf_a = confidence_of(fa, default=0.5) or 0.5
                         conf_b = confidence_of(fb, default=0.5) or 0.5
@@ -490,7 +496,9 @@ async def cross_agent_comparison(
                             FindingComparison(
                                 finding_a=fa,
                                 finding_b=fb,
-                                verdict=FindingVerdict.AGREEMENT if is_agreement else FindingVerdict.CONTRADICTION,
+                                verdict=FindingVerdict.AGREEMENT
+                                if is_agreement
+                                else FindingVerdict.CONTRADICTION,
                                 cross_modal_confirmed=is_agreement,
                             )
                         )

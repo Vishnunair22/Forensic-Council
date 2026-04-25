@@ -50,9 +50,17 @@ def check_thumbnail_coherence(path: str) -> dict[str, Any]:
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
     if total < 3:
         cap.release()
-        return {"available": False, "not_applicable": True, "reason": "Too few frames for thumbnail coherence."}
+        return {
+            "available": False,
+            "not_applicable": True,
+            "reason": "Too few frames for thumbnail coherence.",
+        }
 
-    labels = [("early", max(0, int(total * 0.02))), ("middle", int(total * 0.50)), ("late", max(0, int(total * 0.90)))]
+    labels = [
+        ("early", max(0, int(total * 0.02))),
+        ("middle", int(total * 0.50)),
+        ("late", max(0, int(total * 0.90))),
+    ]
     hashes: dict[str, int] = {}
     try:
         for label, idx in labels:
@@ -77,7 +85,9 @@ def check_thumbnail_coherence(path: str) -> dict[str, Any]:
     early_mid = distances.get("early_vs_middle", 0)
     early_late = distances.get("early_vs_late", 0)
     mid_late = distances.get("late_vs_middle", distances.get("middle_vs_late", 0))
-    mismatch = (early_mid >= 28 and early_late >= 28 and mid_late <= 22) or max(distances.values()) >= 42
+    mismatch = (early_mid >= 28 and early_late >= 28 and mid_late <= 22) or max(
+        distances.values()
+    ) >= 42
     score = min(1.0, max(distances.values()) / 64.0)
     return {
         "available": True,
@@ -100,7 +110,11 @@ def _worker() -> None:
         try:
             req = json.loads(line)
             path = req.get("input")
-            result = check_thumbnail_coherence(path) if path else {"error": "Missing input path", "available": False}
+            result = (
+                check_thumbnail_coherence(path)
+                if path
+                else {"error": "Missing input path", "available": False}
+            )
         except Exception as exc:
             result = {"error": str(exc), "available": False}
         print(json.dumps(result), flush=True)

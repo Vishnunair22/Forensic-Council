@@ -5,6 +5,7 @@ Uses FastAPI's TestClient with all infrastructure mocked.
 Tests every HTTP endpoint: auth, investigate, sessions, HITL, metrics, health.
 Also validates security headers, request validation, and error shapes.
 """
+
 import io
 import os
 import uuid
@@ -21,6 +22,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 try:
     from fastapi.testclient import TestClient
+
     HAS_FASTAPI = True
 except ImportError:
     HAS_FASTAPI = False
@@ -28,6 +30,7 @@ except ImportError:
 pytestmark = pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi not installed")
 
 # â”€â”€ Build TestClient with all infra mocked â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 @pytest.fixture(scope="module")
 def client():
@@ -42,7 +45,7 @@ def client():
     mock_redis.incrby = AsyncMock(return_value=1)
     mock_redis.ttl = AsyncMock(return_value=3600)
     mock_redis.ping = AsyncMock(return_value=True)
-    
+
     mock_pipeline = AsyncMock()
     mock_pipeline.execute = AsyncMock(return_value=[])
     mock_redis.pipeline = MagicMock(return_value=mock_pipeline)
@@ -71,16 +74,20 @@ def client():
 
     try:
         from api.main import app
-        
+
         # Ensure dev fallback users are populated for login tests
-        with patch.dict(os.environ, {
-            "BOOTSTRAP_ADMIN_PASSWORD": "admin_test_123!",
-            "BOOTSTRAP_INVESTIGATOR_PASSWORD": "inv_test_123!"
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "BOOTSTRAP_ADMIN_PASSWORD": "admin_test_123!",
+                "BOOTSTRAP_INVESTIGATOR_PASSWORD": "inv_test_123!",
+            },
+        ):
             # Re-trigger dev fallback build if it was already imported
             import api.routes.auth
+
             api.routes.auth._DEMO_USERS_FALLBACK = api.routes.auth._build_dev_fallback()
-            
+
             with TestClient(app, raise_server_exceptions=False) as c:
                 yield c
     except ImportError:
@@ -92,12 +99,15 @@ def client():
 
 @pytest.fixture
 def jpeg_file():
-    return io.BytesIO(b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9")
+    return io.BytesIO(
+        b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9"
+    )
 
 
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # ROOT & HEALTH
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
 
 class TestRootAndHealth:
     def test_root_returns_200(self, client):
@@ -132,10 +142,11 @@ class TestRootAndHealth:
 # SECURITY HEADERS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+
 class TestSecurityHeaders:
     REQUIRED_HEADERS = [
         ("x-content-type-options", "nosniff"),
-        ("x-frame-options", None),           # value varies
+        ("x-frame-options", None),  # value varies
         ("referrer-policy", None),
     ]
 
@@ -168,6 +179,7 @@ class TestSecurityHeaders:
 # AUTH ENDPOINTS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+
 class TestAuthEndpoints:
     def test_login_endpoint_exists(self, client):
         r = client.post("/api/v1/auth/login", data={"username": "x", "password": "y"})
@@ -177,13 +189,19 @@ class TestAuthEndpoints:
         """The demo investigator account should be valid with BOOTSTRAP env vars."""
         r = client.post(
             "/api/v1/auth/login",
-            data={"username": "investigator", "password": os.environ.get("BOOTSTRAP_INVESTIGATOR_PASSWORD", "inv_test_123!")},
+            data={
+                "username": "investigator",
+                "password": os.environ.get("BOOTSTRAP_INVESTIGATOR_PASSWORD", "inv_test_123!"),
+            },
         )
         # Either 200 (success) or 401 (bootstrap not run) â€” both are valid
         assert r.status_code in (200, 401, 422)
 
     def test_login_wrong_password_returns_401(self, client):
-        r = client.post("/api/v1/auth/login", data={"username": "investigator", "password": "absolutely-wrong-password"})
+        r = client.post(
+            "/api/v1/auth/login",
+            data={"username": "investigator", "password": "absolutely-wrong-password"},
+        )
         assert r.status_code in (401, 422)
 
     def test_login_missing_body_returns_422(self, client):
@@ -210,45 +228,58 @@ class TestAuthEndpoints:
 # INVESTIGATION ENDPOINT
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+
 class TestInvestigationEndpoint:
     def test_investigate_without_auth_returns_401(self, client, jpeg_file):
         # State-changing requests require CSRF tokens.
         client.get("/")
         csrf_token = client.cookies.get("csrf_token")
-        
+
         client.cookies.clear()
-        r = client.post("/api/v1/investigate", 
-                        headers={"X-CSRF-Token": csrf_token or "missing"},
-                        files={"file": ("e.jpg", jpeg_file, "image/jpeg")},
-                        data={"case_id": "CASE-1234567890", "investigator_id": "REQ-12345"})
+        r = client.post(
+            "/api/v1/investigate",
+            headers={"X-CSRF-Token": csrf_token or "missing"},
+            files={"file": ("e.jpg", jpeg_file, "image/jpeg")},
+            data={"case_id": "CASE-1234567890", "investigator_id": "REQ-12345"},
+        )
         assert r.status_code in (401, 403)
 
     def test_investigate_valid_request_returns_200(self, client, auth_headers, jpeg_file):
-        from core.auth import get_current_user, User, UserRole
+        from core.auth import User, UserRole, get_current_user
+
         mock_user = User(user_id="user-1", username="test", role=UserRole.INVESTIGATOR)
-        
+
         # Apply local override
         client.app.dependency_overrides[get_current_user] = lambda: mock_user
-        
+
         client.get("/")
         csrf_token = client.cookies.get("csrf_token")
         headers = {**auth_headers, "X-CSRF-Token": csrf_token or "dummy"}
-        
+
         try:
             # Mock various dependencies to allow the request to proceed without real infra
-            with patch("api.routes.investigation.check_investigation_rate_limit", new_callable=AsyncMock), \
-                 patch("api.routes.investigation.check_daily_cost_quota", new_callable=AsyncMock), \
-                 patch("api.routes.investigation.set_active_pipeline_metadata", new_callable=AsyncMock), \
-                 patch("magic.from_buffer", return_value="image/jpeg"), \
-                 patch("api.routes.investigation.settings", MagicMock(evidence_storage_path="/tmp", use_redis_worker=False)), \
-                 patch("api.routes.investigation.Path.mkdir", MagicMock()), \
-                 patch("api.routes.investigation.open", MagicMock()):
-                
+            with (
+                patch(
+                    "api.routes.investigation.check_investigation_rate_limit",
+                    new_callable=AsyncMock,
+                ),
+                patch("api.routes.investigation.check_daily_cost_quota", new_callable=AsyncMock),
+                patch(
+                    "api.routes.investigation.set_active_pipeline_metadata", new_callable=AsyncMock
+                ),
+                patch("magic.from_buffer", return_value="image/jpeg"),
+                patch(
+                    "api.routes.investigation.settings",
+                    MagicMock(evidence_storage_path="/tmp", use_redis_worker=False),
+                ),
+                patch("api.routes.investigation.Path.mkdir", MagicMock()),
+                patch("api.routes.investigation.open", MagicMock()),
+            ):
                 r = client.post(
                     "/api/v1/investigate",
                     headers=headers,
                     files={"file": ("test.jpg", jpeg_file, "image/jpeg")},
-                    data={"case_id": "CASE-1234567890", "investigator_id": "REQ-12345"}
+                    data={"case_id": "CASE-1234567890", "investigator_id": "REQ-12345"},
                 )
                 assert r.status_code in [200, 500]
                 if r.status_code == 200:
@@ -259,34 +290,43 @@ class TestInvestigationEndpoint:
             client.app.dependency_overrides.clear()
 
     def test_investigate_missing_file_returns_422(self, client):
-        r = client.post("/api/v1/investigate",
-                        data={"case_id": "CASE-1234567890", "investigator_id": "REQ-12345"},
-                        headers={"Authorization": "Bearer fake-token"})
+        r = client.post(
+            "/api/v1/investigate",
+            data={"case_id": "CASE-1234567890", "investigator_id": "REQ-12345"},
+            headers={"Authorization": "Bearer fake-token"},
+        )
         assert r.status_code in (401, 403, 422)
 
     def test_investigate_missing_case_id_returns_422(self, client, jpeg_file):
-        r = client.post("/api/v1/investigate",
-                        files={"file": ("e.jpg", jpeg_file, "image/jpeg")},
-                        data={"investigator_id": "REQ-12345"},
-                        headers={"Authorization": "Bearer fake-token"})
+        r = client.post(
+            "/api/v1/investigate",
+            files={"file": ("e.jpg", jpeg_file, "image/jpeg")},
+            data={"investigator_id": "REQ-12345"},
+            headers={"Authorization": "Bearer fake-token"},
+        )
         assert r.status_code in (401, 403, 422)
 
     def test_investigate_invalid_case_id_format(self, client, jpeg_file):
-        r = client.post("/api/v1/investigate",
-                        files={"file": ("e.jpg", jpeg_file, "image/jpeg")},
-                        data={"case_id": "INVALID-ID", "investigator_id": "REQ-12345"},
-                        headers={"Authorization": "Bearer fake-token"})
+        r = client.post(
+            "/api/v1/investigate",
+            files={"file": ("e.jpg", jpeg_file, "image/jpeg")},
+            data={"case_id": "INVALID-ID", "investigator_id": "REQ-12345"},
+            headers={"Authorization": "Bearer fake-token"},
+        )
         assert r.status_code in (400, 401, 403, 422)
 
     def test_investigate_oversized_content_length_rejected(self, client):
-        r = client.post("/api/v1/investigate",
-                        headers={"Authorization": "Bearer fake", "Content-Length": "999999999"})
+        r = client.post(
+            "/api/v1/investigate",
+            headers={"Authorization": "Bearer fake", "Content-Length": "999999999"},
+        )
         assert r.status_code in (400, 401, 403, 413, 422)
 
 
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # SESSION ENDPOINTS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
 
 class TestSessionEndpoints:
     def test_nonexistent_session_report_returns_404_or_401(self, client):
@@ -318,29 +358,41 @@ class TestSessionEndpoints:
 # HITL ENDPOINT
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+
 class TestHITLEndpoint:
     def test_hitl_without_auth_returns_401(self, client):
-        r = client.post("/api/v1/hitl/decision",
-                        json={"session_id": "s", "checkpoint_id": "c", "agent_id": "a", "decision": "APPROVE"})
+        r = client.post(
+            "/api/v1/hitl/decision",
+            json={"session_id": "s", "checkpoint_id": "c", "agent_id": "a", "decision": "APPROVE"},
+        )
         assert r.status_code in (401, 403)
 
     def test_hitl_invalid_body_returns_422(self, client):
-        r = client.post("/api/v1/hitl/decision",
-                        json={"bad": "body"},
-                        headers={"Authorization": "Bearer fake-token"})
+        r = client.post(
+            "/api/v1/hitl/decision",
+            json={"bad": "body"},
+            headers={"Authorization": "Bearer fake-token"},
+        )
         assert r.status_code in (401, 403, 422)
 
     def test_hitl_valid_structure(self, client):
-        r = client.post("/api/v1/hitl/decision",
-                        json={"session_id": str(uuid.uuid4()), "checkpoint_id": str(uuid.uuid4()),
-                              "agent_id": "agent-arbiter", "decision": "APPROVE"},
-                        headers={"Authorization": "Bearer fake-token"})
+        r = client.post(
+            "/api/v1/hitl/decision",
+            json={
+                "session_id": str(uuid.uuid4()),
+                "checkpoint_id": str(uuid.uuid4()),
+                "agent_id": "agent-arbiter",
+                "decision": "APPROVE",
+            },
+            headers={"Authorization": "Bearer fake-token"},
+        )
         assert r.status_code in (200, 401, 403, 404)
 
 
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # METRICS ENDPOINT
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
 
 class TestMetricsEndpoint:
     def test_metrics_endpoint_exists(self, client):
@@ -361,6 +413,7 @@ class TestMetricsEndpoint:
 # GENERAL REQUEST HANDLING
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+
 class TestRequestHandling:
     def test_options_method_handled(self, client):
         r = client.options("/api/v1/auth/login")
@@ -371,9 +424,11 @@ class TestRequestHandling:
         assert r.status_code in (404, 405)
 
     def test_invalid_json_body_returns_422(self, client):
-        r = client.post("/api/v1/hitl/decision",
-                        data="not-json",
-                        headers={"Authorization": "Bearer t", "Content-Type": "application/json"})
+        r = client.post(
+            "/api/v1/hitl/decision",
+            data="not-json",
+            headers={"Authorization": "Bearer t", "Content-Type": "application/json"},
+        )
         assert r.status_code in (401, 403, 422)
 
     def test_large_content_length_rejected(self, client):
@@ -383,6 +438,3 @@ class TestRequestHandling:
             headers={"Content-Length": str(60 * 1024 * 1024), "Authorization": "Bearer t"},
         )
         assert r.status_code in (400, 401, 403, 413, 422)
-
-
-

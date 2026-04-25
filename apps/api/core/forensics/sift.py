@@ -13,6 +13,7 @@ from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
+
 def detect_copy_move(file_path: str, n_features: int = 500) -> dict:
     """
     Detect image copy-move forgery via SIFT feature matching.
@@ -49,9 +50,10 @@ def detect_copy_move(file_path: str, n_features: int = 500) -> dict:
         # 1. queryIdx != trainIdx (not matching the same keypoint)
         # 2. Euclidean distance between pts > 30px (not a localized texture match)
         good_matches = [
-            m for m in matches
-            if m.queryIdx != m.trainIdx and
-            np.linalg.norm(np.array(kp[m.queryIdx].pt) - np.array(kp[m.trainIdx].pt)) > 30
+            m
+            for m in matches
+            if m.queryIdx != m.trainIdx
+            and np.linalg.norm(np.array(kp[m.queryIdx].pt) - np.array(kp[m.trainIdx].pt)) > 30
         ]
 
         # Threshold: if more than 10 non-localized matches, flag as potential copy-move

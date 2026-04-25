@@ -59,15 +59,16 @@ _BANDWIDTH_HZ = 0.5
 _MIN_ENF_SNR_DB = 3.0
 
 # STFT parameters — high frequency resolution needed for ENF tracking
-_STFT_WINDOW_S = 8.0       # 8-second analysis window → 0.125 Hz resolution
-_STFT_HOP_S = 2.0           # 2-second hop → one ENF sample every 2s
-_MAX_AUDIO_S = 600           # Analyze at most 10 minutes
+_STFT_WINDOW_S = 8.0  # 8-second analysis window → 0.125 Hz resolution
+_STFT_HOP_S = 2.0  # 2-second hop → one ENF sample every 2s
+_MAX_AUDIO_S = 600  # Analyze at most 10 minutes
 
 # Discontinuity threshold (z-score of frame-to-frame ENF delta)
 _SPLICE_ZSCORE_THRESH = 3.0
 
 
 # ── Core analysis ─────────────────────────────────────────────────────────────
+
 
 def _band_power(power_spectrum: np.ndarray, freqs: np.ndarray, centre_hz: float) -> float:
     """Integrate power in ±_BANDWIDTH_HZ around centre_hz."""
@@ -149,11 +150,13 @@ def _detect_splice_points(
     for i, (z, delta) in enumerate(zip(z_scores, deltas, strict=False)):
         if z > _SPLICE_ZSCORE_THRESH:
             timestamp_s = (i + 1) * hop_s
-            splice_candidates.append({
-                "timestamp_s": round(timestamp_s, 2),
-                "discontinuity_score": round(float(min(z / 10.0, 1.0)), 3),
-                "delta_power_db": round(float(10.0 * np.log10(delta + 1e-10)), 2),
-            })
+            splice_candidates.append(
+                {
+                    "timestamp_s": round(timestamp_s, 2),
+                    "discontinuity_score": round(float(min(z / 10.0, 1.0)), 3),
+                    "delta_power_db": round(float(10.0 * np.log10(delta + 1e-10)), 2),
+                }
+            )
 
     # Deduplicate: keep highest score within 4-second windows
     deduped: list[dict[str, Any]] = []
@@ -303,8 +306,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ENF audio forensics analyzer")
     parser.add_argument("--input", type=str, help="Input audio file path")
     parser.add_argument(
-        "--grid", type=str, default="auto", choices=["50", "60", "auto"],
-        help="Grid frequency hint (default: auto-detect)"
+        "--grid",
+        type=str,
+        default="auto",
+        choices=["50", "60", "auto"],
+        help="Grid frequency hint (default: auto-detect)",
     )
     parser.add_argument("--warmup", action="store_true", help="Warmup mode — preload dependencies")
     parser.add_argument("--worker", action="store_true", help="Worker mode — persistent process")
@@ -314,6 +320,7 @@ if __name__ == "__main__":
         try:
             import soundfile  # noqa: F401
             from scipy import signal  # noqa: F401
+
             print(json.dumps({"status": "ready", "available": True}))
         except ImportError as exc:
             print(json.dumps({"status": "unavailable", "error": str(exc), "available": False}))

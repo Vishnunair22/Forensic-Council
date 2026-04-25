@@ -3,8 +3,8 @@ HITL Routes Unit Tests
 =====================
 """
 
-from uuid import uuid4
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -37,9 +37,10 @@ class TestSubmitDecision:
         pipeline = MagicMock()
         pipeline.handle_hitl_decision = AsyncMock()
 
-        with patch("core.persistence.redis_client.get_redis_client") as mock_redis, \
-             patch("api.routes._session_state.get_active_pipeline") as mock_get_pipeline:
-            
+        with (
+            patch("core.persistence.redis_client.get_redis_client") as mock_redis,
+            patch("api.routes._session_state.get_active_pipeline") as mock_get_pipeline,
+        ):
             mock_get_pipeline.return_value = pipeline
             mockRedis = MagicMock()
             mockRedis.get = AsyncMock(return_value=None)
@@ -47,6 +48,7 @@ class TestSubmitDecision:
             mock_redis.return_value = mockRedis
 
             from api.routes import hitl
+
             result = await hitl.submit_decision(hitl_request, mock_user)
 
             assert result["status"] == "processed"
@@ -55,13 +57,15 @@ class TestSubmitDecision:
     @pytest.mark.asyncio
     async def test_no_active_pipeline_raises_404(self, hitl_request, mock_user):
         """Test 404 raised when no active pipeline."""
-        with patch("core.persistence.redis_client.get_redis_client") as mock_redis, \
-             patch("api.routes._session_state.get_active_pipeline") as mock_get_pipeline:
-            
+        with (
+            patch("core.persistence.redis_client.get_redis_client") as mock_redis,
+            patch("api.routes._session_state.get_active_pipeline") as mock_get_pipeline,
+        ):
             mock_get_pipeline.return_value = None
             mock_redis.return_value = None
 
             from api.routes import hitl
+
             try:
                 await hitl.submit_decision(hitl_request, mock_user)
             except HTTPException as e:
@@ -74,9 +78,10 @@ class TestSubmitDecision:
         """Test idempotent duplicate decisions return early."""
         pipeline = MagicMock()
 
-        with patch("core.persistence.redis_client.get_redis_client") as mock_redis, \
-             patch("api.routes._session_state.get_active_pipeline") as mock_get_pipeline:
-            
+        with (
+            patch("core.persistence.redis_client.get_redis_client") as mock_redis,
+            patch("api.routes._session_state.get_active_pipeline") as mock_get_pipeline,
+        ):
             mock_get_pipeline.return_value = pipeline
             mockRedis = MagicMock()
             mockRedis.get = AsyncMock(return_value="1")  # Already processed
@@ -84,6 +89,7 @@ class TestSubmitDecision:
             mock_redis.return_value = mockRedis
 
             from api.routes import hitl
+
             result = await hitl.submit_decision(hitl_request, mock_user)
 
             assert result["status"] == "already_processed"
@@ -95,9 +101,10 @@ class TestSubmitDecision:
         pipeline = MagicMock()
         pipeline.handle_hitl_decision = AsyncMock(side_effect=Exception("Internal error"))
 
-        with patch("core.persistence.redis_client.get_redis_client") as mock_redis, \
-             patch("api.routes._session_state.get_active_pipeline") as mock_get_pipeline:
-            
+        with (
+            patch("core.persistence.redis_client.get_redis_client") as mock_redis,
+            patch("api.routes._session_state.get_active_pipeline") as mock_get_pipeline,
+        ):
             mock_get_pipeline.return_value = pipeline
             mockRedis = MagicMock()
             mockRedis.get = AsyncMock(return_value=None)
@@ -105,6 +112,7 @@ class TestSubmitDecision:
             mock_redis.return_value = mockRedis
 
             from api.routes import hitl
+
             try:
                 await hitl.submit_decision(hitl_request, mock_user)
             except HTTPException as e:

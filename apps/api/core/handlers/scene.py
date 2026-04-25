@@ -49,14 +49,36 @@ class SceneHandlers(BaseToolHandler):
 
     def register_tools(self, registry) -> None:
         """Register tools with the agent's ToolRegistry."""
-        registry.register("screenshot_scene_applicability", self.screenshot_scene_applicability_handler, "Screen-capture object/scene applicability check")
-        registry.register("object_detection",           self.object_detection_handler,           "YOLO11 Object detection")
-        registry.register("secondary_classification",   self.secondary_classification_handler,   "CLIP context check")
-        registry.register("scale_validation",           self.scale_validation_handler,           "Object scale/physics check")
-        registry.register("lighting_consistency",       self.lighting_consistency_handler,       "Lighting vector check")
-        registry.register("scene_incongruence",         self.scene_incongruence_handler,         "Semantic scene check")
-        registry.register("vector_contraband_search",   self.vector_contraband_search_handler,   "SigLIP vector search for contraband")
-        registry.register("lighting_correlation_initial", self.lighting_correlation_handler,     "Initial lighting misalignment audit")
+        registry.register(
+            "screenshot_scene_applicability",
+            self.screenshot_scene_applicability_handler,
+            "Screen-capture object/scene applicability check",
+        )
+        registry.register(
+            "object_detection", self.object_detection_handler, "YOLO11 Object detection"
+        )
+        registry.register(
+            "secondary_classification", self.secondary_classification_handler, "CLIP context check"
+        )
+        registry.register(
+            "scale_validation", self.scale_validation_handler, "Object scale/physics check"
+        )
+        registry.register(
+            "lighting_consistency", self.lighting_consistency_handler, "Lighting vector check"
+        )
+        registry.register(
+            "scene_incongruence", self.scene_incongruence_handler, "Semantic scene check"
+        )
+        registry.register(
+            "vector_contraband_search",
+            self.vector_contraband_search_handler,
+            "SigLIP vector search for contraband",
+        )
+        registry.register(
+            "lighting_correlation_initial",
+            self.lighting_correlation_handler,
+            "Initial lighting misalignment audit",
+        )
 
     async def screenshot_scene_applicability_handler(self, input_data: dict) -> dict:
         """Fast scope note for screenshots where physical scene tools do not apply."""
@@ -85,7 +107,20 @@ class SceneHandlers(BaseToolHandler):
         Create a temporary path with a media suffix while preserving bytes.
         """
         ext = os.path.splitext(file_path)[1].lower()
-        if ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff", ".mp4", ".mov", ".avi", ".mkv", ".webm"}:
+        if ext in {
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".webp",
+            ".bmp",
+            ".tif",
+            ".tiff",
+            ".mp4",
+            ".mov",
+            ".avi",
+            ".mkv",
+            ".webm",
+        }:
             return file_path, None
 
         mime = (getattr(self.agent.evidence_artifact, "mime_type", "") or "").lower()
@@ -162,7 +197,7 @@ class SceneHandlers(BaseToolHandler):
             try:
                 await self.agent.update_sub_task("Performing scene-wide object sweep...")
                 results = await ic.predict_yolo(target_path, conf=0.20)
-                model   = await ic.get_yolo_model()
+                model = await ic.get_yolo_model()
 
                 detections = []
                 for r in results:
@@ -171,31 +206,34 @@ class SceneHandlers(BaseToolHandler):
                         x_c, y_c, w, h = [round(float(v), 1) for v in xywh]
                         x1, y1 = round(x_c - w / 2, 1), round(y_c - h / 2, 1)
                         x2, y2 = round(x_c + w / 2, 1), round(y_c + h / 2, 1)
-                        detections.append({
-                            "class_name":  model.names[int(box.cls)],
-                            "confidence":  round(float(box.conf), 3),
-                            "bbox_xywh":   [x_c, y_c, w, h],
-                            # Normalised corner format — consumed by roi_extract_handler
-                            "box": {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
-                            "is_reliable": float(box.conf) > 0.35,
-                        })
+                        detections.append(
+                            {
+                                "class_name": model.names[int(box.cls)],
+                                "confidence": round(float(box.conf), 3),
+                                "bbox_xywh": [x_c, y_c, w, h],
+                                # Normalised corner format — consumed by roi_extract_handler
+                                "box": {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
+                                "is_reliable": float(box.conf) > 0.35,
+                            }
+                        )
 
                 classes_found = sorted(
                     {str(d.get("class_name", "unknown")) for d in detections if d.get("class_name")}
                 )
                 weapon_terms = {"knife", "gun", "pistol", "rifle", "shotgun", "firearm", "weapon"}
                 weapon_detections = [
-                    d for d in detections
+                    d
+                    for d in detections
                     if any(term in str(d.get("class_name", "")).lower() for term in weapon_terms)
                 ]
                 res = {
-                    "detections":      detections,
+                    "detections": detections,
                     "detection_count": len(detections),
-                    "classes_found":    classes_found,
+                    "classes_found": classes_found,
                     "weapon_detections": weapon_detections,
-                    "backend":         model.ckpt_path if hasattr(model, "ckpt_path") else "yolo11",
-                    "available":       True,
-                    "confidence":      0.90 if detections else 0.70,
+                    "backend": model.ckpt_path if hasattr(model, "ckpt_path") else "yolo11",
+                    "available": True,
+                    "confidence": 0.90 if detections else 0.70,
                     "court_defensible": True,
                 }
                 await self.agent._record_tool_result("object_detection", res)
@@ -208,15 +246,15 @@ class SceneHandlers(BaseToolHandler):
                     file=target_path,
                 )
                 degraded = {
-                    "detections":      [],
+                    "detections": [],
                     "detection_count": 0,
-                    "classes_found":    [],
+                    "classes_found": [],
                     "weapon_detections": [],
-                    "available":       False,
-                    "degraded":        True,
-                    "confidence":      0.0,
+                    "available": False,
+                    "degraded": True,
+                    "confidence": 0.0,
                     "court_defensible": False,
-                    "error":           str(exc),
+                    "error": str(exc),
                     "fallback_reason": f"YOLO inference failed: {exc}",
                 }
                 await self.agent._record_tool_result("object_detection", degraded)
@@ -238,37 +276,41 @@ class SceneHandlers(BaseToolHandler):
         if self._is_video(target_path):
             target_path, tmp_frame_path = await self._extract_best_video_frame(target_path)
         try:
-            await self.agent.update_sub_task("Auditing high-dimensional threat manifolds (SigLIP)...")
+            await self.agent.update_sub_task(
+                "Auditing high-dimensional threat manifolds (SigLIP)..."
+            )
             ic = await self.get_inference()
             raw = await ic.predict_siglip(target_path, check_concerns=True)
             # predict_siglip may return an object or a dict — handle both.
             if isinstance(raw, dict):
-                top_match     = raw.get("top_match", "unknown")
+                top_match = raw.get("top_match", "unknown")
                 top_confidence = raw.get("top_confidence", raw.get("confidence", 0.0))
-                concern_flag  = raw.get("concern_flag", False)
-                available     = raw.get("available", True)
+                concern_flag = raw.get("concern_flag", False)
+                available = raw.get("available", True)
             else:
-                top_match      = getattr(raw, "top_match", "unknown")
+                top_match = getattr(raw, "top_match", "unknown")
                 top_confidence = getattr(raw, "top_confidence", 0.0)
-                concern_flag   = getattr(raw, "concern_flag", False)
-                available      = getattr(raw, "available", True)
+                concern_flag = getattr(raw, "concern_flag", False)
+                available = getattr(raw, "available", True)
 
             result = {
-                "top_match":     top_match,
+                "top_match": top_match,
                 "top_confidence": top_confidence,
-                "confidence":    float(top_confidence) if concern_flag else max(0.70, 1.0 - float(top_confidence or 0.0)),
-                "concern_flag":  concern_flag,
-                "available":     available,
+                "confidence": float(top_confidence)
+                if concern_flag
+                else max(0.70, 1.0 - float(top_confidence or 0.0)),
+                "concern_flag": concern_flag,
+                "available": available,
                 "court_defensible": True,
             }
         except Exception as exc:
             logger.warning("vector_contraband_search failed", error=str(exc))
             result = {
-                "available":      False,
-                "degraded":       True,
-                "confidence":     0.0,
+                "available": False,
+                "degraded": True,
+                "confidence": 0.0,
                 "court_defensible": False,
-                "error":          str(exc),
+                "error": str(exc),
             }
         finally:
             if tmp_frame_path and os.path.exists(tmp_frame_path):
@@ -286,7 +328,9 @@ class SceneHandlers(BaseToolHandler):
         tmp_frame_path: str | None = None
         if self._is_video(target_path):
             target_path, tmp_frame_path = await self._extract_best_video_frame(target_path)
-        await self.agent.update_sub_task("Auditing light-source vectors for compositing anomalies...")
+        await self.agent.update_sub_task(
+            "Auditing light-source vectors for compositing anomalies..."
+        )
         try:
             result = await run_ml_tool("lighting_correlator.py", target_path, timeout=12.0)
             if not result.get("error") and result.get("available"):
@@ -326,7 +370,9 @@ class SceneHandlers(BaseToolHandler):
                 target = max(low_conf, key=lambda x: x.get("confidence", 0))
                 box = target.get("box", {})
                 if box and all(k in box for k in ("x1", "y1", "x2", "y2")):
-                    await self.agent.update_sub_task(f"Verifying {target.get('class_name')} ROI via SigLIP...")
+                    await self.agent.update_sub_task(
+                        f"Verifying {target.get('class_name')} ROI via SigLIP..."
+                    )
                     with Image.open(artifact.file_path) as img:
                         w, h = img.size
                         # YOLO box coords are absolute pixels — use them directly.
@@ -350,27 +396,27 @@ class SceneHandlers(BaseToolHandler):
 
             raw = await ic.predict_siglip(target_path)
             if isinstance(raw, dict):
-                top_match      = raw.get("top_match", "unknown")
+                top_match = raw.get("top_match", "unknown")
                 top_confidence = raw.get("top_confidence", raw.get("confidence", 0.0))
             else:
-                top_match      = getattr(raw, "top_match", "unknown")
+                top_match = getattr(raw, "top_match", "unknown")
                 top_confidence = getattr(raw, "top_confidence", 0.0)
 
             result = {
-                "top_match":      top_match,
-                "confidence":     top_confidence,
-                "available":      True,
+                "top_match": top_match,
+                "confidence": top_confidence,
+                "available": True,
                 "court_defensible": True,
-                "is_roi_specific": target_path != artifact.file_path
+                "is_roi_specific": target_path != artifact.file_path,
             }
         except Exception as exc:
             logger.warning("secondary_classification failed", error=str(exc))
             result = {
-                "available":      False,
-                "degraded":       True,
-                "confidence":     0.0,
+                "available": False,
+                "degraded": True,
+                "confidence": 0.0,
                 "court_defensible": False,
-                "error":          str(exc),
+                "error": str(exc),
             }
         finally:
             for p in tmp_cleanup:
@@ -395,7 +441,7 @@ class SceneHandlers(BaseToolHandler):
             img = np.array(Image.open(artifact.file_path).convert("RGB"))
             img_area = float(img.shape[0] * img.shape[1])
 
-            yolo_ctx   = self.agent._tool_context.get("object_detection", {})
+            yolo_ctx = self.agent._tool_context.get("object_detection", {})
             detections = yolo_ctx.get("detections", [])
 
             anomalies = []
@@ -403,36 +449,38 @@ class SceneHandlers(BaseToolHandler):
                 bbox = det.get("bbox_xywh", [])
                 if len(bbox) < 4:
                     continue
-                _, _, w, h    = bbox
+                _, _, w, h = bbox
                 obj_area_frac = (w * h) / max(img_area, 1.0)
-                label         = det.get("class_name", "object")
-                conf          = det.get("confidence", 0.0)
+                label = det.get("class_name", "object")
+                conf = det.get("confidence", 0.0)
                 # Flag objects occupying > 80 % of the frame as scale anomalies
                 # (only meaningful if detection confidence is high)
                 if obj_area_frac > 0.80 and conf > 0.50:
-                    anomalies.append({
-                        "class_name":    label,
-                        "area_fraction": round(obj_area_frac, 3),
-                        "note":          "Object occupies >80% of frame — scale implausible",
-                    })
+                    anomalies.append(
+                        {
+                            "class_name": label,
+                            "area_fraction": round(obj_area_frac, 3),
+                            "note": "Object occupies >80% of frame — scale implausible",
+                        }
+                    )
 
             result = {
-                "scale_anomalies":     anomalies,
-                "anomaly_count":       len(anomalies),
-                "objects_checked":     len(detections),
-                "scale_consistent":    len(anomalies) == 0,
-                "confidence":          0.65 if detections else 0.40,
-                "available":           True,
-                "court_defensible":    True,
-                "backend":             "heuristic-bbox-area",
+                "scale_anomalies": anomalies,
+                "anomaly_count": len(anomalies),
+                "objects_checked": len(detections),
+                "scale_consistent": len(anomalies) == 0,
+                "confidence": 0.65 if detections else 0.40,
+                "available": True,
+                "court_defensible": True,
+                "backend": "heuristic-bbox-area",
             }
         except Exception as exc:
             result = {
-                "available":      False,
-                "degraded":       True,
-                "confidence":     0.0,
+                "available": False,
+                "degraded": True,
+                "confidence": 0.0,
                 "court_defensible": False,
-                "error":          str(exc),
+                "error": str(exc),
             }
         await self.agent._record_tool_result("scale_validation", result)
         return result
@@ -487,13 +535,15 @@ class SceneHandlers(BaseToolHandler):
                     roi_std = roi_lighting.get("shadow_angle_std_deg", 0.0)
                     deviation = abs(roi_std - scene_std)
                     if deviation > 15.0:
-                        roi_flags.append({
-                            "class_name": det.get("class_name", "object"),
-                            "confidence": det.get("confidence"),
-                            "roi_shadow_std_deg": round(roi_std, 2),
-                            "scene_shadow_std_deg": round(scene_std, 2),
-                            "deviation_deg": round(deviation, 2),
-                        })
+                        roi_flags.append(
+                            {
+                                "class_name": det.get("class_name", "object"),
+                                "confidence": det.get("confidence"),
+                                "roi_shadow_std_deg": round(roi_std, 2),
+                                "scene_shadow_std_deg": round(scene_std, 2),
+                                "deviation_deg": round(deviation, 2),
+                            }
+                        )
         finally:
             for p in tmp_paths:
                 if os.path.exists(p):
@@ -518,8 +568,11 @@ class SceneHandlers(BaseToolHandler):
                 )
             except Exception as exc:
                 result = {
-                    "available": False, "degraded": True, "confidence": 0.0,
-                    "court_defensible": False, "error": str(exc),
+                    "available": False,
+                    "degraded": True,
+                    "confidence": 0.0,
+                    "court_defensible": False,
+                    "error": str(exc),
                 }
         return self._normalize_lighting_result(result)
 
@@ -532,7 +585,9 @@ class SceneHandlers(BaseToolHandler):
             result["inconsistency_detected"] = result.get("lighting_consistent") is False
         elif "inconsistency_detected" in result and "lighting_consistent" not in result:
             result["lighting_consistent"] = not bool(result.get("inconsistency_detected"))
-        result.setdefault("compositing_candidates", 1 if result.get("inconsistency_detected") else 0)
+        result.setdefault(
+            "compositing_candidates", 1 if result.get("inconsistency_detected") else 0
+        )
         result.setdefault("available", True)
         result.setdefault("confidence", 0.55 if result.get("inconsistency_detected") else 0.70)
         return result
@@ -543,10 +598,11 @@ class SceneHandlers(BaseToolHandler):
         img = cv2.imread(file_path)
         if img is None:
             return {"error": "Cannot read image", "available": False, "confidence": 0.0}
-        gray    = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        edges   = cv2.Canny(gray, 50, 150)
-        lines   = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=50,
-                                  minLineLength=30, maxLineGap=10)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray, 50, 150)
+        lines = cv2.HoughLinesP(
+            edges, 1, np.pi / 180, threshold=50, minLineLength=30, maxLineGap=10
+        )
         if lines is None or len(lines) < 3:
             return {
                 "lighting_consistent": True,
@@ -563,12 +619,12 @@ class SceneHandlers(BaseToolHandler):
         ]
         std_deg = float(np.std(angles))
         return {
-            "lighting_consistent":   std_deg < 30.0,
-            "shadow_angle_std_deg":  round(std_deg, 2),
-            "confidence":            0.55,
-            "available":             True,
-            "court_defensible":      False,
-            "backend":               "heuristic-houghlines",
+            "lighting_consistent": std_deg < 30.0,
+            "shadow_angle_std_deg": round(std_deg, 2),
+            "confidence": 0.55,
+            "available": True,
+            "court_defensible": False,
+            "backend": "heuristic-houghlines",
         }
 
     # ── Phase 2: Scene Incongruence ────────────────────────────────────────────
@@ -586,14 +642,17 @@ class SceneHandlers(BaseToolHandler):
         if self._is_video(target_path):
             target_path, tmp_frame_path = await self._extract_best_video_frame(target_path)
         try:
-            loop   = asyncio.get_running_loop()
+            loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(
                 None, self._scene_incongruence_heuristic, target_path
             )
         except Exception as exc:
             result = {
-                "available": False, "degraded": True, "confidence": 0.0,
-                "court_defensible": False, "error": str(exc),
+                "available": False,
+                "degraded": True,
+                "confidence": 0.0,
+                "court_defensible": False,
+                "error": str(exc),
             }
         finally:
             if tmp_frame_path and os.path.exists(tmp_frame_path):
@@ -609,11 +668,11 @@ class SceneHandlers(BaseToolHandler):
         h, w = img.shape[:2]
         rows, cols = 3, 3
         cell_h, cell_w = h // rows, w // cols
-        
+
         histograms = []
         for r in range(rows):
             for c in range(cols):
-                cell = img[r * cell_h:(r + 1) * cell_h, c * cell_w:(c + 1) * cell_w]
+                cell = img[r * cell_h : (r + 1) * cell_h, c * cell_w : (c + 1) * cell_w]
                 hist = cv2.calcHist([cell], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
                 cv2.normalize(hist, hist)
                 histograms.append(hist)
@@ -628,8 +687,8 @@ class SceneHandlers(BaseToolHandler):
 
         avg_corr = float(np.mean(correlations)) if correlations else 1.0
         # High incongruence if average correlation is low
-        is_incongruent = avg_corr < 0.35 
-        
+        is_incongruent = avg_corr < 0.35
+
         return {
             "scene_incongruent": is_incongruent,
             "average_histogram_correlation": round(avg_corr, 4),

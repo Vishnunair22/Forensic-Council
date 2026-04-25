@@ -25,6 +25,7 @@ from core.episodic_memory import EpisodicMemory
 from core.evidence import EvidenceArtifact
 from core.mime_registry import MimeRegistry
 from core.persistence.evidence_store import EvidenceStore
+from core.react_loop import AgentFinding
 from core.structured_logging import get_logger
 from core.tool_registry import ToolRegistry
 from core.working_memory import WorkingMemory
@@ -141,7 +142,5 @@ class ForensicAgent(
         file_path = getattr(self.evidence_artifact, "file_path", "") or ""
 
         return MimeRegistry.is_supported(
-            agent_name=self.agent_name,
-            mime_type=mime_type,
-            file_path=file_path
+            agent_name=self.agent_name, mime_type=mime_type, file_path=file_path
         )

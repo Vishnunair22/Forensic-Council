@@ -8,7 +8,6 @@ from uuid import uuid4
 
 from probe_initial_agent import _run_probe
 
-
 SAMPLE_AGENTS = {
     "jpeg": ["Agent1", "Agent3", "Agent5"],
     "png": ["Agent1", "Agent3", "Agent5"],

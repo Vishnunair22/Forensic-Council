@@ -153,7 +153,11 @@ def _worker() -> None:
         try:
             req = json.loads(line)
             path = req.get("input")
-            result = classify_prosody(path) if path else {"error": "Missing input path", "available": False}
+            result = (
+                classify_prosody(path)
+                if path
+                else {"error": "Missing input path", "available": False}
+            )
         except Exception as exc:
             result = {"error": str(exc), "available": False}
         print(json.dumps(result), flush=True)

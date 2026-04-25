@@ -329,9 +329,7 @@ def main() -> int:
     print(f"\nModel saved to: {model_path}")
     print(f"Latest symlink: {latest_path}")
     print(f"\nTo use: set calibration_models_path={args.output_dir} in settings,")
-    print(
-        f"or copy {model_path} to your deployment's calibration_models/{args.agent}/ directory."
-    )
+    print(f"or copy {model_path} to your deployment's calibration_models/{args.agent}/ directory.")
 
     return 0
 

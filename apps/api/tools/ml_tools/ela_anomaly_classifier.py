@@ -109,9 +109,7 @@ def classify_ela(image_path: str, quality: int = 95) -> dict:
     score_range = scores.max() - scores.min()
     if score_range > 0:
         normalized = 1.0 - (scores.min() - scores) / score_range
-        anomaly_score = (
-            float(np.mean(normalized[anomalous_idx])) if len(anomalous_idx) > 0 else 0.0
-        )
+        anomaly_score = float(np.mean(normalized[anomalous_idx])) if len(anomalous_idx) > 0 else 0.0
     else:
         anomaly_score = 0.0
 
@@ -150,17 +148,19 @@ if __name__ == "__main__":
         try:
             import cv2
             import numpy as np
-            print(json.dumps({
-                "status": "warmed_up",
-                "dependencies": ["sklearn", "numpy", "cv2", "PIL"],
-                "message": "ELA anomaly classifier ready"
-            }))
+
+            print(
+                json.dumps(
+                    {
+                        "status": "warmed_up",
+                        "dependencies": ["sklearn", "numpy", "cv2", "PIL"],
+                        "message": "ELA anomaly classifier ready",
+                    }
+                )
+            )
             sys.exit(0)
         except Exception as e:
-            print(json.dumps({
-                "status": "warmup_failed",
-                "error": str(e)
-            }))
+            print(json.dumps({"status": "warmup_failed", "error": str(e)}))
             sys.exit(1)
 
     # Worker mode - persistent process reading from stdin

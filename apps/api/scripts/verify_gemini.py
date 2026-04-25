@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 def test_gemini():
     key = os.getenv("GEMINI_API_KEY")
     if not key:
@@ -23,6 +24,7 @@ def test_gemini():
                 return f"STATUS: {r.status_code} - {r.text}"
         except Exception as e:
             return f"EXCEPTION: {str(e)}"
+
 
 if __name__ == "__main__":
     print(test_gemini())

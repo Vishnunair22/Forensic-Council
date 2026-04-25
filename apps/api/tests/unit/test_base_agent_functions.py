@@ -89,20 +89,23 @@ def _make_agent(cls, agent_id="Agent1"):
 
 # ── _attach_llm_reasoning_to_findings() ──────────────────────────────────────
 
+
 class TestAttachLlmReasoning:
     def test_empty_inputs_return_empty(self):
         result = _attach_llm_reasoning_to_findings([], [])
         assert result == []
 
     def test_empty_react_chain_returns_unchanged(self):
-        findings = [AgentFinding(
-            agent_id="Agent1",
-            finding_type="ela",
-            status="CONFIRMED",
-            confidence_raw=0.8,
-            reasoning_summary="Normal.",
-            metadata={"tool_name": "ela_full_image"},
-        )]
+        findings = [
+            AgentFinding(
+                agent_id="Agent1",
+                finding_type="ela",
+                status="CONFIRMED",
+                confidence_raw=0.8,
+                reasoning_summary="Normal.",
+                metadata={"tool_name": "ela_full_image"},
+            )
+        ]
         result = _attach_llm_reasoning_to_findings(findings, [])
         assert result == findings
         assert result[0].reasoning_summary == "Normal."
@@ -175,8 +178,16 @@ class TestAttachLlmReasoning:
 
     def test_dict_based_steps_also_work(self):
         """Steps can be dicts instead of ReActStep models."""
-        thought_step = {"step_type": "THOUGHT", "content": "suspicious anomaly found", "tool_name": None}
-        action_step = {"step_type": "ACTION", "content": "run tool", "tool_name": "noise_fingerprint"}
+        thought_step = {
+            "step_type": "THOUGHT",
+            "content": "suspicious anomaly found",
+            "tool_name": None,
+        }
+        action_step = {
+            "step_type": "ACTION",
+            "content": "run tool",
+            "tool_name": "noise_fingerprint",
+        }
         finding = AgentFinding(
             agent_id="Agent1",
             finding_type="noise",
@@ -191,22 +202,46 @@ class TestAttachLlmReasoning:
     def test_multiple_findings_same_tool(self):
         """Each finding gets its own reasoning snippet in order."""
         thought1 = ReActStep(step_type="THOUGHT", content="First suspicious thought.", iteration=1)
-        action1 = ReActStep(step_type="ACTION", content="run", tool_name="ela_full_image", tool_input={}, iteration=1)
+        action1 = ReActStep(
+            step_type="ACTION",
+            content="run",
+            tool_name="ela_full_image",
+            tool_input={},
+            iteration=1,
+        )
         thought2 = ReActStep(step_type="THOUGHT", content="Second suspicious thought.", iteration=2)
-        action2 = ReActStep(step_type="ACTION", content="run again", tool_name="ela_full_image", tool_input={}, iteration=2)
+        action2 = ReActStep(
+            step_type="ACTION",
+            content="run again",
+            tool_name="ela_full_image",
+            tool_input={},
+            iteration=2,
+        )
 
-        finding1 = AgentFinding(agent_id="Agent1", finding_type="ela1", status="CONFIRMED",
-                                 confidence_raw=0.8, reasoning_summary="First.", metadata={"tool_name": "ela_full_image"})
-        finding2 = AgentFinding(agent_id="Agent1", finding_type="ela2", status="CONFIRMED",
-                                 confidence_raw=0.7, reasoning_summary="Second.", metadata={"tool_name": "ela_full_image"})
+        finding1 = AgentFinding(
+            agent_id="Agent1",
+            finding_type="ela1",
+            status="CONFIRMED",
+            confidence_raw=0.8,
+            reasoning_summary="First.",
+            metadata={"tool_name": "ela_full_image"},
+        )
+        finding2 = AgentFinding(
+            agent_id="Agent1",
+            finding_type="ela2",
+            status="CONFIRMED",
+            confidence_raw=0.7,
+            reasoning_summary="Second.",
+            metadata={"tool_name": "ela_full_image"},
+        )
         result = _attach_llm_reasoning_to_findings(
-            [finding1, finding2],
-            [thought1, action1, thought2, action2]
+            [finding1, finding2], [thought1, action1, thought2, action2]
         )
         assert len(result) == 2
 
 
 # ── ForensicAgent._compute_ceiling() ─────────────────────────────────────────
+
 
 class TestComputeCeiling:
     def test_small_task_count(self):
@@ -224,10 +259,12 @@ class TestComputeCeiling:
 
 # ── ForensicAgent methods via Agent1Image ─────────────────────────────────────
 
+
 class TestForensicAgentMethods:
     @pytest.fixture
     def agent(self):
         from agents.agent1_image import Agent1Image
+
         return _make_agent(Agent1Image, "Agent1")
 
     @pytest.mark.asyncio
@@ -251,15 +288,18 @@ class TestForensicAgentMethods:
     async def test_run_challenge_returns_findings(self, agent):
         """run_challenge should return a list (possibly empty if tools not available)."""
         from core.react_loop import ReActLoopResult
+
         tool_reg = MagicMock()
         tool_reg.list_tools = MagicMock(return_value=[])
         mock_engine = MagicMock()
-        mock_engine.run = AsyncMock(return_value=ReActLoopResult(
-            session_id=agent.session_id,
-            agent_id="Agent1",
-            findings=[],
-            completed=True,
-        ))
+        mock_engine.run = AsyncMock(
+            return_value=ReActLoopResult(
+                session_id=agent.session_id,
+                agent_id="Agent1",
+                findings=[],
+                completed=True,
+            )
+        )
         agent._loop_result = None  # required before run_challenge
         with patch.object(agent, "build_tool_registry", new=AsyncMock(return_value=tool_reg)):
             with patch("core.react_loop.ReActLoopEngine", return_value=mock_engine):
@@ -287,9 +327,11 @@ class TestForensicAgentMethods:
 
 # ── Agent5Metadata-specific: supports_uploaded_file ──────────────────────────
 
+
 class TestAgent5SupportsFile:
     def test_agent5_supports_image(self):
         from agents.agent5_metadata import Agent5Metadata
+
         agent = _make_agent(Agent5Metadata, "Agent5")
         # Agent5 handles metadata; JPEG should be supported
         agent.evidence_artifact.metadata["mime_type"] = "image/jpeg"
@@ -297,17 +339,22 @@ class TestAgent5SupportsFile:
 
     def test_agent1_does_not_support_audio(self):
         from agents.agent1_image import Agent1Image
+
         agent = _make_agent(Agent1Image, "Agent1")
         # Must set both mime_type AND file_path to audio to avoid .jpg extension match
         agent.evidence_artifact.metadata["mime_type"] = "audio/wav"
         agent.evidence_artifact._file_path = "/tmp/test_audio.wav"
         # Use is_supported directly to verify the logic
         from core.mime_registry import MimeRegistry
-        result = MimeRegistry.is_supported("Agent1_ImageIntegrity", mime_type="audio/wav", file_path="/tmp/sound.wav")
+
+        result = MimeRegistry.is_supported(
+            "Agent1_ImageIntegrity", mime_type="audio/wav", file_path="/tmp/sound.wav"
+        )
         assert result is False
 
     def test_agent2_supports_audio(self):
         from agents.agent2_audio import Agent2Audio
+
         agent = _make_agent(Agent2Audio, "Agent2")
         agent.evidence_artifact.metadata["mime_type"] = "audio/wav"
         assert agent.supports_uploaded_file is True

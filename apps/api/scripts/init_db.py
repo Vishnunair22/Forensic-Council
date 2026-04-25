@@ -83,7 +83,9 @@ async def init_database() -> bool:
 
         except Exception as e:
             if attempt < max_retries:
-                logger.warning(f"Database connection attempt {attempt} failed: {e}. Retrying in {retry_delay}s...")
+                logger.warning(
+                    f"Database connection attempt {attempt} failed: {e}. Retrying in {retry_delay}s..."
+                )
                 await asyncio.sleep(retry_delay)
             else:
                 logger.error("Failed to initialize database after multiple attempts", error=str(e))
@@ -121,9 +123,7 @@ async def bootstrap_users(client: PostgresClient) -> None:
     admin_password = os.environ.get("BOOTSTRAP_ADMIN_PASSWORD")
 
     # Get investigator credentials from environment
-    investigator_username = os.environ.get(
-        "BOOTSTRAP_INVESTIGATOR_USERNAME", "investigator"
-    )
+    investigator_username = os.environ.get("BOOTSTRAP_INVESTIGATOR_USERNAME", "investigator")
     investigator_password = os.environ.get("BOOTSTRAP_INVESTIGATOR_PASSWORD")
 
     # Create admin user if password is provided
@@ -192,9 +192,7 @@ async def bootstrap_users(client: PostgresClient) -> None:
                 investigator_username,
                 hashed,
             )
-            logger.info(
-                "Investigator user password synchronized", username=investigator_username
-            )
+            logger.info("Investigator user password synchronized", username=investigator_username)
 
 
 def main():

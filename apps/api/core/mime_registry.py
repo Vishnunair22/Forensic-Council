@@ -3,13 +3,12 @@ Centralized MIME type and file extension registry for Forensic Council.
 """
 
 
-
 class MimeRegistry:
-    """ Registry for mapping agents to supported file types. """
+    """Registry for mapping agents to supported file types."""
 
     @staticmethod
     def get_supported_types(agent_name: str) -> list[str]:
-        """ Return list of MIME prefixes supported by the agent. """
+        """Return list of MIME prefixes supported by the agent."""
         name = agent_name.lower()
         if "agent1" in name or "imageintegrity" in name:
             return ["image/"]
@@ -21,17 +20,54 @@ class MimeRegistry:
         if "agent4" in name or "temporalvideo" in name:
             return ["video/"]
         if "agent5" in name or "metadatacontext" in name:
-            return ["*"] # Supports all
+            return ["*"]  # Supports all
         return ["*"]
 
     @staticmethod
     def get_supported_extensions(agent_name: str) -> list[str]:
-        """ Return list of file extensions supported by the agent. """
+        """Return list of file extensions supported by the agent."""
         name = agent_name.lower()
 
-        audio_exts = [".wav", ".mp3", ".flac", ".ogg", ".aac", ".m4a", ".wma", ".opus", ".amr", ".aiff"]
-        video_exts = [".mp4", ".avi", ".mov", ".mkv", ".flv", ".wmv", ".webm", ".m4v", ".3gp", ".ts", ".ogv"]
-        image_exts = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".webp", ".heic", ".heif", ".dng", ".avif", ".raw"]
+        audio_exts = [
+            ".wav",
+            ".mp3",
+            ".flac",
+            ".ogg",
+            ".aac",
+            ".m4a",
+            ".wma",
+            ".opus",
+            ".amr",
+            ".aiff",
+        ]
+        video_exts = [
+            ".mp4",
+            ".avi",
+            ".mov",
+            ".mkv",
+            ".flv",
+            ".wmv",
+            ".webm",
+            ".m4v",
+            ".3gp",
+            ".ts",
+            ".ogv",
+        ]
+        image_exts = [
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".gif",
+            ".bmp",
+            ".tiff",
+            ".tif",
+            ".webp",
+            ".heic",
+            ".heif",
+            ".dng",
+            ".avif",
+            ".raw",
+        ]
 
         if "agent1" in name or "imageintegrity" in name:
             return image_exts
@@ -45,7 +81,7 @@ class MimeRegistry:
 
     @classmethod
     def is_supported(cls, agent_name: str, mime_type: str = "", file_path: str = "") -> bool:
-        """ Check if a file is supported by an agent. """
+        """Check if a file is supported by an agent."""
         supported_types = cls.get_supported_types(agent_name)
         if "*" in supported_types:
             return True

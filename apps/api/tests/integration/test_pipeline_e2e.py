@@ -1,4 +1,4 @@
-﻿"""
+"""
 Backend E2E Pipeline Test â€” Multi-Agent Sequence
 ================================================
 Validates the ForensicCouncilPipeline logic:
@@ -9,6 +9,7 @@ Mocks:
 - Low-level infrastructure (Redis, Postgres, Qdrant)
 - Agent results to simulate execution
 """
+
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -22,27 +23,29 @@ from orchestration.pipeline import ForensicCouncilPipeline
 def mock_user():
     return User(user_id="u1", username="investigator", role=UserRole.INVESTIGATOR)
 
+
 @pytest.fixture
 def session_id():
     return str(uuid.uuid4())
 
+
 @pytest.fixture
 def mock_pipeline_context():
     """Mocks for the infrastructure inside the pipeline."""
-    with patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as m_redis, \
-         patch("core.persistence.postgres_client.get_postgres_client", new_callable=AsyncMock) as m_pg, \
-         patch("core.persistence.qdrant_client.get_qdrant_client", new_callable=AsyncMock) as m_qd:
-
+    with (
+        patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as m_redis,
+        patch(
+            "core.persistence.postgres_client.get_postgres_client", new_callable=AsyncMock
+        ) as m_pg,
+        patch("core.persistence.qdrant_client.get_qdrant_client", new_callable=AsyncMock) as m_qd,
+    ):
         m_redis.return_value.get = AsyncMock(return_value=None)
         m_redis.return_value.set = AsyncMock(return_value=True)
         m_pg.return_value.fetch_one = AsyncMock(return_value=None)
         m_pg.return_value.execute = AsyncMock(return_value="OK")
 
-        yield {
-            "redis": m_redis.return_value,
-            "pg": m_pg.return_value,
-            "qdrant": m_qd.return_value
-        }
+        yield {"redis": m_redis.return_value, "pg": m_pg.return_value, "qdrant": m_qd.return_value}
+
 
 @pytest.mark.asyncio
 async def test_pipeline_sequential_execution(mock_user, session_id, mock_pipeline_context):
@@ -63,6 +66,7 @@ async def test_pipeline_sequential_execution(mock_user, session_id, mock_pipelin
                 # We just check if it's runnable
                 assert True
 
+
 @pytest.mark.asyncio
 async def test_agent_to_arbiter_flow(mock_user, session_id, mock_pipeline_context):
     """Verify context flow to arbiter."""
@@ -76,5 +80,3 @@ async def test_agent_to_arbiter_flow(mock_user, session_id, mock_pipeline_contex
             assert True
     else:
         assert True
-
-

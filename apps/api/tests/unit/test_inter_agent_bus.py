@@ -41,6 +41,7 @@ from core.inter_agent_bus import (
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
+
 def _bus(session_id=None) -> InterAgentBus:
     return InterAgentBus(session_id=session_id)
 
@@ -60,6 +61,7 @@ def _call(
 
 
 # ── PERMITTED call paths (via registry) ──────────────────────────────────────
+
 
 class TestPermittedCallPaths:
     def test_agent2_can_call_agent4(self):
@@ -98,6 +100,7 @@ class TestPermittedCallPaths:
 
 # ── Receiver-only agents (empty permitted_callees in registry) ─────────────
 
+
 class TestCallReceiversOnly:
     def test_agent5_has_no_permitted_callees(self):
         reg = get_agent_registry()
@@ -122,11 +125,14 @@ class TestCallReceiversOnly:
         reg = get_agent_registry()
         all_agents = reg.get_all_agent_ids()
         for agent in all_agents:
-            assert agent in reg.get_permitted_callees("Arbiter") or \
-                   reg.get_permitted_callees("Arbiter") == all_agents
+            assert (
+                agent in reg.get_permitted_callees("Arbiter")
+                or reg.get_permitted_callees("Arbiter") == all_agents
+            )
 
 
 # ── Circular call detection ──────────────────────────────────────────────────
+
 
 class TestCircularCallDetection:
     def test_no_circular_without_artifact_id(self):
@@ -178,6 +184,7 @@ class TestCircularCallDetection:
 
 # ── Arbiter rechallenge detection ────────────────────────────────────────────
 
+
 class TestArbiterRechallenge:
     def test_no_rechallenge_on_fresh_bus(self):
         session_id = uuid4()
@@ -215,6 +222,7 @@ class TestArbiterRechallenge:
 
 
 # ── InterAgentCall model ──────────────────────────────────────────────────────
+
 
 class TestInterAgentCallModel:
     def test_call_has_unique_id(self):
@@ -255,12 +263,14 @@ class TestInterAgentCallModel:
 
 # ── dispatch validation (permission errors) ────────────────────────────────────
 
+
 class TestDispatchPermissions:
     @pytest.mark.asyncio
     async def test_dispatch_unpermitted_path_raises(self):
         b = _bus()
         bad_call = _call("Agent1", "Agent2")  # Agent1 → Agent2 not permitted
         from unittest.mock import AsyncMock, MagicMock
+
         mock_callee = MagicMock()
         mock_logger = AsyncMock()
         with pytest.raises(PermittedCallViolationError):
@@ -275,6 +285,7 @@ class TestDispatchPermissions:
         b._active_calls.add(("Agent4", "Agent2", artifact_str))
         circular_call = _call("Agent2", "Agent4", artifact_id=artifact)
         from unittest.mock import AsyncMock, MagicMock
+
         with pytest.raises(CircularCallError):
             await b.dispatch(circular_call, MagicMock(), AsyncMock())
 
@@ -285,5 +296,6 @@ class TestDispatchPermissions:
         b._arbiter_challenges["None"] = {"Agent1"}
         rechallenge = _call("Arbiter", "Agent1", call_type=InterAgentCallType.CHALLENGE)
         from unittest.mock import AsyncMock, MagicMock
+
         with pytest.raises(ArbiterRechallengeError):
             await b.dispatch(rechallenge, MagicMock(), AsyncMock())

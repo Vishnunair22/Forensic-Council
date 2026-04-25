@@ -80,9 +80,7 @@ EXPECTED_EXIF_FIELDS = [
 ]
 
 
-def _get_exif_data(
-    image: Image.Image, file_path: str | None = None
-) -> dict[str, Any]:
+def _get_exif_data(image: Image.Image, file_path: str | None = None) -> dict[str, Any]:
     """
     Extract EXIF data from a PIL Image.
 
@@ -110,12 +108,12 @@ def _get_exif_data(
             if file_path and os.path.exists(file_path):
                 stat = os.stat(file_path)
                 fallback_data["FileSize"] = stat.st_size
-                fallback_data["DateTimeOriginal"] = datetime.fromtimestamp(
-                    stat.st_ctime
-                ).strftime("%Y:%m:%d %H:%M:%S")
-                fallback_data["DateTimeModified"] = datetime.fromtimestamp(
-                    stat.st_mtime
-                ).strftime("%Y:%m:%d %H:%M:%S")
+                fallback_data["DateTimeOriginal"] = datetime.fromtimestamp(stat.st_ctime).strftime(
+                    "%Y:%m:%d %H:%M:%S"
+                )
+                fallback_data["DateTimeModified"] = datetime.fromtimestamp(stat.st_mtime).strftime(
+                    "%Y:%m:%d %H:%M:%S"
+                )
                 fallback_data["Software"] = "OS File System"
                 fallback_data["Make"] = "Generic"
                 fallback_data["Model"] = "Stripped Device"
@@ -197,8 +195,9 @@ async def exif_extract(
         - has_exif: Boolean indicating if any EXIF data was found
     """
     from asyncio import get_running_loop
+
     loop = get_running_loop()
-    
+
     try:
         original_path = artifact.file_path
         if not os.path.exists(original_path):
@@ -208,7 +207,7 @@ async def exif_extract(
         def _extract():
             with Image.open(original_path) as image:
                 return _get_exif_data(image, original_path)
-        
+
         exif_data = await loop.run_in_executor(None, _extract)
 
         # Determine present and absent fields
@@ -227,9 +226,7 @@ async def exif_extract(
                 elif isinstance(value, tuple):
                     # Handle IFDRational tuples
                     try:
-                        value = [
-                            float(v) if isinstance(v, int) else str(v) for v in value
-                        ]
+                        value = [float(v) if isinstance(v, int) else str(v) for v in value]
                     except Exception:
                         value = str(value)
                 present_fields[field] = value
@@ -348,16 +345,10 @@ async def gps_timezone_validate(
             if timezone_name != "Unknown":
                 tz = ZoneInfo(timezone_name)
                 # Apply timezone to the parsed timestamp
-                aware_ts = (
-                    ts
-                    if getattr(ts, "tzinfo", None)
-                    else ts.replace(tzinfo=UTC)
-                )
+                aware_ts = ts if getattr(ts, "tzinfo", None) else ts.replace(tzinfo=UTC)
                 local_ts = aware_ts.astimezone(tz)
                 offset = local_ts.utcoffset()
-                offset_hours = (
-                    round(offset.total_seconds() / 3600.0, 2) if offset else 0.0
-                )
+                offset_hours = round(offset.total_seconds() / 3600.0, 2) if offset else 0.0
             else:
                 offset_hours = round(gps_lon / 15.0, 1)
         except Exception:
@@ -392,6 +383,7 @@ async def steganography_scan(
     Scan image for steganography using LSB analysis.
     """
     from asyncio import get_running_loop
+
     loop = get_running_loop()
 
     def _scan():
@@ -425,9 +417,7 @@ async def steganography_scan(
         transitions_b = np.sum(np.abs(np.diff(lsb_b.astype(float), axis=1)))
 
         total_pixels = img_array.shape[0] * (img_array.shape[1] - 1) * 3
-        transition_ratio = (
-            transitions_r + transitions_g + transitions_b
-        ) / total_pixels
+        transition_ratio = (transitions_r + transitions_g + transitions_b) / total_pixels
         transition_deviation = abs(transition_ratio - 0.5)
 
         confidence = float(min(1.0, (avg_deviation * 4 + transition_deviation * 2)))
@@ -446,8 +436,16 @@ async def steganography_scan(
                 "confidence": 0.0,
                 "method": "LSB_statistical_analysis",
                 "lsb_statistics": {
-                    "proportion_ones": {"red": float(prop_r), "green": float(prop_g), "blue": float(prop_b)},
-                    "deviation_from_random": {"red": float(deviation_r), "green": float(deviation_g), "blue": float(deviation_b)},
+                    "proportion_ones": {
+                        "red": float(prop_r),
+                        "green": float(prop_g),
+                        "blue": float(prop_b),
+                    },
+                    "deviation_from_random": {
+                        "red": float(deviation_r),
+                        "green": float(deviation_g),
+                        "blue": float(deviation_b),
+                    },
                     "transition_ratio": float(transition_ratio),
                     "average_deviation": float(avg_deviation),
                 },
@@ -460,8 +458,16 @@ async def steganography_scan(
             "confidence": confidence,
             "method": "LSB_statistical_analysis",
             "lsb_statistics": {
-                "proportion_ones": {"red": float(prop_r), "green": float(prop_g), "blue": float(prop_b)},
-                "deviation_from_random": {"red": float(deviation_r), "green": float(deviation_g), "blue": float(deviation_b)},
+                "proportion_ones": {
+                    "red": float(prop_r),
+                    "green": float(prop_g),
+                    "blue": float(prop_b),
+                },
+                "deviation_from_random": {
+                    "red": float(deviation_r),
+                    "green": float(deviation_g),
+                    "blue": float(deviation_b),
+                },
                 "transition_ratio": float(transition_ratio),
                 "average_deviation": float(avg_deviation),
             },
@@ -477,8 +483,9 @@ async def file_structure_analysis(
     Analyze file structure for anomalies.
     """
     from asyncio import get_running_loop
+
     loop = get_running_loop()
-    
+
     def _analyze():
         anomalies = []
         original_path = artifact.file_path
@@ -542,10 +549,14 @@ async def file_structure_analysis(
             if sig in header and not original_path.upper().endswith(fname):
                 if fname == "PNG" and not original_path.lower().endswith(".png"):
                     chimeric_detected = True
-                    anomalies.append(f"Chimeric signature: Contains {fname} header but has different extension.")
+                    anomalies.append(
+                        f"Chimeric signature: Contains {fname} header but has different extension."
+                    )
                 elif fname == "JPEG" and not original_path.lower().endswith((".jpg", ".jpeg")):
                     chimeric_detected = True
-                    anomalies.append(f"Chimeric signature: Contains {fname} header but has different extension.")
+                    anomalies.append(
+                        f"Chimeric signature: Contains {fname} header but has different extension."
+                    )
 
         return {
             "file_size": file_size,
@@ -874,9 +885,7 @@ async def astronomical_validate_astral(
         lon = gps_coords.get("longitude") if gps_coords else None
 
         present_fields = exif_result.get("present_fields", {})
-        dt_str = present_fields.get("DateTimeOriginal") or present_fields.get(
-            "DateTime"
-        )
+        dt_str = present_fields.get("DateTimeOriginal") or present_fields.get("DateTime")
 
         if not lat or not lon or not dt_str:
             return {
@@ -888,9 +897,7 @@ async def astronomical_validate_astral(
 
         # Parse datetime
         try:
-            dt = datetime.strptime(dt_str, "%Y:%m:%d %H:%M:%S").replace(
-                tzinfo=UTC
-            )
+            dt = datetime.strptime(dt_str, "%Y:%m:%d %H:%M:%S").replace(tzinfo=UTC)
         except ValueError:
             return {
                 "status": "SKIPPED",
@@ -1041,9 +1048,7 @@ async def exif_extract_enhanced(
             "GPSLatitude",
         ]
         absent_fields = [
-            f
-            for f in MANDATORY
-            if not any(f.lower() in k.lower() for k in all_metadata)
+            f for f in MANDATORY if not any(f.lower() in k.lower() for k in all_metadata)
         ]
     else:
         # For digital/lossless formats (PNG, BMP, GIF, WebP, etc.) camera EXIF
@@ -1078,6 +1083,7 @@ async def steganography_scan_enhanced(
     Enhanced steganography detection using stegano + chi-squared.
     """
     from asyncio import get_running_loop
+
     loop = get_running_loop()
 
     def _scan():
@@ -1085,13 +1091,12 @@ async def steganography_scan_enhanced(
         # Test 1: stegano LSB decode
         try:
             from stegano import lsb as stegano_lsb
+
             hidden = stegano_lsb.reveal(artifact.file_path)
             if hidden and len(hidden) > 3:
                 results["lsb_hidden_text_found"] = True
                 results["lsb_message_length"] = len(hidden)
-                results["lsb_message_preview"] = (
-                    hidden[:50] + "..." if len(hidden) > 50 else hidden
-                )
+                results["lsb_message_preview"] = hidden[:50] + "..." if len(hidden) > 50 else hidden
             else:
                 results["lsb_hidden_text_found"] = False
         except Exception:
@@ -1145,7 +1150,7 @@ async def camera_profile_match(
     try:
         exif_data = await exif_extract(artifact=artifact)
         present = exif_data.get("present_fields", {})
-        
+
         make = present.get("Make") or present.get("make")
         model = present.get("Model") or present.get("model")
         lens = present.get("LensModel") or present.get("lens_model")
@@ -1155,32 +1160,54 @@ async def camera_profile_match(
         result["lens_model"] = lens
 
         if not make and not model:
-            result["anomalies"].append("No camera Make/Model in EXIF — possibly stripped or synthetic")
+            result["anomalies"].append(
+                "No camera Make/Model in EXIF — possibly stripped or synthetic"
+            )
             result["confidence"] = 0.1
             return result
 
         # Basic heuristic: known reputable brands raise confidence
-        known_makes = {"Canon", "Nikon", "Sony", "Fujifilm", "Olympus", "Panasonic",
-                       "Leica", "Pentax", "Hasselblad", "Apple", "Samsung", "Google"}
+        known_makes = {
+            "Canon",
+            "Nikon",
+            "Sony",
+            "Fujifilm",
+            "Olympus",
+            "Panasonic",
+            "Leica",
+            "Pentax",
+            "Hasselblad",
+            "Apple",
+            "Samsung",
+            "Google",
+        }
         make_str = (make or "").split()[0].title() if make else ""
 
         if make_str in known_makes:
             result["matched"] = True
-            result["confidence"] = 0.40 # Brand match is NOT a sensor profile match
-            result["note"] = f"Heuristic brand match for '{make_str}' (not a physical sensor fingerprint)."
+            result["confidence"] = 0.40  # Brand match is NOT a sensor profile match
+            result["note"] = (
+                f"Heuristic brand match for '{make_str}' (not a physical sensor fingerprint)."
+            )
         elif make:
             result["matched"] = True
             result["confidence"] = 0.25
-            result["anomalies"].append(f"Unrecognised make '{make}' — metadata suggests non-standard device")
+            result["anomalies"].append(
+                f"Unrecognised make '{make}' — metadata suggests non-standard device"
+            )
         else:
             result["confidence"] = 0.1
-            result["anomalies"].append("Make absent but model present — possible metadata tampering")
+            result["anomalies"].append(
+                "Make absent but model present — possible metadata tampering"
+            )
 
         # Flag implausible make/model combinations
         if make and model and make.upper() in model.upper():
             pass  # normal: "Canon Canon EOS 5D"
         elif make and model and model.upper() in make.upper():
-            result["anomalies"].append("Model string embedded in Make — possible duplication artefact")
+            result["anomalies"].append(
+                "Model string embedded in Make — possible duplication artefact"
+            )
 
     except Exception as exc:
         result["error"] = str(exc)
@@ -1215,20 +1242,29 @@ async def provenance_chain_verify(
             result["provenance_found"] = True
             result["chain_intact"] = True
             result["signature_valid"] = True
-            result["issuer"] = xmp_fields.get("c2pa:issuer") or xmp_fields.get("c2pa") or "Unknown C2PA issuer"
+            result["issuer"] = (
+                xmp_fields.get("c2pa:issuer") or xmp_fields.get("c2pa") or "Unknown C2PA issuer"
+            )
             return result
 
         # Check for any cryptographic hash fields
-        hash_fields = {k: v for k, v in exif_data.items()
-                       if any(t in k.lower() for t in ["hash", "sig", "sign", "cert", "provenance"])}
+        hash_fields = {
+            k: v
+            for k, v in exif_data.items()
+            if any(t in k.lower() for t in ["hash", "sig", "sign", "cert", "provenance"])
+        }
         if hash_fields:
             result["provenance_found"] = True
             result["signature_valid"] = None  # present but unvalidated without CA
-            result["anomalies"].append("Provenance fields detected but CA validation unavailable offline")
+            result["anomalies"].append(
+                "Provenance fields detected but CA validation unavailable offline"
+            )
             return result
 
         # No provenance markers
-        result["anomalies"].append("No C2PA or cryptographic provenance chain found in file metadata")
+        result["anomalies"].append(
+            "No C2PA or cryptographic provenance chain found in file metadata"
+        )
 
     except Exception as exc:
         result["error"] = str(exc)

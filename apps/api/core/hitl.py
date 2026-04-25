@@ -38,18 +38,10 @@ class HITLCheckpointState(BaseModel):
     )
     agent_id: str = Field(..., description="Agent that triggered checkpoint")
     session_id: uuid.UUID = Field(..., description="Session ID")
-    reason: HITLCheckpointReason = Field(
-        ..., description="Why checkpoint was triggered"
-    )
-    current_finding_summary: str = Field(
-        default="", description="Summary of findings so far"
-    )
-    paused_at_iteration: int = Field(
-        ..., description="Iteration at which loop was paused"
-    )
-    investigator_brief: str = Field(
-        default="", description="Brief for the human investigator"
-    )
+    reason: HITLCheckpointReason = Field(..., description="Why checkpoint was triggered")
+    current_finding_summary: str = Field(default="", description="Summary of findings so far")
+    paused_at_iteration: int = Field(..., description="Iteration at which loop was paused")
+    investigator_brief: str = Field(default="", description="Brief for the human investigator")
     status: Literal["PAUSED", "RESUMED", "OVERRIDDEN", "TERMINATED"] = Field(
         default="PAUSED", description="Current checkpoint status"
     )
@@ -71,9 +63,9 @@ class HumanDecisionType(StrEnum):
 class HumanDecision(BaseModel):
     """A human decision in response to a HITL checkpoint."""
 
-    decision_type: Literal[
-        "APPROVE", "REDIRECT", "OVERRIDE", "TERMINATE", "ESCALATE"
-    ] = Field(..., description="Type of decision made")
+    decision_type: Literal["APPROVE", "REDIRECT", "OVERRIDE", "TERMINATE", "ESCALATE"] = Field(
+        ..., description="Type of decision made"
+    )
     investigator_id: str = Field(..., description="ID of the human investigator")
     notes: str = Field(default="", description="Notes from the investigator")
     override_finding: dict[str, Any] | None = Field(

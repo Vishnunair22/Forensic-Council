@@ -3,7 +3,7 @@ Metadata Handlers Unit Tests
 ========================
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -52,8 +52,8 @@ class TestMetadataHandlers:
 
     def test_handler_has_base_class(self, mock_agent):
         """Test handler inherits from BaseToolHandler."""
-        from core.handlers.metadata import MetadataHandlers
         from core.handlers.base import BaseToolHandler
+        from core.handlers.metadata import MetadataHandlers
 
         handler = MetadataHandlers(mock_agent)
         assert isinstance(handler, BaseToolHandler)

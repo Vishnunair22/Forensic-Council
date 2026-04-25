@@ -43,18 +43,19 @@ async def submit_decision(
     redis = None
     try:
         from core.persistence.redis_client import get_redis_client
+
         redis = await get_redis_client()
         if redis:
             if await redis.get(cache_key):
                 logger.info(
                     "HITL decision already processed (idempotent)",
                     checkpoint_id=decision.checkpoint_id,
-                    decision=decision.decision
+                    decision=decision.decision,
                 )
                 return {
                     "status": "already_processed",
                     "checkpoint_id": decision.checkpoint_id,
-                    "decision": decision.decision
+                    "decision": decision.decision,
                 }
     except Exception as e:
         logger.warning("Redis idempotency check failed, proceeding anyway", error=str(e))
@@ -92,7 +93,7 @@ async def submit_decision(
             "HITL decision processed successfully",
             checkpoint_id=decision.checkpoint_id,
             decision=decision.decision,
-            investigator_id=current_user.user_id
+            investigator_id=current_user.user_id,
         )
 
     except ValueError as e:
@@ -103,11 +104,11 @@ async def submit_decision(
             "HITL decision processing failed",
             error=str(e),
             exc_info=True,
-            checkpoint_id=decision.checkpoint_id
+            checkpoint_id=decision.checkpoint_id,
         )
         raise HTTPException(
             status_code=500,
-            detail="Failed to process decision. The decision may have been partially applied."
+            detail="Failed to process decision. The decision may have been partially applied.",
         )
 
     return {

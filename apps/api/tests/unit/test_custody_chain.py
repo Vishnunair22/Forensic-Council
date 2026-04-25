@@ -35,6 +35,7 @@ from core.signing import compute_content_hash
 # Mock database client
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 class MockPostgresClient:
     """
     In-memory substitute for the PostgreSQL client used by CustodyLogger.
@@ -57,21 +58,29 @@ class MockPostgresClient:
             #                  timestamp_utc, content, content_hash, signature,
             #                  prior_entry_ref
             (
-                entry_id, entry_type, agent_id, session_id,
-                timestamp_utc, content, content_hash, signature,
+                entry_id,
+                entry_type,
+                agent_id,
+                session_id,
+                timestamp_utc,
+                content,
+                content_hash,
+                signature,
                 prior_entry_ref,
             ) = args
-            self._rows.append({
-                "entry_id": entry_id,
-                "entry_type": entry_type,
-                "agent_id": agent_id,
-                "session_id": session_id,
-                "timestamp_utc": timestamp_utc,
-                "content": content,
-                "content_hash": content_hash,
-                "signature": signature,
-                "prior_entry_ref": prior_entry_ref,
-            })
+            self._rows.append(
+                {
+                    "entry_id": entry_id,
+                    "entry_type": entry_type,
+                    "agent_id": agent_id,
+                    "session_id": session_id,
+                    "timestamp_utc": timestamp_utc,
+                    "content": content,
+                    "content_hash": content_hash,
+                    "signature": signature,
+                    "prior_entry_ref": prior_entry_ref,
+                }
+            )
         elif q.startswith("UPDATE CHAIN_OF_CUSTODY"):
             # tamper_entry: SET content = $1 WHERE entry_id = $2
             new_content, entry_id = args
@@ -120,6 +129,7 @@ class MockPostgresClient:
 # Helpers
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 def _make_logger(mock_db: MockPostgresClient) -> CustodyLogger:
     """Create a CustodyLogger wired to the given in-memory database."""
     cl = CustodyLogger(postgres_client=mock_db)  # type: ignore[arg-type]
@@ -129,6 +139,7 @@ def _make_logger(mock_db: MockPostgresClient) -> CustodyLogger:
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Tests
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 @pytest.mark.asyncio
 async def test_chain_links_entries() -> None:
@@ -268,5 +279,3 @@ async def test_content_hash_used_as_link() -> None:
 
     assert first_hash == expected_prior
     assert db._rows[1]["prior_entry_ref"] == first_hash
-
-

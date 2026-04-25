@@ -4,13 +4,12 @@ Tests for investigation_runner.py — critical path between pipeline and outside
 
 from __future__ import annotations
 
-import pytest
-from datetime import datetime, timedelta, UTC
-from pathlib import Path
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
-from api.schemas import BriefUpdate
+import pytest
+
 from orchestration.investigation_runner import (
     run_investigation_task,
 )
@@ -26,7 +25,7 @@ def mock_pipeline():
 @pytest.fixture
 def mock_report():
     from agents.arbiter import ForensicReport
-    
+
     return ForensicReport(
         report_id=uuid4(),
         case_id="case-123",
@@ -52,25 +51,29 @@ class TestRunInvestigationTask:
         session_id = str(uuid4())
         evidence_file = tmp_path / "test.jpg"
         evidence_file.write_bytes(b"fake image")
-        
+
         mock_pipeline = MagicMock()
         mock_pipeline.run_investigation = AsyncMock(return_value=mock_report)
         mock_pipeline._final_report = mock_report
-        
-        with patch("orchestration.investigation_runner.get_session_persistence") as mock_persist, \
-             patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast, \
-             patch("orchestration.investigation_runner.set_final_report") as mock_set, \
-             patch("orchestration.investigation_runner.set_active_pipeline_metadata") as mock_set_meta, \
-             patch("orchestration.investigation_runner.clear_session_websockets") as mock_clear_ws, \
-             patch("orchestration.investigation_runner.remove_active_pipeline") as mock_remove, \
-             patch("orchestration.investigation_runner.increment_investigations_completed") as mock_inc_comp, \
-             patch("orchestration.investigation_runner._active_tasks", {}):
-            
+
+        with (
+            patch("orchestration.investigation_runner.get_session_persistence") as mock_persist,
+            patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast,
+            patch("orchestration.investigation_runner.set_final_report") as mock_set,
+            patch(
+                "orchestration.investigation_runner.set_active_pipeline_metadata"
+            ) as mock_set_meta,
+            patch("orchestration.investigation_runner.clear_session_websockets") as mock_clear_ws,
+            patch("orchestration.investigation_runner.remove_active_pipeline") as mock_remove,
+            patch(
+                "orchestration.investigation_runner.increment_investigations_completed"
+            ) as mock_inc_comp,
+            patch("orchestration.investigation_runner._active_tasks", {}),
+        ):
             mock_persist.return_value = MagicMock(
-                save_report=AsyncMock(),
-                update_session_status=AsyncMock()
+                save_report=AsyncMock(), update_session_status=AsyncMock()
             )
-            
+
             await run_investigation_task(
                 session_id=session_id,
                 pipeline=mock_pipeline,
@@ -78,7 +81,7 @@ class TestRunInvestigationTask:
                 case_id="case-123",
                 investigator_id="user-123",
             )
-            
+
             # Verify broadcast was called with PIPELINE_COMPLETE
             call_args = mock_broadcast.call_args_list
             assert len(call_args) > 0
@@ -91,26 +94,28 @@ class TestRunInvestigationTask:
         session_id = str(uuid4())
         evidence_file = tmp_path / "test.jpg"
         evidence_file.write_bytes(b"fake image")
-        
+
         mock_pipeline = MagicMock()
         mock_pipeline.run_investigation = AsyncMock(return_value=mock_report)
         mock_pipeline._final_report = mock_report
-        
-        with patch("orchestration.investigation_runner.get_session_persistence") as mock_persist, \
-             patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast, \
-             patch("orchestration.investigation_runner.set_final_report") as mock_set, \
-             patch("orchestration.investigation_runner.set_active_pipeline_metadata") as mock_set_meta, \
-             patch("orchestration.investigation_runner.clear_session_websockets") as mock_clear_ws, \
-             patch("orchestration.investigation_runner.remove_active_pipeline") as mock_remove, \
-             patch("orchestration.investigation_runner.increment_investigations_completed") as mock_inc_comp, \
-             patch("orchestration.investigation_runner._active_tasks", {}):
-            
-            mock_persistence = MagicMock(
-                save_report=AsyncMock(),
-                update_session_status=AsyncMock()
-            )
+
+        with (
+            patch("orchestration.investigation_runner.get_session_persistence") as mock_persist,
+            patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast,
+            patch("orchestration.investigation_runner.set_final_report") as mock_set,
+            patch(
+                "orchestration.investigation_runner.set_active_pipeline_metadata"
+            ) as mock_set_meta,
+            patch("orchestration.investigation_runner.clear_session_websockets") as mock_clear_ws,
+            patch("orchestration.investigation_runner.remove_active_pipeline") as mock_remove,
+            patch(
+                "orchestration.investigation_runner.increment_investigations_completed"
+            ) as mock_inc_comp,
+            patch("orchestration.investigation_runner._active_tasks", {}),
+        ):
+            mock_persistence = MagicMock(save_report=AsyncMock(), update_session_status=AsyncMock())
             mock_persist.return_value = mock_persistence
-            
+
             await run_investigation_task(
                 session_id=session_id,
                 pipeline=mock_pipeline,
@@ -118,7 +123,7 @@ class TestRunInvestigationTask:
                 case_id="case-123",
                 investigator_id="user-123",
             )
-            
+
             # Verify persistence save was called
             assert mock_persistence.save_report.called
 
@@ -128,25 +133,29 @@ class TestRunInvestigationTask:
         session_id = str(uuid4())
         evidence_file = tmp_path / "test.jpg"
         evidence_file.write_bytes(b"fake image")
-        
+
         mock_pipeline = MagicMock()
         mock_pipeline.run_investigation = AsyncMock(return_value=mock_report)
         mock_pipeline._final_report = mock_report
-        
-        with patch("orchestration.investigation_runner.get_session_persistence") as mock_persist, \
-             patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast, \
-             patch("orchestration.investigation_runner.set_final_report") as mock_set, \
-             patch("orchestration.investigation_runner.set_active_pipeline_metadata") as mock_set_meta, \
-             patch("orchestration.investigation_runner.clear_session_websockets") as mock_clear_ws, \
-             patch("orchestration.investigation_runner.remove_active_pipeline") as mock_remove, \
-             patch("orchestration.investigation_runner.increment_investigations_completed") as mock_inc_comp, \
-             patch("orchestration.investigation_runner._active_tasks", {}):
-            
+
+        with (
+            patch("orchestration.investigation_runner.get_session_persistence") as mock_persist,
+            patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast,
+            patch("orchestration.investigation_runner.set_final_report") as mock_set,
+            patch(
+                "orchestration.investigation_runner.set_active_pipeline_metadata"
+            ) as mock_set_meta,
+            patch("orchestration.investigation_runner.clear_session_websockets") as mock_clear_ws,
+            patch("orchestration.investigation_runner.remove_active_pipeline") as mock_remove,
+            patch(
+                "orchestration.investigation_runner.increment_investigations_completed"
+            ) as mock_inc_comp,
+            patch("orchestration.investigation_runner._active_tasks", {}),
+        ):
             mock_persist.return_value = MagicMock(
-                save_report=AsyncMock(),
-                update_session_status=AsyncMock()
+                save_report=AsyncMock(), update_session_status=AsyncMock()
             )
-            
+
             await run_investigation_task(
                 session_id=session_id,
                 pipeline=mock_pipeline,
@@ -154,7 +163,7 @@ class TestRunInvestigationTask:
                 case_id="case-123",
                 investigator_id="user-123",
             )
-            
+
             # Verify metric was incremented
             assert mock_inc_comp.call_count == 1
 
@@ -164,25 +173,29 @@ class TestRunInvestigationTask:
         session_id = str(uuid4())
         evidence_file = tmp_path / "test.jpg"
         evidence_file.write_bytes(b"fake image")
-        
+
         mock_pipeline = MagicMock()
         mock_pipeline.run_investigation = AsyncMock(return_value=mock_report)
         mock_pipeline._final_report = mock_report
-        
-        with patch("orchestration.investigation_runner.get_session_persistence") as mock_persist, \
-             patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast, \
-             patch("orchestration.investigation_runner.set_final_report") as mock_set, \
-             patch("orchestration.investigation_runner.set_active_pipeline_metadata") as mock_set_meta, \
-             patch("orchestration.investigation_runner.clear_session_websockets") as mock_clear_ws, \
-             patch("orchestration.investigation_runner.remove_active_pipeline") as mock_remove, \
-             patch("orchestration.investigation_runner.increment_investigations_completed") as mock_inc_comp, \
-             patch("orchestration.investigation_runner._active_tasks", {}):
-            
+
+        with (
+            patch("orchestration.investigation_runner.get_session_persistence") as mock_persist,
+            patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast,
+            patch("orchestration.investigation_runner.set_final_report") as mock_set,
+            patch(
+                "orchestration.investigation_runner.set_active_pipeline_metadata"
+            ) as mock_set_meta,
+            patch("orchestration.investigation_runner.clear_session_websockets") as mock_clear_ws,
+            patch("orchestration.investigation_runner.remove_active_pipeline") as mock_remove,
+            patch(
+                "orchestration.investigation_runner.increment_investigations_completed"
+            ) as mock_inc_comp,
+            patch("orchestration.investigation_runner._active_tasks", {}),
+        ):
             mock_persist.return_value = MagicMock(
-                save_report=AsyncMock(),
-                update_session_status=AsyncMock()
+                save_report=AsyncMock(), update_session_status=AsyncMock()
             )
-            
+
             await run_investigation_task(
                 session_id=session_id,
                 pipeline=mock_pipeline,
@@ -190,7 +203,7 @@ class TestRunInvestigationTask:
                 case_id="case-123",
                 investigator_id="user-123",
             )
-            
+
             # File should be deleted on success
             assert not evidence_file.exists()
 
@@ -200,26 +213,28 @@ class TestRunInvestigationTask:
         session_id = str(uuid4())
         evidence_file = tmp_path / "test.jpg"
         evidence_file.write_bytes(b"fake image")
-        
+
         mock_pipeline = MagicMock()
-        mock_pipeline.run_investigation = AsyncMock(
-            side_effect=RuntimeError("Pipeline exploded")
-        )
-        
-        with patch("orchestration.investigation_runner.get_session_persistence") as mock_persist, \
-             patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast, \
-             patch("orchestration.investigation_runner.set_final_report") as mock_set, \
-             patch("orchestration.investigation_runner.set_active_pipeline_metadata") as mock_set_meta, \
-             patch("orchestration.investigation_runner.clear_session_websockets") as mock_clear_ws, \
-             patch("orchestration.investigation_runner.remove_active_pipeline") as mock_remove, \
-             patch("orchestration.investigation_runner.increment_investigations_failed") as mock_inc_fail, \
-             patch("orchestration.investigation_runner._active_tasks", {}):
-            
+        mock_pipeline.run_investigation = AsyncMock(side_effect=RuntimeError("Pipeline exploded"))
+
+        with (
+            patch("orchestration.investigation_runner.get_session_persistence") as mock_persist,
+            patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast,
+            patch("orchestration.investigation_runner.set_final_report") as mock_set,
+            patch(
+                "orchestration.investigation_runner.set_active_pipeline_metadata"
+            ) as mock_set_meta,
+            patch("orchestration.investigation_runner.clear_session_websockets") as mock_clear_ws,
+            patch("orchestration.investigation_runner.remove_active_pipeline") as mock_remove,
+            patch(
+                "orchestration.investigation_runner.increment_investigations_failed"
+            ) as mock_inc_fail,
+            patch("orchestration.investigation_runner._active_tasks", {}),
+        ):
             mock_persist.return_value = MagicMock(
-                save_report=AsyncMock(),
-                update_session_status=AsyncMock()
+                save_report=AsyncMock(), update_session_status=AsyncMock()
             )
-            
+
             await run_investigation_task(
                 session_id=session_id,
                 pipeline=mock_pipeline,
@@ -227,7 +242,7 @@ class TestRunInvestigationTask:
                 case_id="case-123",
                 investigator_id="user-123",
             )
-            
+
             # Verify broadcast was called with ERROR
             call_args = mock_broadcast.call_args_list
             assert len(call_args) > 0
@@ -240,26 +255,28 @@ class TestRunInvestigationTask:
         session_id = str(uuid4())
         evidence_file = tmp_path / "test.jpg"
         evidence_file.write_bytes(b"fake image")
-        
+
         mock_pipeline = MagicMock()
-        mock_pipeline.run_investigation = AsyncMock(
-            side_effect=RuntimeError("Pipeline exploded")
-        )
-        
-        with patch("orchestration.investigation_runner.get_session_persistence") as mock_persist, \
-             patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast, \
-             patch("orchestration.investigation_runner.set_final_report") as mock_set, \
-             patch("orchestration.investigation_runner.set_active_pipeline_metadata") as mock_set_meta, \
-             patch("orchestration.investigation_runner.clear_session_websockets") as mock_clear_ws, \
-             patch("orchestration.investigation_runner.remove_active_pipeline") as mock_remove, \
-             patch("orchestration.investigation_runner.increment_investigations_failed") as mock_inc_fail, \
-             patch("orchestration.investigation_runner._active_tasks", {}):
-            
+        mock_pipeline.run_investigation = AsyncMock(side_effect=RuntimeError("Pipeline exploded"))
+
+        with (
+            patch("orchestration.investigation_runner.get_session_persistence") as mock_persist,
+            patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast,
+            patch("orchestration.investigation_runner.set_final_report") as mock_set,
+            patch(
+                "orchestration.investigation_runner.set_active_pipeline_metadata"
+            ) as mock_set_meta,
+            patch("orchestration.investigation_runner.clear_session_websockets") as mock_clear_ws,
+            patch("orchestration.investigation_runner.remove_active_pipeline") as mock_remove,
+            patch(
+                "orchestration.investigation_runner.increment_investigations_failed"
+            ) as mock_inc_fail,
+            patch("orchestration.investigation_runner._active_tasks", {}),
+        ):
             mock_persist.return_value = MagicMock(
-                save_report=AsyncMock(),
-                update_session_status=AsyncMock()
+                save_report=AsyncMock(), update_session_status=AsyncMock()
             )
-            
+
             await run_investigation_task(
                 session_id=session_id,
                 pipeline=mock_pipeline,
@@ -267,7 +284,7 @@ class TestRunInvestigationTask:
                 case_id="case-123",
                 investigator_id="user-123",
             )
-            
+
             # Verify failed metric was incremented
             assert mock_inc_fail.call_count == 1
 
@@ -277,26 +294,28 @@ class TestRunInvestigationTask:
         session_id = str(uuid4())
         evidence_file = tmp_path / "test.jpg"
         evidence_file.write_bytes(b"fake image")
-        
+
         mock_pipeline = MagicMock()
-        mock_pipeline.run_investigation = AsyncMock(
-            side_effect=RuntimeError("Pipeline exploded")
-        )
-        
-        with patch("orchestration.investigation_runner.get_session_persistence") as mock_persist, \
-             patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast, \
-             patch("orchestration.investigation_runner.set_final_report") as mock_set, \
-             patch("orchestration.investigation_runner.set_active_pipeline_metadata") as mock_set_meta, \
-             patch("orchestration.investigation_runner.clear_session_websockets") as mock_clear_ws, \
-             patch("orchestration.investigation_runner.remove_active_pipeline") as mock_remove, \
-             patch("orchestration.investigation_runner.increment_investigations_failed") as mock_inc_fail, \
-             patch("orchestration.investigation_runner._active_tasks", {}):
-            
+        mock_pipeline.run_investigation = AsyncMock(side_effect=RuntimeError("Pipeline exploded"))
+
+        with (
+            patch("orchestration.investigation_runner.get_session_persistence") as mock_persist,
+            patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast,
+            patch("orchestration.investigation_runner.set_final_report") as mock_set,
+            patch(
+                "orchestration.investigation_runner.set_active_pipeline_metadata"
+            ) as mock_set_meta,
+            patch("orchestration.investigation_runner.clear_session_websockets") as mock_clear_ws,
+            patch("orchestration.investigation_runner.remove_active_pipeline") as mock_remove,
+            patch(
+                "orchestration.investigation_runner.increment_investigations_failed"
+            ) as mock_inc_fail,
+            patch("orchestration.investigation_runner._active_tasks", {}),
+        ):
             mock_persist.return_value = MagicMock(
-                save_report=AsyncMock(),
-                update_session_status=AsyncMock()
+                save_report=AsyncMock(), update_session_status=AsyncMock()
             )
-            
+
             await run_investigation_task(
                 session_id=session_id,
                 pipeline=mock_pipeline,
@@ -304,7 +323,7 @@ class TestRunInvestigationTask:
                 case_id="case-123",
                 investigator_id="user-123",
             )
-            
+
             # File should be deleted even on failure
             assert not evidence_file.exists()
 
@@ -314,25 +333,29 @@ class TestRunInvestigationTask:
         session_id = str(uuid4())
         evidence_file = tmp_path / "test.jpg"
         # Don't create the file - it doesn't exist
-        
+
         mock_pipeline = MagicMock()
         mock_pipeline.run_investigation = AsyncMock(return_value=mock_report)
         mock_pipeline._final_report = mock_report
-        
-        with patch("orchestration.investigation_runner.get_session_persistence") as mock_persist, \
-             patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast, \
-             patch("orchestration.investigation_runner.set_final_report") as mock_set, \
-             patch("orchestration.investigation_runner.set_active_pipeline_metadata") as mock_set_meta, \
-             patch("orchestration.investigation_runner.clear_session_websockets") as mock_clear_ws, \
-             patch("orchestration.investigation_runner.remove_active_pipeline") as mock_remove, \
-             patch("orchestration.investigation_runner.increment_investigations_completed") as mock_inc_comp, \
-             patch("orchestration.investigation_runner._active_tasks", {}):
-            
+
+        with (
+            patch("orchestration.investigation_runner.get_session_persistence") as mock_persist,
+            patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast,
+            patch("orchestration.investigation_runner.set_final_report") as mock_set,
+            patch(
+                "orchestration.investigation_runner.set_active_pipeline_metadata"
+            ) as mock_set_meta,
+            patch("orchestration.investigation_runner.clear_session_websockets") as mock_clear_ws,
+            patch("orchestration.investigation_runner.remove_active_pipeline") as mock_remove,
+            patch(
+                "orchestration.investigation_runner.increment_investigations_completed"
+            ) as mock_inc_comp,
+            patch("orchestration.investigation_runner._active_tasks", {}),
+        ):
             mock_persist.return_value = MagicMock(
-                save_report=AsyncMock(),
-                update_session_status=AsyncMock()
+                save_report=AsyncMock(), update_session_status=AsyncMock()
             )
-            
+
             # Should not raise even if file doesn't exist
             await run_investigation_task(
                 session_id=session_id,
@@ -348,25 +371,29 @@ class TestRunInvestigationTask:
         session_id = str(uuid4())
         evidence_file = tmp_path / "test.jpg"
         evidence_file.write_bytes(b"fake image")
-        
+
         mock_pipeline = MagicMock()
         mock_pipeline.run_investigation = AsyncMock(return_value=None)
         mock_pipeline._final_report = None  # Both are None
-        
-        with patch("orchestration.investigation_runner.get_session_persistence") as mock_persist, \
-             patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast, \
-             patch("orchestration.investigation_runner.set_final_report") as mock_set, \
-             patch("orchestration.investigation_runner.set_active_pipeline_metadata") as mock_set_meta, \
-             patch("orchestration.investigation_runner.clear_session_websockets") as mock_clear_ws, \
-             patch("orchestration.investigation_runner.remove_active_pipeline") as mock_remove, \
-             patch("orchestration.investigation_runner.increment_investigations_completed") as mock_inc_comp, \
-             patch("orchestration.investigation_runner._active_tasks", {}):
-            
+
+        with (
+            patch("orchestration.investigation_runner.get_session_persistence") as mock_persist,
+            patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast,
+            patch("orchestration.investigation_runner.set_final_report") as mock_set,
+            patch(
+                "orchestration.investigation_runner.set_active_pipeline_metadata"
+            ) as mock_set_meta,
+            patch("orchestration.investigation_runner.clear_session_websockets") as mock_clear_ws,
+            patch("orchestration.investigation_runner.remove_active_pipeline") as mock_remove,
+            patch(
+                "orchestration.investigation_runner.increment_investigations_completed"
+            ) as mock_inc_comp,
+            patch("orchestration.investigation_runner._active_tasks", {}),
+        ):
             mock_persist.return_value = MagicMock(
-                save_report=AsyncMock(),
-                update_session_status=AsyncMock()
+                save_report=AsyncMock(), update_session_status=AsyncMock()
             )
-            
+
             # Should complete without raising - error is caught and handled
             await run_investigation_task(
                 session_id=session_id,
@@ -375,35 +402,42 @@ class TestRunInvestigationTask:
                 case_id="case-123",
                 investigator_id="user-123",
             )
-            
+
             # Should broadcast ERROR when report is None
             assert mock_broadcast.called
 
     @pytest.mark.asyncio
-    async def test_storage_persistence_failure_does_not_block_completion(self, mock_report, tmp_path):
+    async def test_storage_persistence_failure_does_not_block_completion(
+        self, mock_report, tmp_path
+    ):
         """Test that storage persistence failure doesn't block completion."""
         session_id = str(uuid4())
         evidence_file = tmp_path / "test.jpg"
         evidence_file.write_bytes(b"fake image")
-        
+
         mock_pipeline = MagicMock()
         mock_pipeline.run_investigation = AsyncMock(return_value=mock_report)
         mock_pipeline._final_report = mock_report
-        
-        with patch("orchestration.investigation_runner.get_session_persistence") as mock_persist, \
-             patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast, \
-             patch("orchestration.investigation_runner.set_final_report") as mock_set, \
-             patch("orchestration.investigation_runner.set_active_pipeline_metadata") as mock_set_meta, \
-             patch("orchestration.investigation_runner.clear_session_websockets") as mock_clear_ws, \
-             patch("orchestration.investigation_runner.remove_active_pipeline") as mock_remove, \
-             patch("orchestration.investigation_runner.increment_investigations_completed") as mock_inc_comp, \
-             patch("orchestration.investigation_runner._active_tasks", {}):
-            
+
+        with (
+            patch("orchestration.investigation_runner.get_session_persistence") as mock_persist,
+            patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast,
+            patch("orchestration.investigation_runner.set_final_report") as mock_set,
+            patch(
+                "orchestration.investigation_runner.set_active_pipeline_metadata"
+            ) as mock_set_meta,
+            patch("orchestration.investigation_runner.clear_session_websockets") as mock_clear_ws,
+            patch("orchestration.investigation_runner.remove_active_pipeline") as mock_remove,
+            patch(
+                "orchestration.investigation_runner.increment_investigations_completed"
+            ) as mock_inc_comp,
+            patch("orchestration.investigation_runner._active_tasks", {}),
+        ):
             # Persistence fails but should continue
             mock_persist.return_value = MagicMock(
                 save_report=AsyncMock(side_effect=RuntimeError("DB down"))
             )
-            
+
             # Should complete without raising
             await run_investigation_task(
                 session_id=session_id,
@@ -412,6 +446,6 @@ class TestRunInvestigationTask:
                 case_id="case-123",
                 investigator_id="user-123",
             )
-            
+
             # Broadcast should still have been called
             assert mock_broadcast.called

@@ -7,9 +7,10 @@ Core Enums and constants for agent identification across the system.
 
 from enum import StrEnum
 
+
 class AgentID(StrEnum):
     """Enumeration of all core forensic agents."""
-    
+
     AGENT1 = "Agent1"
     AGENT2 = "Agent2"
     AGENT3 = "Agent3"

@@ -12,7 +12,6 @@ from uuid import uuid4
 
 from probe_initial_agent import AGENT_CLASSES, SAMPLES
 
-
 TOOL_ALIASES: dict[str, tuple[str, ...]] = {
     "neural_splicing": ("neural_splicing",),
     "neural_copy_move": ("neural_copy_move",),
@@ -135,7 +134,9 @@ async def run_probe(agent_id: str, sample: str, include_findings: bool = False) 
     missing_tools = [
         tool
         for tool in expected_tools
-        if not any(alias in fired for alias in TOOL_ALIASES.get(tool, (tool,)) for fired in fired_tools)
+        if not any(
+            alias in fired for alias in TOOL_ALIASES.get(tool, (tool,)) for fired in fired_tools
+        )
     ]
     invalid_findings = [
         {
@@ -145,7 +146,14 @@ async def run_probe(agent_id: str, sample: str, include_findings: bool = False) 
             "summary": f.get("reasoning_summary"),
             "metadata": {
                 key: (f.get("metadata") or {}).get(key)
-                for key in ("error", "available", "degraded", "fallback_reason", "note", "model_used")
+                for key in (
+                    "error",
+                    "available",
+                    "degraded",
+                    "fallback_reason",
+                    "note",
+                    "model_used",
+                )
                 if key in (f.get("metadata") or {})
             },
         }

@@ -23,20 +23,22 @@ def mock_artifact():
     artifact.to_dict.return_value = {"id": "test_id"}
     return artifact
 
-class TestVideoTools:
 
+class TestVideoTools:
     @patch("cv2.VideoCapture")
     @patch("os.path.exists", return_value=True)
-    @patch("os.path.getsize", return_value=1024*1024)
+    @patch("os.path.getsize", return_value=1024 * 1024)
     @pytest.mark.asyncio
     async def test_video_metadata_extract(self, mock_getsize, mock_exists, mock_vc, mock_artifact):
         mock_cap = MagicMock()
         mock_cap.isOpened.return_value = True
         mock_cap.get.side_effect = lambda prop: {
-            0: 30.0, # FPS (CAP_PROP_FPS is usually 5) - wait check values
+            0: 30.0,  # FPS (CAP_PROP_FPS is usually 5) - wait check values
         }.get(prop, 0)
         # Simplified side effect for testing
-        mock_cap.get.side_effect = lambda prop: 30.0 if prop == 5 else 100.0 if prop == 7 else 1920 # FPS=30, Count=100
+        mock_cap.get.side_effect = lambda prop: (
+            30.0 if prop == 5 else 100.0 if prop == 7 else 1920
+        )  # FPS=30, Count=100
         mock_cap.getBackendName.return_value = "FFMPEG"
         mock_vc.return_value = mock_cap
 
@@ -53,10 +55,12 @@ class TestVideoTools:
     @patch("os.makedirs")
     @patch("core.evidence.EvidenceArtifact.create_derivative")
     @pytest.mark.asyncio
-    async def test_frame_window_extract(self, mock_create_deriv, mock_makedirs, mock_exists, mock_imwrite, mock_vc, mock_artifact):
+    async def test_frame_window_extract(
+        self, mock_create_deriv, mock_makedirs, mock_exists, mock_imwrite, mock_vc, mock_artifact
+    ):
         mock_cap = MagicMock()
         mock_cap.isOpened.return_value = True
-        mock_cap.get.return_value = 100 # Total frames
+        mock_cap.get.return_value = 100  # Total frames
         mock_cap.read.return_value = (True, np.zeros((10, 10, 3), dtype=np.uint8))
         mock_vc.return_value = mock_cap
 
@@ -77,14 +81,16 @@ class TestVideoTools:
     @patch("os.path.exists", return_value=True)
     @patch("core.evidence.EvidenceArtifact.create_derivative")
     @pytest.mark.asyncio
-    async def test_optical_flow_analyze(self, mock_create_deriv, mock_exists, mock_imwrite, mock_flow, mock_vc, mock_artifact):
+    async def test_optical_flow_analyze(
+        self, mock_create_deriv, mock_exists, mock_imwrite, mock_flow, mock_vc, mock_artifact
+    ):
         mock_cap = MagicMock()
         mock_cap.isOpened.return_value = True
         # CV2 props: 3=width, 4=height, 5=fps, 7=frame_count
-        mock_cap.get.side_effect = lambda prop: {
-            3: 100, 4: 100, 5: 30.0, 7: 10
-        }.get(prop, 0)
-        mock_cap.read.side_effect = [(True, np.zeros((100, 100, 3), dtype=np.uint8))] * 11 + [(False, None)]
+        mock_cap.get.side_effect = lambda prop: {3: 100, 4: 100, 5: 30.0, 7: 10}.get(prop, 0)
+        mock_cap.read.side_effect = [(True, np.zeros((100, 100, 3), dtype=np.uint8))] * 11 + [
+            (False, None)
+        ]
         mock_vc.return_value = mock_cap
 
         # Mock optical flow (returns flow field)
@@ -104,12 +110,14 @@ class TestVideoTools:
     @patch("os.path.isdir", return_value=True)
     @patch("os.listdir")
     @pytest.mark.asyncio
-    async def test_frame_consistency_analyze(self, mock_listdir, mock_isdir, mock_imread, mock_artifact):
+    async def test_frame_consistency_analyze(
+        self, mock_listdir, mock_isdir, mock_imread, mock_artifact
+    ):
         mock_listdir.return_value = ["frame_001.png", "frame_002.png", "frame_003.png"]
 
         # Create different frames to trigger inconsistency
         frame1 = np.zeros((100, 100, 3), dtype=np.uint8)
-        frame2 = np.ones((100, 100, 3), dtype=np.uint8) * 255 # Very different
+        frame2 = np.ones((100, 100, 3), dtype=np.uint8) * 255  # Very different
         mock_imread.side_effect = [frame1, frame2, frame1]
 
         # We need a dummy artifact that points to a directory
@@ -126,7 +134,9 @@ class TestVideoTools:
     @patch("os.path.isdir", return_value=True)
     @patch("os.listdir")
     @pytest.mark.asyncio
-    async def test_face_swap_detect_heuristic(self, mock_listdir, mock_isdir, mock_imread, mock_cascade_cls, mock_artifact):
+    async def test_face_swap_detect_heuristic(
+        self, mock_listdir, mock_isdir, mock_imread, mock_cascade_cls, mock_artifact
+    ):
         mock_listdir.return_value = ["frame_001.png"]
         mock_imread.return_value = np.zeros((200, 200, 3), dtype=np.uint8)
 
@@ -149,16 +159,17 @@ class TestVideoTools:
     async def test_face_swap_detect_deepface_fallback(self, mock_exists, mock_vc, mock_artifact):
         # Test fallback when deepface is not installed
         with patch.dict("sys.modules", {"deepface": None}):
-             # Reloading or re-importing might be tricky, but face_swap_detect_deepface
-             # has a try-except ImportError inside.
-             result = await face_swap_detect_deepface(mock_artifact)
-             assert result["available"] is False
-             assert "DeepFace library not installed" in result["forensic_caveat"]
+            # Reloading or re-importing might be tricky, but face_swap_detect_deepface
+            # has a try-except ImportError inside.
+            result = await face_swap_detect_deepface(mock_artifact)
+            assert result["available"] is False
+            assert "DeepFace library not installed" in result["forensic_caveat"]
 
     @patch("os.path.exists", return_value=False)
     @pytest.mark.asyncio
     async def test_optical_flow_file_not_found(self, mock_exists, mock_artifact):
         from core.exceptions import ToolUnavailableError
+
         with pytest.raises(ToolUnavailableError, match="File not found"):
             await optical_flow_analyze(mock_artifact)
 
@@ -167,6 +178,7 @@ class TestVideoTools:
     @pytest.mark.asyncio
     async def test_optical_flow_cannot_open(self, mock_exists, mock_vc, mock_artifact):
         from core.exceptions import ToolUnavailableError
+
         mock_cap = MagicMock()
         mock_cap.isOpened.return_value = False
         mock_vc.return_value = mock_cap
@@ -177,6 +189,7 @@ class TestVideoTools:
     @pytest.mark.asyncio
     async def test_frame_window_extract_invalid_range(self, mock_exists, mock_artifact):
         from core.exceptions import ToolUnavailableError
+
         with patch("cv2.VideoCapture") as mock_vc:
             mock_cap = MagicMock()
             mock_cap.isOpened.return_value = True
@@ -189,6 +202,7 @@ class TestVideoTools:
     @pytest.mark.asyncio
     async def test_frame_consistency_not_a_dir(self, mock_isdir, mock_artifact):
         from core.exceptions import ToolUnavailableError
+
         with pytest.raises(ToolUnavailableError, match="not a directory"):
             await frame_consistency_analyze(mock_artifact)
 
@@ -216,12 +230,14 @@ class TestVideoTools:
 
         # Mock flow to return high magnitude for a specific call
         flow_results = [np.full((100, 100, 2), 1.0)] * 10
-        flow_results[5] = np.full((100, 100, 2), 100.0) # outlier
+        flow_results[5] = np.full((100, 100, 2), 100.0)  # outlier
 
-        with patch("cv2.calcOpticalFlowFarneback", side_effect=flow_results), \
-             patch("cv2.imwrite"), \
-             patch("builtins.open", mock_open(read_data=b"data")), \
-             patch("core.evidence.EvidenceArtifact.create_derivative", return_value=MagicMock()):
+        with (
+            patch("cv2.calcOpticalFlowFarneback", side_effect=flow_results),
+            patch("cv2.imwrite"),
+            patch("builtins.open", mock_open(read_data=b"data")),
+            patch("core.evidence.EvidenceArtifact.create_derivative", return_value=MagicMock()),
+        ):
             result = await optical_flow_analyze(mock_artifact, flow_threshold=1.0)
             assert len(result["flagged_frames"]) > 0
 
@@ -232,7 +248,7 @@ class TestVideoTools:
     async def test_video_metadata_zero_fps(self, mock_getsize, mock_exists, mock_vc, mock_artifact):
         mock_cap = MagicMock()
         mock_cap.isOpened.return_value = True
-        mock_cap.get.side_effect = lambda prop: 0.0 if prop == 5 else 100 # FPS=0
+        mock_cap.get.side_effect = lambda prop: 0.0 if prop == 5 else 100  # FPS=0
         mock_vc.return_value = mock_cap
 
         result = await video_metadata_extract(mock_artifact)
@@ -249,7 +265,7 @@ class TestVideoTools:
 
             mock_cap = MagicMock()
             mock_cap.isOpened.return_value = True
-            mock_cap.get.return_value = 2.0 # FPS=2, so sample rate = 1 (every frame)
+            mock_cap.get.return_value = 2.0  # FPS=2, so sample rate = 1 (every frame)
             # 5 frames to ensure we get > 3 detections
             mock_frames = [(True, np.zeros((10, 10, 3)))] * 5
             mock_cap.read.side_effect = mock_frames + [(False, None)]
@@ -261,7 +277,7 @@ class TestVideoTools:
                 [{"embedding": [-1.0] * 128}],
                 [{"embedding": [1.0] * 128}],
                 [{"embedding": [-1.0] * 128}],
-                [{"embedding": [1.0] * 128}]
+                [{"embedding": [1.0] * 128}],
             ]
 
             result = await face_swap_detect_deepface(mock_artifact, confidence_threshold=0.1)

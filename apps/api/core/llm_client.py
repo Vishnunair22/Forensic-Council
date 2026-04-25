@@ -59,7 +59,7 @@ class LLMClient:
     def __init__(self, config: Settings, use_arbiter_tier: bool = False):
         self.config = config
         self.use_arbiter_tier = use_arbiter_tier
-        
+
         if use_arbiter_tier:
             self.provider = config.arbiter_llm_provider.lower()
             self.api_key = config.arbiter_llm_api_key or config.llm_api_key
@@ -76,7 +76,7 @@ class LLMClient:
                 for model in getattr(config, "llm_fallback_models", "").split(",")
                 if model.strip()
             ]
-        
+
         self.temperature = config.llm_temperature
         self.max_tokens = config.llm_max_tokens
         self.timeout = config.llm_timeout
@@ -99,9 +99,7 @@ class LLMClient:
             half_open_max_calls=2,
         )
 
-    async def _get_client(
-        self, timeout_override: float | None = None
-    ) -> httpx.AsyncClient:
+    async def _get_client(self, timeout_override: float | None = None) -> httpx.AsyncClient:
         """Return a shared httpx.AsyncClient, creating it on first use.
 
         Connection pool is sized for concurrent agent + arbiter LLM calls:
@@ -162,10 +160,14 @@ class LLMClient:
                 resp = await asyncio.wait_for(client.get(url, headers=headers), timeout=3.0)
             return resp.status_code < 500
         except (TimeoutError, ConnectionError, OSError) as e:
-            logger.debug("LLM health check failed (network/timeout)", provider=self.provider, error=str(e))
+            logger.debug(
+                "LLM health check failed (network/timeout)", provider=self.provider, error=str(e)
+            )
             return False
         except Exception as e:
-            logger.debug("LLM health check failed (unexpected)", provider=self.provider, error=str(e))
+            logger.debug(
+                "LLM health check failed (unexpected)", provider=self.provider, error=str(e)
+            )
             return False
 
     async def generate_reasoning_step(
@@ -229,7 +231,6 @@ class LLMClient:
                 logger.error(f"All reasoning candidates failed: {last_exc}")
             return LLMResponse(content="", provider=self.provider)
 
-
     async def _execute_call(
         self,
         messages: list[dict[str, str]],
@@ -266,9 +267,7 @@ class LLMClient:
         """Build the message list from the current ReAct chain."""
         messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
         if current_task:
-            messages.append(
-                {"role": "user", "content": f"Current task: {current_task}"}
-            )
+            messages.append({"role": "user", "content": f"Current task: {current_task}"})
 
         for step in react_chain:
             step_type = step.get("step_type", "")
@@ -288,9 +287,7 @@ class LLMClient:
             elif step_type == "OBSERVATION":
                 obs = content
                 if len(obs) > 3000:
-                    obs = (
-                        obs[:3000] + "\n... [observation truncated for context length]"
-                    )
+                    obs = obs[:3000] + "\n... [observation truncated for context length]"
                 messages.append({"role": "user", "content": f"Observation: {obs}"})
 
         return messages
@@ -320,9 +317,7 @@ class LLMClient:
             except (httpx.TimeoutException, httpx.NetworkError) as e:
                 if attempt < _MAX_RETRIES - 1:
                     wait = _BASE_BACKOFF * (2**attempt)
-                    logger.warning(
-                        f"LLM API {type(e).__name__}, retrying in {wait:.1f}s"
-                    )
+                    logger.warning(f"LLM API {type(e).__name__}, retrying in {wait:.1f}s")
                     await asyncio.sleep(wait)
                 else:
                     raise
@@ -347,7 +342,7 @@ class LLMClient:
         """Call Groq API using model candidates, skipping cross-provider specs."""
         if not self.is_available:
             raise RuntimeError("Groq API key is placeholder or missing")
-            
+
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -365,15 +360,15 @@ class LLMClient:
 
         client = await self._get_client()
         last_exc: Exception | None = None
-        
+
         for model in self._get_model_candidates():
             # Skip candidates that specify a different provider (e.g. "gemini/...")
             if "/" in model and not model.startswith("groq/"):
                 continue
-            
+
             target_model = model.split("/", 1)[1] if "/" in model else model
             payload = {**base_payload, "model": target_model}
-            
+
             try:
                 response = await self._with_retry(
                     lambda p=payload: client.post(url, headers=headers, json=p)
@@ -385,7 +380,6 @@ class LLMClient:
                 logger.warning(f"Groq candidate {model} failed: {exc}")
 
         raise RuntimeError("All Groq candidates failed") from last_exc
-
 
     async def _call_gemini(
         self,
@@ -409,22 +403,25 @@ class LLMClient:
             "generationConfig": {
                 "temperature": self.temperature,
                 "maxOutputTokens": self.max_tokens,
-            }
+            },
         }
 
         if available_tools:
-            payload["tools"] = [{"functionDeclarations": [
+            payload["tools"] = [
                 {
-                    "name": t["name"],
-                    "description": t.get("description", ""),
-                    "parameters": t.get("parameters", {"type": "object", "properties": {}})
-                } for t in available_tools
-            ]}]
+                    "functionDeclarations": [
+                        {
+                            "name": t["name"],
+                            "description": t.get("description", ""),
+                            "parameters": t.get("parameters", {"type": "object", "properties": {}}),
+                        }
+                        for t in available_tools
+                    ]
+                }
+            ]
 
         client = await self._get_client()
-        response = await self._with_retry(
-            lambda: client.post(url, json=payload)
-        )
+        response = await self._with_retry(lambda: client.post(url, json=payload))
         response.raise_for_status()
         data = response.json()
 
@@ -439,7 +436,7 @@ class LLMClient:
                 elif "functionCall" in part:
                     tool_call = {
                         "name": part["functionCall"]["name"],
-                        "arguments": part["functionCall"].get("args", {})
+                        "arguments": part["functionCall"].get("args", {}),
                     }
 
             return LLMResponse(content=content, tool_call=tool_call)
@@ -454,9 +451,7 @@ class LLMClient:
     ) -> LLMResponse:
         """Call OpenAI API."""
         if not self.is_available:
-            raise RuntimeError(
-                "OpenAI API key is placeholder or missing — cannot call LLM"
-            )
+            raise RuntimeError("OpenAI API key is placeholder or missing — cannot call LLM")
         url = "https://api.openai.com/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -474,9 +469,7 @@ class LLMClient:
             payload["tool_choice"] = "auto"
 
         client = await self._get_client()
-        response = await self._with_retry(
-            lambda: client.post(url, headers=headers, json=payload)
-        )
+        response = await self._with_retry(lambda: client.post(url, headers=headers, json=payload))
         response.raise_for_status()
         return self._parse_openai_response(response.json())
 
@@ -487,9 +480,7 @@ class LLMClient:
     ) -> LLMResponse:
         """Call Anthropic Claude API."""
         if not self.is_available:
-            raise RuntimeError(
-                "Anthropic API key is placeholder or missing — cannot call LLM"
-            )
+            raise RuntimeError("Anthropic API key is placeholder or missing — cannot call LLM")
         url = "https://api.anthropic.com/v1/messages"
         headers = {
             "x-api-key": self.api_key,
@@ -518,17 +509,13 @@ class LLMClient:
                 {
                     "name": t["name"],
                     "description": t.get("description", ""),
-                    "input_schema": t.get(
-                        "parameters", {"type": "object", "properties": {}}
-                    ),
+                    "input_schema": t.get("parameters", {"type": "object", "properties": {}}),
                 }
                 for t in available_tools
             ]
 
         client = await self._get_client()
-        response = await self._with_retry(
-            lambda: client.post(url, headers=headers, json=payload)
-        )
+        response = await self._with_retry(lambda: client.post(url, headers=headers, json=payload))
         response.raise_for_status()
         data = response.json()
 
@@ -540,9 +527,7 @@ class LLMClient:
             elif block["type"] == "tool_use":
                 tool_call = {"name": block["name"], "arguments": block["input"]}
 
-        return LLMResponse(
-            content=content, tool_call=tool_call, usage=data.get("usage")
-        )
+        return LLMResponse(content=content, tool_call=tool_call, usage=data.get("usage"))
 
     @staticmethod
     def _tools_to_openai_format(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -595,7 +580,7 @@ class LLMClient:
         json_mode: bool = True,
     ) -> str:
         """Executive summary synthesis with cross-provider fallback support."""
-        with _tracer.start_as_current_span("llm.generate_synthesis") as span:
+        with _tracer.start_as_current_span("llm.generate_synthesis"):
             if not self.is_available:
                 return ""
 
@@ -625,32 +610,60 @@ class LLMClient:
                 try:
                     # Dispatch to specific provider logic
                     if target_provider in ("groq", "openai"):
-                        url = "https://api.groq.com/openai/v1/chat/completions" if target_provider == "groq" else "https://api.openai.com/v1/chat/completions"
-                        headers = {"Authorization": f"Bearer {target_api_key}", "Content-Type": "application/json"}
+                        url = (
+                            "https://api.groq.com/openai/v1/chat/completions"
+                            if target_provider == "groq"
+                            else "https://api.openai.com/v1/chat/completions"
+                        )
+                        headers = {
+                            "Authorization": f"Bearer {target_api_key}",
+                            "Content-Type": "application/json",
+                        }
                         payload = {
                             "model": target_model,
-                            "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_content}],
-                            "temperature": 0.2, "max_tokens": tokens,
+                            "messages": [
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_content},
+                            ],
+                            "temperature": 0.2,
+                            "max_tokens": tokens,
                         }
-                        if json_mode: payload["response_format"] = {"type": "json_object"}
-                        
+                        if json_mode:
+                            payload["response_format"] = {"type": "json_object"}
+
                         client = await self._get_client(timeout_override=timeout_override or 15.0)
-                        resp = await self._with_retry(lambda: client.post(url, headers=headers, json=payload))
+                        resp = await self._with_retry(
+                            lambda c=client, u=url, h=headers, p=payload: c.post(
+                                u, headers=h, json=p
+                            )
+                        )
                         resp.raise_for_status()
                         return resp.json()["choices"][0]["message"].get("content", "").strip()
 
                     elif target_provider == "gemini":
                         url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={target_api_key}"
                         payload = {
-                            "contents": [{"role": "user", "parts": [{"text": f"{system_prompt}\n\n{user_content}"}]}],
+                            "contents": [
+                                {
+                                    "role": "user",
+                                    "parts": [{"text": f"{system_prompt}\n\n{user_content}"}],
+                                }
+                            ],
                             "generationConfig": {"temperature": 0.2, "maxOutputTokens": tokens},
                         }
-                        if json_mode: payload["generationConfig"]["responseMimeType"] = "application/json"
-                        
+                        if json_mode:
+                            payload["generationConfig"]["responseMimeType"] = "application/json"
+
                         client = await self._get_client(timeout_override=timeout_override or 15.0)
-                        resp = await self._with_retry(lambda: client.post(url, json=payload))
+                        resp = await self._with_retry(
+                            lambda c=client, u=url, p=payload: c.post(u, json=p)
+                        )
                         resp.raise_for_status()
-                        return resp.json()["candidates"][0]["content"]["parts"][0].get("text", "").strip()
+                        return (
+                            resp.json()["candidates"][0]["content"]["parts"][0]
+                            .get("text", "")
+                            .strip()
+                        )
 
                 except Exception as exc:
                     last_exc = exc

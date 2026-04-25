@@ -36,7 +36,11 @@ def _features(audio: np.ndarray, sr: int) -> dict[str, float]:
 
     high_band = power[(freqs >= 6000) & (freqs <= min(sr / 2, 12000))]
     mid_band = power[(freqs >= 500) & (freqs < 4000)]
-    high_mid_ratio = float(np.mean(high_band) / (np.mean(mid_band) + 1e-12)) if len(high_band) and len(mid_band) else 0.0
+    high_mid_ratio = (
+        float(np.mean(high_band) / (np.mean(mid_band) + 1e-12))
+        if len(high_band) and len(mid_band)
+        else 0.0
+    )
 
     frame = max(1, int(sr * 0.025))
     hop = max(1, int(sr * 0.010))
@@ -120,7 +124,11 @@ def _worker() -> None:
         try:
             req = json.loads(line)
             path = req.get("input")
-            result = scan_audio_generation(path) if path else {"error": "Missing input path", "available": False}
+            result = (
+                scan_audio_generation(path)
+                if path
+                else {"error": "Missing input path", "available": False}
+            )
         except Exception as exc:
             result = {"error": str(exc), "available": False}
         print(json.dumps(result), flush=True)

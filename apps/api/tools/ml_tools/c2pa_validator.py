@@ -45,7 +45,7 @@ def scan_jumbf_manifest(file_path: str) -> dict:
                     break
 
                 # Get the box length
-                lbox = struct.unpack(">I", data[idx-4 : idx])[0]
+                lbox = struct.unpack(">I", data[idx - 4 : idx])[0]
 
                 # Minimum JUMBF header is 12 bytes: LBox(4), TBox(4), ZBox(4)?
                 # Or LBox(4), TBox(4), [Description Box...]
@@ -54,15 +54,17 @@ def scan_jumbf_manifest(file_path: str) -> dict:
                 # Usually follows immediately or after a small header.
                 content_sample = data[idx : idx + 64]
                 if b"c2pa" in content_sample:
-                    manifests.append({
-                        "offset": idx - 4,
-                        "length": lbox,
-                        "type": "C2PA_MANIFEST",
-                        "status": "LOADED"
-                    })
+                    manifests.append(
+                        {
+                            "offset": idx - 4,
+                            "length": lbox,
+                            "type": "C2PA_MANIFEST",
+                            "status": "LOADED",
+                        }
+                    )
 
-                idx += 4 # Move past current match to keep scanning
-                if len(manifests) > 5: # Safety cap
+                idx += 4  # Move past current match to keep scanning
+                if len(manifests) > 5:  # Safety cap
                     break
 
     except Exception as e:
@@ -88,7 +90,7 @@ def scan_jumbf_manifest(file_path: str) -> dict:
         "note": note,
         "standard": "ISO/IEC 19566-5 (JUMBF)",
         "available": True,
-        "court_defensible": True
+        "court_defensible": True,
     }
 
 
@@ -101,11 +103,15 @@ if __name__ == "__main__":
 
     # Warmup
     if args.warmup:
-        print(json.dumps({
-            "status": "warmed_up",
-            "dependencies": ["struct", "os"],
-            "message": "C2PA validator ready"
-        }))
+        print(
+            json.dumps(
+                {
+                    "status": "warmed_up",
+                    "dependencies": ["struct", "os"],
+                    "message": "C2PA validator ready",
+                }
+            )
+        )
         sys.exit(0)
 
     # Worker mode

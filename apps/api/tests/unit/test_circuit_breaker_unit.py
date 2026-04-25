@@ -37,6 +37,7 @@ from core.circuit_breaker import (
 
 # ── CircuitBreakerConfig ───────────────────────────────────────────────────────
 
+
 class TestCircuitBreakerConfig:
     def test_defaults(self):
         cfg = CircuitBreakerConfig()
@@ -53,20 +54,25 @@ class TestCircuitBreakerConfig:
 
 # ── CircuitBreaker CLOSED state ────────────────────────────────────────────────
 
+
 class TestCircuitBreakerClosed:
     @pytest.mark.asyncio
     async def test_successful_call_passes_through(self):
         cb = CircuitBreaker("test_service", CircuitBreakerConfig())
+
         async def success():
             return "ok"
+
         result = await cb.call(success)
         assert result == "ok"
 
     @pytest.mark.asyncio
     async def test_single_failure_stays_closed(self):
         cb = CircuitBreaker("test_service", CircuitBreakerConfig(failure_threshold=3))
+
         async def failing():
             raise RuntimeError("fail")
+
         with pytest.raises(RuntimeError):
             await cb.call(failing)
         assert cb.state == CircuitState.CLOSED
@@ -76,8 +82,10 @@ class TestCircuitBreakerClosed:
     async def test_failures_at_threshold_open_circuit(self):
         cfg = CircuitBreakerConfig(failure_threshold=2)
         cb = CircuitBreaker("test_service", cfg)
+
         async def failing():
             raise RuntimeError("fail")
+
         for _ in range(2):
             try:
                 await cb.call(failing)
@@ -93,19 +101,23 @@ class TestCircuitBreakerClosed:
 
         async def success():
             return "ok"
+
         await cb.call(success)
         assert cb.failure_count == 0
 
 
 # ── CircuitBreaker OPEN state ──────────────────────────────────────────────────
 
+
 class TestCircuitBreakerOpen:
     @pytest.mark.asyncio
     async def test_open_circuit_blocks_calls(self):
         cfg = CircuitBreakerConfig(failure_threshold=1, timeout_seconds=3600)
         cb = CircuitBreaker("test_service", cfg)
+
         async def failing():
             raise RuntimeError("fail")
+
         try:
             await cb.call(failing)
         except RuntimeError:
@@ -119,8 +131,10 @@ class TestCircuitBreakerOpen:
     async def test_open_circuit_attempts_recovery_after_timeout(self):
         cfg = CircuitBreakerConfig(failure_threshold=1, timeout_seconds=0)
         cb = CircuitBreaker("test_service", cfg)
+
         async def failing():
             raise RuntimeError("fail")
+
         try:
             await cb.call(failing)
         except RuntimeError:
@@ -128,14 +142,17 @@ class TestCircuitBreakerOpen:
         assert cb.state == CircuitState.OPEN
         # Force recovery time to be past
         cb.last_failure_time = datetime.now() - timedelta(seconds=10)
+
         # Next call should transition to HALF_OPEN
         async def success():
             return "recovered"
+
         result = await cb.call(success)
         assert result == "recovered"
 
 
 # ── CircuitBreaker HALF_OPEN state ─────────────────────────────────────────────
+
 
 class TestCircuitBreakerHalfOpen:
     @pytest.mark.asyncio
@@ -147,6 +164,7 @@ class TestCircuitBreakerHalfOpen:
 
         async def success():
             return "ok"
+
         await cb.call(success)
         await cb.call(success)
         assert cb.state == CircuitState.CLOSED
@@ -159,12 +177,14 @@ class TestCircuitBreakerHalfOpen:
 
         async def failing():
             raise RuntimeError("fail")
+
         with pytest.raises(RuntimeError):
             await cb.call(failing)
         assert cb.state == CircuitState.OPEN
 
 
 # ── get_state / reset ──────────────────────────────────────────────────────────
+
 
 class TestCircuitBreakerGetStateAndReset:
     def test_get_state_returns_dict(self):
@@ -203,6 +223,7 @@ class TestCircuitBreakerGetStateAndReset:
 
 
 # ── CircuitBreakerRegistry ─────────────────────────────────────────────────────
+
 
 class TestCircuitBreakerRegistry:
     def test_get_creates_breaker(self):

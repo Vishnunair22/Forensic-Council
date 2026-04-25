@@ -55,13 +55,9 @@ _BASE_BACKOFF = 2.0
 
 _DEFAULT_MODEL = "gemini-2.5-flash"
 
-_DEFAULT_FALLBACK_CHAIN = (
-    "gemini-2.5-flash-lite,gemini-2.0-flash,gemini-2.0-flash-lite"
-)
+_DEFAULT_FALLBACK_CHAIN = "gemini-2.5-flash-lite,gemini-2.0-flash,gemini-2.0-flash-lite"
 
-_THINKING_MODEL_PREFIXES = (
-    "gemini-2.5",
-)
+_THINKING_MODEL_PREFIXES = ("gemini-2.5",)
 
 
 class _ModelUnavailableError(Exception):
@@ -102,7 +98,9 @@ class GeminiVisionFinding:
     file_type_assessment: str = ""
     confidence: float = 0.0
     court_defensible: bool = True
-    caveat: str = "Gemini vision analysis — LLM-derived, requires corroboration with deterministic tools."
+    caveat: str = (
+        "Gemini vision analysis — LLM-derived, requires corroboration with deterministic tools."
+    )
     raw_response: str = ""
     latency_ms: float = 0.0
     error: str | None = None
@@ -144,21 +142,15 @@ class GeminiVisionFinding:
                 "contextual_anomalies": self.contextual_anomalies,
                 # deep_forensic_analysis extras (populated if analysis_type == 'deep_forensic_analysis')
                 "extracted_text": getattr(self, "_extracted_text", []),
-                "interface_identification": getattr(
-                    self, "_interface_identification", ""
-                ),
+                "interface_identification": getattr(self, "_interface_identification", ""),
                 "contextual_narrative": getattr(self, "_contextual_narrative", ""),
                 "authenticity_verdict": getattr(self, "_authenticity_verdict", ""),
-                "metadata_visual_consistency": getattr(
-                    self, "_metadata_visual_consistency", ""
-                ),
+                "metadata_visual_consistency": getattr(self, "_metadata_visual_consistency", ""),
                 "analysis_phase": "deep",
                 "latency_ms": round(self.latency_ms, 1),
                 # Map authenticity_verdict to standard manipulation flags so the
                 # arbiter's _is_direct_manip check registers Gemini findings.
-                "manipulation_detected": getattr(
-                    self, "_authenticity_verdict", ""
-                ).upper()
+                "manipulation_detected": getattr(self, "_authenticity_verdict", "").upper()
                 in ("SUSPICIOUS", "LIKELY_MANIPULATED"),
                 "deepfake_detected": getattr(self, "_authenticity_verdict", "").upper()
                 == "AI_GENERATED",
@@ -221,9 +213,7 @@ class GeminiVisionClient:
         self.model: str = getattr(config, "gemini_model", _DEFAULT_MODEL)
         # Build ordered fallback chain from comma-separated config string.
         # Duplicates and the primary model itself are removed; order is preserved.
-        _chain_str: str = getattr(
-            config, "gemini_fallback_models", _DEFAULT_FALLBACK_CHAIN
-        )
+        _chain_str: str = getattr(config, "gemini_fallback_models", _DEFAULT_FALLBACK_CHAIN)
         seen: set[str] = {self.model}
         _chain: list[str] = []
         for _raw in _chain_str.split(","):
@@ -240,9 +230,7 @@ class GeminiVisionClient:
 
         # Circuit breaker: opens after 3 consecutive failures, recovers after 120s
         self._circuit_breaker = CircuitBreaker(
-            failure_threshold=3,
-            recovery_timeout=120.0,
-            half_open_max_calls=1
+            failure_threshold=3, recovery_timeout=120.0, half_open_max_calls=1
         )
 
     # ------------------------------------------------------------------ #
@@ -277,14 +265,20 @@ class GeminiVisionClient:
                         if name:
                             available_models.add(name)
                 elif resp.status_code == 401:
-                    logger.warning("Gemini API key is invalid — all Gemini grounding will be skipped")
+                    logger.warning(
+                        "Gemini API key is invalid — all Gemini grounding will be skipped"
+                    )
                     self._enabled = False
                     return {}
                 else:
-                    logger.warning("Gemini models.list returned unexpected status", status=resp.status_code)
+                    logger.warning(
+                        "Gemini models.list returned unexpected status", status=resp.status_code
+                    )
                     return {}
         except (httpx.TimeoutException, httpx.ConnectError) as e:
-            logger.warning("Gemini models.list unreachable at startup (will retry at runtime)", error=str(e))
+            logger.warning(
+                "Gemini models.list unreachable at startup (will retry at runtime)", error=str(e)
+            )
             return {}
         except Exception as e:
             logger.warning("Gemini model validation failed", error=str(e))
@@ -313,7 +307,9 @@ class GeminiVisionClient:
             # If primary model is unavailable, promote first available fallback
             if self.model in unavailable and self.fallback_chain:
                 self.model = self.fallback_chain.pop(0)
-                logger.warning("Primary Gemini model unavailable — promoted fallback", new_primary=self.model)
+                logger.warning(
+                    "Primary Gemini model unavailable — promoted fallback", new_primary=self.model
+                )
             elif self.model in unavailable:
                 logger.warning("No Gemini models available — disabling Gemini grounding")
                 self._enabled = False
@@ -587,9 +583,7 @@ class GeminiVisionClient:
             return finding
 
         meta_text = (
-            json.dumps(metadata_summary, indent=2, default=str)
-            if metadata_summary
-            else "{}"
+            json.dumps(metadata_summary, indent=2, default=str) if metadata_summary else "{}"
         )
         prompt = (
             "You are a forensic metadata analyst. The file's EXIF/metadata claims:\n"
@@ -706,7 +700,7 @@ class GeminiVisionClient:
         # Reorder cascade based on model_hint if provided
         primary_model = model_hint if model_hint and model_hint != self.model else self.model
         fallback_models = [m for m in self.fallback_chain if m != primary_model]
-        if model_hint and model_hint == self.model: # hint is already primary
+        if model_hint and model_hint == self.model:  # hint is already primary
             pass
         elif model_hint and model_hint not in self.fallback_chain:
             # Hint is external/new, add it to the front
@@ -714,11 +708,13 @@ class GeminiVisionClient:
         elif model_hint:
             # Hint was in fallback, promote it
             if self.model != primary_model:
-                fallback_models = [self.model] + [m for m in self.fallback_chain if m != primary_model]
+                fallback_models = [self.model] + [
+                    m for m in self.fallback_chain if m != primary_model
+                ]
 
-        models_to_try = [_model_entry(primary_model, payload if primary_model == self.model else None)] + [
-            _model_entry(m) for m in fallback_models
-        ]
+        models_to_try = [
+            _model_entry(primary_model, payload if primary_model == self.model else None)
+        ] + [_model_entry(m) for m in fallback_models]
 
         last_exc: Exception = RuntimeError("no models attempted")
         # Acquire the process-wide quota semaphore before issuing any HTTP call.
@@ -855,7 +851,11 @@ class GeminiVisionClient:
                             )
                             if resp.status_code == 400:
                                 safe_err = error_detail[:200].replace('"', "'").replace("\n", " ")
-                                return '{"error": "' + safe_err + '", "content_description": "Gemini rejected the payload (400 Bad Request) — analysis skipped.", "confidence": 0, "file_type_assessment": "unknown"}'
+                                return (
+                                    '{"error": "'
+                                    + safe_err
+                                    + '", "content_description": "Gemini rejected the payload (400 Bad Request) — analysis skipped.", "confidence": 0, "file_type_assessment": "unknown"}'
+                                )
                             resp.raise_for_status()
                     data = resp.json()
                     # Extract text from Gemini response structure
@@ -940,11 +940,7 @@ class GeminiVisionClient:
 
         # deep_forensic_analysis extras: interface + authenticity verdict
         iface = data.get("interface_identification", "")
-        if (
-            iface
-            and isinstance(iface, str)
-            and iface.lower() not in ("none", "n/a", "")
-        ):
+        if iface and isinstance(iface, str) and iface.lower() not in ("none", "n/a", ""):
             descriptions.insert(0, f"Interface: {iface}")
         verdict = data.get("authenticity_verdict", "")
         if verdict and isinstance(verdict, str):
@@ -1003,31 +999,21 @@ class GeminiVisionClient:
         desc_parts = descriptions[:3]
         if manipulation_signals:
             none_signals = [
-                s
-                for s in manipulation_signals
-                if s.lower() not in ("none detected", "none")
+                s for s in manipulation_signals if s.lower() not in ("none detected", "none")
             ]
             if none_signals:
-                desc_parts.append(
-                    f"Manipulation signals: {'; '.join(none_signals[:3])}"
-                )
-        content_description = (
-            " | ".join(desc_parts) if desc_parts else "Visual analysis complete."
-        )
+                desc_parts.append(f"Manipulation signals: {'; '.join(none_signals[:3])}")
+        content_description = " | ".join(desc_parts) if desc_parts else "Visual analysis complete."
 
         finding = GeminiVisionFinding(
             analysis_type=analysis_type,
             model_used=self.model,
             content_description=content_description,
             manipulation_signals=[
-                s
-                for s in manipulation_signals
-                if s.lower() not in ("none detected", "none")
+                s for s in manipulation_signals if s.lower() not in ("none detected", "none")
             ],
             detected_objects=[
-                o
-                for o in detected_objects
-                if o.lower() not in ("none detected", "none")
+                o for o in detected_objects if o.lower() not in ("none detected", "none")
             ],
             contextual_anomalies=contextual_anomalies,
             file_type_assessment=file_type,
@@ -1117,17 +1103,19 @@ class GeminiVisionClient:
                 )
             except Exception as resize_exc:
                 # If resize fails, fall through and send original — better than failing entirely
-                logger.warning(
-                    f"Gemini: image resize failed for {file_path}: {resize_exc}"
-                )
+                logger.warning(f"Gemini: image resize failed for {file_path}: {resize_exc}")
 
         # Handle Audio Files: Convert to Spectrogram Image for Gemini "Vision"
         if mime_type.startswith("audio/"):
             try:
-                spectrogram_raw, spectrogram_mime = GeminiVisionClient._generate_spectrogram(file_path)
+                spectrogram_raw, spectrogram_mime = GeminiVisionClient._generate_spectrogram(
+                    file_path
+                )
                 return base64.b64encode(spectrogram_raw).decode("utf-8"), spectrogram_mime
             except Exception as audio_err:
-                logger.warning(f"Gemini: spectrogram generation failed for {file_path}: {audio_err}")
+                logger.warning(
+                    f"Gemini: spectrogram generation failed for {file_path}: {audio_err}"
+                )
                 # Fall through to raw binary (Gemini 1.5+ sometimes handles raw audio)
 
         return base64.b64encode(raw).decode("utf-8"), mime_type
@@ -1143,8 +1131,8 @@ class GeminiVisionClient:
 
         import numpy as np
         import soundfile as sf
-        from scipy import signal
         from PIL import Image as _PImage
+        from scipy import signal
 
         # Load audio without librosa. The Gemini path should be lightweight and
         # robust even when optional numba/librosa hooks are unavailable.
@@ -1229,15 +1217,11 @@ class GeminiVisionClient:
 
             # Noise estimate via high-frequency residual
             blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-            noise_residual = float(
-                np.abs(gray.astype(float) - blurred.astype(float)).mean()
-            )
+            noise_residual = float(np.abs(gray.astype(float) - blurred.astype(float)).mean())
 
             # JPEG artifact check: blockiness score
             block_diff = (
-                float(np.abs(np.diff(gray.astype(float), axis=0)[7::8].mean()))
-                if h > 16
-                else 0.0
+                float(np.abs(np.diff(gray.astype(float), axis=0)[7::8].mean())) if h > 16 else 0.0
             )
             likely_jpeg_compressed = block_diff > 3.0
 
@@ -1325,9 +1309,7 @@ class GeminiVisionClient:
 
             ocr_summary = ""
             if ocr_text_lines:
-                ocr_summary = (
-                    f" Text visible in image: {' | '.join(ocr_text_lines[:6])}."
-                )
+                ocr_summary = f" Text visible in image: {' | '.join(ocr_text_lines[:6])}."
 
             narrative = (
                 f"Local forensic analysis (set GEMINI_API_KEY for full AI vision). {scene_desc}"
@@ -1361,9 +1343,7 @@ class GeminiVisionClient:
                 _extracted_text=ocr_text_lines,
                 _interface_identification="",
                 _contextual_narrative=narrative,
-                _authenticity_verdict="SUSPICIOUS"
-                if manipulation_signals
-                else "CANNOT_DETERMINE",
+                _authenticity_verdict="SUSPICIOUS" if manipulation_signals else "CANNOT_DETERMINE",
                 _metadata_visual_consistency="; ".join(meta_notes)
                 if meta_notes
                 else "No EXIF for cross-validation",

@@ -215,9 +215,7 @@ class SessionManager:
             )
 
             session.checkpoints[checkpoint.checkpoint_id] = checkpoint
-            session.agent_loops[agent_id].pending_checkpoints.append(
-                checkpoint.checkpoint_id
-            )
+            session.agent_loops[agent_id].pending_checkpoints.append(checkpoint.checkpoint_id)
             session.status = SessionStatus.AWAITING_HITL
             session.updated_at = datetime.now(UTC)
 
@@ -236,9 +234,7 @@ class SessionManager:
             for session in self._sessions.values():
                 if checkpoint_id in session.checkpoints:
                     checkpoint = session.checkpoints[checkpoint_id]
-                    checkpoint.status = CheckpointStatus(
-                        decision.get("status", "APPROVED")
-                    )
+                    checkpoint.status = CheckpointStatus(decision.get("status", "APPROVED"))
                     checkpoint.human_decision = decision
                     checkpoint.resolved_at = datetime.now(UTC)
 
@@ -249,8 +245,7 @@ class SessionManager:
 
                     # Check if any pending checkpoints remain
                     has_pending = any(
-                        cp.status == CheckpointStatus.PENDING
-                        for cp in session.checkpoints.values()
+                        cp.status == CheckpointStatus.PENDING for cp in session.checkpoints.values()
                     )
                     if not has_pending:
                         session.status = SessionStatus.RUNNING
@@ -273,11 +268,7 @@ class SessionManager:
         if not session:
             return []
 
-        return [
-            cp
-            for cp in session.checkpoints.values()
-            if cp.status == CheckpointStatus.PENDING
-        ]
+        return [cp for cp in session.checkpoints.values() if cp.status == CheckpointStatus.PENDING]
 
     async def get_investigator_brief(
         self,

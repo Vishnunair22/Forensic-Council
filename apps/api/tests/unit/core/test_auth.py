@@ -1,4 +1,4 @@
-﻿"""
+"""
 Backend Unit Tests â€” core/auth.py
 ===================================
 Tests JWT creation/validation, bcrypt password hashing,
@@ -9,6 +9,7 @@ D13 fix: corrected import names from actual module:
   - decode_token       (was: validate_token)
   - create_access_token(user_id, role, expires_delta, username)
 """
+
 import asyncio
 from datetime import timedelta
 from unittest.mock import AsyncMock, patch
@@ -25,6 +26,7 @@ try:
         get_password_hash,
         verify_password,
     )
+
     HAS_AUTH = True
 except ImportError:
     HAS_AUTH = False
@@ -35,6 +37,7 @@ pytestmark = pytest.mark.skipif(not HAS_AUTH, reason="core.auth not importable")
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # PASSWORD HASHING (bcrypt)
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
 
 class TestPasswordHashing:
     def test_hash_returns_string(self):
@@ -84,6 +87,7 @@ class TestPasswordHashing:
 # JWT CREATION
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+
 class TestJWTCreation:
     def _make_token(self, user_id="user-1", role=None, expires_delta=None):
         r = role or UserRole.INVESTIGATOR
@@ -97,6 +101,7 @@ class TestJWTCreation:
     def _decode_payload(self, token: str) -> dict:
         import base64
         import json
+
         payload_b64 = token.split(".")[1]
         padding = 4 - len(payload_b64) % 4
         if padding != 4:
@@ -121,6 +126,7 @@ class TestJWTCreation:
     def test_default_expiry_le_120_minutes(self):
         """Default expiry should be â‰¤ 120 minutes (v1.0.3 regression guard)."""
         import time
+
         payload = self._decode_payload(self._make_token())
         window_minutes = (payload["exp"] - time.time()) / 60
         assert window_minutes <= 120, (
@@ -129,6 +135,7 @@ class TestJWTCreation:
 
     def test_custom_expiry_respected(self):
         import time
+
         token = self._make_token(expires_delta=timedelta(minutes=30))
         payload = self._decode_payload(token)
         window_minutes = (payload["exp"] - time.time()) / 60
@@ -139,11 +146,13 @@ class TestJWTCreation:
 # JWT DECODING (decode_token is async â€” use asyncio.run)
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+
 class TestJWTDecoding:
     def _make_token(self, user_id="user-1", role=None, expires_delta=None):
         r = role or UserRole.INVESTIGATOR
-        return create_access_token(user_id=user_id, role=r,
-                                   expires_delta=expires_delta, username=user_id)
+        return create_access_token(
+            user_id=user_id, role=r, expires_delta=expires_delta, username=user_id
+        )
 
     def test_valid_token_decodes(self):
         """decode_token must return TokenData for a valid token."""
@@ -191,6 +200,7 @@ class TestJWTDecoding:
 # USERROLE
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+
 class TestUserRole:
     def test_investigator_role_exists(self):
         assert UserRole.INVESTIGATOR is not None
@@ -201,5 +211,3 @@ class TestUserRole:
     def test_role_values_are_strings(self):
         for role in UserRole:
             assert isinstance(role.value, str)
-
-

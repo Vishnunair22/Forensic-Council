@@ -12,6 +12,7 @@ from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
+
 def analyze_frequency_bands(file_path: str) -> dict:
     """
     Perform FFT frequency band distribution analysis.
@@ -36,12 +37,14 @@ def analyze_frequency_bands(file_path: str) -> dict:
         total_energy = magnitude.sum() + 1e-6
 
         bands = {}
-        for i, (r_inner, r_outer, c_inner, c_outer) in enumerate([
-            (0, r1, 0, c1),
-            (r1, r2, c1, c2),
-            (r2, r3, c2, c3),
-            (r3, h // 2, c3, w // 2),
-        ]):
+        for i, (r_inner, r_outer, c_inner, c_outer) in enumerate(
+            [
+                (0, r1, 0, c1),
+                (r1, r2, c1, c2),
+                (r2, r3, c2, c3),
+                (r3, h // 2, c3, w // 2),
+            ]
+        ):
             mask = np.zeros((h, w), dtype=bool)
             mask[cy - r_outer : cy + r_outer, cx - c_outer : cx + c_outer] = True
             if i > 0:

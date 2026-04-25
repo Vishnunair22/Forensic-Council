@@ -88,8 +88,7 @@ class TestLLMClientInit:
                 llm_api_key="gsk_realkey_abcdefgh123",
                 llm_model="llama-3.3-70b-versatile",
                 llm_fallback_models=(
-                    "openai/gpt-oss-20b,llama-3.3-70b-versatile,"
-                    "llama-3.1-8b-instant"
+                    "openai/gpt-oss-20b,llama-3.3-70b-versatile,llama-3.1-8b-instant"
                 ),
             )
         )
@@ -254,9 +253,7 @@ class TestGenerateReasoningStep:
             "choices": [{"message": {"content": "ok"}}],
             "usage": {"prompt_tokens": 1, "completion_tokens": 1},
         }
-        mock_with_retry = AsyncMock(
-            side_effect=[RuntimeError("primary down"), mock_response]
-        )
+        mock_with_retry = AsyncMock(side_effect=[RuntimeError("primary down"), mock_response])
 
         with (
             patch.object(client, "_get_client", AsyncMock(return_value=mock_http)),

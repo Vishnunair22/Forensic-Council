@@ -63,9 +63,7 @@ def analyze_lighting(image_path: str, num_peaks: int = 10) -> dict:
             "note": "No edges detected for analysis",
         }
 
-    _, peak_angles, _ = hough_line_peaks(
-        h_space, angles, distances, num_peaks=num_peaks
-    )
+    _, peak_angles, _ = hough_line_peaks(h_space, angles, distances, num_peaks=num_peaks)
 
     if len(peak_angles) < 2:
         return {
@@ -109,9 +107,7 @@ def analyze_lighting(image_path: str, num_peaks: int = 10) -> dict:
     return {
         "lighting_consistent": lighting_consistent,
         "shadow_angle_std_deg": round(angle_std, 2),
-        "dominant_shadow_angles_deg": [
-            round(float(np.degrees(a)), 1) for a in peak_angles[:3]
-        ],
+        "dominant_shadow_angles_deg": [round(float(np.degrees(a)), 1) for a in peak_angles[:3]],
         "highlight_direction": highlight_direction,
         "confidence": confidence,
         "available": True,
@@ -172,9 +168,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Analyze lighting consistency")
     parser.add_argument("--input", type=str, help="Path to input image")
     parser.add_argument("--output", help="Path to save visualization")
-    parser.add_argument(
-        "--peaks", type=int, default=10, help="Number of dominant lines to detect"
-    )
+    parser.add_argument("--peaks", type=int, default=10, help="Number of dominant lines to detect")
     parser.add_argument("--warmup", action="store_true", help="Warmup mode - preload dependencies")
     parser.add_argument("--worker", action="store_true", help="Worker mode - persistent process")
     args = parser.parse_args()
@@ -184,17 +178,19 @@ if __name__ == "__main__":
         try:
             import cv2
             import numpy as np
-            print(json.dumps({
-                "status": "warmed_up",
-                "dependencies": ["cv2", "numpy"],
-                "message": "Lighting analyzer ready"
-            }))
+
+            print(
+                json.dumps(
+                    {
+                        "status": "warmed_up",
+                        "dependencies": ["cv2", "numpy"],
+                        "message": "Lighting analyzer ready",
+                    }
+                )
+            )
             sys.exit(0)
         except Exception as e:
-            print(json.dumps({
-                "status": "warmup_failed",
-                "error": str(e)
-            }))
+            print(json.dumps({"status": "warmup_failed", "error": str(e)}))
             sys.exit(1)
 
     # Worker mode - persistent process reading from stdin
@@ -230,11 +226,7 @@ if __name__ == "__main__":
         result = analyze_lighting(args.input, num_peaks=args.peaks)
 
         # Create visualization if requested
-        if (
-            args.output
-            and result.get("available")
-            and result.get("dominant_shadow_angles_deg")
-        ):
+        if args.output and result.get("available") and result.get("dominant_shadow_angles_deg"):
             success = visualize_lighting(
                 args.input, args.output, result["dominant_shadow_angles_deg"]
             )

@@ -150,28 +150,38 @@ class Agent3Object(ForensicAgent):
         # 1. If weapon/contraband detected, escalate to secondary classification
         if tool_name == "vector_contraband_search":
             if finding.evidence_verdict == "POSITIVE" and (finding.confidence_raw or 0.0) > 0.6:
-                logger.info("High-confidence contraband detected; escalating", agent_id=self.agent_id)
+                logger.info(
+                    "High-confidence contraband detected; escalating", agent_id=self.agent_id
+                )
                 await self.inject_task(
                     description="Run secondary_classification on flagged objects for validation",
-                    priority=20
+                    priority=20,
                 )
 
         # 2. If lighting inconsistency in initial check, escalate to deep analysis
         if tool_name == "lighting_correlation_initial":
             if finding.evidence_verdict == "POSITIVE":
-                logger.info("Lighting inconsistency detected; escalating to deep analysis", agent_id=self.agent_id)
+                logger.info(
+                    "Lighting inconsistency detected; escalating to deep analysis",
+                    agent_id=self.agent_id,
+                )
                 await self.inject_task(
                     description="Run lighting_consistency for deep ROI-aware shadow-angle audit",
-                    priority=15
+                    priority=15,
                 )
 
         # 3. If scene incongruence found, inject adversarial robustness check
         if tool_name == "scene_incongruence":
-            if finding.evidence_verdict == "POSITIVE" or finding.metadata.get("incongruence_detected"):
-                logger.info("Scene incongruence detected; injecting adversarial check", agent_id=self.agent_id)
+            if finding.evidence_verdict == "POSITIVE" or finding.metadata.get(
+                "incongruence_detected"
+            ):
+                logger.info(
+                    "Scene incongruence detected; injecting adversarial check",
+                    agent_id=self.agent_id,
+                )
                 await self.inject_task(
                     description="Run adversarial_robustness_check against object detection evasion",
-                    priority=12
+                    priority=12,
                 )
 
         # 4. Signal to inter-agent bus
@@ -229,9 +239,7 @@ class Agent3Object(ForensicAgent):
                     logger.debug(f"{self.agent_id}: Gemini signal callback failed", error=str(e))
 
             return await self._gemini_deep_forensic_handler(
-                input_data,
-                model_hint="gemini-2.5-flash",
-                signal_callback=_gemini_signal_callback
+                input_data, model_hint="gemini-2.5-flash", signal_callback=_gemini_signal_callback
             )
 
         registry.register(

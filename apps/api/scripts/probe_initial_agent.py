@@ -5,9 +5,8 @@ import asyncio
 import hashlib
 import json
 import math
-import os
-import subprocess
 import struct
+import subprocess
 import tempfile
 import wave
 from pathlib import Path
@@ -179,7 +178,9 @@ async def _run_probe(agent_id: str, sample: str, include_findings: bool = False)
     finally:
         await shutdown_ml_workers()
     serialized = [f.model_dump(mode="json") for f in findings]
-    tools = [((f.get("metadata") or {}).get("tool_name") or f.get("finding_type")) for f in serialized]
+    tools = [
+        ((f.get("metadata") or {}).get("tool_name") or f.get("finding_type")) for f in serialized
+    ]
     verdicts = [
         {
             "tool": (f.get("metadata") or {}).get("tool_name") or f.get("finding_type"),
@@ -215,7 +216,8 @@ async def _run_probe(agent_id: str, sample: str, include_findings: bool = False)
     degraded = [
         {
             "tool": (f.get("metadata") or {}).get("tool_name"),
-            "reason": (f.get("metadata") or {}).get("fallback_reason") or (f.get("metadata") or {}).get("note"),
+            "reason": (f.get("metadata") or {}).get("fallback_reason")
+            or (f.get("metadata") or {}).get("note"),
         }
         for f in serialized
         if (f.get("metadata") or {}).get("degraded")
@@ -240,7 +242,9 @@ async def _run_probe(agent_id: str, sample: str, include_findings: bool = False)
         "tools": tools,
         "verdicts": verdicts,
         "missing_tool_tasks": [
-            t for t in expected_tasks if not any(tool and tool in str(t).lower().replace("-", "_") for tool in tools)
+            t
+            for t in expected_tasks
+            if not any(tool and tool in str(t).lower().replace("-", "_") for tool in tools)
         ],
         "degraded": degraded,
         "incomplete": incomplete,
@@ -260,7 +264,9 @@ def main() -> None:
     parser.add_argument("--include-findings", action="store_true")
     args = parser.parse_args()
 
-    result = asyncio.run(_run_probe(args.agent, args.sample, include_findings=args.include_findings))
+    result = asyncio.run(
+        _run_probe(args.agent, args.sample, include_findings=args.include_findings)
+    )
     print(json.dumps(result, indent=2, sort_keys=True))
 
 

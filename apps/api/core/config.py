@@ -380,7 +380,8 @@ class Settings(BaseSettings):
         default=600, description="Max seconds for a single investigation"
     )
     hitl_decision_timeout: int = Field(
-        default=3600, description="Max seconds to wait for HITL decision before auto-skipping deep analysis"
+        default=3600,
+        description="Max seconds to wait for HITL decision before auto-skipping deep analysis",
     )
     investigation_max_retries: int = Field(
         default=3, description="Max retry attempts for failed investigations"

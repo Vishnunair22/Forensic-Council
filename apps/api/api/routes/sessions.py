@@ -66,6 +66,7 @@ def _forensic_report_to_dto(report) -> ReportDTO:
                 meta = _json.loads(meta)
             except Exception:
                 meta = {}
+
         def _opt_float(value):
             if value is None:
                 return None
@@ -74,8 +75,16 @@ def _forensic_report_to_dto(report) -> ReportDTO:
             except (TypeError, ValueError):
                 return None
 
-        evidence_verdict = str(d.get("evidence_verdict") or meta.get("evidence_verdict") or "INCONCLUSIVE").upper()
-        if evidence_verdict not in {"POSITIVE", "NEGATIVE", "INCONCLUSIVE", "NOT_APPLICABLE", "ERROR"}:
+        evidence_verdict = str(
+            d.get("evidence_verdict") or meta.get("evidence_verdict") or "INCONCLUSIVE"
+        ).upper()
+        if evidence_verdict not in {
+            "POSITIVE",
+            "NEGATIVE",
+            "INCONCLUSIVE",
+            "NOT_APPLICABLE",
+            "ERROR",
+        }:
             evidence_verdict = "INCONCLUSIVE"
 
         dto = AgentFindingDTO(
@@ -130,9 +139,7 @@ def _forensic_report_to_dto(report) -> ReportDTO:
     cross_modal = []
     try:
         cross_modal = [
-            _to_finding_dto(f)
-            for f in (report.cross_modal_confirmed or [])
-            if _is_real_finding(f)
+            _to_finding_dto(f) for f in (report.cross_modal_confirmed or []) if _is_real_finding(f)
         ]
     except Exception as e:
         logger.warning("Failed to convert cross-modal findings", error=str(e))
@@ -140,9 +147,7 @@ def _forensic_report_to_dto(report) -> ReportDTO:
     incomplete = []
     try:
         incomplete = [
-            _to_finding_dto(f)
-            for f in (report.incomplete_findings or [])
-            if _is_real_finding(f)
+            _to_finding_dto(f) for f in (report.incomplete_findings or []) if _is_real_finding(f)
         ]
     except Exception as e:
         logger.warning("Failed to convert incomplete findings", error=str(e))
@@ -191,7 +196,9 @@ def _forensic_report_to_dto(report) -> ReportDTO:
             per_agent_analysis=getattr(report, "per_agent_analysis", {}) or {},
             overall_confidence=float(getattr(report, "overall_confidence", 0.0) or 0.0),
             overall_error_rate=float(getattr(report, "overall_error_rate", 0.0) or 0.0),
-            overall_verdict=str(getattr(report, "overall_verdict", "REVIEW REQUIRED") or "REVIEW REQUIRED"),
+            overall_verdict=str(
+                getattr(report, "overall_verdict", "REVIEW REQUIRED") or "REVIEW REQUIRED"
+            ),
             cross_modal_confirmed=cross_modal,
             contested_findings=contested,
             tribunal_resolved=tribunal_resolved,
@@ -203,9 +210,7 @@ def _forensic_report_to_dto(report) -> ReportDTO:
             verdict_sentence=getattr(report, "verdict_sentence", "") or "",
             key_findings=list(getattr(report, "key_findings", []) or []),
             reliability_note=getattr(report, "reliability_note", "") or "",
-            manipulation_probability=float(
-                getattr(report, "manipulation_probability", 0.0) or 0.0
-            ),
+            manipulation_probability=float(getattr(report, "manipulation_probability", 0.0) or 0.0),
             compression_penalty=float(getattr(report, "compression_penalty", 1.0) or 1.0),
             confidence_min=float(getattr(report, "confidence_min", 0.0) or 0.0),
             confidence_max=float(getattr(report, "confidence_max", 0.0) or 0.0),
@@ -260,7 +265,6 @@ def _forensic_report_to_dto(report) -> ReportDTO:
         )
 
 
-
 @router.get("", response_model=list[SessionInfo])
 async def list_sessions(current_user: User = Depends(get_current_user)):
     """List all active sessions. Requires authentication."""
@@ -276,19 +280,19 @@ async def list_sessions(current_user: User = Depends(get_current_user)):
         session_id = key.replace(SESSION_METADATA_KEY_PREFIX, "")
         metadata = await redis.get_json(key)
         if metadata and isinstance(metadata, dict):
-            sessions.append(SessionInfo(
-                session_id=session_id,
-                case_id=metadata.get("case_id", "unknown"),
-                status=metadata.get("status", "running"),
-                started_at=metadata.get("created_at", ""),
-            ))
+            sessions.append(
+                SessionInfo(
+                    session_id=session_id,
+                    case_id=metadata.get("case_id", "unknown"),
+                    status=metadata.get("status", "running"),
+                    started_at=metadata.get("created_at", ""),
+                )
+            )
     return sessions
 
 
 @router.delete("/{session_id}")
-async def terminate_session(
-    session_id: str, current_user: User = Depends(get_current_user)
-):
+async def terminate_session(session_id: str, current_user: User = Depends(get_current_user)):
     """Terminate a running session. Requires authentication."""
     from api.routes._session_state import get_active_pipeline_metadata
 
@@ -309,6 +313,7 @@ async def terminate_session(
     # so the worker in another process can stop its pipeline.
     # For now, we just remove the metadata.
     from core.persistence.redis_client import get_redis_client
+
     redis = await get_redis_client()
     await redis.delete(f"forensic:session:metadata:{session_id}")
 
@@ -349,8 +354,12 @@ async def live_updates(websocket: WebSocket, session_id: str):
 
     if auth_token:
         # Debug: log token extraction (obscure the middle)
-        token_preview = f"{auth_token[:10]}...{auth_token[-10:]}" if len(auth_token) > 20 else "short"
-        logger.info("Extracted WebSocket auth token", session_id=session_id, token_preview=token_preview)
+        token_preview = (
+            f"{auth_token[:10]}...{auth_token[-10:]}" if len(auth_token) > 20 else "short"
+        )
+        logger.info(
+            "Extracted WebSocket auth token", session_id=session_id, token_preview=token_preview
+        )
 
     if not auth_token:
         logger.warning("WebSocket auth failed: No token found", session_id=session_id)
@@ -399,11 +408,13 @@ async def live_updates(websocket: WebSocket, session_id: str):
             "WebSocket connection rejected: session was interrupted by API restart",
             session_id=session_id,
         )
-        await websocket.send_json({
-            "type": "ERROR",
-            "message": "This investigation was interrupted by a server restart and cannot be resumed. Please start a new investigation.",
-            "data": {"status": "interrupted", "recoverable": False},
-        })
+        await websocket.send_json(
+            {
+                "type": "ERROR",
+                "message": "This investigation was interrupted by a server restart and cannot be resumed. Please start a new investigation.",
+                "data": {"status": "interrupted", "recoverable": False},
+            }
+        )
         await websocket.close(code=4010)
         return
 
@@ -471,7 +482,7 @@ async def live_updates(websocket: WebSocket, session_id: str):
                     logger.warning(
                         "WebSocket idle timeout",
                         session_id=session_id,
-                        idle_seconds=time.time() - last_activity
+                        idle_seconds=time.time() - last_activity,
                     )
                     await websocket.close(code=1000, reason="Idle timeout")
                     break
@@ -484,12 +495,14 @@ async def live_updates(websocket: WebSocket, session_id: str):
     idle_task = asyncio.create_task(monitor_idle())
 
     try:
-        await websocket.send_json({
-            "type": "CONNECTED",
-            "session_id": session_id,
-            "message": "Connected to distributed live updates",
-            "data": {"status": "connected", "user_id": user_id},
-        })
+        await websocket.send_json(
+            {
+                "type": "CONNECTED",
+                "session_id": session_id,
+                "message": "Connected to distributed live updates",
+                "data": {"status": "connected", "user_id": user_id},
+            }
+        )
 
         # Wait for client to close or disconnect
         while True:
@@ -510,12 +523,14 @@ async def live_updates(websocket: WebSocket, session_id: str):
                     logger.warning(
                         "WebSocket rate limit exceeded",
                         session_id=session_id,
-                        messages_per_minute=len(message_timestamps)
+                        messages_per_minute=len(message_timestamps),
                     )
-                    await websocket.send_json({
-                        "type": "ERROR",
-                        "detail": "Rate limit exceeded. Maximum 100 messages per minute.",
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "ERROR",
+                            "detail": "Rate limit exceeded. Maximum 100 messages per minute.",
+                        }
+                    )
                     await websocket.close(code=1008, reason="Rate limit exceeded")
                     break
 
@@ -658,9 +673,7 @@ async def get_session_report(
         # Failed (error set on pipeline)
         error = getattr(pipeline, "_error", None)
         if error:
-            raise HTTPException(
-                status_code=500, detail=f"Investigation failed: {error}"
-            )
+            raise HTTPException(status_code=500, detail=f"Investigation failed: {error}")
 
         # Pipeline exists but report not ready: agents, arbiter, or persistence in flight.
         # Do not fall through to 404 just because _active_tasks lost the handle or the
@@ -754,9 +767,7 @@ async def get_session_report(
                 rd = db_row["report_data"]
                 per_agent = {
                     agent_id: [_rebuild_finding(f) for f in findings]
-                    for agent_id, findings in (
-                        rd.get("per_agent_findings") or {}
-                    ).items()
+                    for agent_id, findings in (rd.get("per_agent_findings") or {}).items()
                 }
                 return _RD(
                     report_id=str(rd.get("report_id", "")),
@@ -784,9 +795,7 @@ async def get_session_report(
                     verdict_sentence=rd.get("verdict_sentence", ""),
                     key_findings=list(rd.get("key_findings") or []),
                     reliability_note=rd.get("reliability_note", ""),
-                    manipulation_probability=float(
-                        rd.get("manipulation_probability") or 0.0
-                    ),
+                    manipulation_probability=float(rd.get("manipulation_probability") or 0.0),
                     compression_penalty=float(rd.get("compression_penalty") or 1.0),
                     confidence_min=float(rd.get("confidence_min") or 0.0),
                     confidence_max=float(rd.get("confidence_max") or 0.0),
@@ -834,11 +843,13 @@ async def download_report(
 
     # Generate filename with timestamp
     from datetime import datetime
+
     timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     filename = f"forensic_report_{session_id}_{timestamp}.json"
 
     # Serialize Pydantic model before passing to JSONResponse
     from fastapi.responses import JSONResponse
+
     content = report_dto.model_dump() if hasattr(report_dto, "model_dump") else report_dto
     return JSONResponse(
         content=content,
@@ -943,18 +954,14 @@ async def get_session_checkpoints(
                     "agent_name": row["agent_id"],
                     "brief_text": row.get("investigator_brief") or "",
                     "decision_needed": "APPROVE, REDIRECT, OVERRIDE, TERMINATE, or ESCALATE",
-                    "created_at": row["created_utc"].isoformat()
-                    if row.get("created_utc")
-                    else "",
+                    "created_at": row["created_utc"].isoformat() if row.get("created_utc") else "",
                 }
             )
     except Exception as e:
         # Non-fatal — return empty list if DB unavailable
         from core.structured_logging import get_logger as _gl
 
-        _gl(__name__).warning(
-            "Failed to fetch checkpoints", error=str(e), exc_info=True
-        )
+        _gl(__name__).warning("Failed to fetch checkpoints", error=str(e), exc_info=True)
 
     return checkpoints
 
@@ -1005,11 +1012,13 @@ async def resume_investigation(
     decision_key = f"forensic:session:resume_decision:{session_id}"
     await redis.set(
         decision_key,
-        json.dumps({
-            "deep_analysis": request.deep_analysis,
-            "decided_by": current_user.user_id,
-            "decided_at": datetime.now(UTC).isoformat(),
-        }),
+        json.dumps(
+            {
+                "deep_analysis": request.deep_analysis,
+                "decided_by": current_user.user_id,
+                "decided_at": datetime.now(UTC).isoformat(),
+            }
+        ),
         ex=14400,
     )
 

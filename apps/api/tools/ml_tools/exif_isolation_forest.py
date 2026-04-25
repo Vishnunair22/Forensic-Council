@@ -37,10 +37,20 @@ def _num(value: Any) -> float | None:
 
 
 def _feature_vector(exif: dict[str, Any]) -> tuple[list[float], list[str]]:
-    expected = ["Make", "Model", "DateTimeOriginal", "ExposureTime", "FNumber", "ISOSpeedRatings", "FocalLength"]
+    expected = [
+        "Make",
+        "Model",
+        "DateTimeOriginal",
+        "ExposureTime",
+        "FNumber",
+        "ISOSpeedRatings",
+        "FocalLength",
+    ]
     missing = [k for k in expected if k not in exif]
     software = str(exif.get("Software", "")).lower()
-    edit_sw = int(any(x in software for x in ("photoshop", "gimp", "lightroom", "affinity", "snapseed")))
+    edit_sw = int(
+        any(x in software for x in ("photoshop", "gimp", "lightroom", "affinity", "snapseed"))
+    )
     exposure = _num(exif.get("ExposureTime")) or 0.0
     fnum = _num(exif.get("FNumber")) or 0.0
     iso = _num(exif.get("ISOSpeedRatings")) or _num(exif.get("PhotographicSensitivity")) or 0.0
@@ -82,13 +92,16 @@ def score_exif(path: str) -> dict[str, Any]:
         import numpy as np
         from sklearn.ensemble import IsolationForest
 
-        baseline = np.array([
-            [24, 0, 0, 2.0, 1.0, 0.45, -2.0, 0],
-            [36, 0, 0, 2.2, 1.2, 0.55, -2.7, 1],
-            [18, 2, 0, 2.4, 1.0, 0.60, -1.6, 0],
-            [12, 4, 0, 2.0, 0.8, 0.40, -2.3, 0],
-            [8, 5, 1, 2.0, 0.0, 0.0, -5.0, 0],
-        ], dtype=float)
+        baseline = np.array(
+            [
+                [24, 0, 0, 2.0, 1.0, 0.45, -2.0, 0],
+                [36, 0, 0, 2.2, 1.2, 0.55, -2.7, 1],
+                [18, 2, 0, 2.4, 1.0, 0.60, -1.6, 0],
+                [12, 4, 0, 2.0, 0.8, 0.40, -2.3, 0],
+                [8, 5, 1, 2.0, 0.0, 0.0, -5.0, 0],
+            ],
+            dtype=float,
+        )
         model = IsolationForest(contamination=0.25, random_state=42)
         model.fit(baseline)
         raw = float(-model.score_samples(np.array([vec], dtype=float))[0])
@@ -130,7 +143,9 @@ def _worker() -> None:
         try:
             req = json.loads(line)
             path = req.get("input")
-            result = score_exif(path) if path else {"error": "Missing input path", "available": False}
+            result = (
+                score_exif(path) if path else {"error": "Missing input path", "available": False}
+            )
         except Exception as exc:
             result = {"error": str(exc), "available": False}
         print(json.dumps(result), flush=True)

@@ -47,8 +47,7 @@ async def verify_groq() -> dict:
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(
-                "https://api.groq.com/openai/v1/models",
-                headers={"Authorization": f"Bearer {key}"}
+                "https://api.groq.com/openai/v1/models", headers={"Authorization": f"Bearer {key}"}
             )
             response.raise_for_status()
 
@@ -58,20 +57,20 @@ async def verify_groq() -> dict:
             logger.info(
                 "Groq API connectivity verified",
                 status_code=response.status_code,
-                models_available=model_count
+                models_available=model_count,
             )
 
             return {
                 "status": "ok",
                 "status_code": response.status_code,
-                "models_available": model_count
+                "models_available": model_count,
             }
 
     except httpx.HTTPStatusError as e:
         logger.error(
             "Groq API returned error status",
             status_code=e.response.status_code,
-            response_body=e.response.text[:500]
+            response_body=e.response.text[:500],
         )
         raise
     except httpx.ConnectError as e:

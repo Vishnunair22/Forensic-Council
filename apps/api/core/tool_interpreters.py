@@ -120,16 +120,11 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
     "scene_incongruence": lambda o: (
         f"Scene noise coherence: {o.get('contextual_anomalies_detected', 0)} anomalous region(s) detected. "
         f"Noise std across quadrants: {o.get('noise_variance_across_quadrants', 0):.1f} "
-        f"(mean: {o.get('mean_noise_level', 0):.1f}). "
-        + (o.get("anomaly_description", "") or "")
+        f"(mean: {o.get('mean_noise_level', 0):.1f}). " + (o.get("anomaly_description", "") or "")
     ),
     "contraband_database": lambda o: (
         f"Contraband/CLIP analysis: top match = '{o.get('top_matches', [{}])[0].get('category', 'none') if o.get('top_matches') else 'none'}'. "
-        + (
-            "CONCERN FLAG raised."
-            if o.get("concern_flag")
-            else "No concern flag raised."
-        )
+        + ("CONCERN FLAG raised." if o.get("concern_flag") else "No concern flag raised.")
     ),
     "lighting_consistency": lambda o: (
         f"Lighting/shadow consistency: {'INCONSISTENCY detected' if o.get('inconsistency_detected') else 'consistent across scene'}. "
@@ -149,26 +144,15 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
             if o.get("datetime_original")
             else "Capture time: not in EXIF. "
         )
-        + (
-            f"Modified: {o.get('datetime_modified', '')}. "
-            if o.get("datetime_modified")
-            else ""
-        )
+        + (f"Modified: {o.get('datetime_modified', '')}. " if o.get("datetime_modified") else "")
         + (f"Software: {o.get('software', '')}. " if o.get("software") else "")
-        + (
-            f"Dimensions: {o.get('image_dimensions', '')}. "
-            if o.get("image_dimensions")
-            else ""
-        )
+        + (f"Dimensions: {o.get('image_dimensions', '')}. " if o.get("image_dimensions") else "")
         + f"GPS: {'Present' if o.get('gps_coordinates') else 'Absent'}. "
         + f"{o.get('total_fields_extracted', 0)} EXIF field(s) extracted. "
         + (
             f"Missing mandatory fields: {', '.join(str(f) for f in o.get('absent_mandatory_fields', [])[:5])}."
             if o.get("absent_mandatory_fields")
-            else (
-                o.get("file_format_note")
-                or "All mandatory EXIF fields present."
-            )
+            else (o.get("file_format_note") or "All mandatory EXIF fields present.")
         )
     ),
     "gps_timezone_validate": lambda o: (
@@ -183,8 +167,7 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
             if o.get("plausible") is None
             and any("timestamp" in str(i).lower() for i in o.get("issues", []))
             else (
-                "GPS-timezone is INCONSISTENT — "
-                + "; ".join(o.get("issues", ["Unknown issue"]))
+                "GPS-timezone is INCONSISTENT — " + "; ".join(o.get("issues", ["Unknown issue"]))
                 if o.get("plausible") is False
                 else f"GPS-timestamp timezone cross-validation passed. Timezone: {o.get('timezone', 'N/A')}."
             )
@@ -214,11 +197,7 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
     ),
     "metadata_anomaly_score": lambda o: (
         f"ML anomaly score: {o.get('anomaly_score', 0):.3f} "
-        + (
-            "(ANOMALOUS). "
-            if o.get("is_anomalous")
-            else "(within normal range). "
-        )
+        + ("(ANOMALOUS). " if o.get("is_anomalous") else "(within normal range). ")
         + (
             "Anomalous fields: " + ", ".join(o.get("anomalous_fields", [])[:5])
             if o.get("anomalous_fields")
@@ -248,9 +227,7 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
         + str(o.get("word_count", 0))
         + " word(s). "
         + (
-            "Preview: '"
-            + str(o.get("text", o.get("full_text", "")))[:100]
-            + "...'"
+            "Preview: '" + str(o.get("text", o.get("full_text", "")))[:100] + "...'"
             if o.get("text") or o.get("full_text")
             else "No visible text found."
         )
@@ -280,8 +257,7 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
         + str(o.get("resolution", ""))
         + ". "
         + (
-            "HIGH-SEVERITY FLAGS: "
-            + ", ".join(o.get("high_severity_flags", []))
+            "HIGH-SEVERITY FLAGS: " + ", ".join(o.get("high_severity_flags", []))
             if o.get("high_severity_flags")
             else "No high-severity flags."
         )
@@ -334,8 +310,7 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
         f"Scene: {str(o.get('gemini_scene', o.get('content_description', '')))[:150]}. "
         + (
             f"Manipulation signals: {'; '.join(o.get('gemini_manipulation_signals', o.get('manipulation_signals', [])))[:200]}."
-            if o.get("gemini_manipulation_signals")
-            or o.get("manipulation_signals")
+            if o.get("gemini_manipulation_signals") or o.get("manipulation_signals")
             else "No manipulation signals identified."
         )
     ),
@@ -345,8 +320,7 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
         else f"Gemini cross-validation: {str(o.get('gemini_authenticity_assessment', o.get('content_description', '')))[:200]}. "
         + (
             f"Additional anomalies: {'; '.join(str(s) for s in o.get('gemini_additional_anomalies', o.get('manipulation_signals', [])))[:200]}."
-            if o.get("gemini_additional_anomalies")
-            or o.get("manipulation_signals")
+            if o.get("gemini_additional_anomalies") or o.get("manipulation_signals")
             else "No additional anomalies identified."
         )
     ),
@@ -357,8 +331,7 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
         f"Validated objects: {', '.join(str(x) for x in o.get('gemini_validated_objects', o.get('detected_objects', [])))[:150] or 'none identified'}. "
         + (
             f"Compositing signals: {'; '.join(str(s) for s in o.get('gemini_compositing_signals', o.get('manipulation_signals', [])))[:200]}."
-            if o.get("gemini_compositing_signals")
-            or o.get("manipulation_signals")
+            if o.get("gemini_compositing_signals") or o.get("manipulation_signals")
             else "No compositing signals detected."
         )
     ),
@@ -392,11 +365,7 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
                     else "No text found in image. "
                 )
                 + (f"Authenticity verdict: {verdict}. " if verdict else "")
-                + (
-                    f"Metadata vs visual: {meta_consistency[:200]}. "
-                    if meta_consistency
-                    else ""
-                )
+                + (f"Metadata vs visual: {meta_consistency[:200]}. " if meta_consistency else "")
                 + (
                     f"Manipulation signals: {'; '.join(str(s) for s in signals[:6])}."
                     if signals
@@ -626,11 +595,7 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
     ),
     "anomaly_classification": lambda o: (
         f"Anomaly classification result: {o.get('classification', 'INCONCLUSIVE')}. "
-        + (
-            f"Details: {o.get('note', '')}"
-            if o.get("note")
-            else "No additional detail available."
-        )
+        + (f"Details: {o.get('note', '')}" if o.get("note") else "No additional detail available.")
     ),
     "extract_deep_metadata": lambda o: (
         f"Deep metadata extraction: {o.get('total_fields', o.get('field_count', 0))} field(s) extracted. "
@@ -693,12 +658,10 @@ _TOOL_INTERPRETERS.update(
             f"Top similarity: {o.get('top_similarity', o.get('similarity', o.get('confidence', 0))):.3f}. "
             f"{'Similar prior media was found.' if o.get('match_found') else 'No high-confidence prior match was reported.'}"
         ),
-
         # Agent 2 refined audio tools.
         "neural_prosody": lambda o: (
             f"Neural prosody screen {'found acoustic irregularities consistent with synthetic or edited speech' if o.get('prosody_anomaly_detected') or o.get('anomaly_detected') else 'found no strong acoustic prosody irregularity'}. "
-            f"Score: {o.get('confidence', o.get('anomaly_score', 0)):.3f}. "
-            + _flag_list(o)
+            f"Score: {o.get('confidence', o.get('anomaly_score', 0)):.3f}. " + _flag_list(o)
         ),
         "audio_gen_signature": lambda o: (
             f"Generative-audio signature scan {'flagged TTS/vocoder-like spectral traces' if o.get('synthetic_detected') or o.get('is_synthetic') or o.get('anomaly_detected') else 'found no strong TTS/vocoder signature'}. "
@@ -707,12 +670,15 @@ _TOOL_INTERPRETERS.update(
         ),
         "voice_clone_deep_ensemble": _TOOL_INTERPRETERS["voice_clone_detect"],
         "anti_spoofing_deep_ensemble": _TOOL_INTERPRETERS["anti_spoofing_detect"],
-
         # Agent 3 object/context tools.
         "vector_contraband_search": lambda o: (
             f"Threat/contraband vector search top match: {o.get('top_match', 'none')} "
             f"({o.get('top_confidence', o.get('confidence', 0)):.0%}). "
-            + ("Potential threat item flagged." if o.get("concern_flag") else "No threat/contraband match above concern threshold.")
+            + (
+                "Potential threat item flagged."
+                if o.get("concern_flag")
+                else "No threat/contraband match above concern threshold."
+            )
         ),
         "lighting_correlation_initial": lambda o: (
             f"Initial lighting correlation {'flagged possible compositing' if o.get('inconsistency_detected') or o.get('lighting_consistent') is False else 'did not find a stable lighting mismatch'}. "
@@ -723,7 +689,6 @@ _TOOL_INTERPRETERS.update(
             "Screen-capture scope: physical object/scene tools were skipped for this upload. "
             + str(o.get("reason", ""))[:220]
         ),
-
         # Agent 4 video tools.
         "vfi_error_map": lambda o: (
             f"Video interpolation/motion error map {'flagged synthetic or interpolated motion' if o.get('vfi_artifact_detected') or o.get('inconsistency_detected') else 'found no strong interpolation artifact'}. "
@@ -742,9 +707,12 @@ _TOOL_INTERPRETERS.update(
         "compression_artifact_analysis": lambda o: (
             f"Video compression audit measured frame-size variation CV={o.get('coefficient_of_variation', 0):.4f} "
             f"across {o.get('frames_analyzed', 0)} sampled frames. "
-            + ("Compression pattern is irregular." if o.get("inconsistency_detected") else "No strong codec discontinuity was detected.")
+            + (
+                "Compression pattern is irregular."
+                if o.get("inconsistency_detected")
+                else "No strong codec discontinuity was detected."
+            )
         ),
-
         # Agent 5 metadata/provenance tools.
         "compression_risk_audit": lambda o: (
             f"Compression/platform audit: {o.get('detected_platform') or 'no social/chat platform footprint detected'}. "
@@ -753,7 +721,11 @@ _TOOL_INTERPRETERS.update(
         ),
         "exif_isolation_forest": lambda o: (
             f"EXIF outlier screen score {o.get('anomaly_score', 0):.3f}. "
-            + ("Metadata fields are statistically unusual. " if o.get("is_anomalous") else "Metadata fields are within expected range. ")
+            + (
+                "Metadata fields are statistically unusual. "
+                if o.get("is_anomalous")
+                else "Metadata fields are within expected range. "
+            )
             + _flag_list(o)
         ),
         "astro_grounding": lambda o: (
@@ -762,13 +734,21 @@ _TOOL_INTERPRETERS.update(
         ),
         "provenance_chain_verify": lambda o: (
             f"C2PA/provenance check: {o.get('verdict', 'NO_CONTENT_CREDENTIALS')}. "
-            + ("Signed provenance was found. " if o.get("c2pa_present") or o.get("content_credentials_present") else "No signed content credentials were found; absence alone is not suspicious. ")
+            + (
+                "Signed provenance was found. "
+                if o.get("c2pa_present") or o.get("content_credentials_present")
+                else "No signed content credentials were found; absence alone is not suspicious. "
+            )
             + _flag_list(o)
         ),
         "c2pa_validator": lambda o: _TOOL_INTERPRETERS["provenance_chain_verify"](o),
         "camera_profile_match": lambda o: (
             f"Camera/device profile: {o.get('camera_make', o.get('make', 'Unknown'))} {o.get('camera_model', o.get('model', ''))}. "
-            + ("Declared device profile is inconsistent with metadata. " if o.get("exif_fingerprint_suspicious") or o.get("profile_mismatch") else "No device-profile contradiction was detected. ")
+            + (
+                "Declared device profile is inconsistent with metadata. "
+                if o.get("exif_fingerprint_suspicious") or o.get("profile_mismatch")
+                else "No device-profile contradiction was detected. "
+            )
             + _flag_list(o)
         ),
         "device_fingerprint_db": lambda o: _TOOL_INTERPRETERS["camera_profile_match"](o),
