@@ -27,13 +27,15 @@ _user_investigation_times: dict[str, list[float]] = {}
 _MEM_RATE_MAX_USERS = 10_000
 
 # ── Per-user daily API cost quota ────────────────────────────────────────────
+# For free tier, set to 0 to disable cost tracking (or use token counts).
+# Production should set this to match their budget.
 _COST_PER_INVESTIGATION_USD = 1.60
 _DAILY_COST_QUOTA_USD = {
-    "investigator": 50.0,
-    "auditor": 50.0,
+    "investigator": 0.0,  # Free tier: $0 disables tracking
+    "auditor": 0.0,
     "admin": 500.0,
 }
-_DAILY_COST_QUOTA_DEFAULT_USD = 50.0
+_DAILY_COST_QUOTA_DEFAULT_USD = 0.0  # Free tier default
 _COST_QUOTA_WINDOW_SECS = 86400
 
 _mem_cost_tracker: dict[str, tuple[float, float]] = {}

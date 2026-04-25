@@ -323,6 +323,17 @@ def _build_forensic_system_prompt(
         import re as _re
 
         s = _re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", s)
+        # Prompt injection hardening: escape potential instruction overrides
+        injection_patterns = [
+            r"(?i)ignore\s+(previous|all\s+|above)\s+(instructions|prompts|commands)",
+            r"(?i)forget\s+(everything|all\s+|your\s+)instructions",
+            r"(?i)new\s+instruction",
+            r"(?i)you\s+are\s+(now|actually)\s+",
+            r"(?i)instead\s+(of|use)",
+            r"(?i)verdict\s*=\s*",
+        ]
+        for pattern in injection_patterns:
+            s = _re.sub(pattern, "[FILTERED]", s)
         return s
 
     file_name = _sanitize(file_name)
