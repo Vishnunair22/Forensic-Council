@@ -469,36 +469,23 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const hasStartedAnalysis = status !== "idle" || isUploading || validCompletedAgents.length > 0;
   const showUploadForm = !autoStartBlocking && status === "idle" && !isUploading;
 
+  // Dismiss the loading overlay as soon as the WebSocket is live — no need to
+  // wait for backend activity. The agent cards render in "checking" state while
+  // the worker warms up, which is clearer than a full-screen blocking overlay.
   useEffect(() => {
-    // Hide overlay as soon as the WebSocket is live AND the backend has left the
-    // pure-idle state — includes 'analyzing', 'awaiting_decision', any agent activity.
-    const hasBackendActivity =
-      status === "processing" ||
-      status === "analyzing" ||
-      status === "awaiting_decision" ||
-      status === "complete" ||
-      status === "error" ||
-      Object.values(agentUpdates).some(
-        (u) => u.status === "running" || u.status === "complete" || u.status === "skipped"
-      );
-
-    if (showLoadingOverlay && analysisStreamReady && hasBackendActivity) {
+    if (showLoadingOverlay && analysisStreamReady) {
       setShowLoadingOverlay(false);
       sessionOnlyStorage.removeItem("fc_show_loading");
     }
-  }, [showLoadingOverlay, analysisStreamReady, status, agentUpdates]);
-
-  // Fallback: if the WebSocket connects but the worker never sends an agent update
-  // (e.g. frozen due to rate limiting), dismiss the overlay after 15 s so the user
-  // can see the "Waiting for agents…" state and interact with the page.
-  useEffect(() => {
-    if (!showLoadingOverlay || !analysisStreamReady) return;
-    const t = setTimeout(() => {
-      setShowLoadingOverlay(false);
-      sessionOnlyStorage.removeItem("fc_show_loading");
-    }, 15_000);
-    return () => clearTimeout(t);
   }, [showLoadingOverlay, analysisStreamReady]);
+
+  // Auto-accept the initial analysis so the user never sees the HITL decision
+  // dock. The backend resumes, runs the Arbiter, and we navigate to /result.
+  useEffect(() => {
+    if (!awaitingDecision) return;
+    const t = setTimeout(() => handleAcceptAnalysis(), 1500);
+    return () => clearTimeout(t);
+  }, [awaitingDecision, handleAcceptAnalysis]);
 
   return {
     file, setFile,

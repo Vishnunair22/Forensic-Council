@@ -5,11 +5,7 @@ import {
  Loader2,
  FileText,
  ArrowRight,
- Microscope,
- RotateCcw,
- CheckCircle2,
  Activity,
- Ban,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
@@ -70,8 +66,6 @@ interface AgentProgressDisplayProps {
  awaitingDecision: boolean;
  pipelineStatus?: string;
  pipelineMessage?: string;
- onAcceptAnalysis?: () => void;
- onDeepAnalysis?: () => void;
  onNewUpload?: () => void;
  onViewResults?: () => void;
  playSound?: (type: SoundType) => void;
@@ -103,8 +97,6 @@ export function AgentProgressDisplay({
  awaitingDecision,
  pipelineStatus,
  pipelineMessage,
- onAcceptAnalysis,
- onDeepAnalysis,
  onNewUpload,
  onViewResults,
  playSound: _playSound,
@@ -196,14 +188,12 @@ export function AgentProgressDisplay({
    return "waiting";
   };
 
- const showInitialDecision = phase === "initial" && (awaitingDecision || allAgentsDone);
  const showDeepComplete = phase === "deep" && (allAgentsDone || pipelineStatus === "complete");
  const phaseStatusText = allAgentsDone || pipelineStatus === "complete"
   ? `${phase === "initial" ? "Initial" : "Deep"} analysis phase complete`
   : `${phase === "initial" ? "Initial" : "Deep"} analysis in progress`;
 
  const runningCount = Object.keys(agentUpdates).filter(id => !completedAgents.some(c => c.agent_id === id)).length;
- const skippedCount = skippedAgentIds.size;
 
  return (
   <div className="flex flex-col w-full max-w-[1560px] mx-auto gap-8 pb-36 pt-24">
@@ -284,8 +274,24 @@ export function AgentProgressDisplay({
 
 
 
+   {/* Auto-proceed notice while initial analysis is being submitted to the Arbiter */}
    <AnimatePresence>
-    {(showInitialDecision || showDeepComplete) && (
+    {awaitingDecision && !showDeepComplete && (
+     <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 20 }}
+      className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-3 rounded-full bg-slate-900/90 border border-primary/20 backdrop-blur-md shadow-lg"
+     >
+      <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />
+      <span className="text-[11px] font-mono text-white/60 tracking-widest uppercase">Generating Report…</span>
+     </motion.div>
+    )}
+   </AnimatePresence>
+
+   {/* Deep analysis complete — explicit action required */}
+   <AnimatePresence>
+    {showDeepComplete && (
       <motion.div
        initial={{ opacity: 0, y: 100 }}
        animate={{ opacity: 1, y: 0 }}
@@ -294,44 +300,21 @@ export function AgentProgressDisplay({
       >
        <div className="horizon-card p-2 rounded-[2rem] shadow-[0_40px_100px_rgba(0,0,0,0.8)] pointer-events-auto">
          <div className="bg-[#020617] rounded-[1.8rem] p-3 flex items-center gap-4">
-           {showInitialDecision ? (
-            <>
-             <button
-              onClick={onAcceptAnalysis}
-              disabled={isNavigating}
-              className="flex-1 btn-horizon-outline py-4 text-xs"
-             >
-              {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Accept Analysis"}
-             </button>
-             <button
-              onClick={onDeepAnalysis}
-              disabled={isNavigating}
-              className="flex-[1.5] btn-horizon-primary py-4 text-xs flex items-center justify-center gap-3"
-             >
-              <Microscope className="w-4 h-4" />
-              Deep Analysis
-              <ArrowRight className="w-4 h-4" />
-             </button>
-            </>
-           ) : (
-            <>
-             <button
-              onClick={onNewUpload}
-              className="flex-1 btn-horizon-outline py-4 text-xs"
-             >
-              New Upload
-             </button>
-             <button
-              onClick={onViewResults}
-              disabled={isNavigating}
-              className="flex-[1.5] btn-horizon-primary py-4 text-xs flex items-center justify-center gap-3"
-             >
-              {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-              Generate Report
-              <ArrowRight className="w-4 h-4" />
-             </button>
-            </>
-           )}
+           <button
+            onClick={onNewUpload}
+            className="flex-1 btn-horizon-outline py-4 text-xs"
+           >
+            New Upload
+           </button>
+           <button
+            onClick={onViewResults}
+            disabled={isNavigating}
+            className="flex-[1.5] btn-horizon-primary py-4 text-xs flex items-center justify-center gap-3"
+           >
+            {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+            View Results
+            <ArrowRight className="w-4 h-4" />
+           </button>
          </div>
        </div>
       </motion.div>

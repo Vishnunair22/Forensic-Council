@@ -30,8 +30,9 @@ logger = get_logger(__name__)
 _tracer = get_tracer("forensic-council.llm")
 
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
-_MAX_RETRIES = 5
+_MAX_RETRIES = 3
 _BASE_BACKOFF = 2.0
+_MAX_BACKOFF = 5.0  # cap per-attempt wait so worker never blocks more than ~15 s total
 
 # Per-provider circuit breakers shared across all LLMClient instances.
 # Keyed by "provider:model" so a failing model on one provider does not
@@ -326,7 +327,7 @@ class LLMClient:
 
                 last_response = response
                 if response.status_code in _RETRYABLE_STATUS:
-                    wait = _BASE_BACKOFF * (2**attempt)
+                    wait = min(_BASE_BACKOFF * (2**attempt), _MAX_BACKOFF)
                     logger.warning(
                         f"LLM API {response.status_code}, retrying in {wait:.1f}s (attempt {attempt + 1}/{_MAX_RETRIES})"
                     )
@@ -335,7 +336,7 @@ class LLMClient:
                 return response
             except (httpx.TimeoutException, httpx.NetworkError) as e:
                 if attempt < _MAX_RETRIES - 1:
-                    wait = _BASE_BACKOFF * (2**attempt)
+                    wait = min(_BASE_BACKOFF * (2**attempt), _MAX_BACKOFF)
                     logger.warning(f"LLM API {type(e).__name__}, retrying in {wait:.1f}s")
                     await asyncio.sleep(wait)
                 else:

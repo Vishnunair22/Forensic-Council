@@ -29,7 +29,6 @@ export default function EvidencePage() {
     isUploading,
     uploadPhaseText,
     showLoadingOverlay, setShowLoadingOverlay,
-    arbiterLiveText,
     setAutoStartBlocking,
     phase,
     isSubmittingHITL,
@@ -45,11 +44,8 @@ export default function EvidencePage() {
     handleFile,
     triggerAnalysis,
     handleHITLDecision,
-    handleAcceptAnalysis,
-    handleDeepAnalysis,
     handleNewUpload,
     handleViewResults,
-    resetSimulation,
     allAgentsDone,
     awaitingDecision,
     hasStartedAnalysis,
@@ -64,7 +60,7 @@ export default function EvidencePage() {
 
   let progressText = uploadPhaseText || "Establishing secure forensic pipeline…";
   if (awaitingDecision) {
-    progressText = "Initial analysis complete. Choose how to proceed.";
+    progressText = "Analysis complete. Preparing report…";
   } else if (phase === "deep" && (status === "complete" || allAgentsDone)) {
     progressText = "Deep analysis complete. All findings collected.";
   } else if (runningAgentNames.length > 0) {
@@ -118,8 +114,6 @@ export default function EvidencePage() {
                 awaitingDecision={awaitingDecision}
                 pipelineStatus={status}
                 pipelineMessage={pipelineMessage || pipelineThinking}
-                onAcceptAnalysis={handleAcceptAnalysis}
-                onDeepAnalysis={handleDeepAnalysis}
                 onNewUpload={handleNewUpload}
                 onViewResults={handleViewResults}
                 playSound={playSound}
@@ -158,16 +152,6 @@ export default function EvidencePage() {
           </>
         </PageTransition>
       </main>
-
-      <AnimatePresence>
-        {isNavigating && (
-          <AnalysisProgressOverlay
-            isVisible={isNavigating}
-            title="Arbiter Deliberation"
-            message={arbiterLiveText || "Synthesizing final verdict..."}
-          />
-        )}
-      </AnimatePresence>
 
       <HITLCheckpointModal
         checkpoint={hitlCheckpoint}
