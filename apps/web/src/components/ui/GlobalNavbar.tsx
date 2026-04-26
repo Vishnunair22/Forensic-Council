@@ -48,22 +48,15 @@ export function GlobalNavbar() {
         {isResetting && <ForensicResetOverlay />}
       </AnimatePresence>
 
-      <motion.button
+      <button
         type="button"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        className="horizon-glass flex items-center px-6 py-4 rounded-xl border border-white/10 group cursor-pointer transition-all duration-300 hover:border-primary/40 shadow-[0_20px_50px_rgba(0,0,0,0.5)] relative overflow-hidden"
+        className="flex items-center px-6 py-4 border border-white bg-black text-white cursor-pointer"
         onClick={handleLogoClick}
         aria-label="Return to Forensic Council home"
         aria-current={pathname === "/" ? "page" : undefined}
       >
-        {/* Subtle Highlight Beam */}
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-        
-        <BrandLogo size="sm" isHovered={isHovered} />
-      </motion.button>
+        <BrandLogo size="sm" isHovered={false} />
+      </button>
     </nav>
   );
 }

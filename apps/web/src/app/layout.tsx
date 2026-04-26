@@ -44,25 +44,18 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${orbitron.variable} ${jetbrainsMono.variable} font-sans text-slate-100 antialiased min-h-screen flex flex-col`}
       >
-        <DarkBackgroundAnimation />
         <Suspense fallback={null}>
           <RouteExperience />
         </Suspense>
         <GlobalNavbar />
-
-        {/* Skip navigation — visible on focus for keyboard users */}
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:z-[9999] focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:bg-sky-500 focus:text-white focus:rounded focus:font-bold"
+          className="sr-only focus:not-sr-only focus:absolute focus:z-[9999] focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:font-bold"
         >
           Skip to main content
         </a>
-
         <QueryProvider>
           <main className="flex-1 relative z-10" id="main-content">
-            {/* Navbar Safe Zone / Masking Gradient */}
-            <div className="fixed top-0 left-0 right-0 h-32 bg-gradient-to-b from-background via-background/80 to-transparent pointer-events-none z-[150] opacity-60" />
-            
             {children}
           </main>
 
