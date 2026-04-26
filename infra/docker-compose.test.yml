@@ -12,7 +12,7 @@ services:
     environment:
       - REDISCLI_AUTH=test
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping"]
+      test: ["CMD-SHELL", "redis-cli -a test ping"]
       interval: 5s
       timeout: 3s
       retries: 5

@@ -2,15 +2,14 @@
 
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  ShieldAlert, 
-  Ban, 
+import {
+  ShieldAlert,
+  Ban,
   Activity,
   Cpu,
   Scan,
   Microscope,
   type LucideIcon,
-  CheckCircle2
 } from "lucide-react";
 import { clsx } from "clsx";
 import { fmtTool } from "@/lib/fmtTool";
@@ -48,6 +47,7 @@ const statusConfig = {
   complete:    { color: "text-success",    label: "Verified"  },
   error:       { color: "text-danger",     label: "Error"     },
   unsupported: { color: "text-white/30",   label: "Bypassed"   },
+  validating:  { color: "text-primary",    label: "Validating" },
 };
 
 const ALERT_VERDICTS = new Set(["FLAGGED", "SUSPICIOUS", "LIKELY_MANIPULATED", "LIKELY_AI_GENERATED", "LIKELY_SPOOFED"]);
@@ -75,13 +75,10 @@ export function AgentStatusCard({
   status,
   liveUpdate,
   completedData,
-  isRevealed,
-  isFadingOut,
 }: AgentStatusCardProps) {
-  const cfg = statusConfig[status];
+  const cfg = statusConfig[status] || statusConfig.running;
   const [stageIndex, setStageIndex] = useState(0);
   const [showAllTools, setShowAllTools] = useState(false);
-  const [expandedFindings, setExpandedFindings] = useState<Record<string, boolean>>({});
 
   const agentGraphic = AGENT_GRAPHICS[agentId] || { icon: Cpu, color: "text-primary", bg: "bg-primary/10" };
   const Icon = agentGraphic.icon;
@@ -111,10 +108,6 @@ export function AgentStatusCard({
   );
   const ProgressIcon = progressDescriptor.icon;
   
-  const toggleFinding = (id: string) => {
-    setExpandedFindings(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
   return (
     <motion.div
       layout
@@ -264,7 +257,6 @@ export function AgentStatusCard({
                <div className="w-12 h-12 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-center text-primary animate-pulse">
                   <Activity className="w-6 h-6" />
                </div>
-               <span className="text-[10px] font-mono font-bold text-primary/40 uppercase tracking-[0.2em]">Syncing_Neural_Bridge</span>
             </div>
           ) : status === "waiting" ? (
             <div className="flex flex-col items-center justify-center h-full text-center opacity-20 py-12">

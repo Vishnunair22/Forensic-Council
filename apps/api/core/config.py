@@ -791,6 +791,7 @@ def validate_production_settings() -> None:
         "example",
         "production",
         "your_gemini_key",
+        "paste_gemini_key_here",
     )
     _sk = s.signing_key.lower()
     _jk = s.jwt_secret_key.lower()
@@ -804,7 +805,7 @@ def validate_production_settings() -> None:
         errors.append(
             "JWT_SECRET_KEY must be changed from placeholder and at least 32 characters for production"
         )
-    if "your_gemini_key" in _gk:
+    if "your_gemini_key" in _gk or "paste_gemini_key_here" in _gk:
         errors.append(
             "GEMINI_API_KEY placeholder detected in production! Please set a valid key or leave empty for local fallback."
         )

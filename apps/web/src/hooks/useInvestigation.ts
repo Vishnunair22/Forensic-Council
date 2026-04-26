@@ -126,9 +126,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const [phase, setPhase] = useState<"initial" | "deep">("initial");
   const [isSubmittingHITL, setIsSubmittingHITL] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [wsConnectionError, setWsConnectionError] = useState<string | null>(null);
   const analysisCompleteSoundedRef = useRef(false);
   const autoStartFiredRef = useRef(false);
   const investigationInFlightRef = useRef(false);
+  const lastSessionIdRef = useRef<string | null>(null);
 
   const {
     status,
@@ -216,6 +218,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       playSound("scan");
       setIsUploading(true);
       setValidationError(null);
+      setWsConnectionError(null);
       setPhase("initial");
       setAnalysisStreamReady(false);
       setAutoStartBlocking(false);
@@ -313,6 +316,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       setIsUploading(false);
       setUploadPhaseText("Connecting to analysis stream…");
 
+      lastSessionIdRef.current = sessionIdToUse;
+
       connectWebSocket(sessionIdToUse)
         .then(() => {
           setAnalysisStreamReady(true);
@@ -320,7 +325,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         })
         .catch((wsErr: unknown) => {
           const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
-          setValidationError(wsErrMsg);
+          setWsConnectionError(wsErrMsg);
           setShowLoadingOverlay(false);
           resetSimulation();
         })
@@ -410,10 +415,33 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     }
   }, [playSound, resumeInvestigation, completedAgents]);
 
+  const retryWsConnection = useCallback(() => {
+    const sid = lastSessionIdRef.current || storage.getItem<string>("forensic_session_id");
+    if (!sid) {
+      // No session to reconnect to — fall back to a fresh upload
+      if (file) triggerAnalysis(file);
+      return;
+    }
+    setWsConnectionError(null);
+    startSimulation();
+    connectWebSocket(sid)
+      .then(() => {
+        setAnalysisStreamReady(true);
+        setUploadPhaseText("Agents dispatching…");
+      })
+      .catch((wsErr: unknown) => {
+        const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
+        setWsConnectionError(wsErrMsg);
+        resetSimulation();
+      });
+  }, [file, triggerAnalysis, startSimulation, connectWebSocket, resetSimulation]);
+
   const handleNewUpload = useCallback(() => {
     playSound("click");
     setFile(null);
     setPhase("initial");
+    setWsConnectionError(null);
+    lastSessionIdRef.current = null;
     resetSimulation();
     // Route to home and trigger the upload modal opening via an event
     router.push("/");
@@ -511,6 +539,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     dismissCheckpoint,
     handleFile,
     triggerAnalysis,
+    retryWsConnection,
     handleHITLDecision,
     handleAcceptAnalysis,
     handleDeepAnalysis,
@@ -522,5 +551,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     hasStartedAnalysis,
     showUploadForm,
     validAgentsData,
+    wsConnectionError,
   };
 }

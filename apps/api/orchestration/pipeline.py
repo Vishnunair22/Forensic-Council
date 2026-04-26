@@ -23,6 +23,15 @@ from core.structured_logging import get_logger
 logger = get_logger(__name__)
 
 
+def _calculate_quorum(agent_count: int) -> int:
+    """Return minimum agents needed for quorum: floor(n/2) + 1.
+
+    This ensures more than 50% of agents must agree, preventing tie scenarios.
+    For n=1: 1 (100%), n=2: 2 (100%), n=3: 2 (66.7%), n=4: 3 (75%), n=5: 3 (60%).
+    """
+    return max(1, agent_count // 2 + 1)
+
+
 class SignalBus:
     """Async signal bus for cross-agent coordination and early deliberation."""
 
@@ -32,14 +41,14 @@ class SignalBus:
         self.quorum_event = asyncio.Event()
         self._agent_ids = agent_ids
         # Initial quorum based on all agents; will be refined once support is checked.
-        self._required_quorum = max(1, len(agent_ids) // 2 + 1)
+        self._required_quorum = _calculate_quorum(len(agent_ids))
         self._ready_agents = set()
         self._quorum_lock = asyncio.Lock()
 
     def update_applicable_agents(self, applicable_ids: list[str]):
         """Update quorum threshold based on actually applicable agents."""
         sorted_ids = sorted(applicable_ids)
-        self._required_quorum = max(1, len(sorted_ids) // 2 + 1)
+        self._required_quorum = _calculate_quorum(len(sorted_ids))
         logger.info(
             "Quorum threshold updated",
             applicable_count=len(sorted_ids),

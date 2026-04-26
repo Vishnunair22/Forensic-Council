@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
 from core.auth import User, get_current_user
+from core.config import get_settings
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
@@ -44,6 +45,7 @@ async def _event_generator(
     """
     # Import the shared WebSocket connections registry
     from api.routes._session_state import _websocket_connections
+    from core.persistence.redis_client import get_redis_client
 
     # Increase queue size from 100 → 500
     queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=500)
@@ -88,6 +90,48 @@ async def _event_generator(
         _websocket_connections[session_id] = []
     _websocket_connections[session_id].append(consumer)
 
+    # When using the Redis worker topology the pipeline runs in a separate
+    # container. broadcast_update() in the worker finds no local SSE consumers
+    # and publishes to Redis pub/sub instead. Subscribe here to bridge those
+    # worker-published updates into this SSE stream.
+    redis_task: asyncio.Task | None = None
+    pubsub = None
+
+    settings = get_settings()
+    if settings.use_redis_worker:
+        try:
+            redis = await get_redis_client()
+            pubsub = redis.get_pubsub()
+            channel = f"forensic:updates:{session_id}"
+            await pubsub.subscribe(channel)
+
+            async def _redis_listener(ps, ch: str) -> None:
+                try:
+                    async for message in ps.listen():
+                        if message["type"] == "message":
+                            try:
+                                data = json.loads(message["data"])
+                                await consumer.send_json(data)
+                            except Exception:
+                                pass
+                except asyncio.CancelledError:
+                    pass
+                except Exception as exc:
+                    logger.debug(
+                        "Redis pub/sub listener error",
+                        session_id=session_id,
+                        error=str(exc),
+                    )
+
+            redis_task = asyncio.create_task(_redis_listener(pubsub, channel))
+            logger.debug("Redis pub/sub subscriber started", session_id=session_id, channel=channel)
+        except Exception as exc:
+            logger.warning(
+                "Could not start Redis pub/sub subscriber",
+                session_id=session_id,
+                error=str(exc),
+            )
+
     try:
         # Send initial connection event
         yield f"event: connected\ndata: {json.dumps({'type': 'CONNECTED', 'session_id': session_id})}\n\n"
@@ -106,6 +150,20 @@ async def _event_generator(
                 yield ": keepalive\n\n"
 
     finally:
+        # Cancel Redis pub/sub listener
+        if redis_task is not None:
+            redis_task.cancel()
+            try:
+                await redis_task
+            except (asyncio.CancelledError, Exception):
+                pass
+        if pubsub is not None:
+            try:
+                await pubsub.unsubscribe()
+                await pubsub.aclose()
+            except Exception:
+                pass
+
         # Unregister consumer
         try:
             _websocket_connections.get(session_id, []).remove(consumer)

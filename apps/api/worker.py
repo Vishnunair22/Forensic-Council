@@ -70,13 +70,16 @@ async def main() -> None:
         logger.info("Received shutdown signal; draining worker", signal=sig.name)
         shutdown.set()
 
+    def handle_signal_sync(sig: signal.Signals, frame: Any) -> None:
+        loop = asyncio.get_running_loop()
+        loop.call_soon_threadsafe(shutdown.set)
+
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         try:
             loop.add_signal_handler(sig, handle_signal, sig)
         except (NotImplementedError, OSError):
-            # Windows does not support loop.add_signal_handler for SIGTERM.
-            signal.signal(sig, lambda _signal, _frame: shutdown.set())
+            signal.signal(sig, handle_signal_sync)
 
     queue = get_investigation_queue()
     worker = InvestigationWorker(queue, worker_id=os.getpid())
@@ -195,19 +198,21 @@ async def main() -> None:
             try:
                 if os.path.exists(evidence_file_path):
                     os.unlink(evidence_file_path)
-            except Exception:
-                pass  # File may have already been removed by the pipeline's own cleanup.
+                    logger.debug("Cleaned up temporary evidence file", path=evidence_file_path)
+            except Exception as e:
+                logger.warning("Failed to cleanup evidence file", path=evidence_file_path, error=str(e))
             _active_pipelines.pop(session_str, None)
             clear_session_websockets(session_str)
 
     worker.set_handler(investigation_handler)
 
     async def periodic_cleanup() -> None:
+        cleanup_timeout = int(os.environ.get("CLEANUP_TIMEOUT_SECONDS", "3600"))
         while not shutdown.is_set():
             try:
                 await asyncio.wait_for(
                     asyncio.to_thread(cleanup_evidence),
-                    timeout=3600,
+                    timeout=cleanup_timeout,
                 )
             except TimeoutError:
                 logger.error("Periodic cleanup exceeded 1-hour timeout; skipping cycle")

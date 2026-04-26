@@ -36,6 +36,9 @@ from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
+DEFAULT_CONFIDENCE_FALLBACK = 0.5
+MAX_CHALLENGE_ATTEMPTS = 2
+
 # Re-exporting for backward compatibility
 __all__ = [
     "FindingVerdict",
@@ -461,29 +464,40 @@ class CouncilArbiter(ArbiterNarrativeMixin):
 
             # Challenge loop: re-invoke the lower-confidence agent if factory available.
             # Without agent_factory this remains a contested (HITL-escalated) finding.
+            # Limited to MAX_CHALLENGE_ATTEMPTS to prevent resource exhaustion.
             if self.agent_factory is not None:
                 try:
-                    conf_a = fa.get("raw_confidence_score") or fa.get("confidence_raw") or 0.5
-                    conf_b = fb.get("raw_confidence_score") or fb.get("confidence_raw") or 0.5
+                    conf_a = fa.get("raw_confidence_score") or fa.get("confidence_raw") or DEFAULT_CONFIDENCE_FALLBACK
+                    conf_b = fb.get("raw_confidence_score") or fb.get("confidence_raw") or DEFAULT_CONFIDENCE_FALLBACK
                     challenged_id = agent_a_id if conf_a <= conf_b else agent_b_id
                     contradicting = fb if challenged_id == agent_a_id else fa
 
-                    challenge_result = await self.agent_factory.reinvoke_agent(
-                        agent_id=challenged_id,
-                        session_id=self.session_id,
-                        challenge_context={
-                            "challenge_id": str(_uuid.uuid4()),
-                            "contradiction": contradicting,
-                            "arbiter_session": str(self.session_id),
-                        },
-                    )
+                    challenge_entry["challenge_attempts"] = 0
+                    revised_findings = []
+                    for attempt in range(MAX_CHALLENGE_ATTEMPTS):
+                        challenge_entry["challenge_attempts"] = attempt + 1
+                        challenge_result = await self.agent_factory.reinvoke_agent(
+                            agent_id=challenged_id,
+                            session_id=self.session_id,
+                            challenge_context={
+                                "challenge_id": str(_uuid.uuid4()),
+                                "attempt_number": attempt + 1,
+                                "max_attempts": MAX_CHALLENGE_ATTEMPTS,
+                                "contradiction": contradicting,
+                                "arbiter_session": str(self.session_id),
+                            },
+                        )
+                        revised_findings = challenge_result.get("findings", [])
+                        if revised_findings:
+                            break
+
                     challenge_entry["challenge_attempted"] = True
-                    revised_findings = challenge_result.get("findings", [])
                     challenge_entry["challenge_resolved"] = bool(revised_findings)
                     challenge_entry["revised_findings"] = revised_findings
                     logger.info(
                         "Challenge loop completed",
                         challenged_agent=challenged_id,
+                        attempts=challenge_entry["challenge_attempts"],
                         resolved=bool(revised_findings),
                     )
                 except Exception as exc:

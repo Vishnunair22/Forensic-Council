@@ -23,6 +23,9 @@ from core.evidence import ArtifactType, EvidenceArtifact
 from core.exceptions import ToolUnavailableError
 from core.image_utils import is_lossless_image
 from core.persistence.evidence_store import EvidenceStore
+from core.structured_logging import get_logger
+
+logger = get_logger(__name__)
 
 # OCR imports
 
@@ -105,6 +108,13 @@ async def ela_full_image(
         lossless_label = pil_format or ext.lstrip(".").upper() or "LOSSLESS"
 
         if is_lossless:
+            logger.info(
+                "ELA skipped for lossless format",
+                artifact_id=artifact.artifact_id,
+                session_id=getattr(artifact, "session_id", None),
+                mime_type=mime_type,
+                format_label=lossless_label,
+            )
             return {
                 "max_anomaly": None,
                 "anomaly_regions": [],
@@ -122,6 +132,7 @@ async def ela_full_image(
                     "Use frequency-domain analysis, noise fingerprinting, or CFA "
                     "demosaicing checks instead for this file type."
                 ),
+                "logged_skip_reason": f"Lossless format {lossless_label} not compatible with ELA",
                 "court_defensible": False,
                 "available": True,
             }
@@ -212,7 +223,6 @@ async def ela_full_image(
                 "num_anomaly_regions": len(anomaly_regions),
                 "mean_ela": mean_ela,
                 "std_ela": std_ela,
-                "ela_mean": mean_ela,
                 "quality_levels": quality_levels_used,
                 "multi_quality_fusion": multi_quality,
                 "derivative_artifact": derivative_artifact.to_dict()
@@ -233,7 +243,9 @@ async def ela_full_image(
     except Exception as e:
         if isinstance(e, ToolUnavailableError):
             raise
-        raise ToolUnavailableError(f"ELA analysis failed: {str(e)}") from e
+        raise ToolUnavailableError(
+            f"ELA analysis failed for artifact {artifact.artifact_id} (session {getattr(artifact, 'session_id', 'unknown')}): {str(e)}"
+        ) from e
 
 
 async def roi_extract(
@@ -319,7 +331,9 @@ async def roi_extract(
     except Exception as e:
         if isinstance(e, ToolUnavailableError):
             raise
-        raise ToolUnavailableError(f"ROI extraction failed: {str(e)}") from e
+        raise ToolUnavailableError(
+            f"ROI extraction failed for artifact {artifact.artifact_id}: {str(e)}"
+        ) from e
 
 
 async def jpeg_ghost_detect(
@@ -372,6 +386,13 @@ async def jpeg_ghost_detect(
         lossless_label = pil_format or ext.lstrip(".").upper() or "LOSSLESS"
 
         if is_lossless:
+            logger.info(
+                "JPEG ghost detection skipped for lossless format",
+                artifact_id=artifact.artifact_id,
+                session_id=getattr(artifact, "session_id", None),
+                mime_type=mime_type,
+                format_label=lossless_label,
+            )
             return {
                 "ghost_detected": False,
                 "confidence": 0.0,
@@ -379,6 +400,7 @@ async def jpeg_ghost_detect(
                 "max_variance": None,
                 "mean_variance": None,
                 "ghost_not_applicable": True,
+                "logged_skip_reason": f"Lossless format {lossless_label} not compatible with JPEG ghost detection",
                 "ghost_limitation_note": (
                     f"JPEG ghost detection is not applicable to lossless {lossless_label} files. "
                     "This technique detects double-JPEG-compression artefacts — a lossless "
@@ -484,7 +506,9 @@ async def jpeg_ghost_detect(
     except ToolUnavailableError:
         raise
     except Exception as e:
-        raise ToolUnavailableError(f"JPEG ghost detection failed: {str(e)}") from e
+        raise ToolUnavailableError(
+            f"JPEG ghost detection failed for artifact {artifact.artifact_id}: {str(e)}"
+        ) from e
 
 
 async def file_hash_verify(
@@ -581,7 +605,9 @@ async def compute_perceptual_hash(
     except Exception as e:
         if isinstance(e, ToolUnavailableError):
             raise
-        raise ToolUnavailableError(f"Perceptual hash computation failed: {str(e)}") from e
+        raise ToolUnavailableError(
+            f"Perceptual hash computation failed for artifact {artifact.artifact_id}: {str(e)}"
+        ) from e
 
 
 async def frequency_domain_analysis(
@@ -669,7 +695,9 @@ async def frequency_domain_analysis(
     except ToolUnavailableError:
         raise
     except Exception as e:
-        raise ToolUnavailableError(f"Frequency domain analysis failed: {str(e)}") from e
+        raise ToolUnavailableError(
+            f"Frequency domain analysis failed for artifact {artifact.artifact_id}: {str(e)}"
+        ) from e
 
 
 async def extract_text_from_image(
@@ -750,8 +778,14 @@ async def extract_text_from_image(
             timeout=_timeout,
         )
     except TimeoutError:
+        logger.warning(
+            "OCR timed out",
+            artifact_id=artifact.artifact_id,
+            timeout=_timeout,
+        )
         return {
-            "status": "timeout",
+            "status": "error",
+            "error_type": "timeout",
             "court_defensible": False,
             "error": f"OCR timed out after {_timeout}s",
             "extracted_text": [],

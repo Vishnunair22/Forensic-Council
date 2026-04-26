@@ -9,7 +9,11 @@
 
 {
     admin off
-    auto_https off
+    # auto_https is ON by default.
+    # For production domains Caddy auto-provisions Let's Encrypt certs.
+    # For localhost Caddy uses a self-signed internal cert (no ACME needed).
+    # Set ACME_EMAIL in .env to receive cert expiry notifications.
+    email {$ACME_EMAIL:admin@localhost}
     http_port 80
     https_port 443
 }
@@ -24,52 +28,6 @@
         X-Content-Type-Options "nosniff"
         X-Frame-Options "DENY"
         X-Robots-Tag "none"
-        Referrer-Policy "strict-origin-when-cross-origin"
-        -Server
-        -X-Powered-By
-    }
-
-    request_body {
-        max_size 55MB
-    }
-
-    handle /api/v1/* {
-        reverse_proxy backend:8000 {
-            header_up Host {host}
-            header_up Upgrade {header.Upgrade}
-            header_up Connection {header.Connection}
-            flush_interval -1
-
-            transport http {
-                response_header_timeout 620s
-                dial_timeout 10s
-                read_buffer 64KB
-                write_buffer 64KB
-            }
-        }
-    }
-
-    handle {
-        reverse_proxy frontend:3000 {
-            header_up Host {host}
-
-            transport http {
-                response_header_timeout 300s
-                dial_timeout 10s
-            }
-        }
-    }
-}
-
-{$DOMAIN:localhost} {
-    encode zstd gzip
-
-    header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-        X-Content-Type-Options "nosniff"
-        X-Robots-Tag "none"
-        X-XSS-Protection "0"
-        X-Frame-Options "DENY"
         Referrer-Policy "strict-origin-when-cross-origin"
         -Server
         -X-Powered-By

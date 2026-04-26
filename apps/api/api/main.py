@@ -372,12 +372,15 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "0"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    csp_connect = ["'self'"]
+    if settings.app_env != "production":
+        csp_connect.extend(settings.cors_allowed_origins)
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "script-src 'self'; "
         "style-src 'self'; "
-        "img-src 'self' blob: data:; "
-        "connect-src 'self'; "
+        f"img-src 'self' blob: data:; "
+        f"connect-src 'self' {' '.join(csp_connect)}; "
         "frame-ancestors 'none'; "
         "base-uri 'self'; "
         "form-action 'self';"
@@ -702,9 +705,9 @@ async def health_check():
         await pg.fetch_val("SELECT 1")
         checks["postgres"] = "ok"
     except Exception as e:
-        checks["postgres"] = (
-            "error: connection failed" if not settings.debug else f"error: {str(e)[:60]}"
-        )
+        checks["postgres"] = "error: connection failed"
+        if settings.debug:
+            checks["postgres_debug"] = f"{type(e).__name__}: {str(e)[:100]}"
         overall_healthy = False
 
     # ── Redis ─────────────────────────────────────────────────────────────────
@@ -713,9 +716,9 @@ async def health_check():
         await redis.ping()
         checks["redis"] = "ok"
     except Exception as e:
-        checks["redis"] = (
-            "error: connection failed" if not settings.debug else f"error: {str(e)[:60]}"
-        )
+        checks["redis"] = "error: connection failed"
+        if settings.debug:
+            checks["redis_debug"] = f"{type(e).__name__}: {str(e)[:100]}"
         overall_healthy = False
 
     # ── Qdrant ────────────────────────────────────────────────────────────────
@@ -725,9 +728,9 @@ async def health_check():
         await qdrant.health_check()
         checks["qdrant"] = "ok"
     except Exception as e:
-        checks["qdrant"] = (
-            "error: connection failed" if not settings.debug else f"error: {str(e)[:60]}"
-        )
+        checks["qdrant"] = "error: connection failed"
+        if settings.debug:
+            checks["qdrant_debug"] = f"{type(e).__name__}: {str(e)[:100]}"
         overall_healthy = False
 
     # ── ML Tools Warm-Up Status (Decoupled to Worker) ─────────────────────────

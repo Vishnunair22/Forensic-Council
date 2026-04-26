@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
  Loader2,
  FileText,
@@ -103,48 +103,42 @@ export function AgentProgressDisplay({
  isNavigating = false,
  mimeType,
 }: AgentProgressDisplayProps) {
-  const [revealedCount, setRevealedCount] = useState(0);
   const [validatedAgents, setValidatedAgents] = useState<Set<string>>(new Set());
   const [hiddenAgents, setHiddenAgents] = useState<Set<string>>(new Set());
 
-  // Staggered reveal logic: Reveal one agent every 3s
-  useEffect(() => {
-    if (revealedCount < allValidAgents.length) {
-      const timer = setTimeout(() => {
-        setRevealedCount(prev => prev + 1);
-        playSound?.("agent");
-      }, revealedCount === 0 ? 0 : 3000); // First one immediate, then 3s delay
-      return () => clearTimeout(timer);
-    }
-  }, [revealedCount, playSound]);
+  const playSoundRef = useRef(playSound);
+  useEffect(() => { playSoundRef.current = playSound; }, [playSound]);
 
-  // Validation phase logic: Each agent validates for 2s after appearing
+  // Validate each card with a per-card stagger — runs once on mount only.
+  // Using a single effect with all timers avoids the chained-setTimeout pattern
+  // that breaks when re-renders (from frequent WS updates) reset intermediate state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (revealedCount > 0) {
-      const currentAgentId = allValidAgents[revealedCount - 1].id;
-      const timer = setTimeout(() => {
-        setValidatedAgents(prev => new Set(prev).add(currentAgentId));
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [revealedCount]);
+    const timers = allValidAgents.map((agent, i) =>
+      setTimeout(() => {
+        setValidatedAgents(prev => new Set(prev).add(agent.id));
+        playSoundRef.current?.("agent");
+      }, 800 + i * 600) // 0.8s, 1.4s, 2.0s, 2.6s, 3.2s
+    );
+    return () => timers.forEach(t => clearTimeout(t));
+  }, []); // intentional — one-time setup on mount
 
-  // Auto-hide skipped agents after 10s
+  // Auto-hide unsupported agents 10s after they are validated
   useEffect(() => {
+    const timers: NodeJS.Timeout[] = [];
     validatedAgents.forEach(id => {
-      const isSupported = isAgentSupportedForMime(id, mimeType);
-      if (!isSupported && !hiddenAgents.has(id)) {
-        const timer = setTimeout(() => {
+      if (!isAgentSupportedForMime(id, mimeType) && !hiddenAgents.has(id)) {
+        timers.push(setTimeout(() => {
           setHiddenAgents(prev => new Set(prev).add(id));
-        }, 10000);
-        return () => clearTimeout(timer);
+        }, 10000));
       }
     });
-  }, [validatedAgents, mimeType, hiddenAgents]);
+    return () => timers.forEach(clearTimeout);
+  }, [validatedAgents, mimeType]); // hiddenAgents intentionally omitted to prevent re-scheduling
 
   const visibleAgents = useMemo(() => {
-    return allValidAgents.slice(0, revealedCount).filter(a => !hiddenAgents.has(a.id));
-  }, [revealedCount, hiddenAgents]);
+    return allValidAgents.filter(a => !hiddenAgents.has(a.id));
+  }, [hiddenAgents]);
 
   const getAgentStatus = (agentId: string) => {
     if (!validatedAgents.has(agentId)) return "validating";
@@ -164,16 +158,21 @@ export function AgentProgressDisplay({
     return "waiting";
   };
 
+  const containerVariants: import("framer-motion").Variants = {
+    hidden: {},
+    show: { transition: { staggerChildren: 0.15 } },
+  };
+
   const itemVariants: import("framer-motion").Variants = {
     hidden: { opacity: 0, scale: 0.9, y: 30 },
-    show: { 
-      opacity: 1, 
+    show: {
+      opacity: 1,
       scale: 1,
       y: 0,
-      transition: { 
-        type: "spring", 
-        damping: 25, 
-        stiffness: 120 
+      transition: {
+        type: "spring",
+        damping: 25,
+        stiffness: 120
       }
     }
   };
@@ -221,15 +220,18 @@ export function AgentProgressDisplay({
       </div>
 
       <div className="w-full">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <motion.div
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          variants={containerVariants}
+          initial="hidden"
+          animate="show"
+        >
           <AnimatePresence mode="popLayout">
             {visibleAgents.map((agent) => (
               <motion.div
                 key={agent.id}
                 layout
                 variants={itemVariants}
-                initial="hidden"
-                animate="show"
                 exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.3 } }}
               >
                 <AgentStatusCard
@@ -246,7 +248,7 @@ export function AgentProgressDisplay({
               </motion.div>
             ))}
           </AnimatePresence>
-        </div>
+        </motion.div>
       </div>
 
       <AnimatePresence>

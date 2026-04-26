@@ -43,6 +43,7 @@ export default function EvidencePage() {
     dismissCheckpoint,
     handleFile,
     triggerAnalysis,
+    retryWsConnection,
     handleHITLDecision,
     handleNewUpload,
     handleViewResults,
@@ -51,6 +52,7 @@ export default function EvidencePage() {
     hasStartedAnalysis,
     showUploadForm,
     validAgentsData,
+    wsConnectionError,
   } = useInvestigation(playSound);
 
   // Derive progress text for accessibility (NVDA)
@@ -122,12 +124,12 @@ export default function EvidencePage() {
               />
             )}
 
-            <ForensicErrorModal 
-              isVisible={!!(errorMessage || validationError)} 
-              message={errorMessage || validationError || "The analysis pipeline was interrupted."} 
-              errorCode={errorMessage ? "0xFC_PIPELINE_HALT" : "0xFC_VALIDATION_FAIL"}
-              onRetry={!!file ? () => triggerAnalysis(file as File) : undefined}
-              onHome={handleNewUpload} 
+            <ForensicErrorModal
+              isVisible={!!(errorMessage || wsConnectionError || validationError)}
+              message={errorMessage || wsConnectionError || validationError || "The analysis pipeline was interrupted."}
+              errorCode={errorMessage ? "0xFC_PIPELINE_HALT" : wsConnectionError ? "0xFC_CONN_FAIL" : "0xFC_VALIDATION_FAIL"}
+              onRetry={wsConnectionError ? retryWsConnection : (!!file ? () => triggerAnalysis(file as File) : undefined)}
+              onHome={handleNewUpload}
             />
 
             {!showUploadForm && !hasStartedAnalysis && !showLoadingOverlay && !validationError && (

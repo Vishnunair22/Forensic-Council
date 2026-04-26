@@ -111,8 +111,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      # Use CMD-SHELL form so REDISCLI_AUTH env var is in scope
-      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD} ping | grep PONG"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -181,7 +180,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-forensic_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       POSTGRES_DB: ${POSTGRES_DB:-forensic_council}
-      POSTGRES_INITDB_ARGS: --data-checksums --auth-host=scram-sha-256
+      POSTGRES_INITDB_ARGS: --data-checksums --auth-host=scram-sha-256 --auth-local=scram-sha-256
     # SECURITY: Run as non-root (postgres), drop unnecessary capabilities
     user: postgres
     security_opt:
@@ -314,7 +313,7 @@ services:
       migration:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -548,6 +547,11 @@ services:
       # Inside Docker, the frontend container CANNOT reach "localhost:8000" — it must
       # use the Docker-internal service name "backend".
       - INTERNAL_API_URL=http://backend:8000
+    # Next.js 15.3+ defaults `next dev` to Turbopack, which does not use the
+    # webpack watchOptions.poll config and receives no inotify events from the
+    # Windows host bind mount. Passing --no-turbopack restores webpack, which
+    # polls the filesystem every 500 ms (see next.config.ts watchOptions).
+    command: ["npm", "run", "dev", "--", "--no-turbopack"]
     depends_on:
       backend:
         condition: service_healthy

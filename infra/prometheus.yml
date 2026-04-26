@@ -7,7 +7,8 @@ global:
 scrape_configs:
   - job_name: forensic_api
     metrics_path: /api/v1/metrics/raw
-    bearer_token_file: /run/secrets/metrics_scrape_token
+    authorization:
+      credentials_file: /run/secrets/metrics_scrape_token
     static_configs:
       - targets:
           - backend:8000

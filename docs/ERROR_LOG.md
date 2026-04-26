@@ -4,6 +4,36 @@ All production bugs and their resolutions, ordered chronologically.
 
 ---
 
+## 2026-04-27 — Session 6: WebSocket Error Handling & HMR Fix
+
+### Error: Wrong Error Code for WebSocket Connection Failures
+
+**File:** `apps/web/src/app/evidence/page.tsx`, `apps/web/src/hooks/useInvestigation.ts`
+
+**Symptom:** After a WebSocket connection failure, the error modal shows `0xFC_VALIDATION_FAIL` and the error message "WebSocket connection error". `0xFC_VALIDATION_FAIL` is the code reserved for file-format validation errors (wrong MIME type, file too large), not connection failures. Clicking "Retry Analysis" re-uploaded the file instead of reconnecting to the existing session.
+
+**Root Cause:** In `useInvestigation.ts`, the `.catch` block of `connectWebSocket()` stored WS errors in `setValidationError` — the same state used for file validation errors. The modal's `errorCode` selection (`errorMessage ? "0xFC_PIPELINE_HALT" : "0xFC_VALIDATION_FAIL"`) had no branch for WS connection failures.
+
+**Fix:**
+- Added `wsConnectionError` state in `useInvestigation` dedicated to WebSocket connection failures.
+- Added `lastSessionIdRef` to remember the session ID that was accepted by the backend even after `resetSimulation()` clears it.
+- Added `retryWsConnection` callback that reconnects to the existing session ID rather than re-uploading the file.
+- Updated `evidence/page.tsx` modal: `0xFC_CONN_FAIL` for WS errors, `0xFC_PIPELINE_HALT` for pipeline errors, `0xFC_VALIDATION_FAIL` only for file validation errors. Retry action is context-aware.
+
+---
+
+### Error: HMR Not Working in Docker Development (Windows Bind Mount)
+
+**File:** `infra/docker-compose.yml`
+
+**Symptom:** Editing frontend source files on the Windows host does not trigger hot-module replacement (HMR) inside the running Docker container. The browser never reflects code changes without a full container restart.
+
+**Root Cause:** Next.js 15.3+ changed `next dev` to use Turbopack by default. Turbopack uses the OS-native file watcher (inotify on Linux), which receives no events from Windows host bind mounts because WSL2 does not forward inotify events across the filesystem boundary. The existing `watchOptions.poll: 500` fix in `next.config.ts` only applies to webpack, not Turbopack.
+
+**Fix:** Added `command: ["npm", "run", "dev", "--", "--no-turbopack"]` to the `frontend` service in `docker-compose.yml`. This forces Next.js to use webpack, which applies the 500 ms filesystem polling configured in `next.config.ts` and restores HMR on Windows Docker bind mounts.
+
+---
+
 ## 2026-03-16 — Session 5: Full Runtime Audit (v1.0.4)
 
 ### Error: Report 404 After Investigation Completes (Race Window)

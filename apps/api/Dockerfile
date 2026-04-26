@@ -31,23 +31,23 @@ FROM python:3.12-slim-bookworm AS base
 # gcc is needed at install time (some packages compile C extensions);
 # it is purged in the deps-* stages to shrink the final layers.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get -o Acquire::Check-Date=false update \
-    && apt-get install -y --no-install-recommends \
-        curl \
-        tesseract-ocr \
-        tesseract-ocr-eng \
-        exiftool \
-        ffmpeg \
-        libgl1 \
-        libglib2.0-0 \
-        gcc \
-        mediainfo \
-        libmediainfo-dev \
-        libmagic-dev \
-        util-linux \
-        procps \
-    && rm -rf /var/lib/apt/lists/*
+     --mount=type=cache,target=/var/lib/apt,sharing=locked \
+     apt-get -o Acquire::Check-Date=false update \
+     && apt-get install -y --no-install-recommends \
+         wget \
+         tesseract-ocr \
+         tesseract-ocr-eng \
+         exiftool \
+         ffmpeg \
+         libgl1 \
+         libglib2.0-0 \
+         gcc \
+         mediainfo \
+         libmediainfo-dev \
+         libmagic-dev \
+         util-linux \
+         procps \
+     && rm -rf /var/lib/apt/lists/*
 
 # Install uv (fast Python package manager).
 # Pinned for reproducible builds; using pip to avoid ghcr.io TLS issues.
@@ -231,18 +231,12 @@ ENV RELOAD=true \
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
-    CMD curl -f -s http://localhost:8000/health || exit 1
-
 USER root
 ENTRYPOINT ["sh", "scripts/docker_entrypoint.sh"]
 
 
 # Stage 6: production - hardened, non-root
 FROM app AS production
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
-    CMD curl -f -s http://localhost:8000/health || exit 1
 
 EXPOSE 8000
 
