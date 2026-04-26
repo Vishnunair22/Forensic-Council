@@ -2,35 +2,29 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect } from "react";
-import { useTimer } from "@/hooks/useTimer";
+import { Loader2 } from "lucide-react";
 
 interface AnalysisProgressOverlayProps {
   isVisible: boolean;
   title?: string;
   message?: string;
-  onComplete?: () => void;
 }
 
 export function AnalysisProgressOverlay({ 
   isVisible, 
-  title = "Neural Uplink Active",
-  message = "Establishing Secure Multi-Agent Bridge",
-  onComplete: _onComplete 
+  title = "Initializing",
+  message = "Please wait...",
 }: AnalysisProgressOverlayProps) {
-  const { formattedTime, reset } = useTimer(isVisible);
 
   useEffect(() => {
-    if (!isVisible) {
-      reset();
-    } else {
-      // Lock scroll when visible
+    if (isVisible) {
       const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
       return () => {
         document.body.style.overflow = originalOverflow || "unset";
       };
     }
-  }, [isVisible, reset]);
+  }, [isVisible]);
 
   return (
     <AnimatePresence>
@@ -39,54 +33,24 @@ export function AnalysisProgressOverlay({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/90 backdrop-blur-3xl"
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-md"
         >
-          <div className="max-w-xl w-full px-6">
+          <div className="max-w-md w-full px-6 flex flex-col items-center text-center">
             <motion.div
-              initial={{ opacity: 0, scale: 0.98, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.98, y: 10 }}
-              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-              className="relative flex flex-col items-center text-center"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-col items-center"
             >
-              {/* --- Horizon Aperture Loader --- */}
-              <div className="relative w-24 h-24 mb-12 flex items-center justify-center">
-                <motion.div 
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-                  className="absolute inset-0 rounded-full border border-primary/20 border-dashed"
-                />
-                <motion.div 
-                  animate={{ rotate: -360 }}
-                  transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
-                  className="absolute inset-4 rounded-full border border-primary/10 border-dashed"
-                />
-                <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_15px_rgba(0,255,255,0.8)]" />
-              </div>
+              <Loader2 className="w-10 h-10 text-primary animate-spin mb-6" />
               
-              <h2 className="text-3xl md:text-4xl font-heading font-bold text-white tracking-tight mb-4">
+              <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">
                 {title}
               </h2>
               
-              <p className="text-base font-medium text-white/40 tracking-wide max-w-sm mb-12">
+              <p className="text-zinc-400 text-sm font-medium">
                 {message}
               </p>
-
-              {/* Horizon Progress Bar */}
-              <div className="w-full max-w-xs h-[2px] bg-white/5 rounded-full overflow-hidden relative mb-8">
-                <motion.div 
-                  initial={{ x: "-100%" }}
-                  animate={{ x: "100%" }}
-                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                  className="absolute top-0 bottom-0 w-1/2 bg-gradient-to-r from-transparent via-primary to-transparent"
-                />
-              </div>
-
-              {/* Timer HUD */}
-              <div className="flex items-center gap-3 text-[10px] font-mono tracking-[0.2em] text-white/30">
-                <span className="uppercase">Elapsed_Time</span>
-                <span className="text-primary font-bold">{formattedTime}</span>
-              </div>
             </motion.div>
           </div>
         </motion.div>

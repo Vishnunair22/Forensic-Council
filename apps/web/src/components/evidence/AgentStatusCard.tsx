@@ -17,6 +17,7 @@ import { fmtTool } from "@/lib/fmtTool";
 import {
   getDefaultProgressTotal,
   getLiveProgressDescriptor,
+  getAgentPrefix,
 } from "@/lib/tool-progress";
 import type { AgentUpdate, FindingPreview } from "./AgentProgressDisplay";
 
@@ -24,7 +25,7 @@ interface AgentStatusCardProps {
   agentId: string;
   name: string;
   badge: string;
-  status: "waiting" | "checking" | "running" | "complete" | "error" | "unsupported";
+  status: "waiting" | "checking" | "running" | "complete" | "error" | "unsupported" | "validating";
   thinking?: string;
   liveUpdate?: {
     status: string;
@@ -119,7 +120,7 @@ export function AgentStatusCard({
       layout
       className={clsx(
         "horizon-card relative flex flex-col rounded-2xl overflow-hidden min-h-[540px] transition-all duration-500",
-        status === "running" && "ring-2 ring-primary/30",
+        (status === "running" || status === "validating") && "ring-2 ring-primary/30",
         status === "waiting" && "opacity-40 grayscale-[0.5]"
       )}
     >
@@ -144,6 +145,7 @@ export function AgentStatusCard({
                   "px-2 py-0.5 rounded text-[10px] font-mono font-bold border",
                   status === "complete" ? "bg-success/10 border-success/30 text-success" :
                   status === "error" ? "bg-danger/10 border-danger/30 text-danger" :
+                  status === "validating" ? "bg-primary/10 border-primary/30 text-primary" :
                   "bg-white/5 border-white/10 text-white/40"
                 )}>
                   {cfg.label.toUpperCase()}
@@ -158,7 +160,7 @@ export function AgentStatusCard({
 
         {/* --- Progress Section --- */}
         <AnimatePresence mode="wait">
-          {(status === "running" || status === "checking") && (
+          {(status === "running" || status === "checking" || status === "validating") && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -166,15 +168,25 @@ export function AgentStatusCard({
               className="space-y-4"
             >
               <div className="flex items-center gap-3 text-white/60">
-                <ProgressIcon className="w-4 h-4 text-primary" />
+                {status === "validating" ? (
+                  <Activity className="w-4 h-4 text-primary animate-pulse" />
+                ) : (
+                  <ProgressIcon className="w-4 h-4 text-primary" />
+                )}
                 <span className="text-xs font-mono font-bold tracking-tight truncate">
-                  {progressDescriptor.label}
+                  {status === "validating" 
+                    ? `${getAgentPrefix(agentId)} FILE_TYPE_VALIDATION` 
+                    : `${getAgentPrefix(agentId)} ${progressDescriptor.label} ${currentToolIndex}/${liveTotal}`}
                 </span>
               </div>
               <div className="relative w-full h-[2px] bg-white/5 rounded-full overflow-hidden">
                 <motion.div
                   className="absolute top-0 bottom-0 bg-primary shadow-[0_0_10px_#00FFFF]"
-                  animate={{ width: `${(currentToolIndex / liveTotal) * 100}%` }}
+                  animate={{ 
+                    width: status === "validating" ? "100%" : `${(currentToolIndex / liveTotal) * 100}%`,
+                    opacity: status === "validating" ? [0.3, 1, 0.3] : 1
+                  }}
+                  transition={status === "validating" ? { duration: 2, repeat: Infinity } : undefined}
                 />
               </div>
             </motion.div>
@@ -259,9 +271,16 @@ export function AgentStatusCard({
                <span className="text-[10px] font-mono font-bold text-white tracking-[0.3em] uppercase">Awaiting_Payload</span>
             </div>
           ) : status === "unsupported" ? (
-            <div className="flex flex-col items-center justify-center h-full text-center p-8 gap-4 opacity-40 py-12">
-               <Ban className="w-10 h-10 text-white/20" />
-               <span className="text-[10px] font-mono font-bold text-white uppercase tracking-widest">Incompatible_Format</span>
+            <div className="flex flex-col items-center justify-center h-full text-center p-8 gap-6 py-12">
+               <Ban className="w-12 h-12 text-danger/40" />
+               <div className="space-y-2">
+                 <p className="text-sm font-medium text-white/70">
+                   {name} do not support file type formats.
+                 </p>
+                 <p className="text-[10px] font-mono text-white/30 uppercase tracking-widest">
+                   Agent skipped initial analysis
+                 </p>
+               </div>
             </div>
           ) : null}
         </AnimatePresence>

@@ -112,8 +112,8 @@ export function HeroAuthActions() {
         {(isAuthenticating || isNavigating) && (
           <AnalysisProgressOverlay
             isVisible={isAuthenticating || isNavigating}
-            title={isNavigating ? "Neural Uplink Active" : "Initializing Protocol"}
-            message={isNavigating ? "Routing To Analysis Workspace..." : (authError ?? "Authenticating Investigator...")}
+            title={isNavigating ? "Connecting" : "Authenticating"}
+            message={isNavigating ? "Establishing secure session..." : (authError ?? "Verifying investigator credentials...")}
           />
         )}
       </AnimatePresence>

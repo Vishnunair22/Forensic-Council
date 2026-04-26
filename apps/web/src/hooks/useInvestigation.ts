@@ -469,9 +469,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const hasStartedAnalysis = status !== "idle" || isUploading || validCompletedAgents.length > 0;
   const showUploadForm = !autoStartBlocking && status === "idle" && !isUploading;
 
-  // Dismiss the loading overlay as soon as the WebSocket is live — no need to
-  // wait for backend activity. The agent cards render in "checking" state while
-  // the worker warms up, which is clearer than a full-screen blocking overlay.
+  // Dismiss the loading overlay immediately once the analysis stream is ready.
+  // This allows the main evidence page to be visible while the agent cards
+  // begin their staggered, sequential entrance animations.
   useEffect(() => {
     if (showLoadingOverlay && analysisStreamReady) {
       setShowLoadingOverlay(false);

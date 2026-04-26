@@ -73,8 +73,8 @@ export default function EvidencePage() {
         {showLoadingOverlay && (
           <AnalysisProgressOverlay
             isVisible={showLoadingOverlay}
-            title="Secure Workspace"
-            message={pipelineMessage || uploadPhaseText || "Initializing secure workspace..."}
+            title="Analysis Pipeline"
+            message={pipelineMessage || uploadPhaseText || "Preparing evidence..."}
           />
         )}
       </AnimatePresence>

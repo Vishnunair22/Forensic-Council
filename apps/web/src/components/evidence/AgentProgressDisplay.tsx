@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
  Loader2,
  FileText,
@@ -78,14 +78,14 @@ const AgentStatusCard = dynamic(
   { ssr: false },
 );
 
-const allValidAgents = AGENTS_DATA.filter((agent) => agent.id !== "AGT-06");
+const allValidAgents = AGENTS_DATA.filter((agent) => agent.id !== "Arbiter");
 
-function unsupportedAgentIdsForMime(mimeType?: string): string[] {
- if (!mimeType) return [];
- if (mimeType.startsWith("image/")) return ["Agent2", "Agent4"];
- if (mimeType.startsWith("audio/")) return ["Agent1", "Agent3", "Agent4"];
- if (mimeType.startsWith("video/")) return ["Agent1", "Agent2"];
- return [];
+function isAgentSupportedForMime(agentId: string, mimeType?: string): boolean {
+  if (!mimeType) return true;
+  if (mimeType.startsWith("image/")) return !["Agent2", "Agent4"].includes(agentId);
+  if (mimeType.startsWith("audio/")) return !["Agent1", "Agent3", "Agent4"].includes(agentId);
+  if (mimeType.startsWith("video/")) return !["Agent1", "Agent2"].includes(agentId);
+  return true;
 }
 
 export function AgentProgressDisplay({
@@ -99,227 +99,195 @@ export function AgentProgressDisplay({
  pipelineMessage,
  onNewUpload,
  onViewResults,
- playSound: _playSound,
+ playSound,
  isNavigating = false,
  mimeType,
 }: AgentProgressDisplayProps) {
-  const [hiddenAgentIds, setHiddenAgentIds] = useState<Set<string>>(new Set());
-  const [skippedAgentIds, setSkippedAgentIds] = useState<Set<string>>(new Set());
-  const [isRunningExpanded, setIsRunningExpanded] = useState(false);
-  const [isSkippedExpanded, setIsSkippedExpanded] = useState(false);
+  const [revealedCount, setRevealedCount] = useState(0);
+  const [validatedAgents, setValidatedAgents] = useState<Set<string>>(new Set());
+  const [hiddenAgents, setHiddenAgents] = useState<Set<string>>(new Set());
 
- useEffect(() => {
-  const unsupportedIds = unsupportedAgentIdsForMime(mimeType);
-  if (unsupportedIds.length === 0) return;
+  // Staggered reveal logic: Reveal one agent every 3s
+  useEffect(() => {
+    if (revealedCount < allValidAgents.length) {
+      const timer = setTimeout(() => {
+        setRevealedCount(prev => prev + 1);
+        playSound?.("agent");
+      }, revealedCount === 0 ? 0 : 3000); // First one immediate, then 3s delay
+      return () => clearTimeout(timer);
+    }
+  }, [revealedCount, playSound]);
 
-  setSkippedAgentIds((prev) => new Set([...prev, ...unsupportedIds]));
-  const timer = setTimeout(() => {
-   setHiddenAgentIds((prev) => new Set([...prev, ...unsupportedIds]));
-  }, 10000);
+  // Validation phase logic: Each agent validates for 2s after appearing
+  useEffect(() => {
+    if (revealedCount > 0) {
+      const currentAgentId = allValidAgents[revealedCount - 1].id;
+      const timer = setTimeout(() => {
+        setValidatedAgents(prev => new Set(prev).add(currentAgentId));
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [revealedCount]);
 
-  return () => clearTimeout(timer);
- }, [mimeType]);
+  // Auto-hide skipped agents after 10s
+  useEffect(() => {
+    validatedAgents.forEach(id => {
+      const isSupported = isAgentSupportedForMime(id, mimeType);
+      if (!isSupported && !hiddenAgents.has(id)) {
+        const timer = setTimeout(() => {
+          setHiddenAgents(prev => new Set(prev).add(id));
+        }, 10000);
+        return () => clearTimeout(timer);
+      }
+    });
+  }, [validatedAgents, mimeType, hiddenAgents]);
 
- // Track which agents are unsupported
- useEffect(() => {
-  completedAgents.forEach((agent) => {
-   const isUnsupported = agent.status === "skipped" ||
-    (agent.error && /not applicable|not supported|skipping|skipped/i.test(agent.error));
-   
-   if (isUnsupported && !skippedAgentIds.has(agent.agent_id)) {
-    setSkippedAgentIds(prev => new Set([...prev, agent.agent_id]));
-    
-    // Schedule cleanup after 10 seconds
-    setTimeout(() => {
-     setHiddenAgentIds(prev => new Set([...prev, agent.agent_id]));
-    }, 10000);
-   }
-  });
- }, [completedAgents, skippedAgentIds]);
-
- const visibleAgents = allValidAgents.filter(a => !hiddenAgentIds.has(a.id));
-
- // Variants for staggered entrance
- const containerVariants = {
-  hidden: { opacity: 0 },
-  show: {
-   opacity: 1,
-   transition: {
-    staggerChildren: 0.15,
-    delayChildren: 0.2
-   }
-  }
- };
-
- const itemVariants: import("framer-motion").Variants = {
-  hidden: { opacity: 0, scale: 0.9, y: 30 },
-  show: { 
-   opacity: 1, 
-   scale: 1,
-   y: 0,
-   transition: { 
-    type: "spring", 
-    damping: 25, 
-    stiffness: 120 
-   }
-  }
- };
+  const visibleAgents = useMemo(() => {
+    return allValidAgents.slice(0, revealedCount).filter(a => !hiddenAgents.has(a.id));
+  }, [revealedCount, hiddenAgents]);
 
   const getAgentStatus = (agentId: string) => {
-   if (skippedAgentIds.has(agentId)) return "unsupported";
-   const completed = completedAgents.find((c) => c.agent_id === agentId);
-   if (completed) {
-    const isSkipped =
-     completed.status === "skipped" ||
-     (completed.error
-      ? /not applicable|not supported|skipping|skipped/i.test(completed.error)
-      : false);
-    if (isSkipped) return "unsupported";
-    return (completed.status === "error" || completed.status === "failed" || completed.error) ? "error" : "complete";
-   }
-   if (agentUpdates[agentId]) return "running";
+    if (!validatedAgents.has(agentId)) return "validating";
+    
+    const isSupported = isAgentSupportedForMime(agentId, mimeType);
+    if (!isSupported) return "unsupported";
 
-   // If the pipeline is active but agent hasn't started yet, show as "checking" (Connecting)
-   // instead of "waiting" (Dim/0.3 opacity). This provides better visual feedback during ingestion.
-   if (pipelineStatus === "analyzing" || pipelineStatus === "initiating" || pipelineStatus === "processing") {
-     return "checking";
-   }
-
-   return "waiting";
+    const completed = completedAgents.find((c) => c.agent_id === agentId);
+    if (completed) {
+      return (completed.status === "error" || completed.status === "failed" || completed.error) ? "error" : "complete";
+    }
+    
+    if (agentUpdates[agentId]) return "running";
+    if (pipelineStatus === "analyzing" || pipelineStatus === "initiating" || pipelineStatus === "processing") {
+      return "checking";
+    }
+    return "waiting";
   };
 
- const showDeepComplete = phase === "deep" && (allAgentsDone || pipelineStatus === "complete");
- const phaseStatusText = allAgentsDone || pipelineStatus === "complete"
-  ? `${phase === "initial" ? "Initial" : "Deep"} analysis phase complete`
-  : `${phase === "initial" ? "Initial" : "Deep"} analysis in progress`;
+  const itemVariants: import("framer-motion").Variants = {
+    hidden: { opacity: 0, scale: 0.9, y: 30 },
+    show: { 
+      opacity: 1, 
+      scale: 1,
+      y: 0,
+      transition: { 
+        type: "spring", 
+        damping: 25, 
+        stiffness: 120 
+      }
+    }
+  };
 
- const runningCount = Object.keys(agentUpdates).filter(id => !completedAgents.some(c => c.agent_id === id)).length;
+  const runningCount = Object.keys(agentUpdates).filter(id => !completedAgents.some(c => c.agent_id === id)).length;
 
- return (
-  <div className="flex flex-col w-full max-w-[1560px] mx-auto gap-8 pb-36 pt-24">
-
-    {/* ── Evidence Analysis Title & Phase ────────────────────────────────── */}
-    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-10 w-full mb-12 px-2">
-      <div className="flex flex-col gap-2">
-        <motion.h1
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="text-4xl md:text-5xl font-heading font-bold text-white tracking-tight"
-        >
-          Evidence Analysis
-        </motion.h1>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_10px_#00FFFF]" />
-            <p className="text-[10px] font-mono font-bold text-primary tracking-[0.2em] uppercase">
-              {phase === "initial" ? "Initial_Pipeline" : "Deep_Pipeline"}
+  return (
+    <div className="flex flex-col w-full max-w-[1560px] mx-auto gap-8 pb-36 pt-24">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-10 w-full mb-12 px-2">
+        <div className="flex flex-col gap-2">
+          <motion.h1
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="text-4xl md:text-5xl font-heading font-bold text-white tracking-tight"
+          >
+            Evidence Analysis
+          </motion.h1>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_10px_#00FFFF]" />
+              <p className="text-[10px] font-mono font-bold text-primary tracking-[0.2em] uppercase">
+                {phase === "initial" ? "Initial_Pipeline" : "Deep_Pipeline"}
+              </p>
+            </div>
+            <div className="w-[1px] h-3 bg-white/10" />
+            <p className="text-xs font-medium text-white/40 italic" role="status" aria-live="polite">
+              {pipelineMessage || progressText || (allAgentsDone ? "Analysis phase complete" : "Analysis in progress")}
             </p>
           </div>
-          <div className="w-[1px] h-3 bg-white/10" />
-          <p className="text-xs font-medium text-white/40 italic" role="status" aria-live="polite">
-            {pipelineMessage || progressText || phaseStatusText}
-          </p>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <div className="horizon-card px-6 py-4 rounded-xl flex items-center gap-6 border-primary/20">
+             <div className="flex flex-col items-start">
+               <span className="text-[9px] font-mono font-bold text-white/20 uppercase tracking-widest">Active_Nodes</span>
+               <span className="text-2xl font-mono font-bold text-white leading-none mt-1">0{runningCount}</span>
+             </div>
+             <div className="w-10 h-10 rounded-full border border-primary/20 flex items-center justify-center">
+                <motion.div animate={{ rotate: 360 }} transition={{ duration: 4, repeat: Infinity, ease: "linear" }}>
+                  <Activity className="w-5 h-5 text-primary" />
+                </motion.div>
+             </div>
+          </div>
         </div>
       </div>
 
-      {/* Running Agents HUD */}
-      <div className="flex items-center gap-4">
-        <div className="horizon-card px-6 py-4 rounded-xl flex items-center gap-6 border-primary/20">
-           <div className="flex flex-col items-start">
-             <span className="text-[9px] font-mono font-bold text-white/20 uppercase tracking-widest">Active_Nodes</span>
-             <span className="text-2xl font-mono font-bold text-white leading-none mt-1">0{runningCount}</span>
-           </div>
-           <div className="w-10 h-10 rounded-full border border-primary/20 flex items-center justify-center">
-              <motion.div animate={{ rotate: 360 }} transition={{ duration: 4, repeat: Infinity, ease: "linear" }}>
-                <Activity className="w-5 h-5 text-primary" />
+      <div className="w-full">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <AnimatePresence mode="popLayout">
+            {visibleAgents.map((agent) => (
+              <motion.div
+                key={agent.id}
+                layout
+                variants={itemVariants}
+                initial="hidden"
+                animate="show"
+                exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.3 } }}
+              >
+                <AgentStatusCard
+                  agentId={agent.id}
+                  name={agent.name}
+                  badge={agent.badge}
+                  status={getAgentStatus(agent.id) as any}
+                  thinking={agentUpdates[agent.id]?.thinking}
+                  liveUpdate={agentUpdates[agent.id]}
+                  completedData={completedAgents.find((c) => c.agent_id === agent.id)}
+                  isRevealed={true}
+                  fileMime={mimeType}
+                />
               </motion.div>
-           </div>
+            ))}
+          </AnimatePresence>
         </div>
       </div>
+
+      <AnimatePresence>
+        {awaitingDecision && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-3 rounded-full bg-slate-900/90 border border-primary/20 backdrop-blur-md shadow-lg"
+          >
+            <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />
+            <span className="text-[11px] font-mono text-white/60 tracking-widest uppercase">Generating Report…</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {(allAgentsDone || pipelineStatus === "complete") && (
+          <motion.div
+            initial={{ opacity: 0, y: 100 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 100 }}
+            className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-6 pointer-events-none"
+          >
+            <div className="horizon-card p-2 rounded-[2rem] shadow-[0_40px_100px_rgba(0,0,0,0.8)] pointer-events-auto">
+              <div className="bg-[#020617] rounded-[1.8rem] p-3 flex items-center gap-4">
+                <button onClick={onNewUpload} className="flex-1 btn-horizon-outline py-4 text-xs">New Upload</button>
+                <button
+                  onClick={onViewResults}
+                  disabled={isNavigating}
+                  className="flex-[1.5] btn-horizon-primary py-4 text-xs flex items-center justify-center gap-3"
+                >
+                  {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                  View Results
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
-
-   {/* ── Agent Cards Grid ──────────────────────────────────────────────── */}
-   <div className="w-full">
-    <motion.div 
-     layout
-     variants={containerVariants}
-     initial="hidden"
-     animate="show"
-     className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-    >
-     <AnimatePresence mode="popLayout">
-      {visibleAgents.map((agent) => (
-       <motion.div
-        key={agent.id}
-        layout
-        variants={itemVariants}
-        exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.3 } }}
-       >
-        <AgentStatusCard
-         agentId={agent.id}
-         name={agent.name}
-         badge={agent.badge}
-         status={getAgentStatus(agent.id)}
-         thinking={agentUpdates[agent.id]?.thinking}
-         liveUpdate={agentUpdates[agent.id]}
-         completedData={completedAgents.find((c) => c.agent_id === agent.id)}
-         isRevealed={true}
-         fileMime={mimeType}
-        />
-       </motion.div>
-      ))}
-     </AnimatePresence>
-    </motion.div>
-   </div>
-
-
-
-   {/* Auto-proceed notice while initial analysis is being submitted to the Arbiter */}
-   <AnimatePresence>
-    {awaitingDecision && !showDeepComplete && (
-     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 20 }}
-      className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-3 rounded-full bg-slate-900/90 border border-primary/20 backdrop-blur-md shadow-lg"
-     >
-      <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />
-      <span className="text-[11px] font-mono text-white/60 tracking-widest uppercase">Generating Report…</span>
-     </motion.div>
-    )}
-   </AnimatePresence>
-
-   {/* Deep analysis complete — explicit action required */}
-   <AnimatePresence>
-    {showDeepComplete && (
-      <motion.div
-       initial={{ opacity: 0, y: 100 }}
-       animate={{ opacity: 1, y: 0 }}
-       exit={{ opacity: 0, y: 100 }}
-       className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-6 pointer-events-none"
-      >
-       <div className="horizon-card p-2 rounded-[2rem] shadow-[0_40px_100px_rgba(0,0,0,0.8)] pointer-events-auto">
-         <div className="bg-[#020617] rounded-[1.8rem] p-3 flex items-center gap-4">
-           <button
-            onClick={onNewUpload}
-            className="flex-1 btn-horizon-outline py-4 text-xs"
-           >
-            New Upload
-           </button>
-           <button
-            onClick={onViewResults}
-            disabled={isNavigating}
-            className="flex-[1.5] btn-horizon-primary py-4 text-xs flex items-center justify-center gap-3"
-           >
-            {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-            View Results
-            <ArrowRight className="w-4 h-4" />
-           </button>
-         </div>
-       </div>
-      </motion.div>
-    )}
-   </AnimatePresence>
-  </div>
- );
+  );
 }

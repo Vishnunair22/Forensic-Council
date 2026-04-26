@@ -24,6 +24,18 @@ type ProgressDescriptor = {
   icon: LucideIcon;
 };
 
+export const AGENT_PREFIXES: Record<string, string> = {
+  Agent1: "Graphic",
+  Agent2: "Acoustic",
+  Agent3: "Scene",
+  Agent4: "Motion",
+  Agent5: "Digital",
+};
+
+export function getAgentPrefix(agentId: string): string {
+  return AGENT_PREFIXES[agentId] || "Node";
+}
+
 const DEFAULT_TOTALS: Record<string, number> = {
   Agent1: 6,
   Agent2: 5,
@@ -33,23 +45,23 @@ const DEFAULT_TOTALS: Record<string, number> = {
 };
 
 const TOOL_PROGRESS: Record<string, ProgressDescriptor> = {
-  extract_text_from_image: { label: "Extracting visible text with OCR", icon: Camera },
-  extract_evidence_text: { label: "Reading evidence text with OCR", icon: Camera },
-  object_text_ocr: { label: "Reading text inside detected objects", icon: Camera },
-  analyze_image_content: { label: "Identifying visual content", icon: ImageIcon },
-  ela_full_image: { label: "Scanning image compression patterns", icon: Scan },
-  ela_anomaly_classify: { label: "Classifying image anomaly regions", icon: Scan },
-  jpeg_ghost_detect: { label: "Checking JPEG recompression traces", icon: Layers },
-  frequency_domain_analysis: { label: "Inspecting frequency artifacts", icon: Activity },
+  extract_text_from_image: { label: "Identifying the image contents using ocr tools", icon: Camera },
+  extract_evidence_text: { label: "Identifying the image contents using ocr tools", icon: Camera },
+  object_text_ocr: { label: "Identifying the image contents using ocr tools", icon: Camera },
+  analyze_image_content: { label: "Classifying visual elements and content", icon: ImageIcon },
+  ela_full_image: { label: "Analyzing image compression for anomalies", icon: Scan },
+  ela_anomaly_classify: { label: "Classifying detected anomaly regions", icon: Scan },
+  jpeg_ghost_detect: { label: "Detecting JPEG recompression signatures", icon: Layers },
+  frequency_domain_analysis: { label: "Inspecting spectral frequency artifacts", icon: Activity },
   deepfake_frequency_check: { label: "Checking synthetic-media frequency traces", icon: Brain },
   noise_fingerprint: { label: "Comparing camera noise consistency", icon: Fingerprint },
   prnu_analysis: { label: "Comparing sensor fingerprint consistency", icon: Fingerprint },
-  copy_move_detect: { label: "Looking for cloned image regions", icon: Layers },
-  splicing_detect: { label: "Scanning image splice boundaries", icon: Layers },
-  image_splice_check: { label: "Checking image splice indicators", icon: Layers },
-  file_hash_verify: { label: "Verifying evidence file hash", icon: Shield },
-  adversarial_robustness_check: { label: "Testing anti-forensics robustness", icon: Shield },
-  object_detection: { label: "Detecting objects and scene elements", icon: Search },
+  copy_move_detect: { label: "Searching for cloned image regions", icon: Layers },
+  splicing_detect: { label: "Detecting image splice boundaries", icon: Layers },
+  image_splice_check: { label: "Validating image splice indicators", icon: Layers },
+  file_hash_verify: { label: "Verifying cryptographic file hash", icon: Shield },
+  adversarial_robustness_check: { label: "Testing for anti-forensic patterns", icon: Shield },
+  object_detection: { label: "Identifying objects and scene elements", icon: Search },
   scene_incongruence: { label: "Checking scene consistency", icon: Search },
   lighting_consistency: { label: "Comparing lighting and shadow direction", icon: Zap },
   scale_validation: { label: "Checking object scale and proportions", icon: Gauge },
@@ -96,11 +108,11 @@ const TOOL_PROGRESS: Record<string, ProgressDescriptor> = {
 
 const FALLBACK_BY_AGENT: Record<string, ProgressDescriptor[]> = {
   Agent1: [
-    { label: "Identifying visual content", icon: ImageIcon },
-    { label: "Extracting visible text with OCR", icon: Camera },
-    { label: "Scanning image compression patterns", icon: Scan },
-    { label: "Inspecting frequency artifacts", icon: Activity },
-    { label: "Comparing camera noise consistency", icon: Fingerprint },
+    { label: "Identifying visual content and elements", icon: ImageIcon },
+    { label: "Identifying the image contents using ocr tools", icon: Camera },
+    { label: "Analyzing image compression for anomalies", icon: Scan },
+    { label: "Inspecting spectral frequency artifacts", icon: Activity },
+    { label: "Validating camera noise consistency", icon: Fingerprint },
     { label: "Synthesizing visual evidence", icon: Brain },
   ],
   Agent2: [
