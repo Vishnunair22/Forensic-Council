@@ -422,6 +422,7 @@ async def live_updates(websocket: WebSocket, session_id: str):
     # This task listens for messages published by the Worker to the session channel
     # and forwards them directly to the user's specific WebSocket connection.
     async def _redis_subscriber():
+        nonlocal last_activity
         pubsub = None
         try:
             redis = await get_redis_client()

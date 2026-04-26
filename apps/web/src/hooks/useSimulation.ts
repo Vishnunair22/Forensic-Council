@@ -404,8 +404,11 @@ export const useSimulation = ({
           try {
             const update: BriefUpdate = JSON.parse(event.data);
 
-            // Silently discard server-side keepalive pings — they carry no state.
-            if ((update as { type: string }).type === "PING") return;
+            // Respond to server keepalive pings so the idle monitor stays reset.
+            if ((update as { type: string }).type === "PING") {
+              wsRef.current?.send(JSON.stringify({ type: "PONG", timestamp: Date.now() }));
+              return;
+            }
 
             dbg.log("[WebSocket] Received update, adding to queue:", update);
 

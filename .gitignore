@@ -134,6 +134,7 @@ tmp_*
 .planning/
 .claude/
 .cursor/
+.agent/
 .uv-cache/
 .uv_cache/
 .mcp.json

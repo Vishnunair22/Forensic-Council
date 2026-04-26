@@ -488,6 +488,18 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     }
   }, [showLoadingOverlay, analysisStreamReady, status, agentUpdates]);
 
+  // Fallback: if the WebSocket connects but the worker never sends an agent update
+  // (e.g. frozen due to rate limiting), dismiss the overlay after 15 s so the user
+  // can see the "Waiting for agents…" state and interact with the page.
+  useEffect(() => {
+    if (!showLoadingOverlay || !analysisStreamReady) return;
+    const t = setTimeout(() => {
+      setShowLoadingOverlay(false);
+      sessionOnlyStorage.removeItem("fc_show_loading");
+    }, 15_000);
+    return () => clearTimeout(t);
+  }, [showLoadingOverlay, analysisStreamReady]);
+
   return {
     file, setFile,
     isDragging, setIsDragging,

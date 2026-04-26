@@ -137,7 +137,8 @@ class Settings(BaseSettings):
         data = info.data if hasattr(info, "data") else {}
         env = data.get("app_env", "development")
         if env == "production":
-            if v.lower() in INSECURE_DEFAULTS:
+            v_lower = v.lower()
+            if v_lower in INSECURE_DEFAULTS or "replace_me" in v_lower or "replace" in v_lower:
                 raise ValueError(
                     f"POSTGRES_PASSWORD '{v}' is insecure for production! "
                     "Set a strong, unique password via the POSTGRES_PASSWORD environment variable."
@@ -359,6 +360,8 @@ class Settings(BaseSettings):
                 "dev",
                 "generate",
                 "placeholder",
+                "replace_me",
+                "replace",
                 "secret-key",
                 "strong",
                 "example",
@@ -415,6 +418,16 @@ class Settings(BaseSettings):
         ge=1,
         le=5,
         description="Maximum number of simultaneous heavy neural/math tools allowed (prevents CPU starvation).",
+    )
+    daily_cost_quota_usd: float = Field(
+        default=50.0,
+        ge=0.0,
+        description="Daily API cost quota in USD for investigator/auditor roles. Set to 0 for unlimited.",
+    )
+    daily_cost_quota_admin_usd: float = Field(
+        default=500.0,
+        ge=0.0,
+        description="Daily API cost quota in USD for admin role. Set to 0 for unlimited.",
     )
 
     # LLM Configuration (Global / Agents)
@@ -683,6 +696,8 @@ class Settings(BaseSettings):
                 "example",
                 "generate",
                 "placeholder",
+                "replace_me",
+                "replace",
                 "secret-key",
                 "strong",
                 "production",
@@ -705,6 +720,21 @@ class Settings(BaseSettings):
                 raise ValueError("JWT_SECRET_KEY must be >= 32 chars in production")
             if not self.redis_password:
                 raise ValueError("REDIS_PASSWORD must be set in production")
+            for _name, _val in (
+                ("SIGNING_KEY", self.signing_key),
+                ("JWT_SECRET_KEY", self.jwt_secret_key),
+                ("REDIS_PASSWORD", self.redis_password or ""),
+            ):
+                if "replace_me" in _val.lower() or "replace" in _val.lower():
+                    raise ValueError(
+                        f"{_name} still contains a placeholder value. "
+                        "Run infra/generate_production_keys.sh --write to populate real secrets."
+                    )
+            if not self.qdrant_api_key or "replace_me" in (self.qdrant_api_key or "").lower():
+                raise ValueError(
+                    "QDRANT_API_KEY must be set in production. "
+                    "Without it, Qdrant exposes all vectors to anyone who can reach port 6333."
+                )
         return self
 
 
@@ -741,6 +771,8 @@ def validate_production_settings() -> None:
         "admin",
         "investigator",
         "password",
+        "replace_me",
+        "replace",
     )
     for var in ("BOOTSTRAP_ADMIN_PASSWORD", "BOOTSTRAP_INVESTIGATOR_PASSWORD"):
         val = os.environ.get(var, "").strip()
@@ -752,6 +784,8 @@ def validate_production_settings() -> None:
         "default",
         "generate",
         "placeholder",
+        "replace_me",
+        "replace",
         "secret-key",
         "strong",
         "example",

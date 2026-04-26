@@ -27,15 +27,13 @@ _user_investigation_times: dict[str, list[float]] = {}
 _MEM_RATE_MAX_USERS = 10_000
 
 # ── Per-user daily API cost quota ────────────────────────────────────────────
-# For free tier, set to 0 to disable cost tracking (or use token counts).
-# Production should set this to match their budget.
 _COST_PER_INVESTIGATION_USD = 1.60
 _DAILY_COST_QUOTA_USD = {
-    "investigator": 0.0,  # Free tier: $0 disables tracking
-    "auditor": 0.0,
-    "admin": 500.0,
+    "investigator": settings.daily_cost_quota_usd,
+    "auditor": settings.daily_cost_quota_usd,
+    "admin": settings.daily_cost_quota_admin_usd,
 }
-_DAILY_COST_QUOTA_DEFAULT_USD = 0.0  # Free tier default
+_DAILY_COST_QUOTA_DEFAULT_USD = settings.daily_cost_quota_usd
 _COST_QUOTA_WINDOW_SECS = 86400
 
 _mem_cost_tracker: dict[str, tuple[float, float]] = {}
@@ -120,6 +118,8 @@ async def check_daily_cost_quota(user_id: str, user_role: str = "investigator") 
     """
     key = f"cost_quota:{user_id}"
     quota = _DAILY_COST_QUOTA_USD.get(user_role, _DAILY_COST_QUOTA_DEFAULT_USD)
+    if quota <= 0.0:
+        return  # $0 = unlimited; free-tier cost tracking disabled
     is_production = settings.app_env == "production"
 
     # Lua script: atomically check quota then increment only if within budget.
@@ -148,8 +148,10 @@ async def check_daily_cost_quota(user_id: str, user_role: str = "investigator") 
 
         redis = await get_redis_client()
         if redis:
-            result = await redis.client.eval(
-                _lua_quota, 1, key, _COST_CENTS, _QUOTA_CENTS, _COST_QUOTA_WINDOW_SECS
+            result = await redis.eval(
+                _lua_quota,
+                keys=[key],
+                args=[_COST_CENTS, _QUOTA_CENTS, _COST_QUOTA_WINDOW_SECS],
             )
             allowed, current_cents, ttl = int(result[0]), int(result[1]), int(result[2])
             if not allowed:

@@ -29,7 +29,7 @@ services:
       - easyocr_cache:/app/cache/easyocr:rw
       - numba_cache:/app/cache/numba_cache:rw
       - yolo_cache:/app/cache/ultralytics:rw
-      - calibration_models_cache:/app/storage/calibration_models:rw
+      - calibration_models_cache:/app/cache/calibration_models:rw
     healthcheck:
       start_period: 600s # 10 minutes for first-run model downloads
 
@@ -50,7 +50,7 @@ services:
       - easyocr_cache:/app/cache/easyocr:rw
       - numba_cache:/app/cache/numba_cache:rw
       - yolo_cache:/app/cache/ultralytics:rw
-      - calibration_models_cache:/app/storage/calibration_models:rw
+      - calibration_models_cache:/app/cache/calibration_models:rw
 
   frontend:
     build:

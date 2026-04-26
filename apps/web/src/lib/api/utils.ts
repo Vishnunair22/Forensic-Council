@@ -16,28 +16,39 @@ export const dbg = {
 // ── Origin & URLs ─────────────────────────────────────────────────────────────
 
 const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
-const INTERNAL_API_BASE = process.env.INTERNAL_API_URL ?? "";
+const INTERNAL_API_URL = process.env.INTERNAL_API_URL ?? "";
 
 export const API_BASE: string =
   typeof window !== "undefined"
     ? RAW_API_BASE && RAW_API_BASE !== "/"
       ? RAW_API_BASE.replace(/\/$/, "")
       : window.location.origin
-    : INTERNAL_API_BASE || RAW_API_BASE || "http://backend:8000";
+    : INTERNAL_API_URL || RAW_API_BASE || "http://backend:8000";
 
-export const WS_BASE: string = (() => {
-  if (typeof window === "undefined") return API_BASE.replace(/^http/, "ws");
-  
-  // If we are accessing the UI via port 3000 (Next.js dev server directly),
-  // we must redirect WebSocket traffic to port 80 (Caddy) because Next.js 
-  // doesn't proxy WebSockets.
-  if (window.location.port === "3000") {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${window.location.hostname}`; // Defaults to port 80/443
+export function getWSBase(): string {
+  // ALWAYS compute fresh for browser - don't cache at module load
+  // This avoids SSR pre-computation issues
+  if (typeof window === "undefined") {
+    return "ws://backend:8000";
   }
+  
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const hostname = window.location.hostname;
+  
+  // If accessing via Caddy (port 80/443), use that
+  if (window.location.port === "80" || window.location.port === "443") {
+    return `${protocol}//${hostname}`;
+  }
+  // If accessing via Next.js (port 3000), go through Caddy on 80
+  if (window.location.port === "3000") {
+    return `${protocol}//${hostname}`;
+  }
+  
+  return `${protocol}//${hostname}`;
+}
 
-  return API_BASE.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
-})();
+// Legacy export for backward compatibility  
+export const WS_BASE = getWSBase();
 
 // ── Cookie & Auth Helpers ────────────────────────────────────────────────────
 

@@ -159,37 +159,6 @@ def download_easyocr(force: bool = False) -> bool:
 
     print(f"  {YELLOW}[WARN]{RESET}  EasyOCR download failed: {last_error} (details: {log_path})")
     return False
-    if count >= 2 and not force:
-        print(f"  {GREEN}[SKIP]{RESET}  EasyOCR — already cached ({count} files)")
-        return True
-
-    print(f"  {CYAN}[DOWN]{RESET}  EasyOCR English models → {easyocr_dir}")
-    try:
-        os.environ["EASYOCR_MODEL_DIR"] = easyocr_dir
-        # EasyOCR tries to write a metadata dir under $HOME/.EasyOCR regardless
-        # of model_storage_directory. Create a secure temporary directory.
-        orig_home = os.environ.get("HOME", "")
-        with (
-            tempfile.TemporaryDirectory(prefix="easyocr_") as temp_home,
-            log_path.open("w", encoding="utf-8") as log_file,
-        ):
-            os.environ["HOME"] = temp_home
-            import easyocr
-
-            with contextlib.redirect_stdout(log_file), contextlib.redirect_stderr(log_file):
-                easyocr.Reader(
-                    ["en"],
-                    gpu=False,
-                    download_enabled=True,
-                    model_storage_directory=easyocr_dir,
-                )
-        if orig_home:
-            os.environ["HOME"] = orig_home
-        print(f"  {GREEN}[OK  ]{RESET}  EasyOCR downloaded.")
-        return True
-    except Exception as exc:
-        print(f"  {YELLOW}[WARN]{RESET}  EasyOCR download failed: {exc} (details: {log_path})")
-        return False
 
 
 def download_open_clip(force: bool = False) -> bool:

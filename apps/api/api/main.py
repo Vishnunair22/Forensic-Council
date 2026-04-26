@@ -191,9 +191,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
 
         _redis = await get_redis_client()
-        _orphan_keys = []
-        async for _key in _redis.scan_iter(match=f"{SESSION_METADATA_KEY_PREFIX}*"):
-            _orphan_keys.append(_key)
+        _orphan_keys = await _redis.keys(f"{SESSION_METADATA_KEY_PREFIX}*")
         _interrupted_count = 0
         for _key in _orphan_keys:
             try:

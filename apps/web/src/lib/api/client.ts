@@ -10,6 +10,7 @@ import {
   dbg,
   getAuthToken,
   getMutationHeaders,
+  getWSBase,
   setAuthToken,
 } from "./utils";
 import {
@@ -265,9 +266,10 @@ export async function submitHITLDecision(decision: HITLDecisionRequest): Promise
 
 export function createLiveSocket(sessionId: string): { ws: WebSocket; connected: Promise<void> } {
   const token = getAuthToken();
+  const wsBase = getWSBase();  // Call function, not use constant
   const protocols = token ? ["forensic-v1", `token.${token}`] : ["forensic-v1"];
   const ws = new WebSocket(
-    `${WS_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}/live`,
+    `${wsBase}/api/v1/sessions/${encodeURIComponent(sessionId)}/live`,
     protocols,
   );
 

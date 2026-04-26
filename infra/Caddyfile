@@ -6,22 +6,12 @@
 # Production:
 #   DOMAIN=forensic.yourdomain.com
 #   ACME_EMAIL=admin@yourdomain.com
-#
-# Caddy obtains and renews Let's Encrypt certificates automatically when DOMAIN
-# is a real public hostname. The DOMAIN value is provided by docker-compose.yml.
 
 {
     admin off
     auto_https off
-
-    log {
-        output file /var/log/caddy/access.log {
-            roll_size 10MB
-            roll_keep 10
-            roll_keep_for 720h
-        }
-        format json
-    }
+    http_port 80
+    https_port 443
 }
 
 :80 {
@@ -31,10 +21,10 @@
     redir @production_domain https://{host}{uri}
 
     header {
-        X-Content-Type-Options     "nosniff"
-        X-Frame-Options            "DENY"
-        X-Robots-Tag               "none"
-        Referrer-Policy            "strict-origin-when-cross-origin"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-Robots-Tag "none"
+        Referrer-Policy "strict-origin-when-cross-origin"
         -Server
         -X-Powered-By
     }
@@ -46,11 +36,15 @@
     handle /api/v1/* {
         reverse_proxy backend:8000 {
             header_up Host {host}
+            header_up Upgrade {header.Upgrade}
+            header_up Connection {header.Connection}
             flush_interval -1
 
             transport http {
                 response_header_timeout 620s
-                dial_timeout            10s
+                dial_timeout 10s
+                read_buffer 64KB
+                write_buffer 64KB
             }
         }
     }
@@ -61,7 +55,7 @@
 
             transport http {
                 response_header_timeout 300s
-                dial_timeout            10s
+                dial_timeout 10s
             }
         }
     }
@@ -70,17 +64,13 @@
 {$DOMAIN:localhost} {
     encode zstd gzip
 
-    # NOTE: Content-Security-Policy uses 'unsafe-inline' for Next.js 15 compatibility.
-    # For stricter security, switch to nonces (requires Next.js server-side nonce generation).
     header {
-        Strict-Transport-Security  "max-age=31536000; includeSubDomains; preload"
-        X-Content-Type-Options     "nosniff"
-        X-Robots-Tag               "none"
-        X-XSS-Protection           "0"
-        X-Frame-Options            "DENY"
-        Referrer-Policy            "strict-origin-when-cross-origin"
-        Permissions-Policy         "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
-        Content-Security-Policy    "default-src 'self'; script-src 'self' 'unsafe-inline' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' http://backend:8000; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Robots-Tag "none"
+        X-XSS-Protection "0"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
         -Server
         -X-Powered-By
     }
@@ -89,23 +79,18 @@
         max_size 55MB
     }
 
-    # Backend API and WebSocket/SSE streams. Next.js API routes under /api/auth/*
-    # must remain routed to the frontend, so keep this matcher scoped to /api/v1/*.
     handle /api/v1/* {
         reverse_proxy backend:8000 {
             header_up Host {host}
-            health_uri      /health
-            health_status   200
-            health_interval 10s
-            health_timeout  5s
-
+            header_up Upgrade {header.Upgrade}
+            header_up Connection {header.Connection}
             flush_interval -1
 
             transport http {
                 response_header_timeout 620s
-                dial_timeout            10s
-                read_buffer             64KB
-                write_buffer            64KB
+                dial_timeout 10s
+                read_buffer 64KB
+                write_buffer 64KB
             }
         }
     }
@@ -116,7 +101,7 @@
 
             transport http {
                 response_header_timeout 300s
-                dial_timeout            10s
+                dial_timeout 10s
             }
         }
     }

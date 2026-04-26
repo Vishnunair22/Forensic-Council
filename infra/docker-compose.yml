@@ -64,8 +64,8 @@ x-backend-env: &backend-env
   RATE_LIMIT_ANONYMOUS: ${RATE_LIMIT_ANONYMOUS:-10}
   RATE_LIMIT_INVESTIGATION_PER_5MIN: ${RATE_LIMIT_INVESTIGATION_PER_5MIN:-5}
   EVIDENCE_STORAGE_PATH: /app/storage/evidence
-  CALIBRATION_MODELS_PATH: /app/storage/calibration_models
-  NUMBA_DISABLE_JIT: ${NUMBA_DISABLE_JIT:-true}
+  CALIBRATION_MODELS_PATH: /app/cache/calibration_models
+  NUMBA_DISABLE_JIT: ${NUMBA_DISABLE_JIT:-1}
   NUMBA_CACHE_DIR: /app/cache/numba_cache
   HOME: /app/cache/easyocr
   EASYOCR_MODEL_DIR: /app/cache/easyocr
@@ -81,6 +81,10 @@ x-backend-env: &backend-env
   OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
   OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-forensic-council-api}
   METRICS_SCRAPE_TOKEN: ${METRICS_SCRAPE_TOKEN:?METRICS_SCRAPE_TOKEN must be set}
+  # Force watchfiles to use polling mode on Windows Docker bind mounts.
+  # inotify events from Windows host → WSL2 → container are unreliable;
+  # polling ensures uvicorn --reload actually picks up code changes.
+  WATCHFILES_FORCE_POLLING: "true"
 
 x-redis-pwd: &redis-pwd ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
 
@@ -281,7 +285,7 @@ services:
       dockerfile: Dockerfile
       target: development
       args:
-        PRELOAD_MODELS: ${PRELOAD_MODELS:-true}
+        PRELOAD_MODELS: ${PRELOAD_MODELS:-1}
         YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-yolo11n.pt}
         AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
     container_name: forensic_api
@@ -298,7 +302,7 @@ services:
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-["http://localhost","http://localhost:3000","http://127.0.0.1","http://127.0.0.1:3000"]}
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
       OTEL_SERVICE_NAME: forensic_api
     depends_on:
       postgres:
@@ -339,6 +343,19 @@ services:
       - /tmp:nosuid,size=512m
     stop_grace_period: 150s
     volumes:
+      # Source code bind mounts — uvicorn --reload picks up changes instantly.
+      # Individual subdirectories are mounted so .venv (and /app/storage) are NOT
+      # shadowed; the container keeps the Python packages baked into the image.
+      - ../apps/api/core:/app/core:ro
+      - ../apps/api/api:/app/api:ro
+      - ../apps/api/agents:/app/agents:ro
+      - ../apps/api/tools:/app/tools:ro
+      - ../apps/api/orchestration:/app/orchestration:ro
+      - ../apps/api/reports:/app/reports:ro
+      - ../apps/api/scripts:/app/scripts:ro
+      - ../apps/api/config:/app/config:ro
+      - ../apps/api/worker.py:/app/worker.py:ro
+      # Runtime data volumes
       - evidence_data:/app/storage/evidence:rw
       - signing_keys:/app/storage/keys:rw
       - hf_cache:/app/cache/huggingface:rw
@@ -346,7 +363,7 @@ services:
       - easyocr_cache:/app/cache/easyocr:rw
       - numba_cache:/app/cache/numba_cache:rw
       - yolo_cache:/app/cache/ultralytics:rw
-      - calibration_models_cache:/app/storage/calibration_models:rw
+      - calibration_models_cache:/app/cache/calibration_models:rw
     # SECURITY: infra_net for Redis/Postgres/Qdrant; external_net for Groq/Gemini outbound;
     # backend_net so Caddy and frontend can resolve and proxy to backend:8000
     networks:
@@ -373,7 +390,7 @@ services:
       <<: *backend-env
       APP_NAME: forensic_worker
       RELOAD: "false"
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
       OTEL_SERVICE_NAME: forensic_worker
     depends_on:
       postgres:
@@ -404,6 +421,17 @@ services:
     tmpfs:
       - /tmp:nosuid,size=512m
     volumes:
+      # Source code bind mounts — restart the worker to pick up changes instantly.
+      - ../apps/api/core:/app/core:ro
+      - ../apps/api/api:/app/api:ro
+      - ../apps/api/agents:/app/agents:ro
+      - ../apps/api/tools:/app/tools:ro
+      - ../apps/api/orchestration:/app/orchestration:ro
+      - ../apps/api/reports:/app/reports:ro
+      - ../apps/api/scripts:/app/scripts:ro
+      - ../apps/api/config:/app/config:ro
+      - ../apps/api/worker.py:/app/worker.py:ro
+      # Runtime data volumes
       - evidence_data:/app/storage/evidence:rw
       - signing_keys:/app/storage/keys:ro
       - hf_cache:/app/cache/huggingface:rw
@@ -411,7 +439,7 @@ services:
       - easyocr_cache:/app/cache/easyocr:rw
       - numba_cache:/app/cache/numba_cache:rw
       - yolo_cache:/app/cache/ultralytics:rw
-      - calibration_models_cache:/app/storage/calibration_models:rw
+      - calibration_models_cache:/app/cache/calibration_models:rw
     deploy:
       resources:
         limits:
