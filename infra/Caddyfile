@@ -19,7 +19,6 @@
 }
 
 :80, :443 {
-    encode zstd gzip
 
     # Redirect HTTP to HTTPS for non-localhost domains.
     # Caddy handles automatic HTTPS for specific domains, but for a generic
@@ -30,6 +29,7 @@
     }
     redir @http https://{host}{uri}
 
+    # Security Headers
     header {
         X-Content-Type-Options "nosniff"
         X-Frame-Options "DENY"
@@ -39,11 +39,25 @@
         -X-Powered-By
     }
 
-    request_body {
-        max_size 55MB
+    # API: WebSocket Route (Long-lived connections, no compression, no timeout)
+    handle /api/v1/sessions/*/live {
+        reverse_proxy backend:8000 {
+            header_up Host {host}
+            flush_interval -1
+
+            transport http {
+                response_header_timeout 0
+                dial_timeout 10s
+            }
+        }
     }
 
+    # API: REST Routes (Standard timeouts, 55MB limit, with compression)
     handle /api/v1/* {
+        request_body {
+            max_size 55MB
+        }
+        encode zstd gzip
         reverse_proxy backend:8000 {
             header_up Host {host}
             flush_interval -1
@@ -57,7 +71,9 @@
         }
     }
 
+    # Frontend
     handle {
+        encode zstd gzip
         reverse_proxy frontend:3000 {
             header_up Host {host}
 

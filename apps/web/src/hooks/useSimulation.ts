@@ -464,6 +464,32 @@ export const useSimulation = ({
           dbg.log("[WebSocket] Connection closed:", event.code, event.reason);
           wsRef.current = null;
 
+          // ── Terminal Close Codes ──────────────────────────────────────────
+          // If the server tells us the session is dead, unauthorized, or missing,
+          // we must clear our local storage and NOT attempt a reconnect.
+          // 4001: Missing session ID / Invalid path
+          // 4003: Access Denied (Identity Mismatch)
+          // 4004: Session Not Found
+          // 4010: Session Interrupted (Poisoned by restart or terminal error)
+          const terminalCodes = [4001, 4003, 4004, 4010];
+          if (terminalCodes.includes(event.code)) {
+            dbg.warn("[WebSocket] Terminal close code received. Clearing session state.");
+            setSessionId(null);
+            try { storage.removeItem(SESSION_ID_KEY); } catch { /* ignore */ }
+            try { storage.removeItem(HITL_CHECKPOINT_KEY); } catch { /* ignore */ }
+            
+            // If connection was already established, set to error state
+            if (wsConnectionReady) {
+              setErrorMessage(event.reason || "Investigation interrupted. Please restart.");
+              setStatus("error");
+            }
+            // Reject the pending promise if it hasn't resolved
+            if (!wsConnectionReady) {
+              reject(new Error(event.reason || `Terminal Error (code ${event.code})`));
+            }
+            return;
+          }
+
           // If connection was never established, reject the promise
           if (!wsConnectionReady) {
             const reason =

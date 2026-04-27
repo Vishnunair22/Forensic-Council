@@ -399,13 +399,42 @@ async def live_updates(websocket: WebSocket, session_id: str):
     # and forwards them directly to the user's specific WebSocket connection.
     async def _redis_subscriber():
         nonlocal last_activity
+        # Create a dedicated Redis connection for the subscriber with no socket timeout.
+        # The shared singleton has a 30s timeout which kills the listener during silence.
+        from redis.asyncio import Redis
+        settings = get_settings()
+        dedicated_redis = None
         pubsub = None
         try:
-            redis = await get_redis_client()
-            pubsub = redis.client.pubsub()
+            dedicated_redis = Redis(
+                host=settings.redis_host,
+                port=settings.redis_port,
+                db=settings.redis_db,
+                password=settings.redis_password,
+                socket_timeout=None,  # No timeout for pub/sub listening
+                socket_connect_timeout=5,
+                socket_keepalive=True,
+                decode_responses=True
+            )
+            pubsub = dedicated_redis.pubsub()
             channel = f"forensic:updates:{session_id}"
+            replay_key = f"forensic:replay:{session_id}"
+            
+            # 1. Subscribe first (captures all future messages)
             await pubsub.subscribe(channel)
 
+            # 2. Replay any missed messages from the buffer
+            replay_messages = await dedicated_redis.lrange(replay_key, 0, -1)
+            if replay_messages:
+                for msg_json in replay_messages:
+                    try:
+                        data = json.loads(msg_json)
+                        await websocket.send_json(data)
+                        last_activity = time.time()
+                    except Exception:
+                        pass
+
+            # 3. Listen for live updates
             async for message in pubsub.listen():
                 if message["type"] == "message":
                     data = json.loads(message["data"])
@@ -428,10 +457,12 @@ async def live_updates(websocket: WebSocket, session_id: str):
             if pubsub:
                 try:
                     await pubsub.unsubscribe()
+                    await pubsub.aclose()
                 except Exception:
                     pass
+            if dedicated_redis:
                 try:
-                    await pubsub.aclose()
+                    await dedicated_redis.aclose()
                 except Exception:
                     pass
 

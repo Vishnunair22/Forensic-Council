@@ -25,7 +25,7 @@ logger = get_logger(__name__)
 
 # Module-level metrics for observability
 _custody_write_failures: int = 0
-_session_chain_locks: defaultdict[UUID, asyncio.Lock] = defaultdict(asyncio.Lock)
+_session_chain_locks: defaultdict[tuple[UUID, str], asyncio.Lock] = defaultdict(asyncio.Lock)
 
 
 def _json_safe(value: Any) -> Any:
@@ -205,15 +205,16 @@ class CustodyLogger:
         """Async context manager exit — never close the shared pool."""
         pass
 
-    async def _get_last_entry_hash(self, session_id: UUID) -> str | None:
+    async def _get_last_entry_hash(self, session_id: UUID, agent_id: str) -> str | None:
         """
-        Get the content_hash of the last entry for a session.
+        Get the content_hash of the last entry for a specific agent in a session.
 
         Args:
             session_id: Session to query
+            agent_id: Agent to query
 
         Returns:
-            Content hash of last entry, or None if no entries
+            Content hash of last entry, or None if no entries for this agent
         """
         if self._postgres is None:
             return None
@@ -221,11 +222,11 @@ class CustodyLogger:
         query = """
             SELECT content_hash
             FROM chain_of_custody
-            WHERE session_id = $1
+            WHERE session_id = $1 AND agent_id = $2
             ORDER BY timestamp_utc DESC
             LIMIT 1
         """
-        result = await self._postgres.fetch_one(query, session_id)
+        result = await self._postgres.fetch_one(query, session_id, agent_id)
         if result:
             return result["content_hash"]
         return None
@@ -237,8 +238,8 @@ class CustodyLogger:
         entry_type: EntryType,
         content: dict[str, Any],
     ) -> UUID | None:
-        """Log a signed entry with per-session serialization."""
-        async with _session_chain_locks[session_id]:
+        """Log a signed entry with per-agent serialization."""
+        async with _session_chain_locks[(session_id, agent_id)]:
             try:
                 return await self._log_entry_unlocked(
                     agent_id=agent_id,
@@ -284,10 +285,8 @@ class CustodyLogger:
         signed = sign_content(agent_id, content)
 
         # Get prior entry hash for chain linking
-        # If DB is down, we might miss the link, which is why Fix 1 is critical.
-        # In a full-WAL system, we would calculate this from the sequential WAL.
-        # For now, we attempt to get from DB, or link to a "soft-link" in Redis if needed.
-        prior_entry_ref = await self._get_last_entry_hash(session_id)
+        # Chain is per-agent to allow concurrent logging without global locks.
+        prior_entry_ref = await self._get_last_entry_hash(session_id, agent_id)
 
         if self._postgres is None:
             await self._queue_to_wal(
@@ -467,8 +466,9 @@ class CustodyLogger:
                 valid=True,  # Empty chain is valid
             )
 
-        # Verify each entry
-        for i, entry in enumerate(entries):
+        # Verify each entry, tracking the last seen hash per agent
+        last_hashes: dict[str, str] = {}
+        for entry in entries:
             # Verify signature
             signed_entry = entry.to_signed_entry()
             if not verify_entry(signed_entry):
@@ -477,31 +477,22 @@ class CustodyLogger:
                     total_entries=len(entries),
                     valid=False,
                     broken_at=entry.entry_id,
-                    broken_reason="Signature verification failed",
+                    broken_reason=f"Signature verification failed for agent {entry.agent_id}",
                 )
 
             # Verify chain link (prior_entry_ref)
-            if i == 0:
-                # First entry should have no prior
-                if entry.prior_entry_ref is not None:
-                    return ChainVerificationReport(
-                        session_id=session_id,
-                        total_entries=len(entries),
-                        valid=False,
-                        broken_at=entry.entry_id,
-                        broken_reason="First entry has prior_entry_ref",
-                    )
-            else:
-                # Subsequent entries should link to previous
-                expected_prior = entries[i - 1].content_hash
-                if entry.prior_entry_ref != expected_prior:
-                    return ChainVerificationReport(
-                        session_id=session_id,
-                        total_entries=len(entries),
-                        valid=False,
-                        broken_at=entry.entry_id,
-                        broken_reason="Chain link broken - prior_entry_ref mismatch",
-                    )
+            expected_prior = last_hashes.get(entry.agent_id)
+            if entry.prior_entry_ref != expected_prior:
+                return ChainVerificationReport(
+                    session_id=session_id,
+                    total_entries=len(entries),
+                    valid=False,
+                    broken_at=entry.entry_id,
+                    broken_reason=f"Chain link broken for agent {entry.agent_id} - prior_entry_ref mismatch",
+                )
+            
+            # Update last hash for this agent
+            last_hashes[entry.agent_id] = entry.content_hash
 
         logger.info(
             "Chain verification complete",

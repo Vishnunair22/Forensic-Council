@@ -205,10 +205,55 @@ async def start_investigation(
                 )
                 if not was_set:
                     existing = await _redis.get(dedup_key)
-                    tmp_path.unlink(missing_ok=True)
-                    raise HTTPException(
-                        status_code=409, detail=f"Duplicate detected: session {existing}"
-                    )
+                    existing_session_id = existing if isinstance(existing, str) else existing.decode()
+                    
+                    # ── Check if the existing session is actually active ─────────
+                    # If the session was interrupted by a restart or finished, we 
+                    # should NOT return 409. Instead, we clear the dedup key and 
+                    # allow the user to start a fresh investigation for the same file.
+                    try:
+                        existing_meta = await set_active_pipeline_metadata(existing_session_id, None) or {}
+                        status = existing_meta.get("status")
+                        if status not in ("running", "paused"):
+                            await _redis.delete(dedup_key)
+                            # Try setting it again for the current request
+                            was_set = await _redis.set(
+                                dedup_key,
+                                session_id,
+                                nx=True,
+                                ex=settings.investigation_timeout + 60,
+                            )
+                            if not was_set:
+                                # Highly unlikely race condition: another request won the race.
+                                # Just let it return 409 normally in the next block.
+                                pass
+                    except Exception as meta_err:
+                        logger.warning("Failed to check status of existing dedup session", error=str(meta_err))
+
+                    # If we successfully cleared and reset (was_set is True now), 
+                    # then we just fall through to the rest of the investigation.
+                    # Otherwise, if was_set is still False, we return 409.
+                    if not was_set:
+                        # Re-claim ownership: update the existing session with current user ID.
+                        try:
+                            existing_meta = await set_active_pipeline_metadata(existing_session_id, None) or {}
+                            await set_active_pipeline_metadata(
+                                existing_session_id,
+                                {
+                                    **existing_meta,
+                                    "investigator_id": current_user.user_id,
+                                    "investigator_role": current_user.role.value,
+                                    "case_investigator_label": investigator_id,
+                                }
+                            )
+                        except Exception as meta_exc:
+                            logger.warning("Failed to re-claim session ownership on dedup", 
+                                           session_id=existing_session_id, error=str(meta_exc))
+
+                        tmp_path.unlink(missing_ok=True)
+                        raise HTTPException(
+                            status_code=409, detail=f"Duplicate detected: session {existing_session_id}"
+                        )
         except HTTPException:
             raise
         except Exception as exc:
@@ -240,7 +285,9 @@ async def start_investigation(
                 "status": "running",
                 "brief": "Initializing forensic pipeline...",
                 "case_id": case_id,
-                "investigator_id": investigator_id,
+                "investigator_id": current_user.user_id,
+                "investigator_role": current_user.role.value,
+                "case_investigator_label": investigator_id,
                 "file_path": str(tmp_path),
                 "original_filename": file.filename,
                 "created_at": datetime.now(UTC).isoformat(),
@@ -267,7 +314,7 @@ async def start_investigation(
                 await get_investigation_queue().submit(
                     session_id=UUID(session_id),
                     case_id=case_id,
-                    investigator_id=investigator_id,
+                    investigator_id=current_user.user_id,
                     evidence_file_path=str(tmp_path),
                     original_filename=file.filename,
                 )
@@ -286,7 +333,7 @@ async def start_investigation(
                     pipeline=pipeline,
                     evidence_file_path=str(tmp_path),
                     case_id=case_id,
-                    investigator_id=investigator_id,
+                    investigator_id=current_user.user_id,
                     original_filename=file.filename,
                 )
             )
@@ -300,7 +347,7 @@ async def start_investigation(
                 await p.save_session_state(
                     session_id=session_id,
                     case_id=case_id,
-                    investigator_id=investigator_id,
+                    investigator_id=current_user.user_id,
                     pipeline_state={"status": "running"},
                     status="running",
                 )

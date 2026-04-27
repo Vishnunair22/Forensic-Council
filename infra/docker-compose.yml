@@ -299,7 +299,7 @@ services:
       BOOTSTRAP_INVESTIGATOR_PASSWORD: ${BOOTSTRAP_INVESTIGATOR_PASSWORD}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8000,http://127.0.0.1:3000}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost,http://localhost:3000,http://localhost:8000,http://127.0.0.1:3000}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
       OTEL_SERVICE_NAME: forensic_api
     depends_on:
@@ -550,7 +550,7 @@ services:
     # webpack watchOptions.poll config and receives no inotify events from the
     # Windows host bind mount. Passing --no-turbopack restores webpack, which
     # polls the filesystem every 500 ms (see next.config.ts watchOptions).
-    command: ["npm", "run", "dev", "--", "--no-turbopack"]
+    command: ["npm", "run", "dev"]
     depends_on:
       backend:
         condition: service_healthy

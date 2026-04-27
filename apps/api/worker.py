@@ -20,6 +20,7 @@ from api.routes._session_state import (  # noqa: E402
     _active_pipelines,
     broadcast_update,
     clear_session_websockets,
+    get_active_pipeline_metadata,
     set_active_pipeline_metadata,
     set_final_report,
 )
@@ -46,23 +47,26 @@ async def main() -> None:
     """Main worker entry point."""
     logger.info("Starting Forensic Council Worker", pid=os.getpid())
 
-    try:
-        from core.ml_subprocess import warmup_all_tools
+    async def _warmup_background() -> None:
+        try:
+            from core.ml_subprocess import warmup_all_tools
 
-        logger.info("Pre-warming ML tools in worker")
-        warmup_results = await warmup_all_tools(timeout_per_tool=120.0)
-        succeeded = sum(1 for value in warmup_results.values() if value)
-        total = len(warmup_results)
+            logger.info("Pre-warming ML tools in worker (background)")
+            warmup_results = await warmup_all_tools(timeout_per_tool=120.0)
+            succeeded = sum(1 for value in warmup_results.values() if value)
+            total = len(warmup_results)
 
-        if succeeded < total:
-            logger.warning(
-                f"Only {succeeded}/{total} ML tools warmed up",
-                failed_tools=[name for name, ok in warmup_results.items() if not ok],
-            )
-        else:
-            logger.info(f"All {total} ML tools warmed up successfully")
-    except Exception as exc:
-        logger.warning("ML warmup failed in worker", error=str(exc))
+            if succeeded < total:
+                logger.warning(
+                    f"Only {succeeded}/{total} ML tools warmed up",
+                    failed_tools=[name for name, ok in warmup_results.items() if not ok],
+                )
+            else:
+                logger.info(f"All {total} ML tools warmed up successfully")
+        except Exception as exc:
+            logger.warning("ML warmup failed in worker", error=str(exc))
+
+    asyncio.create_task(_warmup_background())
 
     shutdown = asyncio.Event()
 
@@ -94,16 +98,26 @@ async def main() -> None:
         session_str = str(session_id)
 
         try:
+            # Robust identity preservation: check for existing metadata
+            # This is critical for the Redis worker where uvicorn/main API may have 
+            # already set the initial UUID.
+            existing_meta = await get_active_pipeline_metadata(session_str) or {}
+            _investigator_id = existing_meta.get("investigator_id", investigator_id)
+            _investigator_role = existing_meta.get("investigator_role")
+            _case_label = existing_meta.get("case_investigator_label")
+
             await set_active_pipeline_metadata(
                 session_str,
                 {
                     "status": "running",
                     "brief": "Initializing forensic pipeline...",
                     "case_id": case_id,
-                    "investigator_id": investigator_id,
+                    "investigator_id": _investigator_id,
+                    "investigator_role": _investigator_role,
+                    "case_investigator_label": _case_label,
                     "file_path": evidence_file_path,
                     "original_filename": original_filename,
-                    "created_at": datetime.now(UTC).isoformat(),
+                    "created_at": existing_meta.get("created_at") or datetime.now(UTC).isoformat(),
                 },
             )
             await broadcast_update(
@@ -135,16 +149,24 @@ async def main() -> None:
                 ),
             )
             await set_final_report(session_str, report)
+            # Refresh metadata to get the latest UUID/label
+            existing_meta = await get_active_pipeline_metadata(session_str) or {}
+            _investigator_id = existing_meta.get("investigator_id", investigator_id)
+            _investigator_role = existing_meta.get("investigator_role")
+            _case_label = existing_meta.get("case_investigator_label")
+
             await set_active_pipeline_metadata(
                 session_str,
                 {
                     "status": "completed",
                     "brief": "Investigation complete.",
                     "case_id": case_id,
-                    "investigator_id": investigator_id,
+                    "investigator_id": _investigator_id,
+                    "investigator_role": _investigator_role,
+                    "case_investigator_label": _case_label,
                     "file_path": evidence_file_path,
                     "original_filename": original_filename,
-                    "created_at": datetime.now(UTC).isoformat(),
+                    "created_at": existing_meta.get("created_at"),
                     "completed_at": datetime.now(UTC).isoformat(),
                     "report_id": str(report.report_id),
                 },
@@ -179,13 +201,21 @@ async def main() -> None:
                 ),
             )
             try:
+                # Refresh metadata to get the latest UUID/label
+                existing_meta = await get_active_pipeline_metadata(session_str) or {}
+                _investigator_id = existing_meta.get("investigator_id", investigator_id)
+                _investigator_role = existing_meta.get("investigator_role")
+                _case_label = existing_meta.get("case_investigator_label")
+
                 await set_active_pipeline_metadata(
                     session_str,
                     {
                         "status": "error",
                         "brief": error_msg,
                         "case_id": case_id,
-                        "investigator_id": investigator_id,
+                        "investigator_id": _investigator_id,
+                        "investigator_role": _investigator_role,
+                        "case_investigator_label": _case_label,
                         "file_path": evidence_file_path,
                         "original_filename": original_filename,
                         "error": error_msg,

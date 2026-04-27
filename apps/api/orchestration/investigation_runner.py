@@ -15,6 +15,7 @@ from api.routes._session_state import (
     _active_tasks,
     broadcast_update,
     clear_session_websockets,
+    get_active_pipeline_metadata,
     get_session_websockets,  # noqa: F401 - kept for legacy tests/monkeypatches.
     remove_active_pipeline,
     set_active_pipeline_metadata,
@@ -68,10 +69,12 @@ async def run_investigation_task(
             original_filename=original_filename,
             session_id=session_id,
         )
-        if report is None:
-            report = getattr(pipeline, "_final_report", None)
-        if report is None:
-            raise RuntimeError("Investigation completed without a final report")
+        # Robust identity preservation: read the investigator UUID from initial metadata
+        # so that completion/error updates don't overwrite it with the frontend label.
+        existing_meta = await get_active_pipeline_metadata(session_id) or {}
+        _investigator_id = existing_meta.get("investigator_id", investigator_id)
+        _investigator_role = existing_meta.get("investigator_role")
+        _case_label = existing_meta.get("case_investigator_label")
 
         await set_final_report(session_id, report)
         await set_active_pipeline_metadata(
@@ -80,10 +83,12 @@ async def run_investigation_task(
                 "status": "completed",
                 "brief": "Investigation complete.",
                 "case_id": case_id,
-                "investigator_id": investigator_id,
+                "investigator_id": _investigator_id,
+                "investigator_role": _investigator_role,
+                "case_investigator_label": _case_label,
                 "file_path": evidence_file_path,
                 "original_filename": original_filename,
-                "created_at": datetime.now(UTC).isoformat(),
+                "created_at": existing_meta.get("created_at"),
                 "completed_at": datetime.now(UTC).isoformat(),
                 "report_id": str(report.report_id),
             },
@@ -115,13 +120,20 @@ async def run_investigation_task(
         error_msg = str(exc)
         logger.error("Investigation task failed", error=error_msg, exc_info=True)
         increment_investigations_failed()
+        existing_meta = await get_active_pipeline_metadata(session_id) or {}
+        _investigator_id = existing_meta.get("investigator_id", investigator_id)
+        _investigator_role = existing_meta.get("investigator_role")
+        _case_label = existing_meta.get("case_investigator_label")
+
         await set_active_pipeline_metadata(
             session_id,
             {
                 "status": "error",
                 "brief": error_msg,
                 "case_id": case_id,
-                "investigator_id": investigator_id,
+                "investigator_id": _investigator_id,
+                "investigator_role": _investigator_role,
+                "case_investigator_label": _case_label,
                 "file_path": evidence_file_path,
                 "original_filename": original_filename,
                 "error": error_msg,

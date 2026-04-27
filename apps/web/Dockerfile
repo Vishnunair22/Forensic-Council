@@ -16,7 +16,8 @@ FROM node:22-alpine AS base
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY package.json ./
+COPY package-lock.json* ./
 
 # Use npm ci with legacy-peer-deps for reproducible builds.
 # React 19 introduces stricter peer dependency enforcement. Several transitive

@@ -98,12 +98,37 @@ async def _event_generator(
     pubsub = None
 
     settings = get_settings()
+    dedicated_redis = None
+    pubsub = None
     if settings.use_redis_worker:
         try:
-            redis = await get_redis_client()
-            pubsub = redis.get_pubsub()
+            from redis.asyncio import Redis
+            dedicated_redis = Redis(
+                host=settings.redis_host,
+                port=settings.redis_port,
+                db=settings.redis_db,
+                password=settings.redis_password,
+                socket_timeout=None,  # No timeout for pub/sub listening
+                socket_connect_timeout=5,
+                socket_keepalive=True,
+                decode_responses=True
+            )
+            pubsub = dedicated_redis.pubsub()
             channel = f"forensic:updates:{session_id}"
+            replay_key = f"forensic:replay:{session_id}"
+            
+            # 1. Subscribe first (captures all future messages)
             await pubsub.subscribe(channel)
+
+            # 2. Replay any missed messages from the buffer
+            replay_messages = await dedicated_redis.lrange(replay_key, 0, -1)
+            if replay_messages:
+                for msg_json in replay_messages:
+                    try:
+                        data = json.loads(msg_json)
+                        await consumer.send_json(data)
+                    except Exception:
+                        pass
 
             async def _redis_listener(ps, ch: str) -> None:
                 try:
@@ -161,6 +186,11 @@ async def _event_generator(
             try:
                 await pubsub.unsubscribe()
                 await pubsub.aclose()
+            except Exception:
+                pass
+        if dedicated_redis is not None:
+            try:
+                await dedicated_redis.aclose()
             except Exception:
                 pass
 

@@ -4,6 +4,121 @@ All production bugs and their resolutions, ordered chronologically.
 
 ---
 
+## 2026-04-27 — Session 7: Identity Hardening & Infrastructure Audit
+
+### Error: 0xFC_PIPELINE_HALT / 403 Forbidden on Investigation Start
+
+**Symptom:** Every new investigation fails immediately with a "You do not have access to this investigation" error. WebSocket/SSE connections return 403 Forbidden.
+
+**Root Cause:** Identity mismatch in `assert_session_access()`. The frontend was sending a case label (e.g., `REQ-123456`) as the `investigator_id`. The backend stored this label in Redis metadata but compared it against the actual Database User UUID from the JWT during auth checks. Since `REQ-123456` != `UUID`, access was denied.
+
+**Fix:**
+- **`investigation.py`**: Updated initial metadata write to store `current_user.user_id` (UUID) as `investigator_id` and preserved the frontend label in `case_investigator_label`.
+- **`investigation.py`**: Updated the 409 Deduplication path to "re-claim" ownership by updating the `investigator_id` of the existing session to the current user's UUID.
+- **`investigation_runner.py` & `worker.py`**: Updated completion and error handlers to read existing metadata and preserve the investigator UUID, preventing it from being overwritten by the label during the pipeline lifecycle.
+
+---
+
+### Error: WebSocket 1006 Disconnects / Handshake Failure
+
+**Symptom:** WebSocket connections fail during the handshake or disconnect mid-investigation with code 1006 (Abnormal Closure).
+
+**Root Cause:** Three compounding proxy bugs in the `Caddyfile`:
+1. **Compression Corruption**: `encode zstd gzip` was being applied to WebSocket upgrades, corrupting the 101 Switching Protocols response.
+2. **Missing Headers**: `Upgrade` and `Connection` headers were being stripped by Caddy before reaching Uvicorn.
+3. **Timeouts**: `response_header_timeout` was set to 620s globally, causing Caddy to drop long-lived WebSocket streams that didn't send new headers.
+
+**Fix:**
+- Implemented path-based routing for WebSockets (`/api/v1/sessions/*/live`) with `response_header_timeout 0` and no compression.
+- Removed manual `header_up Upgrade/Connection` (Caddy 2 handles these automatically; manual overrides interfered with the built-in tunnel).
+- Moved `request_body max_size` and `encode` to the REST block (`/api/v1/*`) to keep the WebSocket pipe clean.
+
+---
+
+### Error: "Live update channel disconnected" after 30s of silence
+
+**Symptom:** WebSocket or SSE connections die exactly ~30 seconds after starting an investigation, especially during slow model loading or deep analysis phases.
+
+**Root Cause:** The `_redis_subscriber` coroutine was reusing the shared Redis singleton connection pool. This pool is configured with `socket_timeout=30.0` to prevent hanging REST commands. However, `pubsub.listen()` is a blocking operation; if no messages are received for 30 seconds, the socket times out and the connection is closed.
+
+**Fix:**
+- Updated `sessions.py` (WebSocket) and `sse.py` (SSE) to create a **dedicated Redis connection** specifically for the subscriber.
+- Configured this dedicated connection with `socket_timeout=None` (infinite wait) and `socket_keepalive=True` to ensure stability during silent periods.
+- Added proper cleanup in `finally` blocks to close the dedicated connection when the user disconnects.
+
+---
+
+### Error: Pipeline "Frozen" at 1/6 due to Custody Logging Serialization
+
+**Symptom:** Forensic agents appear stuck at "1/6 tools" indefinitely. The pipeline progress bar never moves, although the worker is active.
+
+**Root Cause:** A serialization bottleneck in the `CustodyLogger`. Every agent in the pipeline was sharing a single `asyncio.Lock` per `session_id` inside `log_entry`. Since tool calls generate multiple log entries (THOUGHT → ACTION → OBSERVATION) and each involves a blocking Postgres insert, the agents were deadlocking each other. Agent A would hold the lock waiting for a DB write while Agent B was blocked waiting for the lock to log its first observation.
+
+**Fix:**
+- **`custody_logger.py`**: Refactored the locking mechanism to be per-agent: `_session_chain_locks[(session_id, agent_id)]`. 
+- **Per-Agent Hash Chains**: Updated the cryptographic linking to maintain separate hash chains for each agent. This allows all 5 agents to log simultaneously while preserving tamper-evident integrity for each investigator's timeline.
+- **Verification Audit**: Updated `verify_chain` to correctly validate these parallel agent chains during forensic audits.
+
+---
+
+### Error: Lost Messages / "Stuck" UI due to Pub/Sub Race Condition
+
+**Symptom:** After uploading a file, the UI remains stuck on "Preparing forensic agents..." even though the worker is running. No updates ever arrive at the frontend.
+
+**Root Cause:** A race condition between the worker and the API's WebSocket subscriber. The worker often finishes the first 3-5 initialization steps (broadcasts) before the WebSocket subscriber has fully connected and subscribed to the Redis channel. Since Redis Pub/Sub is fire-and-forget, these early messages are lost forever to that connection.
+
+**Fix:**
+- **`_session_state.py`**: Implemented a **Replay Buffer** using a Redis List (`forensic:replay:{session_id}`). Every `broadcast_update` now simultaneously publishes to the live channel and pushes to this list (capped at 50 items).
+- **`sessions.py` & `sse.py`**: Updated subscribers to perform a two-step "Catch Up":
+    1. Subscribe to the live channel first (to capture all future messages).
+    2. Drain the replay buffer via `LRANGE` to capture all messages published during the connection gap.
+    3. Transition to listening to the live stream.
+
+---
+
+### Error: "Poisoned Session" Loop / 409 Deduplication Deadlock
+
+**Symptom:** After a backend restart, retrying an analysis for the same file results in a "Duplicate detected" error (409), followed by an immediate connection failure or 403 Forbidden. The system gets stuck in a loop where retries always return a broken session.
+
+**Root Cause:** 
+1. **Stale Dedup**: Every backend restart marks all "running" sessions as "interrupted". However, the Redis deduplication keys (mapping file hash -> session ID) were not being cleared. 
+2. **Infinite Reconnect**: When a user retried, the backend returned the ID of the "interrupted" session. The frontend would then connect to this dead session, receive an error (4010), and immediately attempt to reconnect, creating a loop.
+
+**Fix:**
+- **`investigation.py`**: Updated the deduplication handler to check the status of existing sessions. If a session is not "running" or "paused", the stale dedup key is deleted, and the current request proceeds as a fresh investigation.
+- **`useSimulation.ts`**: Updated the WebSocket close handler to recognize terminal codes (`4001`, `4003`, `4004`, `4010`). For these codes, the frontend now clears its local `session_id` storage and stops all reconnection attempts, allowing the next retry to start clean.
+
+---
+
+### Error: Next.js 15.5 Startup Crash & Build Failure
+
+**Symptom:** Frontend container fails to start with "unrecognized option --no-turbopack". Docker build fails on `package-lock.json` missing in monorepo sub-apps.
+
+**Root Cause:** 
+1. Next.js 15.5 removed the `--no-turbopack` flag (webpack is now the default unless `--turbo` is passed).
+2. The `Dockerfile` required `package-lock.json` in the app directory, which doesn't exist in some monorepo structures where the lockfile is at the root.
+
+**Fix:**
+- Removed `--no-turbopack` from `infra/docker-compose.yml`.
+- Made `package-lock.json` copy optional in `apps/web/Dockerfile` using a wildcard (`package-lock.jso[n]`).
+
+---
+
+### Config: CORS & API Connectivity Issues
+
+**Symptom:** Backend is unreachable from the browser ("Failed to fetch") or backend fails to start with "validation error for Settings: cors_allowed_origins".
+
+**Root Cause:** 
+1. **Connectivity**: `NEXT_PUBLIC_API_URL` was pointing directly to `:8000`, bypassing the Caddy proxy and triggering CORS blocks or connection failures in restricted environments.
+2. **Parsing**: Pydantic Settings attempts to `json.loads()` environment variables for `list[str]` types; comma-separated strings in `.env` were rejected.
+
+**Fix:** 
+- Cleared `NEXT_PUBLIC_API_URL` in `.env` and `.env.example` to force the browser to use the same-origin proxy (Caddy) for API calls.
+- Changed `CORS_ALLOWED_ORIGINS` in `.env` to a valid JSON array format (e.g., `["http://localhost"]`).
+- Added `http://localhost` (the Caddy origin) to the allowed origins list.
+
+---
+
 ## 2026-04-27 — Session 6: WebSocket Error Handling & HMR Fix
 
 ### Error: Wrong Error Code for WebSocket Connection Failures
