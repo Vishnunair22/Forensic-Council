@@ -79,6 +79,8 @@ interface AgentProgressDisplayProps {
   mimeType?: string;
   playSound?: (type: SoundType) => void;
   revealQueue?: AgentUpdate[];
+  revealPending?: boolean;
+  arbiterDeliberating?: boolean;
 }
 
 const allValidAgents = AGENTS_DATA.filter((agent) => agent.id !== "Arbiter");
@@ -103,6 +105,8 @@ export function AgentProgressDisplay({
   mimeType,
   playSound,
   revealQueue = [],
+  revealPending = false,
+  arbiterDeliberating = false,
 }: AgentProgressDisplayProps) {
   const [hiddenAgents, setHiddenAgents] = useState(new Set<string>());
   const playSoundRef = useRef(playSound);
@@ -152,7 +156,7 @@ export function AgentProgressDisplay({
 
   const initialAgentIds = useMemo<string[]>(() => {
     if (phase !== "deep") return [];
-    const raw = storage.getItem<AgentUpdate[]>("forensic_initial_agents");
+    const raw = storage.getItem<AgentUpdate[]>("forensic_initial_agents", true);
     const parsed = raw ?? [];
     return Array.isArray(parsed)
       ? parsed.map((a) => a.agent_id).filter((id): id is string => typeof id === "string")
@@ -268,6 +272,7 @@ export function AgentProgressDisplay({
                   completedData={completedAgents.find((c) => c.agent_id === agent.id)}
                   isRevealed={true}
                   fileMime={mimeType}
+                  phase={phase}
                 />
               </motion.div>
             ))}
@@ -276,14 +281,14 @@ export function AgentProgressDisplay({
       </div>
 
       <AnimatePresence>
-        {awaitingDecision && phase === "initial" && (
+        {awaitingDecision && phase === "initial" && revealQueue.length === 0 && !arbiterDeliberating && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-6 pointer-events-none"
+            className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-6"
           >
-            <div className="glass-panel p-2 rounded-full shadow-[0_40px_100px_rgba(0,0,0,0.8)] pointer-events-auto border-white/10">
+            <div className="glass-panel p-2 rounded-full shadow-[0_40px_100px_rgba(0,0,0,0.8)] border-white/10">
               <div className="bg-[#020203]/80 rounded-full p-2 flex items-center gap-3">
                 <button
                   data-testid="accept-analysis-btn"
@@ -317,9 +322,9 @@ export function AgentProgressDisplay({
             initial={{ opacity: 0, y: 100 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 100 }}
-            className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-6 pointer-events-none"
+            className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-6"
           >
-            <div className="glass-panel p-2 rounded-full shadow-[0_40px_100px_rgba(0,0,0,0.8)] pointer-events-auto border-white/10">
+            <div className="glass-panel p-2 rounded-full shadow-[0_40px_100px_rgba(0,0,0,0.8)] border-white/10">
               <div className="bg-[#020203]/80 rounded-full p-2 flex items-center gap-3">
                 <button data-testid="new-analysis-btn" onClick={onNewUpload} className="flex-1 btn-horizon-outline py-3 text-xs">New Ingestion</button>
                 <button

@@ -133,6 +133,9 @@ export default function EvidencePage() {
                 isNavigating={isNavigating}
                 mimeType={storage.getItem<string>(FORENSIC_MIME_TYPE_KEY) ?? undefined}
                 playSound={playSound}
+                revealQueue={revealQueue}
+                revealPending={revealPending}
+                arbiterDeliberating={arbiterDeliberating}
               />
             )}
 

@@ -37,6 +37,7 @@ export interface AgentStatusCardProps {
   isFadingOut?: boolean;
   fileMime?: string;
   onComplete?: () => void;
+  phase?: "initial" | "deep";
 }
 
 const statusConfig = {
@@ -113,6 +114,7 @@ export function AgentStatusCard({
   liveUpdate,
   completedData,
   fileMime,
+  phase = "initial",
 }: AgentStatusCardProps) {
   const fileCategory = fileMime?.startsWith("image/") ? "image"
     : fileMime?.startsWith("audio/") ? "audio"
@@ -160,6 +162,7 @@ export function AgentStatusCard({
         (status === "running" || status === "validating" || status === "checking") && "border-[var(--color-success-light)]/30 shadow-[0_0_30px_rgba(167,255,210,0.1)]",
         status === "waiting" && "opacity-40"
       )}
+      data-testid={`agent-card-${agentId}`}
     >
       {/* --- Card Header --- */}
       <div className="p-8 pb-6 border-b border-white/5 relative z-10">
@@ -214,7 +217,7 @@ export function AgentStatusCard({
                   {status === "validating"
                     ? "Validating forensic modules…"
                     : status === "checking"
-                    ? "Synchronizing with pipeline…"
+                    ? (phase === "deep" ? "Re-arming for deep analysis…" : "Synchronizing with pipeline…")
                     : `${progressDescriptor.label} ${currentToolIndex}/${liveTotal}`}
                 </span>
               </div>
