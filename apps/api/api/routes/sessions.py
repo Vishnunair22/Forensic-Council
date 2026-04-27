@@ -446,7 +446,7 @@ async def live_updates(websocket: WebSocket, session_id: str):
                 except Exception:
                     pass
                 try:
-                    await pubsub.close()
+                    await pubsub.aclose()
                 except Exception:
                     pass
 
@@ -839,19 +839,19 @@ async def download_report(
 
     Returns the report with proper Content-Disposition headers for file download.
     """
-    # Get the report using existing logic
-    report_dto = await get_session_report(session_id, current_user)
+    # Get the report or the 202 response using existing logic
+    report_or_response = await get_session_report(session_id, current_user)
+
+    # If still in progress, return the 202 status response unchanged.
+    if isinstance(report_or_response, JSONResponse):
+        return report_or_response
 
     # Generate filename with timestamp
-    from datetime import datetime
-
     timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     filename = f"forensic_report_{session_id}_{timestamp}.json"
 
     # Serialize Pydantic model before passing to JSONResponse
-    from fastapi.responses import JSONResponse
-
-    content = report_dto.model_dump() if hasattr(report_dto, "model_dump") else report_dto
+    content = report_or_response.model_dump(mode="json")
     return JSONResponse(
         content=content,
         headers={
@@ -903,8 +903,8 @@ async def get_agent_brief(
                     ]
                     if in_progress:
                         brief_text = getattr(in_progress[-1], "description", "")
-        except Exception:
-            pass  # brief is non-critical
+        except Exception as e:
+            logger.debug("Failed to extract agent brief", session_id=session_id, agent_id=agent_id, error=str(e))
 
     return {"brief": brief_text}
 

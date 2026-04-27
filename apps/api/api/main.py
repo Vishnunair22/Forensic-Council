@@ -73,8 +73,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "SIGNING_KEY is using a development placeholder. Never use this in production."
         )
 
-    # Warn when RS256 is configured but private key is absent — dev falls back to HS256 silently
+    # Refuse insecure HS256 fallback in production
     if settings.jwt_algorithm.startswith("RS") and not settings.jwt_private_key:
+        if settings.app_env == "production":
+            logger.error(
+                "CRITICAL: JWT_ALGORITHM=%s but JWT_PRIVATE_KEY is missing. "
+                "Refusing to start in production to prevent silent HS256 fallback.",
+                settings.jwt_algorithm
+            )
+            raise RuntimeError("Missing JWT private key for RS256 in production")
+            
         logger.warning(
             "JWT_ALGORITHM=%s but JWT_PRIVATE_KEY is not set — "
             "falling back to HS256 (HMAC symmetric). "
@@ -480,8 +488,9 @@ async def rate_limit_middleware(request: Request, call_next):
     is_authenticated = bool(auth_header or session_cookie)
 
     if auth_header:
-        # Hash the token so the raw bearer value is never written into Redis keys or logs
-        identifier = "tok:" + hashlib.sha256(auth_header.encode()).hexdigest()[:32]
+        # Strip "Bearer " prefix if present for consistent hashing
+        raw_token = auth_header[7:] if auth_header.lower().startswith("bearer ") else auth_header
+        identifier = "tok:" + hashlib.sha256(raw_token.strip().encode()).hexdigest()[:32]
     elif session_cookie:
         identifier = "cookie:" + hashlib.sha256(session_cookie.encode()).hexdigest()[:32]
     else:
@@ -566,6 +575,12 @@ async def limit_upload_size(request: Request, call_next):
             status_code=413,
             detail=f"Request body too large (max {MAX_BODY_SIZE // (1024 * 1024)}MB)",
         )
+
+    # 2. Check if body was already read by previous middleware
+    if hasattr(request, "_body"):
+        if len(request._body) > MAX_BODY_SIZE:
+             raise HTTPException(status_code=413, detail="Request body exceeds limit (pre-read)")
+        return await call_next(request)
 
     # 2. Resilient path: wrap the ASGI receive callable at the protocol level
     #    instead of patching the private request._receive attribute.

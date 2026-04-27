@@ -18,11 +18,17 @@
     https_port 443
 }
 
-:80 {
+:80, :443 {
     encode zstd gzip
 
-    @production_domain not host localhost 127.0.0.1
-    redir @production_domain https://{host}{uri}
+    # Redirect HTTP to HTTPS for non-localhost domains.
+    # Caddy handles automatic HTTPS for specific domains, but for a generic
+    # config, we ensure redirection if accessed via port 80.
+    @http {
+        protocol http
+        not host localhost 127.0.0.1
+    }
+    redir @http https://{host}{uri}
 
     header {
         X-Content-Type-Options "nosniff"

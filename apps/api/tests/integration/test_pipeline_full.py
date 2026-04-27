@@ -17,6 +17,8 @@ from uuid import uuid4
 
 import pytest
 
+pytestmark = pytest.mark.requires_ml
+
 os.environ.setdefault("APP_ENV", "testing")
 os.environ.setdefault("SIGNING_KEY", "test-signing-key-" + "x" * 32)
 os.environ.setdefault("POSTGRES_USER", "test")

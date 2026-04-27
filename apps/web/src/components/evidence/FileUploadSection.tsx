@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useMemo, useEffect, useState } from "react";
+import { useRef, useMemo, useEffect, useState, useCallback } from "react";
 import Image from "next/image";
 import { 
  RotateCcw, 
@@ -41,15 +41,17 @@ export function FileUploadSection({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileHash, setFileHash] = useState<string | null>(null);
 
-  const computeHash = async (f: File) => {
+  const computeHash = useCallback(async (f: File) => {
     try {
       const buf = await f.arrayBuffer();
       const digest = await crypto.subtle.digest("SHA-256", buf);
-      return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
+      return Array.from(new Uint8Array(digest))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
     } catch {
       return null;
     }
-  };
+  }, []);
 
   useEffect(() => {
     let isActive = true;

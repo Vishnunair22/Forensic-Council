@@ -72,7 +72,7 @@ services:
       DEBUG: "false"
     volumes: !override
       - evidence_data:/app/storage/evidence:rw
-      - signing_keys:/app/storage/keys:rw
+      - signing_keys:/app/storage/keys:ro
       - hf_cache:/app/cache/huggingface:rw
       - torch_cache:/app/cache/torch:rw
       - easyocr_cache:/app/cache/easyocr:rw

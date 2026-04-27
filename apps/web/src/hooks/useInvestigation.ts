@@ -347,8 +347,14 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       setShowLoadingOverlay(true);
       setAutoStartBlocking(false);
       triggerAnalysis(pending);
+    } else if (!pending && autoStartBlocking && !isUploading && status === "idle") {
+      // Safety guard: auto-start was requested but file is lost (e.g. refresh)
+      setAutoStartBlocking(false);
+      setShowLoadingOverlay(false);
+      sessionOnlyStorage.removeItem("forensic_auto_start");
+      sessionOnlyStorage.removeItem("fc_show_loading");
     }
-  }, [triggerAnalysis]);
+  }, [triggerAnalysis, autoStartBlocking, isUploading, status]);
 
   const handleFile = (f: File) => {
     if (f.size > 50 * 1024 * 1024) {

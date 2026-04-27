@@ -19,7 +19,10 @@ from uuid import uuid4
 
 import pytest
 
-pytestmark = pytest.mark.skip(reason="Standalone system test — run with Docker stack directly")
+pytestmark = [
+    pytest.mark.skip(reason="Standalone system test — run with Docker stack directly"),
+    pytest.mark.requires_ml,
+]
 
 # Identify API root (works for both local and Docker)
 API_DIR = Path(__file__).resolve().parents[2]

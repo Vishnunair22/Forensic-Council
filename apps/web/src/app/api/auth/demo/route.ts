@@ -13,8 +13,14 @@ export async function POST() {
   const demoUsername = process.env.DEMO_USERNAME || "investigator";
   const demoPassword =
     process.env.BOOTSTRAP_INVESTIGATOR_PASSWORD ||
-    process.env.DEMO_PASSWORD ||
-    "demo_dev_only_not_for_production";
+    process.env.DEMO_PASSWORD;
+
+  if (!demoPassword) {
+    return NextResponse.json(
+      { error: "Demo login disabled: server has no BOOTSTRAP_INVESTIGATOR_PASSWORD or DEMO_PASSWORD configured." },
+      { status: 503 },
+    );
+  }
   const backendBaseUrls = getBackendBaseUrls();
 
   const formData = new URLSearchParams();

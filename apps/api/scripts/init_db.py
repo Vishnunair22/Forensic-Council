@@ -126,73 +126,76 @@ async def bootstrap_users(client: PostgresClient) -> None:
     investigator_username = os.environ.get("BOOTSTRAP_INVESTIGATOR_USERNAME", "investigator")
     investigator_password = os.environ.get("BOOTSTRAP_INVESTIGATOR_PASSWORD")
 
-    # Create admin user if password is provided
-    if admin_password:
-        admin_exists = await client.fetch_one(
-            "SELECT 1 FROM users WHERE username = $1", admin_username
-        )
+    try:
+        # Create admin user if password is provided
+        if admin_password:
+            admin_exists = await client.fetch_one(
+                "SELECT 1 FROM users WHERE username = $1", admin_username
+            )
 
-        if not admin_exists:
-            hashed = get_password_hash(admin_password)
-            await client.execute(
-                """
-                INSERT INTO users
-                    (user_id, username, hashed_password, role, is_active, is_disabled)
-                VALUES ($1, $2, $3, 'admin', TRUE, FALSE)
-                """,
-                f"admin-{admin_username}",
-                admin_username,
-                hashed,
-            )
-            logger.info("Admin user created", username=admin_username)
-        else:
-            hashed = get_password_hash(admin_password)
-            await client.execute(
-                """
-                UPDATE users
-                SET hashed_password = $2,
-                    is_active = TRUE,
-                    is_disabled = FALSE
-                WHERE username = $1
-                """,
-                admin_username,
-                hashed,
-            )
-            logger.info("Admin user password synchronized", username=admin_username)
+            if not admin_exists:
+                hashed = get_password_hash(admin_password)
+                await client.execute(
+                    """
+                    INSERT INTO users
+                        (user_id, username, hashed_password, role, is_active, is_disabled)
+                    VALUES ($1, $2, $3, 'admin', TRUE, FALSE)
+                    """,
+                    f"admin-{admin_username}",
+                    admin_username,
+                    hashed,
+                )
+                logger.info("Admin user created", username=admin_username)
+            else:
+                hashed = get_password_hash(admin_password)
+                await client.execute(
+                    """
+                    UPDATE users
+                    SET hashed_password = $2,
+                        is_active = TRUE,
+                        is_disabled = FALSE
+                    WHERE username = $1
+                    """,
+                    admin_username,
+                    hashed,
+                )
+                logger.info("Admin user password synchronized", username=admin_username)
 
-    # Create investigator user if password is provided
-    if investigator_password:
-        investigator_exists = await client.fetch_one(
-            "SELECT 1 FROM users WHERE username = $1", investigator_username
-        )
+        # Create investigator user if password is provided
+        if investigator_password:
+            investigator_exists = await client.fetch_one(
+                "SELECT 1 FROM users WHERE username = $1", investigator_username
+            )
 
-        if not investigator_exists:
-            hashed = get_password_hash(investigator_password)
-            await client.execute(
-                """
-                INSERT INTO users
-                    (user_id, username, hashed_password, role, is_active, is_disabled)
-                VALUES ($1, $2, $3, 'investigator', TRUE, FALSE)
-                """,
-                f"inv-{investigator_username}",
-                investigator_username,
-                hashed,
-            )
-            logger.info("Investigator user created", username=investigator_username)
-        else:
-            hashed = get_password_hash(investigator_password)
-            await client.execute(
-                """
-                UPDATE users
-                SET hashed_password = $2,
-                    is_active = TRUE,
-                    is_disabled = FALSE
-                WHERE username = $1
-                """,
-                investigator_username,
-                hashed,
-            )
-            logger.info("Investigator user password synchronized", username=investigator_username)
+            if not investigator_exists:
+                hashed = get_password_hash(investigator_password)
+                await client.execute(
+                    """
+                    INSERT INTO users
+                        (user_id, username, hashed_password, role, is_active, is_disabled)
+                    VALUES ($1, $2, $3, 'investigator', TRUE, FALSE)
+                    """,
+                    f"inv-{investigator_username}",
+                    investigator_username,
+                    hashed,
+                )
+                logger.info("Investigator user created", username=investigator_username)
+            else:
+                hashed = get_password_hash(investigator_password)
+                await client.execute(
+                    """
+                    UPDATE users
+                    SET hashed_password = $2,
+                        is_active = TRUE,
+                        is_disabled = FALSE
+                    WHERE username = $1
+                    """,
+                    investigator_username,
+                    hashed,
+                )
+                logger.info("Investigator user password synchronized", username=investigator_username)
+    except Exception as e:
+        logger.warning("User bootstrap update failed (likely DB lock)", error=str(e))
 
 
 def main():

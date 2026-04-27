@@ -174,6 +174,22 @@ async def start_investigation(
             tmp_path.unlink(missing_ok=True)
             raise HTTPException(status_code=400, detail="File is empty.")
 
+        import magic
+
+        with open(tmp_path, "rb") as _f:
+            head = _f.read(2048)
+
+        # Use to_thread to prevent blocking the event loop on MIME detection
+        mime = await asyncio.to_thread(magic.from_buffer, head, mime=True)
+
+        valid_exts = _EXACT_MIME_EXT_MAP.get(mime, frozenset())
+        if not valid_exts or raw_suffix not in valid_exts:
+            tmp_path.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=400,
+                detail=f"Security violation: content '{mime}' mismatch ext '{raw_suffix}'",
+            )
+
         content_hash = hasher.hexdigest()
         dedup_key = f"dedup:{case_id}:{content_hash}"
         try:
@@ -197,22 +213,6 @@ async def start_investigation(
             raise
         except Exception as exc:
             logger.debug("Evidence deduplication skipped", error=str(exc))
-
-        import magic
-
-        with open(tmp_path, "rb") as _f:
-            head = _f.read(2048)
-
-        # Use to_thread to prevent blocking the event loop on MIME detection
-        mime = await asyncio.to_thread(magic.from_buffer, head, mime=True)
-
-        valid_exts = _EXACT_MIME_EXT_MAP.get(mime, frozenset())
-        if not valid_exts or raw_suffix not in valid_exts:
-            tmp_path.unlink(missing_ok=True)
-            raise HTTPException(
-                status_code=400,
-                detail=f"Security violation: content '{mime}' mismatch ext '{raw_suffix}'",
-            )
 
         if mime.startswith("image/") and mime != "image/gif":
             try:

@@ -47,8 +47,6 @@ export function getWSBase(): string {
   return `${protocol}//${hostname}`;
 }
 
-// Legacy export for backward compatibility  
-export const WS_BASE = getWSBase();
 
 // ── Cookie & Auth Helpers ────────────────────────────────────────────────────
 

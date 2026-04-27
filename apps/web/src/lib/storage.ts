@@ -43,6 +43,15 @@ function createStorage(store: Storage) {
   };
 }
 
-export const persistentStorage = isBrowser ? createStorage(window.localStorage) : createStorage({} as Storage);
-export const sessionOnlyStorage = isBrowser ? createStorage(window.sessionStorage) : createStorage({} as Storage);
+const noopStorage: Storage = {
+  length: 0,
+  clear: () => {},
+  getItem: () => null,
+  key: () => null,
+  removeItem: () => {},
+  setItem: () => {},
+};
+
+export const persistentStorage = createStorage(isBrowser ? window.localStorage : noopStorage);
+export const sessionOnlyStorage = createStorage(isBrowser ? window.sessionStorage : noopStorage);
 export const storage = persistentStorage;

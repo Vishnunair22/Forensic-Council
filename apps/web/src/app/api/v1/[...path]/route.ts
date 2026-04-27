@@ -78,6 +78,8 @@ async function proxyRequest(
     path.includes("upload") ||
     path.includes("deep-analysis") ||
     path.includes("video") ||
+    path.includes("report") ||
+    path.includes("decision") ||
     path[0] === "investigate"; // POST /api/v1/investigate is the evidence upload endpoint
   const timeoutMs = isHeavyPath ? 300_000 : 60_000; // 5 min for uploads/deep, 1 min otherwise
 

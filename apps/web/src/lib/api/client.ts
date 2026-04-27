@@ -5,7 +5,6 @@
 import { ReportDTOSchema } from "@/lib/schemas";
 import {
   API_BASE,
-  WS_BASE,
   clearAuthToken,
   dbg,
   getAuthToken,
@@ -360,8 +359,10 @@ export async function pollForReport(
     const response = await getReport(sessionId);
     onProgress?.(response.status);
     if (response.status === "complete" && response.report) return response.report;
-    if (attempt === 0) continue;
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    
+    if (attempt < maxAttempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
   }
   throw new Error("Report polling timed out");
 }
