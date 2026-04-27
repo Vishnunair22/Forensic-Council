@@ -916,3 +916,19 @@ async def main():
 
 if __name__ == "__main__":
     issues = asyncio.run(main())
+
+
+# Proper pytest wrapper for CI/linting
+@pytest.mark.requires_docker
+@pytest.mark.requires_network
+@pytest.mark.slow
+def test_system_smoke_runs_without_crash():
+    """
+    Gate: system test runner must complete without unhandled exception.
+    
+    This is a smoke test that verifies the system test can run.
+    Full system tests require a running Docker stack with all services.
+    """
+    issues = asyncio.run(main())
+    critical = [i for i in issues if i["severity"] == "CRITICAL"]
+    assert critical == [], f"System test found critical issues: {critical}"

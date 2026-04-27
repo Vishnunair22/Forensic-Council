@@ -2,16 +2,17 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import {
- Loader2,
- FileText,
- ArrowRight,
- Activity,
+  Loader2,
+  FileText,
+  ArrowRight,
+  Activity,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 import { AGENTS as AGENTS_DATA } from "@/lib/constants";
 import { SoundType } from "@/hooks/useSound";
 import type { AgentStatusCardProps } from "./AgentStatusCard";
+import { QuotaMeter } from "./QuotaMeter";
 
 export interface FindingPreview {
  tool: string;
@@ -50,24 +51,25 @@ export interface AgentUpdate {
 }
 
 interface AgentProgressDisplayProps {
- agentUpdates: Record<
-  string,
-  {
-   status: string;
-   thinking: string;
-   tools_done?: number;
-   tools_total?: number;
-   tool_name?: string;
-  }
- >;
- completedAgents: AgentUpdate[];
- progressText: string;
- allAgentsDone: boolean;
- phase: "initial" | "deep";
- awaitingDecision: boolean;
- pipelineStatus?: string;
- pipelineMessage?: string;
-onNewUpload?: () => void;
+  agentUpdates: Record<
+    string,
+    {
+      status: string;
+      thinking: string;
+      tools_done?: number;
+      tools_total?: number;
+      tool_name?: string;
+    }
+  >;
+  completedAgents: AgentUpdate[];
+  progressText: string;
+  allAgentsDone: boolean;
+  phase: "initial" | "deep";
+  awaitingDecision: boolean;
+  pipelineStatus?: string;
+  pipelineMessage?: string;
+  sessionId?: string | null;
+  onNewUpload?: () => void;
   onViewResults?: () => void;
   onAcceptAnalysis?: () => void;
   onRunDeepAnalysis?: () => void;
@@ -102,6 +104,7 @@ export function AgentProgressDisplay({
   awaitingDecision,
   pipelineStatus,
   pipelineMessage,
+  sessionId,
   onNewUpload,
   onViewResults,
   onAcceptAnalysis,
@@ -161,7 +164,10 @@ export function AgentProgressDisplay({
   const runningCount = Object.keys(agentUpdates).filter(id => !completedAgents.some(c => c.agent_id === id)).length;
 
   return (
-    <div className="flex flex-col w-full max-w-[1560px] mx-auto gap-8 pb-36 pt-24">
+    <div 
+      className="flex flex-col w-full max-w-[1560px] mx-auto gap-8 pb-36 pt-24"
+      aria-label="Agent forensic analysis progress"
+    >
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-10 w-full mb-12 px-2">
         <div className="flex flex-col gap-2">
           <motion.h1
@@ -179,7 +185,7 @@ export function AgentProgressDisplay({
               </p>
             </div>
             <div className="w-[1px] h-3 bg-white/10" />
-            <p className="text-xs font-medium text-white/40 italic" role="status" aria-live="polite">
+            <p className="text-xs font-medium text-white/40 italic" role="status" aria-live="polite" aria-atomic="false">
               {pipelineMessage || progressText || (allAgentsDone ? "Analysis phase complete" : "Analysis in progress")}
             </p>
           </div>
@@ -197,6 +203,7 @@ export function AgentProgressDisplay({
                 </motion.div>
              </div>
           </div>
+          {sessionId && <QuotaMeter sessionId={sessionId} />}
         </div>
       </div>
 

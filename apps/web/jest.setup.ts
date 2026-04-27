@@ -4,6 +4,19 @@ import { toHaveNoViolations } from 'jest-axe';
 // @ts-ignore
 expect.extend(toHaveNoViolations);
 
+// Polyfill missing browser globals for Jest
+if (typeof CloseEvent === 'undefined') {
+  global.CloseEvent = class CloseEvent extends Event {
+    code: number; reason: string; wasClean: boolean;
+    constructor(type: string, init?: CloseEventInit) {
+      super(type, init);
+      this.code = init?.code ?? 0;
+      this.reason = init?.reason ?? '';
+      this.wasClean = init?.wasClean ?? false;
+    }
+  } as typeof CloseEvent;
+}
+
 // Mock browser APIs when the active Jest environment provides a window.
 if (typeof window !== "undefined") {
   window.scrollTo = jest.fn();

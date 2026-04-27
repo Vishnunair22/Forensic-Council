@@ -94,6 +94,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "SIGNING_KEY is using a development placeholder. Never use this in production."
         )
 
+    # Research model license warning
+    if settings.enable_research_models and settings.app_env == "production":
+        logger.warning(
+            "RESEARCH_MODELS enabled in production. These models (BusterNet, F3-Net, "
+            "ManTra-Net, TruFor, clovaai/AASIST) are non-commercial. Remove from court "
+            "exhibits unless licensed. Set enable_research_models=False for production."
+        )
+
     # Refuse insecure HS256 fallback in production
     if settings.jwt_algorithm.startswith("RS") and not settings.jwt_private_key:
         if settings.app_env == "production":

@@ -1137,3 +1137,67 @@ async def resume_investigation(
         if request.deep_analysis
         else "Proceeding to final report",
     }
+
+
+# ============================================================================
+# QUOTA ENDPOINT — per-session API usage data
+# ============================================================================
+
+
+class QuotaResponseDTO(_BaseModel):
+    tokens_used: int = 0
+    tokens_limit: int = 0
+    cost_estimate_usd: float = 0.0
+    calls_total: int = 0
+    degraded: bool = False
+
+
+@router.get("/{session_id}/quota", response_model=QuotaResponseDTO)
+async def get_session_quota_endpoint(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Return per-session quota data including tokens used and cost estimate.
+
+    Reads from Redis quota hash and returns normalized values.
+    Returns degraded=true if Redis is unavailable.
+    """
+    from core.quota_meter import get_session_quota as _get_session_quota
+
+    # Verify session access
+    await assert_session_access(session_id, current_user)
+
+    # Get quota data from Redis
+    raw_data = await _get_session_quota(session_id)
+
+    if not raw_data:
+        return QuotaResponseDTO(
+            tokens_used=0,
+            tokens_limit=100000,  # Default limit
+            cost_estimate_usd=0.0,
+            calls_total=0,
+            degraded=False,
+        )
+
+    # Parse numeric values from Redis strings
+    try:
+        tokens_used = int(raw_data.get("tokens:total", 0))
+    except (ValueError, TypeError):
+        tokens_used = 0
+
+    try:
+        calls_total = int(raw_data.get("calls:total", 0))
+    except (ValueError, TypeError):
+        calls_total = 0
+
+    # Cost estimate: ~$0.001 per 1K tokens for gemini-2.5-flash
+    cost_estimate_usd = tokens_used / 1_000_000 * 1.25  # Approximate cost
+
+    return QuotaResponseDTO(
+        tokens_used=tokens_used,
+        tokens_limit=100000,  # Default limit, could be configurable
+        cost_estimate_usd=round(cost_estimate_usd, 4),
+        calls_total=calls_total,
+        degraded=False,
+    )

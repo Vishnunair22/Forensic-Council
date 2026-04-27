@@ -65,6 +65,16 @@ class InferenceClient:
         """Get or load YOLO11 model."""
         async with self._load_locks["yolo"]:
             if "yolo" not in self._models:
+                model_name = getattr(self.settings, "yolo_model_name", "detr-resnet-50")
+
+                # AGPL License Guard
+                if "yolo" in model_name.lower() and not self.settings.enable_agpl_models:
+                    raise RuntimeError(
+                        f"YOLO model '{model_name}' requires enable_agpl_models=True for use. "
+                        "This model is AGPL-licensed. For commercial use, set yolo_model_name "
+                        "to 'detr-resnet-50' (Apache-2.0 licensed) or keep the default."
+                    )
+
                 yolo_cache = self.settings.yolo_model_dir
                 os.makedirs(yolo_cache, exist_ok=True)
                 yolo_config_dir = os.getenv("YOLO_CONFIG_DIR", "/tmp/ultralytics")
@@ -95,7 +105,6 @@ class InferenceClient:
                 if safe_updates:
                     yolo_settings.update(safe_updates)
 
-                model_name = getattr(self.settings, "yolo_model_name", "yolo11m.pt")
                 model_path = os.path.join(yolo_cache, model_name)
 
                 if not os.path.exists(model_path):

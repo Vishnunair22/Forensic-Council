@@ -18,9 +18,12 @@ import { sessionOnlyStorage, storage } from "@/lib/storage";
 const FORENSIC_MIME_TYPE_KEY = "forensic_mime_type";
 const FC_SHOW_LOADING_KEY = "fc_show_loading";
 const FORENSIC_AUTO_START_KEY = "forensic_auto_start";
+const FORENSIC_SESSION_ID_KEY = "forensic_session_id";
 
 export default function EvidencePage() {
   const { playSound } = useSound();
+
+  const sessionId = hasStartedAnalysis ? storage.getItem<string>(FORENSIC_SESSION_ID_KEY) : null;
 
   const {
     file, setFile,
@@ -118,6 +121,7 @@ export default function EvidencePage() {
                 awaitingDecision={awaitingDecision}
                 pipelineStatus={status}
                 pipelineMessage={pipelineMessage || pipelineThinking}
+                sessionId={sessionId}
                 onNewUpload={handleNewUpload}
                 onViewResults={handleViewResults}
                 onAcceptAnalysis={handleAcceptAnalysis}

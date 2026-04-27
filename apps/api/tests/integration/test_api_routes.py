@@ -281,7 +281,7 @@ class TestInvestigationEndpoint:
                     files={"file": ("test.jpg", jpeg_file, "image/jpeg")},
                     data={"case_id": "CASE-1234567890", "investigator_id": "REQ-12345"},
                 )
-                assert r.status_code in [200, 500]
+                assert r.status_code == 200
                 if r.status_code == 200:
                     data = r.json()
                     assert "session_id" in data

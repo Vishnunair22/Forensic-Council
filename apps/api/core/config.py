@@ -187,8 +187,27 @@ class Settings(BaseSettings):
         description="Ultralytics/YOLO model cache",
     )
     yolo_model_name: str = Field(
-        default="yolo11n.pt",
-        description="YOLO model weight filename (default yolo11n.pt for speed; use yolo11m.pt for high precision)",
+        default="detr-resnet-50",
+        description=(
+            "Object detection model. Use detr-resnet-50 for commercial use (Apache-2.0). "
+            "Ultralytics YOLO models (yolo11n.pt, yolo11m.pt) are AGPL-licensed and require "
+            "enable_agpl_models=True for non-compliant use."
+        ),
+    )
+    enable_agpl_models: bool = Field(
+        default=False,
+        description=(
+            "Set True only if AGPL compliance is confirmed. "
+            "Enables Ultralytics YOLO models which are AGPL-licensed. "
+            "For commercial use, keep False and use detr-resnet-50."
+        ),
+    )
+    enable_research_models: bool = Field(
+        default=False,
+        description=(
+            "Enables BusterNet, F3-Net, ManTra-Net, TruFor, and clovaai/AASIST. "
+            "These models are non-commercial only. Set True only for research deployments."
+        ),
     )
     siglip_model_name: str = Field(
         default="ViT-B-32",
