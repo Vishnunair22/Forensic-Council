@@ -9,7 +9,6 @@ This folder contains the Docker Compose, Caddy, Prometheus, and deployment helpe
 | `docker-compose.yml` | Base stack: API, worker, frontend, Postgres, Redis, Qdrant, Caddy, Jaeger, Prometheus |
 | `docker-compose.dev.yml` | Development override with hot reload and larger frontend dev resources |
 | `docker-compose.prod.yml` | Production override with optimized build targets, log rotation, and reduced direct host ports |
-| `docker-compose.infra.yml` | Infrastructure-only override for Postgres, Redis, and Qdrant |
 | `docker-compose.test.yml` | Lightweight integration test services |
 | `Caddyfile` | Reverse proxy, TLS, security headers, API routing, upload limits |
 | `prometheus.yml` | Prometheus scrape configuration |
@@ -103,16 +102,6 @@ docker compose \
   -f infra/docker-compose.prod.yml \
   --env-file .env \
   up --build -d
-```
-
-Infrastructure only:
-
-```bash
-docker compose \
-  -f infra/docker-compose.yml \
-  -f infra/docker-compose.infra.yml \
-  --env-file .env \
-  up -d
 ```
 
 Test services:

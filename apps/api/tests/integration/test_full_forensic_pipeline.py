@@ -3,6 +3,8 @@
 from uuid import uuid4
 
 import pytest
+
+pytest.importorskip("torch")
 from fastapi import status
 from httpx import AsyncClient
 

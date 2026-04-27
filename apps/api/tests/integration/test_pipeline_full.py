@@ -17,6 +17,8 @@ from uuid import uuid4
 
 import pytest
 
+pytest.importorskip("torch")
+
 pytestmark = pytest.mark.requires_ml
 
 os.environ.setdefault("APP_ENV", "testing")

@@ -46,8 +46,6 @@
     handle /api/v1/* {
         reverse_proxy backend:8000 {
             header_up Host {host}
-            header_up Upgrade {header.Upgrade}
-            header_up Connection {header.Connection}
             flush_interval -1
 
             transport http {

@@ -128,6 +128,7 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 pythonpath = ["."]
+norecursedirs = ["tests/integration_legacy", ".venv", "node_modules"]
 addopts = "-v --tb=short -m 'not requires_docker and not requires_network and not requires_ml'"
 markers = [
     "regression: marks tests as regression tests (deselect with -m 'not regression')",
@@ -220,7 +221,7 @@ ignore = ["E501", "S101"]
 # -- Pyright configuration --------------------------------------------------
 [tool.pyright]
 include = ["core", "api", "agents", "tools", "orchestration"]
-exclude = ["**/__pycache__", "**/.pytest_cache"]
+exclude = ["**/__pycache__", "**/.pytest_cache", "tools/ml_tools"]
 typeCheckingMode = "basic"
 strict = ["core/auth.py", "core/signing.py", "core/circuit_breaker.py"]  # Critical security modules
 

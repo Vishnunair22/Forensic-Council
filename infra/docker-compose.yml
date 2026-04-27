@@ -294,13 +294,12 @@ services:
     environment:
       <<: *backend-env
       APP_NAME: forensic_council
-      RELOAD: "true"
       API_HOST: 0.0.0.0
       API_PORT: 8000
       BOOTSTRAP_INVESTIGATOR_PASSWORD: ${BOOTSTRAP_INVESTIGATOR_PASSWORD}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-["http://localhost","http://localhost:3000","http://127.0.0.1","http://127.0.0.1:3000"]}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8000,http://127.0.0.1:3000}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
       OTEL_SERVICE_NAME: forensic_api
     depends_on:

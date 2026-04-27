@@ -15,6 +15,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+pytest.importorskip("torch")
+
 pytestmark = pytest.mark.requires_ml
 
 from core.auth import User, UserRole

@@ -103,6 +103,7 @@ FROM deps-core AS migration
 
 COPY pyproject.toml uv.lock ./
 COPY scripts/ scripts/
+COPY probes/ probes/
 COPY core/ core/
 COPY api/ api/
 COPY agents/ agents/
@@ -140,6 +141,7 @@ FROM deps-full AS app
 
 COPY pyproject.toml uv.lock ./
 COPY scripts/ scripts/
+COPY probes/ probes/
 COPY core/ core/
 COPY api/ api/
 COPY agents/ agents/
@@ -183,7 +185,7 @@ RUN mkdir -p \
     /opt/forensic-model-cache/ultralytics
 
 # Verify ML runtime dependencies and script registry before downloading models.
-RUN python scripts/validate_ml_tools.py
+RUN python probes/validate_ml_tools.py
 
 # Bake heavyweight model assets into the image so clean Docker volumes start hot.
 # Runtime named volumes shadow /app/cache/*, so the entrypoint seeds them from
@@ -201,14 +203,14 @@ RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
         YOLO_CONFIG_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" \
         YOLO_MODEL_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" \
         HOME="/tmp" \
-        python scripts/model_pre_download.py --strict; \
+        python probes/model_pre_download.py --strict; \
     else \
         echo "Skipping build-time model preload (PRELOAD_MODELS=$PRELOAD_MODELS)"; \
     fi
 
 # Pre-compile application bytecode for faster cold starts.
 # UV_COMPILE_BYTECODE=1 compiled venv packages; this handles app source code.
-RUN python -m compileall -q api/ core/ orchestration/ agents/ tools/ scripts/ reports/ || true
+RUN python -m compileall -q api/ core/ orchestration/ agents/ tools/ scripts/ || true
 
 # Create a dedicated non-root user. All writable paths are chown'd here;
 # volume mounts in docker-compose inherit these permissions.

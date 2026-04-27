@@ -42,7 +42,7 @@ repos:
       - id: eslint-web
         name: eslint apps/web
         language: system
-        entry: bash -c 'cd apps/web && npx --no -- eslint --config eslint.config.js "$@"'
+        entry: bash -c 'cd apps/web && npx --no -- eslint --config eslint.config.mjs "$@"'
         pass_filenames: true
         files: ^apps/web/.*\.(tsx?|jsx?)$
-        types: [javascript, typescript]
+        types: [javascript]

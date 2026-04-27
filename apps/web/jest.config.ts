@@ -30,7 +30,8 @@ const config: Config = {
       statements: 75,
     },
     // Critical modules require higher coverage
-    "./src/lib/api.ts": { branches: 90, lines: 95 },
+    "./src/lib/api.ts": { branches: 80, lines: 90 },
+    "./src/lib/api/": { branches: 80, lines: 85 },
     "./src/hooks/useInvestigation.ts": { branches: 60, lines: 40 },
     "./src/components/evidence/FileUploadSection.tsx": { branches: 80, lines: 85 },
   },

@@ -92,9 +92,3 @@ services:
 
 volumes:
   nextjs_cache:
-  hf_cache:
-  torch_cache:
-  easyocr_cache:
-  numba_cache:
-  yolo_cache:
-  calibration_models_cache:

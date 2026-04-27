@@ -13,6 +13,7 @@
 #   SKIP_CACHE_CHECK=1      Skip cache status + import check
 # ============================================================================
 set -e
+export HOME="${HOME:-/tmp}"
 
 echo "Starting Forensic Council entrypoint as user: $(id -u)"
 
@@ -46,7 +47,7 @@ fi
 CAL_SRC="/app/storage/calibration_models"
 CAL_DST="${CALIBRATION_MODELS_PATH:-/app/cache/calibration_models}"
 if [ -d "$CAL_SRC" ] && [ -d "$CAL_DST" ]; then
-    CAL_COUNT=$(find "$CAL_DST" -type f -name "*.json" 2>/dev/null | wc -l || echo 0)
+    CAL_COUNT=$(find "$CAL_DST" -type f -name "*.json" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
     if [ "${CAL_COUNT:-0}" -lt 1 ]; then
         echo "  Seeding calibration models into volume: $CAL_SRC -> $CAL_DST"
         cp -r "$CAL_SRC/." "$CAL_DST/" 2>/dev/null || true
@@ -73,8 +74,8 @@ seed_cache_dir() {
         return 0
     fi
 
-    DST_COUNT=$(find "$DST" -type f 2>/dev/null | wc -l || echo 0)
-    SRC_COUNT=$(find "$SRC" -type f 2>/dev/null | wc -l || echo 0)
+    DST_COUNT=$(find "$DST" -type f 2>/dev/null | wc -l | tr -d ' ' || echo 0)
+    SRC_COUNT=$(find "$SRC" -type f 2>/dev/null | wc -l | tr -d ' ' || echo 0)
 
     if [ "${DST_COUNT:-0}" -lt "$SRC_COUNT" ] && [ "${SRC_COUNT:-0}" -ge "$MIN_FILES" ]; then
         echo "  Seeding $LABEL cache into volume: $SRC -> $DST"
@@ -103,18 +104,18 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
     # More robust cache detection:
     # For HuggingFace - check for model hub directories (not just individual files)
     # Valid models create hub/models--* directories with blobs/ subdirectories
-    HF_HUBS=$(find "$HF_DIR/hub" "$HF_DIR/transformers" -type d -name "models--*" 2>/dev/null | wc -l || echo 0)
-    HF_BLOBS=$(find "$HF_DIR/hub" "$HF_DIR/transformers" -type d -name "blobs" 2>/dev/null | wc -l || echo 0)
+    HF_HUBS=$(find "$HF_DIR/hub" "$HF_DIR/transformers" -type d -name "models--*" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
+    HF_BLOBS=$(find "$HF_DIR/hub" "$HF_DIR/transformers" -type d -name "blobs" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
     
     # For YOLO - check for actual .pt weight files (not config/settings.json)
-    YOLO_WEIGHTS=$(find "$YOLO_DIR" -maxdepth 1 -type f -name "*.pt" 2>/dev/null | wc -l || echo 0)
-    TORCH_WEIGHTS=$(find "$TORCH_DIR" -type f \( -name "*.pth" -o -name "*.pt" \) 2>/dev/null | wc -l || echo 0)
-    EASYOCR_FILES=$(find "$EASYOCR_DIR" -type f 2>/dev/null | wc -l || echo 0)
+    YOLO_WEIGHTS=$(find "$YOLO_DIR" -maxdepth 1 -type f -name "*.pt" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
+    TORCH_WEIGHTS=$(find "$TORCH_DIR" -type f \( -name "*.pth" -o -name "*.pt" \) 2>/dev/null | wc -l | tr -d ' ' || echo 0)
+    EASYOCR_FILES=$(find "$EASYOCR_DIR" -type f 2>/dev/null | wc -l | tr -d ' ' || echo 0)
 
     AASIST_SAFE_NAME=$(printf '%s' "${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}" | sed 's#/#--#g')
-    CLIP_READY=$(find "$HF_DIR/hub/models--timm--vit_base_patch32_clip_224.openai/blobs" -type f -size +100M 2>/dev/null | wc -l || echo 0)
-    ECAPA_READY=$(find "$HF_DIR/hub/models--speechbrain--spkrec-ecapa-voxceleb/blobs" -type f -size +1M 2>/dev/null | wc -l || echo 0)
-    AASIST_READY=$(find "$HF_DIR/hub/models--$AASIST_SAFE_NAME/blobs" "$HF_DIR/transformers/models--$AASIST_SAFE_NAME/blobs" -type f -size +1M 2>/dev/null | wc -l || echo 0)
+    CLIP_READY=$(find "$HF_DIR/hub/models--timm--vit_base_patch32_clip_224.openai/blobs" -type f -size +100M 2>/dev/null | wc -l | tr -d ' ' || echo 0)
+    ECAPA_READY=$(find "$HF_DIR/hub/models--speechbrain--spkrec-ecapa-voxceleb/blobs" -type f -size +1M 2>/dev/null | wc -l | tr -d ' ' || echo 0)
+    AASIST_READY=$(find "$HF_DIR/hub/models--$AASIST_SAFE_NAME/blobs" "$HF_DIR/transformers/models--$AASIST_SAFE_NAME/blobs" -type f -size +1M 2>/dev/null | wc -l | tr -d ' ' || echo 0)
 
     # Need exact HF model families (OpenCLIP + SpeechBrain ECAPA + audio deepfake detector), YOLO,
     # torchvision ResNet, and EasyOCR. Count checks alone can pass with the wrong
@@ -127,9 +128,9 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
         echo "  This fallback runs once per empty volume."
         echo "============================================================"
         if [ "$(id -u)" = "0" ]; then
-            runuser -u appuser -- python scripts/model_pre_download.py --strict > /tmp/model_download.log 2>&1
+            runuser -u appuser -- python probes/model_pre_download.py --strict > /tmp/model_download.log 2>&1
         else
-            python scripts/model_pre_download.py --strict > /tmp/model_download.log 2>&1
+            python probes/model_pre_download.py --strict > /tmp/model_download.log 2>&1
         fi
         echo "  Model download complete. Log: /tmp/model_download.log"
     else
@@ -142,9 +143,9 @@ fi
 if [ "${SKIP_CACHE_CHECK:-0}" != "1" ]; then
     echo "  Verifying model cache and imports..."
     if [ "$(id -u)" = "0" ]; then
-        runuser -u appuser -- python scripts/model_cache_check.py
+        runuser -u appuser -- python probes/model_cache_check.py
     else
-        python scripts/model_cache_check.py
+        python probes/model_cache_check.py
     fi
 fi
 
@@ -170,7 +171,7 @@ else
     # Use 'sh -c' to correctly word-split the command string into binary + args.
     # Direct 'exec "$ACTUAL_CMD"' would treat the whole string as the binary name.
     if [ "$(id -u)" = "0" ]; then
-        exec runuser -u appuser -- sh -c "$ACTUAL_CMD"
+        exec runuser -u appuser -- env HOME=/tmp sh -c "$ACTUAL_CMD"
     fi
     exec sh -c "$ACTUAL_CMD"
 fi

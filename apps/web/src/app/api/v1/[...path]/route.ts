@@ -1,6 +1,10 @@
 import { backendUrlFor, getBackendBaseUrls } from "@/lib/backendTargets";
 import { NextRequest, NextResponse } from "next/server";
 
+if (typeof new Headers().getSetCookie !== "function") {
+  throw new Error("Node.js 20.10+ required for getSetCookie() support");
+}
+
 const RETRYABLE_STATUSES = new Set([502, 503, 504]);
 // 30 s for regular requests; long-poll / upload endpoints get more time via streaming
 // const PROXY_TIMEOUT_MS = 30_000;
@@ -50,15 +54,6 @@ function copyResponseHeaders(response: Response) {
   if (typeof responseHeaders.getSetCookie === "function") {
     const cookies = responseHeaders.getSetCookie();
     cookies.forEach((c: string) => headers.append("Set-Cookie", c));
-  } else {
-    // Fallback: headers.get('set-cookie') might return multiple cookies
-    // separated by comma-space, which we try to re-split.
-    const raw = response.headers.get("set-cookie");
-    if (raw) {
-      // Very naive split for legacy environments — most modern Node/Next environments
-      // should hit the getSetCookie path above.
-      headers.set("Set-Cookie", raw);
-    }
   }
 
   return headers;

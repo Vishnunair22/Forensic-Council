@@ -243,6 +243,10 @@ class Settings(BaseSettings):
         default=None, description="RSA Public Key (PEM) for JWT verification"
     )
 
+    # ─── Frontend & API Networking ───────────────────────────────────────────
+    next_public_api_url: str | None = Field(default=None, alias="NEXT_PUBLIC_API_URL")
+    internal_api_url: str | None = Field(default=None, alias="INTERNAL_API_URL")
+
     cors_allowed_origins: list[str] = Field(
         default=[
             "http://localhost:3000",
@@ -256,22 +260,29 @@ class Settings(BaseSettings):
     @field_validator("cors_allowed_origins", mode="before")
     @classmethod
     def parse_cors(cls, v):
+        """
+        Parse CORS origins from environment variable.
+        Supports both CSV (preferred) and JSON array formats.
+        Strips brackets and quotes for robustness against manual .env edits.
+        """
         import json
 
         if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                return []
+            # Robust handling: if it looks like a JSON list, try to parse it
             if v.startswith("["):
                 try:
                     parsed = json.loads(v)
-                    if not isinstance(parsed, list):
-                        raise ValueError("CORS_ORIGINS must be a JSON array")
-                    return parsed
-                except (json.JSONDecodeError, ValueError) as e:
-                    raise ValueError(
-                        f"Invalid CORS_ALLOWED_ORIGINS JSON array: '{v}'. "
-                        "Expected format: ['http://localhost:3000', 'https://example.com']. "
-                        f"Error: {e}"
-                    ) from e
-            return [i.strip() for i in v.split(",") if i.strip()]
+                    if isinstance(parsed, list):
+                        return [str(i).strip().strip("\"'").strip() for i in parsed]
+                except (json.JSONDecodeError, ValueError):
+                    # Fall back to CSV parsing if JSON fails
+                    v = v.strip("[]")
+            
+            # Split on comma and strip whitespace/quotes from each origin
+            return [i.strip().strip("\"'").strip() for i in v.split(",") if i.strip()]
         return v
 
     @field_validator("cors_allowed_origins")

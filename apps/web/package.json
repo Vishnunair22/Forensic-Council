@@ -10,7 +10,7 @@
     "directory": "apps/web"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=20.10.0"
   },
   "scripts": {
     "dev": "next dev",

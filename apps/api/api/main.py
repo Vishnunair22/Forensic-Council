@@ -16,6 +16,7 @@ import secrets
 import shutil
 import time
 import uuid
+from urllib.parse import urlparse
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -25,7 +26,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from api.routes import auth, hitl, investigation, metrics, sessions, sse
+from api.routes import (
+    auth_router,
+    hitl_router,
+    investigation_router,
+    metrics_router,
+    sessions_router,
+    sse_router,
+)
 from api.routes.metrics import (
     increment_error_count,
     increment_rate_limit_redis_bypasses,
@@ -82,13 +90,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 settings.jwt_algorithm
             )
             raise RuntimeError("Missing JWT private key for RS256 in production")
-            
-        logger.warning(
-            "JWT_ALGORITHM=%s but JWT_PRIVATE_KEY is not set — "
-            "falling back to HS256 (HMAC symmetric). "
-            "Set JWT_PRIVATE_KEY + JWT_PUBLIC_KEY before production deployment.",
-            settings.jwt_algorithm,
-        )
+        else:
+            logger.warning(
+                "JWT_ALGORITHM=%s but JWT_PRIVATE_KEY is not set — "
+                "falling back to HS256 (HMAC symmetric). "
+                "Set JWT_PRIVATE_KEY + JWT_PUBLIC_KEY before production deployment.",
+                settings.jwt_algorithm,
+            )
 
     # Startup
     await start_monitoring(app.state)
@@ -274,9 +282,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # 2. Wait for in-flight investigations to complete
     # Use investigation_timeout + buffer to allow longer investigations to complete
-    from core.config import get_settings
-    _settings = get_settings()
-    GRACEFUL_SHUTDOWN_TIMEOUT = _settings.investigation_timeout + 30  # Allow up to 10min + 30s buffer
+    GRACEFUL_SHUTDOWN_TIMEOUT = settings.investigation_timeout + 30  # Allow up to 10min + 30s buffer
     try:
         from api.routes._session_state import _active_tasks
 
@@ -312,7 +318,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # 4. Close in-flight pipeline connections
     try:
-        await investigation.cleanup_connections()
+        from api.routes.investigation import cleanup_connections
+        await cleanup_connections()
         logger.info("Pipeline connections cleaned up")
     except Exception as e:
         logger.warning("Pipeline cleanup failed", error=str(e))
@@ -377,8 +384,6 @@ app.add_middleware(
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
     """Add security headers to every response."""
-    from urllib.parse import urlparse
-
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
@@ -592,8 +597,8 @@ async def limit_upload_size(request: Request, call_next):
         )
 
     # 2. Check if body was already read by previous middleware
-    if hasattr(request, "_body"):
-        if len(request._body) > MAX_BODY_SIZE:
+    if hasattr(request.state, "body_size"):
+        if request.state.body_size > MAX_BODY_SIZE:
              raise HTTPException(status_code=413, detail="Request body exceeds limit (pre-read)")
         return await call_next(request)
 
@@ -608,6 +613,7 @@ async def limit_upload_size(request: Request, call_next):
         if message["type"] == "http.request":
             body = message.get("body", b"")
             _count += len(body)
+            request.state.body_size = _count
             if _count > MAX_BODY_SIZE:
                 raise HTTPException(
                     status_code=413,
@@ -626,7 +632,8 @@ async def metrics_middleware(request: Request, call_next):
     start_time = time.time()
 
     # Update active sessions count
-    set_active_sessions(investigation.get_active_pipelines_count())
+    from api.routes.investigation import get_active_pipelines_count
+    set_active_sessions(get_active_pipelines_count())
 
     try:
         response = await call_next(request)
@@ -658,12 +665,12 @@ if settings.debug:
 
 
 # Include routers
-app.include_router(auth.router)
-app.include_router(investigation.router)
-app.include_router(hitl.router)
-app.include_router(sessions.router)
-app.include_router(metrics.router)
-app.include_router(sse.router)
+app.include_router(auth_router)
+app.include_router(investigation_router)
+app.include_router(hitl_router)
+app.include_router(sessions_router)
+app.include_router(metrics_router)
+app.include_router(sse_router)
 
 
 @app.exception_handler(Exception)

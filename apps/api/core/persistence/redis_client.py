@@ -100,7 +100,7 @@ class RedisClient:
         except Exception as e:
             logger.error("Failed to connect to Redis", error=str(e))
             raise RedisConnectionError(
-                f"Failed to connect to Redis at {self._host}:{self._port}",
+                f"Failed to connect to Redis at {self._host}:{self._port}: {str(e)}",
                 details={"host": self._host, "port": self._port, "error": str(e)},
             ) from e
 

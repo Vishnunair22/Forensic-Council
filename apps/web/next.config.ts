@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import type { Configuration } from "webpack";
 import path from "path";
 
 /**
@@ -70,7 +71,7 @@ const nextConfig: NextConfig = {
   // On Windows bind mounts, inotify events are not forwarded into the container
   // reliably, so polling restores HMR. The custom source-map template also
   // avoids Chrome "illegal path" errors for host paths with spaces.
-  webpack: (config: Record<string, unknown> & { resolve: { alias: Record<string, string> }; watchOptions?: unknown; output?: Record<string, unknown> }, { dev }: { dev: boolean }) => {
+  webpack: (config: Configuration, { dev }: { dev: boolean }) => {
     // Removed redundant class-variance-authority alias
 
     if (dev) {
