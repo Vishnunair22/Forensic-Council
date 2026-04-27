@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { X, Upload } from "lucide-react";
+import { ALLOWED_MIME_TYPES } from "@/lib/constants";
 
 export interface UploadModalProps {
   onClose: () => void;
@@ -117,7 +118,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
                 type="file" 
                 aria-label="Upload evidence file"
                 className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                accept="image/*,video/*,audio/*"
+                accept={Array.from(ALLOWED_MIME_TYPES).join(",")}
                 onChange={(e) => {
                   if (e.target.files?.[0]) onFileSelected(e.target.files[0]);
                 }}

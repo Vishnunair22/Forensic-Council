@@ -26,6 +26,7 @@ from core.structured_logging import get_logger
 # Re-export so existing imports keep working
 from orchestration.agent_factory import AgentFactory, AgentLoopResult, _serialize_react_chain
 from orchestration.signal_bus import SignalBus
+from orchestration.pipeline_registry import register_pipeline, unregister_pipeline
 
 logger = get_logger(__name__)
 
@@ -392,7 +393,6 @@ class ForensicCouncilPipeline:
         from core.observability import get_tracer
         from orchestration.pipeline_phases import run_agents_concurrent
         from orchestration.pipeline_enrichment import enrich_report
-from orchestration.pipeline_registry import register_pipeline, unregister_pipeline
 
         _tracer = get_tracer("forensic-council.pipeline")
         from core.agents import AgentID

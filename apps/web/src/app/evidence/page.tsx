@@ -60,9 +60,15 @@ export default function EvidencePage() {
     revealQueue,
     revealPending,
     arbiterDeliberating,
+    arbiterLiveText,
   } = useInvestigation(playSound);
 
-  const sessionId = hasStartedAnalysis ? storage.getItem<string>(FORENSIC_SESSION_ID_KEY) : null;
+  const [sessionId, setSessionId] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (hasStartedAnalysis) {
+      setSessionId(storage.getItem<string>(FORENSIC_SESSION_ID_KEY));
+    }
+  }, [hasStartedAnalysis]);
 
   // Derive progress text for accessibility (NVDA)
   const runningAgentNames = Object.keys(agentUpdates)

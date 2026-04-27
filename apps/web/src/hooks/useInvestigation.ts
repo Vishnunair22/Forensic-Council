@@ -421,6 +421,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   }, [playSound, resumeInvestigation, router, isNavigating]);
 
   const handleDeepAnalysis = useCallback(async () => {
+    if (investigationInFlightRef.current) return;
+    investigationInFlightRef.current = true;
     playSound("think");
     storage.setItem("forensic_is_deep", "true");
     storage.setItem("forensic_initial_agents", completedAgentsRef.current, true);
@@ -431,6 +433,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       await resumeInvestigation(true);
     } catch {
       playSound("error");
+    } finally {
+      investigationInFlightRef.current = false;
     }
   }, [playSound, resumeInvestigation, clearCompletedAgents]);
 

@@ -326,8 +326,6 @@ export const useSimulation = ({
                           ],
                           // Sum findings counts from both phases
                           findings_count: (existing.findings_count || 0) + (newUpdate.findings_count || 0),
-                          // Use the lower (worse) confidence
-                          confidence: Math.min(existing.confidence || 1, newUpdate.confidence || 1),
                           // Deep-phase verdict takes precedence if present
                           agent_verdict: newUpdate.agent_verdict || existing.agent_verdict,
                         };
@@ -777,6 +775,7 @@ export const useSimulation = ({
   const clearCompletedAgents = useCallback(() => {
     setCompletedAgents([]);
     completedAgentsRef.current = [];
+    setAgentUpdates({});
     setPipelineMessage("Beginning deep analysis...");
     setPipelineThinking("");
     setRevealQueue([]);
