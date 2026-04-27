@@ -528,13 +528,13 @@ class Settings(BaseSettings):
         description="Timeout for Gemini API calls in seconds (raised to 55s for deep forensic analysis).",
     )
     gemini_max_concurrent: int = Field(
-        default=2,
+        default=1,
         ge=1,
         le=10,
         description=(
             "Maximum number of Gemini API calls that may be in-flight simultaneously "
-            "across all agents. Prevents 5 concurrent agents from saturating the "
-            "free-tier quota (10 RPM). Increase if you have a paid-tier key."
+            "across all agents. Default 1 prevents free-tier 429s (10 RPM limit). "
+            "Raise to 2-3 with a paid-tier key or GEMINI_MAX_CONCURRENT env var."
         ),
     )
 

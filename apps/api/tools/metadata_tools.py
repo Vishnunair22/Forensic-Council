@@ -804,11 +804,11 @@ async def get_physical_address(lat: float, lon: float) -> dict[str, Any]:
     try:
         global _last_nominatim_call
         async with _nominatim_lock:
-            now = asyncio.get_event_loop().time()
+            now = asyncio.get_running_loop().time()
             elapsed = now - _last_nominatim_call
             if elapsed < _NOMINATIM_MIN_INTERVAL:
                 await asyncio.sleep(_NOMINATIM_MIN_INTERVAL - elapsed)
-            _last_nominatim_call = asyncio.get_event_loop().time()
+            _last_nominatim_call = asyncio.get_running_loop().time()
 
             # Nominatim requires a user_agent string
             geolocator = Nominatim(user_agent="ForensicCouncilAgent/1.0")

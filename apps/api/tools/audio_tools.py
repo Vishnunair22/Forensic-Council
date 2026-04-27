@@ -174,7 +174,7 @@ async def speaker_diarize(
         if not os.path.exists(audio_path):
             raise ToolUnavailableError(f"File not found: {audio_path}")
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         info = sf.info(audio_path)
         duration = float(info.duration)
 
@@ -498,7 +498,7 @@ async def anti_spoofing_detect(
         # ── Heuristic spectral fallback ───────────────────────────────────────
 
         # Load audio
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         y, sr = await loop.run_in_executor(None, lambda: librosa.load(audio_path, sr=None))
 
         # Extract segment if specified
@@ -604,7 +604,7 @@ async def prosody_analyze(
 
         # Load audio. Prefer librosa for pitch/beat helpers, but keep a
         # SoundFile path so hardened containers with broken numba still work.
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         used_librosa = True
         try:
             y, sr = await loop.run_in_executor(None, lambda: librosa.load(audio_path, sr=None))
@@ -776,7 +776,7 @@ async def background_noise_consistency(
             raise ToolUnavailableError(f"File not found: {audio_path}")
 
         # Load audio without relying on librosa's numba-backed lazy imports.
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         y, sr = await loop.run_in_executor(None, lambda: _load_audio_with_soundfile(audio_path))
         len(y) / sr
 
@@ -1040,7 +1040,7 @@ async def _get_speechbrain_classifier_async() -> Any:
 
             return EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb")
 
-        _speechbrain_classifier_instance = await asyncio.get_event_loop().run_in_executor(
+        _speechbrain_classifier_instance = await asyncio.get_running_loop().run_in_executor(
             None, _load
         )
         return _speechbrain_classifier_instance

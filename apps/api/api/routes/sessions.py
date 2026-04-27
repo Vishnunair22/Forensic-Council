@@ -185,85 +185,43 @@ def _forensic_report_to_dto(report) -> ReportDTO:
             logger.warning("Failed to serialize signed_utc", error=str(e))
             signed_utc_str = None
 
-    # Build DTO with defensive defaults for all fields
-    try:
-        return ReportDTO(
-            report_id=str(report.report_id),
-            session_id=str(report.session_id),
-            case_id=report.case_id,
-            executive_summary=report.executive_summary or "",
-            per_agent_findings=per_agent,
-            per_agent_metrics=getattr(report, "per_agent_metrics", {}) or {},
-            per_agent_analysis=getattr(report, "per_agent_analysis", {}) or {},
-            overall_confidence=float(getattr(report, "overall_confidence", 0.0) or 0.0),
-            overall_error_rate=float(getattr(report, "overall_error_rate", 0.0) or 0.0),
-            overall_verdict=str(
-                getattr(report, "overall_verdict", "REVIEW REQUIRED") or "REVIEW REQUIRED"
-            ),
-            cross_modal_confirmed=cross_modal,
-            contested_findings=contested,
-            tribunal_resolved=tribunal_resolved,
-            incomplete_findings=incomplete,
-            uncertainty_statement=report.uncertainty_statement or "",
-            cryptographic_signature=report.cryptographic_signature or "",
-            report_hash=report.report_hash or "",
-            signed_utc=signed_utc_str,
-            verdict_sentence=getattr(report, "verdict_sentence", "") or "",
-            key_findings=list(getattr(report, "key_findings", []) or []),
-            reliability_note=getattr(report, "reliability_note", "") or "",
-            manipulation_probability=float(getattr(report, "manipulation_probability", 0.0) or 0.0),
-            compression_penalty=float(getattr(report, "compression_penalty", 1.0) or 1.0),
-            confidence_min=float(getattr(report, "confidence_min", 0.0) or 0.0),
-            confidence_max=float(getattr(report, "confidence_max", 0.0) or 0.0),
-            confidence_std_dev=float(getattr(report, "confidence_std_dev", 0.0) or 0.0),
-            applicable_agent_count=int(getattr(report, "applicable_agent_count", 0) or 0),
-            skipped_agents=dict(getattr(report, "skipped_agents", {}) or {}),
-            analysis_coverage_note=getattr(report, "analysis_coverage_note", "") or "",
-            per_agent_summary=dict(getattr(report, "per_agent_summary", {}) or {}),
-            degradation_flags=list(getattr(report, "degradation_flags", []) or []),
-            cross_modal_fusion=dict(getattr(report, "cross_modal_fusion", {}) or {}),
-        )
-    except Exception as e:
-        logger.error(
-            "Failed to serialize report to DTO - returning minimal valid DTO",
-            error=str(e),
-            exc_info=True,
-        )
-        # Return a minimal valid DTO rather than crashing with 500
-        return ReportDTO(
-            report_id=str(getattr(report, "report_id", "")),
-            session_id=str(getattr(report, "session_id", "")),
-            case_id=str(getattr(report, "case_id", "")),
-            executive_summary="Report serialization failed - data may be incomplete",
-            per_agent_findings={},
-            per_agent_metrics={},
-            per_agent_analysis={},
-            overall_confidence=0.0,
-            overall_error_rate=0.0,
-            overall_verdict="INCONCLUSIVE",
-            cross_modal_confirmed=[],
-            contested_findings=[],
-            tribunal_resolved=[],
-            incomplete_findings=[],
-            uncertainty_statement="Report data unavailable due to serialization error",
-            cryptographic_signature="",
-            report_hash="",
-            signed_utc=None,
-            verdict_sentence="",
-            key_findings=[],
-            reliability_note="",
-            manipulation_probability=0.0,
-            confidence_min=0.0,
-            confidence_max=0.0,
-            confidence_std_dev=0.0,
-            applicable_agent_count=0,
-            skipped_agents={},
-            analysis_coverage_note="",
-            per_agent_summary={},
-            degradation_flags=["Report serialization failed"],
-            cross_modal_fusion={},
-            compression_penalty=1.0,
-        )
+    # Build DTO — let construction errors propagate to the route handler as 500
+    return ReportDTO(
+        report_id=str(report.report_id),
+        session_id=str(report.session_id),
+        case_id=report.case_id,
+        executive_summary=report.executive_summary or "",
+        per_agent_findings=per_agent,
+        per_agent_metrics=getattr(report, "per_agent_metrics", {}) or {},
+        per_agent_analysis=getattr(report, "per_agent_analysis", {}) or {},
+        overall_confidence=float(getattr(report, "overall_confidence", 0.0) or 0.0),
+        overall_error_rate=float(getattr(report, "overall_error_rate", 0.0) or 0.0),
+        overall_verdict=str(
+            getattr(report, "overall_verdict", "REVIEW REQUIRED") or "REVIEW REQUIRED"
+        ),
+        cross_modal_confirmed=cross_modal,
+        contested_findings=contested,
+        tribunal_resolved=tribunal_resolved,
+        incomplete_findings=incomplete,
+        uncertainty_statement=report.uncertainty_statement or "",
+        cryptographic_signature=report.cryptographic_signature or "",
+        report_hash=report.report_hash or "",
+        signed_utc=signed_utc_str,
+        verdict_sentence=getattr(report, "verdict_sentence", "") or "",
+        key_findings=list(getattr(report, "key_findings", []) or []),
+        reliability_note=getattr(report, "reliability_note", "") or "",
+        manipulation_probability=float(getattr(report, "manipulation_probability", 0.0) or 0.0),
+        compression_penalty=float(getattr(report, "compression_penalty", 1.0) or 1.0),
+        confidence_min=float(getattr(report, "confidence_min", 0.0) or 0.0),
+        confidence_max=float(getattr(report, "confidence_max", 0.0) or 0.0),
+        confidence_std_dev=float(getattr(report, "confidence_std_dev", 0.0) or 0.0),
+        applicable_agent_count=int(getattr(report, "applicable_agent_count", 0) or 0),
+        skipped_agents=dict(getattr(report, "skipped_agents", {}) or {}),
+        analysis_coverage_note=getattr(report, "analysis_coverage_note", "") or "",
+        per_agent_summary=dict(getattr(report, "per_agent_summary", {}) or {}),
+        degradation_flags=list(getattr(report, "degradation_flags", []) or []),
+        cross_modal_fusion=dict(getattr(report, "cross_modal_fusion", {}) or {}),
+    )
 
 
 @router.get("", response_model=list[SessionInfo])
@@ -619,8 +577,8 @@ async def get_arbiter_status(
                     else getattr(report, "report_id", session_id)
                 )
                 return {"status": "complete", "report_id": str(report_id)}
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("Report cache check failed", session_id=session_id, error=str(_e))
 
         # 2. Check active metadata in Redis
         try:
@@ -633,8 +591,8 @@ async def get_arbiter_status(
                     return {"status": "error", "message": metadata.get("error", "Unknown error")}
                 msg = metadata.get("brief") or "Investigation in progress…"
                 return {"status": "running", "message": msg}
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("Pipeline metadata check failed", session_id=session_id, error=str(_e))
 
         # 3. DB fallback
         try:
@@ -653,8 +611,8 @@ async def get_arbiter_status(
                         "status": "error",
                         "message": db_row.get("error_message", "Unknown error"),
                     }
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("DB status check failed", session_id=session_id, error=str(_e))
 
         return {"status": "not_found"}
 
@@ -730,8 +688,8 @@ async def get_session_report(
             payload, created_at = redis_hit
             _final_reports[session_id] = (payload, created_at)
             return _forensic_report_to_dto(payload)
-    except Exception:
-        pass
+    except Exception as _e:
+        logger.warning("Redis report cache lookup failed", session_id=session_id, error=str(_e))
 
     # ── 3. PostgreSQL — restart-resilient fallback ────────────────────────────
     try:

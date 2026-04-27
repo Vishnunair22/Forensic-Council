@@ -61,7 +61,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Initializes infrastructure on startup and closes on shutdown.
     """
     # IMPV-03: Initialize Managed ProcessPool for CPU-bound forensic analysis (ELA, FFT, etc.)
-    max_workers = min(16, os.cpu_count() or 4)
+    # FORENSIC_MAX_WORKERS env var overrides the default cap.
+    # Default is min(4, cpu_count) to prevent OOM on constrained Docker hosts;
+    # raise via FORENSIC_MAX_WORKERS for bare-metal production deployments.
+    _env_max = int(os.environ.get("FORENSIC_MAX_WORKERS", "0"))
+    max_workers = _env_max if _env_max > 0 else min(4, os.cpu_count() or 2)
     app.state.process_pool = concurrent.futures.ProcessPoolExecutor(max_workers=max_workers)
     # Cap the number of in-flight + queued CPU tasks to 4× worker count.
     # Callers must acquire this semaphore before submitting; reject with 503 on overflow.
