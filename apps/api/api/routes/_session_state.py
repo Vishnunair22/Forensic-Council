@@ -138,11 +138,10 @@ async def set_final_report(session_id: str, report: Any) -> None:
     key = f"{REPORT_CACHE_KEY_PREFIX}{session_id}"
     ts_key = f"{REPORT_CACHE_KEY_PREFIX}{session_id}:created_at"
     data = report.model_dump(mode="json") if hasattr(report, "model_dump") else report
-    import json as _json
 
     await redis.set(
         key,
-        _json.dumps(data, default=str) if isinstance(data, dict) else data,
+        json.dumps(data, default=str),
         ex=_REPORT_TTL_SECONDS,
     )
     # Issue 9.2: Store the real creation timestamp alongside the report data

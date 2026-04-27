@@ -272,8 +272,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 1. Stop accepting new investigations
     app.state.accepting_requests = False
 
-    # 2. Wait for in-flight investigations to complete (up to 120s for deep analysis)
-    GRACEFUL_SHUTDOWN_TIMEOUT = 120  # 2 minutes for long investigations
+    # 2. Wait for in-flight investigations to complete
+    # Use investigation_timeout + buffer to allow longer investigations to complete
+    from core.config import get_settings
+    _settings = get_settings()
+    GRACEFUL_SHUTDOWN_TIMEOUT = _settings.investigation_timeout + 30  # Allow up to 10min + 30s buffer
     try:
         from api.routes._session_state import _active_tasks
 
@@ -374,15 +377,27 @@ app.add_middleware(
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
     """Add security headers to every response."""
+    from urllib.parse import urlparse
+
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "0"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+
+    def _origin(u: str) -> str:
+        p = urlparse(u)
+        return f"{p.scheme}://{p.netloc}" if p.netloc else u
+
     csp_connect = ["'self'"]
-    if settings.app_env != "production":
-        csp_connect.extend(settings.cors_allowed_origins)
+    csp_connect.extend([_origin(u) for u in settings.cors_allowed_origins])
+
+    # Also add internal API URL if configured (for separate frontend/api deployments)
+    internal_api = getattr(settings, "internal_api_url", None) or getattr(settings, "next_public_api_url", None)
+    if internal_api:
+        csp_connect.append(_origin(internal_api))
+
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "script-src 'self'; "

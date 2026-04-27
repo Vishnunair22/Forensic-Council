@@ -96,15 +96,15 @@ async function proxyRequest(
     lastBackendUrl = baseUrl;
 
     try {
-      const response = await fetch(backendUrlFor(pathname, baseUrl), {
+      const init: RequestInit & { duplex?: "half" } = {
         method: request.method,
         headers: requestHeaders,
         body: streamBody,
-        // @ts-expect-error: 'duplex' is required when body is a stream in some environments
-        duplex: streamBody ? 'half' : undefined,
         redirect: "manual",
         signal: AbortSignal.timeout(timeoutMs),
-      });
+      };
+      if (streamBody) init.duplex = "half";
+      const response = await fetch(backendUrlFor(pathname, baseUrl), init);
 
       if (RETRYABLE_STATUSES.has(response.status)) {
         lastError = `Backend returned ${response.status} via ${baseUrl}`;

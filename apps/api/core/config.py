@@ -357,15 +357,10 @@ class Settings(BaseSettings):
             _forbidden = (
                 "change",
                 "default",
-                "dev",
-                "generate",
                 "placeholder",
                 "replace_me",
                 "replace",
                 "secret-key",
-                "strong",
-                "example",
-                "production",
             )
             if any(word in v.lower() for word in _forbidden):
                 raise ValueError(

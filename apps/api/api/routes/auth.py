@@ -5,6 +5,7 @@ Authentication Routes
 Routes for user authentication and token management.
 """
 
+import secrets as _secrets
 import os as _os
 import time
 from collections import defaultdict
@@ -301,15 +302,17 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
     await _clear_failed_attempts(client_ip)
     logger.info("User logged in successfully", user_id=user["user_id"], role=user["role"].value)
 
-    response = JSONResponse(
-        content=TokenResponse(
-            access_token=access_token,
-            token_type="bearer",  # nosec: B106
-            expires_in=get_settings().jwt_access_token_expire_minutes * 60,
-            user_id=user["user_id"],
-            role=user["role"].value,
-        ).model_dump()
-    )
+    csrf_token = _secrets.token_urlsafe(32)
+    token_content = TokenResponse(
+        access_token=access_token,
+        token_type="bearer",  # nosec: B106
+        expires_in=get_settings().jwt_access_token_expire_minutes * 60,
+        user_id=user["user_id"],
+        role=user["role"].value,
+    ).model_dump()
+    token_content["csrf_token"] = csrf_token
+
+    response = JSONResponse(content=token_content)
 
     # Set HttpOnly cookie for production-hardened XSS protection
     response.set_cookie(
@@ -320,6 +323,16 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
         expires=get_settings().jwt_access_token_expire_minutes * 60,
         samesite="strict",
         secure=True if settings.app_env == "production" else False,
+    )
+    # Set CSRF token cookie
+    response.set_cookie(
+        key="csrf_token",
+        value=csrf_token,
+        httponly=False,
+        max_age=86400,
+        samesite="strict",
+        secure=settings.app_env == "production",
+        path="/",
     )
 
     return response
@@ -425,4 +438,5 @@ async def logout(
         }
     )
     response.delete_cookie("access_token")
+    response.delete_cookie("csrf_token")
     return response

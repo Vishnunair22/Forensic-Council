@@ -23,6 +23,7 @@ from api.routes._session_state import (
     set_active_pipeline_metadata,
     unregister_websocket,
 )
+from api.routes._authz import assert_session_access
 from api.schemas import AgentFindingDTO, ReportDTO, ReportStatusDTO, SessionInfo
 from core.auth import User, decode_token, get_current_user
 from core.severity import assign_severity_tier as _assign_severity_tier
@@ -293,12 +294,8 @@ async def list_sessions(current_user: User = Depends(get_current_user)):
 
 @router.delete("/{session_id}")
 async def terminate_session(session_id: str, current_user: User = Depends(get_current_user)):
-    """Terminate a running session. Requires authentication."""
-    from api.routes._session_state import get_active_pipeline_metadata
-
-    metadata = await get_active_pipeline_metadata(session_id)
-    if not metadata:
-        raise HTTPException(status_code=404, detail="Session not found")
+    """Terminate a running session. Requires authentication and session ownership."""
+    await assert_session_access(session_id, current_user)
 
     # Close local WebSocket connections
     for ws in get_session_websockets(session_id):
@@ -418,7 +415,28 @@ async def live_updates(websocket: WebSocket, session_id: str):
         await websocket.close(code=4010)
         return
 
+    # ── 3. Verify session ownership ────────────────────────────────────────────
+    # Create a minimal user object for authorization check
+    from core.auth import User
+
+    auth_user = User(user_id=user_id, username=user_id, role=metadata.get("investigator_role", "investigator"))
+    try:
+        await assert_session_access(session_id, auth_user)
+    except HTTPException as e:
+        await websocket.send_json({"type": "ERROR", "message": e.detail})
+        await websocket.close(code=4003)
+        return
+
     # ── 4. Subscribe to Redis Updates for this session ───────────────────────
+    # WebSocket configuration - declare BEFORE task creation
+    IDLE_TIMEOUT = 300  # 5 minutes
+    PING_INTERVAL = 30  # seconds
+    MAX_MESSAGES_PER_MINUTE = 100
+    from collections import deque
+
+    last_activity = time.time()
+    message_timestamps: deque[float] = deque(maxlen=200)
+
     # This task listens for messages published by the Worker to the session channel
     # and forwards them directly to the user's specific WebSocket connection.
     async def _redis_subscriber():
@@ -438,7 +456,16 @@ async def live_updates(websocket: WebSocket, session_id: str):
         except asyncio.CancelledError:
             raise
         except Exception as e:
-            logger.debug("Redis subscriber task terminated", session_id=session_id, error=str(e))
+            logger.warning("Redis subscriber error", session_id=session_id, error=str(e))
+            try:
+                await websocket.send_json({
+                    "type": "ERROR",
+                    "message": "Live update channel disconnected. Please refresh.",
+                    "data": {"recoverable": True},
+                })
+            except Exception:
+                pass
+            await websocket.close(code=1011)
         finally:
             if pubsub:
                 try:
@@ -450,15 +477,8 @@ async def live_updates(websocket: WebSocket, session_id: str):
                 except Exception:
                     pass
 
-    subscriber_task = asyncio.create_task(_redis_subscriber())
-    register_websocket(session_id, websocket)
-
-    # WebSocket configuration
-    IDLE_TIMEOUT = 300  # 5 minutes
-    PING_INTERVAL = 30  # seconds
-    MAX_MESSAGES_PER_MINUTE = 100
-    last_activity = time.time()
-    message_timestamps: list[float] = []
+    # Note: We do NOT call register_websocket() here - all messages come via
+    # Redis pub/sub to avoid double-delivery in single-process mode
 
     async def send_ping():
         """Send periodic ping to detect stale connections."""
@@ -494,6 +514,7 @@ async def live_updates(websocket: WebSocket, session_id: str):
 
     ping_task = asyncio.create_task(send_ping())
     idle_task = asyncio.create_task(monitor_idle())
+    subscriber_task = asyncio.create_task(_redis_subscriber())
 
     try:
         await websocket.send_json(
@@ -516,9 +537,9 @@ async def live_updates(websocket: WebSocket, session_id: str):
                 now = time.time()
                 one_min_ago = now - 60
 
-                # Remove old timestamps
+                # Remove old timestamps (deque O(1) vs list O(n))
                 while message_timestamps and message_timestamps[0] < one_min_ago:
-                    message_timestamps.pop(0)
+                    message_timestamps.popleft()
 
                 if len(message_timestamps) >= MAX_MESSAGES_PER_MINUTE:
                     logger.warning(
@@ -582,6 +603,8 @@ async def get_arbiter_status(
     Returns status from Redis persistence. Never raises — always returns a
     safe JSON body so the frontend can keep polling without hitting 500s.
     """
+    await assert_session_access(session_id, current_user)
+
     try:
         from api.routes._session_state import get_active_pipeline_metadata, get_final_report
 
@@ -659,9 +682,12 @@ async def get_session_report(
 
     Resolution order (most recent / most reliable first):
     1. In-memory pipeline object  — fastest; only available on the originating replica
-    2. In-memory final_reports cache — survives pipeline eviction for up to 24 h
-    3. PostgreSQL session_reports  — survives restarts and is visible to all replicas
+    2. Redis final report cache — survives restarts, visible to all replicas
+    3. In-memory final_reports cache — survives pipeline eviction for up to 24 h
+    4. PostgreSQL session_reports  — survives restarts and is visible to all replicas
     """
+    await assert_session_access(session_id, current_user)
+
     pipeline = get_active_pipeline(session_id)
 
     # ── 1. In-memory pipeline ─────────────────────────────────────────────────
@@ -694,6 +720,18 @@ async def get_session_report(
         if (datetime.now(UTC) - cached_at).total_seconds() < 86_400:
             return _forensic_report_to_dto(report)
         del _final_reports[session_id]
+
+    # ── 2b. Redis cache (when use_redis_worker=True) ──────────────────────────
+    try:
+        from api.routes._session_state import get_final_report
+
+        redis_hit = await get_final_report(session_id)
+        if redis_hit:
+            payload, created_at = redis_hit
+            _final_reports[session_id] = (payload, created_at)
+            return _forensic_report_to_dto(payload)
+    except Exception:
+        pass
 
     # ── 3. PostgreSQL — restart-resilient fallback ────────────────────────────
     try:
@@ -745,7 +783,7 @@ async def get_session_report(
                         "ERROR",
                     }:
                         evidence_verdict = "INCONCLUSIVE"
-                    return _AFD(
+                    dto = _AFD(
                         finding_id=str(f.get("finding_id", "")),
                         agent_id=str(f.get("agent_id", "")),
                         agent_name=str(f.get("agent_name", "")),
@@ -764,6 +802,9 @@ async def get_session_report(
                         reasoning_summary=str(f.get("reasoning_summary", "")),
                         metadata=metadata or None,
                     )
+                    # D-H2: Ensure severity_tier is populated for DB-rehydrated reports
+                    dto.severity_tier = _assign_severity_tier(dto)
+                    return dto
 
                 rd = db_row["report_data"]
                 per_agent = {
@@ -880,6 +921,8 @@ async def get_agent_brief(
     1. Live working-memory snapshot from the active pipeline
     2. Falls back to empty string — brief is non-critical UI decoration
     """
+    await assert_session_access(session_id, current_user)
+
     pipeline = get_active_pipeline(session_id)
     if not pipeline and session_id not in _final_reports:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -924,6 +967,8 @@ async def get_session_checkpoints(
 
     Checks the active pipeline first, then falls back to the database.
     """
+    await assert_session_access(session_id, current_user)
+
     pipeline = get_active_pipeline(session_id)
     if not pipeline and session_id not in _final_reports:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -997,8 +1042,14 @@ async def resume_investigation(
     {"status": "already_resumed"} rather than 409.
     """
     from core.structured_logging import get_logger as _get_logger
+    from core.persistence.redis_client import get_redis_client
 
     _log = _get_logger(__name__)
+
+    # Validate session_id format first (D-H1)
+    from api.routes._authz import validate_session_id
+
+    validate_session_id(session_id)
 
     _log.info(
         "Resume investigation called",
@@ -1007,8 +1058,23 @@ async def resume_investigation(
         user_id=current_user.user_id,
     )
 
-    from core.persistence.redis_client import get_redis_client
+    # Check session exists and user owns it
+    metadata = await get_active_pipeline_metadata(session_id)
+    if not metadata:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No active investigation found for session {session_id}",
+        )
 
+    # Verify ownership (non-admins can't resume other users' investigations)
+    owner = metadata.get("investigator_id")
+    if current_user.role not in ("admin", "auditor") and owner != current_user.user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have access to this investigation",
+        )
+
+    # Now write the decision key
     redis = await get_redis_client()
     decision_key = f"forensic:session:resume_decision:{session_id}"
     await redis.set(
@@ -1025,12 +1091,6 @@ async def resume_investigation(
 
     pipeline = get_active_pipeline(session_id)
     if not pipeline:
-        metadata = await get_active_pipeline_metadata(session_id)
-        if not metadata:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No active investigation found for session {session_id}",
-            )
         await set_active_pipeline_metadata(
             session_id,
             {

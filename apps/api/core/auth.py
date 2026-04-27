@@ -1,12 +1,13 @@
 """
 Authentication and Authorization Module
-=======================================
+======================================
 
 JWT-based authentication using FastAPI security utilities.
 Provides token generation, validation, and dependency injection for protected routes.
 """
 
 import hashlib
+from collections import OrderedDict
 from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -217,16 +218,18 @@ async def decode_token(token: str) -> TokenData:
 
 
 # Local in-memory cache for recently blacklisted tokens.
-# SECURITY: This is a SHORT-LIVED read-through cache only (5 s TTL).
-# It is NOT an authoritative store. Primary authority is Redis; SQLite is the
-# durable fallback. The local cache exists solely to avoid Redis RTT overhead
-# on the hot-path blacklist check when Redis is healthy.
-_recently_blacklisted: dict[str, float] = {}  # token_hash -> expiry_timestamp
-_LOCAL_BLACKLIST_MAX_AGE = 5  # 5-second read-through TTL (NOT 1 hour)
+# SECURITY: This is a read-through cache that uses token's remaining TTL.
+# It is NOT an authoritative store. Primary authority is Redis. The local cache
+# exists solely to avoid Redis RTT overhead on the hot-path blacklist check.
+from collections import OrderedDict
+
+_recently_blacklisted: OrderedDict[str, float] = OrderedDict()  # token_hash -> expiry_timestamp
 _LOCAL_BLACKLIST_MAX_SIZE = 10000  # prevent unbounded memory growth
 
 # Background cleanup task handle (set during lifespan startup)
 _cleanup_task: object | None = None
+_last_cleanup_time: float = 0.0
+_CLEANUP_INTERVAL_SECONDS = 60.0  # Only cleanup once per minute, not on every call
 
 
 async def _periodic_blacklist_cleanup(interval_seconds: int = 3600) -> None:
@@ -254,19 +257,26 @@ def start_blacklist_cleanup_task() -> None:
 
 
 def _cleanup_local_blacklist() -> None:
-    """Remove expired entries from local blacklist cache."""
+    """Remove expired entries from local blacklist cache (called periodically, not on every auth check)."""
     import time
 
+    global _last_cleanup_time
     current_time = time.time()
+
+    # Only cleanup once per interval to avoid O(n) on every auth check
+    if current_time - _last_cleanup_time < _CLEANUP_INTERVAL_SECONDS:
+        return
+    _last_cleanup_time = current_time
+
     # Build list of expired keys first, then delete (safe iteration)
     expired_keys = [k for k, v in _recently_blacklisted.items() if current_time > v]
     for k in expired_keys:
         _recently_blacklisted.pop(k, None)
     # Enforce max size by dropping oldest entries if needed
     if len(_recently_blacklisted) > _LOCAL_BLACKLIST_MAX_SIZE:
-        sorted_items = sorted(_recently_blacklisted.items(), key=lambda item: item[1])
-        for k, _ in sorted_items[: len(_recently_blacklisted) - _LOCAL_BLACKLIST_MAX_SIZE]:
-            _recently_blacklisted.pop(k, None)
+        # OrderedDict: pop oldest (first item) repeatedly
+        while len(_recently_blacklisted) > _LOCAL_BLACKLIST_MAX_SIZE:
+            _recently_blacklisted.popitem(last=False)
 
 
 async def is_token_blacklisted(token: str) -> bool:
@@ -300,6 +310,8 @@ async def is_token_blacklisted(token: str) -> bool:
     if token_hash in _recently_blacklisted:
         expiry = _recently_blacklisted[token_hash]
         if time.time() < expiry:
+            # Move to end to mark as recently used (LRU behavior)
+            _recently_blacklisted.move_to_end(token_hash)
             return True
         else:
             # Expired, remove it
@@ -313,9 +325,10 @@ async def is_token_blacklisted(token: str) -> bool:
         if redis:
             result = await redis.get(f"blacklist:{token_hash}")
             if result is not None:
-                # Also cache locally for future lookups during Redis outages
-                # Default to 1 hour if we don't know the exact expiry
-                _recently_blacklisted[token_hash] = time.time() + _LOCAL_BLACKLIST_MAX_AGE
+                # Cache locally for the token's remaining TTL (not hardcoded 5s)
+                ttl = await redis.ttl(f"blacklist:{token_hash}")
+                ttl = ttl if ttl and ttl > 0 else 3600
+                _recently_blacklisted[token_hash] = time.time() + ttl
                 return True
             return False
         else:
@@ -386,7 +399,13 @@ async def blacklist_token(token: str, expires_in_seconds: int) -> None:
 
     # Populate local in-memory cache so the fast-path check in
     # is_token_blacklisted catches this token immediately.
+    # Use move_to_end for LRU ordering
     _recently_blacklisted[token_hash] = expires_at
+    _recently_blacklisted.move_to_end(token_hash)
+
+    # Enforce max size
+    while len(_recently_blacklisted) > _LOCAL_BLACKLIST_MAX_SIZE:
+        _recently_blacklisted.popitem(last=False)
 
     try:
         from core.persistence.redis_client import get_redis_client

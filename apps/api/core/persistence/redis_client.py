@@ -160,7 +160,7 @@ class RedisClient:
         """
 
         if not isinstance(value, str):
-            value = json.dumps(value)
+            value = json.dumps(value, default=str)
 
         result = await self.client.set(key, value, ex=ex, px=px, nx=nx, xx=xx)
         # redis-py returns True on success for basic SET, or None if nx=True and key exists
@@ -321,7 +321,7 @@ class RedisClient:
     async def hset(self, name: str, key: str, value: Any) -> int:
         """Set a field in a hash."""
         if not isinstance(value, str):
-            value = json.dumps(value)
+            value = json.dumps(value, default=str)
         return await self.client.hset(name, key, value)
 
     async def hget(self, name: str, key: str) -> Any | None:
