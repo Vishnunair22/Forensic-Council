@@ -43,6 +43,9 @@
     handle /api/v1/sessions/*/live {
         reverse_proxy backend:8000 {
             header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up Upgrade {http.request.header.Upgrade}
+            header_up Connection {http.request.header.Connection}
             flush_interval -1
 
             transport http {

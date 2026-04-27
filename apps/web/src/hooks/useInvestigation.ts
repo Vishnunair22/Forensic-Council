@@ -505,7 +505,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   
   const awaitingDecision = status === "awaiting_decision";
   const allAgentsDone = phase === "deep" 
-    ? status === "complete" 
+    ? (status === "complete" || expectedCompletedCount >= expectedAgentIds.size)
     : expectedCompletedCount >= expectedAgentIds.size;
 
   useEffect(() => {

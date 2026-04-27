@@ -146,9 +146,9 @@ export default function EvidencePage() {
             )}
 
 <ForensicErrorModal
-        isVisible={!!(errorMessage || wsConnectionError || validationError)}
-        message={errorMessage || wsConnectionError || validationError || "The analysis pipeline was interrupted."}
-        errorCode={errorMessage ? "0xFC_PIPELINE_HALT" : wsConnectionError ? "0xFC_CONN_FAIL" : "0xFC_VALIDATION_FAIL"}
+        isVisible={!!(errorMessage || wsConnectionError)}
+        message={errorMessage || wsConnectionError || "The analysis pipeline was interrupted."}
+        errorCode={errorMessage ? "0xFC_PIPELINE_HALT" : "0xFC_CONN_FAIL"}
         onRetry={wsConnectionError ? retryWsConnection : (!!file ? () => triggerAnalysis(file as File) : undefined)}
         onHome={handleNewUpload}
       />

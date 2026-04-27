@@ -158,7 +158,8 @@ export function AgentStatusCard({
     <motion.div
       layout
       className={clsx(
-        "glass-panel relative flex flex-col overflow-hidden min-h-[540px] transition-all duration-500",
+        "glass-panel relative flex flex-col overflow-hidden transition-all duration-500",
+        status === "unsupported" ? "min-h-[200px]" : "min-h-[540px]",
         (status === "running" || status === "validating" || status === "checking") && "border-[var(--color-success-light)]/30 shadow-[0_0_30px_rgba(167,255,210,0.1)]",
         status === "waiting" && "opacity-40"
       )}

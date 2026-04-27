@@ -176,6 +176,7 @@ export function AgentProgressDisplay({
 
     const completed = completedAgents.find((c) => c.agent_id === agentId);
     if (completed) {
+      if (completed.status === "skipped") return "unsupported";
       return (completed.status === "error" || completed.status === "failed" || completed.error) ? "error" : "complete";
     }
     
@@ -318,7 +319,7 @@ export function AgentProgressDisplay({
       </AnimatePresence>
 
       <AnimatePresence>
-        {!awaitingDecision && revealQueue.length === 0 && (allAgentsDone || pipelineStatus === "complete") && (
+        {!awaitingDecision && phase === "deep" && revealQueue.length === 0 && (allAgentsDone || pipelineStatus === "complete") && (
           <motion.div
             initial={{ opacity: 0, y: 100 }}
             animate={{ opacity: 1, y: 0 }}

@@ -67,8 +67,8 @@ export function HeroAuthActions() {
     try {
       const health = await checkBackendHealth();
       if (!health.ok) {
-        setAuthError(health.warmingUp ? "Protocol Warming Up... (60s)" : health.message);
         setIsAuthenticating(false);
+        setAuthError(health.warmingUp ? "Protocol Warming Up... (60s)" : health.message);
         return;
       }
 
@@ -77,12 +77,13 @@ export function HeroAuthActions() {
     } catch (err) {
       if (process.env.NODE_ENV !== "production") console.error("Auto-login failed:", err);
       if (err instanceof ProtocolWarmingError) {
+        setIsAuthenticating(false);
         setAuthError("Protocol Warming Up... (Retrying)");
       } else {
         const msg = err instanceof Error ? err.message : "Authentication failed";
+        setIsAuthenticating(false);
         setAuthError(msg);
       }
-      setIsAuthenticating(false);
       return;
     }
 

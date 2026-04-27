@@ -136,7 +136,8 @@ async def run_agents_concurrent(
                     message=message,
                     data={
                         "status": status,
-                        "findings_count": len(findings) if findings else 0,
+                        "findings_count": 0 if status == "skipped" else (len(findings) if findings else 0),
+                        "confidence": 0 if status == "skipped" else (getattr(agent_inst, "_overall_confidence", None) if agent_inst else None),
                         "error": error,
                         "findings_preview": preview,
                         "agent_verdict": synthesis.get("verdict") if isinstance(synthesis, dict) else None,

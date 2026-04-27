@@ -52,6 +52,13 @@ export async function POST() {
           const errorData = await response.json().catch(() => ({}));
 
           if (response.status >= 400 && response.status < 500) {
+            // Potential race condition: backend is up but user bootstrap hasn't finished.
+            // Retry on 401/403 if we still have attempts left.
+            if ((response.status === 401 || response.status === 403) && attempt < MAX_RETRIES) {
+              lastError = `Backend returned ${response.status} (potential bootstrap race) via ${baseUrl}`;
+              continue;
+            }
+
             return NextResponse.json(
               { error: errorData.detail || "Authentication failed" },
               { status: response.status },
