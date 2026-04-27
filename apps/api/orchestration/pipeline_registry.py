@@ -19,3 +19,7 @@ def notify_decision(session_id: UUID, deep_analysis: bool) -> bool:
     p.run_deep_analysis_flag = bool(deep_analysis)
     p.deep_analysis_decision_event.set()
     return True
+
+
+def get_pipeline(session_id: str | UUID) -> "ForensicCouncilPipeline" | None:
+    return _LIVE_PIPELINES.get(str(session_id))

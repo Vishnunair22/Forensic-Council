@@ -12,7 +12,7 @@ import { AGENTS as AGENTS_DATA } from "@/lib/constants";
 import { QuotaMeter } from "./QuotaMeter";
 import type { SoundType } from "@/hooks/useSound";
 import { storage } from "@/lib/storage";
-import { isAgentSupportedForMime } from "@/lib/agentSupport";
+import { isAgentSupportedForMime, supportedAgentIdsForMime } from "@/lib/agentSupport";
 import { AgentStatusCard } from "./AgentStatusCard";
 
 export interface FindingPreview {
@@ -157,11 +157,12 @@ export function AgentProgressDisplay({
   const initialAgentIds = useMemo<string[]>(() => {
     if (phase !== "deep") return [];
     const raw = storage.getItem<AgentUpdate[]>("forensic_initial_agents", true);
-    const parsed = raw ?? [];
-    return Array.isArray(parsed)
-      ? parsed.map((a) => a.agent_id).filter((id): id is string => typeof id === "string")
-      : [];
-  }, [phase]);
+    if (Array.isArray(raw) && raw.length) {
+      return raw.map((a) => a.agent_id).filter((id): id is string => typeof id === "string");
+    }
+    // Fallback for refresh: derive from MIME so the deep grid is never empty
+    return Array.from(supportedAgentIdsForMime(mimeType || undefined));
+  }, [phase, mimeType]);
 
   const visibleAgents = useMemo(() => {
     return allValidAgents

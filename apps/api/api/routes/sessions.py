@@ -646,6 +646,25 @@ async def get_arbiter_status(
         except Exception as _e:
             logger.debug("DB status check failed", session_id=session_id, error=str(_e))
 
+        # 4. Live in-process fallback (covers Redis + Postgres simultaneously degraded)
+        try:
+            from orchestration.pipeline_registry import get_pipeline
+            pipeline = get_pipeline(session_id)
+            if pipeline is not None:
+                if pipeline._final_report is not None:
+                    return {
+                        "status": "complete",
+                        "report_id": str(pipeline._final_report.report_id),
+                    }
+                if pipeline._error:
+                    return {"status": "error", "message": pipeline._error}
+                return {
+                    "status": "running",
+                    "message": pipeline._arbiter_step or "Arbiter deliberating…",
+                }
+        except Exception as _e:
+            logger.debug("In-memory pipeline fallback failed", session_id=session_id, error=str(_e))
+
         return {"status": "not_found"}
 
     except Exception as e:
