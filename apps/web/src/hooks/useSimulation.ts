@@ -780,6 +780,7 @@ export const useSimulation = ({
     // so the initial-phase card contents don't persist into the deep phase.
     setCompletedAgents([]);
     completedAgentsRef.current = [];
+    setAgentUpdates({});
     setPipelineMessage("");
     setPipelineThinking("");
     setRevealQueue([]);

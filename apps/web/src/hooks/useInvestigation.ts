@@ -307,17 +307,15 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
       lastSessionIdRef.current = sessionIdToUse;
 
-      // Dismiss overlay immediately so the agent cards can begin their staggered
-      // entrance animation while the WebSocket connects in the background.
-      setShowLoadingOverlay(false);
-      sessionOnlyStorage.removeItem("fc_show_loading");
-      setAnalysisStreamReady(true);
-      setUploadPhaseText("Agents dispatching…");
-
       connectWebSocket(sessionIdToUse)
+        .then(() => {
+          setAnalysisStreamReady(true);
+          setUploadPhaseText("Agents dispatching…");
+        })
         .catch((wsErr: unknown) => {
           const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
           setWsConnectionError(wsErrMsg);
+          setShowLoadingOverlay(false);
           resetSimulation();
         })
         .finally(() => {

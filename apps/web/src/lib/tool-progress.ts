@@ -104,6 +104,18 @@ const TOOL_PROGRESS: Record<string, ProgressDescriptor> = {
   provenance_chain_verify: { label: "Checking provenance chain", icon: Shield },
   camera_profile_match: { label: "Comparing camera profile consistency", icon: Fingerprint },
   gemini_deep_forensic: { label: "Synthesizing cross-tool evidence", icon: Brain },
+
+  // Short-form aliases emitted by some backend tool_name values
+  ocr:        { label: "Identifying image contents using OCR tools",  icon: Camera },
+  ela:        { label: "Detecting compression anomalies (ELA)",       icon: Scan },
+  noise:      { label: "Profiling sensor-noise residuals",            icon: Fingerprint },
+  splicing:   { label: "Searching for spliced regions",               icon: Layers },
+  exif:       { label: "Reading EXIF / container metadata",           icon: FileSearch },
+  c2pa:       { label: "Validating C2PA provenance chain",            icon: Shield },
+  yolo:       { label: "Detecting objects and scene context",         icon: Search },
+  diariz:     { label: "Diarising speakers in audio",                 icon: Speaker },
+  spectro:    { label: "Analysing audio spectrogram",                 icon: AudioWaveform },
+  frame_diff: { label: "Comparing frames for tampering",              icon: Video },
 };
 
 const FALLBACK_BY_AGENT: Record<string, ProgressDescriptor[]> = {
