@@ -588,4 +588,8 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             per_agent_metrics=metrics,
             uncertainty_statement="Analysis was skipped for all agents.",
             overall_verdict="INCONCLUSIVE",
+            degradation_flags=[
+                "All agents failed or were skipped — report based on incomplete data."
+            ],
+            analysis_coverage_note="Zero agents produced findings; verdict defaulted to INCONCLUSIVE.",
         )

@@ -38,6 +38,17 @@ _KEY_INV_FAILED = "metrics:investigations_failed"
 _KEY_START_TIME = "metrics:start_time"
 _KEY_RATE_LIMIT_BYPASSES = "metrics:rate_limit_redis_bypasses"
 
+# Pipeline phase durations (histogram buckets in seconds)
+_KEY_PHASE_INITIAL = "metrics:pipeline_phase_seconds_initial"
+_KEY_PHASE_HITL = "metrics:pipeline_phase_seconds_hitl"
+_KEY_PHASE_DEEP = "metrics:pipeline_phase_seconds_deep"
+_KEY_PHASE_ARBITER = "metrics:pipeline_phase_seconds_arbiter"
+_KEY_PHASE_ENRICH = "metrics:pipeline_phase_seconds_enrich"
+_KEY_PHASE_SIGN = "metrics:pipeline_phase_seconds_sign"
+
+# Histogram buckets for pipeline phase durations (in seconds)
+PHASE_BUCKETS = [1.0, 5.0, 15.0, 30.0, 60.0, 120.0, 300.0, 600.0, 900.0]
+
 # ── Process-local fallback (used when Redis is unavailable) ──────────────────
 _local: dict[str, Any] = {
     "request_count": 0,
@@ -50,6 +61,19 @@ _local: dict[str, Any] = {
     "investigations_failed": 0,
     "start_time": time.time(),
     "rate_limit_redis_bypasses": 0,
+    # Phase durations stored as sum and count for histogram approximation
+    "phase_initial_sum": 0.0,
+    "phase_initial_count": 0,
+    "phase_hitl_sum": 0.0,
+    "phase_hitl_count": 0,
+    "phase_deep_sum": 0.0,
+    "phase_deep_count": 0,
+    "phase_arbiter_sum": 0.0,
+    "phase_arbiter_count": 0,
+    "phase_enrich_sum": 0.0,
+    "phase_enrich_count": 0,
+    "phase_sign_sum": 0.0,
+    "phase_sign_count": 0,
 }
 
 
@@ -193,6 +217,28 @@ def increment_rate_limit_redis_bypasses() -> None:
         _local["rate_limit_redis_bypasses"] = _local.get("rate_limit_redis_bypasses", 0) + 1
 
 
+def record_pipeline_phase_duration(phase: str, duration_seconds: float) -> None:
+    """Record pipeline phase duration for observability."""
+    phase_key_map = {
+        "initial": ("phase_initial_sum", "phase_initial_count"),
+        "hitl": ("phase_hitl_sum", "phase_hitl_count"),
+        "deep": ("phase_deep_sum", "phase_deep_count"),
+        "arbiter": ("phase_arbiter_sum", "phase_arbiter_count"),
+        "enrich": ("phase_enrich_sum", "phase_enrich_count"),
+        "sign": ("phase_sign_sum", "phase_sign_count"),
+    }
+    if phase not in phase_key_map:
+        return
+    sum_key, count_key = phase_key_map[phase]
+    try:
+        loop = asyncio.get_running_loop()
+        redis_key = f"metrics:pipeline_phase_seconds_{phase}"
+        loop.create_task(_redis_incr(redis_key, int(duration_seconds * 1000)))
+    except RuntimeError:
+        _local[sum_key] = _local.get(sum_key, 0.0) + duration_seconds
+        _local[count_key] = _local.get(count_key, 0) + 1
+
+
 # ── Snapshot helper ───────────────────────────────────────────────────────────
 
 
@@ -214,6 +260,14 @@ async def _snapshot() -> dict:
     rate_limit_bypasses = await _redis_get_int(
         _KEY_RATE_LIMIT_BYPASSES, "rate_limit_redis_bypasses"
     )
+
+    # Pipeline phase durations
+    phase_initial_avg = _local.get("phase_initial_sum", 0.0) / max(_local.get("phase_initial_count", 0), 1)
+    phase_hitl_avg = _local.get("phase_hitl_sum", 0.0) / max(_local.get("phase_hitl_count", 0), 1)
+    phase_deep_avg = _local.get("phase_deep_sum", 0.0) / max(_local.get("phase_deep_count", 0), 1)
+    phase_arbiter_avg = _local.get("phase_arbiter_sum", 0.0) / max(_local.get("phase_arbiter_count", 0), 1)
+    phase_enrich_avg = _local.get("phase_enrich_sum", 0.0) / max(_local.get("phase_enrich_count", 0), 1)
+    phase_sign_avg = _local.get("phase_sign_sum", 0.0) / max(_local.get("phase_sign_count", 0), 1)
 
     avg_duration = duration_sum / duration_count if duration_count else 0.0
     error_rate = errors_total / requests_total if requests_total else 0.0
@@ -239,6 +293,12 @@ async def _snapshot() -> dict:
         "db_pool_available": pool_stats["available"],
         "db_pool_in_use": pool_stats["in_use"],
         "db_pool_max": pool_stats["max"],
+        "phase_initial_avg": phase_initial_avg,
+        "phase_hitl_avg": phase_hitl_avg,
+        "phase_deep_avg": phase_deep_avg,
+        "phase_arbiter_avg": phase_arbiter_avg,
+        "phase_enrich_avg": phase_enrich_avg,
+        "phase_sign_avg": phase_sign_avg,
     }
 
 
@@ -332,6 +392,15 @@ async def get_prometheus_metrics(current_user: User = Depends(require_admin)) ->
         "# HELP forensic_investigations_failed_total Total investigations failed",
         "# TYPE forensic_investigations_failed_total counter",
         f'forensic_investigations_failed_total{{app="forensic_council"}} {snap["investigations_failed"]}',
+        "",
+        "# HELP forensic_pipeline_phase_seconds_avg Average pipeline phase duration in seconds",
+        "# TYPE forensic_pipeline_phase_seconds_avg gauge",
+        f'forensic_pipeline_phase_seconds_avg{{app="forensic_council",phase="initial"}} {snap["phase_initial_avg"]:.3f}',
+        f'forensic_pipeline_phase_seconds_avg{{app="forensic_council",phase="hitl"}} {snap["phase_hitl_avg"]:.3f}',
+        f'forensic_pipeline_phase_seconds_avg{{app="forensic_council",phase="deep"}} {snap["phase_deep_avg"]:.3f}',
+        f'forensic_pipeline_phase_seconds_avg{{app="forensic_council",phase="arbiter"}} {snap["phase_arbiter_avg"]:.3f}',
+        f'forensic_pipeline_phase_seconds_avg{{app="forensic_council",phase="enrich"}} {snap["phase_enrich_avg"]:.3f}',
+        f'forensic_pipeline_phase_seconds_avg{{app="forensic_council",phase="sign"}} {snap["phase_sign_avg"]:.3f}',
     ]
     return "\n".join(lines) + "\n"
 

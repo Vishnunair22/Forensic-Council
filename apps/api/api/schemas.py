@@ -161,6 +161,7 @@ class BriefUpdate(BaseModel):
         "CONNECTED",
         "ERROR",
         "PIPELINE_QUARANTINED",
+        "REPORT_READY",
     ]
     session_id: str
     agent_id: str | None = None

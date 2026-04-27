@@ -66,11 +66,13 @@ interface AgentProgressDisplayProps {
  awaitingDecision: boolean;
  pipelineStatus?: string;
  pipelineMessage?: string;
- onNewUpload?: () => void;
- onViewResults?: () => void;
- playSound?: (type: SoundType) => void;
- isNavigating?: boolean;
- mimeType?: string;
+onNewUpload?: () => void;
+  onViewResults?: () => void;
+  onAcceptAnalysis?: () => void;
+  onRunDeepAnalysis?: () => void;
+  playSound?: (type: SoundType) => void;
+  isNavigating?: boolean;
+  mimeType?: string;
 }
 
 const AgentStatusCard = dynamic(
@@ -97,41 +99,14 @@ export function AgentProgressDisplay({
  awaitingDecision,
  pipelineStatus,
  pipelineMessage,
- onNewUpload,
- onViewResults,
- playSound,
- isNavigating = false,
- mimeType,
-}: AgentProgressDisplayProps) {
-  const [validatedAgents, setValidatedAgents] = useState<Set<string>>(new Set());
-  const [hiddenAgents, setHiddenAgents] = useState<Set<string>>(new Set());
-
-  const playSoundRef = useRef(playSound);
-  useEffect(() => { playSoundRef.current = playSound; }, [playSound]);
-
-  // Validate each card with a per-card stagger — runs once on mount only.
-  // Using a single effect with all timers avoids the chained-setTimeout pattern
-  // that breaks when re-renders (from frequent WS updates) reset intermediate state.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    const timers = allValidAgents.map((agent, i) =>
-      setTimeout(() => {
-        setValidatedAgents(prev => new Set(prev).add(agent.id));
-        playSoundRef.current?.("agent");
-      }, 800 + i * 600) // 0.8s, 1.4s, 2.0s, 2.6s, 3.2s
-    );
-    return () => timers.forEach(t => clearTimeout(t));
-  }, []); // intentional — one-time setup on mount
-
-  // Auto-hide unsupported agents 10s after they are validated
-  useEffect(() => {
-    const timers: NodeJS.Timeout[] = [];
-    validatedAgents.forEach(id => {
-      if (!isAgentSupportedForMime(id, mimeType) && !hiddenAgents.has(id)) {
-        timers.push(setTimeout(() => {
-          setHiddenAgents(prev => new Set(prev).add(id));
-        }, 10000));
-      }
+onNewUpload,
+  onViewResults,
+  onAcceptAnalysis,
+  onRunDeepAnalysis,
+  playSound,
+  isNavigating = false,
+  mimeType,
+}
     });
     return () => timers.forEach(clearTimeout);
   }, [validatedAgents, mimeType]); // hiddenAgents intentionally omitted to prevent re-scheduling
@@ -257,10 +232,28 @@ export function AgentProgressDisplay({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-3 rounded-full bg-slate-900/90 border border-primary/20 backdrop-blur-md shadow-lg"
+            className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-6 pointer-events-none"
           >
-            <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />
-            <span className="text-[11px] font-mono text-white/60 tracking-widest uppercase">Generating Report…</span>
+            <div className="horizon-card p-2 rounded-[2rem] shadow-[0_40px_100px_rgba(0,0,0,0.8)] pointer-events-auto">
+              <div className="bg-[#020617] rounded-[1.8rem] p-3 flex items-center gap-4">
+                <button
+                  onClick={onAcceptAnalysis}
+                  disabled={isNavigating}
+                  className="flex-1 btn-horizon-outline py-4 text-xs"
+                >
+                  Accept Analysis
+                </button>
+                <button
+                  onClick={onRunDeepAnalysis}
+                  disabled={isNavigating}
+                  className="flex-[1.5] btn-horizon-primary py-4 text-xs flex items-center justify-center gap-3"
+                >
+                  {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
+                  Run Deep Analysis
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

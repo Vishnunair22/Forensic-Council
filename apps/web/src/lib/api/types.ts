@@ -88,7 +88,9 @@ export interface BriefUpdate {
     | "PIPELINE_COMPLETE"
     | "ERROR"
     | "CONNECTED"
-    | "PIPELINE_PAUSED";
+    | "PIPELINE_PAUSED"
+    | "PIPELINE_QUARANTINED"
+    | "REPORT_READY";
   session_id: string;
   agent_id: string | null;
   agent_name: string | null;

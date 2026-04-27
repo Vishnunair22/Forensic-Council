@@ -9,11 +9,14 @@ environment-aware configuration.
 
 import asyncio
 import concurrent.futures
+import faulthandler
 import hashlib
 import json
 import os
 import secrets
+import signal
 import shutil
+import sys
 import time
 import uuid
 from urllib.parse import urlparse
@@ -51,6 +54,12 @@ from core.structured_logging import get_logger, request_id_ctx
 
 logger = get_logger(__name__)
 settings = get_settings()
+
+# Enable faulthandler for debugging hangs. On SIGUSR1, dump all thread stacks.
+# Usage: docker compose kill -s SIGUSR1 backend
+faulthandler.enable()
+if hasattr(signal, "SIGUSR1"):
+    faulthandler.register(signal.SIGUSR1, file=sys.stderr, chain=True)
 
 
 @asynccontextmanager

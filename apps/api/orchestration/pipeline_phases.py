@@ -203,7 +203,7 @@ async def run_agents_concurrent(
             logger.info(f"Running {aid} initial investigation")
             initial_findings = await asyncio.wait_for(
                 agent.run_investigation(),
-                timeout=min(float(pipeline.config.investigation_timeout), 300.0),
+                timeout=min(float(pipeline.config.investigation_timeout), 480.0),
             )
             if pipeline.signal_bus:
                 await pipeline.signal_bus.signal_ready(aid, initial_findings)
@@ -308,41 +308,48 @@ async def run_agents_concurrent(
         a_inst, a_init, a_status = agent_map[aid]
         a_supported = a_status != "unsupported"
         if not a_supported:
+            if aid == producer_id:
+                context_event.set()
             return AgentLoopResult(
                 agent_id=aid, findings=[], reflection_report={}, react_chain=[],
                 agent_active=False, supports_file_type=False,
             )
 
-        await _broadcast_agent_status(aid, "running", f"Running {aid} deep pass...")
-        result = await _run_agent_deep_only(pipeline, a_inst, aid, a_init, a_supported)
+        try:
+            await _broadcast_agent_status(aid, "running", f"Running {aid} deep pass...")
+            result = await _run_agent_deep_only(pipeline, a_inst, aid, a_init, a_supported)
 
-        if result.error:
-            await _broadcast_agent_status(
-                aid, "error", f"{aid} error: {result.error}",
-                error=result.error, agent_inst=a_inst,
-            )
-        else:
-            await _broadcast_agent_status(
-                aid, "complete", f"{aid} analysis complete.",
-                findings=result.findings, agent_inst=a_inst,
-            )
+            if result.error:
+                await _broadcast_agent_status(
+                    aid, "error", f"{aid} error: {result.error}",
+                    error=result.error, agent_inst=a_inst,
+                )
+            else:
+                await _broadcast_agent_status(
+                    aid, "complete", f"{aid} analysis complete.",
+                    findings=result.findings, agent_inst=a_inst,
+                )
 
-        if aid == producer_id:
-            try:
-                gemini_res = {}
-                for f in result.findings or []:
-                    if (
-                        isinstance(f, dict)
-                        and f.get("metadata", {}).get("tool_name") == "gemini_deep_forensic"
-                    ):
-                        gemini_res = f.get("metadata", {})
-                        break
-                if gemini_res:
-                    _broadcast_context(gemini_res)
-            finally:
+            if aid == producer_id:
+                try:
+                    gemini_res = {}
+                    for f in result.findings or []:
+                        if (
+                            isinstance(f, dict)
+                            and f.get("metadata", {}).get("tool_name") == "gemini_deep_forensic"
+                        ):
+                            gemini_res = f.get("metadata", {})
+                            break
+                    if gemini_res:
+                        _broadcast_context(gemini_res)
+                finally:
+                    context_event.set()
+
+            return result
+        except Exception:
+            if aid == producer_id:
                 context_event.set()
-
-        return result
+            raise
 
     raw_deep_all = await asyncio.gather(
         *[_run_deep_with_fallback(aid) for aid in agent_map.keys()],
@@ -405,9 +412,10 @@ async def _run_agent_deep_only(
         try:
             initial_count = len(initial_findings)
             logger.info(f"Running {agent_id} deep investigation")
+            deep_timeout = min(float(pipeline.config.investigation_timeout), 600.0)
             await asyncio.wait_for(
                 agent.run_deep_investigation(),
-                timeout=pipeline.config.investigation_timeout,
+                timeout=deep_timeout,
             )
             all_findings = getattr(agent, "_findings", initial_findings)
             deep_count = max(0, len(all_findings) - initial_count)

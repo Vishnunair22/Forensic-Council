@@ -27,9 +27,15 @@ TOOL_TIMEOUTS: dict[str, float] = {
     # never blocks the analyst decision gate.
     "extract_text_from_image": 45.0,
     "extract_evidence_text": 45.0,
-    "neural_fingerprint": 30.0,
+    "neural_fingerprint": 45.0,
     "noiseprint_cluster": 35.0,
     "neural_ela": 35.0,
+    # Image analysis cold-load can exceed 30s; CLIP/SigLIP models need 45s
+    "analyze_image_content": 45.0,
+    # YOLO object detection in Docker can cold-load slowly
+    "object_detection": 60.0,
+    # Speaker diarization loads heavy audio models
+    "speaker_diarize": 60.0,
     # Gemini deep forensic includes up to 60s wait for Agent1 context
     # plus Gemini API latency. Give it headroom above the inner wait.
     "gemini_deep_forensic": 120.0,

@@ -47,6 +47,8 @@ export default function EvidencePage() {
     handleHITLDecision,
     handleNewUpload,
     handleViewResults,
+    handleAcceptAnalysis,
+    handleDeepAnalysis,
     allAgentsDone,
     awaitingDecision,
     hasStartedAnalysis,
@@ -118,6 +120,8 @@ export default function EvidencePage() {
                 pipelineMessage={pipelineMessage || pipelineThinking}
                 onNewUpload={handleNewUpload}
                 onViewResults={handleViewResults}
+                onAcceptAnalysis={handleAcceptAnalysis}
+                onRunDeepAnalysis={handleDeepAnalysis}
                 playSound={playSound}
                 isNavigating={isNavigating}
                 mimeType={storage.getItem<string>(FORENSIC_MIME_TYPE_KEY) ?? undefined}

@@ -466,6 +466,14 @@ class ForensicCouncilPipeline:
 
         self.signal_bus = SignalBus(all_agents)
 
+        from orchestration.session_manager import SessionStatus
+
+        await self.session_manager.update_agent_status(
+            session_id=session_id,
+            agent_id="all",
+            status=SessionStatus.RUNNING,
+        )
+
         agent_results = await run_agents_concurrent(
             pipeline=self,
             evidence_artifact=evidence_artifact,
@@ -484,9 +492,22 @@ class ForensicCouncilPipeline:
         arbiter_results = self._normalize_agent_results(agent_results)
         report = await self._run_deliberation(arbiter_results, case_id, session_id)
 
-        await enrich_report(pipeline=self, report=report, session_id=session_id,
-                            artifact=evidence_artifact, agent_results=agent_results)
+        try:
+            await enrich_report(pipeline=self, report=report, session_id=session_id,
+                                artifact=evidence_artifact, agent_results=agent_results)
+        except Exception as enrich_err:
+            logger.warning(
+                "Report enrichment failed — proceeding with unsigned base report",
+                error=str(enrich_err),
+            )
+            self._degradation_flags.append(
+                f"Report enrichment failed: {enrich_err}. Some metadata may be incomplete."
+            )
+
         self._final_report = await self.arbiter.sign_report(report)
+
+        if self._degradation_flags:
+            self._final_report.degradation_flags = self._degradation_flags
 
         from orchestration.session_manager import SessionManager
 
@@ -494,6 +515,13 @@ class ForensicCouncilPipeline:
             session_id=session_id,
             report_id=self._final_report.report_id,
         )
+
+        try:
+            from api.routes._session_state import set_final_report as cache_report
+            await cache_report(str(session_id), self._final_report)
+        except Exception as cache_err:
+            logger.warning("Failed to cache report in Redis", error=str(cache_err))
+
         if self.custody_logger:
             await self.custody_logger.log_entry(
                 entry_type=EntryType.REPORT_SIGNED,
@@ -506,6 +534,24 @@ class ForensicCouncilPipeline:
                     ),
                 },
             )
+
+        try:
+            from api.routes._session_state import broadcast_update
+            from api.schemas import BriefUpdate
+            await broadcast_update(
+                str(session_id),
+                BriefUpdate(
+                    type="REPORT_READY",
+                    session_id=str(session_id),
+                    message=f"Forensic report ready: {self._final_report.overall_verdict}",
+                    data={
+                        "report_id": str(self._final_report.report_id),
+                        "verdict": self._final_report.overall_verdict,
+                    },
+                ),
+            )
+        except Exception as _e:
+            logger.debug("REPORT_READY broadcast skipped", error=str(_e))
 
         if hasattr(self, "inter_agent_bus"):
             await self.inter_agent_bus.stop()

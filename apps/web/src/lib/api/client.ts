@@ -283,7 +283,9 @@ export function createLiveSocket(sessionId: string): { ws: WebSocket; connected:
           payload.type === "AGENT_UPDATE" ||
           payload.type === "PIPELINE_PAUSED" ||
           payload.type === "AGENT_COMPLETE" ||
-          payload.type === "PIPELINE_COMPLETE"
+          payload.type === "PIPELINE_COMPLETE" ||
+          payload.type === "REPORT_READY" ||
+          payload.type === "PIPELINE_QUARANTINED"
         ) {
           settle(resolve);
         } else if (payload.type === "ERROR") {

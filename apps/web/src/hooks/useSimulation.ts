@@ -393,6 +393,13 @@ export const useSimulation = ({
                   setStatus("error");
                   playSoundRef.current?.("error");
                   break;
+
+                case "REPORT_READY":
+                  dbg.log("[WebSocket] Report ready:", update.data);
+                  if (update.data?.report_id) {
+                    onCompleteRef.current?.();
+                  }
+                  break;
               }
             }
           } finally {

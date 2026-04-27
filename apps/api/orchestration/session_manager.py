@@ -157,20 +157,27 @@ class SessionManager:
         agent_id: str,
         status: SessionStatus,
     ) -> None:
-        """Update an agent's loop status."""
+        """Update an agent's loop status. Pass agent_id='all' to update all agents."""
         async with self._lock:
             session = self._sessions.get(session_id)
-            if session and agent_id in session.agent_loops:
-                session.agent_loops[agent_id].status = status
+            if session:
+                if agent_id == "all":
+                    for loop in session.agent_loops.values():
+                        loop.status = status
+                elif agent_id in session.agent_loops:
+                    session.agent_loops[agent_id].status = status
                 session.updated_at = datetime.now(UTC)
 
-                # Check if all agents are done
-                all_done = all(
-                    loop.status in (SessionStatus.COMPLETED, SessionStatus.FAILED)
-                    for loop in session.agent_loops.values()
-                )
-                if all_done:
-                    session.status = SessionStatus.COMPLETED
+                if status == SessionStatus.RUNNING:
+                    session.status = SessionStatus.RUNNING
+
+                if agent_id != "all" and agent_id in session.agent_loops:
+                    all_done = all(
+                        loop.status in (SessionStatus.COMPLETED, SessionStatus.FAILED)
+                        for loop in session.agent_loops.values()
+                    )
+                    if all_done:
+                        session.status = SessionStatus.COMPLETED
 
                 if self._redis:
                     await self._persist_session(session)

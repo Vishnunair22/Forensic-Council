@@ -420,7 +420,7 @@ class Settings(BaseSettings):
         description="Hours to retain completed investigation sessions in memory before eviction",
     )
     max_parallel_heavy_tools: int = Field(
-        default=2,
+        default=3,
         ge=1,
         le=5,
         description="Maximum number of simultaneous heavy neural/math tools allowed (prevents CPU starvation).",
