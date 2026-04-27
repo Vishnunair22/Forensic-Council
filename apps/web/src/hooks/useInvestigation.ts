@@ -23,7 +23,7 @@ import { type AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 
 function supportedAgentIdsForMime(mimeType?: string | null): Set<string> {
-  if (!mimeType) return new Set(AGENTS_DATA.filter((a) => a.id !== "AGT-06").map((a) => a.id));
+  if (!mimeType) return new Set(AGENTS_DATA.filter((a) => a.id !== "Arbiter").map((a) => a.id));
   const supported = new Set<string>(["Agent5"]);
   if (mimeType.startsWith("image/")) {
     supported.add("Agent1");

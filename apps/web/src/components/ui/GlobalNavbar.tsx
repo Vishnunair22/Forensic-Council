@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { useSound } from "@/hooks/useSound";
 import { ForensicResetOverlay } from "./ForensicResetOverlay";
 import { BrandLogo } from "./BrandLogo";
@@ -11,7 +11,6 @@ export function GlobalNavbar() {
   const router = useRouter();
   const pathname = usePathname();
   const [isResetting, setIsResetting] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
   const { playSound } = useSound();
 
   const handleLogoClick = useCallback(() => {

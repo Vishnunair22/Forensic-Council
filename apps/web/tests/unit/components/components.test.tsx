@@ -69,7 +69,7 @@ const progressDefaults = {
   awaitingDecision: false,
   isNavigating: false,
   onAcceptAnalysis: jest.fn(),
-  onDeepAnalysis: jest.fn(),
+  onRunDeepAnalysis: jest.fn(),
   onNewUpload: jest.fn(),
   onViewResults: jest.fn(),
   playSound: jest.fn(),
@@ -233,9 +233,9 @@ describe("AgentProgressDisplay", () => {
       fireEvent.click(screen.getByRole("button", { name: /accept|finalize/i }));
       expect(onAccept).toHaveBeenCalled();
     });
-    it("calls onDeepAnalysis on click", () => {
+    it("calls onRunDeepAnalysis on click", () => {
       const onDeep = jest.fn();
-      render(<AgentProgressDisplay {...awaitProps} onDeepAnalysis={onDeep} />);
+      render(<AgentProgressDisplay {...awaitProps} onRunDeepAnalysis={onDeep} />);
       fireEvent.click(screen.getByRole("button", { name: /deep/i }));
       expect(onDeep).toHaveBeenCalled();
     });

@@ -3,13 +3,8 @@
 import React from "react";
 import { 
   History as HistoryIcon, 
-  Trash2, 
   X, 
-  ArrowRight, 
-  Clock,
-  ShieldCheck,
-  Calendar,
-  Lock
+  ArrowRight
 } from "lucide-react";
 import clsx from "clsx";
 import { type HistoryItem } from "@/lib/types";
@@ -149,9 +144,9 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                       <div className="flex items-center gap-4">
                         <div className="text-right hidden lg:block">
                            <div className="text-[10px] font-mono text-white/20">TIMESTAMP</div>
-                           <div className="text-[10px] font-mono text-white/60">
-                             {new Date(item.timestamp).toLocaleDateString()} // {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                           </div>
+<div className="text-[10px] font-mono text-white/60">
+                              {new Date(item.timestamp).toLocaleDateString()} {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </div>
                         </div>
                         <button
                           onClick={(e) => removeItem(e, item.sessionId)}

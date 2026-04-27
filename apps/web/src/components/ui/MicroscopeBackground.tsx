@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useScroll, useTransform, useSpring, useMotionValue, useAnimationFrame } from "framer-motion";
+import { motion, useScroll, useTransform, useSpring } from "framer-motion";
 import { useEffect, useState, useRef } from "react";
 
 /**
@@ -140,7 +140,7 @@ function MetadataTicker() {
   );
 }
 
-function EvidenceNodes({ progress }: { progress: any }) {
+function EvidenceNodes({ progress }: { progress: ReturnType<typeof useSpring> }) {
   const [nodes, setNodes] = useState<{ id: number; x: number; y: number; label: string }[]>([]);
 
   useEffect(() => {
@@ -163,7 +163,9 @@ function EvidenceNodes({ progress }: { progress: any }) {
   );
 }
 
-function EvidenceNode({ node, progress }: { node: any; progress: any }) {
+type EvidenceNodeData = { id: number; x: number; y: number; label: string };
+
+function EvidenceNode({ node, progress }: { node: EvidenceNodeData; progress: ReturnType<typeof useSpring> }) {
   const yShift = useTransform(progress, [0, 1], [0, -150]);
   const opacity = useTransform(progress, [node.y / 100 - 0.1, node.y / 100, node.y / 100 + 0.1], [0.2, 1, 0.2]);
   

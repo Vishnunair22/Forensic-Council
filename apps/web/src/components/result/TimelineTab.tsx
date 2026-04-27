@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { Clock } from "lucide-react";
-import { clsx } from "clsx";
 import type { ReportDTO } from "@/lib/api";
 import type { AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
 import { motion } from "framer-motion";
+
+type TimelineItem = { agent_id: string } | AgentUpdate;
 
 interface TimelineTabProps {
   report: ReportDTO;
@@ -20,6 +20,7 @@ const AGENT_THEMES: Record<string, { color: string }> = {
   Agent3: { color: "#F59E0B" },
   Agent4: { color: "#F43F5E" },
   Agent5: { color: "#8B5CF6" },
+  Arbiter: { color: "#10B981" },
 };
 
 export function TimelineTab({
@@ -94,7 +95,7 @@ export function TimelineTab({
                   </div>
 
                   <div className="grid gap-4 max-w-2xl">
-                    {(hasLiveTimeline ? agentTimeline : activeAgentIds.map(id => ({ agent_id: id }))).map((update: any, idx) => {
+                    {(hasLiveTimeline ? agentTimeline : activeAgentIds.map(id => ({ agent_id: id }))).map((update: TimelineItem, idx) => {
                       const agentId = update.agent_id;
                       const theme = AGENT_THEMES[agentId] || { color: "#00FFFF" };
                       return (
@@ -107,13 +108,13 @@ export function TimelineTab({
                           <div className="w-2 h-2 rounded-full" style={{ backgroundColor: theme.color, boxShadow: `0 0 10px ${theme.color}` }} />
                           <div className="flex-1">
                             <span className="text-[10px] font-mono font-bold uppercase tracking-widest" style={{ color: theme.color }}>
-                              {update.agent_name || agentId}
+                              {"agent_name" in update ? update.agent_name : agentId}
                             </span>
                             <div className="text-[10px] font-mono text-white/20 mt-0.5 truncate uppercase">
-                              {update.message || "Verification Protocol Applied"}
+                              {"message" in update ? update.message : "Verification Protocol Applied"}
                             </div>
                           </div>
-                          {update.completed_at && (
+                          {"completed_at" in update && update.completed_at && (
                             <span className="text-[9px] font-mono text-white/10 shrink-0">
                               [{fmtTime(update.completed_at)}]
                             </span>

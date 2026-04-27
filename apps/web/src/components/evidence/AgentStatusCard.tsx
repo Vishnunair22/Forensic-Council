@@ -20,7 +20,7 @@ import {
 } from "@/lib/tool-progress";
 import type { AgentUpdate, FindingPreview } from "./AgentProgressDisplay";
 
-interface AgentStatusCardProps {
+export interface AgentStatusCardProps {
   agentId: string;
   name: string;
   badge: string;

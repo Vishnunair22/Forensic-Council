@@ -97,7 +97,6 @@ describe("ForensicProgressOverlay accessibility", () => {
   it("renders status text for screen readers", () => {
     render(
       <ForensicProgressOverlay
-        variant="council"
         title="Council deliberation"
         liveText="Compiling report"
         telemetryLabel="Arbiter telemetry"

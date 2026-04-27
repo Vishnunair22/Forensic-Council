@@ -63,7 +63,7 @@ export function FileUploadSection({
       setFileHash(null);
     }
     return () => { isActive = false; };
-  }, [file]);
+  }, [file, computeHash]);
 
   const fileSizeMb = file ? file.size / 1024 / 1024 : 0;
   const fileSizeColor = fileSizeMb > 200 ? "text-rose-400" : fileSizeMb > 50 ? "text-amber-400" : "text-white/40";

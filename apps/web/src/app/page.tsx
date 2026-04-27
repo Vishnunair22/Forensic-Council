@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { HowWorksSection } from "@/components/ui/HowWorksSection";
 import { AgentsSection } from "@/components/ui/AgentsSection";
 import { HeroAuthActions } from "@/components/ui/HeroAuthActions";

@@ -2,12 +2,11 @@
 
 import React, { useMemo } from "react";
 import dynamic from "next/dynamic";
-import { Home as HomeIcon, Activity, History as HistoryIcon } from "lucide-react";
+import { Home as HomeIcon, Activity } from "lucide-react";
 import { motion } from "framer-motion";
 import clsx from "clsx";
 import { type Tab, useResult } from "@/hooks/useResult";
 import { getVerdictConfig } from "@/lib/verdict";
-import { storage } from "@/lib/storage";
 import { ForensicProgressOverlay } from "@/components/ui/ForensicProgressOverlay";
 import { ReportFooter } from "./ReportFooter";
 import { IntelligenceBrief } from "./IntelligenceBrief";
@@ -56,7 +55,6 @@ export function ResultLayout() {
     <div className="min-h-screen pb-32">
       {rs.state === "arbiter" && (
         <ForensicProgressOverlay 
-          variant="council" 
           title="Council Deliberation" 
           liveText={rs.arbiterMsg} 
           telemetryLabel="Synthesizing Consensus" 

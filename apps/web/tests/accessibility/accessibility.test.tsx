@@ -64,7 +64,7 @@ const baseProgress = {
   agentUpdates: {}, completedAgents: [],
   progressText: "Ready", allAgentsDone: false,
   phase: "initial" as const, awaitingDecision: false, isNavigating: false,
-  onAcceptAnalysis: jest.fn(), onDeepAnalysis: jest.fn(),
+  onAcceptAnalysis: jest.fn(), onRunDeepAnalysis: jest.fn(),
   onNewUpload: jest.fn(), onViewResults: jest.fn(), playSound: jest.fn(),
 };
 
@@ -104,7 +104,7 @@ describe("Keyboard Navigation", () => {
 
   it("Space activates a focused button (native button behavior)", () => {
     const onDeep = jest.fn();
-    render(<AgentProgressDisplay {...baseProgress} awaitingDecision={true} allAgentsDone={true} onDeepAnalysis={onDeep} />);
+    render(<AgentProgressDisplay {...baseProgress} awaitingDecision={true} allAgentsDone={true} onRunDeepAnalysis={onDeep} />);
     const btn = screen.getByRole("button", { name: /deep/i });
     btn.focus();
     fireEvent.click(btn);

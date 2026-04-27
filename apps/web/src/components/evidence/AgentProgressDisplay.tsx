@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
  Loader2,
  FileText,
@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 import { AGENTS as AGENTS_DATA } from "@/lib/constants";
 import { SoundType } from "@/hooks/useSound";
+import type { AgentStatusCardProps } from "./AgentStatusCard";
 
 export interface FindingPreview {
  tool: string;
@@ -90,32 +91,37 @@ function isAgentSupportedForMime(agentId: string, mimeType?: string): boolean {
   return true;
 }
 
+type AgentStatus = "waiting" | "checking" | "running" | "complete" | "error" | "unsupported" | "validating";
+
 export function AgentProgressDisplay({
- agentUpdates,
- completedAgents,
- progressText,
- allAgentsDone,
- phase,
- awaitingDecision,
- pipelineStatus,
- pipelineMessage,
-onNewUpload,
+  agentUpdates,
+  completedAgents,
+  progressText,
+  allAgentsDone,
+  phase,
+  awaitingDecision,
+  pipelineStatus,
+  pipelineMessage,
+  onNewUpload,
   onViewResults,
   onAcceptAnalysis,
   onRunDeepAnalysis,
-  playSound,
   isNavigating = false,
   mimeType,
-}
-    });
+}: AgentProgressDisplayProps) {
+  const [hiddenAgents] = useState(new Set<string>());
+  const [validatedAgents] = useState(new Set<string>(AGENTS_DATA.map(a => a.id)));
+
+  useEffect(() => {
+    const timers: NodeJS.Timeout[] = [];
     return () => timers.forEach(clearTimeout);
-  }, [validatedAgents, mimeType]); // hiddenAgents intentionally omitted to prevent re-scheduling
+  }, [validatedAgents, mimeType]);
 
   const visibleAgents = useMemo(() => {
     return allValidAgents.filter(a => !hiddenAgents.has(a.id));
   }, [hiddenAgents]);
 
-  const getAgentStatus = (agentId: string) => {
+  const getAgentStatus = (agentId: string): AgentStatus => {
     if (!validatedAgents.has(agentId)) return "validating";
     
     const isSupported = isAgentSupportedForMime(agentId, mimeType);
@@ -213,7 +219,7 @@ onNewUpload,
                   agentId={agent.id}
                   name={agent.name}
                   badge={agent.badge}
-                  status={getAgentStatus(agent.id) as any}
+                  status={getAgentStatus(agent.id)}
                   thinking={agentUpdates[agent.id]?.thinking}
                   liveUpdate={agentUpdates[agent.id]}
                   completedData={completedAgents.find((c) => c.agent_id === agent.id)}

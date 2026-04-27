@@ -6,7 +6,6 @@ import type { ReportDTO } from "@/lib/api";
 import type { VerdictConfig } from "@/lib/verdict";
 import { ArcGauge } from "./ArcGauge";
 import { EvidenceThumbnail } from "./EvidenceThumbnail";
-import { clsx } from "clsx";
 import { motion } from "framer-motion";
 
 interface ResultHeaderProps {

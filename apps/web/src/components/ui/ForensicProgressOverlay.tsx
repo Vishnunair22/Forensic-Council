@@ -3,21 +3,6 @@
 import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
-export type ForensicProgressVariant = "stream" | "council";
-
-export interface ForensicProgressOverlayProps {
-  variant: ForensicProgressVariant;
-  title: string;
-  liveText: string;
-  telemetryLabel?: string;
-  showElapsed?: boolean;
-}
-
-const variantColors = {
-  stream: { primary: "#00FFFF", glow: "rgba(0,255,255,0.15)" },
-  council: { primary: "#00FFFF", glow: "rgba(0,255,255,0.15)" }, // Unified Horizon palette
-};
-
 function categorize(text: string) {
   if (!text) return "system";
   const lower = text.toLowerCase();
@@ -32,14 +17,19 @@ function fmtDiagnosticTime(): string {
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
 }
 
+export interface ForensicProgressOverlayProps {
+  title: string;
+  liveText: string;
+  telemetryLabel?: string;
+  showElapsed?: boolean;
+}
+
 export function ForensicProgressOverlay({
-  variant,
   title,
   liveText,
   telemetryLabel = "Secured Transmission",
   showElapsed = true,
 }: ForensicProgressOverlayProps) {
-  const colors = variantColors[variant];
   const [elapsed, setElapsed] = useState(0);
   const [log, setLog] = useState<{ id: number; text: string; cat: string }[]>([]);
   const idRef = useRef(0);
@@ -90,7 +80,7 @@ export function ForensicProgressOverlay({
         >
           <div className="w-1 h-1 rounded-full bg-primary animate-pulse shadow-[0_0_10px_#00FFFF]" />
           <span className="text-[10px] font-mono tracking-[0.3em] text-white/30 uppercase">
-            {telemetryLabel} // ID_SCAN_V4
+            {telemetryLabel} {"// ID_SCAN_V4"}
           </span>
         </motion.div>
 

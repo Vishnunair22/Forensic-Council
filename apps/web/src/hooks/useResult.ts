@@ -9,7 +9,7 @@ import {
   type ReportDTO
 } from "@/lib/api";
 import { ARBITER_POLL_INTERVAL_MS, ARBITER_POLL_MAX_ATTEMPTS } from "@/lib/constants";
-import { useForensicData, mapReportDtoToReport } from "@/hooks/useForensicData";
+import { useForensicData } from "@/hooks/useForensicData";
 import { useSound } from "@/hooks/useSound";
 import { type HistoryItem } from "@/lib/types";
 import type { AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
@@ -77,7 +77,7 @@ export function useResult() {
   const [arbiterComplete, setArbiterComplete] = useState(false);
 
   const historySavedRef = useRef(false);
-  const { addToHistory } = useForensicData();
+  useForensicData();
   const { playSound } = useSound();
   const soundRef = useRef(playSound);
 

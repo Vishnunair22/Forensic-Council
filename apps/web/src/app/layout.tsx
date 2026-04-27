@@ -5,7 +5,6 @@ import { GlobalNavbar } from "@/components/ui/GlobalNavbar";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { RouteExperience } from "@/components/ui/RouteExperience";
 import { Toaster } from "@/components/ui/Toaster";
-import { DarkBackgroundAnimation } from "@/components/ui/DarkBackgroundAnimation";
 import { QueryProvider } from "@/components/ui/QueryProvider";
 import "./globals.css";
 
