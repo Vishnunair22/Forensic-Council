@@ -181,13 +181,13 @@ Click **Demo Login** on the landing page to authenticate as the investigator use
 
 ### Step 1 — Generate strong secrets
 
-Run this once from the **repo root**. It backs up your existing `.env` and rewrites all secret fields with cryptographically secure values:
+Run this once from the **repo root**. It prints all required secret values to stdout — copy them into your `.env` file:
 
 ```bash
-bash infra/generate_production_keys.sh --write .env
+bash infra/generate_production_keys.sh
 ```
 
-> On Windows without Git Bash/WSL2: open `.env` and manually replace every `__REPLACE_ME_*` value using the instructions printed by running the script without `--write`.
+> On Windows without Git Bash/WSL2: run the script in Git Bash or WSL2, then paste the output values into your `.env` file manually.
 
 ### Step 2 — Configure production-specific settings
 

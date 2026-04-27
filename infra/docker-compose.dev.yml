@@ -8,6 +8,10 @@ services:
   backend:
     build:
       target: development
+    # The base compose sets read_only: true for production hardening.
+    # Development needs a writable container filesystem for uvicorn --reload
+    # and any runtime writes outside of named/bind-mounted volumes.
+    read_only: false
     environment:
       RELOAD: "true"
       APP_ENV: development
@@ -18,12 +22,12 @@ services:
       - ../apps/api:/app:rw
       # Protect the container's venv from being overwritten by local (potentially incompatible) .venv
       - /app/.venv
-      # Protect model cache volumes: the bind-mount above puts the host's
-      # (empty) backend/ directory at /app, which would shadow /app/cache/*.
-      # These anonymous volumes restore the named-volume mounts from the base
-      # compose for each cache subdirectory so models survive host bind-mounts.
-      # Named volumes from base compose (hf_cache, yolo_cache, etc.) take
-      # precedence over the bind mount for these specific sub-paths.
+      # Restore runtime data volumes explicitly — the full /app bind-mount above
+      # must not shadow evidence uploads or signing keys.
+      - evidence_data:/app/storage/evidence:rw
+      - signing_keys:/app/storage/keys:rw
+      # Protect model cache volumes: named volumes take precedence over the
+      # /app bind-mount for these specific sub-paths so models survive restarts.
       - hf_cache:/app/cache/huggingface:rw
       - torch_cache:/app/cache/torch:rw
       - easyocr_cache:/app/cache/easyocr:rw
@@ -36,6 +40,7 @@ services:
   worker:
     build:
       target: development
+    read_only: false
     environment:
       RELOAD: "true"
       APP_ENV: development
@@ -45,6 +50,8 @@ services:
     volumes:
       - ../apps/api:/app:rw
       - /app/.venv
+      - evidence_data:/app/storage/evidence:rw
+      - signing_keys:/app/storage/keys:ro
       - hf_cache:/app/cache/huggingface:rw
       - torch_cache:/app/cache/torch:rw
       - easyocr_cache:/app/cache/easyocr:rw
