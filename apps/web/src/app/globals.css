@@ -9,144 +9,198 @@
   }
 }
 
-/* ── Simple Dark Theme ──────────────────────────────────────────────────────── */
+/* ── Prism Forensic Design System ────────────────────────────────────────── */
 @theme {
-  --color-primary: #FFFFFF;
-  --color-primary-rgb: 255, 255, 255;
+  --color-primary: #00F2FF;
+  --color-primary-rgb: 0, 242, 255;
 
-  --color-accent: #FFFFFF;
-  --color-accent-rgb: 255, 255, 255;
+  --color-accent: #8B5CF6;
+  --color-accent-rgb: 139, 92, 246;
 
-  --color-success: #FFFFFF;
-  --color-success-rgb: 255, 255, 255;
+  --color-success: #00FF94;
+  --color-success-rgb: 0, 255, 148;
+  --color-success-light: #A7FFD2;
 
-  --color-danger: #FFFFFF;
-  --color-danger-rgb: 255, 255, 255;
+  --color-background: #020203;
 
-  --color-warning: #FFFFFF;
-  --color-warning-rgb: 255, 255, 255;
-
-  --color-info: #FFFFFF;
-  --color-info-rgb: 255, 255, 255;
-
-  --color-background: #000000;
   --color-foreground: #FFFFFF;
 
-  /* ── Simple Surface System ── */
-  --color-surface-1: #111111;
-  --color-surface-2: #222222;
-  --color-surface-3: #333333;
-
-  --color-surface-low:  #000000;
-  --color-surface-mid:  #111111;
-  --color-surface-high: #222222;
-
-  --color-border-subtle: #333333;
-  --color-border-bold:   #FFFFFF;
-
   /* ── Typography ── */
-  --font-sans:    var(--font-inter), system-ui, sans-serif;
-  --font-mono:    var(--font-mono), monospace;
-  --font-heading: var(--font-inter), sans-serif;
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-heading: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 
-  /* ── Type Scale ── */
-  --text-2xs: 0.625rem;
-  --text-xs:  0.75rem;
-  --text-sm:  0.875rem;
-  --text-base: 1rem;
-  --text-lg:  1.125rem;
-  --text-xl:  1.25rem;
-  --text-2xl: 1.5rem;
-  --text-3xl: 1.875rem;
-  --text-4xl: 2.25rem;
-  --text-5xl: 3rem;
-
-  /* ── Border Radius ── */
-  --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
-  --radius-xl: 0px;
-  --radius-2xl: 0px;
-  --radius-full: 0px;
+  /* ── Spacing & Radius ── */
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
 }
 
-/* ── Base Reset ───────────────────────────────────────────────────────────── */
 @layer base {
   html {
     scroll-behavior: smooth;
-    font-size: 16px;
-    background-color: #000000;
+    background-color: var(--color-background);
   }
 
   body {
-    background-color: #000000;
-    color: #FFFFFF;
+    background-color: var(--color-background);
+    color: var(--color-foreground);
     font-family: var(--font-sans);
-    line-height: 1.5;
-  }
-
-  button, a, [role="button"] {
-    cursor: pointer;
-    transition: opacity 0.2s ease;
-  }
-
-  button:hover, a:hover {
-    opacity: 0.8;
+    overflow-x: hidden;
+    min-height: 100vh;
   }
 
   h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    letter-spacing: -0.02em;
     font-weight: 700;
-    margin-bottom: 1rem;
+  }
+
+  button, a, select, input[type="button"], input[type="submit"] {
+    cursor: pointer;
   }
 }
 
-/* ── Simplified Components ────────────────────────────────────────────────── */
 
-.glass-panel, .frosted-panel, .premium-glass, .premium-card, .forensic-border, .horizon-glass, .horizon-card {
-  background: #111111;
-  border: 1px solid #333333;
-  padding: 1.5rem;
+/* ── The "Deep Spectrum" Background ── */
+.bg-mesh-container {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-color: var(--color-background);
+  overflow: hidden;
 }
 
-.btn-premium, .btn-horizon-primary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.75rem 1.5rem;
-  background: #FFFFFF;
-  color: #000000;
+.mesh-orb-1 {
+  position: absolute;
+  top: -10%;
+  left: -10%;
+  width: 60%;
+  height: 60%;
+  background: radial-gradient(circle, rgba(0, 242, 255, 0.1) 0%, transparent 70%);
+  filter: blur(80px);
+  animation: orb-float 20s infinite alternate;
+}
+
+.mesh-orb-2 {
+  position: absolute;
+  bottom: -10%;
+  right: -10%;
+  width: 60%;
+  height: 60%;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.1) 0%, transparent 70%);
+  filter: blur(80px);
+  animation: orb-float 25s infinite alternate-reverse;
+}
+
+@keyframes orb-float {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(5%, 5%) scale(1.1); }
+}
+
+/* ── Glassmorphism Core ── */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    0 8px 32px 0 rgba(0, 0, 0, 0.8),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-xl);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-panel:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(0, 242, 255, 0.2);
+  box-shadow: 
+    0 12px 48px 0 rgba(0, 0, 0, 0.9),
+    0 0 20px rgba(0, 242, 255, 0.05);
+  transform: translateY(-2px);
+}
+
+/* ── Typography Effects ── */
+.text-hero-gradient {
+  background: linear-gradient(135deg, #FFFFFF 0%, rgba(255, 255, 255, 0.5) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-glow-cyan {
+  text-shadow: 0 0 20px rgba(0, 242, 255, 0.3);
+}
+
+/* ── Interactive Elements ── */
+.btn-horizon-primary {
+  background: var(--color-success-light);
+  color: #020617 !important;
+  padding: 1rem 2.5rem;
+  border-radius: 9999px;
   font-weight: 700;
-  border: none;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.btn-outline, .btn-horizon-outline, .btn-pill-secondary {
+  letter-spacing: 0.15em;
+  font-size: 0.875rem;
+  border: 2px solid var(--color-success-light);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.75rem 1.5rem;
+}
+
+
+
+.btn-horizon-primary:hover {
   background: transparent;
-  color: #FFFFFF;
-  border: 1px solid #FFFFFF;
+  color: var(--color-success-light) !important;
+  box-shadow: 0 0 30px rgba(167, 255, 210, 0.3);
+}
+
+
+/* ── Layout & Surfaces ── */
+.bg-surface-1 { background-color: #020203; }
+.bg-surface-2 { background-color: #0A0A0C; }
+.bg-surface-3 { background-color: #121214; }
+
+.btn-horizon-outline {
+  background: transparent;
+  color: white;
+  padding: 1rem 2.5rem;
+  border-radius: 9999px;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-size: 0.875rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.skeleton, .skeleton-text {
-  background: #222222;
+.btn-horizon-outline:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: white;
 }
 
-/* Remove all glow/animations */
-.text-glow, .text-glow-green, .text-glow-red, .text-glow-teal,
-.box-glow-green, .box-glow-red, .box-glow-teal, .scan-line-overlay {
-  text-shadow: none !important;
-  box-shadow: none !important;
-  animation: none !important;
-  display: none !important;
+.glass-button {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-/* Simplified Status Borders */
-.status-border-running  { border-left: 4px solid #FFFFFF; }
-.status-border-complete { border-left: 4px solid #FFFFFF; }
-.status-border-error    { border-left: 4px solid #FFFFFF; }
-.status-border-idle     { border-left: 4px solid #333333; }
+.glass-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--color-success-light);
+  box-shadow: 0 0 20px rgba(167, 255, 210, 0.2);
+}

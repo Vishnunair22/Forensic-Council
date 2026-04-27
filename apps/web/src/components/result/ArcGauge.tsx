@@ -96,13 +96,13 @@ export function ArcGauge({
           <motion.circle
             cx={cx}
             cy={cy}
-            r={radius + 8}
+            r={radius + 12}
             fill="none"
-            stroke="rgba(0,255,255,0.05)"
+            stroke="rgba(167,255,210,0.1)"
             strokeWidth="1"
-            strokeDasharray="2 4"
+            strokeDasharray="4 8"
             animate={{ rotate: 360 }}
-            transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+            transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
             style={{ originX: "50%", originY: "50%" }}
           />
 
@@ -122,14 +122,15 @@ export function ArcGauge({
               animate={{ pathLength: 1 }}
               d={fillPath}
               fill="none"
-              stroke={color}
-              strokeWidth={strokeWidth + 1}
+              stroke={color === "#00FFFF" ? "var(--color-success-light)" : color}
+              strokeWidth={strokeWidth + 2}
               strokeLinecap="round"
               style={{
-                filter: `drop-shadow(0 0 8px ${color}88)`,
+                filter: `drop-shadow(0 0 12px ${color === "#00FFFF" ? "rgba(167,255,210,0.4)" : color + "88"})`,
               }}
             />
           )}
+
 
           {/* Dial Markers */}
           {[0, 0.25, 0.5, 0.75, 1].map((pos) => {

@@ -23,7 +23,7 @@ interface ResultHeaderProps {
 }
 
 const VERDICT_THEMES: Record<string, { color: string; icon: LucideIcon }> = {
-  emerald: { color: "#00FFFF", icon: ShieldCheck },
+  emerald: { color: "#A7FFD2", icon: ShieldCheck },
   red:     { color: "#F43F5E", icon: ShieldAlert },
   amber:   { color: "#F59E0B", icon: Shield },
 };
@@ -45,111 +45,112 @@ export function ResultHeader({
   const discordPct = report.confidence_std_dev ? Math.round(report.confidence_std_dev * 100) : 0;
 
   return (
-    <section className="horizon-card p-1 relative overflow-hidden rounded-3xl">
-      <div className="bg-[#020617] rounded-[inherit] p-10 space-y-12">
+    <section className="glass-panel p-1 relative overflow-hidden rounded-[2.5rem] border-white/5 shadow-[0_64px_128px_rgba(0,0,0,0.6)]">
+      <div className="bg-[#020203]/40 rounded-[inherit] p-12 space-y-16">
         
         {/* --- Top Row: Identity & Verdict --- */}
-        <div className="flex flex-col lg:flex-row gap-12 items-center">
+        <div className="flex flex-col lg:flex-row gap-16 items-center">
           
           {/* Thumbnail with Aperture */}
-          <div className="relative w-40 h-40 flex items-center justify-center shrink-0">
+          <div className="relative w-48 h-48 flex items-center justify-center shrink-0">
             <motion.div 
               animate={{ rotate: 360 }}
-              transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-              className="absolute inset-0 rounded-full border border-primary/20 border-dashed"
+              transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+              className="absolute inset-0 rounded-full border border-[var(--color-success-light)]/20 border-dashed"
             />
-            <div className="absolute inset-4 rounded-full border border-primary/5" />
-            <div className="w-24 h-24 relative z-10">
+            <div className="absolute inset-4 rounded-full border border-white/5" />
+            <div className="w-32 h-32 relative z-10">
               <EvidenceThumbnail
                 thumbnail={thumbnail}
                 mimeType={mimeType}
                 fileName={fileName}
-                className="w-full h-full rounded-xl border border-white/10 shadow-2xl"
+                className="w-full h-full rounded-2xl border border-white/10 shadow-2xl"
               />
             </div>
           </div>
 
           <div className="flex-1 flex flex-col items-center lg:items-start text-center lg:text-left">
-            <div className="flex items-center gap-3 mb-4">
-               <span className="text-[10px] font-mono font-bold text-primary border border-primary/20 px-2 py-0.5 rounded bg-primary/5">
-                 CASE_{report.case_id?.slice(-8) || "FC_ALPHA"}
+            <div className="flex items-center gap-4 mb-6">
+               <span className="text-[10px] font-mono font-bold text-[var(--color-success-light)] border border-[var(--color-success-light)]/20 px-3 py-1 rounded-full bg-[var(--color-success-light)]/5 uppercase tracking-widest">
+                 ID_{report.case_id?.slice(-8) || "FC_ALPHA"}
                </span>
-               <span className="text-[10px] font-mono text-white/30 uppercase tracking-[0.2em]">
-                 {isDeepPhase ? "Deep_Forensics_Active" : "Initial_Intake"}
+               <span className="text-[10px] font-mono text-white/20 uppercase tracking-[0.3em]">
+                 {isDeepPhase ? "Deep_Forensics" : "Standard_Ingestion"}
                </span>
             </div>
 
-            <h2 className="text-xl font-heading font-bold text-white/60 mb-2 truncate max-w-md">{fileName}</h2>
+            <h2 className="text-2xl font-heading font-bold text-white/40 mb-3 truncate max-w-xl tracking-tight">{fileName}</h2>
             
             <motion.p 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-5xl md:text-7xl font-heading font-bold tracking-tight text-white mb-4"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="text-6xl md:text-8xl font-heading font-bold tracking-tighter text-white mb-6 leading-none"
               style={{ color: theme.color }}
             >
               {vc.label.toUpperCase()}
             </motion.p>
             
-            <p className="text-sm font-medium text-white/40 max-w-lg italic">
+            <p className="text-lg font-medium text-white/30 max-w-2xl leading-relaxed italic">
               {vc.desc}
             </p>
           </div>
 
           {/* Quick Stats Pill */}
-          <div className="flex flex-col gap-3">
-             <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-white/[0.02] border border-white/5">
-                <Lock className="w-3.5 h-3.5 text-primary/40" />
-                <span className="text-[10px] font-mono font-bold text-white/60">{activeAgentIds.length} ACTIVE_NODES</span>
+          <div className="flex flex-col gap-4">
+             <div className="flex items-center gap-4 px-6 py-3 rounded-2xl bg-white/[0.02] border border-white/5">
+                <Lock className="w-4 h-4 text-[var(--color-success-light)]/40" />
+                <span className="text-[10px] font-mono font-bold text-white/50 tracking-widest uppercase">{activeAgentIds.length} ACTIVE_NODES</span>
              </div>
-             <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-white/[0.02] border border-white/5">
-                <Fingerprint className="w-3.5 h-3.5 text-primary/40" />
-                <span className="text-[10px] font-mono font-bold text-white/60">SCAN_TIME: {pipelineDuration}</span>
+             <div className="flex items-center gap-4 px-6 py-3 rounded-2xl bg-white/[0.02] border border-white/5">
+                <Fingerprint className="w-4 h-4 text-[var(--color-success-light)]/40" />
+                <span className="text-[10px] font-mono font-bold text-white/50 tracking-widest uppercase">TTL: {pipelineDuration}</span>
              </div>
           </div>
         </div>
 
         {/* --- Metrics Grid --- */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pt-12 border-t border-white/5">
-          <ArcGauge value={confPct} label="Consensus" sublabel="Confidence Score" color="#00FFFF" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 pt-16 border-t border-white/5">
+          <ArcGauge value={confPct} label="Consensus" sublabel="Confidence" color="#A7FFD2" />
           
-          <div className="horizon-card p-6 flex flex-col items-center justify-center text-center">
-             <span className="text-[10px] font-mono font-bold text-white/30 uppercase tracking-[0.2em] mb-4">Neural_Discord</span>
-             <div className="text-3xl font-mono font-bold text-white mb-2">{discordPct}%</div>
+          <div className="glass-panel p-8 flex flex-col items-center justify-center text-center border-white/5">
+             <span className="text-[10px] font-mono font-bold text-white/20 uppercase tracking-[0.2em] mb-6">Neural_Discord</span>
+             <div className="text-4xl font-mono font-bold text-white mb-3 tracking-tighter">{discordPct}%</div>
              <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
                 <motion.div 
                   initial={{ width: 0 }} animate={{ width: `${discordPct}%` }}
-                  className="h-full bg-primary shadow-[0_0_10px_#00FFFF]" 
+                  className="h-full bg-[var(--color-success-light)] shadow-[0_0_15px_rgba(167,255,210,0.5)]" 
                 />
              </div>
-             <span className="text-[9px] font-mono text-white/20 mt-3 uppercase">Confidence Spread</span>
+             <span className="text-[9px] font-mono text-white/10 mt-4 uppercase tracking-widest">Confidence Spread</span>
           </div>
 
-          <div className="horizon-card p-6 flex flex-col items-center justify-center text-center">
-             <span className="text-[10px] font-mono font-bold text-white/30 uppercase tracking-[0.2em] mb-4">Integrity_Risk</span>
-             <div className="text-3xl font-mono font-bold text-white mb-2" style={{ color: manipPct > 50 ? '#F43F5E' : '#00FFFF' }}>{manipPct}%</div>
+          <div className="glass-panel p-8 flex flex-col items-center justify-center text-center border-white/5">
+             <span className="text-[10px] font-mono font-bold text-white/20 uppercase tracking-[0.2em] mb-6">Integrity_Risk</span>
+             <div className="text-4xl font-mono font-bold text-white mb-3 tracking-tighter" style={{ color: manipPct > 50 ? '#F43F5E' : '#A7FFD2' }}>{manipPct}%</div>
              <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
                 <motion.div 
                   initial={{ width: 0 }} animate={{ width: `${manipPct}%` }}
-                  className="h-full bg-primary" 
-                  style={{ backgroundColor: manipPct > 50 ? '#F43F5E' : '#00FFFF' }}
+                  className="h-full" 
+                  style={{ backgroundColor: manipPct > 50 ? '#F43F5E' : '#A7FFD2', boxShadow: manipPct > 50 ? '0 0 15px rgba(244,63,94,0.5)' : '0 0 15px rgba(167,255,210,0.5)' }}
                 />
              </div>
-             <span className="text-[9px] font-mono text-white/20 mt-3 uppercase">Manipulation Prob.</span>
+             <span className="text-[9px] font-mono text-white/10 mt-4 uppercase tracking-widest">Manipulation Prob.</span>
           </div>
 
-          <div className="horizon-card p-6 flex flex-col items-center justify-center text-center">
-             <span className="text-[10px] font-mono font-bold text-white/30 uppercase tracking-[0.2em] mb-4">System_Noise</span>
-             <div className="text-3xl font-mono font-bold text-white mb-2" style={{ color: errPct > 20 ? '#F59E0B' : '#00FFFF' }}>{errPct}%</div>
+          <div className="glass-panel p-8 flex flex-col items-center justify-center text-center border-white/5">
+             <span className="text-[10px] font-mono font-bold text-white/20 uppercase tracking-[0.2em] mb-6">System_Noise</span>
+             <div className="text-4xl font-mono font-bold text-white mb-3 tracking-tighter" style={{ color: errPct > 20 ? '#F59E0B' : '#A7FFD2' }}>{errPct}%</div>
              <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
                 <motion.div 
                   initial={{ width: 0 }} animate={{ width: `${errPct}%` }}
-                  className="h-full bg-primary" 
-                  style={{ backgroundColor: errPct > 20 ? '#F59E0B' : '#00FFFF' }}
+                  className="h-full" 
+                  style={{ backgroundColor: errPct > 20 ? '#F59E0B' : '#A7FFD2', boxShadow: errPct > 20 ? '0 0 15px rgba(245,158,11,0.5)' : '0 0 15px rgba(167,255,210,0.5)' }}
                 />
              </div>
-             <span className="text-[9px] font-mono text-white/20 mt-3 uppercase">Error Variance</span>
+             <span className="text-[9px] font-mono text-white/10 mt-4 uppercase tracking-widest">Error Variance</span>
           </div>
         </div>
+
 
         {/* --- Digital Signature --- */}
         {report.cryptographic_signature && (

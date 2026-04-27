@@ -47,6 +47,18 @@ export function HeroAuthActions() {
     };
   }, []);
 
+  // Open the upload modal when navigated back with ?upload=1 (e.g. from handleNewUpload)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("upload") === "1") {
+      setShowUpload(true);
+      setSelectedFile(null);
+      const url = new URL(window.location.href);
+      url.searchParams.delete("upload");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
+
   const handleStartAnalysis = useCallback(async () => {
     if (!selectedFile) return;
     setShowUpload(false);
@@ -95,8 +107,8 @@ export function HeroAuthActions() {
           aria-label={isAuthenticating ? "Initializing..." : authError ? authError : "Upload a file to begin analysis"}
           className="btn-horizon-primary group relative select-none"
         >
-          <span className="relative z-10 flex items-center gap-3">
-            <span className="font-bold">
+          <span className="relative z-10 flex items-center gap-3 text-[#020617]">
+            <span className="font-bold uppercase tracking-widest">
               {isAuthenticating ? "Initializing..." : authError ? authError : "Begin Analysis"}
             </span>
             {isAuthenticating ? (
@@ -106,6 +118,7 @@ export function HeroAuthActions() {
             )}
           </span>
         </button>
+
       </div>
 
       <AnimatePresence>

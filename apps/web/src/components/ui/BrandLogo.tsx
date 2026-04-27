@@ -27,40 +27,29 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
       {/* --- Horizon Aperture Icon --- */}
       <motion.div
         className={cn(
-          "relative flex items-center justify-center rounded-xl bg-slate-900 border border-white/10 overflow-hidden",
+          "relative flex items-center justify-center rounded-lg bg-black/40 border border-white/5 overflow-hidden",
           iconSizes[size]
         )}
       >
+
         {/* Glow effect on hover */}
         <motion.div 
           animate={{ opacity: isHovered ? 0.3 : 0.1 }}
-          className="absolute inset-0 bg-primary blur-xl" 
+          className="absolute inset-0 bg-[var(--color-success-light)] blur-xl" 
         />
         
-        {/* Technical HUD Crosshair */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-[70%] h-[1px] bg-primary/30" />
-          <div className="h-[70%] w-[1px] bg-primary/30" />
-          <div className="absolute w-[50%] h-[50%] border border-primary/20 rounded-full" />
+        {/* HUD Elements */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+          <div className="w-[80%] h-[1px] bg-[var(--color-success-light)]" />
+          <div className="h-[80%] w-[1px] bg-[var(--color-success-light)]" />
         </div>
 
         {/* The "FC" Core */}
-        <span className="relative text-white font-mono font-bold text-xs z-10">
+        <span className="relative text-white font-mono font-bold text-[10px] z-10 tracking-tight">
           FC
         </span>
-
-        {/* Rotating Tick Marks (Horizon Signature) */}
-        <motion.div 
-          animate={{ rotate: 360 }}
-          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-          className="absolute inset-0 flex items-center justify-center"
-        >
-          <div className="absolute top-1 w-1 h-1 bg-primary/60 rounded-full" />
-          <div className="absolute bottom-1 w-1 h-1 bg-primary/60 rounded-full" />
-          <div className="absolute left-1 w-1 h-1 bg-primary/60 rounded-full" />
-          <div className="absolute right-1 w-1 h-1 bg-primary/60 rounded-full" />
-        </motion.div>
       </motion.div>
+
 
       {/* --- Horizon Name & Reset Context --- */}
       <div className="flex flex-col justify-center">
@@ -72,12 +61,13 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
             Forensic
           </span>
           <span className={cn(
-            "font-heading font-bold text-primary drop-shadow-[0_0_15px_rgba(0,255,255,0.4)] tracking-wider",
+            "font-heading font-bold text-[var(--color-success-light)] drop-shadow-[0_0_15px_rgba(167,255,210,0.4)] tracking-wider",
             textSizes[size]
           )}>
             Council
           </span>
         </div>
+
 
         {/* Back To Home Hint */}
         <AnimatePresence mode="wait">

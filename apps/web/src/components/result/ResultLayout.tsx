@@ -52,28 +52,28 @@ export function ResultLayout() {
   }
 
   return (
-    <div className="min-h-screen pb-32">
+    <div className="min-h-screen pb-48 pt-32 relative">
       {rs.state === "arbiter" && (
         <ForensicProgressOverlay 
-          title="Council Deliberation" 
+          title="Consensus Synthesis" 
           liveText={rs.arbiterMsg} 
-          telemetryLabel="Synthesizing Consensus" 
+          telemetryLabel="Analyzing Agent Intersections" 
           showElapsed 
         />
       )}
 
       {/* ── Horizon Navigation Dock ──────────────────────────────────── */}
-      <nav className="sticky top-[80px] z-[40] w-full px-6 mb-12">
-        <div className="max-w-5xl mx-auto horizon-card p-2 rounded-2xl flex items-center justify-between gap-8 bg-[#020617]/80 backdrop-blur-2xl">
+      <nav className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-2xl px-6">
+        <div className="glass-panel p-2 rounded-full flex items-center justify-between gap-4 bg-[#020203]/80 border-white/10 shadow-[0_32px_64px_rgba(0,0,0,0.6)]">
           <button 
             onClick={rs.handleHome}
-            className="px-6 py-2 text-[10px] font-mono font-bold text-white/30 hover:text-white transition-all uppercase tracking-widest flex items-center gap-3"
+            className="px-6 py-2.5 text-[10px] font-mono font-bold text-white/40 hover:text-white transition-all uppercase tracking-[0.2em] flex items-center gap-3"
           >
             <HomeIcon className="w-3.5 h-3.5" />
-            Analysis_Hub
+            HUB
           </button>
 
-          <div role="tablist" aria-label="Report sections" className="flex items-center gap-2 pr-2">
+          <div role="tablist" aria-label="Report sections" className="flex items-center gap-2 pr-1">
             {(["analysis", "history"] as Tab[]).map((tab) => (
               <button
                 key={tab}
@@ -83,13 +83,13 @@ export function ResultLayout() {
                 aria-controls={`tabpanel-${tab}`}
                 onClick={() => rs.setActiveTab(tab)}
                 className={clsx(
-                  "px-6 py-2 text-[10px] font-mono font-bold transition-all duration-300 rounded-lg uppercase tracking-widest",
+                  "px-8 py-2.5 text-[10px] font-mono font-bold transition-all duration-300 rounded-full uppercase tracking-[0.2em]",
                   rs.activeTab === tab 
-                    ? "bg-primary/10 text-primary border border-primary/20" 
-                    : "text-white/30 hover:text-white/60"
+                    ? "bg-[var(--color-success-light)] text-[#020617] shadow-[0_0_20px_rgba(167,255,210,0.3)]" 
+                    : "text-white/30 hover:text-white/60 hover:bg-white/5"
                 )}
               >
-                {tab === "analysis" ? "Overview" : "History"}
+                {tab === "analysis" ? "OVERVIEW" : "LOGS"}
               </button>
             ))}
           </div>
@@ -97,7 +97,8 @@ export function ResultLayout() {
       </nav>
 
       {/* ── Main Investigative Surface ─────────────────────────────────── */}
-      <main className="max-w-5xl mx-auto px-6 pt-12 space-y-12">
+      <main className="max-w-7xl mx-auto px-6 pt-12 space-y-16">
+
         <div
           role="tabpanel"
           id="tabpanel-history"

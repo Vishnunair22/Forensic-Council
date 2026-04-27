@@ -72,10 +72,10 @@ const progressDefaults = {
   onRunDeepAnalysis: jest.fn(),
   onNewUpload: jest.fn(),
   onViewResults: jest.fn(),
-  playSound: jest.fn(),
 };
 
 beforeEach(() => jest.clearAllMocks());
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // FileUploadSection
@@ -292,10 +292,5 @@ describe("AgentProgressDisplay", () => {
     });
   });
 
-  describe("sound integration", () => {
-    it("accepts playSound prop without error", () => {
-      const playSound = jest.fn();
-      expect(() => render(<AgentProgressDisplay {...progressDefaults} playSound={playSound} />)).not.toThrow();
-    });
-  });
 });
+

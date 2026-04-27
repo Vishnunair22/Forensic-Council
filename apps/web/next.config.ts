@@ -30,6 +30,8 @@ const nextConfig: NextConfig = {
   // reducing the production Docker image from ~1 GB to ~150 MB.
   output: "standalone",
 
+  outputFileTracingRoot: path.join(__dirname, "../../"),
+
   // ── Compression ──────────────────────────────────────────────────────────
   // Disabled: Caddy handles compression via `encode zstd gzip` in Caddyfile.
   // Enabling both causes double-compression (wasted CPU, slightly larger output).

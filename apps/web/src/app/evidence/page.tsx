@@ -23,8 +23,6 @@ const FORENSIC_SESSION_ID_KEY = "forensic_session_id";
 export default function EvidencePage() {
   const { playSound } = useSound();
 
-  const sessionId = hasStartedAnalysis ? storage.getItem<string>(FORENSIC_SESSION_ID_KEY) : null;
-
   const {
     file, setFile,
     isDragging, setIsDragging,
@@ -59,6 +57,8 @@ export default function EvidencePage() {
     validAgentsData,
     wsConnectionError,
   } = useInvestigation(playSound);
+
+  const sessionId = hasStartedAnalysis ? storage.getItem<string>(FORENSIC_SESSION_ID_KEY) : null;
 
   // Derive progress text for accessibility (NVDA)
   const runningAgentNames = Object.keys(agentUpdates)
@@ -126,9 +126,9 @@ export default function EvidencePage() {
                 onViewResults={handleViewResults}
                 onAcceptAnalysis={handleAcceptAnalysis}
                 onRunDeepAnalysis={handleDeepAnalysis}
-                playSound={playSound}
                 isNavigating={isNavigating}
                 mimeType={storage.getItem<string>(FORENSIC_MIME_TYPE_KEY) ?? undefined}
+                playSound={playSound}
               />
             )}
 

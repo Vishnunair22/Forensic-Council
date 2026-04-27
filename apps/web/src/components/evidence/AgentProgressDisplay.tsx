@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Loader2,
   FileText,
@@ -8,11 +8,12 @@ import {
   Activity,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import dynamic from "next/dynamic";
 import { AGENTS as AGENTS_DATA } from "@/lib/constants";
-import { SoundType } from "@/hooks/useSound";
-import type { AgentStatusCardProps } from "./AgentStatusCard";
 import { QuotaMeter } from "./QuotaMeter";
+import type { SoundType } from "@/hooks/useSound";
+import { storage } from "@/lib/storage";
+import { isAgentSupportedForMime } from "@/lib/agentSupport";
+import { AgentStatusCard } from "./AgentStatusCard";
 
 export interface FindingPreview {
  tool: string;
@@ -32,6 +33,7 @@ export interface AgentUpdate {
  agent_id: string;
  agent_name: string;
  message: string;
+ summary?: string;
  status: "running" | "complete" | "skipped" | "error" | "failed";
  confidence: number;
  findings_count: number;
@@ -73,25 +75,12 @@ interface AgentProgressDisplayProps {
   onViewResults?: () => void;
   onAcceptAnalysis?: () => void;
   onRunDeepAnalysis?: () => void;
-  playSound?: (type: SoundType) => void;
   isNavigating?: boolean;
   mimeType?: string;
+  playSound?: (type: SoundType) => void;
 }
-
-const AgentStatusCard = dynamic(
-  () => import("./AgentStatusCard").then((m) => m.AgentStatusCard),
-  { ssr: false },
-);
 
 const allValidAgents = AGENTS_DATA.filter((agent) => agent.id !== "Arbiter");
-
-function isAgentSupportedForMime(agentId: string, mimeType?: string): boolean {
-  if (!mimeType) return true;
-  if (mimeType.startsWith("image/")) return !["Agent2", "Agent4"].includes(agentId);
-  if (mimeType.startsWith("audio/")) return !["Agent1", "Agent3", "Agent4"].includes(agentId);
-  if (mimeType.startsWith("video/")) return !["Agent1", "Agent2"].includes(agentId);
-  return true;
-}
 
 type AgentStatus = "waiting" | "checking" | "running" | "complete" | "error" | "unsupported" | "validating";
 
@@ -111,22 +100,74 @@ export function AgentProgressDisplay({
   onRunDeepAnalysis,
   isNavigating = false,
   mimeType,
+  playSound,
 }: AgentProgressDisplayProps) {
-  const [hiddenAgents] = useState(new Set<string>());
-  const [validatedAgents] = useState(new Set<string>(AGENTS_DATA.map(a => a.id)));
+  const [hiddenAgents, setHiddenAgents] = useState(new Set<string>());
+  const playSoundRef = useRef(playSound);
+  useEffect(() => { playSoundRef.current = playSound; }, [playSound]);
+
+  // Play page-load sound + staggered card entrance sounds once on mount
+  const mountSoundsFiredRef = useRef(false);
+  useEffect(() => {
+    if (mountSoundsFiredRef.current) return;
+    mountSoundsFiredRef.current = true;
+    const ps = playSoundRef.current;
+    if (!ps) return;
+    ps("page_load");
+    const count = allValidAgents.length;
+    for (let i = 0; i < count; i++) {
+      setTimeout(() => playSoundRef.current?.("hum"), i * 150 + 80);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const prevHiddenSizeRef = useRef(0);
+
+  // Play a subtle sound when unsupported agents slide off the grid
+  useEffect(() => {
+    if (hiddenAgents.size > prevHiddenSizeRef.current) {
+      playSoundRef.current?.("click");
+    }
+    prevHiddenSizeRef.current = hiddenAgents.size;
+  }, [hiddenAgents.size]);
 
   useEffect(() => {
+    if (!mimeType) return;
     const timers: NodeJS.Timeout[] = [];
+    allValidAgents.forEach((agent) => {
+      if (!isAgentSupportedForMime(agent.id, mimeType)) {
+        const timer = setTimeout(() => {
+          setHiddenAgents((prev) => {
+            const next = new Set(prev);
+            next.add(agent.id);
+            return next;
+          });
+        }, 10000);
+        timers.push(timer);
+      }
+    });
     return () => timers.forEach(clearTimeout);
-  }, [validatedAgents, mimeType]);
+  }, [mimeType]);
+
+  const initialAgentIds = useMemo<string[]>(() => {
+    if (phase !== "deep") return [];
+    try {
+      const raw = storage.getItem<string>("forensic_initial_agents");
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed)
+        ? parsed.map((a: { agent_id?: string }) => a.agent_id).filter((id): id is string => typeof id === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  }, [phase]);
 
   const visibleAgents = useMemo(() => {
-    return allValidAgents.filter(a => !hiddenAgents.has(a.id));
-  }, [hiddenAgents]);
+    return allValidAgents
+      .filter((a) => !hiddenAgents.has(a.id))
+      .filter((a) => phase === "deep" ? initialAgentIds.includes(a.id) : true);
+  }, [hiddenAgents, phase, initialAgentIds]);
 
   const getAgentStatus = (agentId: string): AgentStatus => {
-    if (!validatedAgents.has(agentId)) return "validating";
-    
     const isSupported = isAgentSupportedForMime(agentId, mimeType);
     if (!isSupported) return "unsupported";
 
@@ -144,21 +185,17 @@ export function AgentProgressDisplay({
 
   const containerVariants: import("framer-motion").Variants = {
     hidden: {},
-    show: { transition: { staggerChildren: 0.15 } },
+    show: { transition: { staggerChildren: 0.6, delayChildren: 0.1 } },
   };
 
   const itemVariants: import("framer-motion").Variants = {
-    hidden: { opacity: 0, scale: 0.9, y: 30 },
+    hidden: { opacity: 0, scale: 0.92, y: 40 },
     show: {
       opacity: 1,
       scale: 1,
       y: 0,
-      transition: {
-        type: "spring",
-        damping: 25,
-        stiffness: 120
-      }
-    }
+      transition: { type: "spring", damping: 22, stiffness: 110, duration: 0.55 },
+    },
   };
 
   const runningCount = Object.keys(agentUpdates).filter(id => !completedAgents.some(c => c.agent_id === id)).length;
@@ -173,39 +210,40 @@ export function AgentProgressDisplay({
           <motion.h1
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="text-4xl md:text-5xl font-heading font-bold text-white tracking-tight"
+            className="text-5xl md:text-6xl font-heading font-bold text-white tracking-tight"
           >
-            Evidence Analysis
+            Analysis Pipeline
           </motion.h1>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_10px_#00FFFF]" />
-              <p className="text-[10px] font-mono font-bold text-primary tracking-[0.2em] uppercase">
-                {phase === "initial" ? "Initial_Pipeline" : "Deep_Pipeline"}
+              <div className="w-2 h-2 rounded-full bg-[var(--color-success-light)] animate-pulse shadow-[0_0_15px_rgba(167,255,210,0.5)]" />
+              <p className="text-[10px] font-mono font-bold text-[var(--color-success-light)] tracking-[0.3em] uppercase">
+                {phase === "initial" ? "Initial_Verification" : "Deep_Analysis"}
               </p>
             </div>
             <div className="w-[1px] h-3 bg-white/10" />
-            <p className="text-xs font-medium text-white/40 italic" role="status" aria-live="polite" aria-atomic="false">
-              {pipelineMessage || progressText || (allAgentsDone ? "Analysis phase complete" : "Analysis in progress")}
+            <p className="text-sm font-medium text-white/40 italic" role="status" aria-live="polite" aria-atomic="false">
+              {pipelineMessage || progressText || (allAgentsDone ? "Analysis phase complete" : "Coordination in progress")}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="horizon-card px-6 py-4 rounded-xl flex items-center gap-6 border-primary/20">
+          <div className="glass-panel px-6 py-5 rounded-2xl flex items-center gap-6 border-white/10">
              <div className="flex flex-col items-start">
-               <span className="text-[9px] font-mono font-bold text-white/20 uppercase tracking-widest">Active_Nodes</span>
-               <span className="text-2xl font-mono font-bold text-white leading-none mt-1">0{runningCount}</span>
+               <span className="text-[9px] font-mono font-bold text-white/20 uppercase tracking-[0.2em]">Active_Nodes</span>
+               <span className="text-3xl font-mono font-bold text-white leading-none mt-1">0{runningCount}</span>
              </div>
-             <div className="w-10 h-10 rounded-full border border-primary/20 flex items-center justify-center">
+             <div className="w-12 h-12 rounded-full border border-[var(--color-success-light)]/20 flex items-center justify-center bg-[var(--color-success-light)]/5">
                 <motion.div animate={{ rotate: 360 }} transition={{ duration: 4, repeat: Infinity, ease: "linear" }}>
-                  <Activity className="w-5 h-5 text-primary" />
+                  <Activity className="w-6 h-6 text-[var(--color-success-light)]" />
                 </motion.div>
              </div>
           </div>
           {sessionId && <QuotaMeter sessionId={sessionId} />}
         </div>
       </div>
+
 
       <div className="w-full">
         <motion.div
@@ -240,30 +278,32 @@ export function AgentProgressDisplay({
       </div>
 
       <AnimatePresence>
-        {awaitingDecision && (
+        {awaitingDecision && phase === "initial" && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-6 pointer-events-none"
           >
-            <div className="horizon-card p-2 rounded-[2rem] shadow-[0_40px_100px_rgba(0,0,0,0.8)] pointer-events-auto">
-              <div className="bg-[#020617] rounded-[1.8rem] p-3 flex items-center gap-4">
+            <div className="glass-panel p-2 rounded-full shadow-[0_40px_100px_rgba(0,0,0,0.8)] pointer-events-auto border-white/10">
+              <div className="bg-[#020203]/80 rounded-full p-2 flex items-center gap-3">
                 <button
                   onClick={onAcceptAnalysis}
                   disabled={isNavigating}
-                  className="flex-1 btn-horizon-outline py-4 text-xs"
+                  className="flex-1 btn-horizon-outline py-3 text-xs"
                 >
-                  Accept Analysis
+                  Accept Verdict
                 </button>
                 <button
                   onClick={onRunDeepAnalysis}
                   disabled={isNavigating}
-                  className="flex-[1.5] btn-horizon-primary py-4 text-xs flex items-center justify-center gap-3"
+                  className="flex-[1.5] btn-horizon-primary py-3 text-xs flex items-center justify-center gap-3"
                 >
-                  {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-                  Run Deep Analysis
-                  <ArrowRight className="w-4 h-4" />
+                  <span className="flex items-center gap-2 text-[#020617]">
+                    {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
+                    <span className="font-bold">DEEP ANALYSIS</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </span>
                 </button>
               </div>
             </div>
@@ -272,30 +312,33 @@ export function AgentProgressDisplay({
       </AnimatePresence>
 
       <AnimatePresence>
-        {(allAgentsDone || pipelineStatus === "complete") && (
+        {!awaitingDecision && (allAgentsDone || pipelineStatus === "complete") && (
           <motion.div
             initial={{ opacity: 0, y: 100 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 100 }}
             className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-6 pointer-events-none"
           >
-            <div className="horizon-card p-2 rounded-[2rem] shadow-[0_40px_100px_rgba(0,0,0,0.8)] pointer-events-auto">
-              <div className="bg-[#020617] rounded-[1.8rem] p-3 flex items-center gap-4">
-                <button onClick={onNewUpload} className="flex-1 btn-horizon-outline py-4 text-xs">New Upload</button>
+            <div className="glass-panel p-2 rounded-full shadow-[0_40px_100px_rgba(0,0,0,0.8)] pointer-events-auto border-white/10">
+              <div className="bg-[#020203]/80 rounded-full p-2 flex items-center gap-3">
+                <button onClick={onNewUpload} className="flex-1 btn-horizon-outline py-3 text-xs">New Ingestion</button>
                 <button
                   onClick={onViewResults}
                   disabled={isNavigating}
-                  className="flex-[1.5] btn-horizon-primary py-4 text-xs flex items-center justify-center gap-3"
+                  className="flex-[1.5] btn-horizon-primary py-3 text-xs flex items-center justify-center gap-3"
                 >
-                  {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                  View Results
-                  <ArrowRight className="w-4 h-4" />
+                  <span className="flex items-center gap-2 text-[#020617]">
+                    {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                    <span className="font-bold">VIEW REPORT</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </span>
                 </button>
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
     </div>
   );
 }

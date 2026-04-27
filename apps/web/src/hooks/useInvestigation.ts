@@ -21,24 +21,7 @@ import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { type SoundType } from "@/hooks/useSound";
 import { type AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
-
-function supportedAgentIdsForMime(mimeType?: string | null): Set<string> {
-  if (!mimeType) return new Set(AGENTS_DATA.filter((a) => a.id !== "Arbiter").map((a) => a.id));
-  const supported = new Set<string>(["Agent5"]);
-  if (mimeType.startsWith("image/")) {
-    supported.add("Agent1");
-    supported.add("Agent3");
-  }
-  if (mimeType.startsWith("audio/")) {
-    supported.add("Agent2");
-  }
-  if (mimeType.startsWith("video/")) {
-    supported.add("Agent2");
-    supported.add("Agent3");
-    supported.add("Agent4");
-  }
-  return supported;
-}
+import { supportedAgentIdsForMime } from "@/lib/agentSupport";
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -131,6 +114,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const autoStartFiredRef = useRef(false);
   const investigationInFlightRef = useRef(false);
   const lastSessionIdRef = useRef<string | null>(null);
+  const completedAgentsRef = useRef<AgentUpdate[]>([]);
 
   const {
     status,
@@ -145,10 +129,15 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     hitlCheckpoint,
     errorMessage,
     dismissCheckpoint,
+    clearCompletedAgents,
   } = useSimulation({
     playSound,
     onComplete: () => {},
   });
+
+  useEffect(() => {
+    completedAgentsRef.current = completedAgents;
+  }, [completedAgents]);
 
   useLayoutEffect(() => {
     try {
@@ -318,15 +307,17 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
       lastSessionIdRef.current = sessionIdToUse;
 
+      // Dismiss overlay immediately so the agent cards can begin their staggered
+      // entrance animation while the WebSocket connects in the background.
+      setShowLoadingOverlay(false);
+      sessionOnlyStorage.removeItem("fc_show_loading");
+      setAnalysisStreamReady(true);
+      setUploadPhaseText("Agents dispatching…");
+
       connectWebSocket(sessionIdToUse)
-        .then(() => {
-          setAnalysisStreamReady(true);
-          setUploadPhaseText("Agents dispatching…");
-        })
         .catch((wsErr: unknown) => {
           const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
           setWsConnectionError(wsErrMsg);
-          setShowLoadingOverlay(false);
           resetSimulation();
         })
         .finally(() => {
@@ -353,8 +344,25 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       setShowLoadingOverlay(false);
       sessionOnlyStorage.removeItem("forensic_auto_start");
       sessionOnlyStorage.removeItem("fc_show_loading");
+    } else if (!pending && !autoStartFiredRef.current && status === "idle" && !isUploading && !autoStartBlocking) {
+      // Auto-reconnect to an active session when navigating directly to the evidence page
+      const existingSessionId = storage.getItem<string>("forensic_session_id");
+      if (existingSessionId) {
+        autoStartFiredRef.current = true;
+        startSimulation();
+        connectWebSocket(existingSessionId)
+          .then(() => {
+            setAnalysisStreamReady(true);
+          })
+          .catch((wsErr: unknown) => {
+            const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
+            setWsConnectionError(wsErrMsg);
+            setShowLoadingOverlay(false);
+            resetSimulation();
+          });
+      }
     }
-  }, [triggerAnalysis, autoStartBlocking, isUploading, status]);
+  }, [triggerAnalysis, autoStartBlocking, isUploading, status, startSimulation, connectWebSocket, resetSimulation]);
 
   const handleFile = (f: File) => {
     if (f.size > 50 * 1024 * 1024) {
@@ -396,7 +404,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     if (isNavigating) return;
     playSound("arbiter_start");
     storage.setItem("forensic_is_deep", "false");
-    storage.setItem("forensic_initial_agents", JSON.stringify(completedAgents), false);
+    storage.setItem("forensic_initial_agents", JSON.stringify(completedAgentsRef.current), false);
     setIsNavigating(true);
     try {
       await resumeInvestigation(false);
@@ -406,20 +414,21 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     } catch {
       setIsNavigating(false);
     }
-  }, [playSound, resumeInvestigation, router, isNavigating, completedAgents]);
+  }, [playSound, resumeInvestigation, router, isNavigating]);
 
   const handleDeepAnalysis = useCallback(async () => {
     playSound("think");
     storage.setItem("forensic_is_deep", "true");
-    storage.setItem("forensic_initial_agents", JSON.stringify(completedAgents), false);
+    storage.setItem("forensic_initial_agents", JSON.stringify(completedAgentsRef.current), false);
     analysisCompleteSoundedRef.current = false;
+    clearCompletedAgents();
+    setPhase("deep");
     try {
       await resumeInvestigation(true);
-      setPhase("deep");
     } catch {
       playSound("error");
     }
-  }, [playSound, resumeInvestigation, completedAgents]);
+  }, [playSound, resumeInvestigation, clearCompletedAgents]);
 
   const retryWsConnection = useCallback(() => {
     const sid = lastSessionIdRef.current || storage.getItem<string>("forensic_session_id");
@@ -449,17 +458,13 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setWsConnectionError(null);
     lastSessionIdRef.current = null;
     resetSimulation();
-    // Route to home and trigger the upload modal opening via an event
-    router.push("/");
-    setTimeout(() => {
-      window.dispatchEvent(new Event("fc:open-upload"));
-    }, 800); // 800ms gives Next.js router time to fully swap the page
+    router.push("/?upload=1");
   }, [resetSimulation, playSound, router]);
 
   const handleViewResults = useCallback(async () => {
     if (isNavigating) return;
-    playSound("arbiter_start");
-    storage.setItem("forensic_deep_agents", JSON.stringify(completedAgents), false);
+    playSound("complete");
+    storage.setItem("forensic_deep_agents", JSON.stringify(completedAgentsRef.current), false);
     setIsNavigating(true);
     const sid = storage.getItem<string>("forensic_session_id");
     try {
@@ -468,7 +473,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     } finally {
       setIsNavigating(false);
     }
-  }, [playSound, router, isNavigating, completedAgents]);
+  }, [playSound, router, isNavigating]);
 
   const validAgentsData = AGENTS_DATA.filter((a) => a.name !== "Council Arbiter");
   const validCompletedAgents = completedAgents.filter((c: AgentUpdate) =>
@@ -503,23 +508,18 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const hasStartedAnalysis = status !== "idle" || isUploading || validCompletedAgents.length > 0;
   const showUploadForm = !autoStartBlocking && status === "idle" && !isUploading;
 
-  // Dismiss the loading overlay immediately once the analysis stream is ready.
-  // This allows the main evidence page to be visible while the agent cards
-  // begin their staggered, sequential entrance animations.
+  // Dismiss overlay only once the first agent update arrives, proving the
+  // backend has actually started processing (not just that the WS opened).
   useEffect(() => {
-    if (showLoadingOverlay && analysisStreamReady) {
+    if (
+      showLoadingOverlay &&
+      analysisStreamReady &&
+      (Object.keys(agentUpdates).length > 0 || validCompletedAgents.length > 0)
+    ) {
       setShowLoadingOverlay(false);
       sessionOnlyStorage.removeItem("fc_show_loading");
     }
-  }, [showLoadingOverlay, analysisStreamReady]);
-
-  // Auto-accept the initial analysis so the user never sees the HITL decision
-  // dock. The backend resumes, runs the Arbiter, and we navigate to /result.
-  useEffect(() => {
-    if (!awaitingDecision) return;
-    const t = setTimeout(() => handleAcceptAnalysis(), 1500);
-    return () => clearTimeout(t);
-  }, [awaitingDecision, handleAcceptAnalysis]);
+  }, [showLoadingOverlay, analysisStreamReady, agentUpdates, validCompletedAgents]);
 
   return {
     file, setFile,
