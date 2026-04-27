@@ -78,6 +78,7 @@ interface AgentProgressDisplayProps {
   isNavigating?: boolean;
   mimeType?: string;
   playSound?: (type: SoundType) => void;
+  revealQueue?: AgentUpdate[];
 }
 
 const allValidAgents = AGENTS_DATA.filter((agent) => agent.id !== "Arbiter");
@@ -101,6 +102,7 @@ export function AgentProgressDisplay({
   isNavigating = false,
   mimeType,
   playSound,
+  revealQueue = [],
 }: AgentProgressDisplayProps) {
   const [hiddenAgents, setHiddenAgents] = useState(new Set<string>());
   const playSoundRef = useRef(playSound);
@@ -150,15 +152,11 @@ export function AgentProgressDisplay({
 
   const initialAgentIds = useMemo<string[]>(() => {
     if (phase !== "deep") return [];
-    try {
-      const raw = storage.getItem<string>("forensic_initial_agents");
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed)
-        ? parsed.map((a: { agent_id?: string }) => a.agent_id).filter((id): id is string => typeof id === "string")
-        : [];
-    } catch {
-      return [];
-    }
+    const raw = storage.getItem<AgentUpdate[]>("forensic_initial_agents");
+    const parsed = raw ?? [];
+    return Array.isArray(parsed)
+      ? parsed.map((a) => a.agent_id).filter((id): id is string => typeof id === "string")
+      : [];
   }, [phase]);
 
   const visibleAgents = useMemo(() => {
@@ -288,6 +286,7 @@ export function AgentProgressDisplay({
             <div className="glass-panel p-2 rounded-full shadow-[0_40px_100px_rgba(0,0,0,0.8)] pointer-events-auto border-white/10">
               <div className="bg-[#020203]/80 rounded-full p-2 flex items-center gap-3">
                 <button
+                  data-testid="accept-analysis-btn"
                   onClick={onAcceptAnalysis}
                   disabled={isNavigating}
                   className="flex-1 btn-horizon-outline py-3 text-xs"
@@ -295,6 +294,7 @@ export function AgentProgressDisplay({
                   Accept Verdict
                 </button>
                 <button
+                  data-testid="deep-analysis-btn"
                   onClick={onRunDeepAnalysis}
                   disabled={isNavigating}
                   className="flex-[1.5] btn-horizon-primary py-3 text-xs flex items-center justify-center gap-3"
@@ -312,7 +312,7 @@ export function AgentProgressDisplay({
       </AnimatePresence>
 
       <AnimatePresence>
-        {!awaitingDecision && (allAgentsDone || pipelineStatus === "complete") && (
+        {!awaitingDecision && revealQueue.length === 0 && (allAgentsDone || pipelineStatus === "complete") && (
           <motion.div
             initial={{ opacity: 0, y: 100 }}
             animate={{ opacity: 1, y: 0 }}
@@ -321,8 +321,9 @@ export function AgentProgressDisplay({
           >
             <div className="glass-panel p-2 rounded-full shadow-[0_40px_100px_rgba(0,0,0,0.8)] pointer-events-auto border-white/10">
               <div className="bg-[#020203]/80 rounded-full p-2 flex items-center gap-3">
-                <button onClick={onNewUpload} className="flex-1 btn-horizon-outline py-3 text-xs">New Ingestion</button>
+                <button data-testid="new-analysis-btn" onClick={onNewUpload} className="flex-1 btn-horizon-outline py-3 text-xs">New Ingestion</button>
                 <button
+                  data-testid="view-report-btn"
                   onClick={onViewResults}
                   disabled={isNavigating}
                   className="flex-[1.5] btn-horizon-primary py-3 text-xs flex items-center justify-center gap-3"

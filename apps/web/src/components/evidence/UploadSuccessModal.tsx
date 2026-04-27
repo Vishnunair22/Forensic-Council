@@ -129,6 +129,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: Uploa
                 Reselect File
               </button>
               <button
+                data-testid="upload-start-analysis"
                 onClick={onStartAnalysis}
                 className="btn-horizon-primary flex-1 py-4 text-xs"
               >

@@ -61,7 +61,6 @@ export function HeroAuthActions() {
 
   const handleStartAnalysis = useCallback(async () => {
     if (!selectedFile) return;
-    setShowUpload(false);
     setIsAuthenticating(true);
     setAuthError(null);
 
@@ -85,21 +84,22 @@ export function HeroAuthActions() {
       }
       setIsAuthenticating(false);
       return;
-    } finally {
-      setIsAuthenticating(false);
     }
 
+    setShowUpload(false);
     __pendingFileStore.file = selectedFile;
     sessionOnlyStorage.setItem("forensic_auto_start", "true");
     sessionOnlyStorage.setItem("fc_show_loading", "true");
     setIsNavigating(true);
     router.push("/evidence", { scroll: true });
+    setIsAuthenticating(false);
   }, [router, selectedFile]);
 
   return (
     <>
       <div className="flex flex-col items-center gap-4">
         <button
+          data-testid="cta-begin-analysis"
           onClick={() => {
             playSound("envelope-open");
             setShowUpload(true);

@@ -28,6 +28,7 @@ from api.schemas import AgentFindingDTO, ReportDTO, ReportStatusDTO, SessionInfo
 from core.auth import User, decode_token, get_current_user
 from core.severity import assign_severity_tier as _assign_severity_tier
 from core.structured_logging import get_logger
+from orchestration.pipeline_registry import notify_decision
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 logger = get_logger(__name__)
@@ -1078,9 +1079,23 @@ async def resume_investigation(
         ex=14400,
     )
 
+    # Dual signaling for deployments where Redis is the single point of truth
+    # but the pipeline may run in a different process/worker.
+    # First try in-process get_active_pipeline, then fall back to registry.
     pipeline = get_active_pipeline(session_id)
-    if not pipeline:
-        await set_active_pipeline_metadata(
+    if pipeline:
+        pipeline.run_deep_analysis_flag = request.deep_analysis
+        pipeline.deep_analysis_decision_event.set()
+    else:
+        # Register fallback for when pipeline is in different worker/process
+        try:
+            from uuid import UUID
+            notify_decision(UUID(session_id), request.deep_analysis)
+        except Exception:
+            pass
+
+        if not pipeline:
+            await set_active_pipeline_metadata(
             session_id,
             {
                 **metadata,
@@ -1119,9 +1134,6 @@ async def resume_investigation(
             status_code=400,
             detail="Pipeline is not in a paused state waiting for decision",
         )
-
-    pipeline.run_deep_analysis_flag = request.deep_analysis
-    pipeline.deep_analysis_decision_event.set()
 
     _log.info(
         "Investigation resume signal sent",

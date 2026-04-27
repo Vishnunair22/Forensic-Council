@@ -78,6 +78,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
             <h2 className="text-2xl font-heading font-bold text-white mb-8">Upload Evidence</h2>
 
             <div
+              data-testid="upload-dropzone"
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}

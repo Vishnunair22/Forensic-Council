@@ -519,10 +519,9 @@ export const useSimulation = ({
                   `Connection lost. Reconnecting in ${Math.round(delay / 1000)}s (attempt ${reconnectAttemptsRef.current}/${reconnectConfig.current.maxRetries})…`,
                 );
                 setTimeout(() => {
-                  const currentSessionId = targetSessionId || storage.getItem<string>(SESSION_ID_KEY);
+                  const currentSessionId = sessionId || storage.getItem<string>(SESSION_ID_KEY);
                   if (currentSessionId) {
-                    connectWebSocket(currentSessionId).catch(() => {
-                      // Will be retried by next close event
+                    connectWebSocket(currentSessionId, true).catch(() => {
                     });
                   }
                 }, delay);
@@ -776,12 +775,9 @@ export const useSimulation = ({
   );
 
   const clearCompletedAgents = useCallback(() => {
-    // Full reset for deep phase: clear both completed agents and running-state updates
-    // so the initial-phase card contents don't persist into the deep phase.
     setCompletedAgents([]);
     completedAgentsRef.current = [];
-    setAgentUpdates({});
-    setPipelineMessage("");
+    setPipelineMessage("Beginning deep analysis...");
     setPipelineThinking("");
     setRevealQueue([]);
     isRevealingRef.current = false;
@@ -856,5 +852,7 @@ export const useSimulation = ({
     hitlCheckpoint,
     errorMessage,
     totalAgents: AGENTS_DATA.length,
+    revealQueue,
+    revealPending: revealQueue.length > 0,
   };
 };

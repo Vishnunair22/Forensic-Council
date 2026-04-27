@@ -16,7 +16,7 @@ import type { AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
 import { storage, persistentStorage } from "@/lib/storage";
 
 export type Tab = "analysis" | "history";
-export type PageState = "arbiter" | "ready" | "error" | "empty";
+export type PageState = "loading" | "arbiter" | "ready" | "error" | "empty";
 
 const isDev = process.env.NODE_ENV !== "production";
 const dbg = { error: isDev ? console.error.bind(console) : () => {} };

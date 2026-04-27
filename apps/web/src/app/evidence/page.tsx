@@ -13,6 +13,7 @@ import {
   HITLCheckpointModal,
 } from "@/components/evidence";
 import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
+import { ForensicProgressOverlay } from "@/components/ui/ForensicProgressOverlay";
 import { sessionOnlyStorage, storage } from "@/lib/storage";
 
 const FORENSIC_MIME_TYPE_KEY = "forensic_mime_type";
@@ -56,6 +57,9 @@ export default function EvidencePage() {
     showUploadForm,
     validAgentsData,
     wsConnectionError,
+    revealQueue,
+    revealPending,
+    arbiterDeliberating,
   } = useInvestigation(playSound);
 
   const sessionId = hasStartedAnalysis ? storage.getItem<string>(FORENSIC_SESSION_ID_KEY) : null;
@@ -132,13 +136,24 @@ export default function EvidencePage() {
               />
             )}
 
-            <ForensicErrorModal
-              isVisible={!!(errorMessage || wsConnectionError || validationError)}
-              message={errorMessage || wsConnectionError || validationError || "The analysis pipeline was interrupted."}
-              errorCode={errorMessage ? "0xFC_PIPELINE_HALT" : wsConnectionError ? "0xFC_CONN_FAIL" : "0xFC_VALIDATION_FAIL"}
-              onRetry={wsConnectionError ? retryWsConnection : (!!file ? () => triggerAnalysis(file as File) : undefined)}
-              onHome={handleNewUpload}
-            />
+<ForensicErrorModal
+        isVisible={!!(errorMessage || wsConnectionError || validationError)}
+        message={errorMessage || wsConnectionError || validationError || "The analysis pipeline was interrupted."}
+        errorCode={errorMessage ? "0xFC_PIPELINE_HALT" : wsConnectionError ? "0xFC_CONN_FAIL" : "0xFC_VALIDATION_FAIL"}
+        onRetry={wsConnectionError ? retryWsConnection : (!!file ? () => triggerAnalysis(file as File) : undefined)}
+        onHome={handleNewUpload}
+      />
+
+      <AnimatePresence>
+        {arbiterDeliberating && (
+          <ForensicProgressOverlay
+            key="arbiter-deliberation"
+            title="Council Deliberation"
+            liveText={arbiterLiveText || "Arbiter synthesizing findings..."}
+            showElapsed
+          />
+        )}
+      </AnimatePresence>
 
             {!showUploadForm && !hasStartedAnalysis && !showLoadingOverlay && !validationError && (
               <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 text-center px-6">

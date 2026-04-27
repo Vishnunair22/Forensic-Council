@@ -53,10 +53,10 @@ export function ResultLayout() {
 
   return (
     <div className="min-h-screen pb-48 pt-32 relative">
-      {rs.state === "arbiter" && (
+      {(rs.state === "arbiter" || rs.state === "loading") && (
         <ForensicProgressOverlay 
-          title="Consensus Synthesis" 
-          liveText={rs.arbiterMsg} 
+          title={rs.state === "arbiter" ? "Consensus Synthesis" : "Loading Report"}
+          liveText={rs.arbiterMsg || "Decrypting forensic report..."}
           telemetryLabel="Analyzing Agent Intersections" 
           showElapsed 
         />

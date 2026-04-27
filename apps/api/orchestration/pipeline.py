@@ -357,6 +357,7 @@ class ForensicCouncilPipeline:
 
         try:
             self._current_run_task = asyncio.current_task()
+            register_pipeline(session_id, self)
             await self._run_investigation_core(
                 evidence_file_path, case_id, investigator_id, original_filename, session_id
             )
@@ -372,6 +373,7 @@ class ForensicCouncilPipeline:
             raise
         finally:
             self._current_run_task = None
+            unregister_pipeline(session_id)
             await self._clear_working_memory_for_session(session_id)
 
     async def _run_investigation_core(
@@ -390,6 +392,7 @@ class ForensicCouncilPipeline:
         from core.observability import get_tracer
         from orchestration.pipeline_phases import run_agents_concurrent
         from orchestration.pipeline_enrichment import enrich_report
+from orchestration.pipeline_registry import register_pipeline, unregister_pipeline
 
         _tracer = get_tracer("forensic-council.pipeline")
         from core.agents import AgentID

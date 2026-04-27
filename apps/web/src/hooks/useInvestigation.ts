@@ -110,6 +110,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const [isSubmittingHITL, setIsSubmittingHITL] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
   const [wsConnectionError, setWsConnectionError] = useState<string | null>(null);
+  const [arbiterDeliberating, setArbiterDeliberating] = useState(false);
   const analysisCompleteSoundedRef = useRef(false);
   const autoStartFiredRef = useRef(false);
   const investigationInFlightRef = useRef(false);
@@ -130,6 +131,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     errorMessage,
     dismissCheckpoint,
     clearCompletedAgents,
+    revealQueue,
+    revealPending,
   } = useSimulation({
     playSound,
     onComplete: () => {},
@@ -402,8 +405,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     if (isNavigating) return;
     playSound("arbiter_start");
     storage.setItem("forensic_is_deep", "false");
-    storage.setItem("forensic_initial_agents", JSON.stringify(completedAgentsRef.current), false);
+    storage.setItem("forensic_initial_agents", completedAgentsRef.current, true);
     setIsNavigating(true);
+    setArbiterDeliberating(true);
     try {
       await resumeInvestigation(false);
       const sid = storage.getItem<string>("forensic_session_id");
@@ -411,13 +415,15 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       router.push("/result", { scroll: true });
     } catch {
       setIsNavigating(false);
+    } finally {
+      setArbiterDeliberating(false);
     }
   }, [playSound, resumeInvestigation, router, isNavigating]);
 
   const handleDeepAnalysis = useCallback(async () => {
     playSound("think");
     storage.setItem("forensic_is_deep", "true");
-    storage.setItem("forensic_initial_agents", JSON.stringify(completedAgentsRef.current), false);
+    storage.setItem("forensic_initial_agents", completedAgentsRef.current, true);
     analysisCompleteSoundedRef.current = false;
     clearCompletedAgents();
     setPhase("deep");
@@ -462,14 +468,16 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const handleViewResults = useCallback(async () => {
     if (isNavigating) return;
     playSound("complete");
-    storage.setItem("forensic_deep_agents", JSON.stringify(completedAgentsRef.current), false);
+    storage.setItem("forensic_deep_agents", completedAgentsRef.current, true);
     setIsNavigating(true);
+    setArbiterDeliberating(true);
     const sid = storage.getItem<string>("forensic_session_id");
     try {
       if (sid) await waitForFinalReport(sid, setArbiterLiveText, 300_000);
       router.push("/result", { scroll: true });
     } finally {
       setIsNavigating(false);
+      setArbiterDeliberating(false);
     }
   }, [playSound, router, isNavigating]);
 
@@ -556,5 +564,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     showUploadForm,
     validAgentsData,
     wsConnectionError,
+    revealQueue,
+    revealPending,
+    arbiterDeliberating,
   };
 }
