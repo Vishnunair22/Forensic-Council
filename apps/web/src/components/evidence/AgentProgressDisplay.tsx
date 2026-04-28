@@ -123,7 +123,7 @@ export function AgentProgressDisplay({
     for (let i = 0; i < count; i++) {
       setTimeout(() => playSoundRef.current?.("hum"), i * 150 + 80);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);  
 
   const prevHiddenSizeRef = useRef(0);
 

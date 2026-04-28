@@ -10,6 +10,7 @@ interface AppStorage {
 
 function createStorage(store: Storage): AppStorage {
   return {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     getItem<T>(key: string, parseJson = false, fallback: T | string | null = null): any {
       if (!isBrowser) return fallback;
       try {

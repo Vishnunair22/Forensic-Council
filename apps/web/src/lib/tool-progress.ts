@@ -183,12 +183,10 @@ export function getLiveProgressDescriptor(
   if (normalized && TOOL_PROGRESS[normalized]) return TOOL_PROGRESS[normalized];
   if (normalized) {
     const icon = getToolIcon(normalized);
-    if (icon) {
-      return {
-        label: `Executing forensic tool: ${toolName || normalized}`,
-        icon,
-      };
-    }
+    return {
+      label: `Executing forensic tool: ${toolName || normalized}`,
+      icon,
+    };
   }
 
   const fallbacks = FALLBACK_BY_AGENT[agentId] || FALLBACK_BY_AGENT.Agent1;

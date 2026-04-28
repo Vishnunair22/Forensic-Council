@@ -25,9 +25,11 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
     setHistory((prev) => prev.filter((h) => h.sessionId !== sessionId));
   };
 
+  const [showConfirm, setShowConfirm] = React.useState(false);
+
   const clearAll = () => {
-    if (!window.confirm("Are you sure you want to clear all investigation history?")) return;
     setHistory([]);
+    setShowConfirm(false);
   };
 
   const getVerdictStyle = (verdict: string) => {
@@ -57,12 +59,32 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
 
             <div className="flex items-center gap-6">
               {history.length > 0 && (
-                <button
-                  onClick={clearAll}
-                  className="btn-horizon-outline py-2 px-4 text-[10px] text-danger border-danger/20 hover:bg-danger/5"
-                >
-                  Clear Archive
-                </button>
+                <>
+                  {showConfirm ? (
+                    <div className="flex items-center gap-3 bg-danger/10 p-2 rounded-xl border border-danger/20">
+                      <span className="text-[9px] font-mono text-danger font-bold uppercase tracking-wider px-2">Confirm?</span>
+                      <button
+                        onClick={clearAll}
+                        className="py-1 px-3 text-[9px] font-mono font-bold text-[#05070D] bg-danger rounded-md uppercase"
+                      >
+                        Yes
+                      </button>
+                      <button
+                        onClick={() => setShowConfirm(false)}
+                        className="py-1 px-3 text-[9px] font-mono font-bold text-white/60 bg-white/5 rounded-md uppercase"
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowConfirm(true)}
+                      className="btn-horizon-outline py-2 px-4 text-[10px] text-danger border-danger/20 hover:bg-danger/5"
+                    >
+                      Clear Archive
+                    </button>
+                  )}
+                </>
               )}
               <button
                 onClick={onDismiss}

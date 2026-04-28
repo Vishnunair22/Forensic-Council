@@ -9,6 +9,7 @@ export function useSessionStorage<T>(
   parseJson = false
 ): [T, (val: T | ((prev: T) => T)) => void] {
   const readValue = useCallback(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (storage.getItem(key, parseJson as any, initialValue as any) as T) ?? initialValue;
   }, [key, initialValue, parseJson]);
 
