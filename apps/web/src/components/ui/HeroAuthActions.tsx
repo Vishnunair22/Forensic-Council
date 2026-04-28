@@ -123,11 +123,11 @@ export function HeroAuthActions() {
       </div>
 
       <AnimatePresence>
-        {(isAuthenticating || isNavigating) && (
+        {(isAuthenticating || isNavigating) && !authError && (
           <AnalysisProgressOverlay
-            isVisible={isAuthenticating || isNavigating}
+            isVisible={(isAuthenticating || isNavigating) && !authError}
             title={isNavigating ? "Connecting" : "Authenticating"}
-            message={isNavigating ? "Establishing secure session..." : (authError ?? "Verifying investigator credentials...")}
+            message={isNavigating ? "Establishing secure session..." : "Verifying investigator credentials..."}
           />
         )}
       </AnimatePresence>

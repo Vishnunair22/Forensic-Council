@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { clsx } from "clsx";
+import { ALLOWED_MIME_TYPES } from "@/lib/constants";
 
 interface FileUploadSectionProps {
  file: File | null;
@@ -277,7 +278,7 @@ export function FileUploadSection({
      if (f) onFileSelect(f);
     }}
     className="sr-only"
-    accept="image/*,video/*,audio/*"
+    accept={Array.from(ALLOWED_MIME_TYPES).join(",")}
    />
   </div>
  );

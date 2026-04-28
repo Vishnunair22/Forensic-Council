@@ -145,25 +145,6 @@ export default function EvidencePage() {
               />
             )}
 
-<ForensicErrorModal
-        isVisible={!!(errorMessage || wsConnectionError)}
-        message={errorMessage || wsConnectionError || "The analysis pipeline was interrupted."}
-        errorCode={errorMessage ? "0xFC_PIPELINE_HALT" : "0xFC_CONN_FAIL"}
-        onRetry={wsConnectionError ? retryWsConnection : (!!file ? () => triggerAnalysis(file as File) : undefined)}
-        onHome={handleNewUpload}
-      />
-
-      <AnimatePresence>
-        {arbiterDeliberating && (
-          <ForensicProgressOverlay
-            key="arbiter-deliberation"
-            title="Council Deliberation"
-            liveText={arbiterLiveText || "Arbiter synthesizing findings..."}
-            showElapsed
-          />
-        )}
-      </AnimatePresence>
-
             {!showUploadForm && !hasStartedAnalysis && !showLoadingOverlay && !validationError && (
               <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 text-center px-6">
                 <p className="text-sm text-foreground/55 max-w-md">
@@ -186,6 +167,25 @@ export default function EvidencePage() {
           </>
         </PageTransition>
       </main>
+
+      <ForensicErrorModal
+        isVisible={!!(errorMessage || wsConnectionError)}
+        message={errorMessage || wsConnectionError || "The analysis pipeline was interrupted."}
+        errorCode={errorMessage ? "0xFC_PIPELINE_HALT" : "0xFC_CONN_FAIL"}
+        onRetry={wsConnectionError ? retryWsConnection : (!!file ? () => triggerAnalysis(file as File) : undefined)}
+        onHome={handleNewUpload}
+      />
+
+      <AnimatePresence>
+        {arbiterDeliberating && (
+          <ForensicProgressOverlay
+            key="arbiter-deliberation"
+            title="Council Deliberation"
+            liveText={arbiterLiveText || "Arbiter synthesizing findings..."}
+            showElapsed
+          />
+        )}
+      </AnimatePresence>
 
       <HITLCheckpointModal
         checkpoint={hitlCheckpoint}

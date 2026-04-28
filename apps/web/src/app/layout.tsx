@@ -1,11 +1,13 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Inter, JetBrains_Mono, Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import { GlobalNavbar } from "@/components/ui/GlobalNavbar";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { RouteExperience } from "@/components/ui/RouteExperience";
 import { Toaster } from "@/components/ui/Toaster";
 import { QueryProvider } from "@/components/ui/QueryProvider";
+import { LandingBackground } from "@/components/ui/LandingBackground";
 import "./globals.css";
 
 const inter = Inter({
@@ -40,7 +42,11 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-import { LandingBackground } from "@/components/ui/LandingBackground";
+export async function getCspNonce() {
+  const h = await headers();
+  const nonceHeader = h.get("x-nonce");
+  return nonceHeader ?? "";
+}
 
 export default function RootLayout({
   children,

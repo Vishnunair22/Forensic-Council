@@ -633,6 +633,8 @@ async def get_arbiter_status(
                     return {"status": "complete", "report_id": session_id}
                 if status == "error":
                     return {"status": "error", "message": metadata.get("error", "Unknown error")}
+                if status == "paused_resume_requested":
+                    return {"status": "paused_resume_requested", "message": metadata.get("brief") or "Resume requested"}
                 msg = metadata.get("brief") or "Investigation in progress…"
                 return {"status": "running", "message": msg}
         except Exception as _e:

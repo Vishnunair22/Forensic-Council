@@ -33,22 +33,16 @@ function _parseReportDTO(raw: unknown): ReportDTO {
   const result = ReportDTOSchema.safeParse(raw);
   if (result.success) return result.data as unknown as ReportDTO;
 
-  dbg.error(
+dbg.error(
     "[api] Report validation failed. Falling back to passthrough.",
     result.error.message,
   );
-  
-  // Fire-and-forget telemetry for schema evolution monitoring
-  fetch(`${API_BASE}/api/v1/telemetry`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      event: "schema_validation_error",
-      schema: "ReportDTO",
-      error: result.error.errors,
-      url: window.location.href,
-    }),
-  }).catch(() => {}); // Ignore telemetry failures
+
+  console.error("[telemetry] schema_validation_error:", {
+    schema: "ReportDTO",
+    error: result.error.errors,
+    url: window.location.href,
+  });
 
   // Log strictly but allow the UI to try and render whatever matches the interface.
   return raw as ReportDTO;

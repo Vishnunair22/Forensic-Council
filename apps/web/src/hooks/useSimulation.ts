@@ -16,7 +16,7 @@ const dbg = {
   error: isDev ? console.error.bind(console) : () => {},
 };
 
-import { createLiveSocket, BriefUpdate, HITLCheckpoint, getArbiterStatus } from "@/lib/api";
+import { createLiveSocket, BriefUpdate, HITLCheckpoint, getArbiterStatus, API_BASE } from "@/lib/api";
 import { SoundType } from "./useSound";
 import type { AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
 
@@ -619,7 +619,7 @@ export const useSimulation = ({
 
       tokenExpiryTimeout = setTimeout(() => {
         // Token expires soon — attempt refresh
-        fetch("/api/v1/auth/refresh", {
+        fetch(`${API_BASE}/api/v1/auth/refresh`, {
           method: "POST",
           credentials: "include",
         })
