@@ -29,7 +29,7 @@ os.environ.setdefault("LLM_API_KEY", "test-key")
 os.environ.setdefault("LLM_MODEL", "test-model")
 
 from agents.base_agent import ForensicAgent
-from agents.reflection import _attach_llm_reasoning_to_findings
+from agents.reflection_models import _attach_llm_reasoning_to_findings
 from core.config import Settings
 from core.evidence import ArtifactType, EvidenceArtifact
 from core.react_loop import AgentFinding, ReActStep

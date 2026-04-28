@@ -38,9 +38,6 @@ from core.auth import User, get_current_user
 from core.config import get_settings
 from core.session_persistence import get_session_persistence
 from core.structured_logging import get_logger
-from orchestration.investigation_runner import (
-    run_investigation_task as _run_investigation_task,
-)
 from orchestration.pipeline import ForensicCouncilPipeline
 
 logger = get_logger(__name__)
@@ -111,6 +108,9 @@ async def run_investigation_task(
     original_filename: str | None = None,
 ) -> None:
     """Compatibility wrapper for tests and older imports."""
+    from orchestration.investigation_runner import (
+        run_investigation_task as _run_investigation_task,
+    )
     await _run_investigation_task(
         session_id=session_id,
         pipeline=pipeline,

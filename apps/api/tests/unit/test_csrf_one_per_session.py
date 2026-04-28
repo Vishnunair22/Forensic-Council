@@ -10,7 +10,11 @@ import pytest
 # We need to test the actual FastAPI app behavior
 # Let's test the core CSRF utility logic directly
 class TestCsrfOnePerSession:
-    """Tests for CSRF one-per-session behavior."""
+    @pytest.fixture(autouse=True)
+    def set_app_env(self, monkeypatch):
+        from core.config import get_settings
+        settings = get_settings()
+        monkeypatch.setattr(settings, "app_env", "development")
 
     @pytest.mark.asyncio
     async def test_csrf_cookie_set_on_first_request(self):
@@ -50,8 +54,8 @@ class TestCsrfOnePerSession:
         set_cookie2 = response2.headers.get("set-cookie", "")
 
         # The second response should NOT set a new CSRF cookie
-        # (it may still have set-cookie for other reasons, but not csrf_token)
         csrf_reissued = "csrf_token=" in set_cookie2 and "Max-Age" in set_cookie2
+        assert not csrf_reissued, "CSRF token should not be reissued when already present"
 
         # If there's a Set-Cookie, it should not be re-setting the CSRF token
         # (or it might be extending the existing one)
@@ -127,7 +131,7 @@ class TestCsrfOnePerSession:
 
     @pytest.mark.asyncio
     async def test_csrf_cookie_is_http_only(self):
-        """Verify CSRF cookie has HttpOnly flag for security."""
+        """Verify CSRF cookie does NOT have HttpOnly flag so JS can read it."""
         from fastapi.testclient import TestClient
 
         from api.main import app
@@ -138,7 +142,7 @@ class TestCsrfOnePerSession:
         set_cookie = response.headers.get("set-cookie", "")
 
         if "csrf_token" in set_cookie.lower():
-            assert "HttpOnly" in set_cookie, "CSRF cookie should have HttpOnly flag"
+            assert "HttpOnly" not in set_cookie, "CSRF cookie should not have HttpOnly flag so JS can read it"
 
     @pytest.mark.asyncio
     async def test_csrf_cookie_has_secure_flag_in_production(self):

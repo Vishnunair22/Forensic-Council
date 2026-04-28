@@ -45,7 +45,7 @@ def run_backup() -> int:
     env["PGPASSWORD"] = os.getenv("POSTGRES_PASSWORD", "")
 
     try:
-        result = subprocess.run(
+        subprocess.run(
             cmd,
             env=env,
             check=True,

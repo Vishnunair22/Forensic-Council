@@ -8,7 +8,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from agents.reflection import SelfReflectionReport
+from agents.reflection_models import SelfReflectionReport
 from core.custody_logger import EntryType
 from core.react_loop import AgentFinding
 from core.structured_logging import get_logger

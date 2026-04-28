@@ -585,7 +585,7 @@ class ForensicCouncilPipeline:
                     agent_id=result.agent_id,
                     finding_type=f"{result.agent_id} error",
                     status="INCOMPLETE",
-                    confidence_raw=0.0,
+                    confidence_raw=None,
                     evidence_verdict="ERROR",
                     reasoning_summary=f"Agent failed during investigation: {result.error}",
                     metadata={

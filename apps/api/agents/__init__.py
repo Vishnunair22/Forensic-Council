@@ -26,7 +26,7 @@ from agents.agent4_video import Agent4Video
 from agents.agent5_metadata import Agent5Metadata
 from agents.arbiter import CouncilArbiter
 from agents.base_agent import ForensicAgent
-from agents.reflection import SelfReflectionReport
+from agents.reflection_models import SelfReflectionReport
 
 __all__ = [
     "ForensicAgent",

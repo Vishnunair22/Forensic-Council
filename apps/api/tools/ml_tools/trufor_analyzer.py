@@ -51,7 +51,6 @@ from typing import Any
 
 import cv2
 import numpy as np
-from scipy.ndimage import uniform_filter
 
 # ---------------------------------------------------------------------------
 # SRM high-pass filter bank (30 filters, 5×5 kernels)

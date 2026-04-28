@@ -134,7 +134,7 @@ def client():
         patch("scripts.init_db.bootstrap_users", new_callable=AsyncMock),
     ]
 
-    started = [p.start() for p in patches]
+    [p.start() for p in patches]
     try:
         from api.main import app
 
@@ -574,7 +574,7 @@ class TestAuthEnforcement:
         ("DELETE", f"/api/v1/sessions/{SESSION_ID}"),
     ]
 
-    @pytest.mark.parametrize("method,path", PROTECTED_ROUTES)
+    @pytest.mark.parametrize(("method", "path"), PROTECTED_ROUTES)
     def test_endpoint_rejects_no_auth(self, client, method, path):
         resp = getattr(client, method.lower())(path)
         assert resp.status_code in (401, 403), (

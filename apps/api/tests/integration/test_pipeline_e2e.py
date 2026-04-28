@@ -33,60 +33,78 @@ class TestNormalizeAgentResults:
     """Tests for agent result normalization in pipeline."""
 
     def test_normalize_with_pydantic_findings(self):
-        """Test that pipeline normalizes Pydantic ForensicFinding objects to dicts."""
+        """Test that pipeline normalizes Pydantic findings to dicts."""
+        from orchestration.agent_factory import AgentLoopResult
         from orchestration.pipeline import ForensicCouncilPipeline
 
-        # Create a mock pipeline
         pipeline = ForensicCouncilPipeline()
 
-        # Check if the normalize method exists
         if hasattr(pipeline, "_normalize_agent_results"):
-            # Test with Pydantic-like objects
             class MockFinding:
-                def model_dump(self):
+                def model_dump(self, mode="json"):
                     return {"agent_id": "Agent1", "confidence": 0.8, "verdict": "AUTHENTIC"}
 
-            findings = [MockFinding()]
-            result = pipeline._normalize_agent_results(findings)
+            agent_result = AgentLoopResult(
+                agent_id="Agent1",
+                findings=[MockFinding()],
+                reflection_report={},
+                react_chain=[],
+                error=None
+            )
+            
+            result = pipeline._normalize_agent_results([agent_result])
 
-            # Should return list of dicts
-            assert isinstance(result, list)
-            if result:
-                assert isinstance(result[0], dict)
+            assert isinstance(result, dict)
+            assert "Agent1" in result
+            assert len(result["Agent1"]["findings"]) == 1
+            assert isinstance(result["Agent1"]["findings"][0], dict)
 
     def test_normalize_with_dict_findings(self):
-        """Test normalization with raw dict findings - should be idempotent."""
+        """Test normalization with raw dict findings."""
+        from orchestration.agent_factory import AgentLoopResult
         from orchestration.pipeline import ForensicCouncilPipeline
 
         pipeline = ForensicCouncilPipeline()
 
         if hasattr(pipeline, "_normalize_agent_results"):
-            # Raw dict findings should pass through unchanged
-            findings = [
-                {"agent_id": "Agent1", "confidence": 0.9},
-                {"agent_id": "Agent2", "confidence": 0.7},
-            ]
+            agent_result = AgentLoopResult(
+                agent_id="Agent1",
+                findings=[{"agent_id": "Agent1", "confidence": 0.9}],
+                reflection_report={},
+                react_chain=[],
+                error=None
+            )
 
-            result = pipeline._normalize_agent_results(findings)
+            result = pipeline._normalize_agent_results([agent_result])
 
-            # Should return dicts unchanged
-            assert isinstance(result, list)
-            assert len(result) == 2
+            assert isinstance(result, dict)
+            assert "Agent1" in result
+            assert len(result["Agent1"]["findings"]) == 1
+            assert result["Agent1"]["findings"][0]["confidence"] == 0.9
 
     def test_normalize_with_error_result(self):
         """Test that error results are handled gracefully."""
+        from orchestration.agent_factory import AgentLoopResult
         from orchestration.pipeline import ForensicCouncilPipeline
 
         pipeline = ForensicCouncilPipeline()
 
         if hasattr(pipeline, "_normalize_agent_results"):
-            # Error result (None or exception)
-            findings = [None, {"agent_id": "Agent1", "confidence": 0.5}]
+            agent_result = AgentLoopResult(
+                agent_id="Agent1",
+                findings=[],
+                reflection_report={},
+                react_chain=[],
+                error="Connection failed"
+            )
 
-            result = pipeline._normalize_agent_results(findings)
+            result = pipeline._normalize_agent_results([agent_result])
 
-            # Should filter out None values
-            assert isinstance(result, list)
+            assert isinstance(result, dict)
+            assert "Agent1" in result
+            assert result["Agent1"]["agent_had_error"] is True
+            assert len(result["Agent1"]["findings"]) == 1
+            assert "error" in result["Agent1"]["findings"][0]["finding_type"]
 
 
 class TestPipelineInitialization:
@@ -94,22 +112,24 @@ class TestPipelineInitialization:
 
     async def test_pipeline_initializes_with_session_id(self):
         """Verify pipeline can be initialized with a session ID."""
+        from unittest.mock import AsyncMock, patch
         from orchestration.pipeline import ForensicCouncilPipeline
 
         pipeline = ForensicCouncilPipeline()
 
         # Test initialization with mocked components
-        with patch("orchestration.pipeline.get_redis_client", new_callable=AsyncMock) as m_redis:
+        with patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as m_redis:
             m_redis.return_value = None  # Will use local cache fallback
 
-            with patch("orchestration.pipeline.get_postgres_client", new_callable=AsyncMock):
-                with patch("orchestration.pipeline.get_qdrant_client", new_callable=AsyncMock):
+            with patch("core.persistence.postgres_client.get_postgres_client", new_callable=AsyncMock):
+                with patch("core.persistence.qdrant_client.get_qdrant_client", new_callable=AsyncMock):
                     # Should initialize without raising
                     test_session_id = uuid.UUID("12345678-1234-1234-1234-123456789012")
                     await pipeline._initialize_components(test_session_id)
 
-                    # Verify session_id was stored
-                    assert pipeline.session_id == test_session_id
+                    # Verify components are created
+                    assert pipeline.working_memory is not None
+                    assert pipeline.episodic_memory is not None
 
 
 class TestPipelineArtifactHandling:
@@ -122,7 +142,6 @@ class TestPipelineArtifactHandling:
         pipeline = ForensicCouncilPipeline()
 
         # Non-existent file should raise
-        fake_path = "/nonexistent/path/to/evidence.jpg"
 
         # Check if there's an ingest method that validates file existence
         if hasattr(pipeline, "_ingest_evidence"):

@@ -50,7 +50,7 @@ os.environ["JWT_PRIVATE_KEY"] = TEST_PRIVATE_KEY
 os.environ["JWT_PUBLIC_KEY"] = TEST_PUBLIC_KEY
 
 from fastapi import HTTPException
-from jose import jwt
+import jwt
 
 from core.auth import (
     UserRole,
@@ -255,7 +255,9 @@ class TestRS256Auth:
         from core.auth import TokenData, get_current_user_optional
 
         # Unauthenticated
-        assert await get_current_user_optional(None) is None
+        mock_request = MagicMock()
+        mock_request.cookies = {}
+        assert await get_current_user_optional(request=mock_request, credentials=None) is None
 
         # Authenticated
         mock_creds = MagicMock(credentials="token")
@@ -263,5 +265,5 @@ class TestRS256Auth:
             mock_decode.return_value = TokenData(
                 user_id="u1", username="test", role=UserRole.INVESTIGATOR
             )
-            user = await get_current_user_optional(mock_creds)
+            user = await get_current_user_optional(request=mock_request, credentials=mock_creds)
             assert user.user_id == "u1"

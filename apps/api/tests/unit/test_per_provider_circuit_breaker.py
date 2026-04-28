@@ -30,8 +30,8 @@ class TestCircuitBreakerPerProviderKeying:
         breaker_gemini = CircuitBreaker(service_name="gemini:gemini-2.5-flash")
 
         # Trip the Gemini breaker to OPEN
-        for _ in range(breaker_gemini.failure_threshold):
-            await breaker_gemino.on_failure(Exception("Gemini API error"))
+        for _ in range(breaker_gemini.config.failure_threshold):
+            await breaker_gemini._on_failure(Exception("Gemini API error"))
 
         # Groq breaker should still be CLOSED
         assert breaker_groq.state == CircuitState.CLOSED
@@ -44,12 +44,12 @@ class TestCircuitBreakerPerProviderKeying:
         breaker_groq = CircuitBreaker(service_name="groq:llama3")
 
         # Trip the Groq breaker to OPEN
-        for _ in range(breaker_groq.failure_threshold):
-            await breaker_groq.on_failure(Exception("Groq API error"))
+        for _ in range(breaker_groq.config.failure_threshold):
+            await breaker_groq._on_failure(Exception("Groq API error"))
 
         # Gemini breaker should still be CLOSED
-        assert breaker_gemini.state == CircuitBreakerState.CLOSED
-        assert breaker_groq.state == CircuitBreakerState.OPEN
+        assert breaker_gemini.state == CircuitState.CLOSED
+        assert breaker_groq.state == CircuitState.OPEN
 
     @pytest.mark.asyncio
     async def test_same_provider_different_models_share_breaker(self):
@@ -104,7 +104,7 @@ class TestCircuitBreakerRegistry:
         registry = CircuitBreakerRegistry()
 
         # Get and trip a breaker
-        breaker = registry.get("test-provider:test-model")
+        registry.get("test-provider:test-model")
         # Note: Can't easily trip in sync context, but can test reset
         registry.reset_all()
 
@@ -118,52 +118,52 @@ class TestLLMClientCircuitBreakerKeying:
 
     def test_llm_client_creates_breaker_with_correct_key(self):
         """Verify LLMClient creates circuit breaker with provider:model key."""
-        from core.config import get_settings
+        from core.config import Settings
         from core.llm_client import LLMClient
-
-        settings = get_settings()
 
         # Create an LLMClient
         client = LLMClient(
-            provider="gemini",
-            api_key="test-key",
-            model="gemini-2.5-flash",
+            config=Settings(
+                app_env="testing",
+                llm_provider="openai",
+                llm_api_key="test-key-long-enough-placeholder",
+                llm_model="gpt-4o",
+            )
         )
 
-        # The circuit breaker should be keyed by provider:model
-        # This is verified by checking the breaker is created with the right key
-        # We can't easily access the internal breaker, but we can verify
-        # the key format is correct by checking the client stores the right info
-
-        # The key format used should be: {provider}:{model}
-        expected_key = "gemini:gemini-2.5-flash"
-
         # Verify by checking the client has the model set correctly
-        assert client.model == "gemini-2.5-flash"
-        assert client.provider == "gemini"
+        assert client.model == "gpt-4o"
+        assert client.provider == "openai"
 
     @pytest.mark.asyncio
     async def test_multiple_llm_clients_for_different_providers(self):
         """Verify multiple LLM clients for different providers have separate breakers."""
+        from core.config import Settings
         from core.llm_client import LLMClient
 
         # Create clients for different providers
-        gemini_client = LLMClient(
-            provider="gemini",
-            api_key="test-key-gemini",
-            model="gemini-2.5-flash",
+        openai_client = LLMClient(
+            config=Settings(
+                app_env="testing",
+                llm_provider="openai",
+                llm_api_key="test-key-long-enough-placeholder",
+                llm_model="gpt-4o",
+            )
         )
 
         groq_client = LLMClient(
-            provider="groq",
-            api_key="test-key-groq",
-            model="llama3-70b",
+            config=Settings(
+                app_env="testing",
+                llm_provider="groq",
+                llm_api_key="test-key-long-enough-placeholder",
+                llm_model="llama3-70b",
+            )
         )
 
         # Both should be functional and independent
-        assert gemini_client.provider == "gemini"
+        assert openai_client.provider == "openai"
         assert groq_client.provider == "groq"
-        assert gemini_client.model != groq_client.model
+        assert openai_client.model != groq_client.model
 
 
 class TestCircuitBreakerFailureThreshold:
@@ -172,37 +172,39 @@ class TestCircuitBreakerFailureThreshold:
     def test_default_failure_threshold(self):
         """Verify default failure threshold is reasonable."""
         breaker = CircuitBreaker(service_name="test-service")
-        assert breaker.failure_threshold >= 3, "Failure threshold should be at least 3"
+        assert breaker.config.failure_threshold >= 3, "Failure threshold should be at least 3"
 
     def test_default_success_threshold(self):
         """Verify default success threshold for closing."""
         breaker = CircuitBreaker(service_name="test-service")
-        assert breaker.success_threshold >= 1, "Success threshold should be at least 1"
+        assert breaker.config.success_threshold >= 1, "Success threshold should be at least 1"
 
     @pytest.mark.asyncio
     async def test_failure_count_increments_on_each_failure(self):
         """Verify failure count increments on each failure."""
-        breaker = CircuitBreaker(service_name="test-fail-count", failure_threshold=5)
+        from core.circuit_breaker import CircuitBreakerConfig
+        breaker = CircuitBreaker(service_name="test-fail-count", config=CircuitBreakerConfig(failure_threshold=5))
 
         initial_count = breaker.failure_count
 
         # Add failures
         for _ in range(3):
-            await breaker.on_failure(Exception("Test error"))
+            await breaker._on_failure(Exception("Test error"))
 
         assert breaker.failure_count == initial_count + 3
 
     @pytest.mark.asyncio
     async def test_success_resets_failure_count(self):
         """Verify success call resets failure count."""
-        breaker = CircuitBreaker(service_name="test-reset", failure_threshold=5)
+        from core.circuit_breaker import CircuitBreakerConfig
+        breaker = CircuitBreaker(service_name="test-reset", config=CircuitBreakerConfig(failure_threshold=5))
 
         # Add some failures
         for _ in range(3):
-            await breaker.on_failure(Exception("Test error"))
+            await breaker._on_failure(Exception("Test error"))
 
         # Add a success
-        await breaker.on_success()
+        await breaker._on_success()
 
         # Failure count should reset
         assert breaker.failure_count == 0
