@@ -9,20 +9,14 @@
 
 {
     admin off
-    # auto_https is ON by default.
-    # For production domains Caddy auto-provisions Let's Encrypt certs.
-    # For localhost Caddy uses a self-signed internal cert (no ACME needed).
-    # Set ACME_EMAIL in .env to receive cert expiry notifications.
     email {$ACME_EMAIL:admin@localhost}
     http_port 80
     https_port 443
 }
 
-:80, :443 {
+{$DOMAIN:localhost} {
 
     # Redirect HTTP to HTTPS for non-localhost domains.
-    # Caddy handles automatic HTTPS for specific domains, but for a generic
-    # config, we ensure redirection if accessed via port 80.
     @http {
         protocol http
         not host localhost 127.0.0.1

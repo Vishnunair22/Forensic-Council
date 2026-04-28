@@ -16,20 +16,17 @@ FROM node:22-alpine AS base
 
 WORKDIR /app
 
-COPY package.json ./
-COPY package-lock.json* ./
-
-# Use npm ci with legacy-peer-deps for reproducible builds.
-# React 19 introduces stricter peer dependency enforcement. Several transitive
-# dependencies (e.g. Radix UI primitives) may not yet have published updated
-# peer ranges. Once upstream releases resolve these, remove --legacy-peer-deps.
+COPY package.json package-lock.json ./
+COPY apps/web/package.json ./apps/web/
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci --legacy-peer-deps --prefer-offline --no-audit --no-fund
+    npm ci --legacy-peer-deps --prefer-offline --no-audit --no-fund \
+        --workspace apps/web --include-workspace-root
+WORKDIR /app/apps/web
 
 # ── Stage 1: Development — hot-reload server ─────────────────────────────────
 FROM base AS development
 
-COPY . .
+COPY apps/web/ ./
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=development
@@ -45,7 +42,7 @@ CMD ["npm", "run", "dev"]
 FROM base AS builder
 
 # Copy source
-COPY . .
+COPY apps/web/ ./
 
 # Build-time variables baked into the JS bundle
 ARG NEXT_PUBLIC_API_URL
@@ -81,9 +78,9 @@ RUN addgroup --system --gid 1001 nodejs \
  && adduser  --system --uid  1001 nextjs
 
 # Copy standalone output (Next.js built-in server)
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./public
 
 # Switch to non-root user before the process starts
 USER nextjs

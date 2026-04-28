@@ -15,6 +15,11 @@
 set -e
 export HOME="${HOME:-/tmp}"
 
+EXPECTED_PROJECT="forensic-council"
+if [ -n "${COMPOSE_PROJECT_NAME:-}" ] && [ "$COMPOSE_PROJECT_NAME" != "$EXPECTED_PROJECT" ]; then
+    echo "  WARN: COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME — model volumes will not be shared with the default 'forensic-council' project."
+fi
+
 echo "Starting Forensic Council entrypoint as user: $(id -u)"
 
 # Mounted Docker volumes may be created as root on first use.  The production
@@ -56,6 +61,12 @@ if [ -d "$CAL_SRC" ] && [ -d "$CAL_DST" ]; then
         fi
         echo "  Calibration model seed complete."
     fi
+fi
+
+CAL_FINAL=$(find "$CAL_DST" -type f -name "*.json" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
+if [ "${CAL_FINAL:-0}" -lt 1 ]; then
+    echo "  WARNING: Calibration models volume is EMPTY after seed step."
+    echo "  Forensic probabilities will fall back to identity calibration."
 fi
 
 # ------ 1b. Seed build-time ML model cache into mounted volumes ---------------------------------------------------------

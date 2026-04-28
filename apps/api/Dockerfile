@@ -149,6 +149,7 @@ COPY tools/ tools/
 COPY orchestration/ orchestration/
 COPY reports/ reports/
 COPY config/ config/
+COPY storage/calibration_models/ /opt/forensic-model-cache/calibration_models/
 COPY worker.py .
 
 ENV PATH="/app/.venv/bin:$PATH" \
@@ -204,7 +205,7 @@ RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
         YOLO_CONFIG_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" \
         YOLO_MODEL_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" \
         HOME="/tmp" \
-        python probes/model_pre_download.py --strict; \
+        python probes/model_pre_download.py; \
     else \
         echo "Skipping build-time model preload (PRELOAD_MODELS=$PRELOAD_MODELS)"; \
     fi

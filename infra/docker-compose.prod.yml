@@ -40,9 +40,11 @@ services:
         max-size: "50m"
         max-file: "5"
 
-  frontend:
+frontend:
     restart: always
     build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
       target: runner
       args:
         NEXT_PUBLIC_API_URL: ""

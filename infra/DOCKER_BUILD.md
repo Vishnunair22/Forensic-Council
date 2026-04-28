@@ -339,7 +339,7 @@ docker builder prune -f
 After the stack starts, confirm that all six ML models loaded correctly. Run this against the backend or worker container:
 
 ```bash
-docker exec forensic_api python scripts/model_pre_download.py --check
+docker exec forensic_api python probes/model_pre_download.py --check
 ```
 
 Expected output (all lines should show `populated`, not `empty`):
@@ -360,13 +360,13 @@ To check the six individual models (YOLO, EasyOCR, OpenCLIP, ResNet-50, SpeechBr
 
 ```bash
 # Prints per-model SKIP (cached) or WARN (missing) lines
-docker exec forensic_api python scripts/model_pre_download.py
+docker exec forensic_api python probes/model_pre_download.py
 ```
 
 If any model shows `WARN`, trigger a forced re-download:
 
 ```bash
-docker exec forensic_api python scripts/model_pre_download.py --force
+docker exec forensic_api python probes/model_pre_download.py --force
 ```
 
 To check raw volume disk usage:

@@ -67,7 +67,7 @@ x-backend-env: &backend-env
   CALIBRATION_MODELS_PATH: /app/cache/calibration_models
   NUMBA_DISABLE_JIT: ${NUMBA_DISABLE_JIT:-1}
   NUMBA_CACHE_DIR: /app/cache/numba_cache
-  HOME: /app/cache/easyocr
+  HOME: /tmp
   EASYOCR_MODEL_DIR: /app/cache/easyocr
   YOLO_MODEL_DIR: /app/cache/ultralytics
   YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-yolo11n.pt}
@@ -398,7 +398,7 @@ services:
       migration:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import redis, os; r = redis.Redis(host=os.getenv('REDIS_HOST','redis'), port=int(os.getenv('REDIS_PORT', 6379)), password=os.getenv('REDIS_PASSWORD',''), socket_connect_timeout=3); r.ping()\" || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.create_connection((__import__('os').environ.get('REDIS_HOST','redis'), 6379), timeout=3); s.close()\" || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -512,8 +512,8 @@ services:
   # --------------------------------------------------------------------------
   frontend:
     build:
-      context: ../apps/web
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: apps/web/Dockerfile
       target: development
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}

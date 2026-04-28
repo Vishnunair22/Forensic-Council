@@ -72,6 +72,13 @@ Thumbs.db
 /apps/api/storage/keys/*
 !/apps/api/storage/keys/.gitkeep
 
+# Backend tree should not enter the frontend build context (when using repo root context)
+apps/api/.venv/
+apps/api/cache/
+apps/api/storage/evidence/
+apps/api/storage/keys/
+apps/api/storage/calibration_models/
+
 # ML Caches
 /apps/api/cache/
 *.pt

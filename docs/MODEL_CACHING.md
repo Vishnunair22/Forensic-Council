@@ -169,7 +169,7 @@ docker exec forensic_api ps aux | grep model_pre_download
 docker exec forensic_api cat /tmp/model_download.log
 
 # Force re-download
-docker exec forensic_api python scripts/model_pre_download.py
+docker exec forensic_api python probes/model_pre_download.py
 ```
 
 ### Cache Detection Failing

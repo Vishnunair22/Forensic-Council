@@ -86,9 +86,23 @@ def setup_dirs() -> None:
 
 
 def download_yolo(force: bool = False) -> bool:
-    """YOLO11 object detection — Agent 3 primary."""
     yolo_dir = CACHE_DIRS["YOLO"]
     model_name = settings.yolo_model_name
+
+    # DETR / transformers fallback — used when YOLO_MODEL_NAME is a HF repo ID.
+    if model_name.startswith("detr") or "/" in model_name:
+        try:
+            from transformers import AutoImageProcessor, AutoModelForObjectDetection
+            repo = "facebook/detr-resnet-50" if model_name == "detr-resnet-50" else model_name
+            AutoImageProcessor.from_pretrained(repo)
+            AutoModelForObjectDetection.from_pretrained(repo)
+            print(f"  {GREEN}[OK  ]{RESET}  DETR object detector ({repo}) cached.")
+            return True
+        except Exception as exc:
+            print(f"  {YELLOW}[WARN]{RESET}  DETR download failed: {exc}")
+            return False
+
+    # Original YOLO path (Ultralytics) - skipped if already cached.
     model_path = Path(yolo_dir) / model_name
     existing = [model_path] if model_path.exists() else []
     if existing and not force:

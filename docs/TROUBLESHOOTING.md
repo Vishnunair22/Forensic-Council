@@ -34,7 +34,7 @@
 **Cause**: Models downloading in background
 
 **Fix**:
-- Pre-download models: `python apps/api/scripts/model_pre_download.py`
+- Pre-download models: `python probes/model_pre_download.py`
 - Check `/tmp/model_download.log`
 - Increase Docker memory limit to 8GB
 - Verify internet connectivity from container
