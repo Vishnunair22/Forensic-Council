@@ -34,6 +34,7 @@ from api.routes import (
     investigation_router,
     metrics_router,
     sessions_router,
+    websocket_router,
     sse_router,
 )
 from api.routes.metrics import (
@@ -703,6 +704,7 @@ app.include_router(auth_router)
 app.include_router(investigation_router)
 app.include_router(hitl_router)
 app.include_router(sessions_router)
+app.include_router(websocket_router)
 app.include_router(metrics_router)
 app.include_router(sse_router)
 

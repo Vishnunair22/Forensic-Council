@@ -14,7 +14,7 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 echo "OK: docker present."
 
-if ! command -v docker >/dev/null 2>&1; then
+if ! command -v docker compose >/dev/null 2>&1; then
     echo "FAILED: docker compose is not available."
     exit 1
 fi

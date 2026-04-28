@@ -9,15 +9,7 @@ const HITL_CHECKPOINT_KEY = "forensic_hitl_checkpoint";
 const SESSION_ID_KEY = "forensic_session_id";
 const AUTH_TOKEN_EXPIRY_KEY = "forensic_auth_token_expiry";
 
-/** Dev-only logger — silenced in production builds */
-const isDev = process.env.NODE_ENV !== "production";
-const dbg = {
-  log: isDev ? console.log.bind(console) : () => {},
-  warn: isDev ? console.warn.bind(console) : () => {},
-  error: isDev ? console.error.bind(console) : () => {},
-};
-
-import { createLiveSocket, BriefUpdate, HITLCheckpoint, getArbiterStatus, API_BASE } from "@/lib/api";
+import { createLiveSocket, BriefUpdate, HITLCheckpoint, getArbiterStatus, API_BASE, dbg } from "@/lib/api";
 import { SoundType } from "./useSound";
 import type { AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
 

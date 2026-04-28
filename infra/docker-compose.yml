@@ -350,7 +350,6 @@ services:
       - ../apps/api/reports:/app/reports:rw
       - ../apps/api/scripts:/app/scripts:ro
       - ../apps/api/config:/app/config:ro
-      - ../apps/api/worker.py:/app/worker.py:ro
       # Runtime data volumes
       - evidence_data:/app/storage/evidence:rw
       - signing_keys:/app/storage/keys:rw
@@ -426,7 +425,6 @@ services:
       - ../apps/api/reports:/app/reports:rw
       - ../apps/api/scripts:/app/scripts:ro
       - ../apps/api/config:/app/config:ro
-      - ../apps/api/worker.py:/app/worker.py:ro
       # Runtime data volumes
       - evidence_data:/app/storage/evidence:rw
       - signing_keys:/app/storage/keys:ro

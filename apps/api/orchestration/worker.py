@@ -51,7 +51,6 @@ async def main() -> None:
     async def _warmup_background() -> None:
         try:
             from core.ml_subprocess import warmup_all_tools
-
             logger.info("Pre-warming ML tools in worker (background)")
             warmup_results = await warmup_all_tools(timeout_per_tool=120.0)
             succeeded = sum(1 for value in warmup_results.values() if value)
@@ -285,7 +284,6 @@ async def main() -> None:
                         deep_analysis_val = data.get("deep_analysis")
                         if session_id_val is not None and deep_analysis_val is not None:
                             from uuid import UUID
-
                             notify_decision(UUID(session_id_val), deep_analysis_val)
                     except Exception as parse_err:
                         logger.error(

@@ -13,13 +13,9 @@
 /secrets/
 /keys/
 *.private.key
-/*-api-key.txt
-/*-token.txt
-*.json_report
-bandit_security_report.json
-eslint_frontend_report.json
-ruff_backend_report.json
-git_secrets_scan.txt
+*_report.json
+*_report.txt
+*_scan.txt
 tracked_files.txt
 
 

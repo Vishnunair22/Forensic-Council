@@ -187,3 +187,19 @@ On startup, the API server pre-warms critical ML models. This eliminates the 30-
 ## Frontend Implementation Details
 
 For extremely detailed breakdowns of the Next.js component hierarchy, props, and custom hooks, refer to the **[Component Guide](COMPONENTS.md)**.
+
+---
+
+## Appendix: Agent Capabilities
+
+For a definitive list of diagnostic tools available to each specialist agent, see **[Agent Capabilities](AGENT_CAPABILITIES.md)**.
+
+### Agent Tool Summary
+
+| Agent | Primary Function | Key Tools |
+|-------|-----------------|-----------|
+| **Agent 1 (Image)** | Compression, splicing, GAN detection | ELA, JPEG Ghost, PRNU, Copy-Move, Deepfake |
+| **Agent 2 (Audio)** | Speaker verification, synthesis detection | Diarization, Anti-Spoofing, Prosody, ENF |
+| **Agent 3 (Object)** | Scene context, incongruence detection | YOLO, CLIP, Scale validation, Lighting check |
+| **Agent 4 (Video)** | Frame consistency, face swap detection | Optical Flow, Face Swap, Forgery, Liveness |
+| **Agent 5 (Metadata)** | Exif, GPS, steganography, C2PA | ExifTool, GPS validation, Steganography, C2PA |

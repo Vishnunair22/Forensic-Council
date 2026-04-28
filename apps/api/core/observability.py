@@ -55,7 +55,6 @@ def setup_observability(app, settings) -> None:
     import os
 
     endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "http://jaeger:4318")
-    protocol = os.environ.get("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf")
     service_name = os.environ.get("OTEL_SERVICE_NAME", "forensic-council-api")
 
     resource = Resource.create({"service.name": service_name})

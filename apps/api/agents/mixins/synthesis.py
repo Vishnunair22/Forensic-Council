@@ -11,7 +11,7 @@ from typing import Any
 
 import httpx
 
-from core.context_utils import aggregate_tool_context
+from .._context_utils import aggregate_tool_context
 from core.gemini_client import GeminiVisionClient
 from core.structured_logging import get_logger
 

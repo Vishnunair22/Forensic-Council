@@ -139,9 +139,9 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
         echo "  This fallback runs once per empty volume."
         echo "============================================================"
         if [ "$(id -u)" = "0" ]; then
-            runuser -u appuser -- python probes/model_pre_download.py --strict > /tmp/model_download.log 2>&1
+            runuser -u appuser -- python scripts/model_pre_download.py --strict > /tmp/model_download.log 2>&1
         else
-            python probes/model_pre_download.py --strict > /tmp/model_download.log 2>&1
+            python scripts/model_pre_download.py --strict > /tmp/model_download.log 2>&1
         fi
         echo "  Model download complete. Log: /tmp/model_download.log"
     else
@@ -154,9 +154,9 @@ fi
 if [ "${SKIP_CACHE_CHECK:-0}" != "1" ]; then
     echo "  Verifying model cache and imports..."
     if [ "$(id -u)" = "0" ]; then
-        runuser -u appuser -- python probes/model_cache_check.py
+        runuser -u appuser -- python scripts/model_cache_check.py
     else
-        python probes/model_cache_check.py
+        python scripts/model_cache_check.py
     fi
 fi
 

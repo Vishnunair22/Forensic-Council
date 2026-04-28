@@ -15,7 +15,7 @@ from core.structured_logging import configure_root_logger, get_logger
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from core.config import get_settings
-from worker import main
+from orchestration.worker import main
 
 if __name__ == "__main__":
     settings = get_settings()

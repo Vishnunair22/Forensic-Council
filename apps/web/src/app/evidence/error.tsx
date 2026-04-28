@@ -14,7 +14,9 @@ export default function EvidenceError({
  const router = useRouter();
 
  useEffect(() => {
-  console.error("Evidence page error:", error);
+   if (process.env.NODE_ENV !== "production") {
+     console.error("Evidence page error:", error);
+   }
  }, [error]);
 
  return (

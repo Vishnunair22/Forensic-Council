@@ -6,7 +6,8 @@ import { useQuery } from "@tanstack/react-query";
 import {
   getArbiterStatus,
   getReport,
-  type ReportDTO
+  type ReportDTO,
+  dbg
 } from "@/lib/api";
 import { ARBITER_POLL_INTERVAL_MS, ARBITER_POLL_MAX_ATTEMPTS } from "@/lib/constants";
 import { useForensicData } from "@/hooks/useForensicData";
@@ -17,9 +18,6 @@ import { storage, persistentStorage } from "@/lib/storage";
 
 export type Tab = "analysis" | "history";
 export type PageState = "loading" | "arbiter" | "ready" | "error" | "empty";
-
-const isDev = process.env.NODE_ENV !== "production";
-const dbg = { error: isDev ? console.error.bind(console) : () => {} };
 
 /**
  * Hook for managing the result page state and polling logic.

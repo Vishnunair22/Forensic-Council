@@ -148,6 +148,7 @@ filterwarnings = [
 source = ["core", "agents", "tools", "orchestration", "api", "reports"]
 branch = true
 omit = [
+    "tests/*",
     "tools/ml_tools/*.py",
     "*/worker.py",
     "*/model_cache.py",
@@ -216,7 +217,7 @@ ignore = ["E501", "S101"]
 "tools/audio_tools.py" = ["B904", "N806", "S110"]
 "tools/metadata_tools.py" = ["B904", "N806", "S110"]
 "tools/model_cache.py" = ["B904"]
-"worker.py" = ["S110"]
+"orchestration/worker.py" = ["S110"]
 
 # -- Pyright configuration --------------------------------------------------
 [tool.pyright]

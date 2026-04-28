@@ -33,7 +33,9 @@ export default function ResultError({
   const router = useRouter();
 
   useEffect(() => {
-    console.error("Result page error:", error);
+    if (process.env.NODE_ENV !== "production") {
+      console.error("Result page error:", error);
+    }
   }, [error]);
 
   const zodError = isZodError(error);

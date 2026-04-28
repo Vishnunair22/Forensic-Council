@@ -5,6 +5,7 @@ End-to-end test: evidence upload -> initial analysis -> deep analysis -> report.
 
 import json
 import io
+import os
 import sys
 import time
 import urllib.request
@@ -13,7 +14,9 @@ import urllib.parse
 
 BASE = "http://localhost:8000"
 ADMIN_USER = "admin"
-ADMIN_PASS = "36Nrlx2RI1zPqUb9CZXjGE6F6ZTra4cE"
+ADMIN_PASS = os.environ.get("ADMIN_PASS")
+if not ADMIN_PASS:
+    sys.exit("Set ADMIN_PASS env var before running e2e_test.py")
 
 PASS_S = "\033[92m[PASS]\033[0m"
 FAIL_S = "\033[91m[FAIL]\033[0m"

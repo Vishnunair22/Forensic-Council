@@ -7,15 +7,10 @@ import {
   ReportDTO,
   startInvestigation as apiStartInvestigation,
   InvestigationResponse,
+  dbg
 } from "@/lib/api";
 import { ALLOWED_MIME_TYPES } from "@/lib/constants";
 import { storage } from "@/lib/storage";
-
-/** Dev-only logger — silenced in production builds */
-const isDev = process.env.NODE_ENV !== "production";
-const dbg = {
-  error: isDev ? console.error.bind(console) : () => {},
-};
 
 const HISTORY_KEY = "fc_history";
 const CURRENT_REPORT_KEY = "fc_current_report";

@@ -103,7 +103,6 @@ FROM deps-core AS migration
 
 COPY pyproject.toml uv.lock ./
 COPY scripts/ scripts/
-COPY probes/ probes/
 COPY core/ core/
 COPY api/ api/
 COPY agents/ agents/
@@ -141,7 +140,6 @@ FROM deps-full AS app
 
 COPY pyproject.toml uv.lock ./
 COPY scripts/ scripts/
-COPY probes/ probes/
 COPY core/ core/
 COPY api/ api/
 COPY agents/ agents/
@@ -150,7 +148,7 @@ COPY orchestration/ orchestration/
 COPY reports/ reports/
 COPY config/ config/
 COPY storage/calibration_models/ /opt/forensic-model-cache/calibration_models/
-COPY worker.py .
+# worker.py is now copied as part of orchestration/
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app" \
@@ -187,7 +185,7 @@ RUN mkdir -p \
     /opt/forensic-model-cache/calibration_models
 
 # Verify ML runtime dependencies and script registry before downloading models.
-RUN python probes/validate_ml_tools.py
+RUN python scripts/validate_ml_tools.py
 
 # Bake heavyweight model assets into the image so clean Docker volumes start hot.
 # Runtime named volumes shadow /app/cache/*, so the entrypoint seeds them from
@@ -205,7 +203,7 @@ RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
         YOLO_CONFIG_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" \
         YOLO_MODEL_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" \
         HOME="/tmp" \
-        python probes/model_pre_download.py; \
+        python scripts/model_pre_download.py; \
     else \
         echo "Skipping build-time model preload (PRELOAD_MODELS=$PRELOAD_MODELS)"; \
     fi

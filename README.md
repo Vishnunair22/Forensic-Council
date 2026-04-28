@@ -240,6 +240,50 @@ The canonical environment template is [.env.example](.env.example). Important va
 
 Never commit `.env` or real secrets.
 
+## Common Issues
+
+### `ModuleNotFoundError` on backend start
+Run `uv sync --all-extras` from the `apps/api/` directory. The virtualenv is managed by uv.
+
+### Frontend `EACCES` permission error
+Delete `node_modules` and reinstall: `rm -rf node_modules && npm install`
+
+### Docker port conflict (5432/6379)
+Another Postgres or Redis instance is running. Stop it or change ports in `.env`.
+
+### `GEMINI_API_KEY not set` warning
+This is normal for local development. Agents 1, 3, 5 will use local fallback analysis. Set the key in `.env` to enable Gemini vision.
+
+## Container Orchestration Migration
+
+For scaling beyond `docker compose`, follow these paths:
+
+### Option 1: Docker Swarm
+```yaml
+services:
+  backend:
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+```
+Deploy: `docker stack deploy -c docker-compose.yml -c docker-compose.swarm.yml forensic`
+
+### Option 2: Kubernetes
+Generate secrets from `.env`:
+```bash
+kubectl create secret generic forensic-secrets \
+  --from-literal=POSTGRES_PASSWORD="$(grep POSTGRES_PASSWORD .env | cut -d= -f2)" \
+  --from-literal=JWT_SECRET_KEY="$(grep JWT_SECRET_KEY .env | cut -d= -f2)" \
+  --from-literal=SIGNING_KEY="$(grep SIGNING_KEY .env | cut -d= -f2)"
+```
+
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
@@ -250,7 +294,6 @@ Never commit `.env` or real secrets.
 - [Testing](docs/TESTING.md)
 - [Runbook](docs/RUNBOOK.md)
 - [Current State](docs/STATE.md)
-- [Development Setup](docs/DEVELOPMENT_SETUP.md)
 
 ## Development Guardrails
 
