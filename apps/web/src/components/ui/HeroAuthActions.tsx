@@ -79,6 +79,7 @@ export function HeroAuthActions() {
     try {
       const health = await checkBackendHealth();
       if (!health.ok) {
+        setSelectedFile(null);
         setIsAuthenticating(false);
         setAuthError(health.warmingUp ? "Protocol Warming Up... (60s)" : health.message);
         return;
@@ -93,6 +94,7 @@ export function HeroAuthActions() {
         setAuthError("Protocol Warming Up... (Retrying)");
       } else {
         const msg = err instanceof Error ? err.message : "Authentication failed";
+        setSelectedFile(null);
         setIsAuthenticating(false);
         setAuthError(msg);
       }

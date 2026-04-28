@@ -29,7 +29,7 @@ export function useResult() {
   const router = useRouter();
 
   // Initialize states from sessionStorage immediately if in browser to avoid flickers
-  const getInitial = (key: string) => persistentStorage.getItem(key);
+  const getInitial = (key: string) => storage.getItem(key);
 
   const [mounted, setMounted] = useState(false);
   const [state, setState] = useState<PageState>("arbiter");
@@ -233,7 +233,7 @@ export function useResult() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `forensic-report-${report.report_id.slice(0, 8)}.json`;
+    a.download = `forensic-report-${(report.report_id ?? "unknown").slice(0, 8)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }, [report]);

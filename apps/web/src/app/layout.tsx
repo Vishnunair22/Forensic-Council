@@ -37,11 +37,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-async function getCspNonce() {
-  const h = await headers();
-  const nonceHeader = h.get("x-nonce");
-  return nonceHeader ?? "";
-}
+
 
 export default function RootLayout({
   children,

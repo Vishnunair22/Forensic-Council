@@ -26,28 +26,30 @@ export const API_BASE: string =
     : INTERNAL_API_URL || RAW_API_BASE || "http://backend:8000";
 
 export function getWSBase(): string {
-  // ALWAYS compute fresh for browser - don't cache at module load
-  // This avoids SSR pre-computation issues
-  if (typeof window === "undefined") {
-    return "ws://backend:8000";
-  }
+  if (typeof window === "undefined") return "ws://backend:8000";
 
   if (RAW_API_BASE) {
     try {
       const url = new URL(RAW_API_BASE);
-      return `${url.protocol === "https:" ? "wss:" : "ws:"}//${url.host}`;
-    } catch {
-      // Fallback to window.location.host
-    }
+      const wsProto = url.protocol === "https:" ? "wss:" : "ws:";
+      return `${wsProto}//${url.host}`;
+    } catch { /* fall through */ }
   }
 
-  if (window.location.hostname === "localhost" && window.location.port === "3000") {
-    return "ws://localhost:8000";
+  // Dev convenience — Next.js on :3000, backend on :8000
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    return `ws://${window.location.hostname}:8000`;
   }
 
+  // Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  console.warn(
+    "[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to",
+    `${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`
+  );
   return `${protocol}//${window.location.host}`;
 }
+
 
 
 // ── Cookie & Auth Helpers ────────────────────────────────────────────────────

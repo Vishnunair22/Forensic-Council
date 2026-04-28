@@ -101,23 +101,37 @@ export default function EvidencePage() {
       <main className="max-w-[1560px] mx-auto relative z-10 w-full">
         <PageTransition>
           <>
-            {showUploadForm && (
-              <FileUploadSection
-                key="upload-form"
-                file={file}
-                isDragging={isDragging}
-                isUploading={isUploading}
-                validationError={validationError}
-                onFileSelect={handleFile}
-                onFileDrop={handleFile}
-                onDragEnter={() => setIsDragging(true)}
-                onDragLeave={() => setIsDragging(false)}
-                onUpload={triggerAnalysis}
-                onClear={() => {
-                  setFile(null);
-                  setValidationError(null);
-                }}
-              />
+            {/* Show upload form when idle OR when WS failed (with error banner) */}
+            {(showUploadForm || (wsConnectionError && !hasStartedAnalysis)) && (
+              <>
+                {wsConnectionError && (
+                  <div className="mb-6 rounded-lg border border-red-500/30 bg-red-950/20 px-6 py-4 text-sm text-red-300 flex items-center justify-between gap-4">
+                    <span>⚠ Stream connection failed: {wsConnectionError}</span>
+                    <button
+                      onClick={retryWsConnection}
+                      className="btn-pill-secondary text-xs px-4 py-1 shrink-0"
+                    >
+                      Retry Connection
+                    </button>
+                  </div>
+                )}
+                <FileUploadSection
+                  key="upload-form"
+                  file={file}
+                  isDragging={isDragging}
+                  isUploading={isUploading}
+                  validationError={validationError}
+                  onFileSelect={handleFile}
+                  onFileDrop={handleFile}
+                  onDragEnter={() => setIsDragging(true)}
+                  onDragLeave={() => setIsDragging(false)}
+                  onUpload={triggerAnalysis}
+                  onClear={() => {
+                    setFile(null);
+                    setValidationError(null);
+                  }}
+                />
+              </>
             )}
 
             {hasStartedAnalysis && !showUploadForm && (
@@ -145,8 +159,10 @@ export default function EvidencePage() {
               />
             )}
 
-            {!showUploadForm && !hasStartedAnalysis && !showLoadingOverlay && !validationError && (
+            {/* Fallback — only shows during the brief initiating window */}
+            {!showUploadForm && !hasStartedAnalysis && !showLoadingOverlay && !wsConnectionError && (
               <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 text-center px-6">
+                <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
                 <p className="text-sm text-foreground/55 max-w-md">
                   Initializing the forensic workspace...
                 </p>
@@ -160,7 +176,7 @@ export default function EvidencePage() {
                   }}
                   className="btn-pill-secondary px-6 py-2 text-xs"
                 >
-                  Reset loading & continue
+                  Reset & Upload New File
                 </button>
               </div>
             )}

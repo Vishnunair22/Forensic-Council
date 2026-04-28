@@ -4,9 +4,23 @@ export function middleware(request: NextRequest) {
   const nonce = btoa(crypto.randomUUID()).replace(/=/g, "");
 
   const isProd = process.env.NODE_ENV === "production";
-  const connectSrc = isProd
-    ? "'self'"
-    : "'self' ws://localhost wss://localhost ws://localhost:3000 wss://localhost:3000 ws://localhost:8000 wss://localhost:8000 http://localhost:8000 https://localhost:8000";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+  // Derive WS origin from NEXT_PUBLIC_API_URL
+  let wsOrigin = "";
+  let httpOrigin = "";
+  if (apiUrl) {
+    try {
+      const u = new URL(apiUrl);
+      wsOrigin = `${u.protocol === "https:" ? "wss:" : "ws:"}//${u.host}`;
+      httpOrigin = `${u.protocol}//${u.host}`;
+    } catch { /* ignore */ }
+  }
+
+  const prodConnectSrc = `'self' ${wsOrigin} ${httpOrigin}`.trim().replace(/\s+/g, " ");
+  const devConnectSrc = "'self' ws://localhost wss://localhost ws://localhost:3000 wss://localhost:3000 ws://localhost:8000 wss://localhost:8000 http://localhost:8000 https://localhost:8000";
+  
+  const connectSrc = isProd ? prodConnectSrc : devConnectSrc;
 
   const cspHeader = `
     default-src 'self';
@@ -23,12 +37,7 @@ export function middleware(request: NextRequest) {
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("Content-Security-Policy", cspHeader);
 
-  const response = NextResponse.next({
-    request: {
-      headers: requestHeaders,
-    },
-  });
-
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("Content-Security-Policy", cspHeader);
   return response;
 }
@@ -44,3 +53,4 @@ export const config = {
     },
   ],
 };
+

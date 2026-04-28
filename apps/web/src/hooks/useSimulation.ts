@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { flushSync } from "react-dom";
 import { AGENTS as AGENTS_DATA } from "@/lib/constants";
 import { storage } from "@/lib/storage";
 
@@ -122,21 +123,9 @@ export const useSimulation = ({
 
         let isActive = true;
 
-        const processQueue = async () => {
-          if (isProcessingQueue || messageQueue.length === 0) return;
-          isProcessingQueue = true;
-
-          try {
-            while (messageQueue.length > 0 && isActive) {
-              const update = messageQueue.shift();
-              if (!update) break;
-
-              dbg.log("[Simulation] Processing update from queue:", update);
-
-              const { flushSync } = await import("react-dom");
-              flushSync(() => {
-                switch (update.type) {
-                  case "CONNECTED":
+        const applyUpdate = (update: BriefUpdate) => {
+          switch (update.type) {
+            case "CONNECTED":
                     // Server confirmed auth and registered socket — connection fully ready.
                     // No UI action needed; the connected promise is already resolved in api.ts.
                     break;
@@ -405,8 +394,27 @@ export const useSimulation = ({
                     onCompleteRef.current?.();
                   }
                   break;
+          }
+        };
+
+        const processQueue = async () => {
+          if (isProcessingQueue || messageQueue.length === 0) return;
+          isProcessingQueue = true;
+
+          try {
+            while (messageQueue.length > 0 && isActive) {
+              const update = messageQueue.shift();
+              if (!update) break;
+
+              dbg.log("[Simulation] Processing update from queue:", update);
+
+              try {
+                flushSync(() => {
+                  applyUpdate(update);
+                });
+              } catch (e) {
+                applyUpdate(update);
               }
-              });
             }
           } finally {
             isProcessingQueue = false;
@@ -526,7 +534,7 @@ export const useSimulation = ({
                   `Connection lost. Reconnecting in ${Math.round(delay / 1000)}s (attempt ${reconnectAttemptsRef.current}/${reconnectConfig.current.maxRetries})…`,
                 );
                 setTimeout(() => {
-                  const currentSessionId = sessionId || storage.getItem(SESSION_ID_KEY);
+                  const currentSessionId = storage.getItem(SESSION_ID_KEY);
                   if (currentSessionId) {
                     connectWebSocket(currentSessionId, true).catch(() => {
                     });
@@ -585,6 +593,10 @@ export const useSimulation = ({
           });
       });
     },
+    // connectWebSocket intentionally has empty deps.
+    // All state is accessed via refs (completedAgentsRef, playSoundRef, etc.)
+    // to avoid re-creating the socket on every state change.
+    // DO NOT add state dependencies here without thinking carefully.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );

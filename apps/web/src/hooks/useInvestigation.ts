@@ -169,10 +169,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   useEffect(() => {
     if (typeof window === "undefined" || authReadyRef.current) return;
 
-    if (
-      document.cookie.includes("access_token") ||
-      (storage.getItem("forensic_auth_ok") === "1" && getAuthToken() !== null)
-    ) {
+    if (document.cookie.includes("access_token") || getAuthToken() !== null) {
       authReadyRef.current = Promise.resolve();
     } else {
       authReadyRef.current = autoLoginAsInvestigator()
@@ -367,7 +364,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       setShowLoadingOverlay(true);
       setAutoStartBlocking(false);
       triggerAnalysis(pending);
-    } else if (!pending && autoStartBlocking && !isUploading && status === "idle") {
+    } else if (!pending && autoStartBlocking && (status === "idle" || status === "error") && !isUploading) {
       // Safety guard: auto-start was requested but file is lost (e.g. refresh)
       setAutoStartBlocking(false);
       setShowLoadingOverlay(false);
@@ -375,20 +372,26 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       sessionOnlyStorage.removeItem("fc_show_loading");
     } else if (!pending && !autoStartFiredRef.current && status === "idle" && !isUploading && !autoStartBlocking) {
       // Auto-reconnect to an active session when navigating directly to the evidence page
-      const existingSessionId = storage.getItem("forensic_session_id");
-      if (existingSessionId) {
-        autoStartFiredRef.current = true;
-        startSimulation();
-        connectWebSocket(existingSessionId)
-          .then(() => {
-            setAnalysisStreamReady(true);
-          })
-          .catch((wsErr: unknown) => {
-            const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
-            setWsConnectionError(wsErrMsg);
-            setShowLoadingOverlay(false);
-            resetSimulation();
-          });
+      const noReconnect = sessionOnlyStorage.getItem("fc_no_reconnect");
+      if (noReconnect) {
+        sessionOnlyStorage.removeItem("fc_no_reconnect");
+        // Don't reconnect to old session — fresh upload requested
+      } else {
+        const existingSessionId = storage.getItem("forensic_session_id");
+        if (existingSessionId) {
+          autoStartFiredRef.current = true;
+          startSimulation();
+          connectWebSocket(existingSessionId)
+            .then(() => {
+              setAnalysisStreamReady(true);
+            })
+            .catch((wsErr: unknown) => {
+              const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
+              setWsConnectionError(wsErrMsg);
+              setShowLoadingOverlay(false);
+              resetSimulation();
+            });
+        }
       }
     }
   }, [triggerAnalysis, autoStartBlocking, isUploading, status, startSimulation, connectWebSocket, resetSimulation]);
@@ -511,6 +514,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     storage.removeItem("forensic_deep_agents");
     resetSimulation();
     sessionOnlyStorage.setItem("fc_open_upload_once", "1");
+    sessionOnlyStorage.setItem("fc_no_reconnect", "1");
     router.push("/?upload=1");
   }, [resetSimulation, playSound, router]);
 
@@ -544,10 +548,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     validAgentsData.some((v) => v.id === c.agent_id)
   );
 
-  const [mimeType, setMimeType] = useState<string | null>(null);
+  const [mimeType, setMimeType] = useState<string | null>(() =>
+    storage.getItem("forensic_mime_type") || null
+  );
 
   useEffect(() => {
-    // Safely sync from storage on mount/file change to avoid hydration mismatch
     setMimeType(storage.getItem("forensic_mime_type") || file?.type || null);
   }, [file]);
 
