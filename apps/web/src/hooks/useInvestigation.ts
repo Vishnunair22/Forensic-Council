@@ -379,8 +379,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   }, [triggerAnalysis, autoStartBlocking, isUploading, status, startSimulation, connectWebSocket, resetSimulation]);
 
   const handleFile = (f: File) => {
-    if (f.size > 50 * 1024 * 1024) {
-      setValidationError("File must be under 50MB");
+    if (f.size > 55 * 1024 * 1024) {
+      setValidationError("File must be under 55MB");
       playSound("error");
       return;
     }

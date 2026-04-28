@@ -8,7 +8,7 @@ echo "--- Forensic Council: Production Readiness Check ---"
 
 # 0. Check for required binaries
 echo "[0/5] Verifying required tools..."
-for tool in docker npm pre-commit; do
+for tool in docker npm pre-commit uv; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "FAILED: $tool is not installed or not in PATH."
         exit 1
@@ -18,9 +18,8 @@ echo "OK: All tools present."
 
 # 1. Check for unreplaced placeholders in .env
 echo "[1/5] Checking for unreplaced placeholders in .env..."
-if grep -q "_REPLACE_ME" .env; then
-    echo "FAILED: Found '_REPLACE_ME' placeholders in .env file."
-    grep "_REPLACE_ME" .env
+if grep -E "(_REPLACE_ME|__PASTE_)" .env; then
+    echo "FAILED: Found unreplaced placeholder values in .env file (shown above)."
     exit 1
 fi
 echo "OK: No placeholders found."

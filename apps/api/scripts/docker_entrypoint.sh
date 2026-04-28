@@ -44,7 +44,7 @@ fi
 # CALIBRATION_MODELS_PATH points to /app/cache/calibration_models (a named Docker volume)
 # so models can be updated at runtime without rebuilding the image.
 # On first start the volume is empty - copy the baked-in models in so agents find them.
-CAL_SRC="/app/storage/calibration_models"
+CAL_SRC="${FORENSIC_MODEL_SEED_DIR:-/opt/forensic-model-cache}/calibration_models"
 CAL_DST="${CALIBRATION_MODELS_PATH:-/app/cache/calibration_models}"
 if [ -d "$CAL_SRC" ] && [ -d "$CAL_DST" ]; then
     CAL_COUNT=$(find "$CAL_DST" -type f -name "*.json" 2>/dev/null | wc -l | tr -d ' ' || echo 0)

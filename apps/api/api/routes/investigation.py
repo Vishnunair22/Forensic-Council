@@ -302,6 +302,16 @@ async def start_investigation(
             from api.schemas import BriefUpdate
             from orchestration.investigation_queue import get_investigation_queue
 
+            queue = get_investigation_queue()
+            if not await queue.is_worker_alive():
+                raise HTTPException(
+                    status_code=503,
+                    detail=(
+                        "Investigation worker is not running. "
+                        "Start the worker service and try again."
+                    ),
+                )
+
             try:
                 # Signal immediately that the task is in the queue
                 await broadcast_update(
@@ -314,7 +324,7 @@ async def start_investigation(
                     ),
                 )
 
-                await get_investigation_queue().submit(
+                await queue.submit(
                     session_id=UUID(session_id),
                     case_id=case_id,
                     investigator_id=current_user.user_id,

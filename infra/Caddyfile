@@ -39,6 +39,14 @@
         -X-Powered-By
     }
 
+    # Backend health endpoint — exposed separately so external monitors can reach
+    # the real FastAPI /health without being swallowed by the frontend catch-all.
+    handle /health {
+        reverse_proxy backend:8000 {
+            header_up Host {host}
+        }
+    }
+
     # API: WebSocket Route (Long-lived connections, no compression, no timeout)
     handle /api/v1/sessions/*/live {
         reverse_proxy backend:8000 {

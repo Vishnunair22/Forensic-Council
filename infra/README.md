@@ -9,12 +9,47 @@ This folder contains the Docker Compose, Caddy, Prometheus, and deployment helpe
 | `docker-compose.yml` | Base stack: API, worker, frontend, Postgres, Redis, Qdrant, Caddy, Jaeger, Prometheus |
 | `docker-compose.dev.yml` | Development override with hot reload and larger frontend dev resources |
 | `docker-compose.prod.yml` | Production override with optimized build targets, log rotation, and reduced direct host ports |
-| `docker-compose.test.yml` | Lightweight integration test services |
+| `docker-compose.test.yml` | Lightweight infra-only stack for integration tests that bring their own backend |
 | `Caddyfile` | Reverse proxy, TLS, security headers, API routing, upload limits |
 | `prometheus.yml` | Prometheus scrape configuration |
 | `generate_production_keys.sh` | Generates strong `.env` secrets |
 | `validate_production_readiness.sh` | Runs repository and infrastructure readiness checks |
 | `DOCKER_BUILD.md` | Docker build and cache reference |
+
+## Universal Quickstart (Zero to Running)
+
+```bash
+# 1. Clone and enter the repo
+git clone https://github.com/Vishnunair22/Forensic-Council.git && cd Forensic-Council
+
+# 2. Generate the .env from the template
+cp .env.example .env
+
+# 3. Generate strong secrets (paste output into .env)
+bash infra/generate_production_keys.sh
+
+# 4. Add LLM keys to .env
+#    LLM_API_KEY=<groq key from https://console.groq.com/keys>
+#    GEMINI_API_KEY=<gemini key from https://aistudio.google.com/apikey>
+
+# 5. Build and start (development)
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up --build -d
+
+# 6. Wait for healthy state (~15-40 min on first build for ML downloads)
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env ps
+
+# 7. Verify backend
+curl http://localhost:8000/health
+
+# 8. Open the app
+#    Frontend (via Caddy):  http://localhost
+#    Frontend (direct):     http://localhost:3000
+#    API docs:              http://localhost:8000/docs
+
+# PRODUCTION (replace step 5):
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file .env up --build -d
+bash infra/validate_production_readiness.sh
+```
 
 ## Required Environment
 

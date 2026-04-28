@@ -182,7 +182,8 @@ RUN mkdir -p \
     /opt/forensic-model-cache/huggingface \
     /opt/forensic-model-cache/torch \
     /opt/forensic-model-cache/easyocr \
-    /opt/forensic-model-cache/ultralytics
+    /opt/forensic-model-cache/ultralytics \
+    /opt/forensic-model-cache/calibration_models
 
 # Verify ML runtime dependencies and script registry before downloading models.
 RUN python probes/validate_ml_tools.py

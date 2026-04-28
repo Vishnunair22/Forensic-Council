@@ -53,7 +53,7 @@ MIN_FILES: dict[str, int] = {
 }
 
 REQUIRED_HF_MODEL_DIRS = [
-    "models--timm--vit_base_patch32_clip_224.openai",
+    "models--" + settings.siglip_model_name.replace("hf-hub:", "").replace("/", "--"),
     "models--speechbrain--spkrec-ecapa-voxceleb",
     "models--" + settings.aasist_model_name.replace("/", "--"),
 ]

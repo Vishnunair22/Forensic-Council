@@ -2,13 +2,12 @@
 
 import { useRef, useMemo, useEffect, useState, useCallback } from "react";
 import Image from "next/image";
-import { 
- RotateCcw, 
- ArrowRight, 
- UploadCloud, 
- FileAudio, 
- ShieldAlert, 
- ScanLine 
+import {
+ RotateCcw,
+ UploadCloud,
+ FileAudio,
+ ShieldAlert,
+ ScanLine
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { clsx } from "clsx";
@@ -67,7 +66,7 @@ export function FileUploadSection({
   }, [file, computeHash]);
 
   const fileSizeMb = file ? file.size / 1024 / 1024 : 0;
-  const fileSizeColor = fileSizeMb > 200 ? "text-rose-400" : fileSizeMb > 50 ? "text-amber-400" : "text-white/40";
+  const fileSizeColor = fileSizeMb > 200 ? "text-rose-400" : fileSizeMb > 55 ? "text-amber-400" : "text-white/40";
 
  const filePreviewUrl = useMemo(() => {
   if (!file) return null;

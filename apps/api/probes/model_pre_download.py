@@ -165,12 +165,10 @@ def download_open_clip(force: bool = False) -> bool:
     """OpenCLIP / SigLIP — used by Agent 1 and Agent 3 for zero-shot classification and neural fingerprints."""
     hf_dir = CACHE_DIRS["HF"]
     model_name = settings.siglip_model_name
-    pretrained = "webli" if "siglip" in model_name.lower() else "openai"
-    if "/" in model_name:
-        pretrained = "hf-hub"
 
-    # open_clip caches to HF_HOME/hub/models--...
-    model_slug = f"models--{model_name.replace('/', '--')}"
+    # Normalise slug: strip hf-hub: prefix before building the cache path.
+    clean_name = model_name.replace("hf-hub:", "")
+    model_slug = f"models--{clean_name.replace('/', '--')}"
     model_dir = Path(hf_dir) / "hub" / model_slug
 
     # Robust check: look for any blob > 50 MB (the actual model weights)
@@ -190,12 +188,29 @@ def download_open_clip(force: bool = False) -> bool:
         )
         return True
 
-    print(f"  {CYAN}[DOWN]{RESET}  OpenCLIP/SigLIP {model_name} ({pretrained}) → {hf_dir}")
+    print(f"  {CYAN}[DOWN]{RESET}  OpenCLIP/SigLIP {model_name} → {hf_dir}")
     try:
-        import open_clip
+        if model_name.startswith("hf-hub:") or "/" in model_name:
+            # HF Hub model ID (e.g. google/siglip-base-patch16-224): use transformers
+            # so we are not limited to models registered in open_clip's model registry.
+            from transformers import AutoModel, AutoProcessor
 
-        # Ensure we use the correct pretrained tag for SigLIP models
-        open_clip.create_model_and_transforms(model_name, pretrained=pretrained)
+            AutoProcessor.from_pretrained(clean_name)
+            AutoModel.from_pretrained(clean_name)
+        else:
+            import open_clip
+
+            pretrained = "openai" if "siglip" not in model_name.lower() else "webli"
+            open_clip.create_model_and_transforms(model_name, pretrained=pretrained)
+
+        # Post-download size guard: confirm at least one large blob landed.
+        post_blobs = (
+            [p for p in (model_dir / "blobs").glob("*") if p.is_file() and p.stat().st_size > 50_000_000]
+            if (model_dir / "blobs").exists()
+            else []
+        )
+        if not post_blobs:
+            raise RuntimeError(f"CLIP/SigLIP download succeeded but no large blob found in {model_dir}/blobs — possible partial download")
         print(f"  {GREEN}[OK  ]{RESET}  OpenCLIP/SigLIP downloaded.")
         return True
     except Exception as exc:
@@ -218,6 +233,8 @@ def download_resnet50(force: bool = False) -> bool:
         import torchvision
 
         torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.DEFAULT)
+        if not (resnet_file.exists() and resnet_file.stat().st_size > 50_000_000):
+            raise RuntimeError(f"ResNet-50 weight file missing or truncated after download: {resnet_file}")
         print(f"  {GREEN}[OK  ]{RESET}  ResNet-50 downloaded.")
         return True
     except Exception as exc:

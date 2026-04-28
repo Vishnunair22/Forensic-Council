@@ -511,7 +511,6 @@ docker compose -f infra/docker-compose.yml restart worker
 | `docker-compose.yml` | Base stack — always required | All modes |
 | `docker-compose.dev.yml` | Dev targets, bind mounts, HMR polling | Development |
 | `docker-compose.prod.yml` | Production targets, hardened restart, log rotation | Production |
-| `docker-compose.infra.yml` | Infra only (Postgres, Redis, Qdrant) | Backend dev without Docker frontend |
 | `docker-compose.test.yml` | Test service stack | CI / local test runs |
 
 ### Build arguments

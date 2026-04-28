@@ -27,6 +27,7 @@ services:
     volumes: !override
       - evidence_data:/app/storage/evidence:rw
       - signing_keys:/app/storage/keys:rw
+      - reports_data:/app/reports:rw
       - hf_cache:/app/cache/huggingface:rw
       - torch_cache:/app/cache/torch:rw
       - easyocr_cache:/app/cache/easyocr:rw
@@ -73,6 +74,7 @@ services:
     volumes: !override
       - evidence_data:/app/storage/evidence:rw
       - signing_keys:/app/storage/keys:ro
+      - reports_data:/app/reports:rw
       - hf_cache:/app/cache/huggingface:rw
       - torch_cache:/app/cache/torch:rw
       - easyocr_cache:/app/cache/easyocr:rw

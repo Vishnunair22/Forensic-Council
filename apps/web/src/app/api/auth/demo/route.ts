@@ -59,6 +59,21 @@ export async function POST() {
               continue;
             }
 
+            // Final 401 almost always means BOOTSTRAP_INVESTIGATOR_PASSWORD ≠ DEMO_PASSWORD.
+            // Return 503 (not 401) so the browser doesn't interpret this as a client auth
+            // failure — it is a server misconfiguration.
+            if (response.status === 401 || response.status === 403) {
+              return NextResponse.json(
+                {
+                  error:
+                    "Demo login unavailable: the investigator account credentials do not match. " +
+                    "Ensure BOOTSTRAP_INVESTIGATOR_PASSWORD and DEMO_PASSWORD are set to the same " +
+                    "value in your .env file, then restart the stack.",
+                },
+                { status: 503 },
+              );
+            }
+
             return NextResponse.json(
               { error: errorData.detail || "Authentication failed" },
               { status: response.status },

@@ -28,6 +28,13 @@ let globalCtx: AudioContext | null = null;
 // Chrome's autoplay policy: AudioContext must be created/resumed after a user gesture.
 // We set this flag on the first qualifying DOM event and create the context then.
 let _audioUnlocked = false;
+let _masterVolume = 0.3;
+let _isMuted = false;
+
+export function setMasterVolume(v: number) { _masterVolume = Math.max(0, Math.min(1, v)); }
+export function getMasterVolume() { return _masterVolume; }
+export function setMuted(m: boolean) { _isMuted = m; }
+export function getMuted() { return _isMuted; }
 
 type AudioContextConstructor = new () => AudioContext;
 
@@ -80,6 +87,8 @@ export function useSound() {
   const playSound = useCallback((type: SoundType) => {
     try {
       if (typeof window === "undefined") return;
+      if (_isMuted) return;
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       // Only proceed if user has already interacted — prevents the Chrome
       // "AudioContext was not allowed to start" warning on programmatic calls.
       if (!_audioUnlocked || !globalCtx) return;
@@ -100,7 +109,12 @@ export function useSound() {
       limiter.release.value = 0.1;
       limiter.connect(ctx.destination);
 
-      const out = limiter;
+      // ── Master volume ─────────────────────────────────────────────────────
+      const masterGain = ctx.createGain();
+      masterGain.gain.value = _masterVolume;
+      masterGain.connect(limiter);
+
+      const out = masterGain;
 
       // ── Sounds ────────────────────────────────────────────────────────────
 

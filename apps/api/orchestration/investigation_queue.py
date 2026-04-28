@@ -60,6 +60,10 @@ class InvestigationQueue:
 
     QUEUE_KEY = "forensic:investigation:queue"
     METADATA_KEY = "forensic:investigation:tasks"
+    # Worker writes this key on every BLPOP loop iteration (TTL 30s).
+    # If absent, no worker has been alive for at least 30 seconds.
+    WORKER_HEARTBEAT_KEY = "forensic:worker:heartbeat"
+    WORKER_HEARTBEAT_TTL = 30
 
     def __init__(self):
         self._redis = None
@@ -109,6 +113,11 @@ class InvestigationQueue:
         )
         return task
 
+    async def is_worker_alive(self) -> bool:
+        """Return True if a worker has written a heartbeat within the last 30 seconds."""
+        redis = await self._get_redis()
+        return bool(await redis.exists(self.WORKER_HEARTBEAT_KEY))
+
     async def get_status(self, session_id: UUID) -> InvestigationTask | None:
         """Get the status of an investigation from Redis."""
         redis = await self._get_redis()
@@ -146,6 +155,12 @@ class InvestigationWorker:
 
         while self._running:
             try:
+                # Heartbeat: renew every loop so the API can detect a dead worker.
+                await redis.set(
+                    InvestigationQueue.WORKER_HEARTBEAT_KEY,
+                    str(time.time()),
+                    ex=InvestigationQueue.WORKER_HEARTBEAT_TTL,
+                )
                 # BLPOP blocks until a task is available (timeout 5s)
                 result = await redis.client.blpop(InvestigationQueue.QUEUE_KEY, timeout=5)
                 if not result:

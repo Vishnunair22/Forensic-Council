@@ -42,7 +42,7 @@ x-backend-env: &backend-env
   SIGNING_KEY: ${SIGNING_KEY:?SIGNING_KEY must be set}
   JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set}
   JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
-  LLM_PROVIDER: ${LLM_PROVIDER:-none}
+  LLM_PROVIDER: ${LLM_PROVIDER:-groq}
   LLM_API_KEY: ${LLM_API_KEY:-}
   LLM_MODEL: ${LLM_MODEL:-llama-3.3-70b-versatile}
   LLM_FALLBACK_MODELS: ${LLM_FALLBACK_MODELS:-llama-3.1-8b-instant}
@@ -57,7 +57,7 @@ x-backend-env: &backend-env
   GEMINI_FALLBACK_MODELS: ${GEMINI_FALLBACK_MODELS:-gemini-2.5-flash-lite,gemini-2.0-flash,gemini-2.0-flash-lite}
   GEMINI_TIMEOUT: ${GEMINI_TIMEOUT:-55.0}
   GEMINI_MAX_CONCURRENT: ${GEMINI_MAX_CONCURRENT:-2}
-  GEMINI_API_KEY_POLICY_OK: ${GEMINI_API_KEY_POLICY_OK:-true}
+  GEMINI_API_KEY_POLICY_OK: ${GEMINI_API_KEY_POLICY_OK:-false}
   DAILY_COST_QUOTA_USD: ${DAILY_COST_QUOTA_USD:-50.0}
   DAILY_COST_QUOTA_ADMIN_USD: ${DAILY_COST_QUOTA_ADMIN_USD:-500.0}
   RATE_LIMIT_AUTHENTICATED: ${RATE_LIMIT_AUTHENTICATED:-60}
@@ -85,8 +85,6 @@ x-backend-env: &backend-env
   # inotify events from Windows host → WSL2 → container are unreliable;
   # polling ensures uvicorn --reload actually picks up code changes.
   WATCHFILES_FORCE_POLLING: "true"
-
-x-redis-pwd: &redis-pwd ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
 
 services:
   # --------------------------------------------------------------------------
@@ -290,7 +288,7 @@ services:
     container_name: forensic_api
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8000:8000"  # Direct host access for dev only; production override resets this.
     environment:
       <<: *backend-env
       APP_NAME: forensic_council
@@ -349,7 +347,7 @@ services:
       - ../apps/api/agents:/app/agents:ro
       - ../apps/api/tools:/app/tools:ro
       - ../apps/api/orchestration:/app/orchestration:ro
-      - ../apps/api/reports:/app/reports:ro
+      - ../apps/api/reports:/app/reports:rw
       - ../apps/api/scripts:/app/scripts:ro
       - ../apps/api/config:/app/config:ro
       - ../apps/api/worker.py:/app/worker.py:ro
@@ -425,7 +423,7 @@ services:
       - ../apps/api/agents:/app/agents:ro
       - ../apps/api/tools:/app/tools:ro
       - ../apps/api/orchestration:/app/orchestration:ro
-      - ../apps/api/reports:/app/reports:ro
+      - ../apps/api/reports:/app/reports:rw
       - ../apps/api/scripts:/app/scripts:ro
       - ../apps/api/config:/app/config:ro
       - ../apps/api/worker.py:/app/worker.py:ro
@@ -628,6 +626,7 @@ volumes:
   postgres_data:
   evidence_data:
   signing_keys:
+  reports_data:
   hf_cache:
   torch_cache:
   easyocr_cache:

@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { Inter, JetBrains_Mono, Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
+import { Geist, JetBrains_Mono, Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import { GlobalNavbar } from "@/components/ui/GlobalNavbar";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { RouteExperience } from "@/components/ui/RouteExperience";
@@ -10,9 +10,9 @@ import { QueryProvider } from "@/components/ui/QueryProvider";
 import { LandingBackground } from "@/components/ui/LandingBackground";
 import "./globals.css";
 
-const inter = Inter({
+const geist = Geist({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-geist",
   display: "swap",
 });
 
@@ -56,7 +56,7 @@ export default function RootLayout({
   return (
     <html lang="en" dir="ltr" data-scroll-behavior="smooth" suppressHydrationWarning>
       <body
-        className={`${inter.variable} ${plusJakarta.variable} ${jetbrainsMono.variable} ${geistMono.variable} font-sans text-foreground antialiased min-h-screen flex flex-col overflow-x-hidden`}
+        className={`${geist.variable} ${plusJakarta.variable} ${jetbrainsMono.variable} ${geistMono.variable} font-sans text-foreground antialiased min-h-screen flex flex-col overflow-x-hidden`}
       >
         <LandingBackground />
         <Suspense fallback={null}>
