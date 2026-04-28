@@ -299,7 +299,7 @@ class Settings(BaseSettings):
                 except (json.JSONDecodeError, ValueError):
                     # Fall back to CSV parsing if JSON fails
                     v = v.strip("[]")
-            
+
             # Split on comma and strip whitespace/quotes from each origin
             return [i.strip().strip("\"'").strip() for i in v.split(",") if i.strip()]
         return v
@@ -543,8 +543,8 @@ class Settings(BaseSettings):
         ),
     )
     gemini_timeout: float = Field(
-        default=55.0,
-        description="Timeout for Gemini API calls in seconds (raised to 55s for deep forensic analysis).",
+        default=30.0,
+        description="Timeout for Gemini API calls in seconds.",
     )
     gemini_max_concurrent: int = Field(
         default=1,
@@ -761,7 +761,6 @@ class Settings(BaseSettings):
                     "Without it, Qdrant exposes all vectors to anyone who can reach port 6333."
                 )
         return self
-
 
     @property
     def gemini_available(self) -> bool:

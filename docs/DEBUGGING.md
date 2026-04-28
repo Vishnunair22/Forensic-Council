@@ -80,4 +80,3 @@ SELECT name, applied_at FROM migrations ORDER BY applied_at DESC;
 | WebSocket disconnects immediately | Invalid or expired JWT | Check auth header and token expiry |
 | Agents hang indefinitely | ML process deadlock | Restart worker service |
 | Report generation fails | Postgres connection pool exhausted | Increase `postgres_max_pool_size` |
-

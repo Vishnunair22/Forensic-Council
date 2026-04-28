@@ -38,11 +38,11 @@ export function ForensicProgressOverlay({
   useEffect(() => {
     if (!showElapsed) return;
     const id = setInterval(() => setElapsed((e) => e + 1), 1000);
-    
+
     // Lock scroll on mount
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    
+
     return () => {
       clearInterval(id);
       document.body.style.overflow = originalOverflow || "unset";
@@ -71,7 +71,7 @@ export function ForensicProgressOverlay({
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/5 blur-[150px] rounded-full pointer-events-none" />
 
       <div className="relative z-10 flex flex-col items-center text-center w-full max-w-5xl">
-        
+
         {/* --- Top Metadata --- */}
         <motion.div
           initial={{ y: 20, opacity: 0 }}
@@ -95,7 +95,7 @@ export function ForensicProgressOverlay({
 
         {/* --- Aperture Node --- */}
         <div className="relative w-32 h-32 mb-20 flex items-center justify-center">
-           <motion.div 
+           <motion.div
              animate={{ rotate: 360 }}
              transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
              className="absolute inset-0 rounded-full border-2 border-primary/20 border-dashed"
@@ -110,7 +110,7 @@ export function ForensicProgressOverlay({
             {log.map((entry, idx) => {
               const isLatest = idx === log.length - 1;
               const opacity = isLatest ? 1 : 0.3 - (log.length - 1 - idx) * 0.05;
-              
+
               return (
                 <motion.div
                   key={entry.id}
@@ -121,8 +121,8 @@ export function ForensicProgressOverlay({
                 >
                   <span className="text-[9px] font-mono text-white/20">[{fmtDiagnosticTime()}]</span>
                   <span className={`text-xs font-mono tracking-tight ${
-                    entry.cat === 'success' ? 'text-success' : 
-                    entry.cat === 'error' ? 'text-danger' : 
+                    entry.cat === 'success' ? 'text-success' :
+                    entry.cat === 'error' ? 'text-danger' :
                     entry.cat === 'info' ? 'text-primary' : 'text-white/60'
                   }`}>
                     {entry.text}

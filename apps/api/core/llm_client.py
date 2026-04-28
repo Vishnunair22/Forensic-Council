@@ -37,10 +37,10 @@ _MAX_BACKOFF = 5.0  # cap per-attempt wait so worker never blocks more than ~15 
 # Per-provider circuit breakers shared across all LLMClient instances.
 # Keyed by "provider:model" so a failing model on one provider does not
 # block the same model on a different provider (or a healthy fallback).
-_provider_circuit_breakers: dict[str, "CircuitBreaker"] = {}
+_provider_circuit_breakers: dict[str, CircuitBreaker] = {}
 
 
-def _get_provider_breaker(provider: str, model: str) -> "CircuitBreaker":
+def _get_provider_breaker(provider: str, model: str) -> CircuitBreaker:
     key = f"{provider}:{model}"
     if key not in _provider_circuit_breakers:
         _provider_circuit_breakers[key] = CircuitBreaker(

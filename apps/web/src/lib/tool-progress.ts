@@ -18,6 +18,7 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
+import { getToolIcon } from "./tool-icons";
 
 type ProgressDescriptor = {
   label: string;
@@ -180,8 +181,16 @@ export function getLiveProgressDescriptor(
 ): ProgressDescriptor {
   const normalized = normalizeToolName(toolName);
   if (normalized && TOOL_PROGRESS[normalized]) return TOOL_PROGRESS[normalized];
+  if (normalized) {
+    const icon = getToolIcon(normalized);
+    if (icon) {
+      return {
+        label: `Executing forensic tool: ${toolName || normalized}`,
+        icon,
+      };
+    }
+  }
 
   const fallbacks = FALLBACK_BY_AGENT[agentId] || FALLBACK_BY_AGENT.Agent1;
   return fallbacks[Math.max(0, stepIndex) % fallbacks.length];
 }
-

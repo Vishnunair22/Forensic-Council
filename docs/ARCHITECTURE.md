@@ -187,4 +187,3 @@ On startup, the API server pre-warms critical ML models. This eliminates the 30-
 ## Frontend Implementation Details
 
 For extremely detailed breakdowns of the Next.js component hierarchy, props, and custom hooks, refer to the **[Component Guide](COMPONENTS.md)**.
-

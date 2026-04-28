@@ -85,5 +85,3 @@
 - **Context:** When an investigation fails, `update_session_status()` attempted `INSERT INTO session_reports` with empty strings for `case_id` and `investigator_id` (both `NOT NULL`). The error handler itself crashed with a PostgreSQL constraint violation.
 - **Decision:** Change the error path to `UPDATE session_reports ... WHERE session_id = $1` — only update if a row already exists; never insert.
 - **Rationale:** The `session_reports` row is created by `save_report()` at investigation completion. If the investigation never completed, no row exists, and there is nothing to update — which is the correct behaviour. Attempting to insert a row with empty required fields was both logically wrong and operationally dangerous (it crashed the error handler, preventing the failure from being persisted at all).
-
-

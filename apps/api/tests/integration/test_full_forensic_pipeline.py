@@ -4,19 +4,16 @@ End-to-end integration test for complete forensic investigation flow.
 Tests the investigation endpoint with proper mocking - no torch required.
 """
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from uuid import uuid4
-from unittest.mock import patch, AsyncMock, MagicMock
-from io import BytesIO
 
 
 @pytest.mark.asyncio
 class TestFullForensicPipeline:
     """Tests for complete forensic pipeline flow."""
 
-    async def test_investigate_returns_200_with_session_id(
-        self, client, auth_headers, jpeg_file
-    ):
+    async def test_investigate_returns_200_with_session_id(self, client, auth_headers, jpeg_file):
         """Test that POST /investigate returns 200 with valid session_id."""
         from core.auth import User, UserRole, get_current_user
 
@@ -34,7 +31,11 @@ class TestFullForensicPipeline:
                     new_callable=AsyncMock,
                     return_value=True,
                 ),
-                patch("api.routes.investigation.check_daily_cost_quota", new_callable=AsyncMock, return_value=True),
+                patch(
+                    "api.routes.investigation.check_daily_cost_quota",
+                    new_callable=AsyncMock,
+                    return_value=True,
+                ),
                 patch(
                     "api.routes.investigation.set_active_pipeline_metadata", new_callable=AsyncMock
                 ),
@@ -54,7 +55,9 @@ class TestFullForensicPipeline:
                 )
 
                 # Should return 200, not 202
-                assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+                assert response.status_code == 200, (
+                    f"Expected 200, got {response.status_code}: {response.text}"
+                )
 
                 data = response.json()
                 assert "session_id" in data
@@ -70,7 +73,6 @@ class TestFullForensicPipeline:
     async def test_session_brief_returns_session_metadata(self, client, auth_headers):
         """Test GET /sessions/{id}/brief returns session metadata."""
         # Create a mock session in Redis
-        from unittest.mock import AsyncMock, MagicMock
 
         mock_session_data = {
             "session_id": "test-session-123",
@@ -79,7 +81,9 @@ class TestFullForensicPipeline:
             "phase": "initial",
         }
 
-        with patch("api.routes.sessions.get_active_pipeline_metadata", return_value=mock_session_data):
+        with patch(
+            "api.routes.sessions.get_active_pipeline_metadata", return_value=mock_session_data
+        ):
             response = client.get(
                 "/api/v1/sessions/test-session-123/brief",
                 headers=auth_headers,
@@ -100,7 +104,9 @@ class TestFullForensicPipeline:
         }
 
         with (
-            patch("api.routes.sessions.get_active_pipeline_metadata", return_value=mock_session_data),
+            patch(
+                "api.routes.sessions.get_active_pipeline_metadata", return_value=mock_session_data
+            ),
             patch("api.routes.sessions.get_active_pipeline", return_value=None),
             patch("api.routes.sessions.set_active_pipeline_metadata", new_callable=AsyncMock),
             patch("api.routes.sessions.get_redis_client", new_callable=AsyncMock),
@@ -112,7 +118,9 @@ class TestFullForensicPipeline:
             )
 
             # Should return 200 or 202
-            assert response.status_code in [200, 202], f"Expected 200/202, got {response.status_code}"
+            assert response.status_code in [200, 202], (
+                f"Expected 200/202, got {response.status_code}"
+            )
             data = response.json()
             assert "status" in data
 
@@ -132,8 +140,9 @@ class TestFullForensicPipeline:
     async def test_ecdsa_signature_format(self):
         """Test that ECDSA signature is variable length, not hardcoded to 128."""
         # Test the actual signature generation to verify format
-        from core.custody_chain import sign_entry
         import time
+
+        from core.custody_chain import sign_entry
 
         test_entry = {
             "action": "test_report",
@@ -156,7 +165,9 @@ class TestFullForensicPipeline:
         # Verify content_hash is 64-char hex (SHA-256)
         assert "content_hash" in signed
         assert len(signed["content_hash"]) == 64
-        assert signed["content_hash"].startswith(("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"))
+        assert signed["content_hash"].startswith(
+            ("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f")
+        )
 
 
 class TestInvestigationEndpointContracts:

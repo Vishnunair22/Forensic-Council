@@ -107,4 +107,3 @@ Always check `calibration_status` before citing a score in legal context.
 9. Ports 80 and 443 open for Caddy
 11. Verify `report.degradation_flags` is empty on first test investigation
 12. Run `pytest tests/ --ignore=tests/connectivity -v` before go-live
-

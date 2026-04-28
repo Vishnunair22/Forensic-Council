@@ -94,4 +94,3 @@ Please consult the root [`README.md`](../README.md) and [`docs/DEVELOPMENT_SETUP
 ```
 
 Both scripts are functionally identical. See the root `README.md` for the full command reference.
-

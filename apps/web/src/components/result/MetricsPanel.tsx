@@ -67,7 +67,7 @@ export function MetricsPanel({ report, activeAgentIds }: MetricsPanelProps) {
       </h3>
       <span className="text-[10px] font-mono text-white/10">{activeAgentIds.length} Nodes</span>
      </div>
-     
+
      <div className="space-y-5">
       {activeAgentIds.length === 0 ? (
        <p className="text-xs text-white/20 font-mono italic">No agent execution data detected.</p>
@@ -76,7 +76,7 @@ export function MetricsPanel({ report, activeAgentIds }: MetricsPanelProps) {
         const metrics = report.per_agent_metrics?.[agentId];
         const conf = metrics?.confidence_score ?? 0;
         const theme = AGENT_THEMES[agentId] || { color: "text-white/40", label: agentId };
-        
+
         return (
          <div key={agentId} className="space-y-2 group">
           <div className="flex items-center justify-between">
@@ -88,7 +88,7 @@ export function MetricsPanel({ report, activeAgentIds }: MetricsPanelProps) {
            </span>
           </div>
           <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-           <div 
+           <div
             className={clsx("h-full rounded-full transition-all duration-1000 group-hover:brightness-125", theme.color.replace('text-', 'bg-'))}
             style={{ width: `${Math.round(conf * 100)}%` }}
            />
@@ -102,32 +102,32 @@ export function MetricsPanel({ report, activeAgentIds }: MetricsPanelProps) {
 
     {/* Holistic Stats */}
     <div className="grid grid-cols-2 gap-4">
-     <StatCard 
-      label="Arbiter Confidence" 
+     <StatCard
+      label="Arbiter Confidence"
       value={`${Math.round((report.overall_confidence ?? 0) * 100)}%`}
       color={(report.overall_confidence ?? 0) >= 0.75 ? "text-emerald-400" : (report.overall_confidence ?? 0) >= 0.5 ? "text-amber-400" : "text-rose-400"}
       sublabel="Weighted"
      />
-     <StatCard 
-      label="Integrity Risk" 
+     <StatCard
+      label="Integrity Risk"
       value={`${Math.round((report.manipulation_probability ?? 0) * 100)}%`}
       color={(report.manipulation_probability ?? 0) >= 0.6 ? "text-rose-400" : (report.manipulation_probability ?? 0) >= 0.3 ? "text-amber-400" : "text-emerald-400"}
       sublabel="Risk"
      />
-     <StatCard 
-      label="Analysis Error" 
+     <StatCard
+      label="Analysis Error"
       value={`${Math.round((report.overall_error_rate ?? 0) * 100)}%`}
       color={(report.overall_error_rate ?? 0) >= 0.2 ? "text-rose-400" : "text-emerald-400/50"}
       sublabel="Noise"
      />
-      <StatCard 
-       label="Active Probes" 
+      <StatCard
+       label="Active Probes"
        value={String(report.applicable_agent_count ?? activeAgentIds.length)}
        color="text-primary/80"
        sublabel="Verified"
       />
-      <StatCard 
-       label="Agent Spread σ" 
+      <StatCard
+       label="Agent Spread σ"
        value={`${Math.round((report.confidence_std_dev ?? 0) * 100)}%`}
        color={(report.confidence_std_dev ?? 0) > 0.2 ? "text-amber-400" : "text-emerald-400/50"}
        sublabel="Disagreement"

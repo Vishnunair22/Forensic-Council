@@ -6,7 +6,7 @@ This guide covers the necessary procedures to maintain a production-hardened For
 
 ## 1. Automated Cleanup Service
 
-The system includes a background cleanup task managed by `worker.py`. 
+The system includes a background cleanup task managed by `worker.py`.
 
 ### Configuration
 Adjust cleanup intensity in `.env`:
@@ -80,4 +80,3 @@ Monitor the `/health` endpoint for infrastructure readiness:
 - `redis_ready`: `true`
 - `qdrant_ready`: `true`
 - `ml_tools_warmed`: `true` (Indicates models are in RAM/VRAM)
-

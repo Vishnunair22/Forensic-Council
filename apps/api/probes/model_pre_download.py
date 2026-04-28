@@ -93,6 +93,7 @@ def download_yolo(force: bool = False) -> bool:
     if model_name.startswith("detr") or "/" in model_name:
         try:
             from transformers import AutoImageProcessor, AutoModelForObjectDetection
+
             repo = "facebook/detr-resnet-50" if model_name == "detr-resnet-50" else model_name
             AutoImageProcessor.from_pretrained(repo)
             AutoModelForObjectDetection.from_pretrained(repo)
@@ -219,12 +220,18 @@ def download_open_clip(force: bool = False) -> bool:
 
         # Post-download size guard: confirm at least one large blob landed.
         post_blobs = (
-            [p for p in (model_dir / "blobs").glob("*") if p.is_file() and p.stat().st_size > 50_000_000]
+            [
+                p
+                for p in (model_dir / "blobs").glob("*")
+                if p.is_file() and p.stat().st_size > 50_000_000
+            ]
             if (model_dir / "blobs").exists()
             else []
         )
         if not post_blobs:
-            raise RuntimeError(f"CLIP/SigLIP download succeeded but no large blob found in {model_dir}/blobs — possible partial download")
+            raise RuntimeError(
+                f"CLIP/SigLIP download succeeded but no large blob found in {model_dir}/blobs — possible partial download"
+            )
         print(f"  {GREEN}[OK  ]{RESET}  OpenCLIP/SigLIP downloaded.")
         return True
     except Exception as exc:
@@ -248,7 +255,9 @@ def download_resnet50(force: bool = False) -> bool:
 
         torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.DEFAULT)
         if not (resnet_file.exists() and resnet_file.stat().st_size > 50_000_000):
-            raise RuntimeError(f"ResNet-50 weight file missing or truncated after download: {resnet_file}")
+            raise RuntimeError(
+                f"ResNet-50 weight file missing or truncated after download: {resnet_file}"
+            )
         print(f"  {GREEN}[OK  ]{RESET}  ResNet-50 downloaded.")
         return True
     except Exception as exc:

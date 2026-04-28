@@ -2,9 +2,9 @@
 
 import React, { useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
- History, 
- BadgeCheck, 
+import {
+ History,
+ BadgeCheck,
  Search,
  Zap,
  Clock
@@ -21,12 +21,12 @@ interface ForensicTimelineProps {
  isInitializing?: boolean;
 }
 
-export function ForensicTimeline({ 
- completedAgents, 
+export function ForensicTimeline({
+ completedAgents,
  agentUpdates: _agentUpdates,
- isInitializing 
+ isInitializing
 }: ForensicTimelineProps) {
- 
+
  // Aggregate all findings across all agents
  const allFindings = useMemo(() => {
   const list: Array<{
@@ -77,9 +77,9 @@ export function ForensicTimeline({
       <span className="text-[10px] font-mono text-white/20 tracking-tighter">Real-time Forensic Feed</span>
      </div>
     </div>
-    
+
     <div className="flex gap-2 items-center">
-       <motion.div 
+       <motion.div
         animate={{ opacity: [0.4, 1, 0.4] }}
         transition={{ duration: 2, repeat: Infinity }}
         className="px-2 py-0.5 rounded-full bg-primary/10 border border-primary/30 text-primary text-[10px] font-black tracking-wide flex items-center gap-1.5"
@@ -102,11 +102,11 @@ export function ForensicTimeline({
      aria-relevant="additions"
     >
     <div className="absolute left-[15px] top-0 bottom-0 w-[1px] bg-gradient-to-b from-primary/20 via-white/5 to-transparent z-0" />
-    
+
     <div className="space-y-6 relative z-10">
      <AnimatePresence mode="popLayout">
       {isInitializing && (
-       <motion.div 
+       <motion.div
         initial={{ opacity: 0, x: -10 }}
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, scale: 0.9 }}
@@ -131,7 +131,7 @@ export function ForensicTimeline({
          const isAlert = ALERT_VERDICTS_RENDER.has(finding.verdict ?? "") || finding.severity === "CRITICAL" || finding.severity === "HIGH";
 
         return (
-         <motion.div 
+         <motion.div
           layout
           initial={{ opacity: 0, x: -20, scale: 0.95 }}
           animate={{ opacity: 1, x: 0, scale: 1 }}
@@ -151,7 +151,7 @@ export function ForensicTimeline({
             transition={{ duration: 1, ease: "easeInOut" }}
             className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent z-0 pointer-events-none"
            />
-           
+
            <div className={clsx(
             "w-7 h-7 rounded-lg flex items-center justify-center border shrink-0 relative z-10",
             isAlert ? "bg-rose-500/20 border-rose-500/30 text-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.2)]" : "bg-white/5 border-white/10 text-white/50"
@@ -173,7 +173,7 @@ export function ForensicTimeline({
                </div>
                <BadgeCheck className={clsx("w-3.5 h-3.5 shrink-0", isAlert ? "text-rose-400" : "text-emerald-400/40")} />
               </div>
-            
+
             <p className={clsx(
              "text-[11px] font-medium leading-relaxed",
              isAlert ? "text-rose-300" : "text-white/60"
@@ -186,7 +186,7 @@ export function ForensicTimeline({
         );
        })
       ) : !isInitializing && (
-       <motion.div 
+       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         className="flex flex-col items-center justify-center py-20 text-center gap-4 opacity-20"

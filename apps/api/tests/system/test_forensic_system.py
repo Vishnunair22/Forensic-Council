@@ -925,7 +925,7 @@ if __name__ == "__main__":
 def test_system_smoke_runs_without_crash():
     """
     Gate: system test runner must complete without unhandled exception.
-    
+
     This is a smoke test that verifies the system test can run.
     Full system tests require a running Docker stack with all services.
     """

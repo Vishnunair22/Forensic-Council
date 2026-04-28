@@ -1,10 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { AnimatePresence } from "framer-motion";
 import { useSound } from "@/hooks/useSound";
-import { ForensicResetOverlay } from "./ForensicResetOverlay";
 import { BrandLogo } from "./BrandLogo";
 
 export function GlobalNavbar() {
@@ -43,4 +41,3 @@ export function GlobalNavbar() {
     </nav>
   );
 }
-

@@ -85,17 +85,17 @@ export function FileUploadSection({
  return (
   <div className="flex flex-col items-center justify-center min-h-[75vh] w-full max-w-2xl mx-auto px-4">
     {/* Title Section */}
-    <motion.div 
+    <motion.div
      initial={{ opacity: 0, y: 20 }}
      animate={{ opacity: 1, y: 0 }}
      className="text-center mb-12"
     >
-     <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full mb-8 bg-[var(--color-success-light)]/[0.08] border border-[var(--color-success-light)]/20">
+     <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full mb-8 bg-[var(--color-primary-soft)]/[0.08] border border-[var(--color-primary-soft)]/20">
       <span className="relative flex h-2 w-2">
-       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--color-success-light)] opacity-60" />
-       <span className="relative inline-flex rounded-full h-full w-full bg-[var(--color-success-light)]" />
+       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--color-primary-soft)] opacity-60" />
+       <span className="relative inline-flex rounded-full h-full w-full bg-[var(--color-primary-soft)]" />
       </span>
-      <span className="tracking-[0.2em] font-bold text-[10px] text-[var(--color-success-light)] font-mono uppercase">
+      <span className="tracking-[0.2em] font-bold text-[10px] text-[var(--color-primary-soft)] font-mono uppercase">
        Evidence_Ingestion
       </span>
      </div>
@@ -142,7 +142,7 @@ export function FileUploadSection({
         {!file.type.startsWith("image/") && !file.type.startsWith("video/") && (
          <div className="flex flex-col items-center justify-center h-full gap-4">
           <div className="w-20 h-20 rounded-2xl flex items-center justify-center bg-white/5 border border-white/10">
-           <FileAudio className="w-10 h-10 text-[var(--color-success-light)]" />
+           <FileAudio className="w-10 h-10 text-[var(--color-primary-soft)]" />
           </div>
          </div>
         )}
@@ -208,7 +208,7 @@ export function FileUploadSection({
        aria-label="Upload evidence file. Click or drag and drop."
        className={clsx(
         "w-full glass-panel transition-all duration-500 cursor-pointer overflow-hidden relative border-2 border-dashed group p-1",
-        isDragging ? "border-[var(--color-success-light)]/50 bg-[var(--color-success-light)]/5 scale-[1.01]" : "border-white/10 hover:border-[var(--color-success-light)]/30 hover:bg-white/[0.02]"
+        isDragging ? "border-[var(--color-primary-soft)]/50 bg-[var(--color-primary-soft)]/5 scale-[1.01]" : "border-white/10 hover:border-[var(--color-primary-soft)]/30 hover:bg-white/[0.02]"
        )}
        onClick={() => fileInputRef.current?.click()}
        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInputRef.current?.click(); } }}
@@ -225,7 +225,7 @@ export function FileUploadSection({
        <div className="py-24 flex flex-col items-center gap-8">
         <div className={clsx(
          "w-24 h-24 rounded-[2rem] flex items-center justify-center transition-all duration-500 border shadow-2xl",
-         isDragging ? "bg-[var(--color-success-light)]/20 border-[var(--color-success-light)]/40 text-[var(--color-success-light)] scale-110" : "bg-white/5 border-white/5 text-white/10 group-hover:text-[var(--color-success-light)] group-hover:bg-[var(--color-success-light)]/10 group-hover:border-[var(--color-success-light)]/20 group-hover:scale-105"
+         isDragging ? "bg-[var(--color-primary-soft)]/20 border-[var(--color-primary-soft)]/40 text-[var(--color-primary-soft)] scale-110" : "bg-white/5 border-white/5 text-white/10 group-hover:text-[var(--color-primary-soft)] group-hover:bg-[var(--color-primary-soft)]/10 group-hover:border-[var(--color-primary-soft)]/20 group-hover:scale-105"
         )}>
          <UploadCloud className="w-10 h-10" strokeWidth={1.5} />
         </div>

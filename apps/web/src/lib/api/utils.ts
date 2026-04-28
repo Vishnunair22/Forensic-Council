@@ -31,7 +31,7 @@ export function getWSBase(): string {
   if (typeof window === "undefined") {
     return "ws://backend:8000";
   }
-  
+
   if (RAW_API_BASE) {
     try {
       const url = new URL(RAW_API_BASE);
@@ -40,7 +40,7 @@ export function getWSBase(): string {
       // Fallback to window.location.host
     }
   }
-  
+
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${protocol}//${window.location.host}`;
 }

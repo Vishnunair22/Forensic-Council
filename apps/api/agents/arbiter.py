@@ -467,8 +467,16 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             # Limited to MAX_CHALLENGE_ATTEMPTS to prevent resource exhaustion.
             if self.agent_factory is not None:
                 try:
-                    conf_a = fa.get("raw_confidence_score") or fa.get("confidence_raw") or DEFAULT_CONFIDENCE_FALLBACK
-                    conf_b = fb.get("raw_confidence_score") or fb.get("confidence_raw") or DEFAULT_CONFIDENCE_FALLBACK
+                    conf_a = (
+                        fa.get("raw_confidence_score")
+                        or fa.get("confidence_raw")
+                        or DEFAULT_CONFIDENCE_FALLBACK
+                    )
+                    conf_b = (
+                        fb.get("raw_confidence_score")
+                        or fb.get("confidence_raw")
+                        or DEFAULT_CONFIDENCE_FALLBACK
+                    )
                     challenged_id = agent_a_id if conf_a <= conf_b else agent_b_id
                     contradicting = fb if challenged_id == agent_a_id else fa
 

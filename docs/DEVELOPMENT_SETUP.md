@@ -107,6 +107,3 @@ This is normal for local development. Agents 1, 3, 5 will use local fallback ana
 For optimal forensic precision, use the following in your `.env`:
 - `LLM_MODEL=llama-3.3-70b-versatile` (Groq)
 - `GEMINI_MODEL=gemini-2.5-flash` (Google AI Studio)
-
-
-

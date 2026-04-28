@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import { 
-  History as HistoryIcon, 
-  X, 
+import {
+  History as HistoryIcon,
+  X,
   ArrowRight
 } from "lucide-react";
 import clsx from "clsx";
@@ -42,7 +42,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
     <div className="w-full max-w-5xl mx-auto pb-32">
       <div className="horizon-card p-1 rounded-3xl overflow-hidden">
         <div className="bg-[#020617] rounded-[inherit]">
-          
+
           {/* --- Header --- */}
           <div className="flex flex-col md:flex-row items-center justify-between px-10 py-10 border-b border-white/5 gap-6">
             <div className="flex flex-col gap-2">
@@ -54,7 +54,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                  Forensic_Registry // SECURE_STORAGE_V2
                </p>
             </div>
-            
+
             <div className="flex items-center gap-6">
               {history.length > 0 && (
                 <button
@@ -64,8 +64,8 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                   Clear Archive
                 </button>
               )}
-              <button 
-                onClick={onDismiss} 
+              <button
+                onClick={onDismiss}
                 className="text-[10px] font-mono font-bold text-white/40 hover:text-primary tracking-widest uppercase transition-colors"
               >
                 Back To Analysis
@@ -78,7 +78,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
             {history.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-32 gap-6">
                 <div className="relative w-24 h-24 flex items-center justify-center">
-                  <motion.div 
+                  <motion.div
                     animate={{ rotate: 360 }}
                     transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
                     className="absolute inset-0 rounded-full border border-white/5 border-dashed"
@@ -104,10 +104,10 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                     className="group relative horizon-card p-6 rounded-2xl cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all"
                   >
                     <div className="flex flex-col md:flex-row gap-6 items-center">
-                      
+
                       {/* Aperture Preview */}
                       <div className="relative w-16 h-16 shrink-0 flex items-center justify-center">
-                        <motion.div 
+                        <motion.div
                           animate={{ rotate: 360 }}
                           transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
                           className="absolute inset-0 rounded-full border border-primary/10 border-dashed"
@@ -121,7 +121,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                           />
                         </div>
                       </div>
-                      
+
                       <div className="flex-1 min-w-0">
                          <div className="flex items-center gap-3 mb-2">
                             <span className="text-[9px] font-mono font-bold text-primary/40 tracking-widest">SESSION_{item.sessionId.slice(-6)}</span>

@@ -55,9 +55,9 @@ The Forensic Council system uses persistent Docker volumes to cache ML models ac
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Total Download Size**: ~1.2 GB (first run only)  
-**Download Time**: 5-10 minutes on residential internet  
-**API Startup**: ~30 seconds (parallel with download)  
+**Total Download Size**: ~1.2 GB (first run only)
+**Download Time**: 5-10 minutes on residential internet
+**API Startup**: ~30 seconds (parallel with download)
 **First Investigation**: 30-60 seconds cold start (models loading into memory)
 
 ## Subsequent Runs Flow
@@ -79,7 +79,7 @@ The Forensic Council system uses persistent Docker volumes to cache ML models ac
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Startup Time**: 30-60 seconds (warm-up)  
+**Startup Time**: 30-60 seconds (warm-up)
 **First Investigation**: <5 seconds (models in memory)
 
 ## Monitoring
@@ -210,4 +210,3 @@ docker compose restart backend
 2. **Monitor warm-up status**: Check `/api/v1/health/ml-tools` before accepting traffic
 3. **Don't clear cache volumes**: `docker volume rm` will force re-download
 4. **Use SKIP_MODEL_DOWNLOAD=1**: For testing without model downloads
-

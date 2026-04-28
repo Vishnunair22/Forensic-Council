@@ -73,13 +73,14 @@ async def check_investigation_rate_limit(user_id: str) -> None:
             return
     except HTTPException:
         raise
-    except Exception:
-        if is_production:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Rate limiting service unavailable. Please try again later.",
-                headers={"Retry-After": "30"},
-            )
+    except Exception as e:
+        logger.warning("Redis unavailable for rate limiting - failing open", error=str(e))
+        try:
+            from api.routes.metrics import increment_rate_limit_redis_bypasses
+
+            increment_rate_limit_redis_bypasses()
+        except Exception:
+            pass
 
     # ── In-memory fallback (development only) ────────────────────────────────
     cutoff = now - _USER_RATE_WINDOW_SECS
@@ -169,14 +170,14 @@ async def check_daily_cost_quota(user_id: str, user_role: str = "investigator") 
             return
     except HTTPException:
         raise
-    except Exception:
-        # Issue 8.2: Fail CLOSED in production when Redis is unavailable
-        if is_production:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Cost quota service unavailable. Please try again later.",
-                headers={"Retry-After": "30"},
-            )
+    except Exception as e:
+        logger.warning("Redis unavailable for cost quota - failing open", error=str(e))
+        try:
+            from api.routes.metrics import increment_rate_limit_redis_bypasses
+
+            increment_rate_limit_redis_bypasses()
+        except Exception:
+            pass
 
     # ── In-memory fallback ────────────────────────────────────────────────────
     now = time.time()

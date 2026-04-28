@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
+import { usePathname } from "next/navigation";
 
 interface PageTransitionProps {
   children: React.ReactNode;
@@ -17,16 +18,18 @@ export function PageTransition({
   className = "",
   mode = "wait"
 }: PageTransitionProps) {
+  const pathname = usePathname();
+
   return (
     <AnimatePresence mode={mode}>
       <motion.div
-        key={typeof children === 'string' ? children : undefined}
+        key={pathname}
         className={className}
         initial={{ opacity: 0, scale: 0.995, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.995, y: -8 }}
-        transition={{ 
-          duration: 0.45, 
+        transition={{
+          duration: 0.45,
           ease: [0.16, 1, 0.3, 1], // Custom cubic-bezier for a "fluid but snappy" feel
           opacity: { duration: 0.3 }
         }}
@@ -79,9 +82,9 @@ export function StaggerChild({
           opacity: 1,
           y: 0,
           scale: 1,
-          transition: { 
-            duration: 0.4, 
-            ease: [0.22, 1, 0.36, 1] 
+          transition: {
+            duration: 0.4,
+            ease: [0.22, 1, 0.36, 1]
           },
         },
       }}

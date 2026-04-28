@@ -67,7 +67,7 @@ async function proxyRequest(
   const search = request.nextUrl.search || "";
   const pathname = `/api/v1/${path.join("/")}${search}`;
   const requestHeaders = copyRequestHeaders(request);
-  
+
   // Is this an upload or a heavy forensic operation?
   const isHeavyPath =
     path.includes("upload") ||

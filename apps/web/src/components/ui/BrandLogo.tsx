@@ -33,11 +33,11 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
       >
 
         {/* Glow effect on hover */}
-        <motion.div 
+        <motion.div
           animate={{ opacity: isHovered ? 0.3 : 0.1 }}
-          className="absolute inset-0 bg-[var(--color-success-light)] blur-xl" 
+          className="absolute inset-0 bg-[var(--color-success-light)] blur-xl"
         />
-        
+
         {/* HUD Elements */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
           <div className="w-[80%] h-[1px] bg-[var(--color-success-light)]" />

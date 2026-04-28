@@ -24,9 +24,9 @@ from core.config import Settings, get_settings
 from core.structured_logging import get_logger
 
 # Re-export so existing imports keep working
-from orchestration.agent_factory import AgentFactory, AgentLoopResult, _serialize_react_chain
-from orchestration.signal_bus import SignalBus
+from orchestration.agent_factory import AgentFactory, AgentLoopResult
 from orchestration.pipeline_registry import register_pipeline, unregister_pipeline
+from orchestration.signal_bus import SignalBus
 
 logger = get_logger(__name__)
 
@@ -112,7 +112,10 @@ class ForensicCouncilPipeline:
                     session_id=str(session_id),
                     agent_id=None,
                     message="Initializing forensic core...",
-                    data={"status": "initiating", "thinking": "Establishing secure neural bridge..."},
+                    data={
+                        "status": "initiating",
+                        "thinking": "Establishing secure neural bridge...",
+                    },
                 ),
             )
         except Exception as _e:
@@ -128,7 +131,10 @@ class ForensicCouncilPipeline:
                             session_id=str(session_id),
                             agent_id=None,
                             message="Establishing episodic link...",
-                            data={"status": "initiating", "thinking": "Syncing with Qdrant vector space..."},
+                            data={
+                                "status": "initiating",
+                                "thinking": "Syncing with Qdrant vector space...",
+                            },
                         ),
                     )
                 except Exception as _e:
@@ -151,7 +157,10 @@ class ForensicCouncilPipeline:
                             session_id=str(session_id),
                             agent_id=None,
                             message="Connecting to custody ledger...",
-                            data={"status": "initiating", "thinking": "Securing Postgres persistence layer..."},
+                            data={
+                                "status": "initiating",
+                                "thinking": "Securing Postgres persistence layer...",
+                            },
                         ),
                     )
                 except Exception as _e:
@@ -245,7 +254,9 @@ class ForensicCouncilPipeline:
 
             self.custody_logger.log_entry = broadcast_log_entry
         except ImportError as _e:
-            logger.warning("FastAPI schemas unavailable; custody broadcast patch skipped", error=str(_e))
+            logger.warning(
+                "FastAPI schemas unavailable; custody broadcast patch skipped", error=str(_e)
+            )
 
         from core.persistence.evidence_store import EvidenceStore
         from core.persistence.storage import LocalStorageBackend
@@ -386,13 +397,11 @@ class ForensicCouncilPipeline:
         session_id: UUID,
     ) -> None:
         """Core investigation orchestration."""
-        from agents.arbiter import ForensicReport
         from core.agent_registry import get_agent_registry
         from core.custody_logger import EntryType
-        from core.evidence import EvidenceArtifact
         from core.observability import get_tracer
-        from orchestration.pipeline_phases import run_agents_concurrent
         from orchestration.pipeline_enrichment import enrich_report
+        from orchestration.pipeline_phases import run_agents_concurrent
 
         _tracer = get_tracer("forensic-council.pipeline")
         from core.agents import AgentID
@@ -496,8 +505,13 @@ class ForensicCouncilPipeline:
         report = await self._run_deliberation(arbiter_results, case_id, session_id)
 
         try:
-            await enrich_report(pipeline=self, report=report, session_id=session_id,
-                                artifact=evidence_artifact, agent_results=agent_results)
+            await enrich_report(
+                pipeline=self,
+                report=report,
+                session_id=session_id,
+                artifact=evidence_artifact,
+                agent_results=agent_results,
+            )
         except Exception as enrich_err:
             logger.warning(
                 "Report enrichment failed — proceeding with unsigned base report",
@@ -512,8 +526,6 @@ class ForensicCouncilPipeline:
         if self._degradation_flags:
             self._final_report.degradation_flags = self._degradation_flags
 
-        from orchestration.session_manager import SessionManager
-
         await self.session_manager.set_final_report(
             session_id=session_id,
             report_id=self._final_report.report_id,
@@ -521,6 +533,7 @@ class ForensicCouncilPipeline:
 
         try:
             from api.routes._session_state import set_final_report as cache_report
+
             await cache_report(str(session_id), self._final_report)
         except Exception as cache_err:
             logger.warning("Failed to cache report in Redis", error=str(cache_err))
@@ -541,6 +554,7 @@ class ForensicCouncilPipeline:
         try:
             from api.routes._session_state import broadcast_update
             from api.schemas import BriefUpdate
+
             await broadcast_update(
                 str(session_id),
                 BriefUpdate(

@@ -26,31 +26,31 @@ describe('FileUploadSection', () => {
     onUpload: mockOnUpload,
     onClear: mockOnClear,
   };
-  
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   it('renders upload area with correct ARIA attributes', () => {
     render(<FileUploadSection {...defaultProps} />);
-    
+
     const dropZone = screen.getByRole('button', { name: /upload evidence file/i });
     expect(dropZone).toHaveAttribute('tabIndex', '0');
   });
 
   it('accepts valid image files', async () => {
     render(<FileUploadSection {...defaultProps} />);
-    
-    const file = new File(['fake image data'], 'evidence.jpg', { 
-      type: 'image/jpeg' 
+
+    const file = new File(['fake image data'], 'evidence.jpg', {
+      type: 'image/jpeg'
     });
-    
+
     // We need to find the input. It's sr-only but should be there.
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     expect(input).toBeTruthy();
-    
+
     fireEvent.change(input, { target: { files: [file] } });
-    
+
     await waitFor(() => {
       expect(mockOnFileSelect).toHaveBeenCalledWith(file);
     });
@@ -58,10 +58,10 @@ describe('FileUploadSection', () => {
 
   it('supports keyboard navigation for accessibility', () => {
     render(<FileUploadSection {...defaultProps} />);
-    
+
     const dropZone = screen.getByRole('button', { name: /upload evidence file/i });
     dropZone.focus();
-    
+
     // Enter key should trigger click which in turn triggers file input
     fireEvent.keyDown(dropZone, { key: 'Enter' });
     // Since we are mocking, we just check if it was focused/interacted with

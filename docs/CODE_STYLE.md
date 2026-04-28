@@ -10,26 +10,26 @@ All functions, classes, and modules must have docstrings.
 def process_image(image_path: str, threshold: float = 0.5) -> Dict[str, Any]:
     """
     Process an image for forensic analysis.
-    
+
     This function reads an image file, applies forensic ML tools,
     and returns analysis results with confidence scores.
-    
+
     Args:
         image_path: Path to image file on disk
         threshold: Confidence threshold (0.0-1.0) for flagging anomalies
-        
+
     Returns:
         Dictionary with keys:
             - "status": "success" or "error"
             - "findings": List of forensic findings
             - "confidence": Overall confidence 0-1
             - "error": Error message if status="error"
-            
+
     Raises:
         FileNotFoundError: If image_path doesn't exist
         ValueError: If threshold not in range 0.0-1.0
         ProcessingError: If ML analysis fails
-        
+
     Example:
         >>> result = process_image("/path/to/image.jpg", threshold=0.75)
         >>> if result["status"] == "success":
@@ -75,4 +75,3 @@ footer
 ```
 
 Types: feat, fix, docs, style, refactor, test, chore
-

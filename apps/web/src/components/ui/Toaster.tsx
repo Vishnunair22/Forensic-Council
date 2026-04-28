@@ -76,7 +76,7 @@ function ToastCard({
       aria-live="assertive"
     >
       <div className={clsx("absolute left-0 top-0 bottom-0 w-1", style.stripe)} />
-      
+
       <div className={clsx("w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-surface-1 border border-border-subtle shadow-inner", style.text)}>
         <Icon className="w-4 h-4" />
       </div>

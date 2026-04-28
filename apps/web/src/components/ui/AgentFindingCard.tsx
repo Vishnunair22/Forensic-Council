@@ -143,10 +143,10 @@ function SectionGroup({ section }: { section: Section }) {
   const FlagIcon = flagCfg.icon;
 
   return (
-    <motion.div 
+    <motion.div
       layout
       className={clsx(
-        "rounded-[1.25rem] border overflow-hidden transition-all duration-500 relative group premium-card", 
+        "rounded-[1.25rem] border overflow-hidden transition-all duration-500 relative group premium-card",
         open && "bg-surface-3",
         !open && flagCfg.bg,
         flagCfg.border

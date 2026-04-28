@@ -262,11 +262,17 @@ async def _snapshot() -> dict:
     )
 
     # Pipeline phase durations
-    phase_initial_avg = _local.get("phase_initial_sum", 0.0) / max(_local.get("phase_initial_count", 0), 1)
+    phase_initial_avg = _local.get("phase_initial_sum", 0.0) / max(
+        _local.get("phase_initial_count", 0), 1
+    )
     phase_hitl_avg = _local.get("phase_hitl_sum", 0.0) / max(_local.get("phase_hitl_count", 0), 1)
     phase_deep_avg = _local.get("phase_deep_sum", 0.0) / max(_local.get("phase_deep_count", 0), 1)
-    phase_arbiter_avg = _local.get("phase_arbiter_sum", 0.0) / max(_local.get("phase_arbiter_count", 0), 1)
-    phase_enrich_avg = _local.get("phase_enrich_sum", 0.0) / max(_local.get("phase_enrich_count", 0), 1)
+    phase_arbiter_avg = _local.get("phase_arbiter_sum", 0.0) / max(
+        _local.get("phase_arbiter_count", 0), 1
+    )
+    phase_enrich_avg = _local.get("phase_enrich_sum", 0.0) / max(
+        _local.get("phase_enrich_count", 0), 1
+    )
     phase_sign_avg = _local.get("phase_sign_sum", 0.0) / max(_local.get("phase_sign_count", 0), 1)
 
     avg_duration = duration_sum / duration_count if duration_count else 0.0

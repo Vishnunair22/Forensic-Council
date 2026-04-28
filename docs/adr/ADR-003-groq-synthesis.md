@@ -27,4 +27,3 @@ Use Groq with Llama 3.3 70B for all post-analysis synthesis tasks.
 - Free tier is sufficient for development and low-volume production.
 - Template fallbacks are maintained for when Groq is unreachable (3s health check before parallel calls).
 - The `llm_provider` config allows switching to OpenAI or Anthropic without code changes.
-

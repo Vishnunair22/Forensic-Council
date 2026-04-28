@@ -24,10 +24,11 @@ async def transactional_db(request):
     """
     Fixture that wraps each integration test in a database transaction
     and rolls it back afterward to ensure test isolation.
-    
+
     Only works with a running Postgres. Mark your test with @pytest.mark.requires_docker.
     """
     import asyncpg
+
     from core.persistence.postgres_client import get_postgres_client
 
     try:

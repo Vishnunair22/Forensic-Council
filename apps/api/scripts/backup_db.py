@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -18,27 +18,32 @@ def run_backup() -> int:
     port = os.getenv("POSTGRES_PORT", "5432")
     user = os.getenv("POSTGRES_USER", "forensic_user")
     db = os.getenv("POSTGRES_DB", "forensic_council")
-    
+
     backup_dir = Path("/app/storage/backups")
     backup_dir.mkdir(parents=True, exist_ok=True)
-    
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     filename = f"forensic_{db}_{timestamp}.sql.gz"
     backup_path = backup_dir / filename
-    
+
     cmd = [
         "pg_dump",
-        "-h", host,
-        "-p", port,
-        "-U", user,
-        "-d", db,
+        "-h",
+        host,
+        "-p",
+        port,
+        "-U",
+        user,
+        "-d",
+        db,
         "-Fc",  # custom format for compression
-        "-f", str(backup_path),
+        "-f",
+        str(backup_path),
     ]
-    
+
     env = os.environ.copy()
     env["PGPASSWORD"] = os.getenv("POSTGRES_PASSWORD", "")
-    
+
     try:
         result = subprocess.run(
             cmd,

@@ -88,4 +88,3 @@ if [ "$AGE_DAYS" -gt 365 ]; then
   # Send alert to your notification system
 fi
 ```
-

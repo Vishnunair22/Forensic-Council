@@ -3,12 +3,12 @@
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useSimulation } from "./useSimulation";
-import { 
-  startInvestigation, 
-  submitHITLDecision, 
-  autoLoginAsInvestigator, 
-  DuplicateInvestigationError, 
-  getArbiterStatus, 
+import {
+  startInvestigation,
+  submitHITLDecision,
+  autoLoginAsInvestigator,
+  DuplicateInvestigationError,
+  getArbiterStatus,
   getReport,
   getAuthToken,
   type HITLCheckpoint,
@@ -54,7 +54,7 @@ async function waitForFinalReport(
         getArbiterStatus(sessionId),
         INVESTIGATION_REQUEST_TIMEOUT_MS,
       ) as ArbiterStatusResponse;
-      
+
       if (st.message) onLiveMessage(st.message);
       if (st.status === "error") {
         throw new Error(st.message || "Council synthesis failed.");
@@ -521,9 +521,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const expectedCompletedCount = validCompletedAgents.filter((c: AgentUpdate) =>
     expectedAgentIds.has(c.agent_id)
   ).length;
-  
+
   const awaitingDecision = status === "awaiting_decision";
-  const allAgentsDone = phase === "deep" 
+  const allAgentsDone = phase === "deep"
     ? (status === "complete" || expectedCompletedCount >= expectedAgentIds.size)
     : expectedCompletedCount >= expectedAgentIds.size;
 

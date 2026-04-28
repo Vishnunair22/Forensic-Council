@@ -12,7 +12,7 @@ Mocks:
 """
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -117,7 +117,6 @@ class TestPipelineArtifactHandling:
 
     def test_pipeline_raises_on_missing_evidence_file(self):
         """Verify pipeline raises FileNotFoundError for missing evidence."""
-        import os
         from orchestration.pipeline import ForensicCouncilPipeline
 
         pipeline = ForensicCouncilPipeline()

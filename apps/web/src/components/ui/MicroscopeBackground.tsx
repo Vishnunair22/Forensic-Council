@@ -4,13 +4,13 @@ import { motion, useScroll, useTransform, useSpring } from "framer-motion";
 import { useEffect, useState, useRef } from "react";
 
 /**
- * MicroscopeBackground: A high-fidelity animated background featuring a 
+ * MicroscopeBackground: A high-fidelity animated background featuring a
  * "Blue Horizon" lens with chromatic aberration, magnetic lag, and metadata ticker.
  */
 export function MicroscopeBackground() {
   const { scrollYProgress } = useScroll();
   const containerRef = useRef<HTMLDivElement>(null);
-  
+
   // Magnetic Lag: Smooth out the scroll tracking with spring physics
   const smoothYProgress = useSpring(scrollYProgress, {
     stiffness: 40,
@@ -20,20 +20,20 @@ export function MicroscopeBackground() {
 
   const lensY = useTransform(smoothYProgress, [0, 1], ["15%", "85%"]);
   const lensScale = useTransform(smoothYProgress, [0, 0.5, 1], [1, 1.1, 1]);
-  
+
   return (
     <div ref={containerRef} className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-[#020617]">
       {/* --- Ambient Background Grid --- */}
       <div className="absolute inset-0 bg-grid-small opacity-[0.08]" />
-      
+
       {/* --- Scanning Laser (The "Beam") --- */}
-      <motion.div 
+      <motion.div
         style={{ top: lensY }}
         className="absolute left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-primary/60 to-transparent z-10 shadow-[0_0_20px_rgba(0,255,255,0.5)]"
       >
         <div className="absolute top-0 left-0 right-0 h-[100px] bg-gradient-to-b from-primary/10 to-transparent -translate-y-full" />
       </motion.div>
-      
+
       {/* --- Digital Evidence Nodes --- */}
       <EvidenceNodes progress={smoothYProgress} />
 
@@ -54,18 +54,18 @@ export function MicroscopeBackground() {
           <div className="absolute inset-0 rounded-full border-t-2 border-primary/30 blur-[2px]" />
           <div className="absolute inset-0 rounded-full border-b-2 border-danger/20 blur-[2px]" />
         </div>
-        
+
         {/* Metadata Ticker (Side of Lens) */}
         <MetadataTicker />
-        
+
         {/* Inner Lens HUD Details */}
         <div className="absolute inset-10 rounded-full border border-primary/10 flex items-center justify-center overflow-hidden">
           {/* Crosshairs */}
           <div className="w-full h-[0.5px] bg-primary/40" />
           <div className="absolute w-[0.5px] h-full bg-primary/40" />
-          
+
           {/* Tactical Rotation Marks */}
-          <motion.div 
+          <motion.div
             animate={{ rotate: 360 }}
             transition={{ duration: 60, repeat: Infinity, ease: "linear" }}
             className="absolute inset-0"
@@ -74,23 +74,23 @@ export function MicroscopeBackground() {
               <div
                 key={i}
                 className="absolute w-4 h-[1px] bg-primary/30"
-                style={{ 
-                  left: "50%", 
-                  top: "50%", 
-                  transform: `rotate(${i * 15}deg) translateX(${typeof window !== 'undefined' && window.innerWidth < 768 ? '160px' : '280px'})` 
+                style={{
+                  left: "50%",
+                  top: "50%",
+                  transform: `rotate(${i * 15}deg) translateX(${typeof window !== 'undefined' && window.innerWidth < 768 ? '160px' : '280px'})`
                 }}
               />
             ))}
           </motion.div>
-          
+
           {/* Focusing Grid */}
-          <div className="absolute inset-0 opacity-[0.15]" 
+          <div className="absolute inset-0 opacity-[0.15]"
                style={{ backgroundImage: 'radial-gradient(var(--color-primary) 0.5px, transparent 0.5px)', backgroundSize: '15px 15px' }} />
         </div>
 
         {/* Central Lock-on Reticle */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-           <motion.div 
+           <motion.div
              animate={{ scale: [1, 1.2, 1], opacity: [0.4, 0.8, 0.4] }}
              transition={{ duration: 2, repeat: Infinity }}
              className="w-6 h-6 border-2 border-primary rounded-sm flex items-center justify-center"
@@ -102,7 +102,7 @@ export function MicroscopeBackground() {
 
       {/* --- Procedural Noise/Grain --- */}
       <div className="absolute inset-0 opacity-[0.03] pointer-events-none mix-blend-overlay bg-noise" />
-      
+
       {/* --- Vignette (Focus Effect) --- */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(2,6,23,0.8)_100%)]" />
     </div>
@@ -111,11 +111,11 @@ export function MicroscopeBackground() {
 
 function MetadataTicker() {
   const [codes, setCodes] = useState<string[]>([]);
-  
+
   useEffect(() => {
     const generateCode = () => `0x${Math.random().toString(16).slice(2, 10).toUpperCase()}`;
     setCodes(Array.from({ length: 8 }).map(generateCode));
-    
+
     const interval = setInterval(() => {
       setCodes(prev => [generateCode(), ...prev.slice(0, 7)]);
     }, 2000);
@@ -125,7 +125,7 @@ function MetadataTicker() {
   return (
     <div className="absolute -right-24 top-1/2 -translate-y-1/2 hidden lg:flex flex-col gap-2 font-mono text-[10px] text-primary/40">
       {codes.map((code, i) => (
-        <motion.div 
+        <motion.div
           key={code + i}
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1 - i * 0.12, x: 0 }}
@@ -168,7 +168,7 @@ type EvidenceNodeData = { id: number; x: number; y: number; label: string };
 function EvidenceNode({ node, progress }: { node: EvidenceNodeData; progress: ReturnType<typeof useSpring> }) {
   const yShift = useTransform(progress, [0, 1], [0, -150]);
   const opacity = useTransform(progress, [node.y / 100 - 0.1, node.y / 100, node.y / 100 + 0.1], [0.2, 1, 0.2]);
-  
+
   return (
     <motion.div
       style={{

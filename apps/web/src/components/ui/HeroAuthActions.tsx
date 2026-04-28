@@ -132,7 +132,7 @@ export function HeroAuthActions() {
         )}
       </AnimatePresence>
 
-      <ForensicErrorModal 
+      <ForensicErrorModal
         isVisible={!!authError}
         title="Protocol Initialization Failure"
         message={authError || "Could not establish secure investigator session."}

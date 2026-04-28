@@ -49,16 +49,20 @@ from core.structured_logging import get_logger
 logger = get_logger(__name__)
 _tracer = get_tracer("forensic-council.gemini")
 
+
 # Lazy import to avoid circular dependency at module load time
 def _record_gemini_call(model: str, tokens_in: int = 0, tokens_out: int = 0) -> None:
     """Fire-and-forget quota recording — does not block the analysis pipeline."""
     try:
         import asyncio
+
         from core.quota_meter import record_api_call
+
         loop = asyncio.get_running_loop()
         loop.create_task(record_api_call("gemini", model, tokens_in, tokens_out))
     except Exception:
         pass
+
 
 _GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 _MAX_RETRIES = 5
@@ -249,7 +253,7 @@ class GeminiVisionClient:
                 seen.add(_m)
                 _chain.append(_m)
         self.fallback_chain: list[str] = _chain
-        self.timeout: float = getattr(config, "gemini_timeout", 40.0)
+        self.timeout: float = min(getattr(config, "gemini_timeout", 25.0), 25.0)
 
         # Check if key is missing or is the default placeholder from .env.example
         is_placeholder = self.api_key and "your_gemini_key" in self.api_key
@@ -367,8 +371,7 @@ class GeminiVisionClient:
             return finding
 
         prompt = (
-            _SAFETY_PREAMBLE
-            + "You are a forensic file analyst. Examine this file and provide:\n"
+            _SAFETY_PREAMBLE + "You are a forensic file analyst. Examine this file and provide:\n"
             "1. CONTENT_TYPE: What type of content is this? (photograph, screenshot, "
             "scanned document, AI-generated image, video frame, etc.)\n"
             "2. SCENE_DESCRIPTION: Describe what you see in 2-3 sentences.\n"

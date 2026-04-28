@@ -45,12 +45,8 @@ async def enrich_report(
     )
 
     report.case_linking_flags = results[0] if not isinstance(results[0], BaseException) else []
-    report.chain_of_custody_log = (
-        results[1] if not isinstance(results[1], BaseException) else []
-    )
-    report.evidence_version_trees = (
-        results[2] if not isinstance(results[2], BaseException) else []
-    )
+    report.chain_of_custody_log = results[1] if not isinstance(results[1], BaseException) else []
+    report.evidence_version_trees = results[2] if not isinstance(results[2], BaseException) else []
 
     if any(isinstance(r, (Exception, asyncio.TimeoutError)) for r in results):
         logger.warning("One or more enrichment tasks failed or timed out")
@@ -79,8 +75,7 @@ def _detect_gemini_degradation(pipeline: Any, report: Any) -> None:
         )
     elif all(_is_gemini_error(f) for f in gemini_findings):
         is_refusal = any(
-            "safety" in str(f.get("metadata", {}).get("error", "")).lower()
-            for f in gemini_findings
+            "safety" in str(f.get("metadata", {}).get("error", "")).lower() for f in gemini_findings
         )
         if is_refusal:
             pipeline._degradation_flags.append(
@@ -113,9 +108,7 @@ async def _verify_custody_integrity(pipeline: Any, session_id: UUID) -> None:
         return
 
     try:
-        chain_report = await asyncio.wait_for(
-            custody_logger.verify_chain(session_id), timeout=15.0
-        )
+        chain_report = await asyncio.wait_for(custody_logger.verify_chain(session_id), timeout=15.0)
         if not chain_report.valid:
             pipeline._degradation_flags.append(
                 f"CRITICAL: Custody integrity FAILED (entry {chain_report.broken_at}). "

@@ -14,4 +14,3 @@ Index of all architectural decisions for the Forensic Council project.
 1. Copy `ADR-000-template.md` to `ADR-NNN-short-title.md`
 2. Fill in Status (Proposed / Accepted / Deprecated / Superseded)
 3. Link from this index
-

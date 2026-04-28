@@ -156,9 +156,3 @@ Update `agent-context/rules.md` when:
 - Don't force-push to `main`
 - Don't commit `.env` files, API keys, or any credentials
 - Run `pytest tests/ --ignore=tests/connectivity -v` before opening a PR
-
-
-
-
-
-

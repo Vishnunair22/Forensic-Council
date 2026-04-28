@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getMasterVolume, getMuted, setMasterVolume, setMuted } from "./useSound";
+import { getMuted, setMasterVolume, setMuted } from "./useSound";
 
 const STORAGE_KEY = "forensic_sound_muted";
 const DEFAULT_VOLUME = 0.3;

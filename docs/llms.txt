@@ -38,4 +38,3 @@ docker compose -f infra/docker-compose.yml --env-file .env up --build
 ```bash
 docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up --build
 ```
-

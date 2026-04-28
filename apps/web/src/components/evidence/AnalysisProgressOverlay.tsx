@@ -10,8 +10,8 @@ interface AnalysisProgressOverlayProps {
   message?: string;
 }
 
-export function AnalysisProgressOverlay({ 
-  isVisible, 
+export function AnalysisProgressOverlay({
+  isVisible,
   title = "Initializing",
   message = "Please wait...",
 }: AnalysisProgressOverlayProps) {
@@ -33,6 +33,8 @@ export function AnalysisProgressOverlay({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
+          role="alert"
+          aria-busy="true"
           className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-md"
         >
           <div className="max-w-md w-full px-6 flex flex-col items-center text-center">
@@ -43,11 +45,11 @@ export function AnalysisProgressOverlay({
               className="flex flex-col items-center"
             >
               <Loader2 className="w-10 h-10 text-primary animate-spin mb-6" />
-              
+
               <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">
                 {title}
               </h2>
-              
+
               <p className="text-zinc-400 text-sm font-medium">
                 {message}
               </p>

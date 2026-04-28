@@ -440,7 +440,6 @@ class TestKeyRotation:
 
     @pytest.mark.asyncio
     async def test_rotate_produces_new_key(self):
-
         ks = _fresh_keystore()
         # Pre-load Agent1 deterministically
         old_kp = ks.get_or_create("Agent1")

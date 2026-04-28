@@ -55,8 +55,8 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 backdrop-blur-xl p-4"
       onClick={onClose}
     >
-      <div 
-        className="relative w-full max-w-xl" 
+      <div
+        className="relative w-full max-w-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <motion.div
@@ -68,10 +68,11 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
         >
           {/* Beveled Interior */}
           <div className="bg-[#020617] rounded-[inherit] p-10 flex flex-col items-center text-center">
-            
-            <button 
+
+            <button
               onClick={onClose}
               className="absolute top-6 right-6 text-white/20 hover:text-primary transition-colors"
+              aria-label="Close upload dialog"
             >
               <X className="w-5 h-5" />
             </button>
@@ -84,14 +85,14 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               className={`w-full border-2 border-dashed rounded-2xl p-16 transition-all duration-500 cursor-pointer group flex flex-col items-center justify-center gap-6 relative overflow-hidden ${
-                isDragging 
-                  ? "border-primary bg-primary/5 shadow-[0_0_40px_rgba(0,255,255,0.1)]" 
+                isDragging
+                  ? "border-primary bg-primary/5 shadow-[0_0_40px_rgba(0,255,255,0.1)]"
                   : "border-white/5 hover:border-primary/40 hover:bg-white/[0.02]"
               }`}
             >
               {/* Aperture Animation around icon */}
               <div className="relative flex h-24 w-24 items-center justify-center">
-                <motion.div 
+                <motion.div
                   animate={{ rotate: 360 }}
                   transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
                   className="absolute inset-0 rounded-full border border-primary/20 border-dashed"
@@ -113,9 +114,9 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
               <div className="absolute bottom-4 right-4 text-[9px] font-mono text-primary/20 tracking-widest">
                 WAITING_FOR_DATA
               </div>
-              
+
               <input
-                type="file" 
+                type="file"
                 aria-label="Upload evidence file"
                 className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                 accept={Array.from(ALLOWED_MIME_TYPES).join(",")}

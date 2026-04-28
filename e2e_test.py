@@ -10,7 +10,6 @@ import time
 import urllib.request
 import urllib.error
 import urllib.parse
-import http.cookiejar
 
 BASE = "http://localhost:8000"
 ADMIN_USER = "admin"
@@ -21,23 +20,39 @@ FAIL_S = "\033[91m[FAIL]\033[0m"
 INFO_S = "\033[94m[INFO]\033[0m"
 WARN_S = "\033[93m[WARN]\033[0m"
 
+
 def step(n, msg):
     print(f"\n\033[1m-- Step {n}: {msg}\033[0m")
 
-def ok(msg):    print(f"  {PASS_S} {msg}")
-def fail(msg):  print(f"  {FAIL_S} {msg}"); sys.exit(1)
-def info(msg):  print(f"  {INFO_S} {msg}")
-def warn(msg):  print(f"  {WARN_S} {msg}")
+
+def ok(msg):
+    print(f"  {PASS_S} {msg}")
+
+
+def fail(msg):
+    print(f"  {FAIL_S} {msg}")
+    sys.exit(1)
+
+
+def info(msg):
+    print(f"  {INFO_S} {msg}")
+
+
+def warn(msg):
+    print(f"  {WARN_S} {msg}")
+
 
 # ─── HTTP helpers ─────────────────────────────────────────────────────────────
 
 csrf_token = None
 jwt_token = None
 
+
 def _make_cookie_header():
     if csrf_token:
         return f"csrf_token={csrf_token}"
     return ""
+
 
 def _base_headers(extra=None):
     h = {}
@@ -50,6 +65,7 @@ def _base_headers(extra=None):
         h.update(extra)
     return h
 
+
 def do_get(path):
     url = BASE + path
     req = urllib.request.Request(url, headers=_base_headers())
@@ -57,23 +73,35 @@ def do_get(path):
         with urllib.request.urlopen(req, timeout=30) as r:
             return r.status, json.loads(r.read())
     except urllib.error.HTTPError as e:
-        try:    return e.code, json.loads(e.read())
-        except: return e.code, {"error": str(e)}
+        try:
+            return e.code, json.loads(e.read())
+        except:
+            return e.code, {"error": str(e)}
     except Exception as e:
         return 0, {"error": str(e)}
+
 
 def do_post_form(path, data):
     url = BASE + path
     body = urllib.parse.urlencode(data).encode()
-    req = urllib.request.Request(url, data=body, method="POST",
-                                 headers={**_base_headers(),
-                                          "Content-Type": "application/x-www-form-urlencoded"})
+    req = urllib.request.Request(
+        url,
+        data=body,
+        method="POST",
+        headers={
+            **_base_headers(),
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+    )
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             return r.status, json.loads(r.read())
     except urllib.error.HTTPError as e:
-        try:    return e.code, json.loads(e.read())
-        except: return e.code, {"error": str(e)}
+        try:
+            return e.code, json.loads(e.read())
+        except:
+            return e.code, {"error": str(e)}
+
 
 def do_post_multipart(path, fields, file_name, file_data, file_ct):
     url = BASE + path
@@ -84,7 +112,9 @@ def do_post_multipart(path, fields, file_name, file_data, file_ct):
         parts.append(f'Content-Disposition: form-data; name="{k}"\r\n\r\n'.encode())
         parts.append(v.encode() + b"\r\n")
     parts.append(b"--" + boundary + b"\r\n")
-    parts.append(f'Content-Disposition: form-data; name="file"; filename="{file_name}"\r\n'.encode())
+    parts.append(
+        f'Content-Disposition: form-data; name="file"; filename="{file_name}"\r\n'.encode()
+    )
     parts.append(f"Content-Type: {file_ct}\r\n\r\n".encode())
     parts.append(file_data + b"\r\n")
     parts.append(b"--" + boundary + b"--\r\n")
@@ -100,8 +130,11 @@ def do_post_multipart(path, fields, file_name, file_data, file_ct):
         with urllib.request.urlopen(req, timeout=60) as r:
             return r.status, json.loads(r.read())
     except urllib.error.HTTPError as e:
-        try:    return e.code, json.loads(e.read())
-        except: return e.code, {"raw": e.read().decode(errors="replace")}
+        try:
+            return e.code, json.loads(e.read())
+        except:
+            return e.code, {"raw": e.read().decode(errors="replace")}
+
 
 # ─── Test Steps ───────────────────────────────────────────────────────────────
 
@@ -117,9 +150,15 @@ else:
 step(2, "Authentication (admin login)")
 # Login is CSRF-exempt, no token needed for this request
 url = BASE + "/api/v1/auth/login"
-body_data = urllib.parse.urlencode({"username": ADMIN_USER, "password": ADMIN_PASS}).encode()
-req = urllib.request.Request(url, data=body_data, method="POST",
-                             headers={"Content-Type": "application/x-www-form-urlencoded"})
+body_data = urllib.parse.urlencode(
+    {"username": ADMIN_USER, "password": ADMIN_PASS}
+).encode()
+req = urllib.request.Request(
+    url,
+    data=body_data,
+    method="POST",
+    headers={"Content-Type": "application/x-www-form-urlencoded"},
+)
 try:
     with urllib.request.urlopen(req, timeout=30) as r:
         login_code = r.status
@@ -131,9 +170,11 @@ except urllib.error.HTTPError as e:
 if login_code == 200 and "access_token" in login_body:
     jwt_token = login_body["access_token"]
     csrf_token = login_body.get("csrf_token")
-    ok(f"Logged in. Token type: {login_body.get('token_type')}, Role: {login_body.get('role')}")
+    ok(
+        f"Logged in. Token type: {login_body.get('token_type')}, Role: {login_body.get('role')}"
+    )
     if csrf_token:
-        ok(f"CSRF token obtained from login response")
+        ok("CSRF token obtained from login response")
     else:
         warn("No csrf_token in login response — will try fetching via GET")
 else:
@@ -157,6 +198,7 @@ else:
 step(4, "Create synthetic test evidence (image)")
 try:
     from PIL import Image, ImageDraw
+
     img = Image.new("RGB", (800, 600), color=(100, 149, 237))
     draw = ImageDraw.Draw(img)
     draw.rectangle([60, 60, 380, 300], fill=(220, 50, 50))
@@ -170,6 +212,7 @@ try:
 except ImportError:
     # Standard test JPEG from bytes
     import base64
+
     # A real 10x10 red JPEG
     TINY_JPEG_B64 = (
         "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8U"
@@ -202,7 +245,7 @@ code, body = do_post_multipart(
 
 if code == 200 and "session_id" in body:
     session_id = body["session_id"]
-    ok(f"Investigation started!")
+    ok("Investigation started!")
     info(f"  session_id   : {session_id}")
     info(f"  case_id      : {body.get('case_id')}")
     info(f"  status       : {body.get('status')}")
@@ -236,7 +279,9 @@ while elapsed < MAX_WAIT:
     msg = str(progress.get("message", progress.get("status_message", "")))
 
     if phase != last_phase or abs(pct - last_pct) >= 5:
-        print(f"  [{elapsed:>4}s] status={status:<18} phase={phase:<32} {pct:>3}%  {msg[:65]}")
+        print(
+            f"  [{elapsed:>4}s] status={status:<18} phase={phase:<32} {pct:>3}%  {msg[:65]}"
+        )
         last_phase = phase
         last_pct = pct
 
@@ -290,8 +335,13 @@ step(9, "Fetch final forensic report")
 code, body = do_get(f"/api/v1/sessions/{session_id}/report")
 if code == 200:
     ok("Report generated!")
-    verdict = body.get("verdict", body.get("overall_verdict", body.get("authenticity_verdict", "n/a")))
-    confidence = body.get("confidence", body.get("overall_confidence", body.get("confidence_score", "n/a")))
+    verdict = body.get(
+        "verdict", body.get("overall_verdict", body.get("authenticity_verdict", "n/a"))
+    )
+    confidence = body.get(
+        "confidence",
+        body.get("overall_confidence", body.get("confidence_score", "n/a")),
+    )
     info(f"  verdict      : {verdict}")
     info(f"  confidence   : {confidence}")
     summary = body.get("executive_summary", body.get("summary", ""))
@@ -308,7 +358,9 @@ else:
 step(10, "List all sessions (admin overview)")
 code, body = do_get("/api/v1/sessions")
 if code == 200:
-    sessions = body if isinstance(body, list) else body.get("sessions", body.get("items", []))
+    sessions = (
+        body if isinstance(body, list) else body.get("sessions", body.get("items", []))
+    )
     ok(f"Sessions visible: {len(sessions)}")
     for s in (sessions or [])[:5]:
         sid = str(s.get("session_id", "?"))[:28]

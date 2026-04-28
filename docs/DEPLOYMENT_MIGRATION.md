@@ -54,7 +54,7 @@ docker secret create jwt_secret_key -
 ### Required Resources
 
 1. **Deployment** - backend and worker with rolling strategy
-2. **Service** - ClusterIP for internal communication  
+2. **Service** - ClusterIP for internal communication
 3. **Ingress** - Caddy or nginx-ingress for external
 4. **ConfigMap** - non-secret config
 5. **Secret** - sensitive data

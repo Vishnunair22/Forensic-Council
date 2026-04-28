@@ -17,6 +17,8 @@ and validated.
 
 from __future__ import annotations
 
+import asyncio
+
 from agents.base_agent import ForensicAgent
 from core.handlers.video import VideoHandlers
 from core.inter_agent_bus import InterAgentCall, InterAgentCallType
@@ -140,6 +142,20 @@ class Agent4Video(ForensicAgent):
         )
 
         return registry
+
+    async def run_deep_investigation(self) -> list[AgentFinding]:
+        """Run the deep analysis pass with a hard timeout for heavy ML."""
+        try:
+            # Frontend expected maximum threshold for deep analysis
+            timeout_limit = min(float(self.config.investigation_timeout), 120.0)
+            return await asyncio.wait_for(super().run_deep_investigation(), timeout=timeout_limit)
+        except TimeoutError:
+            logger.error(
+                f"{self.agent_name} deep investigation reached hard timeout budget. Gracefully yielding existing findings.",
+                agent_id=self.agent_id,
+            )
+            # Return whatever findings were accumulated up to this point in self._findings
+            return getattr(self, "_findings", [])
 
     async def on_tool_result(self, finding: AgentFinding) -> None:
         """Reactive task expansion based on temporal signals."""

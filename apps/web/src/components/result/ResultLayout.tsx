@@ -54,18 +54,18 @@ export function ResultLayout() {
   return (
     <div className="min-h-screen pb-48 pt-32 relative">
       {(rs.state === "arbiter" || rs.state === "loading") && (
-        <ForensicProgressOverlay 
+        <ForensicProgressOverlay
           title={rs.state === "arbiter" ? "Consensus Synthesis" : "Loading Report"}
           liveText={rs.arbiterMsg || "Decrypting forensic report..."}
-          telemetryLabel="Analyzing Agent Intersections" 
-          showElapsed 
+          telemetryLabel="Analyzing Agent Intersections"
+          showElapsed
         />
       )}
 
       {/* ── Horizon Navigation Dock ──────────────────────────────────── */}
       <nav className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-2xl px-6">
         <div className="glass-panel p-2 rounded-full flex items-center justify-between gap-4 bg-[#020203]/80 border-white/10 shadow-[0_32px_64px_rgba(0,0,0,0.6)]">
-          <button 
+          <button
             onClick={rs.handleHome}
             className="px-6 py-2.5 text-[10px] font-mono font-bold text-white/40 hover:text-white transition-all uppercase tracking-[0.2em] flex items-center gap-3"
           >
@@ -73,7 +73,18 @@ export function ResultLayout() {
             HUB
           </button>
 
-          <div role="tablist" aria-label="Report sections" className="flex items-center gap-2 pr-1">
+          <div
+            role="tablist"
+            aria-label="Report sections"
+            className="flex items-center gap-2 pr-1 focus:outline-none"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                e.preventDefault();
+                rs.setActiveTab(rs.activeTab === "analysis" ? "history" : "analysis");
+              }
+            }}
+          >
             {(["analysis", "history"] as Tab[]).map((tab) => (
               <button
                 key={tab}
@@ -84,8 +95,8 @@ export function ResultLayout() {
                 onClick={() => rs.setActiveTab(tab)}
                 className={clsx(
                   "px-8 py-2.5 text-[10px] font-mono font-bold transition-all duration-300 rounded-full uppercase tracking-[0.2em]",
-                  rs.activeTab === tab 
-                    ? "bg-[var(--color-success-light)] text-[#020617] shadow-[0_0_20px_rgba(167,255,210,0.3)]" 
+                  rs.activeTab === tab
+                    ? "bg-[var(--color-primary)] text-[#020617] shadow-[0_0_20px_rgba(var(--color-primary-rgb),0.3)]"
                     : "text-white/30 hover:text-white/60 hover:bg-white/5"
                 )}
               >
@@ -116,11 +127,11 @@ export function ResultLayout() {
           aria-labelledby="tab-analysis"
           hidden={rs.activeTab !== "analysis"}
         >
-            <ForensicErrorModal 
-              isVisible={rs.state === "error"} 
-              message={rs.errorMsg} 
-              onHome={rs.handleHome} 
-              onRetry={rs.handleNew} 
+            <ForensicErrorModal
+              isVisible={rs.state === "error"}
+              message={rs.errorMsg}
+              onHome={rs.handleHome}
+              onRetry={rs.handleNew}
             />
             {rs.state === "error" && (
               <div className="flex flex-col items-center justify-center py-32 opacity-20">
@@ -137,7 +148,7 @@ export function ResultLayout() {
               </div>
             )}
             {rs.state === "ready" && rs.report && (
-              <motion.div 
+              <motion.div
                 initial="hidden"
                 animate="visible"
                 variants={{
@@ -155,11 +166,11 @@ export function ResultLayout() {
 
                 {/* 1. Verdict & Identity */}
                 <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
-                  <ResultHeader 
-                    report={rs.report} 
-                    fileName={rs.report.case_id || "Evidence 01"} 
-                    mimeType={rs.mimeType} 
-                    thumbnail={rs.thumbnail} 
+                  <ResultHeader
+                    report={rs.report}
+                    fileName={rs.report.case_id || "Evidence 01"}
+                    mimeType={rs.mimeType}
+                    thumbnail={rs.thumbnail}
                     isDeepPhase={rs.isDeepPhase}
                     vc={getVerdictConfig(rs.report.overall_verdict ?? "")}
                     confPct={Math.round((rs.report.overall_confidence ?? 0) * 100)}
@@ -172,8 +183,8 @@ export function ResultLayout() {
 
                 {/* 2. Intelligence Briefing (Prominent Findings) */}
                 <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
-                  <IntelligenceBrief 
-                    verdictSentence={rs.report.verdict_sentence} 
+                  <IntelligenceBrief
+                    verdictSentence={rs.report.verdict_sentence}
                     keyFindings={rs.report.key_findings}
                     isDeepPhase={rs.isDeepPhase}
                   />
@@ -192,7 +203,7 @@ export function ResultLayout() {
                 <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
                   <TimelineTab report={rs.report} activeAgentIds={activeAgentIds} agentTimeline={rs.agentTimeline} pipelineStartAt={rs.pipelineStartAt} />
                 </motion.div>
-                 
+
                 <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
                   <ReportFooter handleHome={rs.handleHome} />
                 </motion.div>

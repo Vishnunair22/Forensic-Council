@@ -143,7 +143,7 @@ npm test -- --testPathPattern="accessibility" --watchAll=false
 ### Test categories
 
 | Directory | What's tested |
-|-----------|--------------| 
+|-----------|--------------|
 | `apps/web/tests/unit/lib/` | API client, token management, Zod schemas, `cn()` utility |
 | `apps/web/tests/unit/hooks/` | `useForensicData`, `mapReportDtoToReport`, file validation |
 | `apps/web/tests/unit/components/` | `FileUploadSection`, `AgentProgressDisplay` rendering |
@@ -210,13 +210,3 @@ File uploads that exceed 50MB are rejected client-side before the request is sen
 
 ### Agent Failures
 If an individual agent fails, its card shows an error state with a retry button. Other agents continue unaffected. The arbiter marks failed agent findings as contested in the final report.
-
-
-
-
-
-
-
-
-
-

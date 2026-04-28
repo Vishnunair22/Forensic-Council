@@ -297,7 +297,6 @@ MIN_CONFIDENCE_THRESHOLD = 0.15
 
 
 def _has_legacy_positive_signal(finding: dict[str, Any]) -> bool:
-
     meta = finding.get("metadata") or {}
     return (
         meta.get("manipulation_detected") is True

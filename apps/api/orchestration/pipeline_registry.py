@@ -1,11 +1,11 @@
 from __future__ import annotations
-import asyncio
+
 from uuid import UUID
 
-_LIVE_PIPELINES: dict[str, "ForensicCouncilPipeline"] = {}
+_LIVE_PIPELINES: dict[str, ForensicCouncilPipeline] = {}
 
 
-def register_pipeline(session_id: UUID, pipeline: "ForensicCouncilPipeline") -> None:
+def register_pipeline(session_id: UUID, pipeline: ForensicCouncilPipeline) -> None:
     _LIVE_PIPELINES[str(session_id)] = pipeline
 
 
@@ -22,5 +22,5 @@ def notify_decision(session_id: UUID, deep_analysis: bool) -> bool:
     return True
 
 
-def get_pipeline(session_id: str | UUID) -> "ForensicCouncilPipeline" | None:
+def get_pipeline(session_id: str | UUID) -> ForensicCouncilPipeline | None:
     return _LIVE_PIPELINES.get(str(session_id))

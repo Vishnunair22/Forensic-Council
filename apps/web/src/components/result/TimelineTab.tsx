@@ -47,7 +47,7 @@ export function TimelineTab({
 
       <div className="horizon-card p-1 rounded-3xl overflow-hidden">
         <div className="bg-[#020617] rounded-[inherit]">
-          
+
           {/* Header */}
           <div className="px-10 py-8 border-b border-white/5 flex items-center justify-between gap-6">
             <div className="flex flex-col gap-1">
@@ -66,7 +66,7 @@ export function TimelineTab({
             <div className="absolute left-12 top-12 bottom-12 w-px bg-white/5" />
 
             <div className="space-y-16">
-              
+
               {/* 1. Evidence Ingress */}
               {pipelineStartAt && (
                 <div className="relative pl-10">
@@ -99,7 +99,7 @@ export function TimelineTab({
                       const agentId = update.agent_id;
                       const theme = AGENT_THEMES[agentId] || { color: "#00FFFF" };
                       return (
-                        <motion.div 
+                        <motion.div
                           key={idx}
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
@@ -137,7 +137,7 @@ export function TimelineTab({
                       Arbiter consolidation of all agent findings. Final verdict calculation and cryptographic signing.
                     </p>
                     <div className="text-[10px] font-mono text-white/20">
-                      [{fmtTime(report.signed_utc)}] Consensus_Reached 
+                      [{fmtTime(report.signed_utc)}] Consensus_Reached
                       {lastAgentTime && ` // Deliberation: ${fmtDuration(lastAgentTime, report.signed_utc)}`}
                     </div>
                   </div>

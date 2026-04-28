@@ -5,9 +5,9 @@ Tests that when Redis is unavailable, the rate limiter fails open
 (allows the request) AND emits the rate_limit_redis_bypasses metric counter.
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from httpx import AsyncClient, ASGITransport
 
 
 class TestRateLimiterFailOpen:
@@ -72,6 +72,7 @@ class TestRateLimiterFailOpen:
         mock_redis = AsyncMock()
         # Return a timestamp from within the window
         import time
+
         recent_time = str(int(time.time()))
         mock_redis.get.return_value = recent_time.encode()
         mock_redis.set.return_value = True
@@ -91,6 +92,7 @@ class TestRateLimitMetricIncrement:
     async def test_metric_endpoint_exposes_bypass_counter(self):
         """Verify the /metrics endpoint exposes the bypass counter."""
         from fastapi.testclient import TestClient
+
         from api.main import app
 
         client = TestClient(app)
@@ -116,6 +118,7 @@ class TestRateLimitConfiguration:
     def test_rate_limit_window_is_configurable(self):
         """Verify rate limit window can be configured."""
         from core.config import get_settings
+
         settings = get_settings()
 
         # There should be a rate limit configuration
@@ -138,9 +141,9 @@ class TestRateLimitRedisErrorHandling:
     @pytest.mark.asyncio
     async def test_handles_redis_timeout(self):
         """Verify rate limiter handles Redis timeout gracefully."""
-        from core.rate_limit import check_investigation_rate_limit
-
         import asyncio
+
+        from core.rate_limit import check_investigation_rate_limit
 
         async def slow_redis():
             await asyncio.sleep(30)  # Timeout
@@ -152,7 +155,7 @@ class TestRateLimitRedisErrorHandling:
 
         # Use a faster failure mode
         with patch("core.rate_limit.get_redis_client") as mock_get:
-            mock_get.side_effect = asyncio.TimeoutError("Redis timeout")
+            mock_get.side_effect = TimeoutError("Redis timeout")
 
             result = await check_investigation_rate_limit("user-timeout")
 

@@ -53,7 +53,6 @@ class TestCalibrationLayer:
         assert model.calibration_status == CalibrationStatus.UNCALIBRATED
 
     def test_fit_default_model_writes_files(self, tmp_path):
-
         layer = self._make_layer(tmp_path)
         layer.fit_default_model("agent1_image")
 
@@ -64,7 +63,6 @@ class TestCalibrationLayer:
         assert data["agent_id"] == "agent1_image"
 
     def test_fit_default_model_uses_per_agent_params(self, tmp_path):
-
         layer = self._make_layer(tmp_path)
         model = layer.fit_default_model("agent5_metadata")
 
@@ -73,7 +71,6 @@ class TestCalibrationLayer:
         assert model.params["B"] == -1.5
 
     def test_fit_default_model_unknown_agent_uses_defaults(self, tmp_path):
-
         layer = self._make_layer(tmp_path)
         model = layer.fit_default_model("unknown_agent")
 
@@ -84,13 +81,11 @@ class TestCalibrationLayer:
     # ── load_model ───────────────────────────────────────────────────────────
 
     def test_load_model_missing_raises_file_not_found(self, tmp_path):
-
         layer = self._make_layer(tmp_path)
         with pytest.raises(FileNotFoundError, match="agent1_image"):
             layer.load_model("agent1_image", "v99_does_not_exist")
 
     def test_load_model_caches_result(self, tmp_path):
-
         layer = self._make_layer(tmp_path)
         layer.fit_default_model("agent2_audio")
 
@@ -114,7 +109,6 @@ class TestCalibrationLayer:
         assert loaded.agent_id == "agent3_object"
 
     def test_load_model_empty_directory_raises(self, tmp_path):
-
         layer = self._make_layer(tmp_path)
         agent_dir = tmp_path / "empty_agent"
         agent_dir.mkdir()
@@ -125,12 +119,10 @@ class TestCalibrationLayer:
     # ── list_versions ────────────────────────────────────────────────────────
 
     def test_list_versions_empty_when_no_dir(self, tmp_path):
-
         layer = self._make_layer(tmp_path)
         assert layer.list_versions("no_such_agent") == []
 
     def test_list_versions_excludes_latest(self, tmp_path):
-
         layer = self._make_layer(tmp_path)
         layer.fit_default_model("agent4_video")
         versions = layer.list_versions("agent4_video")
@@ -151,7 +143,6 @@ class TestCalibrationLayer:
         assert result.calibration_status == CalibrationStatus.UNCALIBRATED
 
     def test_calibrate_court_statement_warns_uncalibrated(self, tmp_path):
-
         layer = self._make_layer(tmp_path)
         result = layer.calibrate("agent2_audio", raw_score=0.6, finding_class="voice_clone")
 
@@ -167,7 +158,6 @@ class TestCalibrationLayer:
         assert result.raw_score == 0.5
 
     def test_calibrate_computes_confidence_interval(self, tmp_path):
-
         layer = self._make_layer(tmp_path)
         result = layer.calibrate("agent4_video", raw_score=0.5, finding_class="motion")
 
@@ -178,7 +168,6 @@ class TestCalibrationLayer:
         assert ci["lower"] <= ci["upper"]
 
     def test_calibrate_uncertainty_decomposition_present(self, tmp_path):
-
         layer = self._make_layer(tmp_path)
         result = layer.calibrate("agent5_metadata", raw_score=0.3, finding_class="exif_anomaly")
 
@@ -191,7 +180,6 @@ class TestCalibrationLayer:
     # ── _bootstrap_ci ────────────────────────────────────────────────────────
 
     def test_bootstrap_ci_platt_returns_valid_interval(self, tmp_path):
-
         layer = self._make_layer(tmp_path)
         params = {"A": 2.5, "B": -1.2, "method": "platt"}
         ci = layer._bootstrap_ci(raw_score=0.6, params=params, method="platt", n_bootstrap=200)
@@ -202,7 +190,6 @@ class TestCalibrationLayer:
         assert "platt" in ci["method"]
 
     def test_bootstrap_ci_sigmoid_returns_valid_interval(self, tmp_path):
-
         layer = self._make_layer(tmp_path)
         params = {"k": 10.0, "x0": 0.5, "method": "sigmoid"}
         ci = layer._bootstrap_ci(raw_score=0.5, params=params, method="sigmoid", n_bootstrap=200)
@@ -213,7 +200,6 @@ class TestCalibrationLayer:
     # ── _decompose_uncertainty ────────────────────────────────────────────────
 
     def test_decompose_uncertainty_escalates_uncalibrated_high_ci(self, tmp_path):
-
         layer = self._make_layer(tmp_path)
         ci = {"lower": 0.1, "upper": 0.8}  # width=0.7 → triggers UNCALIBRATED escalation
         result = layer._decompose_uncertainty(
@@ -229,7 +215,6 @@ class TestCalibrationLayer:
         assert "UNCALIBRATED" in result.escalation_reason
 
     def test_decompose_uncertainty_no_escalate_when_narrow_ci(self, tmp_path):
-
         layer = self._make_layer(tmp_path)
         ci = {"lower": 0.58, "upper": 0.62}  # very narrow CI
         result = layer._decompose_uncertainty(

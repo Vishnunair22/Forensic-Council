@@ -123,4 +123,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Verified `.env` is not tracked in Git history
 - Added Jaeger OTLP port exposure check to validate_production_readiness.sh
 - Confirmed all `.env.example` variables present (REDIS_PASSWORD, OTEL_ENABLED, NEXT_PUBLIC_API_URL)
-

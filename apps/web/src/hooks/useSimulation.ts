@@ -98,7 +98,7 @@ export const useSimulation = ({
     (targetSessionId: string, isReconnect: boolean = false): Promise<void> => {
       // Store session ID
       setSessionId(targetSessionId);
-      
+
       if (!isReconnect) {
         // Only reset state for a brand new investigation
         setStatus("initiating");
@@ -491,7 +491,7 @@ export const useSimulation = ({
             setSessionId(null);
             try { storage.removeItem(SESSION_ID_KEY); } catch { /* ignore */ }
             try { storage.removeItem(HITL_CHECKPOINT_KEY); } catch { /* ignore */ }
-            
+
             // If connection was already established, set to error state
             if (wsConnectionReady) {
               setErrorMessage(event.reason || "Investigation interrupted. Please restart.");
@@ -796,7 +796,7 @@ export const useSimulation = ({
     if (revealQueue.length === 0 || isRevealingRef.current) return;
 
     isRevealingRef.current = true;
-    
+
     const processNext = () => {
       setRevealQueue((prev) => {
         if (prev.length === 0) {
@@ -805,7 +805,7 @@ export const useSimulation = ({
         }
 
         const [next, ...rest] = prev;
-        
+
         // Add to completed list
         setCompletedAgents((current) => {
           const exists = current.some(a => a.agent_id === next.agent_id);
@@ -814,7 +814,7 @@ export const useSimulation = ({
           }
           return [...current, next];
         });
-        
+
         // Trigger Sound & Callback
         playSoundRef.current?.("agent");
         onAgentCompleteRef.current?.(next);
@@ -824,7 +824,7 @@ export const useSimulation = ({
         } else {
           isRevealingRef.current = false;
         }
-        
+
         return rest;
       });
     };

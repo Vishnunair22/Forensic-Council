@@ -193,7 +193,9 @@ async def bootstrap_users(client: PostgresClient) -> None:
                     investigator_username,
                     hashed,
                 )
-                logger.info("Investigator user password synchronized", username=investigator_username)
+                logger.info(
+                    "Investigator user password synchronized", username=investigator_username
+                )
     except Exception as e:
         logger.warning("User bootstrap update failed (likely DB lock)", error=str(e))
 

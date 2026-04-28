@@ -57,7 +57,7 @@ export function ArcGauge({
   const cx = size / 2;
   const cy = size / 2;
 
-  const startAngle = Math.PI; 
+  const startAngle = Math.PI;
   const endAngle = 0;
 
   function polarToXY(angle: number, r: number) {

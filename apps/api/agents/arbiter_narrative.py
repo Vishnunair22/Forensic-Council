@@ -789,7 +789,9 @@ Rules:
                     else:
                         self._synthesis_client = _client
                 except Exception as _e:
-                    logger.warning("LLM health check failed; falling back to template synthesis", error=str(_e))
+                    logger.warning(
+                        "LLM health check failed; falling back to template synthesis", error=str(_e)
+                    )
                     llm_enabled = False
 
         if not llm_enabled:
@@ -838,7 +840,11 @@ Rules:
                             )
                             return aid, narr or ""
                         except Exception as _e:
-                            logger.warning("Agent narrative generation failed; omitting from report", agent_id=aid, error=str(_e))
+                            logger.warning(
+                                "Agent narrative generation failed; omitting from report",
+                                agent_id=aid,
+                                error=str(_e),
+                            )
                             return aid, ""
 
                 pairs = await asyncio.gather(
@@ -863,7 +869,10 @@ Rules:
                         timeout=45.0,
                     )
                 except Exception as _e:
-                    logger.warning("Executive summary LLM generation failed; falling back to template", error=str(_e))
+                    logger.warning(
+                        "Executive summary LLM generation failed; falling back to template",
+                        error=str(_e),
+                    )
                     return self._template_executive_summary(
                         len(active_agent_results),
                         len(all_findings),
@@ -881,7 +890,10 @@ Rules:
                         timeout=30.0,
                     )
                 except Exception as _e:
-                    logger.warning("Uncertainty statement LLM generation failed; falling back to template", error=str(_e))
+                    logger.warning(
+                        "Uncertainty statement LLM generation failed; falling back to template",
+                        error=str(_e),
+                    )
                     return self._template_uncertainty_statement(
                         len(incomplete_findings), len(contested_findings), overall_error_rate
                     )

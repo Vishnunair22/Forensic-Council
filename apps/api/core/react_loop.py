@@ -169,7 +169,7 @@ class AgentFinding(BaseModel):
         return v if v is not None else {}
 
     @model_validator(mode="after")
-    def enforce_confidence_verdict_contract(self) -> "AgentFinding":
+    def enforce_confidence_verdict_contract(self) -> AgentFinding:
         no_confidence_verdicts = {"NOT_APPLICABLE", "ERROR"}
         if self.evidence_verdict in no_confidence_verdicts and self.confidence_raw is not None:
             raise ValueError(

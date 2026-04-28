@@ -1,6 +1,6 @@
 # Model Licensing Matrix
 
-Last updated: 2026-04-25  
+Last updated: 2026-04-25
 Status: v1.7.0
 
 This document lists every ML weight loaded by Forensic Council, its license, and any restrictions

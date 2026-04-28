@@ -26,4 +26,3 @@ export function backendUrlFor(pathname: string, baseUrl: string): string {
   const cleanPath = pathname.startsWith("/") ? pathname : `/${pathname}`;
   return `${normalizeBaseUrl(baseUrl)}${cleanPath}`;
 }
-

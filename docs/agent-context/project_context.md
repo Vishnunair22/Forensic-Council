@@ -317,5 +317,3 @@ docker compose -f infra/docker-compose.yml \
 **Production:** Set `APP_ENV=production`, strong passwords, real `SIGNING_KEY`, `DOMAIN` for Caddy TLS.
 
 ML models download on first run (~10-15 GB, 15-60 min). Subsequent starts use Docker named volume cache.
-
-

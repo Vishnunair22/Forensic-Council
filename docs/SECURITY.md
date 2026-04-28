@@ -175,4 +175,3 @@ Response time: 48 hours for acknowledgement, 7 days for triage.
 - GitHub Dependabot is recommended for automated dependency update PRs
 - Trivy runs on every push/PR via `.github/workflows/ci.yml` `security-scan` job
 - Docker images should be re-scanned before each production deployment
-

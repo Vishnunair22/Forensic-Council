@@ -5,8 +5,8 @@ Authentication Routes
 Routes for user authentication and token management.
 """
 
-import secrets as _secrets
 import os as _os
+import secrets as _secrets
 import time
 from collections import defaultdict
 from datetime import timedelta
@@ -321,8 +321,9 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
         httponly=True,
         max_age=get_settings().jwt_access_token_expire_minutes * 60,
         expires=get_settings().jwt_access_token_expire_minutes * 60,
-        samesite="strict",
-        secure=True if settings.app_env == "production" else False,
+        samesite="lax",
+        secure=settings.app_env == "production",
+        path="/",
     )
     # Set CSRF token cookie
     response.set_cookie(
@@ -330,7 +331,7 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
         value=csrf_token,
         httponly=False,
         max_age=86400,
-        samesite="strict",
+        samesite="lax",
         secure=settings.app_env == "production",
         path="/",
     )
@@ -390,8 +391,9 @@ async def refresh_token(current_user: User = Depends(get_current_user)):
         httponly=True,
         max_age=_s.jwt_access_token_expire_minutes * 60,
         expires=_s.jwt_access_token_expire_minutes * 60,
-        samesite="strict",
+        samesite="lax",
         secure=_s.app_env == "production",
+        path="/",
     )
     return response
 

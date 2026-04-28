@@ -143,7 +143,7 @@ async function handleAuthError<T>(operation: () => Promise<T>, _retryCount = 0):
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     const isAuthError = msg.includes("401") || msg.includes("Unauthorized") || msg.includes("authenticated");
-    
+
     if (isAuthError && _retryCount < 2) {
       dbg.warn("Session invalid, re-authenticating...");
       await autoLoginAsInvestigator();
@@ -364,7 +364,7 @@ export async function pollForReport(
     const response = await getReport(sessionId);
     onProgress?.(response.status);
     if (response.status === "complete" && response.report) return response.report;
-    
+
     if (attempt < maxAttempts - 1) {
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }

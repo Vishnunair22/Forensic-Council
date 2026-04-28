@@ -14,21 +14,19 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel as _BaseModel
 
+from api.routes._authz import assert_session_access
 from api.routes._session_state import (
     _final_reports,
     get_active_pipeline,
     get_active_pipeline_metadata,
     get_session_websockets,
-    register_websocket,
     set_active_pipeline_metadata,
     unregister_websocket,
 )
-from api.routes._authz import assert_session_access
 from api.schemas import AgentFindingDTO, ReportDTO, ReportStatusDTO, SessionInfo
 from core.auth import User, decode_token, get_current_user
 from core.severity import assign_severity_tier as _assign_severity_tier
 from core.structured_logging import get_logger
-from orchestration.pipeline_registry import notify_decision
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 logger = get_logger(__name__)
@@ -278,22 +276,24 @@ async def terminate_session(session_id: str, current_user: User = Depends(get_cu
 
 _ACTIVE_WS_CONNECTIONS = 0
 
+
 @router.websocket("/{session_id}/live")
 async def live_updates(websocket: WebSocket, session_id: str):
     global _ACTIVE_WS_CONNECTIONS
     MAX_WS = getattr(settings, "max_ws_connections", 1000)
-    
+
     if _ACTIVE_WS_CONNECTIONS >= MAX_WS:
         await websocket.accept(subprotocol="forensic-v1")
         await websocket.send_json({"type": "ERROR", "message": "Server busy"})
         await websocket.close(code=1013, reason="Server busy")
         return
-        
+
     _ACTIVE_WS_CONNECTIONS += 1
     try:
         await _live_updates_impl(websocket, session_id)
     finally:
         _ACTIVE_WS_CONNECTIONS -= 1
+
 
 async def _live_updates_impl(websocket: WebSocket, session_id: str):
     """
@@ -304,7 +304,6 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
     from api.routes._session_state import (
         get_active_pipeline_metadata,
     )
-    from core.persistence.redis_client import get_redis_client
 
     # ── 1. Accept WebSocket and Authenticate ─────────────────────────────────
     # We must accept the connection before we can send JSON error messages.
@@ -390,7 +389,9 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
     # Create a minimal user object for authorization check
     from core.auth import User
 
-    auth_user = User(user_id=user_id, username=user_id, role=metadata.get("investigator_role", "investigator"))
+    auth_user = User(
+        user_id=user_id, username=user_id, role=metadata.get("investigator_role", "investigator")
+    )
     try:
         await assert_session_access(session_id, auth_user)
     except HTTPException as e:
@@ -415,6 +416,7 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
         # Create a dedicated Redis connection for the subscriber with no socket timeout.
         # The shared singleton has a 30s timeout which kills the listener during silence.
         from redis.asyncio import Redis
+
         settings = get_settings()
         dedicated_redis = None
         pubsub = None
@@ -427,12 +429,12 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
                 socket_timeout=None,  # No timeout for pub/sub listening
                 socket_connect_timeout=5,
                 socket_keepalive=True,
-                decode_responses=True
+                decode_responses=True,
             )
             pubsub = dedicated_redis.pubsub()
             channel = f"forensic:updates:{session_id}"
             replay_key = f"forensic:replay:{session_id}"
-            
+
             # 1. Subscribe first (captures all future messages)
             await pubsub.subscribe(channel)
 
@@ -458,11 +460,13 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
         except Exception as e:
             logger.warning("Redis subscriber error", session_id=session_id, error=str(e))
             try:
-                await websocket.send_json({
-                    "type": "ERROR",
-                    "message": "Live update channel disconnected. Please refresh.",
-                    "data": {"recoverable": True},
-                })
+                await websocket.send_json(
+                    {
+                        "type": "ERROR",
+                        "message": "Live update channel disconnected. Please refresh.",
+                        "data": {"recoverable": True},
+                    }
+                )
             except Exception:
                 pass
             await websocket.close(code=1011)
@@ -605,7 +609,12 @@ async def get_arbiter_status(
     Returns status from Redis persistence. Never raises — always returns a
     safe JSON body so the frontend can keep polling without hitting 500s.
     """
-    await assert_session_access(session_id, current_user)
+    try:
+        await assert_session_access(session_id, current_user)
+    except HTTPException as he:
+        if he.status_code == 404:
+            return {"status": "not_found", "message": "Investigation session not found"}
+        raise
 
     try:
         from api.routes._session_state import get_active_pipeline_metadata, get_final_report
@@ -634,7 +643,10 @@ async def get_arbiter_status(
                 if status == "error":
                     return {"status": "error", "message": metadata.get("error", "Unknown error")}
                 if status == "paused_resume_requested":
-                    return {"status": "paused_resume_requested", "message": metadata.get("brief") or "Resume requested"}
+                    return {
+                        "status": "paused_resume_requested",
+                        "message": metadata.get("brief") or "Resume requested",
+                    }
                 msg = metadata.get("brief") or "Investigation in progress…"
                 return {"status": "running", "message": msg}
         except Exception as _e:
@@ -663,6 +675,7 @@ async def get_arbiter_status(
         # 4. Live in-process fallback (covers Redis + Postgres simultaneously degraded)
         try:
             from orchestration.pipeline_registry import get_pipeline
+
             pipeline = get_pipeline(session_id)
             if pipeline is not None:
                 if pipeline._final_report is not None:
@@ -970,7 +983,12 @@ async def get_agent_brief(
                     if in_progress:
                         brief_text = getattr(in_progress[-1], "description", "")
         except Exception as e:
-            logger.debug("Failed to extract agent brief", session_id=session_id, agent_id=agent_id, error=str(e))
+            logger.debug(
+                "Failed to extract agent brief",
+                session_id=session_id,
+                agent_id=agent_id,
+                error=str(e),
+            )
 
     return {"brief": brief_text}
 
@@ -1064,8 +1082,8 @@ async def resume_investigation(
     Returns 200 with idempotency: if the event was already set, returns
     {"status": "already_resumed"} rather than 409.
     """
-    from core.structured_logging import get_logger as _get_logger
     from core.persistence.redis_client import get_redis_client
+    from core.structured_logging import get_logger as _get_logger
 
     _log = _get_logger(__name__)
 
@@ -1122,10 +1140,12 @@ async def resume_investigation(
             if redis:
                 await redis.publish(
                     "forensic:notify_decision",
-                    json.dumps({
-                        "session_id": session_id,
-                        "deep_analysis": request.deep_analysis,
-                    })
+                    json.dumps(
+                        {
+                            "session_id": session_id,
+                            "deep_analysis": request.deep_analysis,
+                        }
+                    ),
                 )
         except Exception as e:
             _log.warning("Failed to publish deep analysis decision to Redis", error=str(e))

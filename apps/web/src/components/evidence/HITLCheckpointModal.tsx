@@ -74,7 +74,7 @@ export function HITLCheckpointModal({
  return (
   <Dialog open={isOpen} onOpenChange={onDismiss}>
    <DialogContent className="sm:max-w-xl glass-panel border-white/10 p-0 overflow-hidden rounded-3xl shadow-[0_32px_64px_rgba(0,0,0,0.8)] border-t border-t-white/10">
-    
+
     {checkpoint ? (
      <div className="p-8 space-y-6">
       <DialogHeader className="text-left space-y-2">

@@ -23,4 +23,3 @@ Use Qdrant as the vector memory store.
 - gRPC support enables fast batch upserts of finding embeddings.
 - Qdrant's filterable search allows querying by forensic signature type alongside vector similarity.
 - Migration to cloud Qdrant is seamless if on-prem becomes insufficient.
-

@@ -29,7 +29,7 @@ export function ErrorDisplay({
           <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-rose-500/10 border border-rose-500/20 shrink-0">
             <AlertCircle className="w-8 h-8 text-rose-400" aria-hidden="true" />
           </div>
-          
+
           <div className="flex-1 text-center md:text-left space-y-4">
             <div>
               <h3 className="text-xl font-bold text-white tracking-tight mb-2">

@@ -257,4 +257,3 @@ All errors return JSON:
 ```
 
 In development (`APP_ENV=development`), errors also include a `message` field with the raw exception.
-

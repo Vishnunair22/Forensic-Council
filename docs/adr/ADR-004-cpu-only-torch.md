@@ -25,4 +25,3 @@ Use CPU-only PyTorch wheels in Docker, with ML inference offloaded to subprocess
 - ML subprocess isolation prevents GIL blocking and WebSocket disconnections.
 - Cold-start model downloads on first run (~5-15 min) are mitigated by Docker named volumes.
 - GPU support can be added later by changing the `pytorch-cpu` index to `pytorch-cu128` and installing nvidia-container-toolkit.
-

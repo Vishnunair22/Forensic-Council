@@ -22,8 +22,8 @@ from api.routes._rate_limiting import (
 )
 from api.routes._session_state import (
     cleanup_connections,  # noqa: F401 - re-exported for api.main shutdown.
-    get_active_pipelines_count,  # noqa: F401 - re-exported for api.main metrics.
     get_active_pipeline_metadata,
+    get_active_pipelines_count,  # noqa: F401 - re-exported for api.main metrics.
     set_active_pipeline,
     set_active_pipeline_metadata,
     set_active_task,
@@ -135,16 +135,44 @@ async def start_investigation(
     await check_investigation_rate_limit(current_user.user_id)
     await check_daily_cost_quota(current_user.user_id, current_user.role.value)
 
-    raw_content_type = (file.content_type or "").split(";")[0].strip().lower()
-    if raw_content_type not in ALLOWED_MIME_TYPES:
+    # Read a small chunk of bytes in-memory to detect the true MIME type before writing to disk
+    head = await file.read(2048)
+    await file.seek(0)
+
+    import magic
+
+    actual_mime = await asyncio.to_thread(magic.from_buffer, head, mime=True)
+
+    # Validate against ALLOWED_MIME_TYPES
+    if actual_mime not in ALLOWED_MIME_TYPES:
+        raise HTTPException(status_code=400, detail=f"File type '{actual_mime}' is not allowed.")
+
+    # Cross-reference with core/mime_registry.py to ensure support
+    from core.mime_registry import MimeRegistry
+
+    is_supported_by_any = False
+    for aid in ["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"]:
+        if MimeRegistry.is_supported(agent_name=aid, mime_type=actual_mime):
+            is_supported_by_any = True
+            break
+
+    if not is_supported_by_any:
         raise HTTPException(
-            status_code=400, detail=f"File type '{raw_content_type}' is not allowed."
+            status_code=400,
+            detail=f"File type '{actual_mime}' is not supported by any specialized forensic agent.",
         )
 
     raw_suffix = Path(file.filename or "").suffix.lower()
     if raw_suffix not in _ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400, detail=f"File extension '{raw_suffix}' is not permitted."
+        )
+
+    valid_exts = _EXACT_MIME_EXT_MAP.get(actual_mime, frozenset())
+    if not valid_exts or raw_suffix not in valid_exts:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Security violation: content '{actual_mime}' mismatch extension '{raw_suffix}'",
         )
 
     if file.size and file.size > MAX_FILE_SIZE:
@@ -175,22 +203,6 @@ async def start_investigation(
             tmp_path.unlink(missing_ok=True)
             raise HTTPException(status_code=400, detail="File is empty.")
 
-        import magic
-
-        with open(tmp_path, "rb") as _f:
-            head = _f.read(2048)
-
-        # Use to_thread to prevent blocking the event loop on MIME detection
-        mime = await asyncio.to_thread(magic.from_buffer, head, mime=True)
-
-        valid_exts = _EXACT_MIME_EXT_MAP.get(mime, frozenset())
-        if not valid_exts or raw_suffix not in valid_exts:
-            tmp_path.unlink(missing_ok=True)
-            raise HTTPException(
-                status_code=400,
-                detail=f"Security violation: content '{mime}' mismatch ext '{raw_suffix}'",
-            )
-
         content_hash = hasher.hexdigest()
         dedup_key = f"dedup:{case_id}:{content_hash}"
         try:
@@ -206,14 +218,18 @@ async def start_investigation(
                 )
                 if not was_set:
                     existing = await _redis.get(dedup_key)
-                    existing_session_id = existing if isinstance(existing, str) else existing.decode()
-                    
+                    existing_session_id = (
+                        existing if isinstance(existing, str) else existing.decode()
+                    )
+
                     # ── Check if the existing session is actually active ─────────
-                    # If the session was interrupted by a restart or finished, we 
-                    # should NOT return 409. Instead, we clear the dedup key and 
+                    # If the session was interrupted by a restart or finished, we
+                    # should NOT return 409. Instead, we clear the dedup key and
                     # allow the user to start a fresh investigation for the same file.
                     try:
-                        existing_meta = await get_active_pipeline_metadata(existing_session_id) or {}
+                        existing_meta = (
+                            await get_active_pipeline_metadata(existing_session_id) or {}
+                        )
                         status = existing_meta.get("status")
                         if status not in ("running", "paused"):
                             await _redis.delete(dedup_key)
@@ -229,15 +245,19 @@ async def start_investigation(
                                 # Just let it return 409 normally in the next block.
                                 pass
                     except Exception as meta_err:
-                        logger.warning("Failed to check status of existing dedup session", error=str(meta_err))
+                        logger.warning(
+                            "Failed to check status of existing dedup session", error=str(meta_err)
+                        )
 
-                    # If we successfully cleared and reset (was_set is True now), 
+                    # If we successfully cleared and reset (was_set is True now),
                     # then we just fall through to the rest of the investigation.
                     # Otherwise, if was_set is still False, we return 409.
                     if not was_set:
                         # Re-claim ownership: update the existing session with current user ID.
                         try:
-                            existing_meta = await get_active_pipeline_metadata(existing_session_id) or {}
+                            existing_meta = (
+                                await get_active_pipeline_metadata(existing_session_id) or {}
+                            )
                             await set_active_pipeline_metadata(
                                 existing_session_id,
                                 {
@@ -245,22 +265,26 @@ async def start_investigation(
                                     "investigator_id": current_user.user_id,
                                     "investigator_role": current_user.role.value,
                                     "case_investigator_label": investigator_id,
-                                }
+                                },
                             )
                         except Exception as meta_exc:
-                            logger.warning("Failed to re-claim session ownership on dedup", 
-                                           session_id=existing_session_id, error=str(meta_exc))
+                            logger.warning(
+                                "Failed to re-claim session ownership on dedup",
+                                session_id=existing_session_id,
+                                error=str(meta_exc),
+                            )
 
                         tmp_path.unlink(missing_ok=True)
                         raise HTTPException(
-                            status_code=409, detail=f"Duplicate detected: session {existing_session_id}"
+                            status_code=409,
+                            detail=f"Duplicate detected: session {existing_session_id}",
                         )
         except HTTPException:
             raise
         except Exception as exc:
             logger.debug("Evidence deduplication skipped", error=str(exc))
 
-        if mime.startswith("image/") and mime != "image/gif":
+        if actual_mime.startswith("image/") and actual_mime != "image/gif":
             try:
                 from PIL import Image
 
@@ -280,7 +304,9 @@ async def start_investigation(
             except Exception:
                 logger.warning("Image integrity check failed; file may be corrupted.")
                 tmp_path.unlink(missing_ok=True)
-                raise HTTPException(status_code=400, detail="Image verification failed; file may be corrupted.")
+                raise HTTPException(
+                    status_code=400, detail="Image verification failed; file may be corrupted."
+                )
 
         await set_active_pipeline_metadata(
             session_id,

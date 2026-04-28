@@ -108,6 +108,11 @@ tmp_*
 **/tests/fixtures/*.avi
 
 
+# ── Auditing / Test Artifacts ─────────────────────────────────────────────
+apps/web/tsc_errors.txt
+apps/api/baseline_results.txt
+
+
 # ── Designated Junk/Temp Dirs (Rules in AGENTS.md) ───────────────────────────
 /apps/api/scratch/*
 !/apps/api/scratch/.gitkeep

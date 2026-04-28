@@ -59,14 +59,14 @@ describe("useSimulation Hook", () => {
 
   test("connectWebSocket establishes a connection", async () => {
     const { result } = renderHook(() => useSimulation({}));
-    
+
     let connectionPromise: Promise<void>;
     act(() => {
       connectionPromise = result.current.connectWebSocket("test-session");
     });
 
     expect(api.createLiveSocket).toHaveBeenCalledWith("test-session");
-    
+
     // Simulate successful connection
     await act(async () => {
       resolveConnected();
@@ -78,7 +78,7 @@ describe("useSimulation Hook", () => {
 
   test("processes AGENT_UPDATE messages", async () => {
     const { result } = renderHook(() => useSimulation({}));
-    
+
     await act(async () => {
       resolveConnected();
       await result.current.connectWebSocket("test-session");
@@ -101,7 +101,7 @@ describe("useSimulation Hook", () => {
 
   test("processes AGENT_COMPLETE messages", async () => {
     const { result } = renderHook(() => useSimulation({ onAgentComplete: mockOnAgentComplete }));
-    
+
     await act(async () => {
       resolveConnected();
       await result.current.connectWebSocket("test-session");
@@ -129,7 +129,7 @@ describe("useSimulation Hook", () => {
 
   test("processes HITL_CHECKPOINT messages", async () => {
     const { result } = renderHook(() => useSimulation({}));
-    
+
     await act(async () => {
       resolveConnected();
       await result.current.connectWebSocket("test-session");
@@ -152,7 +152,7 @@ describe("useSimulation Hook", () => {
 
   test("handles errors and sets error status", async () => {
     const { result } = renderHook(() => useSimulation({}));
-    
+
     await act(async () => {
       resolveConnected();
       await result.current.connectWebSocket("test-session");

@@ -6,8 +6,8 @@ const isDev = process.env.NODE_ENV !== "production";
 
 /**
  * useForensicSfx: Crystalline Audio Synthesis
- * 
- * Provides procedural, low-latency sound effects using the Web Audio API. 
+ *
+ * Provides procedural, low-latency sound effects using the Web Audio API.
  * Specifically tuned for 'Digital Hum' and 'Forensic Pulses.'
  */
 export function useForensicSfx() {
@@ -45,7 +45,7 @@ export function useForensicSfx() {
       osc.type = "sine";
       osc.frequency.setValueAtTime(65.41, now); // C2 (Deep, subtle thrum)
       osc.frequency.exponentialRampToValueAtTime(40, now + 0.3); // Slight downward pitch glide
-      
+
       osc.connect(masterGain);
       osc.start(now);
       osc.stop(now + 0.35);
@@ -60,7 +60,7 @@ export function useForensicSfx() {
       const ping = ctx.createOscillator();
       ping.type = "sine";
       ping.frequency.setValueAtTime(880, now); // A5 (Clear, high-freq blink)
-      
+
       ping.connect(pingGain);
       ping.start(now);
       ping.stop(now + 0.2);
@@ -90,16 +90,16 @@ export function useForensicSfx() {
       osc1.type = "sine";
       osc1.frequency.setValueAtTime(261.63, now); // C4
       osc1.frequency.exponentialRampToValueAtTime(329.63, now + 0.1); // Slide to E4
-      
+
       // Upper Partial (Clarity/Success)
       const osc2 = ctx.createOscillator();
       osc2.type = "sine";
       osc2.frequency.setValueAtTime(523.25, now); // C5
       osc2.frequency.exponentialRampToValueAtTime(783.99, now + 0.15); // Slide to G5
-      
+
       osc1.connect(masterGain);
       osc2.connect(masterGain);
-      
+
       osc1.start(now);
       osc2.start(now);
       osc1.stop(now + 0.4);

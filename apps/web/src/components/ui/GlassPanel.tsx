@@ -10,11 +10,11 @@ interface GlassPanelProps extends HTMLMotionProps<"div"> {
   hoverEffect?: boolean;
 }
 
-export const GlassPanel = ({ 
-  children, 
-  className, 
+export const GlassPanel = ({
+  children,
+  className,
   hoverEffect = true,
-  ...props 
+  ...props
 }: GlassPanelProps) => {
   return (
     <motion.div

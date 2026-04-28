@@ -27,7 +27,7 @@ const dbg = { error: isDev ? console.error.bind(console) : () => {} };
  */
 export function useResult() {
   const router = useRouter();
-  
+
   // Initialize states from sessionStorage immediately if in browser to avoid flickers
   const getInitial = (key: string) => persistentStorage.getItem(key);
 
@@ -37,7 +37,7 @@ export function useResult() {
   const [arbiterMsg, setArbiterMsg] = useState("Council deliberating on evidence...");
   const [errorMsg, setErrorMsg] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("analysis");
-  
+
   // Investigation Meta
   const [isDeepPhase] = useState(() => getInitial("forensic_is_deep") === "true");
   const [thumbnail] = useState(() => getInitial("forensic_thumbnail"));
@@ -56,7 +56,7 @@ export function useResult() {
       return [];
     } catch { return []; }
   });
-  
+
   // Session ID
   const [sessionId, setSessionId] = useState<string | null>(() =>
     typeof window !== "undefined"
@@ -192,7 +192,7 @@ export function useResult() {
         thumbnail: thumbnail || undefined,
         mime: mimeType || undefined,
       };
-      
+
       try {
         const stored = storage.getItem<HistoryItem[]>("forensic_history", true, []);
         const filtered = (stored ?? []).filter((h) => !(h.sessionId === hItem.sessionId && h.type === hItem.type));
@@ -206,12 +206,12 @@ export function useResult() {
   const handleNew = useCallback(() => {
     playSound("click");
     [
-      "forensic_session_id", 
-      "forensic_file_name", 
-      "forensic_case_id", 
-      "forensic_thumbnail", 
-      "forensic_is_deep", 
-      "forensic_initial_agents", 
+      "forensic_session_id",
+      "forensic_file_name",
+      "forensic_case_id",
+      "forensic_thumbnail",
+      "forensic_is_deep",
+      "forensic_initial_agents",
       "forensic_deep_agents",
       "forensic_pipeline_start",
       "forensic_mime_type",

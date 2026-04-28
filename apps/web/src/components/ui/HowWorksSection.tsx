@@ -10,7 +10,7 @@ export function HowWorksSection() {
   return (
     <section className="py-24 px-6 max-w-7xl mx-auto relative z-10">
       <div className="text-center mb-32">
-        <motion.h2 
+        <motion.h2
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -32,7 +32,7 @@ export function HowWorksSection() {
       <div className="relative">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 relative z-10">
           {HOW_IT_WORKS.map((item, i) => (
-            <motion.div 
+            <motion.div
               key={item.step}
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -44,8 +44,8 @@ export function HowWorksSection() {
               <div className="relative z-20 mb-6">
                 <motion.div
                   whileHover={{ scale: 1.05 }}
-                  whileInView={{ 
-                    boxShadow: ["0 0 0px rgba(167,255,210,0)", "0 0 40px rgba(167,255,210,0.1)", "0 0 0px rgba(167,255,210,0)"] 
+                  whileInView={{
+                    boxShadow: ["0 0 0px rgba(167,255,210,0)", "0 0 40px rgba(167,255,210,0.1)", "0 0 0px rgba(167,255,210,0)"]
                   }}
                   transition={{ duration: 3, repeat: Infinity }}
                   className="w-20 h-20 rounded-full bg-surface-2 border border-[var(--color-success-light)]/20 flex items-center justify-center shadow-2xl"
@@ -62,7 +62,7 @@ export function HowWorksSection() {
                     {item.desc}
                   </p>
 
-                  
+
                   {/* Decorative Gradient Background */}
                   <div className="absolute inset-0 bg-gradient-to-b from-[var(--color-success-light)]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                 </div>

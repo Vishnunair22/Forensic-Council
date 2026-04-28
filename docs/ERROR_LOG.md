@@ -55,7 +55,7 @@ All production bugs and their resolutions, ordered chronologically.
 **Root Cause:** A serialization bottleneck in the `CustodyLogger`. Every agent in the pipeline was sharing a single `asyncio.Lock` per `session_id` inside `log_entry`. Since tool calls generate multiple log entries (THOUGHT → ACTION → OBSERVATION) and each involves a blocking Postgres insert, the agents were deadlocking each other. Agent A would hold the lock waiting for a DB write while Agent B was blocked waiting for the lock to log its first observation.
 
 **Fix:**
-- **`custody_logger.py`**: Refactored the locking mechanism to be per-agent: `_session_chain_locks[(session_id, agent_id)]`. 
+- **`custody_logger.py`**: Refactored the locking mechanism to be per-agent: `_session_chain_locks[(session_id, agent_id)]`.
 - **Per-Agent Hash Chains**: Updated the cryptographic linking to maintain separate hash chains for each agent. This allows all 5 agents to log simultaneously while preserving tamper-evident integrity for each investigator's timeline.
 - **Verification Audit**: Updated `verify_chain` to correctly validate these parallel agent chains during forensic audits.
 
@@ -80,8 +80,8 @@ All production bugs and their resolutions, ordered chronologically.
 
 **Symptom:** After a backend restart, retrying an analysis for the same file results in a "Duplicate detected" error (409), followed by an immediate connection failure or 403 Forbidden. The system gets stuck in a loop where retries always return a broken session.
 
-**Root Cause:** 
-1. **Stale Dedup**: Every backend restart marks all "running" sessions as "interrupted". However, the Redis deduplication keys (mapping file hash -> session ID) were not being cleared. 
+**Root Cause:**
+1. **Stale Dedup**: Every backend restart marks all "running" sessions as "interrupted". However, the Redis deduplication keys (mapping file hash -> session ID) were not being cleared.
 2. **Infinite Reconnect**: When a user retried, the backend returned the ID of the "interrupted" session. The frontend would then connect to this dead session, receive an error (4010), and immediately attempt to reconnect, creating a loop.
 
 **Fix:**
@@ -94,7 +94,7 @@ All production bugs and their resolutions, ordered chronologically.
 
 **Symptom:** Frontend container fails to start with "unrecognized option --no-turbopack". Docker build fails on `package-lock.json` missing in monorepo sub-apps.
 
-**Root Cause:** 
+**Root Cause:**
 1. Next.js 15.5 removed the `--no-turbopack` flag (webpack is now the default unless `--turbo` is passed).
 2. The `Dockerfile` required `package-lock.json` in the app directory, which doesn't exist in some monorepo structures where the lockfile is at the root.
 
@@ -108,11 +108,11 @@ All production bugs and their resolutions, ordered chronologically.
 
 **Symptom:** Backend is unreachable from the browser ("Failed to fetch") or backend fails to start with "validation error for Settings: cors_allowed_origins".
 
-**Root Cause:** 
+**Root Cause:**
 1. **Connectivity**: `NEXT_PUBLIC_API_URL` was pointing directly to `:8000`, bypassing the Caddy proxy and triggering CORS blocks or connection failures in restricted environments.
 2. **Parsing**: Pydantic Settings attempts to `json.loads()` environment variables for `list[str]` types; comma-separated strings in `.env` were rejected.
 
-**Fix:** 
+**Fix:**
 - Cleared `NEXT_PUBLIC_API_URL` in `.env` and `.env.example` to force the browser to use the same-origin proxy (Caddy) for API calls.
 - Changed `CORS_ALLOWED_ORIGINS` in `.env` to a valid JSON array format (e.g., `["http://localhost"]`).
 - Added `http://localhost` (the Caddy origin) to the allowed origins list.
@@ -359,4 +359,3 @@ All production bugs and their resolutions, ordered chronologically.
 - **Hardened**: Redis-backed rate limiter and session state store confirmed to handle OOM degradation gracefully via Lua atomicity.
 - **Hardened**: PostgreSQL immutable forensic ledger verified for tamper-evident sequential hashing.
 - **Warning**: Added hardware peak load warnings (15GB RAM) to `ARCHITECTURE.md` to prevent deployment OOMs in Deep Analysis phase.
-

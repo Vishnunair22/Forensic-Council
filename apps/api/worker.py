@@ -100,7 +100,7 @@ async def main() -> None:
 
         try:
             # Robust identity preservation: check for existing metadata
-            # This is critical for the Redis worker where uvicorn/main API may have 
+            # This is critical for the Redis worker where uvicorn/main API may have
             # already set the initial UUID.
             existing_meta = await get_active_pipeline_metadata(session_str) or {}
             _investigator_id = existing_meta.get("investigator_id", investigator_id)
@@ -234,7 +234,9 @@ async def main() -> None:
                     os.unlink(evidence_file_path)
                     logger.debug("Cleaned up temporary evidence file", path=evidence_file_path)
             except Exception as e:
-                logger.warning("Failed to cleanup evidence file", path=evidence_file_path, error=str(e))
+                logger.warning(
+                    "Failed to cleanup evidence file", path=evidence_file_path, error=str(e)
+                )
             _active_pipelines.pop(session_str, None)
             unregister_pipeline(session_id)
             clear_session_websockets(session_str)
@@ -262,16 +264,17 @@ async def main() -> None:
     cleanup_task = asyncio.create_task(periodic_cleanup())
 
     async def notify_decision_consumer() -> None:
-        from core.persistence.redis_client import get_redis_client
         import json
+
+        from core.persistence.redis_client import get_redis_client
         from orchestration.pipeline_registry import notify_decision
-        
+
         try:
             redis = await get_redis_client()
             pubsub = redis.pubsub()
             await pubsub.subscribe("forensic:notify_decision")
             logger.info("Worker subscribed to forensic:notify_decision")
-            
+
             async for message in pubsub.listen():
                 if shutdown.is_set():
                     break
@@ -282,9 +285,12 @@ async def main() -> None:
                         deep_analysis_val = data.get("deep_analysis")
                         if session_id_val is not None and deep_analysis_val is not None:
                             from uuid import UUID
+
                             notify_decision(UUID(session_id_val), deep_analysis_val)
                     except Exception as parse_err:
-                        logger.error("Failed to parse notify_decision message", error=str(parse_err))
+                        logger.error(
+                            "Failed to parse notify_decision message", error=str(parse_err)
+                        )
         except Exception as e:
             logger.error("notify_decision_consumer failed", error=str(e))
 

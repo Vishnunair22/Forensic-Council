@@ -13,7 +13,7 @@ export default function Home() {
 
       {/* --- Hero Section --- */}
       <section className="relative w-full min-h-screen flex flex-col items-center justify-center pt-32 pb-20 px-6">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: "easeOut" }}
@@ -74,13 +74,6 @@ export default function Home() {
         </GlassPanel>
       </section>
 
-      {/* Footer Decoration */}
-      <footer className="w-full py-12 px-6 text-center border-t border-white/5 bg-black/20 backdrop-blur-sm">
-        <p className="text-xs font-mono text-white/20 uppercase tracking-widest">
-          &copy; {new Date().getFullYear()} Forensic Council &mdash; Secure Evidence Analysis Suite
-        </p>
-      </footer>
     </main>
   );
 }
-

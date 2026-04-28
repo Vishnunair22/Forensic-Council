@@ -490,7 +490,7 @@ class CustodyLogger:
                     broken_at=entry.entry_id,
                     broken_reason=f"Chain link broken for agent {entry.agent_id} - prior_entry_ref mismatch",
                 )
-            
+
             # Update last hash for this agent
             last_hashes[entry.agent_id] = entry.content_hash
 

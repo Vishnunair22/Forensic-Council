@@ -349,4 +349,3 @@ After resolving any P0 or P1 incident:
 2. Update this runbook if a new failure mode was discovered
 3. Add a test case to prevent regression
 4. Update `docs/ERROR_LOG.md` with a new entry if a previously unknown failure mode was encountered
-

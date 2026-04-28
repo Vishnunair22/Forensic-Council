@@ -223,7 +223,7 @@ describe("AgentProgressDisplay", () => {
     it("shows New Investigation button only after deep phase", () => {
       const { rerender } = render(<AgentProgressDisplay {...awaitProps} phase="initial" />);
       expect(screen.queryByRole("button", { name: /new investigation/i })).not.toBeInTheDocument();
-      
+
       rerender(<AgentProgressDisplay {...awaitProps} phase="deep" />);
       expect(screen.getByRole("button", { name: /new upload|new investigation/i })).toBeInTheDocument();
     });
@@ -293,4 +293,3 @@ describe("AgentProgressDisplay", () => {
   });
 
 });
-

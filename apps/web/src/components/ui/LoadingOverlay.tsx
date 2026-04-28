@@ -82,11 +82,11 @@ export function LoadingOverlay({ liveText, dispatchedCount = 0, totalAgents = 6 
             >
               Uplinking...
             </motion.h1>
-            <motion.div 
+            <motion.div
                 initial={{ scaleX: 0 }}
                 animate={{ scaleX: 1 }}
                 transition={{ delay: 0.3, duration: 0.8 }}
-                className="h-[1px] w-32 mx-auto bg-primary/20" 
+                className="h-[1px] w-32 mx-auto bg-primary/20"
             />
         </div>
 

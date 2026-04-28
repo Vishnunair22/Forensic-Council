@@ -23,4 +23,3 @@ The free Gemini API tier has rate limits that may cause 429 errors during concur
 ## Session State Volatility
 
 Active investigation sessions are held in process memory. If the API server restarts, in-progress investigations are lost. Completed reports are persisted to PostgreSQL and survive restarts.
-

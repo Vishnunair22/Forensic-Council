@@ -26,4 +26,3 @@ The **Forensic Council** is a mission-critical, court-grade digital evidence ana
 
 ---
 *Last updated: 2026-04-16 after v1.4.0 milestone*
-

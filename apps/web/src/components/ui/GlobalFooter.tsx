@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+
 
 /**
  * GlobalFooter: Universal footer for the Horizon theme.

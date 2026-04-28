@@ -23,7 +23,6 @@ can see how many API calls were consumed and whether fallbacks were triggered.
 from __future__ import annotations
 
 import contextvars
-import json
 import time
 
 from core.structured_logging import get_logger
@@ -114,7 +113,10 @@ async def get_session_quota(session_id: str) -> dict:
         if not raw:
             return {}
 
-        return {k.decode() if isinstance(k, bytes) else k: v.decode() if isinstance(v, bytes) else v for k, v in raw.items()}
+        return {
+            k.decode() if isinstance(k, bytes) else k: v.decode() if isinstance(v, bytes) else v
+            for k, v in raw.items()
+        }
     except Exception as e:
         logger.debug("Quota meter: Redis read failed (non-fatal)", error=str(e))
         return {}

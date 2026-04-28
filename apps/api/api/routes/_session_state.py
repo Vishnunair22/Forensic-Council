@@ -220,24 +220,24 @@ async def broadcast_update(session_id: str, update: BriefUpdate) -> None:
         for ws in dead:
             unregister_websocket(session_id, ws)
 
-    # 2. Publish to Redis for API/worker topologies. 
+    # 2. Publish to Redis for API/worker topologies.
     # Also write to Replay Buffer to prevent race conditions during subscriber startup.
     try:
         redis = await _get_redis()
         channel = f"forensic:updates:{session_id}"
         replay_key = f"{REPLAY_BUFFER_KEY_PREFIX}{session_id}"
         payload = json.dumps(update.model_dump())
-        
+
         # Publish live
         await redis.client.publish(channel, payload)
-        
+
         # Write to replay buffer (atomic capped list)
         async with redis.client.pipeline(transaction=True) as pipe:
             pipe.rpush(replay_key, payload)
             pipe.ltrim(replay_key, -REPLAY_BUFFER_MAX_LEN, -1)
             pipe.expire(replay_key, REPLAY_BUFFER_TTL)
             await pipe.execute()
-            
+
     except Exception as e:
         logger.debug("Redis update broadcast failed", error=str(e))
 

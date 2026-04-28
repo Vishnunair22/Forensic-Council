@@ -66,4 +66,3 @@ This document provides a definitive list of the diagnostic tools available to ea
 | `reverse_search` | Checks for prior appearance of evidence online. | ✅ |
 | `c2pa_validator` | Verifies C2PA Content Credentials/Provenance. | ✅ |
 | `ocr_text_extract` | Tesseract-backed evidence text extraction. | ✅ |
-

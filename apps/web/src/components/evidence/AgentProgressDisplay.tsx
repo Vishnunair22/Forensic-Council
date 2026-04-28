@@ -105,7 +105,6 @@ export function AgentProgressDisplay({
   mimeType,
   playSound,
   revealQueue = [],
-  revealPending = false,
   arbiterDeliberating = false,
 }: AgentProgressDisplayProps) {
   const [hiddenAgents, setHiddenAgents] = useState(new Set<string>());
@@ -179,7 +178,7 @@ export function AgentProgressDisplay({
       if (completed.status === "skipped") return "unsupported";
       return (completed.status === "error" || completed.status === "failed" || completed.error) ? "error" : "complete";
     }
-    
+
     if (agentUpdates[agentId]) return "running";
     if (pipelineStatus === "analyzing" || pipelineStatus === "initiating" || pipelineStatus === "processing") {
       return "checking";
@@ -205,7 +204,7 @@ export function AgentProgressDisplay({
   const runningCount = Object.keys(agentUpdates).filter(id => !completedAgents.some(c => c.agent_id === id)).length;
 
   return (
-    <div 
+    <div
       className="flex flex-col w-full max-w-[1560px] mx-auto gap-8 pb-36 pt-24"
       aria-label="Agent forensic analysis progress"
     >
@@ -220,8 +219,8 @@ export function AgentProgressDisplay({
           </motion.h1>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-[var(--color-success-light)] animate-pulse shadow-[0_0_15px_rgba(167,255,210,0.5)]" />
-              <p className="text-[10px] font-mono font-bold text-[var(--color-success-light)] tracking-[0.3em] uppercase">
+              <div className="w-2 h-2 rounded-full bg-[var(--color-primary)] animate-pulse shadow-[0_0_15px_rgba(var(--color-primary-rgb),0.5)]" />
+              <p className="text-[10px] font-mono font-bold text-[var(--color-primary)] tracking-[0.3em] uppercase">
                 {phase === "initial" ? "Initial_Verification" : "Deep_Analysis"}
               </p>
             </div>
@@ -238,9 +237,9 @@ export function AgentProgressDisplay({
                <span className="text-[9px] font-mono font-bold text-white/20 uppercase tracking-[0.2em]">Active_Nodes</span>
                <span className="text-3xl font-mono font-bold text-white leading-none mt-1">0{runningCount}</span>
              </div>
-             <div className="w-12 h-12 rounded-full border border-[var(--color-success-light)]/20 flex items-center justify-center bg-[var(--color-success-light)]/5">
+             <div className="w-12 h-12 rounded-full border border-[var(--color-primary)]/20 flex items-center justify-center bg-[var(--color-primary)]/5">
                 <motion.div animate={{ rotate: 360 }} transition={{ duration: 4, repeat: Infinity, ease: "linear" }}>
-                  <Activity className="w-6 h-6 text-[var(--color-success-light)]" />
+                  <Activity className="w-6 h-6 text-[var(--color-primary)]" />
                 </motion.div>
              </div>
           </div>

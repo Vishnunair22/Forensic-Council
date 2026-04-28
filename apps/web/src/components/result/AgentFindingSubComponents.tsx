@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-import { 
- ChevronDown, 
- Clock, 
- AlertTriangle, 
- CheckCircle2, 
+import {
+ ChevronDown,
+ Clock,
+ AlertTriangle,
+ CheckCircle2,
  XCircle,
  Info
 } from "lucide-react";
@@ -97,19 +97,19 @@ export function ConfidenceBar({ value }: { value: number }) {
 }
 
 // ─── Tool Row Component ───
-export function ToolRow({ 
- finding, 
- isLast 
-}: { 
- finding: AgentFindingDTO; 
- isLast: boolean; 
+export function ToolRow({
+ finding,
+ isLast
+}: {
+ finding: AgentFindingDTO;
+ isLast: boolean;
 }) {
  const [expanded, setExpanded] = useState(false);
  const toolName = (finding.metadata?.tool_name as string) || finding.finding_type;
- 
+
  const na = finding.metadata?.ela_not_applicable || finding.metadata?.ghost_not_applicable;
  const status = na ? "na" : (finding.status === "CONFIRMED" ? "success" : (finding.status === "ERROR" ? "error" : "warning"));
- 
+
  const Icon = getToolIcon(toolName);
  const timingMs = (finding.metadata?.execution_time_ms as number) || null;
  const confidence = finding.raw_confidence_score || 0;
@@ -151,12 +151,12 @@ export function ToolRow({
        <Clock className="w-3 h-3" /> {timingMs >= 1000 ? `${(timingMs/1000).toFixed(1)}s` : `${timingMs}ms`}
       </span>
      )}
-     
+
      <div className={clsx(
      "px-3 py-1 rounded-full border text-[9px] font-black tracking-wide",
-      status === "success" ? "bg-primary/10 border-primary/20 text-primary" : 
-      status === "error" ? "bg-danger/10 border-danger/20 text-danger" : 
-      status === "na" ? "bg-surface-1 border-border-subtle text-white/20" : 
+      status === "success" ? "bg-primary/10 border-primary/20 text-primary" :
+      status === "error" ? "bg-danger/10 border-danger/20 text-danger" :
+      status === "na" ? "bg-surface-1 border-border-subtle text-white/20" :
      "bg-warning/10 border-warning/20 text-warning"
      )}>
       {status === "success" ? "Clean" : status === "warning" ? "Flagged" : status === "na" ? "N/A" : "Error"}

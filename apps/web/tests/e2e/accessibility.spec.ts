@@ -15,7 +15,7 @@ test.describe('Accessibility (A11y) Audit', () => {
   test('landing page should be WCAG 2.1 AA compliant', async ({ page }) => {
     await page.goto('/');
     await injectAxe(page);
-    
+
     // Check for violations against WCAG 2.1 AA tags
     await checkA11y(page, undefined, {
       axeOptions: {
@@ -39,9 +39,9 @@ test.describe('Accessibility (A11y) Audit', () => {
         // Fallback for different landing page variants
         await page.getByRole('button', { name: /upload/i }).first().click();
     }
-    
+
     await injectAxe(page);
-    
+
     // Ensure modal focus management and labels are correct
     await checkA11y(page, '.fixed', { // Target the modal container if possible, or check whole page
         axeOptions: {

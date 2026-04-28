@@ -3,10 +3,10 @@
 import React, { useEffect, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  AlertTriangle, 
-  Home as HomeIcon, 
-  RefreshCcw, 
+import {
+  AlertTriangle,
+  Home as HomeIcon,
+  RefreshCcw,
   Terminal,
   ShieldAlert,
   X
@@ -39,7 +39,7 @@ export function ForensicErrorModal({
 
   useEffect(() => {
     if (isVisible && mounted) {
-      playSound("alert-error"); 
+      playSound("alert-error");
     }
   }, [isVisible, mounted, playSound]);
 
@@ -48,7 +48,7 @@ export function ForensicErrorModal({
   return (
     <AnimatePresence>
       {isVisible && (
-        <Dialog.Root open={isVisible} onOpenChange={() => {}}>
+        <Dialog.Root open={isVisible} onOpenChange={(open) => { if (!open) onHome?.(); }}>
           <Dialog.Portal forceMount>
             <Dialog.Overlay asChild>
               <motion.div
@@ -67,7 +67,7 @@ export function ForensicErrorModal({
                 className="relative w-full max-w-2xl horizon-card p-1 border-danger/20 focus:outline-none"
               >
                 <div className="bg-[#020617] rounded-[inherit] p-10">
-                  
+
                   {/* --- Header Identity --- */}
                   <div className="flex items-center gap-3 mb-10">
                     <ShieldAlert className="w-4 h-4 text-danger" />
@@ -81,7 +81,7 @@ export function ForensicErrorModal({
                       {title}
                     </h2>
                   </Dialog.Title>
-                  
+
                   <Dialog.Description asChild>
                     <p className="text-base font-medium text-white/40 leading-relaxed mb-8">
                       {message}
@@ -91,7 +91,7 @@ export function ForensicErrorModal({
                   <div className="flex flex-col md:flex-row gap-12 items-start">
                     {/* Aperture Node (Red) */}
                     <div className="relative w-24 h-24 shrink-0 flex items-center justify-center">
-                      <motion.div 
+                      <motion.div
                         animate={{ rotate: 360 }}
                         transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
                         className="absolute inset-0 rounded-full border border-danger/20 border-dashed"
@@ -119,7 +119,7 @@ export function ForensicErrorModal({
                       {/* Actions */}
                       <div className="flex gap-4">
                         {onRetry && (
-                          <button 
+                          <button
                             onClick={onRetry}
                             className="flex-1 btn-horizon-primary py-4 text-xs border-danger/40 bg-danger/10 text-danger hover:bg-danger/20 flex items-center justify-center gap-3"
                           >
@@ -128,7 +128,7 @@ export function ForensicErrorModal({
                           </button>
                         )}
                         {onHome && (
-                          <button 
+                          <button
                             onClick={onHome}
                             className="flex-1 btn-horizon-outline py-4 text-xs flex items-center justify-center gap-3"
                           >

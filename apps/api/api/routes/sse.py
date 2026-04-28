@@ -45,7 +45,6 @@ async def _event_generator(
     """
     # Import the shared WebSocket connections registry
     from api.routes._session_state import _websocket_connections
-    from core.persistence.redis_client import get_redis_client
 
     # Increase queue size from 100 → 500
     queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=500)
@@ -103,6 +102,7 @@ async def _event_generator(
     if settings.use_redis_worker:
         try:
             from redis.asyncio import Redis
+
             dedicated_redis = Redis(
                 host=settings.redis_host,
                 port=settings.redis_port,
@@ -111,12 +111,12 @@ async def _event_generator(
                 socket_timeout=None,  # No timeout for pub/sub listening
                 socket_connect_timeout=5,
                 socket_keepalive=True,
-                decode_responses=True
+                decode_responses=True,
             )
             pubsub = dedicated_redis.pubsub()
             channel = f"forensic:updates:{session_id}"
             replay_key = f"forensic:replay:{session_id}"
-            
+
             # 1. Subscribe first (captures all future messages)
             await pubsub.subscribe(channel)
 
@@ -158,8 +158,8 @@ async def _event_generator(
             )
 
     try:
-        # Send initial connection event
-        yield f"event: connected\ndata: {json.dumps({'type': 'CONNECTED', 'session_id': session_id})}\n\n"
+        # Send initial connection event with retry hint
+        yield f"retry: 2000\nevent: connected\ndata: {json.dumps({'type': 'CONNECTED', 'session_id': session_id})}\n\n"
 
         while True:
             # Check if client disconnected
@@ -167,8 +167,8 @@ async def _event_generator(
                 break
 
             try:
-                # Wait for events with timeout (send keepalive every 30s)
-                msg = await asyncio.wait_for(queue.get(), timeout=30.0)
+                # Wait for events with timeout (send keepalive every 15s for Caddy)
+                msg = await asyncio.wait_for(queue.get(), timeout=15.0)
                 yield f"data: {json.dumps(msg)}\n\n"
             except TimeoutError:
                 # Keepalive

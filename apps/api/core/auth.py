@@ -221,7 +221,6 @@ async def decode_token(token: str) -> TokenData:
 # SECURITY: This is a read-through cache that uses token's remaining TTL.
 # It is NOT an authoritative store. Primary authority is Redis. The local cache
 # exists solely to avoid Redis RTT overhead on the hot-path blacklist check.
-from collections import OrderedDict
 
 _recently_blacklisted: OrderedDict[str, float] = OrderedDict()  # token_hash -> expiry_timestamp
 _LOCAL_BLACKLIST_MAX_SIZE = 10000  # prevent unbounded memory growth

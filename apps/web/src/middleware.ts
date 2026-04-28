@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 export function middleware(request: NextRequest) {
   const nonce = btoa(crypto.randomUUID()).replace(/=/g, "");
-  
+
   const isProd = process.env.NODE_ENV === "production";
   const connectSrc = isProd
     ? "'self'"
     : "'self' ws://localhost wss://localhost ws://localhost:3000 wss://localhost:3000";
-    
+
   const cspHeader = `
     default-src 'self';
     script-src 'self' 'nonce-${nonce}' 'strict-dynamic' ${!isProd ? "'unsafe-eval'" : ""};
@@ -28,7 +28,7 @@ export function middleware(request: NextRequest) {
       headers: requestHeaders,
     },
   });
-  
+
   response.headers.set("Content-Security-Policy", cspHeader);
   return response;
 }

@@ -150,4 +150,3 @@ Row 1: [Uptime] [Success Rate] [Avg Duration] [Active Sessions]
 Row 2: [Custody Errors] [Agent Failures (per agent)] [JWT Failures]
 Row 3: [Investigation Duration Histogram] [Request Rate by Endpoint]
 ```
-

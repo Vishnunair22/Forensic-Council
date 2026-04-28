@@ -6,9 +6,11 @@ increments counters correctly, and returns zero gracefully when
 Redis is unavailable.
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from core.quota_meter import record_api_call, get_session_quota, _session_key
+
+from core.quota_meter import _session_key, get_session_quota, record_api_call
 
 
 class TestRecordApiCall:
@@ -55,12 +57,8 @@ class TestRecordApiCall:
 
         # Check that provider-specific fields are incremented
         call_args = mock_pipeline.hincrby.call_args_list
-        provider_call_found = any(
-            "calls:gemini" in str(call) for call in call_args
-        )
-        total_call_found = any(
-            "calls:total" in str(call) for call in call_args
-        )
+        provider_call_found = any("calls:gemini" in str(call) for call in call_args)
+        total_call_found = any("calls:total" in str(call) for call in call_args)
         assert provider_call_found, "Provider-specific call count not incremented"
         assert total_call_found, "Total call count not incremented"
 
@@ -87,9 +85,7 @@ class TestRecordApiCall:
 
             # Verify it used the context variable's session
             calls = mock_pipeline.hincrby.call_args_list
-            context_session_used = any(
-                "quota:context-session-456" in str(call) for call in calls
-            )
+            context_session_used = any("quota:context-session-456" in str(call) for call in calls)
             assert context_session_used, "Should use session_id from context variable"
         finally:
             session_id_ctx.reset(token)

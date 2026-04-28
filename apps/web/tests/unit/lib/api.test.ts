@@ -54,7 +54,7 @@ global.fetch = jest.fn((url) => {
 
   const response = mockResponses.shift();
   if (response) return Promise.resolve(response);
-  
+
   // Fallback for unexpected calls to avoid "reading 'ok' of undefined"
   console.warn(`[Test] Unexpected fetch call to ${url}`);
   return Promise.resolve({

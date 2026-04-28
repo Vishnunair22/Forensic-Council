@@ -3,11 +3,13 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ShieldAlert,
   Activity,
   Cpu,
-  Scan,
-  Microscope,
+  ScanEye,
+  AudioWaveform,
+  Boxes,
+  Film,
+  Database,
   type LucideIcon,
 } from "lucide-react";
 import { clsx } from "clsx";
@@ -15,7 +17,6 @@ import { fmtTool } from "@/lib/fmtTool";
 import {
   getDefaultProgressTotal,
   getLiveProgressDescriptor,
-  getAgentPrefix,
 } from "@/lib/tool-progress";
 import type { AgentUpdate, FindingPreview } from "./AgentProgressDisplay";
 
@@ -42,12 +43,12 @@ export interface AgentStatusCardProps {
 
 const statusConfig = {
   waiting:     { color: "text-white/20",   label: "Standby"   },
-  checking:    { color: "text-[var(--color-success-light)]",    label: "Syncing" },
-  running:     { color: "text-[var(--color-success-light)]",    label: "Scanning" },
-  complete:    { color: "text-[var(--color-success-light)]",    label: "Verified"  },
+  checking:    { color: "text-[var(--color-primary)]",    label: "Syncing" },
+  running:     { color: "text-[var(--color-primary)]",    label: "Scanning" },
+  complete:    { color: "text-[var(--color-primary)]",    label: "Verified"  },
   error:       { color: "text-danger",     label: "Error"     },
   unsupported: { color: "text-white/30",   label: "Bypassed"   },
-  validating:  { color: "text-[var(--color-success-light)]",    label: "Validating" },
+  validating:  { color: "text-[var(--color-primary)]",    label: "Validating" },
 };
 
 const ALERT_VERDICTS = new Set(["FLAGGED", "SUSPICIOUS", "LIKELY_MANIPULATED", "LIKELY_AI_GENERATED", "LIKELY_SPOOFED"]);
@@ -62,11 +63,11 @@ function isAlertFinding(finding: FindingPreview) {
 }
 
 const AGENT_GRAPHICS: Record<string, { icon: LucideIcon; color: string; bg: string }> = {
-  "Agent1": { icon: Scan, color: "text-[var(--color-success-light)]", bg: "bg-[var(--color-success-light)]/10" },
-  "Agent2": { icon: Activity, color: "text-[var(--color-success-light)]", bg: "bg-[var(--color-success-light)]/10" },
-  "Agent3": { icon: Microscope, color: "text-[var(--color-success-light)]", bg: "bg-[var(--color-success-light)]/10" },
-  "Agent4": { icon: Cpu, color: "text-[var(--color-success-light)]", bg: "bg-[var(--color-success-light)]/10" },
-  "Agent5": { icon: ShieldAlert, color: "text-[var(--color-success-light)]", bg: "bg-[var(--color-success-light)]/10" },
+  "Agent1": { icon: ScanEye,  color: "text-[#60A5FA]", bg: "bg-[#60A5FA]/10" },
+  "Agent2": { icon: AudioWaveform, color: "text-[#38BDF8]", bg: "bg-[#38BDF8]/10" },
+  "Agent3": { icon: Boxes,    color: "text-[#818CF8]", bg: "bg-[#818CF8]/10" },
+  "Agent4": { icon: Film,     color: "text-[#22D3EE]", bg: "bg-[#22D3EE]/10" },
+  "Agent5": { icon: Database, color: "text-[#93C5FD]", bg: "bg-[#93C5FD]/10" },
 };
 
 function FindingRow({ f, i }: { f: FindingPreview; i: number }) {
@@ -98,7 +99,7 @@ function FindingRow({ f, i }: { f: FindingPreview; i: number }) {
       {isLong && (
         <button
           onClick={() => setExpanded((e) => !e)}
-          className="mt-2 text-[10px] font-mono text-[var(--color-success-light)] uppercase tracking-widest"
+          className="mt-2 text-[10px] font-mono text-[var(--color-primary)] uppercase tracking-widest"
         >
           {expanded ? "Show less" : "Show more"}
         </button>
@@ -124,7 +125,7 @@ export function AgentStatusCard({
   const [stageIndex, setStageIndex] = useState(0);
   const [showAllTools, setShowAllTools] = useState(false);
 
-  const agentGraphic = AGENT_GRAPHICS[agentId] || { icon: Cpu, color: "text-[var(--color-success-light)]", bg: "bg-[var(--color-success-light)]/10" };
+  const agentGraphic = AGENT_GRAPHICS[agentId] || { icon: Cpu, color: "text-[var(--color-primary)]", bg: "bg-[var(--color-primary)]/10" };
   const Icon = agentGraphic.icon;
 
   useEffect(() => {
@@ -153,14 +154,14 @@ export function AgentStatusCard({
     currentToolIndex - 1,
   );
   const ProgressIcon = progressDescriptor.icon;
-  
+
   return (
     <motion.div
       layout
       className={clsx(
         "glass-panel relative flex flex-col overflow-hidden transition-all duration-500",
         status === "unsupported" ? "min-h-[200px]" : "min-h-[540px]",
-        (status === "running" || status === "validating" || status === "checking") && "border-[var(--color-success-light)]/30 shadow-[0_0_30px_rgba(167,255,210,0.1)]",
+        (status === "running" || status === "validating" || status === "checking") && "border-[var(--color-primary)]/30 shadow-[0_0_30px_rgba(var(--color-primary-rgb),0.1)]",
         status === "waiting" && "opacity-40"
       )}
       data-testid={`agent-card-${agentId}`}
@@ -171,10 +172,10 @@ export function AgentStatusCard({
           <div className="flex items-center gap-5">
             {/* Aperture Icon */}
             <div className="relative w-16 h-16 flex items-center justify-center">
-              <motion.div 
+              <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-                className="absolute inset-0 rounded-full border border-[var(--color-success-light)]/20 border-dashed"
+                className="absolute inset-0 rounded-full border border-[var(--color-primary)]/20 border-dashed"
               />
               <Icon className={clsx("w-7 h-7 relative z-10", agentGraphic.color)} />
             </div>
@@ -184,7 +185,7 @@ export function AgentStatusCard({
               <div className="flex items-center gap-2">
                 <span className={clsx(
                   "px-2 py-0.5 rounded text-[9px] font-mono font-bold border",
-                  (status === "complete" || status === "validating" || status === "checking" || status === "running") ? "bg-[var(--color-success-light)]/10 border-[var(--color-success-light)]/30 text-[var(--color-success-light)]" :
+                  (status === "complete" || status === "validating" || status === "checking" || status === "running") ? "bg-[var(--color-primary)]/10 border-[var(--color-primary)]/30 text-[var(--color-primary)]" :
                   status === "error" ? "bg-danger/10 border-danger/30 text-danger" :
                   "bg-white/5 border-white/10 text-white/40"
                 )}>
@@ -210,9 +211,9 @@ export function AgentStatusCard({
             >
               <div className="flex items-center gap-3 text-white/60">
                 {(status === "validating" || status === "checking") ? (
-                  <Activity className="w-4 h-4 text-[var(--color-success-light)] animate-pulse" />
+                  <Activity className="w-4 h-4 text-[var(--color-primary)] animate-pulse" />
                 ) : (
-                  <ProgressIcon className="w-4 h-4 text-[var(--color-success-light)]" />
+                  <ProgressIcon className="w-4 h-4 text-[var(--color-primary)]" />
                 )}
                 <span className="text-[10px] font-mono font-bold tracking-[0.1em] truncate">
                   {status === "validating"
@@ -224,7 +225,7 @@ export function AgentStatusCard({
               </div>
               <div className="relative w-full h-[2px] bg-white/5 rounded-full overflow-hidden">
                 <motion.div
-                  className="absolute top-0 bottom-0 bg-[var(--color-success-light)] shadow-[0_0_15px_rgba(167,255,210,0.5)]"
+                  className="absolute top-0 bottom-0 bg-[var(--color-primary)] shadow-[0_0_15px_rgba(var(--color-primary-rgb),0.5)]"
                   animate={{
                     width: (status === "validating" || status === "checking") ? "60%" : `${(currentToolIndex / liveTotal) * 100}%`,
                     opacity: (status === "validating" || status === "checking") ? [0.3, 1, 0.3] : 1,
@@ -277,7 +278,7 @@ export function AgentStatusCard({
               {(showAllTools ? findings : findings.slice(0, 2)).map((f, i) => (
                 <FindingRow key={`${f.tool}-${i}`} f={f} i={i} />
               ))}
-              
+
               {findings.length > 2 && (
                 <button
                   onClick={() => setShowAllTools(!showAllTools)}
@@ -289,7 +290,7 @@ export function AgentStatusCard({
             </div>
           ) : status === "checking" ? (
             <div className="flex flex-col items-center justify-center h-full text-center gap-4 py-12">
-               <div className="w-12 h-12 rounded-xl bg-[var(--color-success-light)]/5 border border-[var(--color-success-light)]/20 flex items-center justify-center text-[var(--color-success-light)] animate-pulse">
+               <div className="w-12 h-12 rounded-xl bg-[var(--color-primary)]/5 border border-[var(--color-primary)]/20 flex items-center justify-center text-[var(--color-primary)] animate-pulse">
                   <Activity className="w-6 h-6" />
                </div>
             </div>

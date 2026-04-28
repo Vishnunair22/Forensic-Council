@@ -38,7 +38,7 @@ describe("useInvestigation Hook", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (useRouter as jest.Mock).mockReturnValue({ push: mockPush });
-    
+
     (useSimulation as jest.Mock).mockReturnValue({
       status: "idle",
       agentUpdates: {},
@@ -57,7 +57,7 @@ describe("useInvestigation Hook", () => {
     });
 
     (api.autoLoginAsInvestigator as jest.Mock).mockResolvedValue({ access_token: "test-token" });
-    
+
     // Mock sessionStorage
     const store: Record<string, string> = { forensic_auth_ok: "1" };
     Object.defineProperty(window, "sessionStorage", {

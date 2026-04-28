@@ -6,8 +6,7 @@ Gemini call does not block Groq.
 """
 
 import pytest
-import time
-from unittest.mock import AsyncMock, MagicMock, patch
+
 from core.circuit_breaker import CircuitBreaker, CircuitState
 
 
@@ -67,6 +66,7 @@ class TestCircuitBreakerPerProviderKeying:
         """Verify LLMClient uses correct breaker key format."""
         # Test that the circuit breaker key format is provider:model
         from core.config import get_settings
+
         settings = get_settings()
 
         # The key format should be: provider:model
@@ -118,8 +118,8 @@ class TestLLMClientCircuitBreakerKeying:
 
     def test_llm_client_creates_breaker_with_correct_key(self):
         """Verify LLMClient creates circuit breaker with provider:model key."""
-        from core.llm_client import LLMClient
         from core.config import get_settings
+        from core.llm_client import LLMClient
 
         settings = get_settings()
 

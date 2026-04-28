@@ -22,7 +22,7 @@ Welcome, Agent. This project follows a specific monorepo and architectural patte
 
 1.  **Strict Typing**: Always use Python type hints and TypeScript interfaces.
 2.  **Forensic Integrity**: Every significant thought or action should be logged via the `custody_logger`.
-3.  **Imports**: 
+3.  **Imports**:
     - In `api`: Use `from core.persistence...` instead of the legacy `from infra...`.
     - Always use relative imports within components where appropriate, but prefer absolute imports from the app root (`api`, `core`, etc.) for clarity.
 4.  **No Junk**: Do not create temporary files in the root. Use `apps/api/scratch/` or `apps/web/public/temp/` if absolutely necessary, but ensure they are ignored by git.
@@ -33,4 +33,3 @@ Standardized root `.env` is the single source of truth for both service and infr
 
 ---
 *Note: This file is intended to provide immediate context for any AI assistant joining the project session map.*
-

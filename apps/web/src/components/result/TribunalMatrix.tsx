@@ -37,7 +37,7 @@ export function TribunalMatrix({ report }: TribunalMatrixProps) {
 
       <div className="horizon-card p-1 rounded-3xl overflow-hidden">
         <div className="bg-[#020617] rounded-[inherit]">
-          
+
           {/* Header */}
           <div className="px-8 py-6 border-b border-white/5 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -46,7 +46,7 @@ export function TribunalMatrix({ report }: TribunalMatrixProps) {
                 {hasContested ? "Contested_Anomaly_Detection" : "Neural_Conflict_Resolved"}
               </span>
             </div>
-            
+
             <div className={clsx(
               "px-3 py-1 rounded text-[9px] font-mono font-bold uppercase tracking-widest border",
               hasContested ? "text-danger border-danger/20 bg-danger/5" : "text-primary border-primary/20 bg-primary/5"
@@ -56,7 +56,7 @@ export function TribunalMatrix({ report }: TribunalMatrixProps) {
           </div>
 
           <div className="p-8 grid grid-cols-1 lg:grid-cols-2 gap-12">
-            
+
             {/* Contested Patterns */}
             <div className="space-y-6">
               <div className="flex items-center gap-3">

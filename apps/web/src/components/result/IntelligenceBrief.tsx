@@ -19,24 +19,24 @@ export function IntelligenceBrief({ verdictSentence, keyFindings = [], isDeepPha
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-16">
-      
+
       {/* --- Executive Briefing Sentence --- */}
       {verdictSentence && (
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           className="glass-panel p-1 relative rounded-[2.5rem] border-white/5"
         >
           <div className="bg-[#020203]/40 rounded-[inherit] p-12 relative overflow-hidden">
             <Quote className="absolute -top-4 -right-4 w-48 h-48 text-white/[0.01] pointer-events-none" />
-            
+
             <div className="flex items-center gap-4 mb-10">
                <Hash className="w-5 h-5 text-[var(--color-success-light)]" />
                <span className="text-[10px] font-mono font-bold text-white/20 uppercase tracking-[0.4em]">
                  EXECUTIVE_SUMMARY // ANALYST_VERDICT
                </span>
             </div>
-            
+
             <p className="text-2xl sm:text-3xl font-medium text-white leading-relaxed italic font-sans text-balance relative z-10 tracking-tight">
               &ldquo;{verdictSentence}&rdquo;
             </p>
@@ -91,4 +91,3 @@ export function IntelligenceBrief({ verdictSentence, keyFindings = [], isDeepPha
     </div>
   );
 }
-

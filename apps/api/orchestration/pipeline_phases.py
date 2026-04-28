@@ -25,7 +25,7 @@ logger = get_logger(__name__)
 
 
 async def run_agents_concurrent(
-    pipeline: "ForensicCouncilPipeline",
+    pipeline: ForensicCouncilPipeline,
     evidence_artifact,
     session_id: UUID,
 ) -> list[AgentLoopResult]:
@@ -65,7 +65,9 @@ async def run_agents_concurrent(
                     m = (
                         f.metadata
                         if hasattr(f, "metadata")
-                        else f.get("metadata", {}) if isinstance(f, dict) else {}
+                        else f.get("metadata", {})
+                        if isinstance(f, dict)
+                        else {}
                     )
                     tool = m.get("tool_name") or (
                         f.finding_type if hasattr(f, "finding_type") else f.get("finding_type")
@@ -84,45 +86,49 @@ async def run_agents_concurrent(
                         else f.get("evidence_verdict", "")
                     ).upper()
                     finding_status = str(
-                        getattr(f, "status", "")
-                        if hasattr(f, "status")
-                        else f.get("status", "")
+                        getattr(f, "status", "") if hasattr(f, "status") else f.get("status", "")
                     ).upper()
                     if evidence_verdict == "ERROR" or finding_status == "INCOMPLETE":
                         tv = "NEEDS_REVIEW"
                     elif evidence_verdict in (
-                        "POSITIVE", "TAMPERED", "SUSPICIOUS", "MANIPULATED",
+                        "POSITIVE",
+                        "TAMPERED",
+                        "SUSPICIOUS",
+                        "MANIPULATED",
                     ) or sev in ("CRITICAL", "HIGH", "MEDIUM"):
                         tv = "FLAGGED"
-                    elif (
-                        evidence_verdict == "NOT_APPLICABLE"
-                        or finding_status == "NOT_APPLICABLE"
-                    ):
+                    elif evidence_verdict == "NOT_APPLICABLE" or finding_status == "NOT_APPLICABLE":
                         tv = "NOT_APPLICABLE"
                     else:
                         tv = "CLEAN"
-                    preview.append({
-                        "tool": tool,
-                        "summary": s[:320],
-                        "severity": sev,
-                        "verdict": tv,
-                        "key_signal": m.get("section_key_signal") or m.get("raw_tool_summary") or "",
-                        "confidence": (
-                            getattr(f, "confidence_raw", None)
-                            if hasattr(f, "confidence_raw")
-                            else f.get("confidence_raw")
-                        ),
-                        "section": m.get("section") or "",
-                    })
+                    preview.append(
+                        {
+                            "tool": tool,
+                            "summary": s[:320],
+                            "severity": sev,
+                            "verdict": tv,
+                            "key_signal": m.get("section_key_signal")
+                            or m.get("raw_tool_summary")
+                            or "",
+                            "confidence": (
+                                getattr(f, "confidence_raw", None)
+                                if hasattr(f, "confidence_raw")
+                                else f.get("confidence_raw")
+                            ),
+                            "section": m.get("section") or "",
+                        }
+                    )
             if isinstance(synthesis, dict) and not preview:
                 summary = str(synthesis.get("narrative_summary") or "").strip()
                 if summary:
-                    preview.append({
-                        "tool": "agent_synthesis",
-                        "summary": summary[:420],
-                        "severity": "LOW",
-                        "verdict": str(synthesis.get("verdict") or "INCONCLUSIVE"),
-                    })
+                    preview.append(
+                        {
+                            "tool": "agent_synthesis",
+                            "summary": summary[:420],
+                            "severity": "LOW",
+                            "verdict": str(synthesis.get("verdict") or "INCONCLUSIVE"),
+                        }
+                    )
 
             await broadcast_update(
                 str(session_id),
@@ -136,15 +142,31 @@ async def run_agents_concurrent(
                     message=message,
                     data={
                         "status": status,
-                        "findings_count": 0 if status == "skipped" else (len(findings) if findings else 0),
-                        "confidence": 0 if status == "skipped" else (getattr(agent_inst, "_overall_confidence", None) if agent_inst else None),
+                        "findings_count": 0
+                        if status == "skipped"
+                        else (len(findings) if findings else 0),
+                        "confidence": 0
+                        if status == "skipped"
+                        else (
+                            getattr(agent_inst, "_overall_confidence", None) if agent_inst else None
+                        ),
                         "error": error,
                         "findings_preview": preview,
-                        "agent_verdict": synthesis.get("verdict") if isinstance(synthesis, dict) else None,
-                        "tool_error_rate": getattr(agent_inst, "_agent_error_rate", None) if agent_inst else None,
-                        "tools_ran": getattr(agent_inst, "_tool_success_count", None) if agent_inst else None,
-                        "tools_failed": getattr(agent_inst, "_tool_error_count", None) if agent_inst else None,
-                        "section_flags": synthesis.get("sections") if isinstance(synthesis, dict) else None,
+                        "agent_verdict": synthesis.get("verdict")
+                        if isinstance(synthesis, dict)
+                        else None,
+                        "tool_error_rate": getattr(agent_inst, "_agent_error_rate", None)
+                        if agent_inst
+                        else None,
+                        "tools_ran": getattr(agent_inst, "_tool_success_count", None)
+                        if agent_inst
+                        else None,
+                        "tools_failed": getattr(agent_inst, "_tool_error_count", None)
+                        if agent_inst
+                        else None,
+                        "section_flags": synthesis.get("sections")
+                        if isinstance(synthesis, dict)
+                        else None,
                     },
                 ),
             )
@@ -181,17 +203,25 @@ async def run_agents_concurrent(
 
         if not supported:
             await _broadcast_agent_status(
-                aid, "skipped", f"{aid} bypassed: file type not supported.",
-                error="Unsupported file type.", agent_inst=inst,
+                aid,
+                "skipped",
+                f"{aid} bypassed: file type not supported.",
+                error="Unsupported file type.",
+                agent_inst=inst,
             )
         else:
             await _broadcast_agent_status(
-                aid, "running", f"Agent {aid} active. Initializing scan...", agent_inst=inst,
+                aid,
+                "running",
+                f"Agent {aid} active. Initializing scan...",
+                agent_inst=inst,
             )
 
     applicable_ids = [
         aid
-        for (inst, supported), aid in zip(agent_instances, registry.get_all_agent_ids(), strict=True)
+        for (inst, supported), aid in zip(
+            agent_instances, registry.get_all_agent_ids(), strict=True
+        )
         if supported
     ]
     if pipeline.signal_bus:
@@ -209,8 +239,11 @@ async def run_agents_concurrent(
             if pipeline.signal_bus:
                 await pipeline.signal_bus.signal_ready(aid, initial_findings)
             await _broadcast_agent_status(
-                aid, "complete", f"{aid} initial analysis complete.",
-                findings=initial_findings, agent_inst=agent,
+                aid,
+                "complete",
+                f"{aid} initial analysis complete.",
+                findings=initial_findings,
+                agent_inst=agent,
             )
             return agent, initial_findings, "complete"
         except Exception as e:
@@ -219,8 +252,12 @@ async def run_agents_concurrent(
             if pipeline.signal_bus:
                 await pipeline.signal_bus.signal_failure(aid)
             await _broadcast_agent_status(
-                aid, "error", f"{aid} error: {e}",
-                findings=findings, error=str(e), agent_inst=agent,
+                aid,
+                "error",
+                f"{aid} error: {e}",
+                findings=findings,
+                error=str(e),
+                agent_inst=agent,
             )
             return agent, findings, "error"
 
@@ -237,9 +274,7 @@ async def run_agents_concurrent(
     agent_map: dict[str, tuple] = {}
     for i, aid in enumerate(registry.get_all_agent_ids()):
         res = (
-            raw_initial[i]
-            if not isinstance(raw_initial[i], BaseException)
-            else (None, [], "error")
+            raw_initial[i] if not isinstance(raw_initial[i], BaseException) else (None, [], "error")
         )
         agent_map[aid] = res
 
@@ -278,9 +313,7 @@ async def run_agents_concurrent(
             meta = {}
             if hasattr(producer_finding, "metadata"):
                 meta = (
-                    producer_finding.metadata
-                    if isinstance(producer_finding.metadata, dict)
-                    else {}
+                    producer_finding.metadata if isinstance(producer_finding.metadata, dict) else {}
                 )
             elif isinstance(producer_finding, dict):
                 meta = producer_finding.get("metadata", {}) or producer_finding
@@ -312,8 +345,12 @@ async def run_agents_concurrent(
             if aid == producer_id:
                 context_event.set()
             return AgentLoopResult(
-                agent_id=aid, findings=[], reflection_report={}, react_chain=[],
-                agent_active=False, supports_file_type=False,
+                agent_id=aid,
+                findings=[],
+                reflection_report={},
+                react_chain=[],
+                agent_active=False,
+                supports_file_type=False,
             )
 
         try:
@@ -322,13 +359,19 @@ async def run_agents_concurrent(
 
             if result.error:
                 await _broadcast_agent_status(
-                    aid, "error", f"{aid} error: {result.error}",
-                    error=result.error, agent_inst=a_inst,
+                    aid,
+                    "error",
+                    f"{aid} error: {result.error}",
+                    error=result.error,
+                    agent_inst=a_inst,
                 )
             else:
                 await _broadcast_agent_status(
-                    aid, "complete", f"{aid} analysis complete.",
-                    findings=result.findings, agent_inst=a_inst,
+                    aid,
+                    "complete",
+                    f"{aid} analysis complete.",
+                    findings=result.findings,
+                    agent_inst=a_inst,
                 )
 
             if aid == producer_id:
@@ -366,17 +409,24 @@ async def run_agents_concurrent(
                 error=str(r),
                 exc_info=r,
             )
-            results.append(AgentLoopResult(
-                agent_id=agent_ids_deep[i],
-                findings=[], reflection_report={}, react_chain=[],
-                error=str(r), agent_active=False,
-            ))
+            results.append(
+                AgentLoopResult(
+                    agent_id=agent_ids_deep[i],
+                    findings=[],
+                    reflection_report={},
+                    react_chain=[],
+                    error=str(r),
+                    agent_active=False,
+                )
+            )
         else:
             results.append(r)
 
     active_agents = [r.agent_id for r in results if r.agent_active]
     skipped_agents = [r.agent_id for r in results if not r.supports_file_type]
-    logger.info("Agent execution summary", active_agents=active_agents, skipped_agents=skipped_agents)
+    logger.info(
+        "Agent execution summary", active_agents=active_agents, skipped_agents=skipped_agents
+    )
 
     for aid in registry.get_all_agent_ids():
         if pipeline.inter_agent_bus is not None:
@@ -386,7 +436,7 @@ async def run_agents_concurrent(
 
 
 async def _run_agent_deep_only(
-    pipeline: "ForensicCouncilPipeline",
+    pipeline: ForensicCouncilPipeline,
     agent,
     agent_id: str,
     initial_findings: list,
@@ -399,13 +449,22 @@ async def _run_agent_deep_only(
 
     if agent is None:
         return AgentLoopResult(
-            agent_id=agent_id, findings=[], reflection_report={}, react_chain=[],
-            agent_active=False, supports_file_type=supports_file, error="Initial pass failed",
+            agent_id=agent_id,
+            findings=[],
+            reflection_report={},
+            react_chain=[],
+            agent_active=False,
+            supports_file_type=supports_file,
+            error="Initial pass failed",
         )
     if not supports_file:
         return AgentLoopResult(
-            agent_id=agent_id, findings=[], reflection_report={}, react_chain=[],
-            agent_active=False, supports_file_type=False,
+            agent_id=agent_id,
+            findings=[],
+            reflection_report={},
+            react_chain=[],
+            agent_active=False,
+            supports_file_type=False,
         )
 
     with _tracer.start_as_current_span(f"agent.{agent_id}.deep_pass") as span:
@@ -449,7 +508,7 @@ async def _run_agent_deep_only(
 
 
 async def _await_deep_analysis_decision(
-    pipeline: "ForensicCouncilPipeline",
+    pipeline: ForensicCouncilPipeline,
     session_id: UUID,
 ) -> bool:
     """

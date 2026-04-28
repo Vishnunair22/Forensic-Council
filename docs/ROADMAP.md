@@ -20,4 +20,3 @@
 - [ ] Docker-Compose Optimization for air-gapped environments.
 - [ ] Tribunal HITL Interface refinement.
 - [ ] Final 2026 Standards Compliance Audit.
-

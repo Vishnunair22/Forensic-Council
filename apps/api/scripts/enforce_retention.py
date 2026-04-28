@@ -7,9 +7,8 @@ Deletes evidence older than EVIDENCE_RETENTION_DAYS from the evidence store.
 from __future__ import annotations
 
 import asyncio
-import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import asyncpg
@@ -37,7 +36,7 @@ async def _connect() -> asyncpg.Pool:
 async def enforce_retention() -> int:
     s = get_settings()
     days = s.evidence_retention_days
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
     evidence_dir = Path(s.evidence_storage_path)
     if not evidence_dir.exists():
         logger.info("evidence dir missing", path=str(evidence_dir))
@@ -53,7 +52,7 @@ async def enforce_retention() -> int:
     for f in evidence_dir.rglob("*"):
         if not f.is_file():
             continue
-        mtime = datetime.fromtimestamp(f.stat().st_mtime, tz=timezone.utc)
+        mtime = datetime.fromtimestamp(f.stat().st_mtime, tz=UTC)
         if mtime >= cutoff:
             continue
         try:

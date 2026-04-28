@@ -82,4 +82,3 @@ curl -F "file=@test_image.jpg" -H "Authorization: Bearer $TOKEN" \
 - [ ] Check performance metrics
 - [ ] Update status page if applicable
 - [ ] Document any issues encountered
-

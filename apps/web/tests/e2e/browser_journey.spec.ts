@@ -335,7 +335,7 @@ async function installJourneyMocks(page: import('@playwright/test').Page) {
  * Tests the visual and interactive journey of a forensic analyst.
  */
 test.describe('Forensic Analyst Journey', () => {
-  
+
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
@@ -411,7 +411,7 @@ test.describe('Forensic Analyst Journey', () => {
 
     await expect(page.locator('h1')).toBeVisible();
     const beginBtn = page.getByRole('button', { name: /Begin Analysis/i });
-    
+
     // Ensure button is usable on mobile
     const box = await beginBtn.boundingBox();
     expect(box?.width).toBeGreaterThan(100);
