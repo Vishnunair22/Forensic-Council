@@ -37,6 +37,7 @@ from orchestration.investigation_queue import (  # noqa: E402
     get_investigation_queue,
 )
 from orchestration.pipeline import ForensicCouncilPipeline  # noqa: E402
+from orchestration.pipeline_registry import register_pipeline, unregister_pipeline  # noqa: E402
 from scripts.cleanup_storage import cleanup_evidence  # noqa: E402
 
 logger = get_logger("worker")
@@ -131,6 +132,9 @@ async def main() -> None:
             )
 
             pipeline = ForensicCouncilPipeline()
+            _active_pipelines[session_str] = pipeline
+            register_pipeline(session_id, pipeline)
+
             report = await pipeline.run_investigation(
                 evidence_file_path=evidence_file_path,
                 case_id=case_id,
@@ -232,6 +236,7 @@ async def main() -> None:
             except Exception as e:
                 logger.warning("Failed to cleanup evidence file", path=evidence_file_path, error=str(e))
             _active_pipelines.pop(session_str, None)
+            unregister_pipeline(session_id)
             clear_session_websockets(session_str)
 
     worker.set_handler(investigation_handler)
@@ -256,6 +261,35 @@ async def main() -> None:
 
     cleanup_task = asyncio.create_task(periodic_cleanup())
 
+    async def notify_decision_consumer() -> None:
+        from core.persistence.redis_client import get_redis_client
+        import json
+        from orchestration.pipeline_registry import notify_decision
+        
+        try:
+            redis = await get_redis_client()
+            pubsub = redis.pubsub()
+            await pubsub.subscribe("forensic:notify_decision")
+            logger.info("Worker subscribed to forensic:notify_decision")
+            
+            async for message in pubsub.listen():
+                if shutdown.is_set():
+                    break
+                if message["type"] == "message":
+                    try:
+                        data = json.loads(message["data"])
+                        session_id_val = data.get("session_id")
+                        deep_analysis_val = data.get("deep_analysis")
+                        if session_id_val is not None and deep_analysis_val is not None:
+                            from uuid import UUID
+                            notify_decision(UUID(session_id_val), deep_analysis_val)
+                    except Exception as parse_err:
+                        logger.error("Failed to parse notify_decision message", error=str(parse_err))
+        except Exception as e:
+            logger.error("notify_decision_consumer failed", error=str(e))
+
+    consumer_task = asyncio.create_task(notify_decision_consumer())
+
     try:
         worker_task = asyncio.create_task(worker.start())
         await shutdown.wait()
@@ -273,6 +307,11 @@ async def main() -> None:
             await cleanup_task
         except (asyncio.CancelledError, Exception):
             pass  # Expected: cleanup task was just cancelled for graceful shutdown.
+        consumer_task.cancel()
+        try:
+            await consumer_task
+        except (asyncio.CancelledError, Exception):
+            pass
         await worker.stop()
         logger.info("Worker stopped cleanly")
 

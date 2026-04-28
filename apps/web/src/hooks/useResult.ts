@@ -29,7 +29,7 @@ export function useResult() {
   const router = useRouter();
   
   // Initialize states from sessionStorage immediately if in browser to avoid flickers
-  const getInitial = (key: string) => persistentStorage.getItem<string>(key, false, null);
+  const getInitial = (key: string) => persistentStorage.getItem(key);
 
   const [mounted, setMounted] = useState(false);
   const [state, setState] = useState<PageState>("arbiter");
@@ -60,7 +60,7 @@ export function useResult() {
   // Session ID
   const [sessionId, setSessionId] = useState<string | null>(() =>
     typeof window !== "undefined"
-      ? storage.getItem<string>("forensic_session_id", false, null)
+      ? storage.getItem("forensic_session_id")
       : null
   );
 
@@ -185,7 +185,7 @@ export function useResult() {
       historySavedRef.current = true;
       const hItem: HistoryItem = {
         sessionId: report.session_id,
-        fileName: storage.getItem<string>("forensic_file_name", false, "Unknown File") || "Unknown File",
+        fileName: storage.getItem("forensic_file_name") || "Unknown File",
         verdict: report.overall_verdict || "INCONCLUSIVE",
         timestamp: Date.now(),
         type: isDeepPhase ? "Deep" : "Initial",

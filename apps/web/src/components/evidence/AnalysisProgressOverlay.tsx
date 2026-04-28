@@ -27,6 +27,7 @@ export function AnalysisProgressOverlay({
   }, [isVisible]);
 
   return (
+    <AnimatePresence>
       {isVisible && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -54,5 +55,6 @@ export function AnalysisProgressOverlay({
           </div>
         </motion.div>
       )}
+    </AnimatePresence>
   );
 }

@@ -16,7 +16,7 @@ import {
   type HITLDecision
 } from "@/lib/api";
 import { toast } from "./use-toast";
-import { AGENTS as AGENTS_DATA, ALLOWED_MIME_TYPES, INVESTIGATION_REQUEST_TIMEOUT_MS } from "@/lib/constants";
+import { AGENTS as AGENTS_DATA, ALLOWED_MIME_TYPES, INVESTIGATION_REQUEST_TIMEOUT_MS, ARBITER_POLL_INTERVAL_MS } from "@/lib/constants";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { type SoundType } from "@/hooks/useSound";
 import { type AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
@@ -46,7 +46,7 @@ async function waitForFinalReport(
   signal?: AbortSignal,
 ): Promise<boolean> {
   const deadline = Date.now() + maxMs;
-  let pollInterval = 1000;
+  let pollInterval = ARBITER_POLL_INTERVAL_MS;
   while (Date.now() < deadline) {
     if (signal?.aborted) return false;
     try {
@@ -88,7 +88,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   const _initInvestigatorId = () => {
     if (typeof window === "undefined") return "REQ-000000";
-    const stored = storage.getItem<string>("forensic_investigator_id");
+    const stored = storage.getItem("forensic_investigator_id");
     const validIdPattern = /^REQ-\d{5,10}$/;
     if (stored && validIdPattern.test(stored)) return stored;
     const fresh = "REQ-" + (Math.floor(Math.random() * 900000) + 100000);
@@ -116,6 +116,15 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const investigationInFlightRef = useRef(false);
   const lastSessionIdRef = useRef<string | null>(null);
   const completedAgentsRef = useRef<AgentUpdate[]>([]);
+  const arbiterAbortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (arbiterAbortControllerRef.current) {
+        arbiterAbortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   const {
     status,
@@ -157,25 +166,29 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   const authReadyRef = useRef<Promise<void> | null>(null);
 
-  if (typeof window !== "undefined" && !authReadyRef.current) {
-    authReadyRef.current = (
+  useEffect(() => {
+    if (typeof window === "undefined" || authReadyRef.current) return;
+
+    if (
       document.cookie.includes("access_token") ||
       (storage.getItem("forensic_auth_ok") === "1" && getAuthToken() !== null)
-    )
-      ? Promise.resolve()
-      : autoLoginAsInvestigator()
-          .then(() => {
-            storage.setItem("forensic_auth_ok", "1");
-          })
-          .catch((err: unknown) => {
-            const msg = err instanceof Error ? err.message : "Authentication failed";
-            setAuthError(msg);
-            toast.destructive({
-              title: "Authentication Error",
-              description: `Could not establish session: ${msg}. Please refresh the page.`,
-            });
+    ) {
+      authReadyRef.current = Promise.resolve();
+    } else {
+      authReadyRef.current = autoLoginAsInvestigator()
+        .then(() => {
+          storage.setItem("forensic_auth_ok", "1");
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : "Authentication failed";
+          setAuthError(msg);
+          toast.destructive({
+            title: "Authentication Error",
+            description: `Could not establish session: ${msg}. Please refresh the page.`,
           });
-  }
+        });
+    }
+  }, []);
 
   const filePreviewUrl = useMemo(() => {
     if (!file) return null;
@@ -217,7 +230,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       setUploadPhaseText("Uploading evidence to secure pipeline…");
 
       const investigatorId = investigatorIdRef.current;
-      const caseId = storage.getItem<string>("forensic_case_id") || "CASE-" + Date.now();
+      const caseId = storage.getItem("forensic_case_id") || "CASE-" + crypto.randomUUID();
 
       setShowLoadingOverlay(true);
       sessionOnlyStorage.setItem("fc_show_loading", "true");
@@ -347,7 +360,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       sessionOnlyStorage.removeItem("fc_show_loading");
     } else if (!pending && !autoStartFiredRef.current && status === "idle" && !isUploading && !autoStartBlocking) {
       // Auto-reconnect to an active session when navigating directly to the evidence page
-      const existingSessionId = storage.getItem<string>("forensic_session_id");
+      const existingSessionId = storage.getItem("forensic_session_id");
       if (existingSessionId) {
         autoStartFiredRef.current = true;
         startSimulation();
@@ -410,8 +423,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setArbiterDeliberating(true);
     try {
       await resumeInvestigation(false);
-      const sid = storage.getItem<string>("forensic_session_id");
-      if (sid) await waitForFinalReport(sid, setArbiterLiveText, 300_000);
+      const sid = storage.getItem("forensic_session_id");
+      if (sid) {
+        arbiterAbortControllerRef.current = new AbortController();
+        await waitForFinalReport(sid, setArbiterLiveText, 300_000, arbiterAbortControllerRef.current.signal);
+      }
       router.push("/result", { scroll: true });
     } catch {
       setIsNavigating(false);
@@ -439,7 +455,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   }, [playSound, resumeInvestigation, clearCompletedAgents]);
 
   const retryWsConnection = useCallback(() => {
-    const sid = lastSessionIdRef.current || storage.getItem<string>("forensic_session_id");
+    const sid = lastSessionIdRef.current || storage.getItem("forensic_session_id");
     if (!sid) {
       // No session to reconnect to — fall back to a fresh upload
       if (file) triggerAnalysis(file);
@@ -475,9 +491,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     storage.setItem("forensic_deep_agents", completedAgentsRef.current, true);
     setIsNavigating(true);
     setArbiterDeliberating(true);
-    const sid = storage.getItem<string>("forensic_session_id");
+    const sid = storage.getItem("forensic_session_id");
     try {
-      if (sid) await waitForFinalReport(sid, setArbiterLiveText, 300_000);
+      if (sid) {
+        arbiterAbortControllerRef.current = new AbortController();
+        await waitForFinalReport(sid, setArbiterLiveText, 300_000, arbiterAbortControllerRef.current.signal);
+      }
       router.push("/result", { scroll: true });
     } finally {
       setIsNavigating(false);
@@ -494,7 +513,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   useEffect(() => {
     // Safely sync from storage on mount/file change to avoid hydration mismatch
-    setMimeType(storage.getItem<string>("forensic_mime_type") || file?.type || null);
+    setMimeType(storage.getItem("forensic_mime_type") || file?.type || null);
   }, [file]);
 
   const expectedAgentIds = useMemo(() => supportedAgentIdsForMime(mimeType), [mimeType]);

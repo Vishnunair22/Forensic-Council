@@ -94,13 +94,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "SIGNING_KEY is using a development placeholder. Never use this in production."
         )
 
-    # Research model license warning
+    # Research model license enforcement
     if settings.enable_research_models and settings.app_env == "production":
-        logger.warning(
-            "RESEARCH_MODELS enabled in production. These models (BusterNet, F3-Net, "
-            "ManTra-Net, TruFor, clovaai/AASIST) are non-commercial. Remove from court "
-            "exhibits unless licensed. Set enable_research_models=False for production."
+        logger.error(
+            "CRITICAL: RESEARCH_MODELS enabled in production. These models (BusterNet, F3-Net, "
+            "ManTra-Net, TruFor, clovaai/AASIST) are strictly non-commercial. "
+            "Refusing to start in production to prevent licensing violations. "
+            "Set ENABLE_RESEARCH_MODELS=false in production."
         )
+        raise RuntimeError("Research models enabled in production")
 
     # Refuse insecure HS256 fallback in production
     if settings.jwt_algorithm.startswith("RS") and not settings.jwt_private_key:
@@ -246,6 +248,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     _ex = _ttl if _ttl > 0 else None
                     await _redis.set(_key, json.dumps(_meta), ex=_ex)
                     _interrupted_count += 1
+                    
+                    # Update custody ledger for the interrupted session
+                    try:
+                        from core.session_persistence import get_session_persistence
+                        p = await get_session_persistence()
+                        session_id = _key.decode().split(":")[-1] if isinstance(_key, bytes) else _key.split(":")[-1]
+                        await p.save_session_state(
+                            session_id=session_id,
+                            case_id=_meta.get("case_id", "unknown"),
+                            investigator_id=_meta.get("investigator_id", "system"),
+                            pipeline_state=_meta,
+                            status="interrupted",
+                        )
+                    except Exception as db_err:
+                        logger.warning("Failed to update custody ledger for orphaned session", error=str(db_err))
+
             except Exception as _key_err:
                 logger.warning(
                     "Failed to update orphaned session key", key=_key, error=str(_key_err)
@@ -397,7 +415,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Request-ID", "X-CSRF-Token"],
 )
 
@@ -445,6 +463,8 @@ _CSRF_EXEMPT_PATHS = {
     "/health",
     "/api/v1/health",
     "/api/v1/auth/login",
+    "/api/v1/auth/refresh",
+    "/api/v1/auth/logout",
     "/docs",
     "/redoc",
     "/openapi.json",
@@ -838,9 +858,33 @@ async def ml_tools_health():
         "details": script_status,
         "warmup_details": warmup_status,
         "cache_dirs": {
-            "huggingface": str(settings.hf_home),
             "torch": str(settings.torch_home),
-            "yolo": str(settings.yolo_model_dir),
+            "huggingface": str(settings.hf_home),
+            "ultralytics": str(settings.yolo_model_dir),
             "easyocr": str(getattr(settings, "easyocr_model_dir", "/app/cache/easyocr")),
         },
+    }
+
+@app.get("/api/v1/health/tools")
+async def system_tools_health():
+    """
+    Check availability of external system dependencies.
+    """
+    import shutil
+    
+    tools = {
+        "ffmpeg": shutil.which("ffmpeg") is not None,
+        "ffprobe": shutil.which("ffprobe") is not None,
+        "exiftool": shutil.which("exiftool") is not None,
+        "tesseract": shutil.which("tesseract") is not None,
+    }
+    
+    missing = [tool for tool, present in tools.items() if not present]
+    status = "healthy" if not missing else "degraded"
+    
+    return {
+        "status": status,
+        "tools": tools,
+        "missing": missing,
+        "message": "All required system tools are present" if not missing else f"Missing system tools: {', '.join(missing)}"
     }

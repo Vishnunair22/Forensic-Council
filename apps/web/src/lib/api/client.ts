@@ -37,6 +37,19 @@ function _parseReportDTO(raw: unknown): ReportDTO {
     "[api] Report validation failed. Falling back to passthrough.",
     result.error.message,
   );
+  
+  // Fire-and-forget telemetry for schema evolution monitoring
+  fetch(`${API_BASE}/api/v1/telemetry`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      event: "schema_validation_error",
+      schema: "ReportDTO",
+      error: result.error.errors,
+      url: window.location.href,
+    }),
+  }).catch(() => {}); // Ignore telemetry failures
+
   // Log strictly but allow the UI to try and render whatever matches the interface.
   return raw as ReportDTO;
 }
@@ -299,11 +312,7 @@ export function createLiveSocket(sessionId: string): { ws: WebSocket; connected:
 
     const handleError = () => settle(() => reject(new Error("WebSocket connection error")));
     const handleClose = (event: CloseEvent) => {
-      if (event.code === 1000) {
-        settle(resolve);
-        return;
-      }
-      settle(() => reject(new Error(event.reason || `WebSocket closed (${event.code})`)));
+      settle(() => reject(new Error(event.reason || `WebSocket closed unexpectedly (${event.code})`)));
     };
 
     const settle = (fn: () => void) => {

@@ -120,24 +120,28 @@ export const useSimulation = ({
         let isProcessingQueue = false;
         let wsConnectionReady = false;
 
+        let isActive = true;
+
         const processQueue = async () => {
           if (isProcessingQueue || messageQueue.length === 0) return;
           isProcessingQueue = true;
 
           try {
-            while (messageQueue.length > 0) {
+            while (messageQueue.length > 0 && isActive) {
               const update = messageQueue.shift();
               if (!update) break;
 
               dbg.log("[Simulation] Processing update from queue:", update);
 
-              switch (update.type) {
-                case "CONNECTED":
-                  // Server confirmed auth and registered socket — connection fully ready.
-                  // No UI action needed; the connected promise is already resolved in api.ts.
-                  break;
+              const { flushSync } = await import("react-dom");
+              flushSync(() => {
+                switch (update.type) {
+                  case "CONNECTED":
+                    // Server confirmed auth and registered socket — connection fully ready.
+                    // No UI action needed; the connected promise is already resolved in api.ts.
+                    break;
 
-                case "AGENT_UPDATE":
+                  case "AGENT_UPDATE":
                   // Pipeline-level updates come through with agent_id=null.
                   // Surface them separately so the UI can show "what the backend is doing" in real time.
                   if (!update.agent_id) {
@@ -402,6 +406,7 @@ export const useSimulation = ({
                   }
                   break;
               }
+              });
             }
           } finally {
             isProcessingQueue = false;
@@ -469,6 +474,7 @@ export const useSimulation = ({
 
         // Handle close - reject if closed before/during connection, otherwise notify
         const handleClose = (event: CloseEvent) => {
+          isActive = false;
           dbg.log("[WebSocket] Connection closed:", event.code, event.reason);
           wsRef.current = null;
 
@@ -520,7 +526,7 @@ export const useSimulation = ({
                   `Connection lost. Reconnecting in ${Math.round(delay / 1000)}s (attempt ${reconnectAttemptsRef.current}/${reconnectConfig.current.maxRetries})…`,
                 );
                 setTimeout(() => {
-                  const currentSessionId = sessionId || storage.getItem<string>(SESSION_ID_KEY);
+                  const currentSessionId = sessionId || storage.getItem(SESSION_ID_KEY);
                   if (currentSessionId) {
                     connectWebSocket(currentSessionId, true).catch(() => {
                     });
@@ -554,7 +560,7 @@ export const useSimulation = ({
             // (that transition is WS-only via PIPELINE_PAUSED and is implicitly
             // restored by the HITL checkpoint sessionStorage key above).
             try {
-              const currentSid = targetSessionId || storage.getItem<string>(SESSION_ID_KEY);
+              const currentSid = targetSessionId || storage.getItem(SESSION_ID_KEY);
               if (currentSid) {
                 const st = await getArbiterStatus(currentSid);
                 if (st.status === "complete") {
@@ -604,7 +610,7 @@ export const useSimulation = ({
   useEffect(() => {
     let tokenExpiryTimeout: NodeJS.Timeout;
     const scheduleTokenExpiryCheck = () => {
-      const expiryStr = storage.getItem<string>(AUTH_TOKEN_EXPIRY_KEY);
+      const expiryStr = storage.getItem(AUTH_TOKEN_EXPIRY_KEY);
       if (!expiryStr) return;
       const expiry = parseInt(expiryStr);
       const now = Date.now();
@@ -621,7 +627,7 @@ export const useSimulation = ({
             if (!response.ok) {
               window.location.href = "/";
             } else {
-              const currentSessionId = sessionId || storage.getItem<string>(SESSION_ID_KEY);
+              const currentSessionId = sessionId || storage.getItem(SESSION_ID_KEY);
               if (currentSessionId) {
                 connectWebSocket(currentSessionId, true);
               }
@@ -694,7 +700,7 @@ export const useSimulation = ({
   const resumeInvestigation = useCallback(
     async (deep: boolean) => {
       const targetId =
-        sessionId || storage.getItem<string>(SESSION_ID_KEY);
+        sessionId || storage.getItem(SESSION_ID_KEY);
       if (!targetId) {
         throw new Error("No active session — cannot resume investigation.");
       }

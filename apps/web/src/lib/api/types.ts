@@ -78,6 +78,8 @@ export interface ReportDTO {
   degradation_flags?: string[];
   compression_penalty?: number;
   cross_modal_fusion?: Record<string, unknown>;
+  calibrated_probability?: number;
+  calibration_status?: string;
 }
 
 export interface BriefUpdate {

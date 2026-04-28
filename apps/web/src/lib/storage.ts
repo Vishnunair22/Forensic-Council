@@ -1,15 +1,22 @@
 export const isBrowser = typeof window !== "undefined";
 const isDev = process.env.NODE_ENV !== "production";
 
-function createStorage(store: Storage) {
+interface AppStorage {
+  getItem(key: string, parseJson?: false, fallback?: string | null): string | null;
+  getItem<T>(key: string, parseJson: true, fallback?: T | null): T | null;
+  setItem(key: string, value: unknown, stringify?: boolean): void;
+  removeItem(key: string): void;
+}
+
+function createStorage(store: Storage): AppStorage {
   return {
-    getItem<T>(key: string, parseJson = false, fallback: T | null = null): T | null {
+    getItem<T>(key: string, parseJson = false, fallback: T | string | null = null): any {
       if (!isBrowser) return fallback;
       try {
         const val = store.getItem(key);
         if (val === null) return fallback;
-        if (parseJson) return JSON.parse(val) as T;
-        return val as unknown as T;
+        if (parseJson) return JSON.parse(val);
+        return val;
       } catch (e: unknown) {
         if (isDev) console.warn(`[storage] Error reading key "${key}":`, e);
         return fallback;

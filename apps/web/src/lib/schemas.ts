@@ -58,4 +58,6 @@ export const ReportDTOSchema = z.object({
   contested_findings: z.array(z.unknown()).optional(),
   tribunal_resolved: z.array(z.unknown()).optional(),
   gemini_vision_findings: z.array(z.unknown()).optional(),
+  calibrated_probability: z.number().min(0).max(1).optional(),
+  calibration_status: z.string().optional(),
 }).passthrough();

@@ -60,6 +60,10 @@ async def submit_decision(
     except Exception as e:
         logger.warning("Redis idempotency check failed, proceeding anyway", error=str(e))
 
+    # Verify the user has access to this session
+    from api.routes._authz import assert_session_access
+    await assert_session_access(decision.session_id, current_user)
+
     # Look up the active pipeline for this session
     pipeline = get_active_pipeline(decision.session_id)
     if pipeline is None:

@@ -39,7 +39,7 @@ dependencies = [
     "bcrypt>=3.2",
     # Image processing tools
     "Pillow>=11.2",
-    "numpy>=1.26,<3.0",  # relaxed upper bound - scipy 1.17+ requires numpy>=2.0
+    "numpy>=2.0,<3.0",  # scipy 1.15+ requires numpy>=2.0
     "scipy>=1.15",
     "piexif>=1.1",
     "imagehash>=4.3",

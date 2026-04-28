@@ -276,8 +276,26 @@ async def terminate_session(session_id: str, current_user: User = Depends(get_cu
     return {"status": "terminated", "session_id": session_id}
 
 
+_ACTIVE_WS_CONNECTIONS = 0
+
 @router.websocket("/{session_id}/live")
 async def live_updates(websocket: WebSocket, session_id: str):
+    global _ACTIVE_WS_CONNECTIONS
+    MAX_WS = getattr(settings, "max_ws_connections", 1000)
+    
+    if _ACTIVE_WS_CONNECTIONS >= MAX_WS:
+        await websocket.accept(subprotocol="forensic-v1")
+        await websocket.send_json({"type": "ERROR", "message": "Server busy"})
+        await websocket.close(code=1013, reason="Server busy")
+        return
+        
+    _ACTIVE_WS_CONNECTIONS += 1
+    try:
+        await _live_updates_impl(websocket, session_id)
+    finally:
+        _ACTIVE_WS_CONNECTIONS -= 1
+
+async def _live_updates_impl(websocket: WebSocket, session_id: str):
     """
     WebSocket endpoint for live investigation updates.
 
@@ -309,13 +327,7 @@ async def live_updates(websocket: WebSocket, session_id: str):
                 break
 
     if auth_token:
-        # Debug: log token extraction (obscure the middle)
-        token_preview = (
-            f"{auth_token[:10]}...{auth_token[-10:]}" if len(auth_token) > 20 else "short"
-        )
-        logger.info(
-            "Extracted WebSocket auth token", session_id=session_id, token_preview=token_preview
-        )
+        logger.info("Extracted WebSocket auth token", session_id=session_id)
 
     if not auth_token:
         logger.warning("WebSocket auth failed: No token found", session_id=session_id)
@@ -1102,23 +1114,25 @@ async def resume_investigation(
     # but the pipeline may run in a different process/worker.
     # First try in-process get_active_pipeline, then fall back to registry.
     pipeline = get_active_pipeline(session_id)
-    if pipeline:
-        pipeline.run_deep_analysis_flag = request.deep_analysis
-        pipeline.deep_analysis_decision_event.set()
-    else:
-        # Register fallback for when pipeline is in different worker/process
+    if pipeline is None:
+        # Publish decision to Redis for the worker process
         try:
-            from uuid import UUID
-            notify_decision(UUID(session_id), request.deep_analysis)
-        except Exception:
-            pass
+            if redis:
+                await redis.publish(
+                    "forensic:notify_decision",
+                    json.dumps({
+                        "session_id": session_id,
+                        "deep_analysis": request.deep_analysis,
+                    })
+                )
+        except Exception as e:
+            _log.warning("Failed to publish deep analysis decision to Redis", error=str(e))
 
-        if not pipeline:
-            await set_active_pipeline_metadata(
+        await set_active_pipeline_metadata(
             session_id,
             {
                 **metadata,
-                "status": "resume_requested",
+                "status": "paused_resume_requested",
                 "deep_analysis": request.deep_analysis,
                 "resume_requested_at": datetime.now(UTC).isoformat(),
             },
@@ -1153,6 +1167,9 @@ async def resume_investigation(
             status_code=400,
             detail="Pipeline is not in a paused state waiting for decision",
         )
+
+    pipeline.run_deep_analysis_flag = request.deep_analysis
+    pipeline.deep_analysis_decision_event.set()
 
     _log.info(
         "Investigation resume signal sent",

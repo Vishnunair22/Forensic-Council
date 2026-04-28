@@ -9,7 +9,7 @@ export function useSessionStorage<T>(
   parseJson = false
 ): [T, (val: T | ((prev: T) => T)) => void] {
   const readValue = useCallback(() => {
-    return storage.getItem<T>(key, parseJson, initialValue) ?? initialValue;
+    return (storage.getItem(key, parseJson as any, initialValue as any) as T) ?? initialValue;
   }, [key, initialValue, parseJson]);
 
   const [state, setState] = useState<T>(readValue);

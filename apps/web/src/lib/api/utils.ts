@@ -32,19 +32,17 @@ export function getWSBase(): string {
     return "ws://backend:8000";
   }
   
+  if (RAW_API_BASE) {
+    try {
+      const url = new URL(RAW_API_BASE);
+      return `${url.protocol === "https:" ? "wss:" : "ws:"}//${url.host}`;
+    } catch {
+      // Fallback to window.location.host
+    }
+  }
+  
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const hostname = window.location.hostname;
-  
-  // If accessing via Caddy (port 80/443), use that
-  if (window.location.port === "80" || window.location.port === "443") {
-    return `${protocol}//${hostname}`;
-  }
-  // If accessing via Next.js (port 3000), go through Caddy on 80
-  if (window.location.port === "3000") {
-    return `${protocol}//${hostname}`;
-  }
-  
-  return `${protocol}//${hostname}`;
+  return `${protocol}//${window.location.host}`;
 }
 
 

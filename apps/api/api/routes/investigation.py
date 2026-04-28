@@ -23,6 +23,7 @@ from api.routes._rate_limiting import (
 from api.routes._session_state import (
     cleanup_connections,  # noqa: F401 - re-exported for api.main shutdown.
     get_active_pipelines_count,  # noqa: F401 - re-exported for api.main metrics.
+    get_active_pipeline_metadata,
     set_active_pipeline,
     set_active_pipeline_metadata,
     set_active_task,
@@ -212,7 +213,7 @@ async def start_investigation(
                     # should NOT return 409. Instead, we clear the dedup key and 
                     # allow the user to start a fresh investigation for the same file.
                     try:
-                        existing_meta = await set_active_pipeline_metadata(existing_session_id, None) or {}
+                        existing_meta = await get_active_pipeline_metadata(existing_session_id) or {}
                         status = existing_meta.get("status")
                         if status not in ("running", "paused"):
                             await _redis.delete(dedup_key)
@@ -236,7 +237,7 @@ async def start_investigation(
                     if not was_set:
                         # Re-claim ownership: update the existing session with current user ID.
                         try:
-                            existing_meta = await set_active_pipeline_metadata(existing_session_id, None) or {}
+                            existing_meta = await get_active_pipeline_metadata(existing_session_id) or {}
                             await set_active_pipeline_metadata(
                                 existing_session_id,
                                 {
@@ -278,6 +279,8 @@ async def start_investigation(
                 raise
             except Exception:
                 logger.warning("Image integrity check failed; file may be corrupted.")
+                tmp_path.unlink(missing_ok=True)
+                raise HTTPException(status_code=400, detail="Image verification failed; file may be corrupted.")
 
         await set_active_pipeline_metadata(
             session_id,
@@ -341,23 +344,18 @@ async def start_investigation(
 
         increment_investigations_started()
 
-        async def _register():
-            try:
-                p = await get_session_persistence()
-                await p.save_session_state(
-                    session_id=session_id,
-                    case_id=case_id,
-                    investigator_id=current_user.user_id,
-                    pipeline_state={"status": "running"},
-                    status="running",
-                )
-            except Exception as exc:
-                logger.debug("Session persistence registration skipped", error=str(exc))
-
-        _t = asyncio.create_task(_register())
-        add_done_callback = getattr(_t, "add_done_callback", None)
-        if callable(add_done_callback):
-            add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+        try:
+            p = await get_session_persistence()
+            await p.save_session_state(
+                session_id=session_id,
+                case_id=case_id,
+                investigator_id=current_user.user_id,
+                pipeline_state={"status": "running"},
+                status="running",
+            )
+        except Exception as exc:
+            logger.error("Session persistence registration failed", error=str(exc))
+            raise HTTPException(status_code=500, detail="Failed to write chain-of-custody ledger.")
 
         return InvestigationResponse(
             session_id=session_id,

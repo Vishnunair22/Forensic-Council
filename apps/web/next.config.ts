@@ -159,16 +159,9 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "X-XSS-Protection", value: "0" },
           {
-            key: "Content-Security-Policy",
-            // In dev, the browser may be on localhost:3000 (Next.js direct) while
-            // WebSocket connects to ws://localhost:80 (Caddy). Different ports = different
-            // origin, which 'self' alone doesn't cover — add explicit ws://localhost so
-            // the browser allows the upgrade regardless of which port serves the page.
-            value: process.env.NODE_ENV === "production"
-              ? "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self'; font-src 'self' data:; frame-ancestors 'none'; form-action 'self';"
-              : "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' ws://localhost wss://localhost ws://localhost:3000 wss://localhost:3000; font-src 'self' data:; frame-ancestors 'none'; form-action 'self';",
+            key: "X-XSS-Protection",
+            value: "0"
           },
           ...(process.env.NODE_ENV === "production" ? [
             { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },

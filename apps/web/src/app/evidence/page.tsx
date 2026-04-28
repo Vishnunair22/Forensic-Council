@@ -66,7 +66,7 @@ export default function EvidencePage() {
   const [sessionId, setSessionId] = React.useState<string | null>(null);
   React.useEffect(() => {
     if (hasStartedAnalysis) {
-      setSessionId(storage.getItem<string>(FORENSIC_SESSION_ID_KEY));
+      setSessionId(storage.getItem(FORENSIC_SESSION_ID_KEY));
     }
   }, [hasStartedAnalysis]);
 
@@ -137,7 +137,7 @@ export default function EvidencePage() {
                 onAcceptAnalysis={handleAcceptAnalysis}
                 onRunDeepAnalysis={handleDeepAnalysis}
                 isNavigating={isNavigating}
-                mimeType={storage.getItem<string>(FORENSIC_MIME_TYPE_KEY) ?? undefined}
+                mimeType={storage.getItem(FORENSIC_MIME_TYPE_KEY) ?? undefined}
                 playSound={playSound}
                 revealQueue={revealQueue}
                 revealPending={revealPending}
