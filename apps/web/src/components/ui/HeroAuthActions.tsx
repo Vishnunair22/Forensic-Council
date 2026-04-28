@@ -50,19 +50,31 @@ export function HeroAuthActions() {
   // Open the upload modal when navigated back with ?upload=1 (e.g. from handleNewUpload)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("upload") === "1") {
+    const openUploadOnce = sessionOnlyStorage.getItem("fc_open_upload_once");
+    if (params.get("upload") === "1" || openUploadOnce === "1") {
       setShowUpload(true);
       setSelectedFile(null);
+      if (openUploadOnce === "1") {
+        sessionOnlyStorage.removeItem("fc_open_upload_once");
+      }
       const url = new URL(window.location.href);
-      url.searchParams.delete("upload");
-      window.history.replaceState({}, "", url.toString());
+      if (url.searchParams.has("upload")) {
+        url.searchParams.delete("upload");
+        window.history.replaceState({}, "", url.toString());
+      }
     }
   }, []);
 
+  useEffect(() => {
+    setIsNavigating(false);
+    setIsAuthenticating(false);
+  }, []);
+
   const handleStartAnalysis = useCallback(async () => {
-    if (!selectedFile) return;
+    if (!selectedFile || isAuthenticating || isNavigating) return;
     setIsAuthenticating(true);
     setAuthError(null);
+    setShowUpload(false);
 
     try {
       const health = await checkBackendHealth();
@@ -87,14 +99,13 @@ export function HeroAuthActions() {
       return;
     }
 
-    setShowUpload(false);
     __pendingFileStore.file = selectedFile;
     sessionOnlyStorage.setItem("forensic_auto_start", "true");
     sessionOnlyStorage.setItem("fc_show_loading", "true");
     setIsNavigating(true);
     router.push("/evidence", { scroll: true });
     setIsAuthenticating(false);
-  }, [router, selectedFile]);
+  }, [router, selectedFile, isAuthenticating, isNavigating]);
 
   return (
     <>
@@ -138,7 +149,7 @@ export function HeroAuthActions() {
         message={authError || "Could not establish secure investigator session."}
         errorCode="0xFC_AUTH_INIT"
         onRetry={handleStartAnalysis}
-        onHome={() => setAuthError(null)}
+        onHome={() => { setAuthError(null); setSelectedFile(null); }}
       />
 
       <AnimatePresence>
@@ -157,9 +168,9 @@ export function HeroAuthActions() {
             key="success-modal"
             file={selectedFile}
             onNewUpload={() => setSelectedFile(null)}
-            onStartAnalysis={() => {
-              playSound("envelope-close"); // The locking seal sound before routing
-              handleStartAnalysis();
+            onStartAnalysis={async () => {
+              playSound("envelope-close");
+              await handleStartAnalysis();
             }}
           />
         )}

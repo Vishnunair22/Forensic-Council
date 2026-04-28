@@ -4,17 +4,18 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import Image from "next/image";
-import { CheckCircle2, FileText } from "lucide-react";
+import { CheckCircle2, FileText, X, Loader2 } from "lucide-react";
 
 export interface UploadSuccessModalProps {
   file: File;
   onNewUpload: () => void;
-  onStartAnalysis: () => void;
+  onStartAnalysis: () => Promise<void> | void;
 }
 
 export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: UploadSuccessModalProps) {
   const [mounted, setMounted] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -32,6 +33,12 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: Uploa
       return () => URL.revokeObjectURL(url);
     }
   }, [file]);
+
+  useEffect(() => {
+    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") onNewUpload(); };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [onNewUpload]);
 
   if (!mounted) return null;
 
@@ -54,6 +61,14 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: Uploa
           className="horizon-card p-1 relative overflow-hidden"
         >
           <div className="bg-[#020617] rounded-[inherit] p-10 flex flex-col items-center text-center">
+            <button
+              onClick={() => { onNewUpload(); }}
+              aria-label="Close"
+              data-testid="success-modal-close"
+              className="absolute top-6 right-6 text-white/40 hover:text-primary"
+            >
+              <X className="w-5 h-5" />
+            </button>
 
             {/* Status Icon */}
             <motion.div
@@ -124,16 +139,22 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: Uploa
             <div className="flex w-full gap-4">
               <button
                 onClick={onNewUpload}
-                className="btn-horizon-outline flex-1 py-4 text-xs"
+                disabled={isStarting}
+                className="btn-horizon-outline flex-1 py-4 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Reselect File
               </button>
               <button
                 data-testid="upload-start-analysis"
-                onClick={onStartAnalysis}
-                className="btn-horizon-primary flex-1 py-4 text-xs"
+                onClick={async () => {
+                  setIsStarting(true);
+                  await onStartAnalysis();
+                  setIsStarting(false);
+                }}
+                disabled={isStarting}
+                className="btn-horizon-primary flex-1 py-4 text-xs flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Begin Analysis
+                {isStarting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Begin Analysis"}
               </button>
             </div>
           </div>

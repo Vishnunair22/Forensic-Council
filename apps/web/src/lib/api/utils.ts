@@ -41,6 +41,10 @@ export function getWSBase(): string {
     }
   }
 
+  if (window.location.hostname === "localhost" && window.location.port === "3000") {
+    return "ws://localhost:8000";
+  }
+
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${protocol}//${window.location.host}`;
 }

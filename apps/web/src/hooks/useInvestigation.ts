@@ -208,6 +208,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setIsUploading(false);
     setPhase("initial");
     setAnalysisStreamReady(false);
+    sessionOnlyStorage.removeItem("fc_show_loading");
+    try { storage.removeItem("forensic_thumbnail"); } catch { /* ignore */ }
     resetSimulationHook();
   }, [resetSimulationHook]);
 
@@ -228,14 +230,27 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       setAnalysisStreamReady(false);
       setAutoStartBlocking(false);
       setUploadPhaseText("Uploading evidence to secure pipeline…");
+      setArbiterLiveText("");
 
       const investigatorId = investigatorIdRef.current;
-      const caseId = storage.getItem("forensic_case_id") || "CASE-" + crypto.randomUUID();
+      const uuid = (typeof crypto !== "undefined" && "randomUUID" in crypto)
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2) + Date.now().toString(36);
+      const caseId = storage.getItem("forensic_case_id") || "CASE-" + uuid;
 
       setShowLoadingOverlay(true);
       sessionOnlyStorage.setItem("fc_show_loading", "true");
 
-      await authReadyRef.current;
+      try {
+        await authReadyRef.current;
+      } catch (authErr) {
+        setIsUploading(false);
+        setShowLoadingOverlay(false);
+        resetSimulation();
+        investigationInFlightRef.current = false;
+        toast.destructive({ title: "Authentication failed", description: authErr instanceof Error ? authErr.message : "Could not establish session." });
+        return;
+      }
 
       // Capture image thumbnail before upload so it's available on the result page
       if (targetFile.type.startsWith("image/")) {
@@ -416,22 +431,27 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   const handleAcceptAnalysis = useCallback(async () => {
     if (isNavigating) return;
+    playSound("click");
     playSound("arbiter_start");
     storage.setItem("forensic_is_deep", "false");
     storage.setItem("forensic_initial_agents", completedAgentsRef.current, true);
     setIsNavigating(true);
     setArbiterDeliberating(true);
+    const sid = storage.getItem("forensic_session_id");
     try {
+      if (!sid) throw new Error("No active session");
       await resumeInvestigation(false);
-      const sid = storage.getItem("forensic_session_id");
-      if (sid) {
-        arbiterAbortControllerRef.current = new AbortController();
-        await waitForFinalReport(sid, setArbiterLiveText, 300_000, arbiterAbortControllerRef.current.signal);
-      }
+      arbiterAbortControllerRef.current = new AbortController();
+      const ok = await waitForFinalReport(sid, setArbiterLiveText, 300_000, arbiterAbortControllerRef.current.signal);
+      if (!ok) throw new Error("Council synthesis timed out");
       router.push("/result", { scroll: true });
-    } catch {
-      setIsNavigating(false);
+    } catch (err) {
+      toast.destructive({
+        title: "Council synthesis failed",
+        description: err instanceof Error ? err.message : "Could not finalize verdict.",
+      });
     } finally {
+      setIsNavigating(false);
       setArbiterDeliberating(false);
     }
   }, [playSound, resumeInvestigation, router, isNavigating]);
@@ -439,6 +459,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const handleDeepAnalysis = useCallback(async () => {
     if (investigationInFlightRef.current) return;
     investigationInFlightRef.current = true;
+    playSound("click");
     playSound("think");
     storage.setItem("forensic_is_deep", "true");
     storage.setItem("forensic_initial_agents", completedAgentsRef.current, true);
@@ -477,27 +498,41 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   const handleNewUpload = useCallback(() => {
     playSound("click");
+    arbiterAbortControllerRef.current?.abort();
+    arbiterAbortControllerRef.current = null;
+    setArbiterDeliberating(false);
+    setArbiterLiveText("");
     setFile(null);
     setPhase("initial");
     setWsConnectionError(null);
     lastSessionIdRef.current = null;
+    storage.removeItem("forensic_session_id");
+    storage.removeItem("forensic_initial_agents");
+    storage.removeItem("forensic_deep_agents");
     resetSimulation();
+    sessionOnlyStorage.setItem("fc_open_upload_once", "1");
     router.push("/?upload=1");
   }, [resetSimulation, playSound, router]);
 
   const handleViewResults = useCallback(async () => {
     if (isNavigating) return;
+    playSound("click");
     playSound("complete");
     storage.setItem("forensic_deep_agents", completedAgentsRef.current, true);
     setIsNavigating(true);
     setArbiterDeliberating(true);
     const sid = storage.getItem("forensic_session_id");
     try {
-      if (sid) {
-        arbiterAbortControllerRef.current = new AbortController();
-        await waitForFinalReport(sid, setArbiterLiveText, 300_000, arbiterAbortControllerRef.current.signal);
-      }
+      if (!sid) throw new Error("No active session");
+      arbiterAbortControllerRef.current = new AbortController();
+      const ok = await waitForFinalReport(sid, setArbiterLiveText, 600_000, arbiterAbortControllerRef.current.signal);
+      if (!ok) throw new Error("Report synthesis timed out");
       router.push("/result", { scroll: true });
+    } catch (err) {
+      toast.destructive({
+        title: "Could not load report",
+        description: err instanceof Error ? err.message : "Try again.",
+      });
     } finally {
       setIsNavigating(false);
       setArbiterDeliberating(false);
@@ -522,10 +557,23 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     expectedAgentIds.has(c.agent_id)
   ).length;
 
-  const awaitingDecision = status === "awaiting_decision";
+  const awaitingDecision =
+    status === "awaiting_decision" ||
+    (phase === "initial" &&
+     expectedAgentIds.size > 0 &&
+     expectedCompletedCount >= expectedAgentIds.size &&
+     !revealPending);
   const allAgentsDone = phase === "deep"
     ? (status === "complete" || expectedCompletedCount >= expectedAgentIds.size)
     : expectedCompletedCount >= expectedAgentIds.size;
+
+  const prevAwaitingDecisionRef = useRef(false);
+  useEffect(() => {
+    if (awaitingDecision && !prevAwaitingDecisionRef.current) {
+      playSound("think");
+    }
+    prevAwaitingDecisionRef.current = awaitingDecision;
+  }, [awaitingDecision, playSound]);
 
   useEffect(() => {
     if (awaitingDecision && !analysisCompleteSoundedRef.current) {
@@ -549,6 +597,15 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       sessionOnlyStorage.removeItem("fc_show_loading");
     }
   }, [showLoadingOverlay, analysisStreamReady, agentUpdates, validCompletedAgents]);
+
+  useEffect(() => {
+    if (!showLoadingOverlay || !analysisStreamReady) return;
+    const safety = setTimeout(() => {
+      setShowLoadingOverlay(false);
+      sessionOnlyStorage.removeItem("fc_show_loading");
+    }, 20_000); // give backend 20s after WS-ready before forcing dismissal
+    return () => clearTimeout(safety);
+  }, [showLoadingOverlay, analysisStreamReady]);
 
   return {
     file, setFile,

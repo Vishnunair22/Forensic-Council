@@ -108,6 +108,11 @@ export function AgentProgressDisplay({
   arbiterDeliberating = false,
 }: AgentProgressDisplayProps) {
   const [hiddenAgents, setHiddenAgents] = useState(new Set<string>());
+  const [validatingAgents, setValidatingAgents] = useState<Set<string>>(
+    () => new Set(allValidAgents.map(a => a.id))
+  );
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+  
   const playSoundRef = useRef(playSound);
   useEffect(() => { playSoundRef.current = playSound; }, [playSound]);
 
@@ -137,21 +142,17 @@ export function AgentProgressDisplay({
 
   useEffect(() => {
     if (!mimeType) return;
-    const timers: NodeJS.Timeout[] = [];
-    allValidAgents.forEach((agent) => {
-      if (!isAgentSupportedForMime(agent.id, mimeType)) {
-        const timer = setTimeout(() => {
-          setHiddenAgents((prev) => {
-            const next = new Set(prev);
-            next.add(agent.id);
-            return next;
-          });
-        }, 10000);
-        timers.push(timer);
-      }
-    });
-    return () => timers.forEach(clearTimeout);
+    const t = setTimeout(() => setValidatingAgents(new Set()), 1200);
+    return () => clearTimeout(t);
   }, [mimeType]);
+
+  const handleSkipExpire = React.useCallback((agentId: string) => {
+    setHiddenAgents((prev) => {
+      const next = new Set(prev);
+      next.add(agentId);
+      return next;
+    });
+  }, []);
 
   const initialAgentIds = useMemo<string[]>(() => {
     if (phase !== "deep") return [];
@@ -159,8 +160,9 @@ export function AgentProgressDisplay({
     if (Array.isArray(raw) && raw.length) {
       return raw.map((a) => a.agent_id).filter((id): id is string => typeof id === "string");
     }
-    // Fallback for refresh: derive from MIME so the deep grid is never empty
-    return Array.from(supportedAgentIdsForMime(mimeType || undefined));
+    const fromMime = Array.from(supportedAgentIdsForMime(mimeType || undefined));
+    if (fromMime.length) return fromMime;
+    return allValidAgents.map(a => a.id);
   }, [phase, mimeType]);
 
   const visibleAgents = useMemo(() => {
@@ -170,6 +172,8 @@ export function AgentProgressDisplay({
   }, [hiddenAgents, phase, initialAgentIds]);
 
   const getAgentStatus = (agentId: string): AgentStatus => {
+    if (validatingAgents.has(agentId)) return "validating";
+    
     const isSupported = isAgentSupportedForMime(agentId, mimeType);
     if (!isSupported) return "unsupported";
 
@@ -205,7 +209,7 @@ export function AgentProgressDisplay({
 
   return (
     <div
-      className="flex flex-col w-full max-w-[1560px] mx-auto gap-8 pb-36 pt-24"
+      className="flex flex-col w-full max-w-[1560px] mx-auto gap-8 pb-48 pt-24"
       aria-label="Agent forensic analysis progress"
     >
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-10 w-full mb-12 px-2">
@@ -250,7 +254,11 @@ export function AgentProgressDisplay({
 
       <div className="w-full">
         <motion.div
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          className={`grid gap-6 ${
+            visibleAgents.length === 1 ? "grid-cols-1 max-w-xl mx-auto"
+            : visibleAgents.length === 2 ? "grid-cols-1 md:grid-cols-2"
+            : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+          }`}
           variants={containerVariants}
           initial="hidden"
           animate="show"
@@ -274,6 +282,9 @@ export function AgentProgressDisplay({
                   isRevealed={true}
                   fileMime={mimeType}
                   phase={phase}
+                  onSkipExpire={handleSkipExpire}
+                  isExpanded={!!expandedCards[agent.id]}
+                  onToggleExpand={() => setExpandedCards(prev => ({ ...prev, [agent.id]: !prev[agent.id] }))}
                 />
               </motion.div>
             ))}
@@ -295,14 +306,15 @@ export function AgentProgressDisplay({
                   data-testid="accept-analysis-btn"
                   onClick={onAcceptAnalysis}
                   disabled={isNavigating}
-                  className="flex-1 btn-horizon-outline py-3 text-xs"
+                  className="flex-1 btn-horizon-outline py-3 text-xs flex items-center justify-center gap-2"
                 >
-                  Accept Verdict
+                  {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  <span>Accept Verdict</span>
                 </button>
                 <button
                   data-testid="deep-analysis-btn"
                   onClick={onRunDeepAnalysis}
-                  disabled={isNavigating}
+                  disabled={isNavigating || (phase as string) === "deep"}
                   className="flex-[1.5] btn-horizon-primary py-3 text-xs flex items-center justify-center gap-3"
                 >
                   <span className="flex items-center gap-2 text-[#020617]">
@@ -318,7 +330,7 @@ export function AgentProgressDisplay({
       </AnimatePresence>
 
       <AnimatePresence>
-        {!awaitingDecision && phase === "deep" && revealQueue.length === 0 && (allAgentsDone || pipelineStatus === "complete") && (
+        {phase === "deep" && revealQueue.length === 0 && (allAgentsDone || pipelineStatus === "complete") && !arbiterDeliberating && (
           <motion.div
             initial={{ opacity: 0, y: 100 }}
             animate={{ opacity: 1, y: 0 }}

@@ -6,7 +6,7 @@ export function middleware(request: NextRequest) {
   const isProd = process.env.NODE_ENV === "production";
   const connectSrc = isProd
     ? "'self'"
-    : "'self' ws://localhost wss://localhost ws://localhost:3000 wss://localhost:3000";
+    : "'self' ws://localhost wss://localhost ws://localhost:3000 wss://localhost:3000 ws://localhost:8000 wss://localhost:8000 http://localhost:8000 https://localhost:8000";
 
   const cspHeader = `
     default-src 'self';

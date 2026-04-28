@@ -667,6 +667,7 @@ export const useSimulation = ({
     try { storage.removeItem(HITL_CHECKPOINT_KEY); } catch { /* ignore */ }
     try { storage.removeItem(SESSION_ID_KEY); } catch { /* ignore */ }
     setErrorMessage(null);
+    setPipelineMessage("");
     setPipelineThinking("");
     setRevealQueue([]);
     isRevealingRef.current = false;
@@ -831,6 +832,30 @@ export const useSimulation = ({
     };
 
     processNext();
+  }, [revealQueue.length]);
+
+  // Watchdog for revealQueue
+  useEffect(() => {
+    if (revealQueue.length === 0) return;
+    const watchdog = setTimeout(() => {
+      dbg.warn("[Simulation] revealQueue stalled. Draining stuck items.");
+      setRevealQueue((prev) => {
+        prev.forEach((agent) => {
+          setCompletedAgents((current) => {
+            const exists = current.some(a => a.agent_id === agent.agent_id);
+            if (exists) {
+              return current.map(a => a.agent_id === agent.agent_id ? agent : a);
+            }
+            return [...current, agent];
+          });
+          onAgentCompleteRef.current?.(agent);
+        });
+        return [];
+      });
+      isRevealingRef.current = false;
+    }, 8000);
+
+    return () => clearTimeout(watchdog);
   }, [revealQueue.length]);
 
   const restoreSimulationState = useCallback(

@@ -16,7 +16,7 @@ interface PageTransitionProps {
 export function PageTransition({
   children,
   className = "",
-  mode = "wait"
+  mode = "popLayout"
 }: PageTransitionProps) {
   const pathname = usePathname();
 

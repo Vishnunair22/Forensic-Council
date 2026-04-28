@@ -39,6 +39,9 @@ export interface AgentStatusCardProps {
   fileMime?: string;
   onComplete?: () => void;
   phase?: "initial" | "deep";
+  onSkipExpire?: (agentId: string) => void;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
 }
 
 const statusConfig = {
@@ -89,13 +92,25 @@ function FindingRow({ f, i }: { f: FindingPreview; i: number }) {
     >
       <div className="flex items-center justify-between mb-2">
         <span className="text-[10px] font-mono font-bold text-white/30">SIG_{i.toString().padStart(2, "0")}</span>
-        <span className={clsx("text-[10px] font-mono font-bold", isAlert ? "text-danger" : "text-success")}>
-          {Math.round((f.confidence || 0) * 100)}% Match
-        </span>
+        <div className="flex items-center gap-2">
+          {f.degraded && (
+            <span className="px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-amber-500/10 border border-amber-500/30 text-amber-500" title={f.fallback_reason || "Tool degraded"}>
+              DEGRADED
+            </span>
+          )}
+          <span className={clsx("text-[10px] font-mono font-bold", isAlert ? "text-danger" : "text-success")}>
+            {Math.round((f.confidence || 0) * 100)}% Match
+          </span>
+        </div>
       </div>
       <p className="text-xs text-white/70 font-medium leading-relaxed mb-1">
         <span className="text-white font-bold">{fmtTool(f.tool)}:</span> {visible}
       </p>
+      {f.degraded && f.fallback_reason && (
+        <p className="text-[9px] text-amber-500/60 font-mono mt-1">
+          Tool fallback used: {f.fallback_reason}
+        </p>
+      )}
       {isLong && (
         <button
           onClick={() => setExpanded((e) => !e)}
@@ -116,6 +131,9 @@ export function AgentStatusCard({
   completedData,
   fileMime,
   phase = "initial",
+  onSkipExpire,
+  isExpanded = false,
+  onToggleExpand,
 }: AgentStatusCardProps) {
   const fileCategory = fileMime?.startsWith("image/") ? "image"
     : fileMime?.startsWith("audio/") ? "audio"
@@ -123,7 +141,6 @@ export function AgentStatusCard({
     : "this file type";
   const cfg = statusConfig[status] || statusConfig.running;
   const [stageIndex, setStageIndex] = useState(0);
-  const [showAllTools, setShowAllTools] = useState(false);
 
   const agentGraphic = AGENT_GRAPHICS[agentId] || { icon: Cpu, color: "text-[var(--color-primary)]", bg: "bg-[var(--color-primary)]/10" };
   const Icon = agentGraphic.icon;
@@ -136,6 +153,12 @@ export function AgentStatusCard({
       return () => clearInterval(interval);
     }
   }, [status]);
+
+  useEffect(() => {
+    if (status !== "unsupported") return;
+    const t = setTimeout(() => onSkipExpire?.(agentId), 10000);
+    return () => clearTimeout(t);
+  }, [status, agentId, onSkipExpire]);
 
   const findings = completedData?.findings_preview || [];
   const toolsRan = completedData?.tools_ran || findings.length || 0;
@@ -275,16 +298,16 @@ export function AgentStatusCard({
         <AnimatePresence mode="wait">
           {status === "complete" && findings.length > 0 ? (
             <div className="space-y-4">
-              {(showAllTools ? findings : findings.slice(0, 2)).map((f, i) => (
+              {(isExpanded ? findings : findings.slice(0, 2)).map((f, i) => (
                 <FindingRow key={`${f.tool}-${i}`} f={f} i={i} />
               ))}
 
               {findings.length > 2 && (
                 <button
-                  onClick={() => setShowAllTools(!showAllTools)}
+                  onClick={() => onToggleExpand?.()}
                   className="w-full py-3 rounded-lg border border-dashed border-white/10 text-white/30 hover:text-white/60 hover:border-white/20 transition-all text-[10px] font-mono uppercase tracking-widest"
                 >
-                  {showAllTools ? "Collapse_Logs" : `View_${findings.length - 2}_More_Signals`}
+                  {isExpanded ? "Collapse_Logs" : `View_${findings.length - 2}_More_Signals`}
                 </button>
               )}
             </div>
