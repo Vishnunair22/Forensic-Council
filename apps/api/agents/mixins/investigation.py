@@ -236,7 +236,7 @@ class AgentInvestigationMixin:
         findings: list[AgentFinding],
         phase: str,
     ) -> dict[str, Any]:
-        """Build metrics and a plain synthesis when the LLM is unavailable."""
+        """Build metrics and evidence-grounded summaries when the LLM is unavailable."""
         actionable = [
             f
             for f in findings
@@ -274,19 +274,70 @@ class AgentInvestigationMixin:
         else:
             verdict = "INCONCLUSIVE"
 
-        narrative = (
-            f"{self.agent_name} {phase} synthesis used deterministic fallback: "
-            f"{len(actionable)} findings, {positive_count} positive signals, "
-            f"{error_rate:.0%} tool error rate."
+        def _tool_name(f: AgentFinding) -> str:
+            return str(f.metadata.get("tool_name") or f.finding_type).replace("_", " ").title()
+
+        def _severity(f: AgentFinding) -> str:
+            verdict = str(f.evidence_verdict or "").upper()
+            status = str(f.status or "").upper()
+            if verdict in {"POSITIVE", "TAMPERED", "SUSPICIOUS", "MANIPULATED"}:
+                conf = float(f.confidence_raw or 0.0)
+                return "HIGH" if conf >= 0.7 else "MEDIUM"
+            if verdict == "ERROR" or status == "INCOMPLETE":
+                return "MEDIUM"
+            return "LOW"
+
+        sorted_findings = sorted(
+            actionable,
+            key=lambda f: (
+                1 if str(f.evidence_verdict).upper() == "POSITIVE" else 0,
+                float(f.confidence_raw or 0.0),
+            ),
+            reverse=True,
         )
+        top_findings = sorted_findings[:4]
+        if top_findings:
+            primary = top_findings[0]
+            primary_summary = primary.reasoning_summary.strip()
+            narrative = (
+                f"{_tool_name(primary)} reported {primary.evidence_verdict.lower()} evidence "
+                f"at {float(primary.confidence_raw or 0.0):.0%} confidence: "
+                f"{primary_summary[:180]}"
+            )
+        else:
+            narrative = (
+                f"{self.agent_name} found no applicable forensic signals for this file type "
+                f"during {phase} analysis."
+            )
+
+        sections = []
+        for idx, f in enumerate(top_findings, start=1):
+            tool_name = str(f.metadata.get("tool_name") or f.finding_type)
+            degraded = bool(f.metadata.get("degraded") or f.metadata.get("fallback_reason"))
+            sections.append(
+                {
+                    "id": f"tool_signal_{idx}",
+                    "label": _tool_name(f),
+                    "opinion": f.reasoning_summary[:420],
+                    "severity": _severity(f),
+                    "refined_findings": [
+                        {
+                            "tool": tool_name,
+                            "user_friendly_summary": f.reasoning_summary[:300],
+                        }
+                    ],
+                    "key_signal": f.metadata.get("raw_tool_summary") or f.finding_type,
+                    "flag": "warn" if degraded else ("bad" if _severity(f) in {"HIGH", "CRITICAL"} else "ok"),
+                }
+            )
         return {
             "agent_confidence": confidence,
             "agent_error_rate": error_rate,
             "verdict": verdict,
             "narrative_summary": narrative,
-            "sections": [],
-            "synthesis_source": "deterministic_fallback",
-            "fallback_reason": "LLM synthesis unavailable, disabled, rate-limited, or timed out.",
+            "sections": sections,
+            "synthesis_source": "tool_grounded_deterministic",
+            "fallback_reason": "LLM narrative unavailable; summary generated directly from model/tool outputs.",
         }
 
     async def run_investigation(self) -> list[AgentFinding]:

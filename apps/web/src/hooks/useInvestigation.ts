@@ -339,6 +339,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         .then(() => {
           setAnalysisStreamReady(true);
           setUploadPhaseText("Agents dispatching…");
+          setShowLoadingOverlay(false);
+          sessionOnlyStorage.removeItem("fc_show_loading");
         })
         .catch((wsErr: unknown) => {
           const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
@@ -491,6 +493,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       .then(() => {
         setAnalysisStreamReady(true);
         setUploadPhaseText("Agents dispatching…");
+        setShowLoadingOverlay(false);
+        sessionOnlyStorage.removeItem("fc_show_loading");
       })
       .catch((wsErr: unknown) => {
         const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
@@ -590,8 +594,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const hasStartedAnalysis = status !== "idle" || isUploading || validCompletedAgents.length > 0;
   const showUploadForm = !autoStartBlocking && status === "idle" && !isUploading;
 
-  // Dismiss overlay only once the first agent update arrives, proving the
-  // backend has actually started processing (not just that the WS opened).
+  // Safety dismissal for reconnects or very fast streams that update state
+  // before the connection promise settles.
   useEffect(() => {
     if (
       showLoadingOverlay &&

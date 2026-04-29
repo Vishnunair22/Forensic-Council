@@ -50,14 +50,15 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: Uploa
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
+      transition={{ duration: 0.18, ease: "easeOut" }}
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 backdrop-blur-xl p-4"
     >
       <div className="relative w-full max-w-xl" onClick={(e) => e.stopPropagation()}>
         <motion.div
-          initial={{ opacity: 0, scale: 0.98, y: 10 }}
+          initial={{ opacity: 0, scale: 0.985, y: 8 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.98, y: 10 }}
-          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+          exit={{ opacity: 0, scale: 0.985, y: 8 }}
+          transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
           className="horizon-card p-1 relative overflow-hidden"
         >
           <div className="bg-[#020617] rounded-[inherit] p-10 flex flex-col items-center text-center">
@@ -148,8 +149,11 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: Uploa
                 data-testid="upload-start-analysis"
                 onClick={async () => {
                   setIsStarting(true);
-                  await onStartAnalysis();
-                  setIsStarting(false);
+                  try {
+                    await onStartAnalysis();
+                  } finally {
+                    setIsStarting(false);
+                  }
                 }}
                 disabled={isStarting}
                 className="btn-horizon-primary flex-1 py-4 text-xs flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"

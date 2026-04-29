@@ -276,7 +276,7 @@ export function AgentProgressDisplay({
                   name={agent.name}
                   badge={agent.badge}
                   status={getAgentStatus(agent.id)}
-                  thinking={agentUpdates[agent.id]?.thinking}
+                  thinking={agentUpdates[agent.id]?.thinking || pipelineMessage || progressText}
                   liveUpdate={agentUpdates[agent.id]}
                   completedData={completedAgents.find((c) => c.agent_id === agent.id)}
                   isRevealed={true}

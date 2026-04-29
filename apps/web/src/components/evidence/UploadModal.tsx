@@ -51,7 +51,8 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      exit={{ opacity: 0, transition: { duration: 0.12, ease: "easeOut" } }}
+      transition={{ duration: 0.14, ease: "easeOut" }}
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 backdrop-blur-xl p-4"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -62,8 +63,8 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
         <motion.div
           initial={{ opacity: 0, scale: 0.98, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.98, y: 10 }}
-          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+          exit={{ opacity: 0, scale: 0.985, y: 6 }}
+          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
           className="horizon-card p-1 relative overflow-hidden"
         >
           {/* Beveled Interior */}

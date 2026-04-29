@@ -14,7 +14,7 @@ import { useForensicData } from "@/hooks/useForensicData";
 import { useSound } from "@/hooks/useSound";
 import { type HistoryItem } from "@/lib/types";
 import type { AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
-import { storage, persistentStorage } from "@/lib/storage";
+import { storage } from "@/lib/storage";
 
 export type Tab = "analysis" | "history";
 export type PageState = "loading" | "arbiter" | "ready" | "error" | "empty";
@@ -46,10 +46,10 @@ export function useResult(initialSessionId?: string) {
       const isDeep = getInitial("forensic_is_deep") === "true";
       const key = isDeep ? "forensic_deep_agents" : "forensic_initial_agents";
       const stored = getInitial(key);
-      if (stored) return JSON.parse(stored);
+      if (stored?.trim()) return JSON.parse(stored);
       if (isDeep) {
         const fallback = getInitial("forensic_initial_agents");
-        if (fallback) return JSON.parse(fallback);
+        if (fallback?.trim()) return JSON.parse(fallback);
       }
       return [];
     } catch { return []; }

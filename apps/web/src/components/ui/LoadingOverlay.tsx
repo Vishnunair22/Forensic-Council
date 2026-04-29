@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle2, Upload, Wifi, Zap } from "lucide-react";
+import { CheckCircle2, Loader2, Upload, Wifi, Zap } from "lucide-react";
 import { clsx } from "clsx";
 
 export interface LoadingOverlayProps {
@@ -42,13 +42,16 @@ function getPhaseIndex(text: string): number {
 }
 
 export function LoadingOverlay({ liveText, dispatchedCount = 0, totalAgents = 6 }: LoadingOverlayProps) {
-  void totalAgents;
   const currentPhase = getPhaseIndex(liveText || "");
   const effectivePhase = dispatchedCount > 0 ? 2 : currentPhase;
+  const progress = Math.min(
+    92,
+    Math.max(18, Math.round(((effectivePhase + 1) / PHASES.length) * 72) + dispatchedCount * 4),
+  );
 
   return (
     <motion.div
-      className="fixed inset-0 z-[300] flex flex-col items-center justify-center px-6 selection:bg-transparent"
+      className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-6 selection:bg-transparent"
       style={{
         background: "rgba(0, 0, 0, 0.95)",
         backdropFilter: "blur(24px)",
@@ -56,10 +59,10 @@ export function LoadingOverlay({ liveText, dispatchedCount = 0, totalAgents = 6 
       }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0, transition: { duration: 0.5, ease: "easeInOut" } }}
-      transition={{ duration: 0.2 }}
+      exit={{ opacity: 0, transition: { duration: 0.18, ease: "easeOut" } }}
+      transition={{ duration: 0.12, ease: "easeOut" }}
     >
-      <div className="relative z-10 flex flex-col items-center w-full max-w-sm">
+      <div className="relative z-10 flex flex-col items-center w-full max-w-md">
         {/* Telemetry Header */}
         <motion.div
           initial={{ y: 10, opacity: 0 }}
@@ -72,22 +75,33 @@ export function LoadingOverlay({ liveText, dispatchedCount = 0, totalAgents = 6 
           </span>
         </motion.div>
 
-        {/* Title Area */}
-        <div className="text-center mb-12">
-            <motion.h1
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.1 }}
-              className="text-4xl font-black tracking-tight text-white mb-2"
-            >
-              Uplinking...
-            </motion.h1>
+        <div className="text-center mb-10 flex flex-col items-center">
+          <Loader2 className="w-12 h-12 text-primary animate-spin mb-6" />
+          <motion.h1
+            initial={{ y: 12, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.05 }}
+            className="text-3xl font-black tracking-tight text-white mb-3"
+          >
+            Preparing Analysis
+          </motion.h1>
+          <p className="min-h-[2.5rem] text-sm font-mono font-semibold tracking-wide text-primary/70 text-center px-4" role="status" aria-live="polite">
+            {liveText || "Opening live investigation stream..."}
+          </p>
+        </div>
+
+        <div className="w-full mb-8">
+          <div className="flex items-center justify-between mb-2 text-[10px] font-mono text-white/30 uppercase tracking-widest">
+            <span>Backend Stream</span>
+            <span>{Math.min(dispatchedCount, totalAgents)}/{totalAgents} Agents</span>
+          </div>
+          <div className="h-2 rounded-full bg-white/5 overflow-hidden border border-white/5">
             <motion.div
-                initial={{ scaleX: 0 }}
-                animate={{ scaleX: 1 }}
-                transition={{ delay: 0.3, duration: 0.8 }}
-                className="h-[1px] w-32 mx-auto bg-primary/20"
+              className="h-full bg-primary shadow-[0_0_24px_rgba(var(--color-primary-rgb),0.45)]"
+              animate={{ width: `${progress}%` }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
             />
+          </div>
         </div>
 
         {/* Phase Timeline */}
@@ -143,16 +157,6 @@ export function LoadingOverlay({ liveText, dispatchedCount = 0, totalAgents = 6 
             );
           })}
         </div>
-
-        {/* Live Status */}
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="mt-10 text-sm font-mono font-semibold tracking-wide text-primary/60 text-center px-4"
-        >
-          {liveText || "Initializing Workspace..."}
-        </motion.p>
       </div>
     </motion.div>
   );

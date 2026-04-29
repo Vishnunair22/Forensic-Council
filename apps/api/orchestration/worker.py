@@ -269,16 +269,24 @@ async def main() -> None:
         from core.persistence.redis_client import get_redis_client
         from orchestration.pipeline_registry import notify_decision
 
-        try:
-            redis = await get_redis_client()
-            pubsub = redis.pubsub()
-            await pubsub.subscribe("forensic:notify_decision")
-            logger.info("Worker subscribed to forensic:notify_decision")
+        while not shutdown.is_set():
+            pubsub = None
+            try:
+                redis = await get_redis_client()
+                pubsub = redis.get_pubsub()
+                await pubsub.subscribe("forensic:notify_decision")
+                logger.info("Worker subscribed to forensic:notify_decision")
 
-            async for message in pubsub.listen():
-                if shutdown.is_set():
-                    break
-                if message["type"] == "message":
+                while not shutdown.is_set():
+                    try:
+                        message = await pubsub.get_message(
+                            ignore_subscribe_messages=True,
+                            timeout=5.0,
+                        )
+                    except TimeoutError:
+                        continue
+                    if not message or message.get("type") != "message":
+                        continue
                     try:
                         data = json.loads(message["data"])
                         session_id_val = data.get("session_id")
@@ -291,8 +299,17 @@ async def main() -> None:
                         logger.error(
                             "Failed to parse notify_decision message", error=str(parse_err)
                         )
-        except Exception as e:
-            logger.error("notify_decision_consumer failed", error=str(e))
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.warning("notify_decision_consumer reconnecting", error=str(e))
+                await asyncio.sleep(2)
+            finally:
+                if pubsub is not None:
+                    try:
+                        await pubsub.close()
+                    except Exception:
+                        pass
 
     consumer_task = asyncio.create_task(notify_decision_consumer())
 

@@ -16,7 +16,11 @@ function createStorage(store: Storage): AppStorage {
       try {
         const val = store.getItem(key);
         if (val === null) return fallback;
-        if (parseJson) return JSON.parse(val);
+        if (parseJson) {
+          const trimmed = val.trim();
+          if (!trimmed) return fallback;
+          return JSON.parse(trimmed);
+        }
         return val;
       } catch (e: unknown) {
         if (isDev) console.warn(`[storage] Error reading key "${key}":`, e);

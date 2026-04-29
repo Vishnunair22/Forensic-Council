@@ -223,6 +223,7 @@ export const useSimulation = ({
                         deep_analysis_pending,
                         status: agentStatus,
                         agent_verdict,
+                        summary,
                         tool_error_rate,
                         section_flags,
                         findings_preview,
@@ -257,6 +258,7 @@ export const useSimulation = ({
                           typeof agent_verdict === "string"
                             ? (agent_verdict as AgentUpdate["agent_verdict"])
                             : undefined,
+                        summary: typeof summary === "string" ? summary : undefined,
                         tool_error_rate:
                           typeof tool_error_rate === "number"
                             ? tool_error_rate
@@ -404,7 +406,7 @@ export const useSimulation = ({
                 flushSync(() => {
                   applyUpdate(update);
                 });
-              } catch (e) {
+              } catch {
                 applyUpdate(update);
               }
             }
@@ -589,7 +591,6 @@ export const useSimulation = ({
     // All state is accessed via refs (completedAgentsRef, playSoundRef, etc.)
     // to avoid re-creating the socket on every state change.
     // DO NOT add state dependencies here without thinking carefully.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 

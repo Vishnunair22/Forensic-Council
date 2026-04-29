@@ -1,0 +1,22 @@
+services:
+  frontend:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      target: runner
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+        INTERNAL_API_URL: "http://backend:8000"
+    volumes: !override []
+    working_dir: /app
+    command: ["node", "/app/apps/web/server.js"]
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+      - RUNNING_IN_DOCKER=1
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
+      - DEMO_PASSWORD=${DEMO_PASSWORD:-demo_dev_only_not_for_production}
+      - BOOTSTRAP_INVESTIGATOR_PASSWORD=${BOOTSTRAP_INVESTIGATOR_PASSWORD:-}
+      - INTERNAL_API_URL=http://backend:8000

@@ -60,6 +60,63 @@ async def run_agents_concurrent(
             synthesis = (
                 getattr(agent_inst, "_agent_synthesis", None) if agent_inst is not None else None
             )
+            def _finding_attr(finding, key: str, default: Any = None) -> Any:
+                if hasattr(finding, key):
+                    return getattr(finding, key)
+                if isinstance(finding, dict):
+                    return finding.get(key, default)
+                return default
+
+            def _summary_for_finding(finding, metadata: dict[str, Any]) -> str:
+                summary_candidates = (
+                    _finding_attr(finding, "reasoning_summary", ""),
+                    metadata.get("llm_refined_summary"),
+                    metadata.get("raw_tool_summary"),
+                    metadata.get("analysis_summary"),
+                    metadata.get("summary"),
+                    metadata.get("message"),
+                    metadata.get("note"),
+                    metadata.get("verdict"),
+                    metadata.get("status"),
+                )
+                for candidate in summary_candidates:
+                    text = str(candidate or "").strip()
+                    if text:
+                        return text
+
+                tool_name = metadata.get("tool_name") or _finding_attr(
+                    finding, "finding_type", "forensic tool"
+                )
+                evidence_verdict = str(_finding_attr(finding, "evidence_verdict", "")).upper()
+                if evidence_verdict == "NEGATIVE":
+                    return f"{tool_name} completed and found no supported anomaly signal."
+                if evidence_verdict == "POSITIVE":
+                    return f"{tool_name} completed and reported a supported forensic signal."
+                if evidence_verdict == "NOT_APPLICABLE":
+                    return f"{tool_name} is not applicable to this file type."
+                return f"{tool_name} completed; review detailed tool metrics for this finding."
+
+            def _append_synthesis_sections(synthesis_data: dict[str, Any]) -> None:
+                for section in synthesis_data.get("sections") or []:
+                    refined = section.get("refined_findings") or []
+                    for item in refined:
+                        summary = str(item.get("user_friendly_summary") or "").strip()
+                        if not summary:
+                            continue
+                        preview.append(
+                            {
+                                "tool": item.get("tool") or section.get("label") or "agent_synthesis",
+                                "summary": summary[:320],
+                                "severity": section.get("severity") or "LOW",
+                                "verdict": str(synthesis_data.get("verdict") or "INCONCLUSIVE"),
+                                "key_signal": section.get("key_signal") or section.get("opinion") or "",
+                                "confidence": synthesis_data.get("agent_confidence"),
+                                "section": section.get("label") or "",
+                                "degraded": bool(synthesis_data.get("fallback_reason")),
+                                "fallback_reason": synthesis_data.get("fallback_reason"),
+                            }
+                        )
+
             if findings:
                 for f in findings:
                     m = (
@@ -72,21 +129,13 @@ async def run_agents_concurrent(
                     tool = m.get("tool_name") or (
                         f.finding_type if hasattr(f, "finding_type") else f.get("finding_type")
                     )
-                    s = (
-                        f.reasoning_summary
-                        if hasattr(f, "reasoning_summary")
-                        else f.get("reasoning_summary", "")
-                    )
-                    if not s:
-                        continue
+                    s = _summary_for_finding(f, m)
                     sev = assign_severity_tier(f)
                     evidence_verdict = str(
-                        getattr(f, "evidence_verdict", "")
-                        if hasattr(f, "evidence_verdict")
-                        else f.get("evidence_verdict", "")
+                        _finding_attr(f, "evidence_verdict", "")
                     ).upper()
                     finding_status = str(
-                        getattr(f, "status", "") if hasattr(f, "status") else f.get("status", "")
+                        _finding_attr(f, "status", "")
                     ).upper()
                     if evidence_verdict == "ERROR" or finding_status == "INCOMPLETE":
                         tv = "NEEDS_REVIEW"
@@ -111,13 +160,28 @@ async def run_agents_concurrent(
                             or m.get("raw_tool_summary")
                             or "",
                             "confidence": (
-                                getattr(f, "confidence_raw", None)
-                                if hasattr(f, "confidence_raw")
-                                else f.get("confidence_raw")
+                                _finding_attr(f, "confidence_raw", None)
                             ),
                             "section": m.get("section") or "",
+                            "degraded": bool(m.get("degraded") or m.get("fallback_reason")),
+                            "fallback_reason": m.get("fallback_reason"),
                         }
                     )
+            if isinstance(synthesis, dict) and synthesis.get("sections"):
+                preview_tools = {str(item.get("tool") or "") for item in preview}
+                before = len(preview)
+                _append_synthesis_sections(synthesis)
+                if before:
+                    deduped = []
+                    seen = set()
+                    for item in preview:
+                        key = (str(item.get("tool") or ""), str(item.get("summary") or "")[:80])
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        if len(deduped) < max(8, len(preview_tools) + 4):
+                            deduped.append(item)
+                    preview = deduped
             if isinstance(synthesis, dict) and not preview:
                 summary = str(synthesis.get("narrative_summary") or "").strip()
                 if summary:
@@ -153,6 +217,9 @@ async def run_agents_concurrent(
                         "error": error,
                         "findings_preview": preview,
                         "agent_verdict": synthesis.get("verdict")
+                        if isinstance(synthesis, dict)
+                        else None,
+                        "summary": synthesis.get("narrative_summary")
                         if isinstance(synthesis, dict)
                         else None,
                         "tool_error_rate": getattr(agent_inst, "_agent_error_rate", None)

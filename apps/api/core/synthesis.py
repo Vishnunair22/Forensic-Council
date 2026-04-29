@@ -356,27 +356,93 @@ Return ONLY a JSON object in this format:
             }
         except Exception as e:
             logger.error(f"Groq synthesis failed: {e}")
-            # Fallback logic
             fallback_verdict = "AUTHENTIC"
             if pre_confidence < 0.5 or pre_error_rate > 0.4:
                 fallback_verdict = "SUSPICIOUS"
             elif pre_confidence < 0.7 or pre_error_rate > 0.2:
                 fallback_verdict = "INCONCLUSIVE"
 
+            signal_rows: list[dict[str, Any]] = []
+            for group in grouped_sections_data:
+                for finding in group.get("findings", []):
+                    signal_rows.append(
+                        {
+                            "group_id": group.get("id"),
+                            "group_label": group.get("label"),
+                            "tool": finding.get("tool", "unknown"),
+                            "confidence": finding.get("confidence", 0.0),
+                            "evidence_verdict": finding.get("evidence_verdict", "INCONCLUSIVE"),
+                            "status": finding.get("status", "INCONCLUSIVE"),
+                            "tool_limitation": finding.get("tool_limitation", False),
+                            "data": finding.get("data", {}),
+                        }
+                    )
+            signal_rows.sort(
+                key=lambda item: (
+                    0 if item.get("tool_limitation") else 1,
+                    1 if str(item.get("evidence_verdict")).upper() == "POSITIVE" else 0,
+                    float(item.get("confidence") or 0.0),
+                ),
+                reverse=True,
+            )
+            primary = signal_rows[0] if signal_rows else {}
+            primary_tool = str(primary.get("tool") or "forensic tools").replace("_", " ")
+            primary_verdict = str(primary.get("evidence_verdict") or "INCONCLUSIVE").lower()
+            primary_conf = float(primary.get("confidence") or pre_confidence or 0.0)
+            narrative = (
+                f"{primary_tool.title()} produced the strongest {primary_verdict} signal "
+                f"at {primary_conf:.0%} confidence across {len(findings)} tool findings."
+                if primary
+                else f"{agent_name} completed analysis with no applicable model signals."
+            )
+
+            sections = []
+            for group in grouped_sections_data:
+                refined = []
+                group_positive = False
+                group_limited = False
+                for finding in group.get("findings", []):
+                    tool = finding.get("tool", "unknown")
+                    data = finding.get("data", {}) if isinstance(finding.get("data"), dict) else {}
+                    verdict = str(finding.get("evidence_verdict") or finding.get("status") or "INCONCLUSIVE")
+                    conf = float(finding.get("confidence") or 0.0)
+                    group_positive = group_positive or verdict.upper() == "POSITIVE"
+                    group_limited = group_limited or bool(finding.get("tool_limitation"))
+                    metric_bits = [
+                        f"{k}={v}"
+                        for k, v in list(data.items())[:3]
+                        if isinstance(v, (bool, int, float, str))
+                    ]
+                    metric_text = f" Key metrics: {', '.join(metric_bits)}." if metric_bits else ""
+                    refined.append(
+                        {
+                            "tool": tool,
+                            "user_friendly_summary": (
+                                f"{tool.replace('_', ' ').title()} returned {verdict.lower()} "
+                                f"evidence at {conf:.0%} confidence.{metric_text}"
+                            ),
+                        }
+                    )
+                sections.append(
+                    {
+                        "id": group["id"],
+                        "label": group["label"],
+                        "opinion": (
+                            f"{group['label']} completed with "
+                            f"{len(group.get('findings', []))} model/tool result(s)."
+                        ),
+                        "severity": "MEDIUM" if group_positive or group_limited else "LOW",
+                        "refined_findings": refined,
+                    }
+                )
+
             return {
                 "agent_confidence": pre_confidence,
                 "agent_error_rate": pre_error_rate,
                 "verdict": fallback_verdict,
-                "narrative_summary": f"Automated synthesis failed. Agent reported {len(findings)} findings with {pre_confidence:.1%} average confidence.",
-                "sections": [
-                    {
-                        "id": g["id"],
-                        "label": g["label"],
-                        "opinion": "Tool results available in raw findings list.",
-                        "severity": "MEDIUM",
-                    }
-                    for g in grouped_sections_data
-                ],
+                "narrative_summary": narrative,
+                "sections": sections,
+                "synthesis_source": "tool_grounded_fallback",
             }
 
     def _compact_metrics(self, f: AgentFinding) -> dict[str, Any]:

@@ -793,6 +793,14 @@ class ReActLoopEngine:
                     "overall_consistency",
                     "avg_confidence",
                     "confidence_score",
+                    "top_confidence",
+                    "max_confidence",
+                    "mean_confidence",
+                    "score",
+                    "probability",
+                    "top_score",
+                    "similarity",
+                    "top_similarity",
                     "trace_continuity",
                 ):
                     val = output.get(key)
@@ -801,9 +809,17 @@ class ReActLoopEngine:
                         break
             if raw_conf is None:
                 if "detections" in output:
-                    raw_conf = 0.60 if len(output.get("detections") or []) > 0 else 0.40
+                    detections = output.get("detections") or []
+                    raw_conf = 0.65 if len(detections) > 0 else 0.82
                 elif "objects_detected" in output:
-                    raw_conf = 0.55 if len(output.get("objects_detected") or []) > 0 else 0.40
+                    raw_conf = 0.65 if len(output.get("objects_detected") or []) > 0 else 0.82
+                elif "weapon_detections" in output:
+                    raw_conf = 0.70 if len(output.get("weapon_detections") or []) > 0 else 0.82
+                elif "detection_count" in output:
+                    raw_conf = 0.70 if int(output.get("detection_count") or 0) > 0 else 0.82
+                elif "classes_found" in output:
+                    classes_found = output.get("classes_found") or []
+                    raw_conf = 0.65 if hasattr(classes_found, "__len__") and len(classes_found) > 0 else 0.82
                 elif output.get("hash_matches") is True or output.get("hash_match") is True:
                     raw_conf = 1.0
                 elif output.get("hash_matches") is False or output.get("hash_match") is False:
@@ -975,6 +991,8 @@ class ReActLoopEngine:
         if any(bool(output.get(f"gemini_{k}")) for k in positive_keys):
             return True
         if output.get("gemini_manipulation_signals") or output.get("manipulation_signals"):
+            return True
+        if output.get("weapon_detections") or output.get("contraband_detections"):
             return True
         if (
             output.get("plausible") is False

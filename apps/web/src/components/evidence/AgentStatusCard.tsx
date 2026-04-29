@@ -127,6 +127,7 @@ export function AgentStatusCard({
   agentId,
   name,
   status,
+  thinking,
   liveUpdate,
   completedData,
   fileMime,
@@ -316,6 +317,9 @@ export function AgentStatusCard({
                <div className="w-12 h-12 rounded-xl bg-[var(--color-primary)]/5 border border-[var(--color-primary)]/20 flex items-center justify-center text-[var(--color-primary)] animate-pulse">
                   <Activity className="w-6 h-6" />
                </div>
+               <p className="max-w-xs text-xs text-white/50 font-medium leading-relaxed">
+                 {liveUpdate?.thinking || thinking || "Connected. Waiting for this agent's first backend signal..."}
+               </p>
             </div>
 
           ) : status === "waiting" ? (

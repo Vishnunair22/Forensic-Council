@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
 import { ArrowRight, Loader2 } from "lucide-react";
 
-import { AnalysisProgressOverlay } from "@/components/evidence/AnalysisProgressOverlay";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { useSound } from "@/hooks/useSound";
 import { sessionOnlyStorage } from "@/lib/storage";
@@ -13,6 +12,7 @@ import { sessionOnlyStorage } from "@/lib/storage";
 import { UploadModal } from "@/components/evidence/UploadModal";
 import { UploadSuccessModal } from "@/components/evidence/UploadSuccessModal";
 import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
+import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 
 export function HeroAuthActions() {
   const router = useRouter();
@@ -21,6 +21,7 @@ export function HeroAuthActions() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [handoffVisible, setHandoffVisible] = useState(false);
   const { playSound } = useSound();
 
   useEffect(() => {
@@ -29,6 +30,7 @@ export function HeroAuthActions() {
       setSelectedFile(null);
       setIsAuthenticating(false);
       setAuthError(null);
+      setHandoffVisible(false);
     };
 
     const openUpload = () => {
@@ -36,6 +38,8 @@ export function HeroAuthActions() {
       setSelectedFile(null);
       setIsAuthenticating(false);
       setAuthError(null);
+      setHandoffVisible(false);
+      router.prefetch("/evidence");
     };
 
     window.addEventListener("fc:reset-home", resetHome);
@@ -44,7 +48,11 @@ export function HeroAuthActions() {
       window.removeEventListener("fc:reset-home", resetHome);
       window.removeEventListener("fc:open-upload", openUpload);
     };
-  }, []);
+  }, [router]);
+
+  useEffect(() => {
+    router.prefetch("/evidence");
+  }, [router]);
 
   // Open the upload modal when navigated back with ?upload=1 (e.g. from handleNewUpload)
   useEffect(() => {
@@ -73,14 +81,22 @@ export function HeroAuthActions() {
     if (!selectedFile || isAuthenticating || isNavigating) return;
     setIsAuthenticating(true);
     setAuthError(null);
-    setShowUpload(false);
+    setHandoffVisible(true);
 
     __pendingFileStore.file = selectedFile;
     sessionOnlyStorage.setItem("forensic_auto_start", "true");
     sessionOnlyStorage.setItem("fc_show_loading", "true");
+    setShowUpload(false);
     setIsNavigating(true);
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
     router.push("/evidence", { scroll: true });
-    setIsAuthenticating(false);
+    window.setTimeout(() => {
+      if (window.location.pathname !== "/evidence") {
+        window.location.assign("/evidence");
+      }
+    }, 2500);
   }, [router, selectedFile, isAuthenticating, isNavigating]);
 
   return (
@@ -90,9 +106,11 @@ export function HeroAuthActions() {
           data-testid="hero-cta-begin"
           onClick={() => {
             playSound("envelope-open");
+            router.prefetch("/evidence");
             setShowUpload(true);
             setSelectedFile(null);
             setAuthError(null);
+            setHandoffVisible(false);
           }}
           aria-label={isAuthenticating ? "Initializing..." : authError ? authError : "Upload a file to begin analysis"}
           className="btn-horizon-primary group relative select-none"
@@ -111,16 +129,6 @@ export function HeroAuthActions() {
 
       </div>
 
-      <AnimatePresence>
-        {(isAuthenticating || isNavigating) && !authError && (
-          <AnalysisProgressOverlay
-            isVisible={(isAuthenticating || isNavigating) && !authError}
-            title={isNavigating ? "Connecting" : "Authenticating"}
-            message={isNavigating ? "Establishing secure session..." : "Verifying investigator credentials..."}
-          />
-        )}
-      </AnimatePresence>
-
       <ForensicErrorModal
         isVisible={!!authError}
         title="Protocol Initialization Failure"
@@ -130,7 +138,7 @@ export function HeroAuthActions() {
         onHome={() => { setAuthError(null); setSelectedFile(null); }}
       />
 
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {showUpload && !selectedFile && (
           <UploadModal
             key="upload-modal" // Crucial for mode="wait" to track component lifecycle
@@ -150,6 +158,16 @@ export function HeroAuthActions() {
               playSound("envelope-close");
               await handleStartAnalysis();
             }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {handoffVisible && (
+          <LoadingOverlay
+            liveText="Opening evidence analysis and preparing live backend stream..."
+            dispatchedCount={0}
+            totalAgents={5}
           />
         )}
       </AnimatePresence>
