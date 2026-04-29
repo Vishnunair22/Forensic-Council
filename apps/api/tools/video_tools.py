@@ -10,18 +10,9 @@ and face swap detection.
 from __future__ import annotations
 
 import hashlib
-import logging
-import os
-from dataclasses import dataclass
-from typing import Any
+from core.structured_logging import get_logger
 
-import cv2
-import numpy as np
-
-from core.evidence import ArtifactType, EvidenceArtifact
-from core.exceptions import ToolUnavailableError
-
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

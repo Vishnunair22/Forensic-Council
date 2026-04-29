@@ -14,7 +14,7 @@ import time
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from core.agents import AgentID
+from core.agent_registry import AgentID
 from core.structured_logging import get_logger
 from orchestration.agent_factory import AgentLoopResult, _serialize_react_chain
 

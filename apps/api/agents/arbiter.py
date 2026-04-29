@@ -26,7 +26,7 @@ from agents.arbiter_verdict import (
     cross_agent_comparison,
     evidence_verdict_of,
 )
-from core.agents import AgentID
+from core.agent_registry import AgentID
 from core.config import Settings, get_settings
 from core.cross_modal_fusion import fuse as cross_modal_fuse
 from core.forensic_policy import ForensicPolicy

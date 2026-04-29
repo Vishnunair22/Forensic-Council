@@ -11,6 +11,18 @@ export const VERDICTS = [
 
 export type Verdict = (typeof VERDICTS)[number];
 
+export interface HistoryItem {
+  sessionId: string;
+  fileName: string;
+  verdict: string;
+  timestamp: number;
+  type: "Initial" | "Deep";
+  thumbnail?: string;
+  mime?: string;
+  score?: number;
+  analysisTime?: string;
+}
+
 export type AgentResult = {
   id: string;
   name: string;

@@ -198,7 +198,7 @@ class ImageHandlers(BaseToolHandler):
 
         # Cross-agent signals from Agent 3 (Object & Context)
         try:
-            from core.agents import AgentID
+            from core.agent_registry import AgentID
 
             shared_ctx = await self.agent.working_memory.get_agent_context(
                 self.agent.session_id, AgentID.AGENT3
@@ -229,7 +229,7 @@ class ImageHandlers(BaseToolHandler):
 
         # Cross-agent signals from Agent 3
         try:
-            from core.agents import AgentID
+            from core.agent_registry import AgentID
 
             shared_ctx = await self.agent.working_memory.get_agent_context(
                 self.agent.session_id, AgentID.AGENT3
@@ -367,7 +367,7 @@ class ImageHandlers(BaseToolHandler):
             obj_ctx = self.agent._tool_context.get("object_detection")
             if not obj_ctx:
                 # Fallback: check shared context from Agent 3 (Object Detection)
-                from core.agents import AgentID
+                from core.agent_registry import AgentID
 
                 shared_ctx = await self.agent.working_memory.get_agent_context(
                     self.agent.session_id, AgentID.AGENT3

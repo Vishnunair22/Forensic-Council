@@ -404,7 +404,7 @@ class ForensicCouncilPipeline:
         from orchestration.pipeline_phases import run_agents_concurrent
 
         _tracer = get_tracer("forensic-council.pipeline")
-        from core.agents import AgentID
+        from core.agent_registry import AgentID
 
         await self._initialize_components(session_id)
 

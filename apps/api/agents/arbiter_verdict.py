@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
-from core.agents import AgentID
+from core.agent_registry import AgentID
 from core.forensic_policy import ForensicPolicy
 
 

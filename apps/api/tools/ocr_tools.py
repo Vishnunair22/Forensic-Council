@@ -12,18 +12,9 @@ Implements a three-tier pipeline:
 from __future__ import annotations
 
 import asyncio
-import logging
-import os
-from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+from core.structured_logging import get_logger
 
-import fitz  # PyMuPDF
-
-from core.evidence import EvidenceArtifact
-from core.exceptions import ToolUnavailableError
-from core.media_kind import is_screen_capture_like
-
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Shared executor for CPU-bound OCR tasks to avoid blocking the event loop
 _OCR_EXECUTOR = ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 1) * 4))
