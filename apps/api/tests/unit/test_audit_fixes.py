@@ -1,3 +1,4 @@
+import inspect
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -106,3 +107,18 @@ async def test_mime_before_dedup():
         assert "Security violation" in exc.value.detail
         assert mock_redis.set.called is False
         assert mock_thread.called is True
+
+
+# ── Init DB exports tests (from test_audit_init_db_exports.py) ───────────────────
+
+
+def test_init_db_exports_required_symbols():
+    """Ensure required symbols for backend lifespan migration/bootstrapping are correctly exported."""
+    from scripts import init_db
+
+    assert hasattr(init_db, "init_database"), "init_database missing from scripts.init_db"
+    assert callable(init_db.init_database), "init_database is not callable"
+    assert hasattr(init_db, "bootstrap_users"), "bootstrap_users missing from scripts.init_db"
+    assert callable(init_db.bootstrap_users), "bootstrap_users is not callable"
+    assert inspect.iscoroutinefunction(init_db.init_database), "init_database must be async def"
+    assert inspect.iscoroutinefunction(init_db.bootstrap_users), "bootstrap_users must be async def"

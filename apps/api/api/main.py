@@ -53,7 +53,6 @@ from core.persistence.redis_client import close_redis_client, get_redis_client
 from core.structured_logging import get_logger, request_id_ctx
 
 logger = get_logger(__name__)
-settings = get_settings()
 
 # Enable faulthandler for debugging hangs. On SIGUSR1, dump all thread stacks.
 # Usage: docker compose kill -s SIGUSR1 backend
@@ -73,6 +72,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # FORENSIC_MAX_WORKERS env var overrides the default cap.
     # Default is min(4, cpu_count) to prevent OOM on constrained Docker hosts;
     # raise via FORENSIC_MAX_WORKERS for bare-metal production deployments.
+    settings = get_settings()
+    app.state.settings = settings
     _env_max = int(os.environ.get("FORENSIC_MAX_WORKERS", "0"))
     max_workers = _env_max if _env_max > 0 else min(4, os.cpu_count() or 2)
     app.state.process_pool = concurrent.futures.ProcessPoolExecutor(max_workers=max_workers)
@@ -403,13 +404,13 @@ app = FastAPI(
     title="Forensic Council API",
     description="Multi-Agent Forensic Evidence Analysis System API",
     version="1.4.0",
-    docs_url="/docs" if settings.app_env != "production" else None,
-    redoc_url="/redoc" if settings.app_env != "production" else None,
+    docs_url="/docs" if get_settings().app_env != "production" else None,
+    redoc_url="/redoc" if get_settings().app_env != "production" else None,
     lifespan=lifespan,
 )
 
 # Configure observability (OpenTelemetry)
-setup_observability(app, settings)
+setup_observability(app, get_settings())
 
 
 @app.exception_handler(RequestValidationError)
@@ -423,10 +424,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 # Configure CORS — restricted methods and headers
 
-_cors_origins = settings.cors_allowed_origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins,
+    allow_origins=get_settings().cors_allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Request-ID", "X-CSRF-Token"],
@@ -436,6 +436,7 @@ app.add_middleware(
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
     """Add security headers to every response."""
+    settings = get_settings()
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
@@ -464,6 +465,7 @@ _CSRF_EXEMPT_PATHS = {
 
 @app.middleware("http")
 async def csrf_middleware(request: Request, call_next):
+    settings = get_settings()
     if settings.app_env == "testing":
         return await call_next(request)
     """
@@ -688,15 +690,16 @@ async def metrics_middleware(request: Request, call_next):
         raise
 
 
-# Diagnostic middleware — only in debug mode
-if settings.debug:
+def _setup_diagnostic_middleware():
+    if get_settings().debug:
+        @app.middleware("http")
+        async def diagnostic_middleware(request: Request, call_next):
+            origin = request.headers.get("origin")
+            logger.info(f"Incoming {request.method} to {request.url.path} from Origin: {origin}")
+            response = await call_next(request)
+            return response
 
-    @app.middleware("http")
-    async def diagnostic_middleware(request: Request, call_next):
-        origin = request.headers.get("origin")
-        logger.info(f"Incoming {request.method} to {request.url.path} from Origin: {origin}")
-        response = await call_next(request)
-        return response
+_setup_diagnostic_middleware()
 
 
 # Include routers
@@ -723,6 +726,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     4xx errors are not silently promoted to 5xx.
     """
     logger.error("Global exception caught", error=str(exc), exc_info=True)
+    settings = request.app.state.settings
 
     # If an HTTPException somehow leaked here, preserve its status code and detail.
     if isinstance(exc, HTTPException):
@@ -743,8 +747,9 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 @app.get("/")
-async def root():
+async def root(request: Request):
     """Root endpoint."""
+    settings = request.app.state.settings
     return {
         "name": "Forensic Council API",
         "version": "1.4.0",
@@ -755,7 +760,7 @@ async def root():
 
 @app.get("/health")
 @app.get("/api/v1/health")
-async def health_check():
+async def health_check(request: Request):
     """
     Deep health check endpoint.
 
@@ -763,6 +768,7 @@ async def health_check():
     Returns 200 only when the API and all dependencies are healthy.
     Returns 503 if any dependency is unavailable.
     """
+    settings = request.app.state.settings
     checks: dict = {}
     overall_healthy = True
 
@@ -770,6 +776,40 @@ async def health_check():
     migrations_ok = getattr(app.state, "migrations_ok", True)
     checks["migrations"] = "ok" if migrations_ok else "failed"
     if not migrations_ok:
+        overall_healthy = False
+
+    # ── PostgreSQL ────────────────────────────────────────────────────────────
+    try:
+        pg = await get_postgres_client()
+        await pg.fetch_val("SELECT 1")
+        checks["postgres"] = "ok"
+    except Exception as e:
+        checks["postgres"] = "error: connection failed"
+        if settings.debug:
+            checks["postgres_debug"] = f"{type(e).__name__}: {str(e)[:100]}"
+        overall_healthy = False
+
+    # ── Redis ─────────────────────────────────────────────────────────────────
+    try:
+        redis = await get_redis_client()
+        await redis.ping()
+        checks["redis"] = "ok"
+    except Exception as e:
+        checks["redis"] = "error: connection failed"
+        if settings.debug:
+            checks["redis_debug"] = f"{type(e).__name__}: {str(e)[:100]}"
+        overall_healthy = False
+
+    # ── Qdrant ─────────────────────────────────────────────────────────────────
+    try:
+        qdrant = await get_qdrant_client()
+        # Use health_check() method instead of direct API call
+        await qdrant.health_check()
+        checks["qdrant"] = "ok"
+    except Exception as e:
+        checks["qdrant"] = "error: connection failed"
+        if settings.debug:
+            checks["qdrant_debug"] = f"{type(e).__name__}: {str(e)[:100]}"
         overall_healthy = False
 
     # ── PostgreSQL ────────────────────────────────────────────────────────────

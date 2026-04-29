@@ -198,3 +198,79 @@ class TestCircuitBreakerConfig:
     def test_default_timeout_seconds(self):
         cfg = CircuitBreakerConfig()
         assert cfg.timeout_seconds == 60
+
+    def test_expected_exceptions_default(self):
+        cfg = CircuitBreakerConfig()
+        assert cfg.expected_exceptions == (Exception,)
+
+
+# ── get_state / reset tests (from test_circuit_breaker_unit.py) ───────────────────
+
+
+class TestCircuitBreakerGetStateAndReset:
+    def test_get_state_returns_dict(self):
+        b = _breaker()
+        state = b.get_state()
+        assert state["service"] == "test_service"
+        assert state["state"] == "closed"
+        assert state["failure_count"] == 0
+
+    def test_get_state_open_includes_recovery_time(self):
+        b = _breaker()
+        b.state = CircuitState.OPEN
+        b.last_failure_time = datetime.now()
+        state = b.get_state()
+        assert state["state"] == "open"
+        assert state["time_until_recovery"] > 0
+
+    def test_reset_clears_state(self):
+        b = _breaker()
+        b.state = CircuitState.OPEN
+        b.failure_count = 5
+        b.last_failure_time = datetime.now()
+        b.reset()
+        assert b.state == CircuitState.CLOSED
+        assert b.failure_count == 0
+        assert b.last_failure_time is None
+
+
+# ── CircuitBreakerRegistry (from test_circuit_breaker_unit.py) ─────────────────
+
+
+class TestCircuitBreakerRegistry:
+    def test_get_creates_breaker(self):
+        from core.circuit_breaker import CircuitBreakerRegistry
+
+        registry = CircuitBreakerRegistry()
+        cb = registry.get("test_service")
+        assert isinstance(cb, CircuitBreaker)
+        assert cb.service_name == "test_service"
+
+    def test_get_returns_same_instance(self):
+        from core.circuit_breaker import CircuitBreakerRegistry
+
+        registry = CircuitBreakerRegistry()
+        cb1 = registry.get("service_a")
+        cb2 = registry.get("service_a")
+        assert cb1 is cb2
+
+    def test_get_all_returns_all_breakers(self):
+        from core.circuit_breaker import CircuitBreakerRegistry
+
+        registry = CircuitBreakerRegistry()
+        registry.get("service_x")
+        registry.get("service_y")
+        all_breakers = registry.get_all_states()
+        assert "service_x" in all_breakers
+        assert "service_y" in all_breakers
+
+    def test_reset_all_resets_all_breakers(self):
+        from core.circuit_breaker import CircuitBreakerRegistry
+
+        registry = CircuitBreakerRegistry()
+        cb = registry.get("broken_service")
+        cb.state = CircuitState.OPEN
+        cb.failure_count = 10
+        registry.reset_all()
+        assert cb.state == CircuitState.CLOSED
+        assert cb.failure_count == 0

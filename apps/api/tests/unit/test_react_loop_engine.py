@@ -480,3 +480,79 @@ class TestGetAvailableToolsForLlm:
         tools = _get_available_tools_for_llm(state)
         assert isinstance(tools, list)
         assert len(tools) > 0
+
+
+# ── ReAct loop model tests (from test_react_loop.py) ─────────────────────────────
+
+
+class TestReActStepType:
+    def test_thought_value(self):
+        from core.react_loop import ReActStepType
+
+        assert ReActStepType.THOUGHT == "THOUGHT"
+
+    def test_action_value(self):
+        from core.react_loop import ReActStepType
+
+        assert ReActStepType.ACTION == "ACTION"
+
+    def test_observation_value(self):
+        from core.react_loop import ReActStepType
+
+        assert ReActStepType.OBSERVATION == "OBSERVATION"
+
+    def test_exactly_three_types(self):
+        from core.react_loop import ReActStepType
+
+        assert len(list(ReActStepType)) == 3
+
+
+class TestReActStep:
+    def test_thought_step_type(self):
+        from core.react_loop import ReActStep
+
+        s = ReActStep(step_type="THOUGHT", content="Test", iteration=1)
+        assert s.step_type == "THOUGHT"
+
+    def test_action_tool_name_stored(self):
+        from core.react_loop import ReActStep
+
+        s = ReActStep(
+            step_type="ACTION",
+            content="Call tool",
+            tool_name="ela_full_image",
+            iteration=1,
+        )
+        assert s.tool_name == "ela_full_image"
+
+    def test_iteration_stored(self):
+        from core.react_loop import ReActStep
+
+        s = ReActStep(step_type="THOUGHT", content="Test", iteration=7)
+        assert s.iteration == 7
+
+
+class TestHITLCheckpointReason:
+    @pytest.mark.parametrize("reason", ["ITERATION_CEILING_50PCT", "CONTESTED_FINDING", "TOOL_UNAVAILABLE", "SEVERITY_THRESHOLD_BREACH"])
+    def test_reason_exists(self, reason):
+        from core.react_loop import HITLCheckpointReason
+
+        assert hasattr(HITLCheckpointReason, reason)
+
+
+class TestHumanDecision:
+    def test_approve_decision_fields(self):
+        from core.react_loop import HumanDecision
+
+        d = HumanDecision(decision_type="APPROVE", investigator_id="REQ-001")
+        assert d.decision_type == "APPROVE"
+
+    def test_override_with_finding(self):
+        from core.react_loop import HumanDecision
+
+        d = HumanDecision(
+            decision_type="OVERRIDE",
+            investigator_id="REQ-003",
+            override_finding={"finding_id": "abc", "status": "CONFIRMED"},
+        )
+        assert d.override_finding is not None

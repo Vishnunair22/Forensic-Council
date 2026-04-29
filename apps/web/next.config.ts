@@ -38,14 +38,13 @@ const nextConfig: NextConfig = {
   compress: false,
 
   // ── TypeScript & ESLint ───────────────────────────────────────────────
-  // Note: These flags allow builds to succeed even with type/lint errors.
-  // For production releases, run: npm run build:strict (uses CI checks)
-  // or remove these flags and fix errors before building.
+  // Strict by default. CI runs `npm run type-check` and `npm run lint`
+  // separately, so build-time strictness catches local-dev regressions.
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
 
 

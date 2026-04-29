@@ -269,3 +269,22 @@ def test_agent_key_pair_generate_from_same_seed_is_identical() -> None:
     kp1 = AgentKeyPair.generate("agent_s", seed=seed)
     kp2 = AgentKeyPair.generate("agent_s", seed=seed)
     assert kp1.get_public_key_pem() == kp2.get_public_key_pem()
+
+
+# ── Additional KeyStore tests (from test_signing_unit.py) ───────────────────────
+
+
+def test_derive_seed_is_deterministic() -> None:
+    """_derive_seed must return the same seed for the same agent_id."""
+    ks = KeyStore()
+    seed1 = ks._derive_seed("Agent1")
+    seed2 = ks._derive_seed("Agent1")
+    assert seed1 == seed2
+
+
+def test_derive_seed_differs_for_different_agents() -> None:
+    """Different agent_ids must produce different seeds."""
+    ks = KeyStore()
+    s1 = ks._derive_seed("Agent1")
+    s2 = ks._derive_seed("Agent2")
+    assert s1 != s2

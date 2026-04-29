@@ -86,8 +86,31 @@ def _finding(
     }
 
 
+def _minimal_finding(agent_id: str = "Agent1") -> dict[str, Any]:
+    """Build the minimum finding dict that is treated as a real finding."""
+    return {
+        "finding_id": str(uuid4()),
+        "agent_id": agent_id,
+        "agent_name": "Image Forensics",
+        "finding_type": "ela_analysis",
+        "status": "CONFIRMED",
+        "confidence_raw": 0.80,
+        "calibrated_probability": 0.78,
+        "court_statement": "No pixel-level manipulation detected.",
+        "reasoning_summary": "ELA map is uniform.",
+        "metadata": {
+            "court_defensible": True,
+            "tool_name": "ela",
+        },
+    }
+
+
 def _results(*agent_ids: str, **kwargs) -> dict[str, dict[str, Any]]:
     return {a: {"findings": [_finding(a, **kwargs)]} for a in agent_ids}
+
+
+def _minimal_agent_results(agent_id: str = "Agent1") -> dict[str, dict[str, Any]]:
+    return {agent_id: {"findings": [_minimal_finding(agent_id)]}}
 
 
 # â”€â”€ FindingVerdict enum â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -402,4 +425,72 @@ class TestArbiterDeliberation:
         arbiter = _arbiter()
         results = _results("Agent1", confidence=0.0)
         report = await arbiter.deliberate(results)
+        assert isinstance(report, ForensicReport)
+
+
+# ── Smoke tests (deferred from test_arbiter_smoke.py) ───────────────────────────────
+
+
+class TestArbiterSmoke:
+    @pytest.mark.asyncio
+    async def test_report_has_valid_verdict(self):
+        """overall_verdict must be one of the five canonical verdicts."""
+        arbiter = _arbiter()
+        report = await arbiter.deliberate(_minimal_agent_results())
+        valid = {"AUTHENTIC", "LIKELY_AUTHENTIC", "INCONCLUSIVE", "LIKELY_MANIPULATED", "MANIPULATED"}
+        assert report.overall_verdict in valid
+
+    @pytest.mark.asyncio
+    async def test_empty_agent_results_returns_inconclusive(self):
+        """When agent_results is empty, the arbiter must return 'INCONCLUSIVE'."""
+        arbiter = _arbiter()
+        report = await arbiter.deliberate({})
+        assert report.overall_verdict == "INCONCLUSIVE"
+
+    @pytest.mark.asyncio
+    async def test_multiple_agents_all_appear_in_findings(self):
+        """All agents' findings should appear in per_agent_findings."""
+        arbiter = _arbiter()
+        agent_results = {
+            "Agent1": {"findings": [_minimal_finding("Agent1")]},
+            "Agent2": {"findings": [_minimal_finding("Agent2")]},
+        }
+        report = await arbiter.deliberate(agent_results)
+        assert "Agent1" in report.per_agent_findings
+        assert "Agent2" in report.per_agent_findings
+
+
+# ── Unit tests with mocks (deferred from test_arbiter_unit.py) ─────────────────────
+
+
+class TestArbiterWithMocks:
+    @pytest.mark.asyncio
+    async def test_deliberate_with_llm_disabled(self):
+        """use_llm=False should skip LLM synthesis without error."""
+        arbiter = _arbiter()
+        agent_results = {
+            "Agent1": {
+                "findings": [_minimal_finding("Agent1")],
+                "react_chain": [],
+                "self_reflection": None,
+            }
+        }
+        report = await arbiter.deliberate(agent_results, case_id="CASE007", use_llm=False)
+        assert isinstance(report, ForensicReport)
+
+    @pytest.mark.asyncio
+    async def test_deliberate_with_react_chain(self):
+        """Findings with react_chain should be processed correctly."""
+        arbiter = _arbiter()
+        agent_results = {
+            "Agent1": {
+                "findings": [_minimal_finding("Agent1")],
+                "react_chain": [
+                    {"step_type": "THOUGHT", "content": "Analyzing image..."},
+                    {"step_type": "ACTION", "content": "run ELA", "tool_name": "ela_full_image"},
+                ],
+                "self_reflection": {"report": "ELA shows signs of manipulation."},
+            }
+        }
+        report = await arbiter.deliberate(agent_results, case_id="CASE009", use_llm=False)
         assert isinstance(report, ForensicReport)

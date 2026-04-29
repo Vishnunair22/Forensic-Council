@@ -40,7 +40,7 @@ services:
         max-size: "50m"
         max-file: "5"
 
-frontend:
+  frontend:
     restart: always
     build:
       context: ..
