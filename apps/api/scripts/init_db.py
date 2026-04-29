@@ -37,6 +37,15 @@ except Exception as e:
 
 logger = get_logger(__name__)
 
+_PLACEHOLDER_MARKERS = ("__REPLACE_ME", "__PASTE_", "change-me", "changeme", "replace_me")
+
+
+def _is_placeholder(value: str | None) -> bool:
+    if not value:
+        return True
+    v = value.lower()
+    return any(m.lower() in v for m in _PLACEHOLDER_MARKERS)
+
 
 async def init_database() -> bool:
     """
@@ -128,7 +137,7 @@ async def bootstrap_users(client: PostgresClient) -> None:
 
     try:
         # Create admin user if password is provided
-        if admin_password:
+        if admin_password and not _is_placeholder(admin_password):
             admin_exists = await client.fetch_one(
                 "SELECT 1 FROM users WHERE username = $1", admin_username
             )
@@ -161,8 +170,15 @@ async def bootstrap_users(client: PostgresClient) -> None:
                 )
                 logger.info("Admin user password synchronized", username=admin_username)
 
+        else:
+            logger.warning(
+                "Skipping admin bootstrap — BOOTSTRAP_ADMIN_PASSWORD missing or "
+                "still set to a placeholder. Run "
+                "infra/generate_production_keys.sh --write to populate real secrets."
+            )
+
         # Create investigator user if password is provided
-        if investigator_password:
+        if investigator_password and not _is_placeholder(investigator_password):
             investigator_exists = await client.fetch_one(
                 "SELECT 1 FROM users WHERE username = $1", investigator_username
             )
@@ -196,6 +212,11 @@ async def bootstrap_users(client: PostgresClient) -> None:
                 logger.info(
                     "Investigator user password synchronized", username=investigator_username
                 )
+        else:
+            logger.warning(
+                "Skipping investigator bootstrap — BOOTSTRAP_INVESTIGATOR_PASSWORD "
+                "missing or still set to a placeholder."
+            )
     except Exception as e:
         logger.warning("User bootstrap update failed (likely DB lock)", error=str(e))
 

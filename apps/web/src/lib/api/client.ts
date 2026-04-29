@@ -143,10 +143,12 @@ async function handleAuthError<T>(operation: () => Promise<T>, _retryCount = 0):
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     const isAuthError = msg.includes("401") || msg.includes("Unauthorized") || msg.includes("authenticated");
+    const isCsrfError = msg.includes("403") || msg.includes("CSRF");
 
-    if (isAuthError && _retryCount < 2) {
-      dbg.warn("Session invalid, re-authenticating...");
+    if ((isAuthError || isCsrfError) && _retryCount < 2) {
+      dbg.warn("Session/CSRF invalid, re-authenticating...");
       await autoLoginAsInvestigator();
+      await fetch(`${API_BASE}/api/v1/health`, { credentials: "include", cache: "no-store" });
       return await handleAuthError(operation, _retryCount + 1);
     }
     throw error;

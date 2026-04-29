@@ -466,11 +466,11 @@ class Settings(BaseSettings):
         description="LLM model. Groq: llama-3.3-70b-versatile. OpenAI: gpt-4o. Anthropic: claude-3-5-sonnet-20241022",
     )
     llm_fallback_models: str = Field(
-        default="openai/gpt-oss-20b,llama-3.1-8b-instant",
+        default="llama-3.1-8b-instant",
         description=(
             "Comma-separated fallback models for the configured LLM provider. "
             "For Groq, these are tried after LLM_MODEL when the primary model "
-            "fails or is unavailable."
+            "fails or is unavailable. Do not prefix entries with 'openai/' for Groq."
         ),
     )
     llm_temperature: float = Field(
@@ -624,14 +624,12 @@ class Settings(BaseSettings):
                 "GEMINI_API_KEY not set. Agents 1, 3, and 5 will use local fallback analysis "
                 "instead of Gemini vision. Get a free key at https://aistudio.google.com/apikey"
             )
-            warnings.warn(msg, UserWarning, stacklevel=2)
             _config_logger.warning(msg)
         elif len(v) < 20:
             msg = (
                 "GEMINI_API_KEY appears too short (< 20 chars). Agents 1, 3, and 5 may skip "
                 "Gemini vision deep analysis — verify the key at https://aistudio.google.com/apikey"
             )
-            warnings.warn(msg, UserWarning, stacklevel=2)
             _config_logger.warning(msg)
         return v
 
@@ -687,9 +685,12 @@ class Settings(BaseSettings):
     # IMPORTANT: never set both use_redis_worker=True and run the in-process
     # worker simultaneously — the same investigation would execute twice.
     use_redis_worker: bool = Field(
-        default=True,
-        description="Submit investigations to Redis queue for external worker (worker.py). "
-        "Set False when running investigations in-process.",
+        default=False,
+        description=(
+            "Submit investigations to Redis queue for external worker (worker.py). "
+            "Docker stacks override this to True via .env / docker-compose. "
+            "Local dev defaults to in-process so `npm run dev` works without a worker."
+        ),
     )
 
     @field_validator("log_level")

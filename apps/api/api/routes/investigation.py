@@ -205,85 +205,87 @@ async def start_investigation(
             raise HTTPException(status_code=400, detail="File is empty.")
 
         content_hash = hasher.hexdigest()
-        dedup_key = f"dedup:{case_id}:{content_hash}"
+dedup_key = f"dedup:{case_id}:{content_hash}"
         try:
             from core.persistence.redis_client import get_redis_client
 
             _redis = await get_redis_client()
-            if _redis:
-                was_set = await _redis.set(
-                    dedup_key,
-                    session_id,
-                    nx=True,
-                    ex=settings.investigation_timeout + 60,
+            was_set = await _redis.set(
+                dedup_key,
+                session_id,
+                nx=True,
+                ex=settings.investigation_timeout + 60,
+            )
+            if not was_set:
+                existing = await _redis.get(dedup_key)
+                existing_session_id = (
+                    existing if isinstance(existing, str) else existing.decode()
                 )
-                if not was_set:
-                    existing = await _redis.get(dedup_key)
-                    existing_session_id = (
-                        existing if isinstance(existing, str) else existing.decode()
+
+                # ── Check if the existing session is actually active ─────────
+                # If the session was interrupted by a restart or finished, we
+                # should NOT return 409. Instead, we clear the dedup key and
+                # allow the user to start a fresh investigation for the same file.
+                try:
+                    existing_meta = (
+                        await get_active_pipeline_metadata(existing_session_id) or {}
+                    )
+                    status = existing_meta.get("status")
+                    if status not in ("running", "paused"):
+                        await _redis.delete(dedup_key)
+                        # Try setting it again for the current request
+                        was_set = await _redis.set(
+                            dedup_key,
+                            session_id,
+                            nx=True,
+                            ex=settings.investigation_timeout + 60,
+                        )
+                        if not was_set:
+                            # Highly unlikely race condition: another request won the race.
+                            # Just let it return 409 normally in the next block.
+                            pass
+                except Exception as meta_err:
+                    logger.warning(
+                        "Failed to check status of existing dedup session", error=str(meta_err)
                     )
 
-                    # ── Check if the existing session is actually active ─────────
-                    # If the session was interrupted by a restart or finished, we
-                    # should NOT return 409. Instead, we clear the dedup key and
-                    # allow the user to start a fresh investigation for the same file.
+                # If we successfully cleared and reset (was_set is True now),
+                # then we just fall through to the rest of the investigation.
+                # Otherwise, if was_set is still False, we return 409.
+                if not was_set:
+                    # Re-claim ownership: update the existing session with current user ID.
                     try:
                         existing_meta = (
                             await get_active_pipeline_metadata(existing_session_id) or {}
                         )
-                        status = existing_meta.get("status")
-                        if status not in ("running", "paused"):
-                            await _redis.delete(dedup_key)
-                            # Try setting it again for the current request
-                            was_set = await _redis.set(
-                                dedup_key,
-                                session_id,
-                                nx=True,
-                                ex=settings.investigation_timeout + 60,
-                            )
-                            if not was_set:
-                                # Highly unlikely race condition: another request won the race.
-                                # Just let it return 409 normally in the next block.
-                                pass
-                    except Exception as meta_err:
+                        await set_active_pipeline_metadata(
+                            existing_session_id,
+                            {
+                                **existing_meta,
+                                "investigator_id": current_user.user_id,
+                                "investigator_role": current_user.role.value,
+                                "case_investigator_label": investigator_id,
+                            },
+                        )
+                    except Exception as meta_exc:
                         logger.warning(
-                            "Failed to check status of existing dedup session", error=str(meta_err)
+                            "Failed to re-claim session ownership on dedup",
+                            session_id=existing_session_id,
+                            error=str(meta_exc),
                         )
 
-                    # If we successfully cleared and reset (was_set is True now),
-                    # then we just fall through to the rest of the investigation.
-                    # Otherwise, if was_set is still False, we return 409.
-                    if not was_set:
-                        # Re-claim ownership: update the existing session with current user ID.
-                        try:
-                            existing_meta = (
-                                await get_active_pipeline_metadata(existing_session_id) or {}
-                            )
-                            await set_active_pipeline_metadata(
-                                existing_session_id,
-                                {
-                                    **existing_meta,
-                                    "investigator_id": current_user.user_id,
-                                    "investigator_role": current_user.role.value,
-                                    "case_investigator_label": investigator_id,
-                                },
-                            )
-                        except Exception as meta_exc:
-                            logger.warning(
-                                "Failed to re-claim session ownership on dedup",
-                                session_id=existing_session_id,
-                                error=str(meta_exc),
-                            )
-
-                        tmp_path.unlink(missing_ok=True)
-                        raise HTTPException(
-                            status_code=409,
-                            detail=f"Duplicate detected: session {existing_session_id}",
-                        )
+                    tmp_path.unlink(missing_ok=True)
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Duplicate detected: session {existing_session_id}",
+                    )
         except HTTPException:
             raise
         except Exception as exc:
-            logger.debug("Evidence deduplication skipped", error=str(exc))
+            logger.error(
+                "Evidence deduplication failed — Redis unavailable, allowing through",
+                error=str(exc),
+            )
 
         if actual_mime.startswith("image/") and actual_mime != "image/gif":
             try:

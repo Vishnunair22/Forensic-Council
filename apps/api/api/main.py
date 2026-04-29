@@ -92,9 +92,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.error("Production validation failed", error=str(e))
         raise
 
-    if settings.signing_key.startswith("dev-"):
+    _dev_markers = ("dev-", "development-", "change", "placeholder", "replace")
+    if any(settings.signing_key.lower().startswith(m) for m in _dev_markers):
         logger.warning(
-            "SIGNING_KEY is using a development placeholder. Never use this in production."
+            "SIGNING_KEY appears to be a development placeholder. "
+            "Run infra/generate_production_keys.sh before production."
         )
 
     # Research model license enforcement
@@ -454,9 +456,9 @@ _CSRF_SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
 _CSRF_EXEMPT_PATHS = {
     "/health",
     "/api/v1/health",
+    "/api/v1/health/ml-tools",
+    "/api/v1/health/tools",
     "/api/v1/auth/login",
-    "/api/v1/auth/refresh",
-    "/api/v1/auth/logout",
     "/docs",
     "/redoc",
     "/openapi.json",
@@ -690,16 +692,18 @@ async def metrics_middleware(request: Request, call_next):
         raise
 
 
-def _setup_diagnostic_middleware():
-    if get_settings().debug:
-        @app.middleware("http")
-        async def diagnostic_middleware(request: Request, call_next):
-            origin = request.headers.get("origin")
-            logger.info(f"Incoming {request.method} to {request.url.path} from Origin: {origin}")
-            response = await call_next(request)
-            return response
-
-_setup_diagnostic_middleware()
+@app.middleware("http")
+async def diagnostic_middleware(request: Request, call_next):
+    if not get_settings().debug:
+        return await call_next(request)
+    origin = request.headers.get("origin")
+    logger.info(
+        "Incoming request",
+        method=request.method,
+        path=request.url.path,
+        origin=origin,
+    )
+    return await call_next(request)
 
 
 # Include routers
@@ -812,53 +816,9 @@ async def health_check(request: Request):
             checks["qdrant_debug"] = f"{type(e).__name__}: {str(e)[:100]}"
         overall_healthy = False
 
-    # ── PostgreSQL ────────────────────────────────────────────────────────────
-    try:
-        pg = await get_postgres_client()
-        await pg.fetch_val("SELECT 1")
-        checks["postgres"] = "ok"
-    except Exception as e:
-        checks["postgres"] = "error: connection failed"
-        if settings.debug:
-            checks["postgres_debug"] = f"{type(e).__name__}: {str(e)[:100]}"
-        overall_healthy = False
-
-    # ── Redis ─────────────────────────────────────────────────────────────────
-    try:
-        redis = await get_redis_client()
-        await redis.ping()
-        checks["redis"] = "ok"
-    except Exception as e:
-        checks["redis"] = "error: connection failed"
-        if settings.debug:
-            checks["redis_debug"] = f"{type(e).__name__}: {str(e)[:100]}"
-        overall_healthy = False
-
-    # ── Qdrant ────────────────────────────────────────────────────────────────
-    try:
-        qdrant = await get_qdrant_client()
-        # Use health_check() method instead of direct API call
-        await qdrant.health_check()
-        checks["qdrant"] = "ok"
-    except Exception as e:
-        checks["qdrant"] = "error: connection failed"
-        if settings.debug:
-            checks["qdrant_debug"] = f"{type(e).__name__}: {str(e)[:100]}"
-        overall_healthy = False
-
-    # ── ML Tools Warm-Up Status (Decoupled to Worker) ─────────────────────────
-    checks["ml_tools"] = {
-        "status": "managed_by_worker",
-    }
-    # ML tools not ready doesn't make the whole system unhealthy
-
-    status_code = 200 if overall_healthy else 503
-    return JSONResponse(
-        status_code=status_code,
-        content={
-            "status": "healthy" if overall_healthy else "degraded",
-            "checks": checks,
-        },
+return JSONResponse(
+        status_code=200 if overall_healthy else 503,
+        content={"status": "ok" if overall_healthy else "degraded", "checks": checks},
     )
 
 
