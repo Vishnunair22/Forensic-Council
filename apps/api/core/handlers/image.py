@@ -30,14 +30,12 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from core.forensics.ela import (
-    check_adversarial_robustness,  # sync, run in executor
-    classify_ela_anomalies,  # async
+from core.forensics import (
+    analyze_frequency_bands,
+    analyze_noise_consistency,
+    check_adversarial_robustness,
+    classify_ela_anomalies,
 )
-from core.forensics.frequency import analyze_frequency_bands  # sync, run in executor
-
-# Forensic analysis helpers (live in core/forensics/)
-from core.forensics.noise import analyze_noise_consistency  # sync, run in executor
 from core.handlers.base import BaseToolHandler
 from core.ml_subprocess import run_ml_tool
 from core.scoring import ConfidenceCalibrator
