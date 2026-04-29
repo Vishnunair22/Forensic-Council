@@ -530,6 +530,7 @@ services:
     environment:
       - NODE_ENV=development
       - NEXT_TELEMETRY_DISABLED=1
+      - RUNNING_IN_DOCKER=1
       # Standalone Next.js server must bind to all interfaces so health-checks
       # and external traffic can reach it from outside the container.
       - HOSTNAME=0.0.0.0

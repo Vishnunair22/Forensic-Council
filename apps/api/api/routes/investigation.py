@@ -205,7 +205,7 @@ async def start_investigation(
             raise HTTPException(status_code=400, detail="File is empty.")
 
         content_hash = hasher.hexdigest()
-dedup_key = f"dedup:{case_id}:{content_hash}"
+        dedup_key = f"dedup:{case_id}:{content_hash}"
         try:
             from core.persistence.redis_client import get_redis_client
 
@@ -241,9 +241,11 @@ dedup_key = f"dedup:{case_id}:{content_hash}"
                             ex=settings.investigation_timeout + 60,
                         )
                         if not was_set:
-                            # Highly unlikely race condition: another request won the race.
-                            # Just let it return 409 normally in the next block.
-                            pass
+                            logger.info(
+                                "Dedup race: another request claimed the same content_hash; "
+                                "deferring to 409 response below.",
+                                session_id=session_id,
+                            )
                 except Exception as meta_err:
                     logger.warning(
                         "Failed to check status of existing dedup session", error=str(meta_err)

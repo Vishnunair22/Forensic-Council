@@ -316,7 +316,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             try:
                 await monitor_task
             except asyncio.CancelledError:
-                pass
+                return
     except Exception as e:
         logger.warning("Failed to stop monitoring", error=str(e))
 
