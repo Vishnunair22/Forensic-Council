@@ -7,9 +7,7 @@ This folder contains the Docker Compose, Caddy, Prometheus, and deployment helpe
 | File | Purpose |
 | --- | --- |
 | `docker-compose.yml` | Base stack: API, worker, frontend, Postgres, Redis, Qdrant, Caddy, Jaeger, Prometheus |
-| `docker-compose.dev.yml` | Development override with hot reload and larger frontend dev resources |
 | `docker-compose.prod.yml` | Production override with optimized build targets, log rotation, and reduced direct host ports |
-| `docker-compose.test.yml` | Lightweight infra-only stack for integration tests that bring their own backend |
 | `Caddyfile` | Reverse proxy, TLS, security headers, API routing, upload limits |
 | `prometheus.yml` | Prometheus scrape configuration |
 | `generate_production_keys.sh` | Generates strong `.env` secrets |
