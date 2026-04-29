@@ -52,8 +52,14 @@ MIN_FILES: dict[str, int] = {
     "Calibration": 0,  # generated after first run
 }
 
+def _open_clip_cache_dir(model_name: str) -> str:
+    if model_name == "ViT-B-32":
+        return "models--timm--vit_base_patch32_clip_224.openai"
+    return "models--" + model_name.replace("hf-hub:", "").replace("/", "--")
+
+
 REQUIRED_HF_MODEL_DIRS = [
-    "models--" + settings.siglip_model_name.replace("hf-hub:", "").replace("/", "--"),
+    _open_clip_cache_dir(settings.siglip_model_name),
     "models--speechbrain--spkrec-ecapa-voxceleb",
     "models--" + settings.aasist_model_name.replace("/", "--"),
 ]

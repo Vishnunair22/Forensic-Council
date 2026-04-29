@@ -5,7 +5,7 @@
 #   deps-full   - core + ML packages (PyTorch, transformers, etc.)
 #   migration   - lightweight DB init, inherits deps-core (~2-3 GB lighter)
 #   app         - shared source + dirs + bytecode (inherits deps-full)
-#   development - hot-reload dev server  (used by: docker-compose.dev.yml)
+#   development - hot-reload dev server  (used by: infra/docker-compose.yml)
 #   production  - hardened, non-root, read-only container (default)
 #
 # Why split deps-core / deps-full?

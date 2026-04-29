@@ -30,6 +30,7 @@ if [ "$(id -u)" = "0" ]; then
         /app/storage/evidence \
         /app/storage/keys \
         /app/storage/calibration_models \
+        /app/cache/calibration_models \
         /app/cache/huggingface \
         /app/cache/torch \
         /app/cache/numba_cache \

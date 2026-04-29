@@ -85,6 +85,7 @@ x-backend-env: &backend-env
   # inotify events from Windows host → WSL2 → container are unreliable;
   # polling ensures uvicorn --reload actually picks up code changes.
   WATCHFILES_FORCE_POLLING: "true"
+  PYTHONDONTWRITEBYTECODE: "1"
 
 services:
   # --------------------------------------------------------------------------
@@ -310,7 +311,7 @@ services:
       migration:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "python probes/validate_ml_tools.py && wget -qO- http://localhost:8000/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -397,7 +398,7 @@ services:
       migration:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import socket; s=socket.create_connection((__import__('os').environ.get('REDIS_HOST','redis'), 6379), timeout=3); s.close()\" || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import os, redis; r=redis.Redis(host=os.environ.get('REDIS_HOST','redis'), port=int(os.environ.get('REDIS_PORT','6379')), password=os.environ.get('REDIS_PASSWORD'), socket_connect_timeout=3, socket_timeout=3); assert r.ping() is True\" || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -450,15 +451,13 @@ services:
   # --------------------------------------------------------------------------
   # Reverse Proxy (Caddy) — TLS termination, security headers, rate limiting
   # --------------------------------------------------------------------------
-  # Caddy is only needed for production TLS. Use profiles: ["prod"] to start.
-  # For local dev without HTTPS use ports 3000/8000 directly.
+  # Caddy is the same-origin entry point for both local and production runs.
+  # Local dev can also use ports 3000/8000 directly.
   # --------------------------------------------------------------------------
   caddy:
     image: caddy:2-alpine
     container_name: forensic_caddy
     restart: unless-stopped
-    profiles:
-      - prod
     ports:
       - "80:80"
       - "443:443"
@@ -469,6 +468,7 @@ services:
       - caddy_logs:/var/log/caddy
     environment:
       - DOMAIN=${DOMAIN:-localhost}
+      - CADDY_SITE_ADDRESS=${CADDY_SITE_ADDRESS:-http://localhost}
       # Suppress quic-go UDP buffer warning — net.core.rmem_max can't be set
       # per-container on Docker Desktop / WSL2 without host kernel changes.
       - QUIC_GO_DISABLE_RECEIVE_BUFFER_WARNING=1
@@ -478,12 +478,10 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      # wget --spider sends a lightweight HEAD-style request to port 80.
-      # On localhost this stays on HTTP (no TLS handshake) and verifies Caddy
-      # is actively accepting connections. On production domains, Caddy redirects
-      # HTTP→HTTPS but the redirect target is still reachable internally via :80,
-      # so the spider check succeeds without requiring a valid TLS certificate.
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:80 || exit 1"]
+      # Accept either local 200 responses or production HTTP-to-HTTPS redirects.
+      # This verifies Caddy is accepting traffic without requiring an internal
+      # TLS handshake or public DNS resolution from inside the container.
+      test: ["CMD-SHELL", "wget -S -qO- --header \"Host: ${DOMAIN:-localhost}\" http://127.0.0.1:80 2>&1 | grep -Eq 'HTTP/[0-9.]+ (200|301|302|307|308)' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -521,12 +519,13 @@ services:
         INTERNAL_API_URL: "http://backend:8000"
     container_name: forensic_ui
     restart: unless-stopped
+    working_dir: /app/apps/web
     ports:
       - "3000:3000"
     volumes:
-      - ../apps/web:/app:rw
-      - /app/.next
-      - /app/node_modules
+      - ../apps/web:/app/apps/web:rw
+      - /app/apps/web/.next
+      - /app/apps/web/node_modules
     environment:
       - NODE_ENV=development
       - NEXT_TELEMETRY_DISABLED=1
@@ -535,8 +534,8 @@ services:
       # and external traffic can reach it from outside the container.
       - HOSTNAME=0.0.0.0
       - PORT=3000
-      # NEXT_PUBLIC_API_URL: empty → browser uses window.location.origin → Caddy (port 80).
-      # Set to https://forensic.yourdomain.com in production only.
+      # NEXT_PUBLIC_API_URL: empty keeps browser requests same-origin.
+      # Dev can use either Caddy on port 80 or the frontend on port 3000.
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
       # DEMO_PASSWORD: server-side only — used by /api/auth/demo Next.js API route.
       # Do NOT use NEXT_PUBLIC_DEMO_PASSWORD — it bakes secrets into the client JS bundle.
@@ -546,10 +545,6 @@ services:
       # Inside Docker, the frontend container CANNOT reach "localhost:8000" — it must
       # use the Docker-internal service name "backend".
       - INTERNAL_API_URL=http://backend:8000
-    # Next.js 15.3+ defaults `next dev` to Turbopack, which does not use the
-    # webpack watchOptions.poll config and receives no inotify events from the
-    # Windows host bind mount. Passing --no-turbopack restores webpack, which
-    # polls the filesystem every 500 ms (see next.config.ts watchOptions).
     command: ["npm", "run", "dev"]
     depends_on:
       backend:

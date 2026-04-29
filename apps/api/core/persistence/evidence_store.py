@@ -5,11 +5,13 @@ Evidence Store Module
 Manages immutable evidence artifact storage with versioning.
 """
 
+from __future__ import annotations
+
 import hashlib
 from typing import Any
 from uuid import UUID
 
-from core.custody_logger import CustodyLogger, EntryType
+# CustodyLogger imported inside methods to avoid circular imports
 from core.evidence import ArtifactType, EvidenceArtifact, VersionTree
 from core.exceptions import ForensicCouncilBaseException
 from core.persistence.postgres_client import PostgresClient, get_postgres_client
@@ -58,7 +60,7 @@ class EvidenceStore:
         self,
         postgres_client: PostgresClient | None = None,
         storage_backend: StorageBackend | None = None,
-        custody_logger: CustodyLogger | None = None,
+        custody_logger: "CustodyLogger" | None = None,
     ) -> None:
         """
         Initialize the evidence store.
@@ -82,6 +84,7 @@ class EvidenceStore:
         if self._storage is None:
             self._storage = LocalStorageBackend()
         if self._custody_logger is None:
+            from core.custody_logger import CustodyLogger
             self._custody_logger = CustodyLogger(postgres_client=self._postgres)
         return self
 
@@ -178,6 +181,7 @@ class EvidenceStore:
 
             # Log to chain of custody
             if self._custody_logger:
+                from core.custody_logger import EntryType
                 await self._custody_logger.log_entry(
                     agent_id=agent_id,
                     session_id=session_id,
@@ -309,6 +313,7 @@ class EvidenceStore:
 
             # Log to chain of custody
             if self._custody_logger:
+                from core.custody_logger import EntryType
                 await self._custody_logger.log_entry(
                     agent_id=agent_id,
                     session_id=artifact.session_id,
@@ -614,6 +619,7 @@ async def get_evidence_store() -> EvidenceStore:
     if _evidence_store is None:
         postgres = await get_postgres_client()
         storage = LocalStorageBackend()
+        from core.custody_logger import CustodyLogger
         custody_logger = CustodyLogger(postgres_client=postgres)
         _evidence_store = EvidenceStore(
             postgres_client=postgres,

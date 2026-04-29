@@ -9,18 +9,24 @@ This module contains infrastructure clients and utilities:
 - Storage abstraction for evidence files
 """
 
-from core.persistence.postgres_client import PostgresClient, get_postgres_client
-from core.persistence.qdrant_client import QdrantClient, get_qdrant_client
-from core.persistence.redis_client import RedisClient, get_redis_client
+from core.persistence.evidence_store import EvidenceStore, get_evidence_store
+from core.persistence.postgres_client import PostgresClient, get_postgres_client, close_postgres_client
+from core.persistence.qdrant_client import QdrantClient, get_qdrant_client, close_qdrant_client
+from core.persistence.redis_client import RedisClient, get_redis_client, close_redis_client
 from core.persistence.storage import LocalStorageBackend, StorageBackend
 
 __all__ = [
     "RedisClient",
     "get_redis_client",
+    "close_redis_client",
     "QdrantClient",
     "get_qdrant_client",
+    "close_qdrant_client",
     "PostgresClient",
     "get_postgres_client",
+    "close_postgres_client",
     "StorageBackend",
     "LocalStorageBackend",
+    "EvidenceStore",
+    "get_evidence_store",
 ]

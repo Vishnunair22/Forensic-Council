@@ -259,7 +259,7 @@ class KeyStore:
                 from core.persistence.postgres_client import get_postgres_client
 
                 pg = await get_postgres_client()
-                if pg is None:
+                if pg is None:  # type: ignore[reportUnnecessaryComparison]
                     return
 
                 rows = await pg.fetch(
@@ -319,7 +319,7 @@ class KeyStore:
             from core.persistence.postgres_client import get_postgres_client
 
             pg = await get_postgres_client()
-            if pg is None or self._fernet is None:
+            if pg is None or self._fernet is None:  # type: ignore[reportUnnecessaryComparison]
                 return
 
             pem = key_pair.get_private_key_pem()
@@ -353,7 +353,7 @@ class KeyStore:
             from core.persistence.postgres_client import get_postgres_client
 
             pg = await get_postgres_client()
-            if pg is None:
+            if pg is None:  # type: ignore[reportUnnecessaryComparison]
                 return
             await pg.execute(
                 "UPDATE agent_signing_keys SET is_active = false WHERE agent_id = $1 AND is_active = true",
@@ -497,9 +497,9 @@ def compute_content_hash(content: dict[str, Any]) -> str:
         if isinstance(obj, float):
             return float(Decimal(str(obj)).quantize(Decimal("0.0000000001"), rounding=ROUND_DOWN))
         if isinstance(obj, dict):
-            return {k: _normalize(v) for k, v in obj.items()}
+            return {k: _normalize(v) for k, v in obj.items()}  # type: ignore[return-value]
         if isinstance(obj, list):
-            return [_normalize(v) for v in obj]
+            return [_normalize(v) for v in obj]  # type: ignore[return-value]
         return obj
 
     normalized = _normalize(content)

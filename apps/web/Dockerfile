@@ -16,12 +16,10 @@ FROM node:22-alpine AS base
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-COPY apps/web/package.json ./apps/web/
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci --legacy-peer-deps --prefer-offline --no-audit --no-fund \
-        --workspace apps/web --include-workspace-root
+COPY apps/web/package.json apps/web/package-lock.json ./apps/web/
 WORKDIR /app/apps/web
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --legacy-peer-deps --prefer-offline --no-audit --no-fund
 
 # ── Stage 1: Development — hot-reload server ─────────────────────────────────
 FROM base AS development
@@ -77,10 +75,11 @@ ENV PORT=3000
 RUN addgroup --system --gid 1001 nodejs \
  && adduser  --system --uid  1001 nextjs
 
-# Copy standalone output (Next.js built-in server)
+# Copy standalone output (Next.js built-in server). In this monorepo the
+# generated server lives at apps/web/server.js inside the standalone tree.
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
 
 # Switch to non-root user before the process starts
 USER nextjs
@@ -92,4 +91,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["node", "apps/web/server.js"]

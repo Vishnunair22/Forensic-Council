@@ -14,7 +14,7 @@
     https_port 443
 }
 
-{$DOMAIN:localhost} {
+{$CADDY_SITE_ADDRESS:http://localhost} {
 
     # Redirect HTTP to HTTPS for non-localhost domains.
     @http {

@@ -16,8 +16,11 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+import fitz
+
 from core.evidence import EvidenceArtifact
 from core.exceptions import ToolUnavailableError
+from core.media_kind import is_screen_capture_like
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)

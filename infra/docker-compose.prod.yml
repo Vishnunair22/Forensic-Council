@@ -53,6 +53,7 @@ services:
     # Remove dev bind-mount (../apps/web:/app) — runner image is self-contained.
     # Without this, the host source tree overwrites the compiled standalone app.
     volumes: !override []
+    command: ["node", "apps/web/server.js"]
     environment:
       NODE_ENV: production
     logging:
@@ -91,6 +92,8 @@ services:
 
   caddy:
     restart: always
+    environment:
+      - CADDY_SITE_ADDRESS=${CADDY_SITE_ADDRESS:-${DOMAIN:-localhost}}
     logging:
       driver: "json-file"
       options:
@@ -105,5 +108,3 @@ services:
 
   prometheus:
     ports: !reset []
-    secrets:
-      - metrics_scrape_token

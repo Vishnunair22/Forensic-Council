@@ -381,9 +381,9 @@ class MigrationManager:
 
     async def get_applied_migrations(self) -> list[int]:
         """Get list of applied migration versions."""
-        assert self._client is not None, "Client not connected"
+        assert self.client is not None, "Client not connected"
         try:
-            assert self._client is not None, "Client not connected"
+            assert self.client is not None, "Client not connected"
             # Check existence first to avoid a postgres ERROR log on first start
             exists = await self.client.fetch_val(
                 """
@@ -424,7 +424,7 @@ class MigrationManager:
             # Use the provided connection (active transaction) if available.
             # This is critical because uncommitted tables are not visible
             # to other connections in the pool.
-            assert self._client is not None, "Client not connected"
+            assert self.client is not None, "Client not connected"
             if conn:
                 result = await conn.fetchval(migration.validation_sql)
             else:

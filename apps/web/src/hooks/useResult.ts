@@ -23,7 +23,7 @@ export type PageState = "loading" | "arbiter" | "ready" | "error" | "empty";
  * Hook for managing the result page state and polling logic.
  * Optimized for performance and flicker-free transitions.
  */
-export function useResult() {
+export function useResult(initialSessionId?: string) {
   const router = useRouter();
 
   // Initialize states from sessionStorage immediately if in browser to avoid flickers
@@ -57,9 +57,9 @@ export function useResult() {
 
   // Session ID
   const [sessionId, setSessionId] = useState<string | null>(() =>
-    typeof window !== "undefined"
+    initialSessionId ?? (typeof window !== "undefined"
       ? storage.getItem("forensic_session_id")
-      : null
+      : null)
   );
 
   const selectSession = useCallback((sid: string) => {

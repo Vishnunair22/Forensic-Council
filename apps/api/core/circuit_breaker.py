@@ -37,7 +37,7 @@ class CircuitBreakerConfig:
     failure_threshold: int = 5
     success_threshold: int = 2
     timeout_seconds: int = 60
-    expected_exceptions: tuple = (Exception,)
+    expected_exceptions: tuple[type[Exception], ...] = (Exception,)
 
 
 class CircuitBreaker:
@@ -59,7 +59,7 @@ class CircuitBreaker:
         self.last_state_change = datetime.now()
         self._lock = asyncio.Lock()
 
-    async def call(self, func: Callable, *args, **kwargs) -> Any:
+    async def call(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         """
         Execute a function through the circuit breaker.
 
@@ -142,7 +142,7 @@ class CircuitBreaker:
         elapsed = (datetime.now() - self.last_failure_time).total_seconds()
         return max(0, self.config.timeout_seconds - elapsed)
 
-    def get_state(self) -> dict:
+    def get_state(self) -> dict[str, Any]:
         """Get current circuit breaker state for monitoring."""
         return {
             "service": self.service_name,
@@ -195,7 +195,7 @@ class CircuitBreakerRegistry:
         return cls._breakers[service_name]
 
     @classmethod
-    def get_all_states(cls) -> dict[str, dict]:
+    def get_all_states(cls) -> dict[str, dict[str, Any]]:
         """Get states of all registered circuit breakers."""
         return {name: breaker.get_state() for name, breaker in cls._breakers.items()}
 
@@ -211,13 +211,17 @@ class CircuitBreakerRegistry:
         cls._breakers.clear()
 
 
+from typing import Any, Optional, TypeVar
+
+T = TypeVar("T")
+
 async def with_retry(
-    func: Callable,
+    func: Callable[[], Any],
     max_retries: int = 3,
     initial_backoff: float = 1.0,
     max_backoff: float = 60.0,
     exponential_base: float = 2.0,
-    retryable_exceptions: tuple = (Exception,),
+    retryable_exceptions: tuple[type[Exception], ...] = (Exception,),
 ) -> Any:
     """
     Execute a function with exponential backoff retry logic.
@@ -246,7 +250,7 @@ async def with_retry(
 
             if attempt == max_retries:
                 logger.error("All retry attempts exhausted", attempts=attempt + 1, error=str(e))
-                raise
+                raise last_exception
 
             backoff = min(initial_backoff * (exponential_base**attempt), max_backoff)
             logger.warning(
@@ -256,4 +260,6 @@ async def with_retry(
             )
             await asyncio.sleep(backoff)
 
-    raise last_exception  # Should never reach here
+    # If we get here, last_exception was set
+    if last_exception is not None:
+        raise last_exception

@@ -183,7 +183,10 @@ def download_open_clip(force: bool = False) -> bool:
 
     # Normalise slug: strip hf-hub: prefix before building the cache path.
     clean_name = model_name.replace("hf-hub:", "")
-    model_slug = f"models--{clean_name.replace('/', '--')}"
+    if model_name == "ViT-B-32":
+        model_slug = "models--timm--vit_base_patch32_clip_224.openai"
+    else:
+        model_slug = f"models--{clean_name.replace('/', '--')}"
     model_dir = Path(hf_dir) / "hub" / model_slug
 
     # Robust check: look for any blob > 50 MB (the actual model weights)

@@ -6,7 +6,7 @@ This folder contains the Docker Compose, Caddy, Prometheus, and deployment helpe
 
 | File | Purpose |
 | --- | --- |
-| `docker-compose.yml` | Base stack: API, worker, frontend, Postgres, Redis, Qdrant, Caddy, Jaeger, Prometheus |
+| `docker-compose.yml` | Development/base stack: API, worker, frontend, Postgres, Redis, Qdrant, Caddy, Jaeger, Prometheus |
 | `docker-compose.prod.yml` | Production override with optimized build targets, log rotation, and reduced direct host ports |
 | `Caddyfile` | Reverse proxy, TLS, security headers, API routing, upload limits |
 | `prometheus.yml` | Prometheus scrape configuration |
@@ -31,10 +31,10 @@ bash infra/generate_production_keys.sh
 #    GEMINI_API_KEY=<gemini key from https://aistudio.google.com/apikey>
 
 # 5. Build and start (development)
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up --build -d
+docker compose -f infra/docker-compose.yml --env-file .env up --build -d
 
 # 6. Wait for healthy state (~15-40 min on first build for ML downloads)
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env ps
+docker compose -f infra/docker-compose.yml --env-file .env ps
 
 # 7. Verify backend
 curl http://localhost:8000/health
@@ -73,6 +73,7 @@ REDIS_PASSWORD=<strong password>
 LLM_API_KEY=<provider key, or leave blank with LLM_PROVIDER=none>
 GEMINI_API_KEY=<Gemini key, optional for tool-only local runs>
 METRICS_SCRAPE_TOKEN=<strong scrape token>
+CADDY_SITE_ADDRESS=http://localhost
 ```
 
 ### Generating secrets
@@ -111,7 +112,6 @@ The script does **not** generate `LLM_API_KEY` or `GEMINI_API_KEY` — obtain th
 > ```powershell
 > docker compose `
 >   -f infra/docker-compose.yml `
->   -f infra/docker-compose.dev.yml `
 >   --env-file .env `
 >   up --build
 > ```
@@ -122,7 +122,6 @@ Development:
 ```bash
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env \
   up --build
 ```
@@ -137,11 +136,7 @@ docker compose \
   up --build -d
 ```
 
-Test services:
-
-```bash
-docker compose -f infra/docker-compose.test.yml up -d
-```
+CI and local tests use the same base compose file unless a test-specific override is added later.
 
 ## Ports
 
@@ -219,12 +214,6 @@ stable across dev and production overrides.
 | `numba_cache` | Numba JIT-compiled kernels | Recompiled on next start (slow first run) |
 | `calibration_models_cache` | Platt scaling calibration files | Must be retrained via `scripts/train_calibration.py` |
 
-### Development-only volumes
-
-| Volume | Contents | Scope |
-| --- | --- | --- |
-| `nextjs_cache` | Next.js webpack compiler cache | Dev overlay only; prevents 120s recompilation on restart |
-
 Avoid `docker compose down -v` unless you intentionally want to delete all persisted data
 and model caches. To stop the stack while preserving volumes:
 
@@ -244,49 +233,41 @@ The script checks key repository files, Docker Compose rendering, basic syntax, 
 
 ## Common Commands
 
-All examples below show the development overlay. For production, replace
-`-f infra/docker-compose.dev.yml` with `-f infra/docker-compose.prod.yml`.
+All examples below show the base development stack. For production, add `-f infra/docker-compose.prod.yml` after the base compose file.
 
 ```bash
 # Render the effective merged compose config (useful for debugging)
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env config
 
 # Rebuild and restart a single service without touching dependencies
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env build backend
 
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env up -d --no-deps backend
 
 # Tail logs for all services
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env logs -f
 
 # Tail logs for a single service
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env logs -f backend
 
 # Stop the stack, keep volumes intact
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env down
 
 # Full reset — destroys all data and model caches
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env down -v
 ```
 

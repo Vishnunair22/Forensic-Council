@@ -88,7 +88,6 @@ Developer mode targets the `development` Docker stage for the backend and worker
 ```bash
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env \
   up --build
 ```
@@ -99,7 +98,6 @@ The first build downloads OS packages, Python dependencies, and ML model weights
 ```bash
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env \
   up --build -d
 ```
@@ -112,7 +110,6 @@ Open a second terminal while the build runs:
 # All services
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env \
   logs -f
 
@@ -138,7 +135,6 @@ Key log lines to watch for:
 ```bash
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env \
   ps
 ```
@@ -198,6 +194,7 @@ APP_ENV=production
 
 # Your public domain (Caddy provisions TLS automatically)
 DOMAIN=forensic.yourdomain.com
+CADDY_SITE_ADDRESS=forensic.yourdomain.com
 
 # Let's Encrypt expiry notifications
 ACME_EMAIL=admin@yourdomain.com
@@ -280,13 +277,11 @@ Use this when Docker layer cache is stale (e.g. base image updated, dependency v
 ```bash
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env \
   build --no-cache
 
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env \
   up -d
 ```
@@ -313,13 +308,11 @@ docker compose \
 # Backend only (developer)
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env \
   build --no-cache backend
 
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env \
   up -d --no-deps backend
 ```
@@ -339,34 +332,34 @@ docker builder prune -f
 After the stack starts, confirm that all six ML models loaded correctly. Run this against the backend or worker container:
 
 ```bash
-docker exec forensic_api python probes/model_pre_download.py --check
+docker exec forensic_api python scripts/model_cache_check.py
 ```
 
 Expected output (all lines should show `populated`, not `empty`):
 
 ```
 =====================================================
-  Forensic Council — ML Model Pre-Download
+  Forensic Council — Startup Cache Check
 =====================================================
 
-Cache status:
-  populated  YOLO         xxx.x MB  (N files)  /app/cache/ultralytics
-  populated  TORCH        xxx.x MB  (N files)  /app/cache/torch
-  populated  HF          xxxx.x MB  (N files)  /app/cache/huggingface
-  populated  EASYOCR       xx.x MB  (N files)  /app/cache/easyocr
+━━━  ML Model Cache Status  ━━━
+  [OK]     HuggingFace  xxxx.x MB  (N files)  /app/cache/huggingface
+  [OK]     PyTorch       xxx.x MB  (N files)  /app/cache/torch
+  [OK]     EasyOCR        xx.x MB  (N files)  /app/cache/easyocr
+  [OK]     YOLO            x.x MB  (N files)  /app/cache/ultralytics
 ```
 
 To check the six individual models (YOLO, EasyOCR, OpenCLIP, ResNet-50, SpeechBrain, audio deepfake detector):
 
 ```bash
 # Prints per-model SKIP (cached) or WARN (missing) lines
-docker exec forensic_api python probes/model_pre_download.py
+docker exec forensic_api python scripts/model_pre_download.py
 ```
 
 If any model shows `WARN`, trigger a forced re-download:
 
 ```bash
-docker exec forensic_api python probes/model_pre_download.py --force
+docker exec forensic_api python scripts/model_pre_download.py --force
 ```
 
 To check raw volume disk usage:
@@ -446,26 +439,22 @@ Rebuild and restart one service without stopping the rest of the stack:
 # Developer — rebuild backend only
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env \
   build backend
 
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env \
   up -d --no-deps backend
 
 # Developer — rebuild frontend only
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env \
   build frontend
 
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env \
   up -d --no-deps frontend
 
@@ -509,9 +498,7 @@ docker compose -f infra/docker-compose.yml restart worker
 | File | Role | Use with |
 |------|------|---------|
 | `docker-compose.yml` | Base stack — always required | All modes |
-| `docker-compose.dev.yml` | Dev targets, bind mounts, HMR polling | Development |
 | `docker-compose.prod.yml` | Production targets, hardened restart, log rotation | Production |
-| `docker-compose.test.yml` | Test service stack | CI / local test runs |
 
 ### Build arguments
 
@@ -527,7 +514,6 @@ Override build args inline:
 ```bash
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env \
   build --build-arg PRELOAD_MODELS=0 backend worker
 ```
@@ -587,13 +573,11 @@ The Dockerfile checks `if [ "$PRELOAD_MODELS" = "1" ]` (exact string `1`). Ensur
 ```bash
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env \
   build --no-cache frontend
 
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env \
   up -d --no-deps frontend
 ```
@@ -619,7 +603,7 @@ The base compose file uses `:?` syntax for required variables. Ensure your `.env
 
 ### Backend hot-reload not picking up changes
 
-Ensure you are using the dev overlay (`-f infra/docker-compose.dev.yml`). The base compose alone does not mount full source — only individual subdirectories. The dev overlay mounts `../apps/api:/app` plus uses `WATCHFILES_FORCE_POLLING=true` which ensures uvicorn detects file changes on Windows Docker bind mounts.
+Use the base compose file (`-f infra/docker-compose.yml`) for development. It mounts the backend source subdirectories and sets `WATCHFILES_FORCE_POLLING=true`, which lets uvicorn detect file changes on Windows Docker bind mounts.
 
 ### Prometheus cannot scrape backend metrics
 
@@ -649,7 +633,6 @@ Useful for debugging volume and environment variable inheritance:
 # Developer
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
   --env-file .env \
   config
 

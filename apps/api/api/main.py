@@ -47,9 +47,14 @@ from api.routes.metrics import (
 from core.config import get_settings, validate_production_settings
 from core.monitoring import start_monitoring
 from core.observability import setup_observability
-from core.persistence.postgres_client import close_postgres_client, get_postgres_client
-from core.persistence.qdrant_client import close_qdrant_client, get_qdrant_client
-from core.persistence.redis_client import close_redis_client, get_redis_client
+from core.persistence import (
+    close_postgres_client,
+    close_qdrant_client,
+    close_redis_client,
+    get_postgres_client,
+    get_qdrant_client,
+    get_redis_client,
+)
 from core.structured_logging import get_logger, request_id_ctx
 
 logger = get_logger(__name__)
@@ -816,7 +821,7 @@ async def health_check(request: Request):
             checks["qdrant_debug"] = f"{type(e).__name__}: {str(e)[:100]}"
         overall_healthy = False
 
-return JSONResponse(
+    return JSONResponse(
         status_code=200 if overall_healthy else 503,
         content={"status": "ok" if overall_healthy else "degraded", "checks": checks},
     )

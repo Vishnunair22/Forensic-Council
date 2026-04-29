@@ -6,10 +6,9 @@ import { AnimatePresence } from "framer-motion";
 import { ArrowRight, Loader2 } from "lucide-react";
 
 import { AnalysisProgressOverlay } from "@/components/evidence/AnalysisProgressOverlay";
-import { autoLoginAsInvestigator, checkBackendHealth, ProtocolWarmingError } from "@/lib/api";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { useSound } from "@/hooks/useSound";
-import { storage, sessionOnlyStorage } from "@/lib/storage";
+import { sessionOnlyStorage } from "@/lib/storage";
 
 import { UploadModal } from "@/components/evidence/UploadModal";
 import { UploadSuccessModal } from "@/components/evidence/UploadSuccessModal";
@@ -76,31 +75,6 @@ export function HeroAuthActions() {
     setAuthError(null);
     setShowUpload(false);
 
-    try {
-      const health = await checkBackendHealth();
-      if (!health.ok) {
-        setSelectedFile(null);
-        setIsAuthenticating(false);
-        setAuthError(health.warmingUp ? "Protocol Warming Up... (60s)" : health.message);
-        return;
-      }
-
-      await autoLoginAsInvestigator();
-      storage.setItem("forensic_auth_ok", "1");
-    } catch (err) {
-      if (process.env.NODE_ENV !== "production") console.error("Auto-login failed:", err);
-      if (err instanceof ProtocolWarmingError) {
-        setIsAuthenticating(false);
-        setAuthError("Protocol Warming Up... (Retrying)");
-      } else {
-        const msg = err instanceof Error ? err.message : "Authentication failed";
-        setSelectedFile(null);
-        setIsAuthenticating(false);
-        setAuthError(msg);
-      }
-      return;
-    }
-
     __pendingFileStore.file = selectedFile;
     sessionOnlyStorage.setItem("forensic_auto_start", "true");
     sessionOnlyStorage.setItem("fc_show_loading", "true");
@@ -113,10 +87,12 @@ export function HeroAuthActions() {
     <>
       <div className="flex flex-col items-center gap-4">
         <button
-          data-testid="cta-begin-analysis"
+          data-testid="hero-cta-begin"
           onClick={() => {
             playSound("envelope-open");
             setShowUpload(true);
+            setSelectedFile(null);
+            setAuthError(null);
           }}
           aria-label={isAuthenticating ? "Initializing..." : authError ? authError : "Upload a file to begin analysis"}
           className="btn-horizon-primary group relative select-none"

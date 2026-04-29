@@ -77,8 +77,8 @@ export async function checkBackendHealth(): Promise<{ ok: boolean; warmingUp?: b
     const response = await fetch(`${API_BASE}/api/v1/health`, {
       method: "GET",
       cache: "no-store",
-      // Increased timeout for slow Docker cold-starts/DNS resolution
-      signal: AbortSignal.timeout(10000),
+      // Allow Docker cold starts and first-use Next proxy compilation to finish.
+      signal: AbortSignal.timeout(120_000),
     });
 
     if (response.ok) return { ok: true, message: "Healthy" };
@@ -109,7 +109,7 @@ export async function autoLoginAsInvestigator(): Promise<TokenResponse> {
       try {
         const response = await fetch("/api/auth/demo", {
           method: "POST",
-          signal: AbortSignal.timeout(10_000),
+          signal: AbortSignal.timeout(120_000),
         });
 
         if (!response.ok) {

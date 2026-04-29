@@ -14,11 +14,13 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import Any
 
-from agents.mixins.context import AgentContextMixin
-from agents.mixins.investigation import AgentInvestigationMixin
-from agents.mixins.memory import AgentMemoryMixin
-from agents.mixins.reflection import AgentReflectionMixin
-from agents.mixins.synthesis import NeuralSynthesisMixin
+from agents.mixins import (
+    AgentContextMixin,
+    AgentInvestigationMixin,
+    AgentMemoryMixin,
+    AgentReflectionMixin,
+    NeuralSynthesisMixin,
+)
 from core.config import Settings
 from core.custody_logger import CustodyLogger
 from core.episodic_memory import EpisodicMemory
