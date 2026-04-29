@@ -126,8 +126,8 @@ class AgentInvestigationMixin:
                     agent_name=self.agent_name,
                     findings=findings,
                     evidence_artifact=self.evidence_artifact,
-                    tool_success_count=self._tool_success_count,
-                    tool_error_count=self._tool_error_count,
+                    tool_success_count=self._tool_success_count,  # type: ignore[attr-defined]
+                    tool_error_count=self._tool_error_count,  # type: ignore[attr-defined]
                     phase=phase,
                 ),
                 timeout=timeout_s,

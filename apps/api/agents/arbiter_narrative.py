@@ -92,7 +92,7 @@ class ArbiterNarrativeMixin:
         """
         Generate a Groq-synthesised per-agent narrative.
         """
-        if not (self.config.llm_api_key and self.config.llm_provider != "none"):
+        if not (self.config.llm_api_key and self.config.llm_provider != "none"):  # type: ignore[attr-defined]
             return ""
 
         client = getattr(self, "_synthesis_client", None) or LLMClient(

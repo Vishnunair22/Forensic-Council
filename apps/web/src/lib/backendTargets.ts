@@ -6,17 +6,27 @@ export function getBackendBaseUrls(): string[] {
   // Use process.env directly. In Next.js server-side code (Route Handlers),
   // this is populated from the environment.
   const internalUrl = process.env.INTERNAL_API_URL;
+  const publicUrl = process.env.NEXT_PUBLIC_API_URL;
 
-  const candidates = [
+  // In production, only try internal/public URLs to avoid ~6s timeout on fallbacks
+  const isProduction = process.env.NODE_ENV === "production";
+
+  const devCandidates = [
     internalUrl,
     "http://backend:8000",          // Docker Compose service name (HIGHEST PRIORITY)
     "http://forensic_api:8000",     // Docker container name
-    process.env.NEXT_PUBLIC_API_URL,
+    publicUrl,
     "http://host.docker.internal:8000", // Docker host gateway
     "http://localhost:8000",        // Local development
     "http://127.0.0.1:8000",        // Local fallback
-  ].filter((value): value is string => Boolean(value && value.trim()));
+  ];
 
+  const prodCandidates = [
+    internalUrl,
+    publicUrl,
+  ].filter((v): v is string => Boolean(v?.trim()));
+
+  const candidates = isProduction ? prodCandidates : devCandidates;
   const targets = [...new Set(candidates.map(normalizeBaseUrl))];
   return targets;
 }

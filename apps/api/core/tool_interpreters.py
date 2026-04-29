@@ -349,25 +349,7 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
         f"Gemini Vision Error: {o.get('error')}."
         if o.get("error")
         else (
-            lambda ctype=(
-                o.get("gemini_content_type", o.get("file_type_assessment", ""))
-                or "unidentified content"
-            ),
-            narrative=(
-                str(o.get("gemini_narrative", o.get("content_description", "")))
-                or "Visual analysis complete."
-            ),
-            objects=o.get(
-                "gemini_detected_objects",
-                o.get("gemini_validated_objects", o.get("detected_objects", [])),
-            ),
-            texts=o.get("gemini_extracted_text", []),
-            verdict=o.get("gemini_verdict", ""),
-            meta_consistency=str(o.get("gemini_metadata_consistency", "")),
-            iface=o.get("gemini_interface", ""),
-            signals=list(
-                o.get("gemini_manipulation_signals") or o.get("manipulation_signals") or []
-            ): (
+            lambda ctype=(o.get("gemini_content_type", o.get("file_type_assessment", "")) or "unidentified content"), narrative=(str(o.get("gemini_narrative", o.get("content_description", ""))) or "Visual analysis complete."), objects=o.get("gemini_detected_objects", o.get("gemini_validated_objects", o.get("detected_objects", []))), texts=o.get("gemini_extracted_text", []), verdict=o.get("gemini_verdict", ""), meta_consistency=str(o.get("gemini_metadata_consistency", "")), iface=o.get("gemini_interface", ""), signals=list(o.get("gemini_manipulation_signals") or o.get("manipulation_signals") or []): (
                 "Gemini deep forensic complete. "
                 + f"Content: {ctype}. "
                 + (f"Interface/UI: {iface}. " if iface else "")

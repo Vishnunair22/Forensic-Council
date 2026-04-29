@@ -5,12 +5,10 @@ Sessions Routes
 Routes for managing investigation sessions.
 """
 
-import asyncio
 import json
-import time
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel as _BaseModel
 
@@ -21,12 +19,9 @@ from api.routes._session_state import (
     get_active_pipeline_metadata,
     get_session_websockets,
     set_active_pipeline_metadata,
-    unregister_websocket,
 )
-from api.schemas import AgentFindingDTO, ReportDTO, ReportStatusDTO, SessionInfo
-from core.auth import User, decode_token, get_current_user
-from core.config import get_settings
-from core.severity import assign_severity_tier as _assign_severity_tier
+from api.schemas import ReportDTO, ReportStatusDTO, SessionInfo
+from core.auth import User, get_current_user
 from core.structured_logging import get_logger
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
@@ -289,7 +284,6 @@ async def get_session_report(
                 )
             if status == "completed" and db_row.get("report_data"):
                 # Re-hydrate from the stored JSON dict
-                from api.schemas import AgentFindingDTO as _AFD
                 from api.schemas import ReportDTO as _RD
 
                 from ._dto import _rebuild_finding

@@ -10,6 +10,13 @@ and face swap detection.
 from __future__ import annotations
 
 import hashlib
+import os
+from dataclasses import dataclass
+from typing import Any
+
+import cv2
+import numpy as np
+
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)

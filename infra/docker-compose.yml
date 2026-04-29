@@ -449,13 +449,16 @@ services:
 
   # --------------------------------------------------------------------------
   # Reverse Proxy (Caddy) — TLS termination, security headers, rate limiting
-  # Binds ports 80 and 443.  For local dev without HTTPS use ports 3000/8000
-  # directly and comment this service out.
+  # --------------------------------------------------------------------------
+  # Caddy is only needed for production TLS. Use profiles: ["prod"] to start.
+  # For local dev without HTTPS use ports 3000/8000 directly.
   # --------------------------------------------------------------------------
   caddy:
     image: caddy:2-alpine
     container_name: forensic_caddy
     restart: unless-stopped
+    profiles:
+      - prod
     ports:
       - "80:80"
       - "443:443"

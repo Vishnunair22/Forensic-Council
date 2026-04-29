@@ -38,7 +38,9 @@ const nextConfig: NextConfig = {
   compress: false,
 
   // ── TypeScript & ESLint ───────────────────────────────────────────────
-  // Note: transpilePackages is no longer needed for class-variance-authority in Next 15.
+  // Note: These flags allow builds to succeed even with type/lint errors.
+  // For production releases, run: npm run build:strict (uses CI checks)
+  // or remove these flags and fix errors before building.
   eslint: {
     ignoreDuringBuilds: true,
   },

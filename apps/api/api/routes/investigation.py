@@ -111,6 +111,7 @@ async def run_investigation_task(
     from orchestration.investigation_runner import (
         run_investigation_task as _run_investigation_task,
     )
+
     await _run_investigation_task(
         session_id=session_id,
         pipeline=pipeline,

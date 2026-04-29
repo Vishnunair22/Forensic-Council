@@ -49,7 +49,8 @@ class AgentReflectionMixin:
         # RT2: Check for overconfident findings
         overconfident_findings = []
         for finding in findings:
-            if finding.confidence_raw > 0.95 and not finding.calibrated:
+            confidence = finding.confidence_raw
+            if confidence is not None and confidence > 0.95 and not finding.calibrated:
                 overconfident_findings.append(
                     f"{finding.finding_type}: {finding.confidence_raw:.2f}"
                 )

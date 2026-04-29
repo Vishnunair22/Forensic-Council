@@ -293,7 +293,6 @@ kubectl create secret generic forensic-secrets \
 - [Security](docs/SECURITY.md)
 - [Testing](docs/TESTING.md)
 - [Runbook](docs/RUNBOOK.md)
-- [Current State](docs/STATE.md)
 
 ## Development Guardrails
 

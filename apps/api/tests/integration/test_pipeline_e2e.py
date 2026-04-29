@@ -40,6 +40,7 @@ class TestNormalizeAgentResults:
         pipeline = ForensicCouncilPipeline()
 
         if hasattr(pipeline, "_normalize_agent_results"):
+
             class MockFinding:
                 def model_dump(self, mode="json"):
                     return {"agent_id": "Agent1", "confidence": 0.8, "verdict": "AUTHENTIC"}
@@ -49,9 +50,9 @@ class TestNormalizeAgentResults:
                 findings=[MockFinding()],
                 reflection_report={},
                 react_chain=[],
-                error=None
+                error=None,
             )
-            
+
             result = pipeline._normalize_agent_results([agent_result])
 
             assert isinstance(result, dict)
@@ -72,7 +73,7 @@ class TestNormalizeAgentResults:
                 findings=[{"agent_id": "Agent1", "confidence": 0.9}],
                 reflection_report={},
                 react_chain=[],
-                error=None
+                error=None,
             )
 
             result = pipeline._normalize_agent_results([agent_result])
@@ -95,7 +96,7 @@ class TestNormalizeAgentResults:
                 findings=[],
                 reflection_report={},
                 react_chain=[],
-                error="Connection failed"
+                error="Connection failed",
             )
 
             result = pipeline._normalize_agent_results([agent_result])
@@ -112,17 +113,22 @@ class TestPipelineInitialization:
 
     async def test_pipeline_initializes_with_session_id(self):
         """Verify pipeline can be initialized with a session ID."""
-        from unittest.mock import AsyncMock, patch
         from orchestration.pipeline import ForensicCouncilPipeline
 
         pipeline = ForensicCouncilPipeline()
 
         # Test initialization with mocked components
-        with patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as m_redis:
+        with patch(
+            "core.persistence.redis_client.get_redis_client", new_callable=AsyncMock
+        ) as m_redis:
             m_redis.return_value = None  # Will use local cache fallback
 
-            with patch("core.persistence.postgres_client.get_postgres_client", new_callable=AsyncMock):
-                with patch("core.persistence.qdrant_client.get_qdrant_client", new_callable=AsyncMock):
+            with patch(
+                "core.persistence.postgres_client.get_postgres_client", new_callable=AsyncMock
+            ):
+                with patch(
+                    "core.persistence.qdrant_client.get_qdrant_client", new_callable=AsyncMock
+                ):
                     # Should initialize without raising
                     test_session_id = uuid.UUID("12345678-1234-1234-1234-123456789012")
                     await pipeline._initialize_components(test_session_id)

@@ -10,15 +10,14 @@ import json
 import time
 from collections import deque
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from api.routes._authz import assert_session_access
 from api.routes._session_state import (
     get_active_pipeline_metadata,
-    get_session_websockets,
     unregister_websocket,
 )
-from core.auth import decode_token, User
+from core.auth import User, decode_token
 from core.config import get_settings
 from core.structured_logging import get_logger
 

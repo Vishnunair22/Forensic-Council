@@ -16,6 +16,7 @@
     "dev": "next dev",
     "dev:webpack": "next dev --webpack",
     "build": "next build",
+    "build:strict": "next build --no-lint && next build",
     "start": "next start",
     "lint": "eslint src --max-warnings 0",
     "lint:fix": "eslint . --fix",

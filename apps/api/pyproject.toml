@@ -145,7 +145,7 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-source = ["core", "agents", "tools", "orchestration", "api", "reports"]
+source = ["core", "agents", "tools", "orchestration", "api"]
 branch = true
 omit = [
     "tests/*",
@@ -171,7 +171,7 @@ exclude_lines = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["core", "agents", "tools", "orchestration", "reports", "api"]
+packages = ["core", "agents", "tools", "orchestration", "api"]
 
 # -- Ruff configuration -----------------------------------------------------
 [tool.ruff]
@@ -197,13 +197,13 @@ ignore = ["E501", "S101"]
 # Runtime pipeline modules use deferred imports to avoid heavy/circular startup costs.
 "orchestration/*.py" = ["E402", "E701", "S110"]
 "agents/arbiter_narrative.py" = ["N806"]
-"agents/reflection.py" = ["N806"]
+"agents/mixins/reflection.py" = ["N806"]
 "api/main.py" = ["N806"]
 "core/calibration.py" = ["N806"]
 "core/cross_modal_fusion.py" = ["N806"]
 "core/episodic_memory.py" = ["S112"]
 "core/exceptions.py" = ["N818"]
-"core/forensics/*.py" = ["N806"]
+"core/forensics.py" = ["N806"]
 "core/gemini_client.py" = ["N806"]
 "core/image_utils.py" = ["S110"]
 "core/persistence/*.py" = ["B904"]
@@ -225,12 +225,6 @@ include = ["core", "api", "agents", "tools", "orchestration"]
 exclude = ["**/__pycache__", "**/.pytest_cache", "tools/ml_tools"]
 typeCheckingMode = "basic"
 strict = ["core/auth.py", "core/signing.py", "core/circuit_breaker.py"]  # Critical security modules
-
-# -- isort configuration ----------------------------------------------------
-[tool.isort]
-profile = "black"
-line_length = 100
-multi_line_output = 3
 
 # -- uv source overrides ----------------------------------------------------
 # Route torch/torchvision/torchaudio to the official CPU-only PyTorch index.

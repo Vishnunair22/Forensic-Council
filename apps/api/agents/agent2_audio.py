@@ -274,5 +274,5 @@ class Agent2Audio(ForensicAgent):
                             "verdict": finding.evidence_verdict,
                         },
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Tool {tool_name} signal error: {e}")

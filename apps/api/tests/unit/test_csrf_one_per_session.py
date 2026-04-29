@@ -13,6 +13,7 @@ class TestCsrfOnePerSession:
     @pytest.fixture(autouse=True)
     def set_app_env(self, monkeypatch):
         from core.config import get_settings
+
         settings = get_settings()
         monkeypatch.setattr(settings, "app_env", "development")
 
@@ -142,7 +143,9 @@ class TestCsrfOnePerSession:
         set_cookie = response.headers.get("set-cookie", "")
 
         if "csrf_token" in set_cookie.lower():
-            assert "HttpOnly" not in set_cookie, "CSRF cookie should not have HttpOnly flag so JS can read it"
+            assert "HttpOnly" not in set_cookie, (
+                "CSRF cookie should not have HttpOnly flag so JS can read it"
+            )
 
     @pytest.mark.asyncio
     async def test_csrf_cookie_has_secure_flag_in_production(self):

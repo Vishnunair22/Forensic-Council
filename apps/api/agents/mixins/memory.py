@@ -110,7 +110,7 @@ class AgentMemoryMixin:
 
     def _signal_completion(self, skipped: bool = False) -> None:
         """Signal agent completion to the inter-agent bus."""
-        if hasattr(self, "inter_agent_bus") and self.inter_agent_bus:
+        if hasattr(self, "inter_agent_bus") and self.inter_agent_bus:  # type: ignore[attr-defined]
             base_id = self.agent_id.replace("_deep", "")
             event_name = f"{base_id.lower()}_complete"
             self.inter_agent_bus.signal_event(

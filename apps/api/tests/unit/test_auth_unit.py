@@ -49,8 +49,8 @@ os.environ["JWT_ALGORITHM"] = "RS256"
 os.environ["JWT_PRIVATE_KEY"] = TEST_PRIVATE_KEY
 os.environ["JWT_PUBLIC_KEY"] = TEST_PUBLIC_KEY
 
-from fastapi import HTTPException
 import jwt
+from fastapi import HTTPException
 
 from core.auth import (
     UserRole,

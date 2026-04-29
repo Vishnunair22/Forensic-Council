@@ -39,13 +39,20 @@ export const metadata: Metadata = {
 
 
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Read CSP nonce from middleware
+  const headerList = await headers();
+  const nonce = headerList.get("x-nonce") ?? "";
+
   return (
     <html lang="en" dir="ltr" data-scroll-behavior="smooth" suppressHydrationWarning>
+      <head>
+        <meta httpEquiv="Content-Security-Policy" content={`default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline';`} />
+      </head>
       <body
         className={`${geist.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} font-sans text-foreground antialiased min-h-screen flex flex-col overflow-x-hidden`}
       >

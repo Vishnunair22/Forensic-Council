@@ -5,7 +5,6 @@ DTO Conversion Helpers
 Helpers for converting ForensicReport and findings to serialization-safe DTOs.
 """
 
-from datetime import UTC, datetime
 from typing import Any
 
 from api.schemas import AgentFindingDTO, ReportDTO
@@ -53,6 +52,7 @@ def _forensic_report_to_dto(report) -> ReportDTO:
         if isinstance(meta, str):
             try:
                 import json as _json
+
                 meta = _json.loads(meta)
             except Exception:
                 meta = {}
@@ -76,7 +76,7 @@ def _forensic_report_to_dto(report) -> ReportDTO:
             finding_type=str(d.get("finding_type", "Unknown")),
             status=str(d.get("status", "CONFIRMED")),
             confidence_raw=_opt_float(d.get("confidence_raw")),
-            evidence_verdict=evidence_verdict,
+            evidence_verdict=evidence_verdict,  # type: ignore[arg-type]
             calibrated=bool(d.get("calibrated", False)),
             calibrated_probability=_opt_float(d.get("calibrated_probability")),
             raw_confidence_score=_opt_float(d.get("raw_confidence_score"))
@@ -203,9 +203,7 @@ def _forensic_report_to_dto(report) -> ReportDTO:
 def _rebuild_finding(f: dict) -> AgentFindingDTO:
     metadata = f.get("metadata") or {}
     evidence_verdict = str(
-        f.get("evidence_verdict")
-        or metadata.get("evidence_verdict")
-        or "INCONCLUSIVE"
+        f.get("evidence_verdict") or metadata.get("evidence_verdict") or "INCONCLUSIVE"
     ).upper()
     if evidence_verdict not in {
         "POSITIVE",
@@ -222,7 +220,7 @@ def _rebuild_finding(f: dict) -> AgentFindingDTO:
         finding_type=str(f.get("finding_type", "")),
         status=str(f.get("status", "CONFIRMED")),
         confidence_raw=_opt_float(f.get("confidence_raw")),
-        evidence_verdict=evidence_verdict,
+        evidence_verdict=evidence_verdict,  # type: ignore[arg-type]
         calibrated=bool(f.get("calibrated", False)),
         calibrated_probability=_opt_float(f.get("calibrated_probability")),
         raw_confidence_score=_opt_float(f.get("raw_confidence_score"))

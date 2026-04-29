@@ -316,6 +316,7 @@ class TransactionContext:
         Issue 3.4: Always release the connection in a finally block so that
         a failed rollback cannot leak a connection from the pool.
         """
+        assert self._conn is not None, "TransactionContext not entered"
         try:
             if exc_type is not None:
                 await self._tx.rollback()
@@ -326,14 +327,17 @@ class TransactionContext:
 
     async def execute(self, query: str, *args: Any) -> str:
         """Execute a query within the transaction."""
+        assert self._conn is not None, "TransactionContext not entered"
         return await self._conn.execute(query, *args)
 
     async def fetch(self, query: str, *args: Any) -> list[asyncpg.Record]:
         """Fetch rows within the transaction."""
+        assert self._conn is not None, "TransactionContext not entered"
         return await self._conn.fetch(query, *args)
 
     async def fetch_one(self, query: str, *args: Any) -> asyncpg.Record | None:
         """Fetch a single row within the transaction."""
+        assert self._conn is not None, "TransactionContext not entered"
         return await self._conn.fetchrow(query, *args)
 
 

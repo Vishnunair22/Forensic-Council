@@ -183,7 +183,10 @@ class TestCircuitBreakerFailureThreshold:
     async def test_failure_count_increments_on_each_failure(self):
         """Verify failure count increments on each failure."""
         from core.circuit_breaker import CircuitBreakerConfig
-        breaker = CircuitBreaker(service_name="test-fail-count", config=CircuitBreakerConfig(failure_threshold=5))
+
+        breaker = CircuitBreaker(
+            service_name="test-fail-count", config=CircuitBreakerConfig(failure_threshold=5)
+        )
 
         initial_count = breaker.failure_count
 
@@ -197,7 +200,10 @@ class TestCircuitBreakerFailureThreshold:
     async def test_success_resets_failure_count(self):
         """Verify success call resets failure count."""
         from core.circuit_breaker import CircuitBreakerConfig
-        breaker = CircuitBreaker(service_name="test-reset", config=CircuitBreakerConfig(failure_threshold=5))
+
+        breaker = CircuitBreaker(
+            service_name="test-reset", config=CircuitBreakerConfig(failure_threshold=5)
+        )
 
         # Add some failures
         for _ in range(3):

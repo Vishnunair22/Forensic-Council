@@ -34,8 +34,8 @@ from api.routes import (
     investigation_router,
     metrics_router,
     sessions_router,
-    websocket_router,
     sse_router,
+    websocket_router,
 )
 from api.routes.metrics import (
     increment_error_count,
