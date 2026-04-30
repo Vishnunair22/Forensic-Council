@@ -93,7 +93,7 @@ class _NoOpSpan:
     def set_attribute(self, key, value):
         pass
 
-    def add_event(self, name, attributes=None):
+    def add_event(self, name, _attributes=None):
         pass
 
     def set_status(self, status):

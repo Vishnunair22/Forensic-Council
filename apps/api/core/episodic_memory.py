@@ -125,7 +125,7 @@ class EpisodicMemory:
             self._qdrant = await get_qdrant_client()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(self, _exc_type, _exc_val, _exc_tb) -> None:
         """Async context manager exit."""
         if self._owned_client and self._qdrant:
             await self._qdrant.disconnect()

@@ -96,9 +96,6 @@ async def terminate_session(session_id: str, current_user: User = Depends(get_cu
     # register_websocket/unregister_websocket and get_session_websockets
     # are still needed for local broadcast, so we don't clear them entirely here.
 
-    # Note: In a distributed system, we would publish a TERMINATE event to Redis
-    # so the worker in another process can stop its pipeline.
-    # For now, we just remove the metadata.
     from core.persistence.redis_client import get_redis_client
 
     redis = await get_redis_client()

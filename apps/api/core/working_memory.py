@@ -228,7 +228,7 @@ class WorkingMemory:
             self._redis = await get_redis_client()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(self, _exc_type, _exc_val, _exc_tb) -> None:
         """Async context manager exit."""
         if self._owned_client and self._redis:
             await self._redis.disconnect()

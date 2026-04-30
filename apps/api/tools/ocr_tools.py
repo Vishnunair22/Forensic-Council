@@ -377,33 +377,6 @@ async def _extract_text_tesseract_fallback(
     return result
 
 
-async def _extract_evidence_text_legacy_unused(
-    artifact: EvidenceArtifact,
-) -> dict[str, Any]:
-    """
-    Auto-dispatching text extraction for any evidence file type.
-    """
-    # PDF → PyMuPDF (embedded text)
-    if _is_pdf(artifact.file_path):
-        result = await extract_text_from_pdf(artifact)
-        if result.get("has_text"):
-            return result
-        # Fall through to EasyOCR for scanned PDFs
-        logger.info("PDF has no embedded text — falling back to OCR")
-
-    # All images and scanned PDFs → EasyOCR
-    if is_screen_capture_like(artifact):
-        result = await _extract_text_tesseract_fallback(artifact)
-        result["screen_capture_fast_path"] = True
-        result.setdefault(
-            "note",
-            "Screen-capture-like image processed with fast OCR path.",
-        )
-        return result
-
-    return await extract_text_easyocr(artifact)
-
-
 async def extract_evidence_text(
     artifact: EvidenceArtifact,
 ) -> dict[str, Any]:

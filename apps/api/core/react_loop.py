@@ -1600,9 +1600,6 @@ class ReActLoopEngine:
             if task.status == "CONTESTED":
                 return HITLCheckpointReason.CONTESTED_FINDING
 
-        # Check for severity threshold breach (if findings have high severity)
-        # This would be checked against findings in a real implementation
-        # For now, we check if any task has severity_threshold flag
         for task in state.tasks:
             if hasattr(task, "severity_threshold") and task.severity_threshold:
                 return HITLCheckpointReason.SEVERITY_THRESHOLD_BREACH

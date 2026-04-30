@@ -188,8 +188,7 @@ class ForensicCouncilPipeline:
 
         self.custody_logger = CustodyLogger(postgres_client=self._postgres)
 
-        # Monkey-patch custody_logger to broadcast each log entry to the UI.
-        # See pipeline_enrichment.py for the cleaner observer pattern TODO.
+        # Broadcast custody entries to the UI without changing the logger API.
         try:
             from api.routes._session_state import AGENT_NAMES, broadcast_update
             from api.schemas import BriefUpdate

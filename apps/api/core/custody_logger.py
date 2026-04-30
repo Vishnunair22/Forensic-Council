@@ -201,7 +201,7 @@ class CustodyLogger:
             self._postgres = await get_postgres_client()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(self, _exc_type, _exc_val, _exc_tb) -> None:
         """Async context manager exit — never close the shared pool."""
         pass
 

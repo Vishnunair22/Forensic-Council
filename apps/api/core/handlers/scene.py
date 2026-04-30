@@ -4,26 +4,6 @@ Scene & Object Tool Handlers
 
 Domain-specific handlers for object detection and scene analysis.
 
-Fix log (applied in audit pass):
-  - Removed bogus import from core.calibration (module does not exist; symbol
-    was also unused — removed entirely).
-  - run_ml_tool import corrected from tools.ml_subprocess to core.ml_subprocess.
-  - scale_validation, lighting_consistency, scene_incongruence removed from
-    tools.image_tools import — those functions do not exist there.
-  - object_detection_handler wrapped in try/except; returns degraded dict on
-    YOLO failure instead of propagating an uncaught exception.
-  - Detection bounding box now stores both bbox_xywh (native) AND a "box" key
-    with x1/y1/x2/y2 so Agent 1's roi_extract_handler can read it.
-  - _extract_best_video_frame implemented using cv2 instead of a stub.
-  - vector_contraband_search_handler wrapped in try/except; handles both object-
-    attribute and dict-style returns from predict_siglip.
-  - secondary_classification_handler wrapped in try/except; _record_tool_result added.
-  - lighting_consistency_handler uses run_ml_tool("lighting_analyzer.py") —
-    the only available implementation.
-  - scale_validation_handler implemented as YOLO-guided heuristic.
-  - scene_incongruence_handler implemented as colour/texture coherence heuristic.
-  - _record_tool_result added to all handlers that were missing it.
-  - lighting_correlation_handler records result on both success and fallback paths.
 """
 
 from __future__ import annotations

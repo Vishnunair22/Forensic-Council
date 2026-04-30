@@ -277,7 +277,6 @@ class InferenceClient:
 
     async def predict_trufor(self, image_path: str):
         """[SOTA] TruFor Vision Transformer analysis."""
-        # Placeholder for actual TruFor loader integration
         return await self._run_phase2_model("trufor", image_path)
 
     async def predict_busternet(self, image_path: str):
