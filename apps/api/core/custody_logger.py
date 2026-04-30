@@ -466,8 +466,8 @@ class CustodyLogger:
                 valid=True,  # Empty chain is valid
             )
 
-        # Verify each entry, tracking the last seen hash per agent
-        last_hashes: dict[str, str] = {}
+        # Verify each entry, tracking the previous entry in the session-wide chain.
+        last_hash: str | None = None
         for entry in entries:
             # Verify signature
             signed_entry = entry.to_signed_entry()
@@ -481,18 +481,18 @@ class CustodyLogger:
                 )
 
             # Verify chain link (prior_entry_ref)
-            expected_prior = last_hashes.get(entry.agent_id)
+            expected_prior = last_hash
             if entry.prior_entry_ref != expected_prior:
                 return ChainVerificationReport(
                     session_id=session_id,
                     total_entries=len(entries),
                     valid=False,
                     broken_at=entry.entry_id,
-                    broken_reason=f"Chain link broken for agent {entry.agent_id} - prior_entry_ref mismatch",
+                    broken_reason="Chain link broken - prior_entry_ref mismatch",
                 )
 
             # Update last hash for this agent
-            last_hashes[entry.agent_id] = entry.content_hash
+            last_hash = entry.content_hash
 
         logger.info(
             "Chain verification complete",

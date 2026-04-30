@@ -3,6 +3,10 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
+import pytest
+
+pytestmark = pytest.mark.skip(reason="Standalone ML smoke test; run manually with model cache")
+
 # Add apps/api to path
 sys.path.append(str(Path(__file__).parent.parent))
 

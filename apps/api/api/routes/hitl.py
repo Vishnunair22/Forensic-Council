@@ -9,7 +9,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.routes._session_state import get_active_pipeline
+from api.routes import _session_state
 from api.schemas import HITLDecisionRequest
 from core.auth import User, get_current_user
 from core.react_loop import HumanDecision
@@ -18,6 +18,11 @@ from core.structured_logging import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/hitl", tags=["hitl"])
+
+
+def get_active_pipeline(session_id: str):
+    """Compatibility wrapper for tests and older imports."""
+    return _session_state.get_active_pipeline(session_id)
 
 
 @router.post("/decision")
@@ -60,11 +65,6 @@ async def submit_decision(
     except Exception as e:
         logger.warning("Redis idempotency check failed, proceeding anyway", error=str(e))
 
-    # Verify the user has access to this session
-    from api.routes._authz import assert_session_access
-
-    await assert_session_access(decision.session_id, current_user)
-
     # Look up the active pipeline for this session
     pipeline = get_active_pipeline(decision.session_id)
     if pipeline is None:
@@ -72,6 +72,11 @@ async def submit_decision(
             status_code=404,
             detail=f"No active investigation found for session {decision.session_id}",
         )
+
+    # Verify the user has access to this session.
+    from api.routes._authz import assert_session_access
+
+    await assert_session_access(decision.session_id, current_user)
 
     # Build the HumanDecision from the request
     try:

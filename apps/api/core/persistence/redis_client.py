@@ -381,6 +381,162 @@ _redis_client: RedisClient | None = None
 _redis_lock: asyncio.Lock | None = None
 
 
+class InMemoryRedisClient:
+    """Small Redis-compatible fallback used when Redis is unavailable in dev/tests."""
+
+    def __init__(self) -> None:
+        self._fallback_store: dict[str, Any] = {}
+        self._hash_store: dict[str, dict[str, Any]] = {}
+        self._expiry: dict[str, int] = {}
+
+    async def ping(self) -> bool:
+        return True
+
+    async def set(
+        self,
+        key: str,
+        value: Any,
+        ex: int | None = None,
+        px: int | None = None,
+        nx: bool = False,
+        xx: bool = False,
+    ) -> bool:
+        if nx and key in self._fallback_store:
+            return False
+        if xx and key not in self._fallback_store:
+            return False
+        self._fallback_store[key] = json.dumps(value, default=str) if not isinstance(value, str) else value
+        if ex is not None:
+            self._expiry[key] = ex
+        elif px is not None:
+            self._expiry[key] = max(1, px // 1000)
+        return True
+
+    async def get(self, key: str) -> str | None:
+        value = self._fallback_store.get(key)
+        return value.decode("utf-8") if isinstance(value, bytes) else value
+
+    async def get_json(self, key: str) -> Any | None:
+        value = await self.get(key)
+        if value is None:
+            return None
+        try:
+            return json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return value
+
+    async def delete(self, *keys: str) -> int:
+        deleted = 0
+        for key in keys:
+            deleted += int(key in self._fallback_store or key in self._hash_store)
+            self._fallback_store.pop(key, None)
+            self._hash_store.pop(key, None)
+            self._expiry.pop(key, None)
+        return deleted
+
+    async def exists(self, *keys: str) -> int:
+        return sum(1 for key in keys if key in self._fallback_store or key in self._hash_store)
+
+    async def expire(self, key: str, seconds: int) -> bool:
+        self._expiry[key] = seconds
+        return True
+
+    async def incr(self, key: str, amount: int = 1) -> int:
+        value = int(self._fallback_store.get(key, 0)) + amount
+        self._fallback_store[key] = str(value)
+        return value
+
+    async def ttl(self, key: str) -> int:
+        return self._expiry.get(key, -1 if key in self._fallback_store else -2)
+
+    async def keys(self, pattern: str = "*") -> list[str]:
+        import fnmatch
+
+        all_keys = set(self._fallback_store) | set(self._hash_store)
+        return [key for key in all_keys if fnmatch.fnmatch(key, pattern)]
+
+    async def publish(self, channel: str, message: Any) -> int:
+        return 0
+
+    def get_pubsub(self):
+        raise RedisConnectionError("Redis pub/sub unavailable in in-memory fallback")
+
+    def pipeline(self):
+        return _InMemoryPipeline(self)
+
+    async def hset(self, name: str, key: str, value: Any) -> int:
+        bucket = self._hash_store.setdefault(name, {})
+        existed = key in bucket
+        bucket[key] = json.dumps(value, default=str) if not isinstance(value, str) else value
+        return 0 if existed else 1
+
+    async def hget(self, name: str, key: str) -> Any | None:
+        value = self._hash_store.get(name, {}).get(key)
+        if value is None:
+            return None
+        try:
+            return json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return value
+
+    async def hgetall(self, name: str) -> dict[str, Any]:
+        return dict(self._hash_store.get(name, {}))
+
+    async def hdel(self, name: str, *keys: str) -> int:
+        bucket = self._hash_store.get(name, {})
+        deleted = 0
+        for key in keys:
+            if key in bucket:
+                deleted += 1
+                bucket.pop(key, None)
+        return deleted
+
+    async def eval(
+        self,
+        script: str,
+        keys: list[str] | None = None,
+        args: list[Any] | None = None,
+    ) -> Any:
+        raise RedisConnectionError("Lua eval unavailable in in-memory fallback")
+
+    async def disconnect(self) -> None:
+        return None
+
+
+class _InMemoryPipeline:
+    def __init__(self, redis: InMemoryRedisClient) -> None:
+        self._redis = redis
+        self._ops: list[tuple[str, tuple[Any, ...]]] = []
+
+    def hincrby(self, name: str, key: str, amount: int = 1):
+        self._ops.append(("hincrby", (name, key, amount)))
+        return self
+
+    def hset(self, name: str, key: str, value: Any):
+        self._ops.append(("hset", (name, key, value)))
+        return self
+
+    def expire(self, key: str, seconds: int):
+        self._ops.append(("expire", (key, seconds)))
+        return self
+
+    async def execute(self) -> list[Any]:
+        results = []
+        for op, args in self._ops:
+            if op == "hincrby":
+                name, key, amount = args
+                bucket = self._redis._hash_store.setdefault(name, {})
+                value = int(bucket.get(key, 0)) + int(amount)
+                bucket[key] = str(value)
+                results.append(value)
+            elif op == "hset":
+                results.append(await self._redis.hset(*args))
+            elif op == "expire":
+                results.append(await self._redis.expire(*args))
+        self._ops.clear()
+        return results
+
+
 def _get_redis_lock() -> asyncio.Lock:
     """Lazily create the Redis init lock on first use (must run inside an event loop)."""
     global _redis_lock
@@ -407,8 +563,15 @@ async def get_redis_client() -> RedisClient:
         # we were waiting for the lock.
         if _redis_client is None:
             client = RedisClient()
-            await client.connect()
-            _redis_client = client
+            try:
+                await client.connect()
+                _redis_client = client
+            except RedisConnectionError:
+                settings = get_settings()
+                if settings.app_env == "production":
+                    raise
+                logger.warning("Redis unavailable; using in-memory fallback client")
+                _redis_client = InMemoryRedisClient()
     return _redis_client
 
 

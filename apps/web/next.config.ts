@@ -41,10 +41,10 @@ const nextConfig: NextConfig = {
   // Strict by default. CI runs `npm run type-check` and `npm run lint`
   // separately, so build-time strictness catches local-dev regressions.
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
 
 

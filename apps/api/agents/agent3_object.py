@@ -197,8 +197,12 @@ class Agent3Object(ForensicAgent):
                             "verdict": finding.evidence_verdict,
                         },
                     )
-                except Exception:
-                    pass
+                except Exception as signal_error:
+                    logger.debug(
+                        "Failed to publish object agent signal",
+                        session_id=self.session_id,
+                        error=str(signal_error),
+                    )
 
     @property
     def supported_file_types(self) -> list[str]:

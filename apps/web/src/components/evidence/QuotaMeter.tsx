@@ -19,7 +19,6 @@ interface QuotaMeterProps {
 export function QuotaMeter({ sessionId, enabled = true }: QuotaMeterProps) {
   const [quota, setQuota] = useState<QuotaData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!sessionId || !enabled) {
@@ -33,7 +32,6 @@ export function QuotaMeter({ sessionId, enabled = true }: QuotaMeterProps) {
     const fetchQuota = async () => {
       if (!mounted) return;
       setLoading(true);
-      setError(null);
 
       try {
         const token = document.cookie
@@ -56,9 +54,8 @@ export function QuotaMeter({ sessionId, enabled = true }: QuotaMeterProps) {
         if (mounted) {
           setQuota(data);
         }
-      } catch (err) {
+      } catch {
         if (mounted) {
-          setError(err instanceof Error ? err.message : "Failed to load quota");
           setQuota({ tokens_used: 0, tokens_limit: 100000, cost_estimate_usd: 0, calls_total: 0, degraded: true });
         }
       } finally {
@@ -95,7 +92,7 @@ export function QuotaMeter({ sessionId, enabled = true }: QuotaMeterProps) {
     );
   }
 
-  if (error && quota?.degraded) {
+  if (quota?.degraded) {
     return (
       <div className="flex items-center gap-2 text-xs text-amber-600">
         <AlertTriangle className="h-3 w-3" />

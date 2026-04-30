@@ -26,6 +26,7 @@ def _strong_env(monkeypatch, **overrides):
         "SIGNING_KEY": "VeryStr0ngKeyWithH!ghEntr0py_1234567890",
         "JWT_SECRET_KEY": "VeryStr0ngKeyWithH!ghEntr0py_1234567890",
         "GEMINI_API_KEY": "AIzaSyFakeKey1234567890",
+        "QDRANT_API_KEY": "qdrant_test_key_1234567890",
         "BOOTSTRAP_ADMIN_PASSWORD": "Str0ngAdm!nPwd_XYZ789",
         "BOOTSTRAP_INVESTIGATOR_PASSWORD": "Str0ngInv!Pwd_XYZ789",
         "POSTGRES_USER": "test",

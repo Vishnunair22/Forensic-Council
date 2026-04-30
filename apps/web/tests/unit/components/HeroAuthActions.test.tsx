@@ -3,34 +3,17 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { HeroAuthActions } from "@/components/ui/HeroAuthActions";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { sessionOnlyStorage, storage } from "@/lib/storage";
-import { ProtocolWarmingError } from "@/lib/api";
 
 const mockPush = jest.fn();
+const mockPrefetch = jest.fn();
 const mockPlaySound = jest.fn();
-const mockCheckBackendHealth = jest.fn();
-const mockAutoLoginAsInvestigator = jest.fn();
 
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, prefetch: mockPrefetch }),
 }));
 
 jest.mock("@/hooks/useSound", () => ({
   useSound: () => ({ playSound: mockPlaySound }),
-}));
-
-jest.mock("@/lib/api", () => ({
-  ProtocolWarmingError: class ProtocolWarmingError extends Error {},
-  autoLoginAsInvestigator: (...args: unknown[]) => mockAutoLoginAsInvestigator(...args),
-  checkBackendHealth: (...args: unknown[]) => mockCheckBackendHealth(...args),
-}));
-
-jest.mock("@/components/ui/ForensicProgressOverlay", () => ({
-  ForensicProgressOverlay: ({ title, liveText }: { title: string; liveText: string }) => (
-    <div data-testid="progress-overlay">
-      <span>{title}</span>
-      <span>{liveText}</span>
-    </div>
-  ),
 }));
 
 jest.mock("@/components/evidence/UploadModal", () => ({
@@ -92,10 +75,7 @@ describe("HeroAuthActions", () => {
     expect(screen.getByTestId("upload-modal")).toBeInTheDocument();
   });
 
-  it("starts analysis after healthy backend and demo login", async () => {
-    mockCheckBackendHealth.mockResolvedValue({ ok: true });
-    mockAutoLoginAsInvestigator.mockResolvedValue({ access_token: "jwt" });
-
+  it("starts analysis with a smooth evidence-page handoff", async () => {
     render(<HeroAuthActions />);
 
     fireEvent.click(screen.getByRole("button", { name: /upload a file to begin analysis/i }));
@@ -103,54 +83,29 @@ describe("HeroAuthActions", () => {
     fireEvent.click(screen.getByRole("button", { name: /start analysis/i }));
 
     await waitFor(() => {
-      expect(mockCheckBackendHealth).toHaveBeenCalled();
-      expect(mockAutoLoginAsInvestigator).toHaveBeenCalled();
       expect(mockPush).toHaveBeenCalledWith("/evidence", { scroll: true });
     });
 
     expect(__pendingFileStore.file?.name).toBe("evidence.jpg");
     expect(sessionOnlyStorage.getItem("forensic_auto_start")).toBe("true");
     expect(sessionOnlyStorage.getItem("fc_show_loading")).toBe("true");
-    expect(storage.getItem("forensic_auth_ok")).toBe("1");
+    expect(screen.getByText(/opening evidence analysis/i)).toBeInTheDocument();
   });
 
-  it("shows backend warming message and does not navigate when health check fails", async () => {
-    mockCheckBackendHealth.mockResolvedValue({
-      ok: false,
-      warmingUp: true,
-      message: "Backend waking up",
-    });
-
+  it("lets users choose another file before starting", () => {
     render(<HeroAuthActions />);
 
     fireEvent.click(screen.getByRole("button", { name: /upload a file to begin analysis/i }));
     fireEvent.click(screen.getByRole("button", { name: /select test file/i }));
-    fireEvent.click(screen.getByRole("button", { name: /start analysis/i }));
+    fireEvent.click(screen.getByRole("button", { name: /choose another/i }));
 
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /protocol warming up/i })).toBeInTheDocument();
-    });
-
-    expect(mockAutoLoginAsInvestigator).not.toHaveBeenCalled();
+    expect(screen.getByTestId("upload-modal")).toBeInTheDocument();
     expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it("handles protocol warming error from auth bootstrap", async () => {
-    mockCheckBackendHealth.mockResolvedValue({ ok: true });
-    mockAutoLoginAsInvestigator.mockRejectedValue(
-      new ProtocolWarmingError("warming"),
-    );
-
+  it("prefetches the evidence route for a faster handoff", () => {
     render(<HeroAuthActions />);
 
-    fireEvent.click(screen.getByRole("button", { name: /upload a file to begin analysis/i }));
-    fireEvent.click(screen.getByRole("button", { name: /select test file/i }));
-    fireEvent.click(screen.getByRole("button", { name: /start analysis/i }));
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /protocol warming up/i })).toBeInTheDocument();
-    });
-
-    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockPrefetch).toHaveBeenCalledWith("/evidence");
   });
 });

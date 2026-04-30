@@ -66,12 +66,10 @@ class TestSubmitDecision:
 
             from api.routes import hitl
 
-            try:
+            with pytest.raises(HTTPException) as exc_info:
                 await hitl.submit_decision(hitl_request, mock_user)
-            except HTTPException as e:
-                assert e.status_code == 404
-            except Exception as e:
-                pytest.fail(f"Expected HTTPException 404 but got {type(e).__name__}: {e}")
+
+            assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
     async def test_redis_idempotency_check_returns_already_processed(self, hitl_request, mock_user):
@@ -113,9 +111,7 @@ class TestSubmitDecision:
 
             from api.routes import hitl
 
-            try:
+            with pytest.raises(HTTPException) as exc_info:
                 await hitl.submit_decision(hitl_request, mock_user)
-            except HTTPException as e:
-                assert e.status_code == 500
-            except Exception as e:
-                pytest.fail(f"Expected HTTPException 500 but got {type(e).__name__}: {e}")
+
+            assert exc_info.value.status_code == 500

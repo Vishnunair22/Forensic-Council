@@ -147,7 +147,11 @@ COPY tools/ tools/
 COPY orchestration/ orchestration/
 COPY reports/ reports/
 COPY config/ config/
-COPY storage/calibration_models/ /opt/forensic-model-cache/calibration_models/
+RUN mkdir -p /opt/forensic-model-cache/calibration_models
+COPY storage/ /tmp/__storage_seed/
+RUN cp -rn /tmp/__storage_seed/calibration_models/. \
+            /opt/forensic-model-cache/calibration_models/ 2>/dev/null || true \
+ && rm -rf /tmp/__storage_seed
 # worker.py is now copied as part of orchestration/
 
 ENV PATH="/app/.venv/bin:$PATH" \

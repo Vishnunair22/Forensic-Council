@@ -127,18 +127,26 @@ async def _event_generator(
                     try:
                         data = json.loads(msg_json)
                         await consumer.send_json(data)
-                    except Exception:
-                        pass
+                    except Exception as replay_error:
+                        logger.debug(
+                            "Failed to replay SSE update",
+                            session_id=session_id,
+                            error=str(replay_error),
+                        )
 
-            async def _redis_listener(ps, ch: str) -> None:
+            async def _redis_listener(ps, _channel: str) -> None:
                 try:
                     async for message in ps.listen():
                         if message["type"] == "message":
                             try:
                                 data = json.loads(message["data"])
                                 await consumer.send_json(data)
-                            except Exception:
-                                pass
+                            except Exception as message_error:
+                                logger.debug(
+                                    "Failed to forward SSE Redis message",
+                                    session_id=session_id,
+                                    error=str(message_error),
+                                )
                 except asyncio.CancelledError:
                     pass
                 except Exception as exc:
@@ -180,19 +188,33 @@ async def _event_generator(
             redis_task.cancel()
             try:
                 await redis_task
-            except (asyncio.CancelledError, Exception):
+            except asyncio.CancelledError:
                 pass
+            except Exception as task_error:
+                logger.debug(
+                    "SSE Redis listener shutdown failed",
+                    session_id=session_id,
+                    error=str(task_error),
+                )
         if pubsub is not None:
             try:
                 await pubsub.unsubscribe()
                 await pubsub.aclose()
-            except Exception:
-                pass
+            except Exception as pubsub_error:
+                logger.debug(
+                    "SSE pubsub shutdown failed",
+                    session_id=session_id,
+                    error=str(pubsub_error),
+                )
         if dedicated_redis is not None:
             try:
                 await dedicated_redis.aclose()
-            except Exception:
-                pass
+            except Exception as redis_close_error:
+                logger.debug(
+                    "SSE Redis client shutdown failed",
+                    session_id=session_id,
+                    error=str(redis_close_error),
+                )
 
         # Unregister consumer
         try:

@@ -60,8 +60,12 @@ def _record_gemini_call(model: str, tokens_in: int = 0, tokens_out: int = 0) -> 
 
         loop = asyncio.get_running_loop()
         loop.create_task(record_api_call("gemini", model, tokens_in, tokens_out))
-    except Exception:
-        pass
+    except Exception as quota_error:
+        logger.debug(
+            "Failed to record Gemini quota usage",
+            model=model,
+            error=str(quota_error),
+        )
 
 
 _GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"

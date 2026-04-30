@@ -1,15 +1,7 @@
 import inspect
-import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-# Mock heavy modules before they are imported by api.routes.investigation
-mock_pipeline_mod = MagicMock()
-sys.modules["orchestration.pipeline"] = mock_pipeline_mod
-mock_runner_mod = MagicMock()
-sys.modules["orchestration.investigation_runner"] = mock_runner_mod
-
 
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
@@ -22,6 +14,7 @@ async def test_get_session_report_in_progress_202():
     mock_persistence.get_report.return_value = {"status": "running"}
 
     with (
+        patch("api.routes.sessions.assert_session_access", new_callable=AsyncMock),
         patch("api.routes.sessions.get_active_pipeline", return_value=None),
         patch("api.routes.sessions._final_reports", {}),
         patch("core.session_persistence.get_session_persistence", return_value=mock_persistence),
@@ -104,7 +97,7 @@ async def test_mime_before_dedup():
             )
 
         assert exc.value.status_code == 400
-        assert "Security violation" in exc.value.detail
+        assert "File type 'text/plain' is not allowed" in exc.value.detail
         assert mock_redis.set.called is False
         assert mock_thread.called is True
 

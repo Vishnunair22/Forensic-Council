@@ -71,6 +71,27 @@ from core.structured_logging import get_logger
 logger = get_logger(__name__)
 
 
+class VerificationError(Exception):
+    """Raised when a compatibility Signer verification fails."""
+
+
+class Signer:
+    """Small deterministic HMAC signer for legacy report-signature callers."""
+
+    def __init__(self, key: str) -> None:
+        self._key = key.encode("utf-8")
+
+    def sign(self, payload: dict[str, Any]) -> str:
+        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+        return _hmac.new(self._key, canonical.encode("utf-8"), hashlib.sha256).hexdigest()
+
+    def verify(self, payload: dict[str, Any], signature: str) -> bool:
+        expected = self.sign(payload)
+        if not _hmac.compare_digest(expected, signature):
+            raise VerificationError("Signature verification failed")
+        return True
+
+
 @dataclass
 class SignedEntry:
     """

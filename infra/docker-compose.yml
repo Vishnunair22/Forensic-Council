@@ -25,7 +25,7 @@ name: forensic-council
 
 x-backend-env: &backend-env
   APP_ENV: ${APP_ENV:-development}
-  DEBUG: "false"
+  DEBUG: ${DEBUG:-false}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   REDIS_HOST: redis
   REDIS_PORT: 6379
@@ -70,7 +70,7 @@ x-backend-env: &backend-env
   HOME: /tmp
   EASYOCR_MODEL_DIR: /app/cache/easyocr
   YOLO_MODEL_DIR: /app/cache/ultralytics
-  YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-yolo11n.pt}
+  YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-detr-resnet-50}
   AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
   YOLO_CONFIG_DIR: /app/cache/ultralytics
   TORCH_HOME: /app/cache/torch
@@ -128,7 +128,7 @@ services:
       - infra_net
 
   qdrant:
-    image: qdrant/qdrant:v1.13.6
+    image: qdrant/qdrant:v1.16.1
     container_name: forensic_qdrant
     restart: unless-stopped
     # SECURITY: Drop all capabilities, run as non-root (qdrant runs as uid 1000)
@@ -284,7 +284,7 @@ services:
       target: development
       args:
         PRELOAD_MODELS: ${PRELOAD_MODELS:-1}
-        YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-yolo11n.pt}
+        YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-detr-resnet-50}
         AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
     container_name: forensic_api
     restart: unless-stopped
@@ -324,6 +324,8 @@ services:
         reservations:
           memory: 512M
           cpus: "0.5"
+    mem_limit: 4g
+    cpus: 2.0
     # SECURITY: Run with minimal privileges, no new privileges, read-only filesystem
     security_opt:
       - no-new-privileges:true
@@ -337,7 +339,7 @@ services:
       - FOWNER
     read_only: true
     tmpfs:
-      - /tmp:nosuid,size=512m
+      - /tmp:nosuid,size=2g
     stop_grace_period: 150s
     volumes:
       # Source code bind mounts — uvicorn --reload picks up changes instantly.
@@ -377,7 +379,7 @@ services:
       target: development
       args:
         PRELOAD_MODELS: ${PRELOAD_MODELS:-1}
-        YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-yolo11n.pt}
+        YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-detr-resnet-50}
         AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
     container_name: forensic_worker
     restart: unless-stopped
@@ -415,7 +417,7 @@ services:
       - FOWNER
     read_only: true
     tmpfs:
-      - /tmp:nosuid,size=512m
+      - /tmp:nosuid,size=2g
     volumes:
       # Source code bind mounts — restart the worker to pick up changes instantly.
       - ../apps/api/core:/app/core:ro
@@ -443,6 +445,8 @@ services:
         reservations:
           memory: 2G
           cpus: "1.0"
+    mem_limit: 12g
+    cpus: 4.0
     networks:
       - infra_net
       - external_net
@@ -595,6 +599,9 @@ services:
         target: metrics_scrape_token
     ports:
       - "9090:9090"
+    depends_on:
+      backend:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:9090/-/healthy || exit 1"]
       interval: 30s

@@ -9,6 +9,7 @@ requiring direct knowledge of agent instantiation details.
 from __future__ import annotations
 
 import inspect
+import sys
 from typing import Any
 from uuid import UUID
 
@@ -17,6 +18,14 @@ from core.config import Settings
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def _get_registry():
+    pipeline_module = sys.modules.get("orchestration.pipeline")
+    patched_getter = getattr(pipeline_module, "get_agent_registry", None)
+    if callable(patched_getter) and patched_getter is not get_agent_registry:
+        return patched_getter()
+    return get_agent_registry()
 
 
 def _serialize_react_chain(react_chain: list[Any]) -> list[dict[str, Any]]:
@@ -127,7 +136,7 @@ class AgentFactory:
         if agent_id in ("Agent2", "Agent3", "Agent4") and self.inter_agent_bus:
             agent_kwargs["inter_agent_bus"] = self.inter_agent_bus
 
-        registry = get_agent_registry()
+        registry = _get_registry()
         create_agent = getattr(registry, "create_agent", None)
         used_create_agent = callable(create_agent)
         if used_create_agent:
@@ -179,4 +188,4 @@ class AgentFactory:
 
     def _get_agent_class(self, agent_id: str) -> type:
         """Get the agent class from the central registry."""
-        return get_agent_registry().get_agent_class(agent_id)
+        return _get_registry().get_agent_class(agent_id)

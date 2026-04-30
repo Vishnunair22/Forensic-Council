@@ -235,7 +235,7 @@ export function FileUploadSection({
           {isDragging ? "Process Evidence" : "Load Media File"}
          </p>
          <p className="text-base font-medium text-white/30">
-          Drag &amp; drop or click to securely upload
+          Drag &amp; drop or click to browse securely
          </p>
         </div>
 

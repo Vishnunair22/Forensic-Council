@@ -19,7 +19,7 @@ if _backend_root not in sys.path:
     sys.path.insert(0, _backend_root)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 async def transactional_db(request):
     """
     Fixture that wraps each integration test in a database transaction

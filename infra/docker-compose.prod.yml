@@ -11,8 +11,8 @@ services:
     build:
       target: production
       args:
-        PRELOAD_MODELS: ${PRELOAD_MODELS:-1}
-        YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-yolo11n.pt}
+        PRELOAD_MODELS: "1"
+        YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-detr-resnet-50}
         AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
     # Suppress the host-facing 8000 port — in production all traffic must flow
     # through Caddy. Direct port exposure bypasses TLS, rate limiting, and
@@ -21,7 +21,7 @@ services:
     environment:
       RELOAD: "false"
       APP_ENV: production
-      DEBUG: "false"
+      DEBUG: ${DEBUG:-false}
     secrets:
       - metrics_scrape_token
     volumes: !override
@@ -53,7 +53,8 @@ services:
     # Remove dev bind-mount (../apps/web:/app) — runner image is self-contained.
     # Without this, the host source tree overwrites the compiled standalone app.
     volumes: !override []
-    command: ["node", "apps/web/server.js"]
+    working_dir: /app
+    command: ["node", "/app/apps/web/server.js"]
     environment:
       NODE_ENV: production
     logging:
@@ -67,13 +68,13 @@ services:
     build:
       target: production
       args:
-        PRELOAD_MODELS: ${PRELOAD_MODELS:-1}
-        YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-yolo11n.pt}
+        PRELOAD_MODELS: "1"
+        YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-detr-resnet-50}
         AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
     environment:
       RELOAD: "false"
       APP_ENV: production
-      DEBUG: "false"
+      DEBUG: ${DEBUG:-false}
     volumes: !override
       - evidence_data:/app/storage/evidence:rw
       - signing_keys:/app/storage/keys:ro

@@ -907,7 +907,19 @@ async def codec_fingerprint(
             y = y.mean(axis=1)
         y = np.asarray(y, dtype=np.float32)
         if y.size == 0:
-            raise ToolUnavailableError("Audio stream is empty")
+            return {
+                "reencoding_events": [],
+                "codec_chain": codec_chain,
+                "format_info": {
+                    "format": info.format,
+                    "subtype": info.subtype,
+                    "channels": info.channels,
+                    "samplerate": info.samplerate,
+                    "duration": info.duration,
+                    "frames": info.frames,
+                    "spectral_complexity": 0.0,
+                },
+            }
 
         # Check for codec artifacts
 
@@ -1208,7 +1220,7 @@ async def av_sync_verify(
         tmp_wav = Path(tempfile.gettempdir()) / f"fc_avsync_{abs(hash(video_path))}.wav"
         await asyncio.get_running_loop().run_in_executor(
             None,
-            lambda: subprocess.run(
+            lambda: subprocess.run(  # noqa: S603 - ffmpeg argv is fixed; evidence path is an arg.
                 [
                     ffmpeg,
                     "-y",

@@ -17,7 +17,9 @@ export function getBackendBaseUrls(): string[] {
     publicUrl,
   ].filter((v): v is string => Boolean(v?.trim()));
 
-  const candidates = isProduction ? prodCandidates : devCandidates;
+  const candidates = (isProduction ? prodCandidates : devCandidates).filter(
+    (value): value is string => Boolean(value?.trim()),
+  );
   const targets = [...new Set(candidates.map(normalizeBaseUrl))];
   return targets;
 }

@@ -23,8 +23,10 @@ can see how many API calls were consumed and whether fallbacks were triggered.
 from __future__ import annotations
 
 import contextvars
+import inspect
 import time
 
+from core.persistence.redis_client import get_redis_client
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
@@ -42,6 +44,12 @@ _KEY_PREFIX = "quota:"
 
 def _session_key(session_id: str) -> str:
     return f"{_KEY_PREFIX}{session_id}"
+
+
+async def _maybe_await(value):
+    if inspect.isawaitable(value):
+        return await value
+    return value
 
 
 async def record_api_call(
@@ -64,8 +72,6 @@ async def record_api_call(
         return
 
     try:
-        from core.persistence.redis_client import get_redis_client
-
         redis = await get_redis_client()
         if not redis:
             return
@@ -79,14 +85,15 @@ async def record_api_call(
         ts_field = "last_call_ts"
 
         pipe = redis.pipeline()
-        pipe.hincrby(key, provider_field, 1)
-        pipe.hincrby(key, total_calls_field, 1)
-        pipe.hincrby(key, tokens_field, tokens_in)
-        pipe.hincrby(key, tokens_out_field, tokens_out)
-        pipe.hincrby(key, total_tokens_field, tokens_in + tokens_out)
-        pipe.hset(key, ts_field, str(time.time()))
-        pipe.expire(key, _QUOTA_TTL_SECONDS)
-        await pipe.execute()
+        pipe = await _maybe_await(pipe)
+        await _maybe_await(pipe.hincrby(key, provider_field, 1))
+        await _maybe_await(pipe.hincrby(key, total_calls_field, 1))
+        await _maybe_await(pipe.hincrby(key, tokens_field, tokens_in))
+        await _maybe_await(pipe.hincrby(key, tokens_out_field, tokens_out))
+        await _maybe_await(pipe.hincrby(key, total_tokens_field, tokens_in + tokens_out))
+        await _maybe_await(pipe.hset(key, ts_field, str(time.time())))
+        await _maybe_await(pipe.expire(key, _QUOTA_TTL_SECONDS))
+        await _maybe_await(pipe.execute())
     except Exception as e:
         logger.debug("Quota meter: Redis write failed (non-fatal)", error=str(e))
 
@@ -102,8 +109,6 @@ async def get_session_quota(session_id: str) -> dict:
         return {}
 
     try:
-        from core.persistence.redis_client import get_redis_client
-
         redis = await get_redis_client()
         if not redis:
             return {}
@@ -127,8 +132,6 @@ async def clear_session_quota(session_id: str) -> None:
     if not session_id:
         return
     try:
-        from core.persistence.redis_client import get_redis_client
-
         redis = await get_redis_client()
         if redis:
             await redis.delete(_session_key(session_id))

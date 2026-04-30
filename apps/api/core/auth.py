@@ -262,13 +262,12 @@ def _cleanup_local_blacklist() -> None:
     global _last_cleanup_time
     current_time = time.time()
 
-    # Only cleanup once per interval to avoid O(n) on every auth check
-    if current_time - _last_cleanup_time < _CLEANUP_INTERVAL_SECONDS:
-        return
-    _last_cleanup_time = current_time
-
     # Build list of expired keys first, then delete (safe iteration)
     expired_keys = [k for k, v in _recently_blacklisted.items() if current_time > v]
+    # Only skip the O(n) pass when there is nothing expired to remove.
+    if not expired_keys and current_time - _last_cleanup_time < _CLEANUP_INTERVAL_SECONDS:
+        return
+    _last_cleanup_time = current_time
     for k in expired_keys:
         _recently_blacklisted.pop(k, None)
     # Enforce max size by dropping oldest entries if needed

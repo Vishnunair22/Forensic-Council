@@ -31,7 +31,18 @@ from core.structured_logging import configure_root_logger
 if __name__ == "__main__":
     from core.config import get_settings
 
-    settings = get_settings()
+    try:
+        settings = get_settings()
+    except Exception as exc:
+        print(
+            "\nForensic Council API configuration is invalid.\n"
+            f"{type(exc).__name__}: {exc}\n\n"
+            "Check .env for required values such as JWT_SECRET_KEY, SIGNING_KEY, "
+            "database credentials, and API keys. Use .env.example as the template.\n",
+            file=sys.stderr,
+        )
+        raise SystemExit(2) from exc
+
     configure_root_logger(settings.log_level)
 
     is_production = settings.app_env == "production"

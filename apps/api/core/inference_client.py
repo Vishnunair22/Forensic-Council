@@ -77,9 +77,10 @@ class InferenceClient:
 
                 yolo_cache = self.settings.yolo_model_dir
                 os.makedirs(yolo_cache, exist_ok=True)
-                yolo_config_dir = os.getenv("YOLO_CONFIG_DIR", "/tmp/ultralytics")
+                default_config_dir = os.path.join(yolo_cache, "config")
+                yolo_config_dir = os.getenv("YOLO_CONFIG_DIR", default_config_dir)
                 if not os.access(yolo_config_dir, os.W_OK):
-                    yolo_config_dir = "/tmp/ultralytics"
+                    yolo_config_dir = default_config_dir
                 os.makedirs(yolo_config_dir, exist_ok=True)
                 os.environ["YOLO_CONFIG_DIR"] = yolo_config_dir
 

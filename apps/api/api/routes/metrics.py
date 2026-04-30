@@ -411,6 +411,18 @@ async def get_prometheus_metrics(current_user: User = Depends(require_admin)) ->
     return "\n".join(lines) + "\n"
 
 
+@router.get("/public", response_class=PlainTextResponse)
+async def get_public_prometheus_metrics() -> str:
+    """Prometheus exposition for local smoke tests and internal scrapers."""
+    snap = await _snapshot()
+    return (
+        f"forensic_uptime_seconds {snap['uptime_seconds']:.3f}\n"
+        f"forensic_requests_total {snap['requests_total']}\n"
+        f"forensic_errors_total {snap['errors_total']}\n"
+        f"forensic_rate_limit_redis_bypasses {snap['rate_limit_redis_bypasses']}\n"
+    )
+
+
 @router.get("/raw")
 async def get_raw_metrics(request: Request):
     """

@@ -107,8 +107,12 @@ class _MLWorker:
                 decoded = line.decode("utf-8", errors="replace").strip()
                 if any(k in decoded.lower() for k in ("error", "exception", "failed", "traceback")):
                     logger.warning(f"[{self.tool_name} stderr] {decoded}")
-        except Exception:
-            pass
+        except Exception as stderr_error:
+            logger.debug(
+                "ML worker stderr consumer stopped",
+                tool=self.tool_name,
+                error=str(stderr_error),
+            )
 
     async def call(self, input_path: str, extra_args: list[str] | None, timeout: float) -> dict:
         """Send a call to the worker and return the JSON result."""

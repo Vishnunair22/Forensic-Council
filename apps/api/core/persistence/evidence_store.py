@@ -8,7 +8,7 @@ Manages immutable evidence artifact storage with versioning.
 from __future__ import annotations
 
 import hashlib
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 # CustodyLogger imported inside methods to avoid circular imports
@@ -19,6 +19,9 @@ from core.persistence.storage import LocalStorageBackend, StorageBackend
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
+
+if TYPE_CHECKING:
+    from core.custody_logger import CustodyLogger
 
 
 class EvidenceStoreError(ForensicCouncilBaseException):
@@ -60,7 +63,7 @@ class EvidenceStore:
         self,
         postgres_client: PostgresClient | None = None,
         storage_backend: StorageBackend | None = None,
-        custody_logger: "CustodyLogger" | None = None,
+        custody_logger: CustodyLogger | None = None,
     ) -> None:
         """
         Initialize the evidence store.
@@ -77,7 +80,7 @@ class EvidenceStore:
         self._owned_storage = storage_backend is None
         self._owned_logger = custody_logger is None
 
-    async def __aenter__(self) -> "EvidenceStore":
+    async def __aenter__(self) -> EvidenceStore:
         """Async context manager entry."""
         if self._postgres is None:
             self._postgres = await get_postgres_client()

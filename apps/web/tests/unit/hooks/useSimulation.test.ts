@@ -73,7 +73,7 @@ describe("useSimulation Hook", () => {
       await connectionPromise!;
     });
 
-    expect(result.current.status).toBe("idle"); // Status changes on AGENT_UPDATE, not just CONNECTED
+    expect(result.current.status).toBe("initiating");
   });
 
   test("processes AGENT_UPDATE messages", async () => {

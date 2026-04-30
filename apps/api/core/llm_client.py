@@ -97,6 +97,7 @@ class LLMClient:
         self.temperature = config.llm_temperature
         self.max_tokens = config.llm_max_tokens
         self.timeout = config.llm_timeout
+        self._circuit_breaker = _get_provider_breaker(self.provider, self.model)
 
         # Fallback settings
         self.fallback_enabled = True

@@ -950,7 +950,7 @@ requires-dist = [
     { name = "accelerate", marker = "extra == 'ml'", specifier = ">=1.7" },
     { name = "astral", specifier = ">=3.2" },
     { name = "asyncpg", specifier = ">=0.30" },
-    { name = "bcrypt", specifier = ">=3.2" },
+    { name = "bcrypt", specifier = ">=3.2,<4.1" },
     { name = "cryptography", specifier = ">=44" },
     { name = "easyocr", specifier = ">=1.7.2" },
     { name = "factory-boy", marker = "extra == 'dev'", specifier = ">=3.3" },

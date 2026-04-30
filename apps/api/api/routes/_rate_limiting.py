@@ -79,8 +79,8 @@ async def check_investigation_rate_limit(user_id: str) -> None:
             from api.routes.metrics import increment_rate_limit_redis_bypasses
 
             increment_rate_limit_redis_bypasses()
-        except Exception:
-            pass
+        except Exception as metric_error:
+            logger.debug("Failed to increment rate-limit bypass metric", error=str(metric_error))
         if is_production:
             raise HTTPException(
                 status_code=503,
@@ -181,8 +181,8 @@ async def check_daily_cost_quota(user_id: str, user_role: str = "investigator") 
             from api.routes.metrics import increment_rate_limit_redis_bypasses
 
             increment_rate_limit_redis_bypasses()
-        except Exception:
-            pass
+        except Exception as metric_error:
+            logger.debug("Failed to increment cost-quota bypass metric", error=str(metric_error))
         if is_production:
             raise HTTPException(
                 status_code=503,

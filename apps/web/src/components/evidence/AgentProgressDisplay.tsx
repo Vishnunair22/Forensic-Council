@@ -230,7 +230,7 @@ export function AgentProgressDisplay({
             </div>
             <div className="w-[1px] h-3 bg-white/10" />
             <p className="text-sm font-medium text-white/40 italic" role="status" aria-live="polite" aria-atomic="false">
-              {pipelineMessage || progressText || (allAgentsDone ? "Analysis phase complete" : "Coordination in progress")}
+              {pipelineMessage || (allAgentsDone ? "Analysis phase complete" : progressText || "Coordination in progress")}
             </p>
           </div>
         </div>
@@ -339,7 +339,14 @@ export function AgentProgressDisplay({
           >
             <div className="glass-panel p-2 rounded-full shadow-[0_40px_100px_rgba(0,0,0,0.8)] border-white/10">
               <div className="bg-[#020203]/80 rounded-full p-2 flex items-center gap-3">
-                <button data-testid="new-analysis-btn" onClick={onNewUpload} className="flex-1 btn-horizon-outline py-3 text-xs">New Ingestion</button>
+                <button
+                  data-testid="new-analysis-btn"
+                  aria-label="New investigation"
+                  onClick={onNewUpload}
+                  className="flex-1 btn-horizon-outline py-3 text-xs"
+                >
+                  New Ingestion
+                </button>
                 <button
                   data-testid="view-report-btn"
                   onClick={onViewResults}

@@ -308,6 +308,10 @@ export function createLiveSocket(sessionId: string): { ws: WebSocket; connected:
 
     const handleError = () => settle(() => reject(new Error("WebSocket connection error")));
     const handleClose = (event: CloseEvent) => {
+      if (event.code === 1000) {
+        settle(resolve);
+        return;
+      }
       settle(() => reject(new Error(event.reason || `WebSocket closed unexpectedly (${event.code})`)));
     };
 

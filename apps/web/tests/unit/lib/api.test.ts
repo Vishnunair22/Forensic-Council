@@ -389,8 +389,8 @@ describe("pollForReport", () => {
   it("resolves after an in-progress poll turns complete", async () => {
     respondJson({}, 202);
     respondJson({
-      report_id: "r-poll",
-      session_id: "sess",
+      report_id: "11111111-1111-4111-8111-111111111111",
+      session_id: "22222222-2222-4222-8222-222222222222",
       case_id: "CASE-1",
       executive_summary: "Done",
       per_agent_findings: {},
@@ -398,7 +398,7 @@ describe("pollForReport", () => {
       per_agent_analysis: {},
       overall_confidence: 0.9,
       overall_error_rate: 0,
-      overall_verdict: "LIKELY",
+      overall_verdict: "LIKELY_AUTHENTIC",
       cross_modal_confirmed: [],
       contested_findings: [],
       tribunal_resolved: [],
@@ -406,18 +406,16 @@ describe("pollForReport", () => {
       uncertainty_statement: "",
       cryptographic_signature: "sig",
       report_hash: "hash",
-      signed_utc: null,
+      signed_utc: "2026-04-30T00:00:00Z",
     });
 
     const onProgress = jest.fn();
     const promise = pollForReport("sess", onProgress, 100, 3);
 
-    await Promise.resolve();
-    jest.advanceTimersByTime(100);
-    await Promise.resolve();
+    await jest.advanceTimersByTimeAsync(100);
 
     const result = await promise;
     expect(onProgress).toHaveBeenCalledWith("in_progress");
-    expect(result.report_id).toBe("r-poll");
+    expect(result.report_id).toBe("11111111-1111-4111-8111-111111111111");
   });
 });

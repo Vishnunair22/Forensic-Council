@@ -36,7 +36,7 @@ dependencies = [
     "websockets>=15.0",
     "PyJWT[cryptography]>=2.8",
     "passlib[bcrypt]>=1.7.4",
-    "bcrypt>=3.2",
+    "bcrypt>=3.2,<4.1",
     # Image processing tools
     "Pillow>=11.2",
     "numpy>=2.0,<3.0",  # scipy 1.15+ requires numpy>=2.0

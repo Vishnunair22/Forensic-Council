@@ -25,15 +25,17 @@ router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 logger = get_logger(__name__)
 
 _ACTIVE_WS_CONNECTIONS = 0
+MAX_MESSAGES_PER_MINUTE = 100
+IDLE_TIMEOUT = 300
 
 
 @router.websocket("/{session_id}/live")
 async def live_updates(websocket: WebSocket, session_id: str):
     global _ACTIVE_WS_CONNECTIONS
     settings = get_settings()  # Fix NameError
-    MAX_WS = getattr(settings, "max_ws_connections", 1000)
+    max_ws = getattr(settings, "max_ws_connections", 1000)
 
-    if _ACTIVE_WS_CONNECTIONS >= MAX_WS:
+    if _ACTIVE_WS_CONNECTIONS >= max_ws:
         await websocket.accept(subprotocol="forensic-v1")
         await websocket.send_json({"type": "ERROR", "message": "Server busy"})
         await websocket.close(code=1013, reason="Server busy")
@@ -134,9 +136,9 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
         return
 
     # ── 4. Subscribe to Redis Updates for this session ───────────────────────
-    IDLE_TIMEOUT = 300  # 5 minutes
-    PING_INTERVAL = 30  # seconds
-    MAX_MESSAGES_PER_MINUTE = 100
+    idle_timeout = IDLE_TIMEOUT  # 5 minutes
+    ping_interval = 30  # seconds
+    max_messages_per_minute = MAX_MESSAGES_PER_MINUTE
 
     last_activity = time.time()
     message_timestamps: deque[float] = deque(maxlen=200)
@@ -172,8 +174,12 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
                         data = json.loads(msg_json)
                         await websocket.send_json(data)
                         last_activity = time.time()
-                    except Exception:
-                        pass
+                    except Exception as replay_error:
+                        logger.debug(
+                            "Failed to replay WebSocket update",
+                            session_id=session_id,
+                            error=str(replay_error),
+                        )
 
             async for message in pubsub.listen():
                 if message["type"] == "message":
@@ -192,26 +198,38 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
                         "data": {"recoverable": True},
                     }
                 )
-            except Exception:
-                pass
+            except Exception as send_error:
+                logger.debug(
+                    "Failed to send WebSocket subscriber error",
+                    session_id=session_id,
+                    error=str(send_error),
+                )
             await websocket.close(code=1011)
         finally:
             if pubsub:
                 try:
                     await pubsub.unsubscribe()
-                    await pubsub.aclose()
-                except Exception:
-                    pass
+                    await pubsub.close()
+                except Exception as pubsub_error:
+                    logger.debug(
+                        "Failed to close WebSocket pubsub",
+                        session_id=session_id,
+                        error=str(pubsub_error),
+                    )
             if dedicated_redis:
                 try:
                     await dedicated_redis.aclose()
-                except Exception:
-                    pass
+                except Exception as redis_close_error:
+                    logger.debug(
+                        "Failed to close WebSocket Redis client",
+                        session_id=session_id,
+                        error=str(redis_close_error),
+                    )
 
     async def send_ping():
         try:
             while True:
-                await asyncio.sleep(PING_INTERVAL)
+                await asyncio.sleep(ping_interval)
                 try:
                     await websocket.send_json({"type": "PING", "timestamp": time.time()})
                 except Exception:
@@ -225,7 +243,7 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
         try:
             while True:
                 await asyncio.sleep(10)
-                if time.time() - last_activity > IDLE_TIMEOUT:
+                if time.time() - last_activity > idle_timeout:
                     logger.warning(
                         "WebSocket idle timeout",
                         session_id=session_id,
@@ -263,7 +281,7 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
                 while message_timestamps and message_timestamps[0] < one_min_ago:
                     message_timestamps.popleft()
 
-                if len(message_timestamps) >= MAX_MESSAGES_PER_MINUTE:
+                if len(message_timestamps) >= max_messages_per_minute:
                     logger.warning(
                         "WebSocket rate limit exceeded",
                         session_id=session_id,

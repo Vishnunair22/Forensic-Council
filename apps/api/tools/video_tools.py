@@ -17,6 +17,8 @@ from typing import Any
 import cv2
 import numpy as np
 
+from core.evidence import ArtifactType, EvidenceArtifact
+from core.exceptions import ToolUnavailableError
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)

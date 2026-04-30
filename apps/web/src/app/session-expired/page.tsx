@@ -28,7 +28,10 @@ export default function SessionExpiredPage() {
               Security Boundary
             </span>
           </div>
-          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tighter leading-none text-white">
+          <h1
+            aria-label="Session expired"
+            className="text-3xl md:text-4xl font-extrabold tracking-tighter leading-none text-white"
+          >
             Session De-synchronized
           </h1>
           <p className="text-base text-white/40 font-medium leading-relaxed">
@@ -47,7 +50,7 @@ export default function SessionExpiredPage() {
              </div>
 
             <p className="text-sm text-white/60 leading-relaxed font-medium">
-              Return to the central hub to authenticate a new digital forensic ledger sequence.
+              Authenticate again to continue forensic analysis. Return to the central hub to start a new digital forensic ledger sequence.
             </p>
 
             <div className="space-y-3">
@@ -56,6 +59,7 @@ export default function SessionExpiredPage() {
                 onClick={() => router.push("/")}
                 className="w-full py-4 rounded-full bg-primary text-[#020617] hover:scale-[1.02] shadow-[0_0_30px_rgba(var(--color-primary-rgb),0.2)] text-xs font-black tracking-[0.2em] uppercase transition-all flex items-center justify-center gap-3 group"
                 data-testid="session-expired-home-cta"
+                aria-label="Return to dashboard"
               >
                 <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                 Return to Hub

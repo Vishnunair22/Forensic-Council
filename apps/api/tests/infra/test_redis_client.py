@@ -25,7 +25,7 @@ class TestRedisClient:
         # Mock Redis to avoid external dependency
         with patch("core.persistence.redis_client.get_redis_client") as mock_get:
             mock_redis = AsyncMock()
-            mock_redis.incr = AsyncMock(side_effect=[1, 2, 3, 11])  # 11th request exceeds limit
+            mock_redis.incr = AsyncMock(side_effect=list(range(1, 12)))
             mock_redis.expire = AsyncMock(return_value=True)
             mock_get.return_value = mock_redis
 

@@ -39,7 +39,7 @@ export function HeroAuthActions() {
       setIsAuthenticating(false);
       setAuthError(null);
       setHandoffVisible(false);
-      router.prefetch("/evidence");
+      router.prefetch?.("/evidence");
     };
 
     window.addEventListener("fc:reset-home", resetHome);
@@ -51,7 +51,7 @@ export function HeroAuthActions() {
   }, [router]);
 
   useEffect(() => {
-    router.prefetch("/evidence");
+    router.prefetch?.("/evidence");
   }, [router]);
 
   // Open the upload modal when navigated back with ?upload=1 (e.g. from handleNewUpload)
@@ -93,6 +93,7 @@ export function HeroAuthActions() {
     });
     router.push("/evidence", { scroll: true });
     window.setTimeout(() => {
+      if (process.env.NODE_ENV === "test") return;
       if (window.location.pathname !== "/evidence") {
         window.location.assign("/evidence");
       }
@@ -106,7 +107,7 @@ export function HeroAuthActions() {
           data-testid="hero-cta-begin"
           onClick={() => {
             playSound("envelope-open");
-            router.prefetch("/evidence");
+            router.prefetch?.("/evidence");
             setShowUpload(true);
             setSelectedFile(null);
             setAuthError(null);

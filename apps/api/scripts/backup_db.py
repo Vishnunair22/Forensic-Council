@@ -45,7 +45,7 @@ def run_backup() -> int:
     env["PGPASSWORD"] = os.getenv("POSTGRES_PASSWORD", "")
 
     try:
-        subprocess.run(
+        subprocess.run(  # noqa: S603 - pg_dump argv is fixed; values are passed as args.
             cmd,
             env=env,
             check=True,

@@ -20,12 +20,17 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
+from agents.arbiter import CouncilArbiter
+from core.agent_registry import get_agent_registry
 from core.config import Settings, get_settings
+from core.inter_agent_bus import InterAgentBus
+from core.persistence.evidence_store import EvidenceStore
 from core.structured_logging import get_logger
 
 # Re-export so existing imports keep working
 from orchestration.agent_factory import AgentFactory, AgentLoopResult
 from orchestration.pipeline_registry import register_pipeline, unregister_pipeline
+from orchestration.session_manager import SessionManager
 from orchestration.signal_bus import SignalBus
 
 logger = get_logger(__name__)
@@ -36,6 +41,11 @@ __all__ = [
     "SignalBus",
     "AgentFactory",
     "AgentLoopResult",
+    "CouncilArbiter",
+    "EvidenceStore",
+    "InterAgentBus",
+    "SessionManager",
+    "get_agent_registry",
 ]
 
 
@@ -258,7 +268,6 @@ class ForensicCouncilPipeline:
                 "FastAPI schemas unavailable; custody broadcast patch skipped", error=str(_e)
             )
 
-        from core.persistence.evidence_store import EvidenceStore
         from core.persistence.storage import LocalStorageBackend
 
         if self.evidence_store is None:
@@ -271,7 +280,6 @@ class ForensicCouncilPipeline:
             )
 
         from core.episodic_memory import EpisodicMemory
-        from core.inter_agent_bus import InterAgentBus
         from core.working_memory import WorkingMemory
 
         self.working_memory = WorkingMemory(
@@ -293,8 +301,6 @@ class ForensicCouncilPipeline:
         self.inter_agent_bus.set_abort_handler(self._handle_global_abort)
         await self.inter_agent_bus.start()
 
-        from orchestration.session_manager import SessionManager
-
         self.session_manager = SessionManager(redis_client=self._redis)
 
         self.agent_factory = AgentFactory(
@@ -305,8 +311,6 @@ class ForensicCouncilPipeline:
             evidence_store=self.evidence_store,
             inter_agent_bus=self.inter_agent_bus,
         )
-
-        from agents.arbiter import CouncilArbiter
 
         self.arbiter = CouncilArbiter(
             session_id=session_id,

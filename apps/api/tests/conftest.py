@@ -9,12 +9,51 @@ import logging
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi.testclient import TestClient
 
 # Suppress noisy passlib deprecation warnings in test output.
 logging.getLogger("passlib").setLevel(logging.ERROR)
+
+
+class _AwaitableResponse:
+    def __init__(self, response):
+        self._response = response
+
+    def __await__(self):
+        async def _resolve():
+            return self._response
+
+        return _resolve().__await__()
+
+    def __getattr__(self, name):
+        return getattr(self._response, name)
+
+
+class _DualModeTestClient:
+    """Expose TestClient responses to both sync tests and async ``await client.get`` tests."""
+
+    def __init__(self, client: TestClient) -> None:
+        self._client = client
+        self.app = client.app
+        self.cookies = client.cookies
+
+    def get(self, *args, **kwargs):
+        return _AwaitableResponse(self._client.get(*args, **kwargs))
+
+    def post(self, *args, **kwargs):
+        return _AwaitableResponse(self._client.post(*args, **kwargs))
+
+    def put(self, *args, **kwargs):
+        return _AwaitableResponse(self._client.put(*args, **kwargs))
+
+    def patch(self, *args, **kwargs):
+        return _AwaitableResponse(self._client.patch(*args, **kwargs))
+
+    def delete(self, *args, **kwargs):
+        return _AwaitableResponse(self._client.delete(*args, **kwargs))
 
 # -- Minimal environment before any backend import --
 
@@ -128,13 +167,49 @@ def expired_payload(sample_user_id) -> dict:
 
 @pytest.fixture
 def auth_headers() -> dict:
-    """Returns headers with a dummy Bearer token for HTTP test client calls."""
-    return {"Authorization": "Bearer test-token-placeholder"}
+    """Returns headers with a valid investigator Bearer token for HTTP test client calls."""
+    from core.auth import UserRole, create_access_token
+
+    token = create_access_token("user-1", UserRole.INVESTIGATOR, username="test")
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
 def admin_auth_headers() -> dict:
-    return {"Authorization": "Bearer admin-token-placeholder"}
+    from core.auth import UserRole, create_access_token
+
+    token = create_access_token("admin-1", UserRole.ADMIN, username="admin")
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def client(mock_redis, mock_postgres, mock_qdrant):
+    """FastAPI TestClient with infrastructure calls mocked for route tests."""
+    from api.main import app
+
+    patches = [
+        patch("core.persistence.redis_client.get_redis_client", return_value=mock_redis),
+        patch("core.persistence.postgres_client.get_postgres_client", return_value=mock_postgres),
+        patch("core.persistence.qdrant_client.get_qdrant_client", return_value=mock_qdrant),
+        patch("core.migrations.run_migrations", new_callable=AsyncMock),
+        patch("scripts.init_db.bootstrap_users", new_callable=AsyncMock),
+    ]
+    for patcher in patches:
+        patcher.start()
+    try:
+        with TestClient(app, raise_server_exceptions=False) as test_client:
+            yield _DualModeTestClient(test_client)
+    finally:
+        app.dependency_overrides.clear()
+        for patcher in reversed(patches):
+            patcher.stop()
+
+
+@pytest.fixture
+def jpeg_file(sample_jpeg_bytes) -> io.BytesIO:
+    buf = io.BytesIO(sample_jpeg_bytes)
+    buf.name = "test.jpg"
+    return buf
 
 
 # -- Infrastructure mocks --

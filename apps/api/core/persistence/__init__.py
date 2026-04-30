@@ -10,9 +10,13 @@ This module contains infrastructure clients and utilities:
 """
 
 from core.persistence.evidence_store import EvidenceStore, get_evidence_store
-from core.persistence.postgres_client import PostgresClient, get_postgres_client, close_postgres_client
-from core.persistence.qdrant_client import QdrantClient, get_qdrant_client, close_qdrant_client
-from core.persistence.redis_client import RedisClient, get_redis_client, close_redis_client
+from core.persistence.postgres_client import (
+    PostgresClient,
+    close_postgres_client,
+    get_postgres_client,
+)
+from core.persistence.qdrant_client import QdrantClient, close_qdrant_client, get_qdrant_client
+from core.persistence.redis_client import RedisClient, close_redis_client, get_redis_client
 from core.persistence.storage import LocalStorageBackend, StorageBackend
 
 __all__ = [

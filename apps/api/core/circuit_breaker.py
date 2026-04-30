@@ -15,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Optional, TypeVar
 
 from core.structured_logging import get_logger
 
@@ -211,9 +211,8 @@ class CircuitBreakerRegistry:
         cls._breakers.clear()
 
 
-from typing import Any, Optional, TypeVar
-
 T = TypeVar("T")
+
 
 async def with_retry(
     func: Callable[[], Any],
@@ -250,7 +249,7 @@ async def with_retry(
 
             if attempt == max_retries:
                 logger.error("All retry attempts exhausted", attempts=attempt + 1, error=str(e))
-                raise last_exception
+                raise last_exception from e
 
             backoff = min(initial_backoff * (exponential_base**attempt), max_backoff)
             logger.warning(
@@ -262,4 +261,4 @@ async def with_retry(
 
     # If we get here, last_exception was set
     if last_exception is not None:
-        raise last_exception
+        raise last_exception from None

@@ -8,14 +8,13 @@ All configuration is centralized and validated at startup.
 
 import logging
 import os
-import warnings
 from functools import lru_cache
 from urllib.parse import quote_plus
 
-_config_logger = logging.getLogger(__name__)
-
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_config_logger = logging.getLogger(__name__)
 
 # Default credentials that must be changed in production
 INSECURE_DEFAULTS = {
@@ -38,7 +37,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=[".env", "../.env"],
+        env_file=[".env.local", ".env", "../.env.local", "../.env"],
         env_file_encoding="utf-8",
         case_sensitive=False,
         env_ignore_empty=True,  # Treat empty strings as "not set" to allow defaults
@@ -812,7 +811,6 @@ def validate_production_settings() -> None:
         "replace_me",
         "replace",
         "secret-key",
-        "strong",
         "example",
         "production",
         "your_gemini_key",
