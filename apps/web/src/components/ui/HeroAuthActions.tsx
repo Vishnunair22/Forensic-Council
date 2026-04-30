@@ -92,12 +92,6 @@ export function HeroAuthActions() {
       requestAnimationFrame(() => resolve());
     });
     router.push("/evidence", { scroll: true });
-    window.setTimeout(() => {
-      if (process.env.NODE_ENV === "test") return;
-      if (window.location.pathname !== "/evidence") {
-        window.location.assign("/evidence");
-      }
-    }, 2500);
   }, [router, selectedFile, isAuthenticating, isNavigating]);
 
   return (

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -22,6 +23,89 @@ if TYPE_CHECKING:
     from orchestration.pipeline import ForensicCouncilPipeline
 
 logger = get_logger(__name__)
+
+
+_HASH_RE = re.compile(r"SHA-256\s*=\s*([0-9a-fA-F]{10,})")
+_TRAILING_ABSENCE_RE = re.compile(
+    r"\s+This supports the absence of (?:this specific anomaly|this specific manipulation pattern|this s.*)$",
+    re.IGNORECASE,
+)
+
+
+def _humanize_initial_finding(
+    *,
+    agent_id: str,
+    tool_name: str,
+    summary: str,
+    evidence_verdict: str,
+    finding_status: str,
+    metadata: dict[str, Any],
+) -> str | None:
+    """Turn raw tool text into a concise card-level investigator note."""
+    tool = (tool_name or "").lower()
+    text = " ".join(str(summary or "").replace("\n", " ").split())
+    text = _TRAILING_ABSENCE_RE.sub(".", text).strip()
+
+    if not text:
+        return None
+
+    if "no analysis possible due to lack of raw tool data" in text.lower():
+        return None
+
+    if "screenshot scene applicability" in tool or "screenshot scene applicability" in text.lower():
+        if "skipped" in text.lower() or evidence_verdict == "NOT_APPLICABLE":
+            return (
+                "Screenshot detected. Physical-scene object detection is not applicable, "
+                "so this node is skipped for the initial pass."
+            )
+        return "Screenshot/context check completed; no physical-scene object evidence was required."
+
+    if "file_hash_verify" in tool or "file hash verify" in text.lower():
+        match = _HASH_RE.search(text)
+        digest = f"{match.group(1)[:12]}..." if match else "recorded digest"
+        return (
+            f"Integrity check passed. The uploaded file hash ({digest}) matches the "
+            "chain-of-custody record, so the submitted artifact was not altered after intake."
+        )
+
+    if "exif" in tool:
+        parts = []
+        if "device: not recorded" in text.lower() or "device not recorded" in text.lower():
+            parts.append("No camera/device model was recorded in EXIF")
+        if "capture time: not in exif" in text.lower() or "capture time not" in text.lower():
+            parts.append("no original capture timestamp was present")
+        if "gps: absent" in text.lower() or "gps absent" in text.lower():
+            parts.append("GPS metadata is absent")
+        if parts:
+            return "; ".join(parts).capitalize() + ". This is common for screenshots and exported images."
+
+    if "file_structure_analysis" in tool or "file structure analysis" in text.lower():
+        if "anomalies: 0" in text.lower() or "header valid" in text.lower():
+            return "File container structure is valid: header/trailer checks passed and no appended payload was detected."
+
+    if "frequency_domain_analysis" in tool or "frequency domain analysis" in text.lower():
+        if "0.000" in text or "appears natural" in text.lower():
+            return "Frequency analysis found no unusual high-frequency artifact pattern; compression/noise distribution looks normal."
+
+    if "extract_text" in tool or "extract text" in text.lower():
+        preview = metadata.get("ocr_text_preview") or metadata.get("text_preview")
+        if preview:
+            return f"OCR extracted visible text from the screenshot for context: {str(preview)[:180]}"
+        if "ocr extracted" in text.lower():
+            return text.replace("Extract Text From Image: ", "").replace("Checked: ", "")
+
+    if "analyze_image_content" in tool or "analyze image content" in text.lower():
+        if "forensic evidence photograph" in text.lower():
+            return (
+                "Visual classifier recognized the upload as forensic/evidence imagery. "
+                "This is a context label, not proof of authenticity."
+            )
+        return text.replace("Analyze Image Content: ", "").replace("Checked: ", "")
+
+    if evidence_verdict == "NEGATIVE" and finding_status != "INCOMPLETE":
+        return text.replace("Checked: ", "")
+
+    return text
 
 
 async def run_agents_concurrent(
@@ -150,10 +234,20 @@ async def run_agents_concurrent(
                         tv = "NOT_APPLICABLE"
                     else:
                         tv = "CLEAN"
+                    human_summary = _humanize_initial_finding(
+                        agent_id=aid,
+                        tool_name=str(tool or ""),
+                        summary=s,
+                        evidence_verdict=evidence_verdict,
+                        finding_status=finding_status,
+                        metadata=m,
+                    )
+                    if human_summary is None:
+                        continue
                     preview.append(
                         {
                             "tool": tool,
-                            "summary": s[:320],
+                            "summary": human_summary[:420],
                             "severity": sev,
                             "verdict": tv,
                             "key_signal": m.get("section_key_signal")

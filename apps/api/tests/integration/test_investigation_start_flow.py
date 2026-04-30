@@ -1,4 +1,5 @@
 import io
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -120,7 +121,7 @@ async def test_run_investigation_task_awaits_final_report_cache(monkeypatch):
     monkeypatch.setattr(investigation_runner, "set_active_pipeline_metadata", AsyncMock())
     monkeypatch.setattr(investigation_runner, "increment_investigations_completed", lambda: None)
     monkeypatch.setattr(investigation_runner, "increment_investigations_failed", lambda: None)
-    monkeypatch.setattr(investigation_runner.os.path, "exists", lambda _path: False)
+    monkeypatch.setattr(Path, "unlink", lambda *_args, **_kwargs: None)
 
     fake_persistence = SimpleNamespace(
         save_report=AsyncMock(return_value=True),
@@ -130,10 +131,7 @@ async def test_run_investigation_task_awaits_final_report_cache(monkeypatch):
     async def fake_get_session_persistence():
         return fake_persistence
 
-    monkeypatch.setattr(
-        "core.session_persistence.get_session_persistence",
-        fake_get_session_persistence,
-    )
+    monkeypatch.setattr(investigation_runner, "get_session_persistence", fake_get_session_persistence)
 
     await investigation_routes.run_investigation_task(
         session_id="11111111-1111-1111-1111-111111111111",

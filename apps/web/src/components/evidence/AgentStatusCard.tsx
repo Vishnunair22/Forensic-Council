@@ -77,8 +77,8 @@ function FindingRow({ f, i }: { f: FindingPreview; i: number }) {
   const [expanded, setExpanded] = useState(false);
   const isAlert = isAlertFinding(f);
   const text = f.summary || "";
-  const isLong = text.length > 180;
-  const visible = expanded || !isLong ? text : text.slice(0, 180) + "…";
+  const isLong = text.length > 260;
+  const visible = expanded || !isLong ? text : text.slice(0, 260) + "...";
 
   return (
     <motion.div
@@ -91,16 +91,20 @@ function FindingRow({ f, i }: { f: FindingPreview; i: number }) {
       )}
     >
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] font-mono font-bold text-white/30">SIG_{i.toString().padStart(2, "0")}</span>
+        <span className="text-[10px] font-mono font-bold text-white/30">
+          {(isAlert ? "Needs_Review" : f.verdict === "NOT_APPLICABLE" ? "Skipped" : "Signal")}_{i.toString().padStart(2, "0")}
+        </span>
         <div className="flex items-center gap-2">
           {f.degraded && (
             <span className="px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-amber-500/10 border border-amber-500/30 text-amber-500" title={f.fallback_reason || "Tool degraded"}>
               DEGRADED
             </span>
           )}
-          <span className={clsx("text-[10px] font-mono font-bold", isAlert ? "text-danger" : "text-success")}>
-            {Math.round((f.confidence || 0) * 100)}% Match
-          </span>
+          {typeof f.confidence === "number" && (
+            <span className={clsx("text-[10px] font-mono font-bold", isAlert ? "text-danger" : "text-success")}>
+              {Math.round(f.confidence * 100)}% confidence
+            </span>
+          )}
         </div>
       </div>
       <p className="text-xs text-white/70 font-medium leading-relaxed mb-1">

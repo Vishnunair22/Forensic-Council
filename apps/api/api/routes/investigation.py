@@ -121,6 +121,28 @@ async def run_investigation_task(
     )
 
 
+async def _cleanup_stale_investigation_session(
+    *,
+    dedup_key: str,
+    session_id: str,
+    reason: str,
+) -> None:
+    """Best-effort cleanup when a queued investigation cannot be started."""
+    try:
+        from core.persistence.redis_client import get_redis_client
+
+        redis = await get_redis_client()
+        await redis.delete(dedup_key)
+        await redis.delete(f"forensic:session:metadata:{session_id}")
+    except Exception as cleanup_error:
+        logger.warning(
+            "Failed to clean stale investigation session",
+            session_id=session_id,
+            reason=reason,
+            error=str(cleanup_error),
+        )
+
+
 @router.post("/investigate", response_model=InvestigationResponse)
 async def start_investigation(
     file: UploadFile = File(...),  # noqa: B008
@@ -340,6 +362,11 @@ async def start_investigation(
 
             queue = get_investigation_queue()
             if not await queue.is_worker_alive():
+                await _cleanup_stale_investigation_session(
+                    dedup_key=dedup_key,
+                    session_id=session_id,
+                    reason="worker liveness failure",
+                )
                 raise HTTPException(
                     status_code=503,
                     detail=(
@@ -368,6 +395,11 @@ async def start_investigation(
                     original_filename=file.filename,
                 )
             except Exception as q_err:
+                await _cleanup_stale_investigation_session(
+                    dedup_key=dedup_key,
+                    session_id=session_id,
+                    reason="enqueue failure",
+                )
                 logger.error("Failed to enqueue investigation", error=str(q_err))
                 raise HTTPException(
                     status_code=500,

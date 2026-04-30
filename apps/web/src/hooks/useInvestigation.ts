@@ -233,7 +233,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       const uuid = (typeof crypto !== "undefined" && "randomUUID" in crypto)
         ? crypto.randomUUID()
         : Math.random().toString(36).slice(2) + Date.now().toString(36);
-      const caseId = storage.getItem("forensic_case_id") || "CASE-" + uuid;
+      const caseId = "CASE-" + uuid;
+      storage.removeItem("forensic_session_id");
+      storage.removeItem("forensic_investigation_ctx");
+      storage.removeItem("forensic_initial_agents");
+      storage.removeItem("forensic_deep_agents");
 
       setShowLoadingOverlay(true);
       sessionOnlyStorage.setItem("fc_show_loading", "true");
@@ -514,6 +518,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setWsConnectionError(null);
     lastSessionIdRef.current = null;
     storage.removeItem("forensic_session_id");
+    storage.removeItem("forensic_investigation_ctx");
+    storage.removeItem("forensic_case_id");
+    storage.removeItem("forensic_file_name");
+    storage.removeItem("forensic_mime_type");
+    storage.removeItem("forensic_pipeline_start");
     storage.removeItem("forensic_initial_agents");
     storage.removeItem("forensic_deep_agents");
     resetSimulation();
