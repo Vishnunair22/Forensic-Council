@@ -1,0 +1,73 @@
+{
+  "name": "forensic-council-frontend",
+  "version": "1.4.0",
+  "private": true,
+  "description": "Multi-Agent Forensic Evidence Analysis System — Frontend UI",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Vishnunair22/Forensic-Council.git",
+    "directory": "apps/web"
+  },
+  "engines": {
+    "node": ">=20.10.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "dev:webpack": "next dev --webpack",
+    "build": "next build",
+    "build:strict": "next build --no-lint && next build",
+    "start": "next start",
+    "lint": "eslint src --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "test": "jest --passWithNoTests",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@tanstack/react-query": "^5.99.0",
+    "@tanstack/react-query-devtools": "^5.99.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.38.0",
+    "lucide-react": "^0.468.0",
+    "next": "^15.5.14",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tailwind-merge": "^3.5.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@axe-core/react": "^4.10.1",
+    "@eslint/eslintrc": "^3.3.5",
+    "@playwright/test": "^1.59.1",
+    "@tailwindcss/postcss": "^4.2.2",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "axe-playwright": "^2.2.2",
+    "concurrently": "^8.2.2",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^15.5.14",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "jest": "^30.3.0",
+    "jest-axe": "^10.0.0",
+    "jest-environment-jsdom": "^30.3.0",
+    "playwright": "^1.59.1",
+    "tailwindcss": "^4.2.2",
+    "ts-jest": "^29.4.6",
+    "tsx": "^4.19.0",
+    "typescript": "5.8.3"
+  },
+  "optionalDependencies": {
+    "@tailwindcss/oxide-linux-x64-musl": "^4.2.4",
+    "lightningcss-linux-x64-musl": "^1.32.0"
+  }
+}

@@ -1,0 +1,102 @@
+# Git
+.git
+.gitignore
+.github
+.gitattributes
+
+# Assistant / local tool metadata
+.agent/
+.claude/
+.cursor/
+.planning/
+.uv-cache/
+.uv_cache/
+.mcp.json
+.opencode.json
+CLAUDE.md
+MASTER_FIX_*.md
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*$py.class
+*.egg-info/
+.venv/
+venv/
+*.log
+.pytest_cache/
+.coverage
+coverage.xml
+
+# Node / Frontend
+node_modules/
+npm-debug.log
+yarn-error.log
+apps/web/.next/
+apps/web/out/
+apps/web/.turbo/
+
+# Build artifacts
+dist/
+build/
+*.tar.gz
+*.zip
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.env
+
+# Test
+test-results/
+tests/output/
+playwright-report/
+playwright/.cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Storage (note: dirs are excluded but .gitkeep files are preserved in git — ensure Dockerfile creates them)
+/apps/api/storage/evidence/*
+!/apps/api/storage/evidence/.gitkeep
+/apps/api/storage/keys/*
+!/apps/api/storage/keys/.gitkeep
+
+# Backend tree should not enter the frontend build context (when using repo root context)
+apps/api/.venv/
+apps/api/cache/
+apps/api/storage/evidence/
+apps/api/storage/keys/
+apps/api/storage/calibration_models/
+
+# ML Caches
+/apps/api/cache/
+*.pt
+*.pth
+*.onnx
+*.bin
+*.h5
+*.weights
+
+# Additional symmetry with .gitignore
+.eslintcache
+.pnpm-store/
+*.tsbuildinfo
+apps/web/coverage/
+apps/web/playwright-report/
+apps/web/apps/
+apps/web/.swc/
+apps/api/tests/fixtures/*.mp4
+apps/api/tests/fixtures/*.wav
+apps/api/tests/fixtures/*.avi
+.history/

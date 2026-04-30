@@ -1,0 +1,51 @@
+# Auto-normalize line endings
+* text=auto
+
+# Source code — LF endings
+*.py text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.sh text eol=lf
+*.editorconfig text eol=lf
+*.dockerignore text eol=lf
+*.gitignore text eol=lf
+*.gitattributes text eol=lf
+*.env.example text eol=lf
+Caddyfile text eol=lf
+Dockerfile text eol=lf
+pyproject.toml text eol=lf
+*.css text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.mp4 binary
+*.mp3 binary
+*.wav binary
+*.pyc binary
+*.so binary
+*.o binary
+
+# Lock files (preserve diffs but avoid merge conflicts)
+package-lock.json text eol=lf merge=binary
+uv.lock text eol=lf merge=binary
+
+# Common binary assets
+*.svg text eol=lf
+*.zip binary
+*.tar.gz binary
+*.pdf binary
+*.woff binary
+*.woff2 binary

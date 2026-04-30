@@ -1,0 +1,44 @@
+# Node modules
+node_modules/
+**/node_modules/
+npm-debug.log*
+
+# Next.js build outputs
+.next/
+out/
+build/
+
+# Env files and secrets
+.env
+.env.*
+!.env.example
+
+# Cache
+.next/cache
+.npm
+.cache
+.turbo
+
+# Dev artifacts
+*.log
+coverage/
+*.tsbuildinfo
+
+# Version control
+.git/
+.gitignore
+.github/
+*.md
+README*
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+nul
+
+# IDE
+.vscode/
+.idea/
+.cursor/
+.claude/
+.agent/

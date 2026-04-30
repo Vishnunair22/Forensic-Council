@@ -1,0 +1,91 @@
+# Forensic Council - Caddy Reverse Proxy
+#
+# Development:
+#   DOMAIN=localhost
+#
+# Production:
+#   DOMAIN=forensic.yourdomain.com
+#   ACME_EMAIL=admin@yourdomain.com
+
+{
+    admin off
+    email {$ACME_EMAIL:admin@localhost}
+    http_port 80
+    https_port 443
+}
+
+{$CADDY_SITE_ADDRESS:http://localhost} {
+
+    # Redirect HTTP to HTTPS for non-localhost domains.
+    @http {
+        protocol http
+        not host localhost 127.0.0.1
+    }
+    redir @http https://{host}{uri}
+
+    # Security Headers
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-Robots-Tag "none"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+        -X-Powered-By
+    }
+
+    # Backend health endpoint — exposed separately so external monitors can reach
+    # the real FastAPI /health without being swallowed by the frontend catch-all.
+    handle /health {
+        reverse_proxy backend:8000 {
+            header_up Host {host}
+        }
+    }
+
+    # API: WebSocket Route (Long-lived connections, no compression, no timeout)
+    handle /api/v1/sessions/*/live {
+        reverse_proxy backend:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up Upgrade {http.request.header.Upgrade}
+            header_up Connection {http.request.header.Connection}
+            flush_interval -1
+
+            transport http {
+                response_header_timeout 0
+                dial_timeout 10s
+            }
+        }
+    }
+
+    # API: REST Routes (Standard timeouts, 55MB limit, with compression)
+    handle /api/v1/* {
+        request_body {
+            max_size 55MB
+        }
+        encode zstd gzip
+        reverse_proxy backend:8000 {
+            header_up Host {host}
+            flush_interval -1
+
+            transport http {
+                response_header_timeout 620s
+                dial_timeout 10s
+                read_buffer 64KB
+                write_buffer 64KB
+            }
+        }
+    }
+
+    # Frontend
+    handle {
+        encode zstd gzip
+        reverse_proxy frontend:3000 {
+            header_up Host {host}
+
+            transport http {
+                response_header_timeout 300s
+                dial_timeout 10s
+            }
+        }
+    }
+}

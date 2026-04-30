@@ -1,0 +1,667 @@
+# ============================================================================
+# Forensic Council — Docker Compose (Development + Production base)
+# ============================================================================
+#
+# Quick start:
+#   copy .env.example .env   # then fill in LLM_API_KEY etc.
+#   docker compose -f infra/docker-compose.yml --env-file .env up --build
+#
+# BuildKit is enabled by default in Docker 23+ and Docker Desktop.
+# If you're on an older Docker version add: DOCKER_BUILDKIT=1 before the command.
+#
+# ML models are stored in named volumes (hf_cache, torch_cache, etc.).
+# They download ONCE on first start and persist across rebuilds/restarts.
+# DO NOT use `docker compose down -v` unless you want to redownload all models.
+#
+# IMPORTANT: COMPOSE_PROJECT_NAME is set to "forensic-council" in .env.example.
+# This ensures dev and production builds share the SAME named volumes and never
+# re-download ML models when switching between dev and prod modes.
+# ============================================================================
+
+# Locks the Docker project name so all compose variants (dev, prod, override)
+# always use the same named volume pool. Without this, Docker would prefix volumes
+# differently based on the working directory, causing separate model downloads.
+name: forensic-council
+
+x-backend-env: &backend-env
+  APP_ENV: ${APP_ENV:-development}
+  DEBUG: ${DEBUG:-false}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+  QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+  QDRANT_HOST: qdrant
+  QDRANT_PORT: 6333
+  QDRANT_GRPC_PORT: 6334
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: 5432
+  POSTGRES_USER: ${POSTGRES_USER:-forensic_user}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+  POSTGRES_DB: ${POSTGRES_DB:-forensic_council}
+  SIGNING_KEY: ${SIGNING_KEY:?SIGNING_KEY must be set}
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set}
+  JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+  LLM_PROVIDER: ${LLM_PROVIDER:-groq}
+  LLM_API_KEY: ${LLM_API_KEY:-}
+  LLM_MODEL: ${LLM_MODEL:-llama-3.3-70b-versatile}
+  LLM_FALLBACK_MODELS: ${LLM_FALLBACK_MODELS:-llama-3.1-8b-instant}
+  LLM_ENABLE_REACT_REASONING: ${LLM_ENABLE_REACT_REASONING:-false}
+  LLM_ENABLE_POST_SYNTHESIS: ${LLM_ENABLE_POST_SYNTHESIS:-true}
+  # Docker stacks use the worker queue by default (USE_REDIS_WORKER=true).
+  # Direct `uv run` uses in-process mode (USE_REDIS_WORKER=false).
+  # Ensure the `worker` service is running when USE_REDIS_WORKER=true.
+  USE_REDIS_WORKER: ${USE_REDIS_WORKER:-true}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+  GEMINI_FALLBACK_MODELS: ${GEMINI_FALLBACK_MODELS:-gemini-2.5-flash-lite,gemini-2.0-flash,gemini-2.0-flash-lite}
+  GEMINI_TIMEOUT: ${GEMINI_TIMEOUT:-55.0}
+  GEMINI_MAX_CONCURRENT: ${GEMINI_MAX_CONCURRENT:-2}
+  GEMINI_API_KEY_POLICY_OK: ${GEMINI_API_KEY_POLICY_OK:-false}
+  DAILY_COST_QUOTA_USD: ${DAILY_COST_QUOTA_USD:-50.0}
+  DAILY_COST_QUOTA_ADMIN_USD: ${DAILY_COST_QUOTA_ADMIN_USD:-500.0}
+  RATE_LIMIT_AUTHENTICATED: ${RATE_LIMIT_AUTHENTICATED:-60}
+  RATE_LIMIT_ANONYMOUS: ${RATE_LIMIT_ANONYMOUS:-10}
+  RATE_LIMIT_INVESTIGATION_PER_5MIN: ${RATE_LIMIT_INVESTIGATION_PER_5MIN:-5}
+  EVIDENCE_STORAGE_PATH: /app/storage/evidence
+  CALIBRATION_MODELS_PATH: /app/cache/calibration_models
+  NUMBA_DISABLE_JIT: ${NUMBA_DISABLE_JIT:-1}
+  NUMBA_CACHE_DIR: /app/cache/numba_cache
+  HOME: /tmp
+  EASYOCR_MODEL_DIR: /app/cache/easyocr
+  YOLO_MODEL_DIR: /app/cache/ultralytics
+  YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-detr-resnet-50}
+  AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
+  YOLO_CONFIG_DIR: /app/cache/ultralytics
+  TORCH_HOME: /app/cache/torch
+  HF_HOME: /app/cache/huggingface
+  TRANSFORMERS_CACHE: /app/cache/huggingface/transformers
+  OTEL_ENABLED: ${OTEL_ENABLED:-true}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318}
+  OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
+  OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-forensic-council-api}
+  METRICS_SCRAPE_TOKEN: ${METRICS_SCRAPE_TOKEN:?METRICS_SCRAPE_TOKEN must be set}
+  # Force watchfiles to use polling mode on Windows Docker bind mounts.
+  # inotify events from Windows host → WSL2 → container are unreliable;
+  # polling ensures uvicorn --reload actually picks up code changes.
+  WATCHFILES_FORCE_POLLING: "true"
+  PYTHONDONTWRITEBYTECODE: "1"
+
+services:
+  # --------------------------------------------------------------------------
+  # Infrastructure
+  # --------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: forensic_redis
+    restart: unless-stopped
+    # Require a password on the Redis instance so it cannot be accessed
+    # without credentials even if the port is accidentally exposed.
+    command: >
+      redis-server
+      --requirepass "${REDIS_PASSWORD}"
+      --loglevel warning
+    # SECURITY: Run as non-root user, drop all capabilities
+    user: redis
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD} ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    environment:
+      - REDISCLI_AUTH=${REDIS_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 128M
+          cpus: "0.25"
+    networks:
+      - infra_net
+
+  qdrant:
+    image: qdrant/qdrant:v1.16.1
+    container_name: forensic_qdrant
+    restart: unless-stopped
+    # SECURITY: Drop all capabilities, run as non-root (qdrant runs as uid 1000)
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      # QDRANT__SERVICE__API_KEY is Qdrant's native API key env var.
+      # Production deployments MUST set QDRANT_API_KEY in .env to enforce auth.
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:-}
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "bash -lc 'exec 3<>/dev/tcp/127.0.0.1/6333; printf \"GET /healthz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3; grep -q \"200 OK\" <&3' || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+          cpus: "0.5"
+    networks:
+      - infra_net
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: forensic_postgres
+    restart: unless-stopped
+    command: >
+      postgres
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c idle_in_transaction_session_timeout=30000
+      -c data_directory=/var/lib/postgresql/data
+      -c fsync=on
+      -c synchronous_commit=on
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-forensic_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      POSTGRES_DB: ${POSTGRES_DB:-forensic_council}
+      POSTGRES_INITDB_ARGS: --data-checksums --auth-host=scram-sha-256 --auth-local=scram-sha-256
+    # SECURITY: Run as non-root (postgres), drop unnecessary capabilities
+    user: postgres
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+      - FOWNER
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-forensic_user} -d ${POSTGRES_DB:-forensic_council}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+    networks:
+      - infra_net
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.66.0
+    container_name: forensic_jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:14269/ > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 64M
+          cpus: "0.1"
+    networks:
+      - infra_net
+
+  migration:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+      target: migration
+    container_name: forensic_migration
+    restart: on-failure
+    command: ["python", "scripts/init_db.py"]
+    # SECURITY: Run with minimal privileges
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-forensic_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      - POSTGRES_DB=${POSTGRES_DB:-forensic_council}
+      - SIGNING_KEY=${SIGNING_KEY:?SIGNING_KEY must be set}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set}
+      - BOOTSTRAP_ADMIN_PASSWORD=${BOOTSTRAP_ADMIN_PASSWORD:?BOOTSTRAP_ADMIN_PASSWORD must be set}
+      - BOOTSTRAP_INVESTIGATOR_PASSWORD=${BOOTSTRAP_INVESTIGATOR_PASSWORD:?BOOTSTRAP_INVESTIGATOR_PASSWORD must be set}
+      - SKIP_MODEL_DOWNLOAD=1
+      - SKIP_CACHE_CHECK=1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - infra_net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+        reservations:
+          memory: 64M
+          cpus: "0.1"
+
+  # --------------------------------------------------------------------------
+  # Backend API
+  # --------------------------------------------------------------------------
+  backend:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+      target: development
+      args:
+        PRELOAD_MODELS: ${PRELOAD_MODELS:-1}
+        YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-detr-resnet-50}
+        AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
+    container_name: forensic_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"  # Direct host access for dev only; production override resets this.
+    environment:
+      <<: *backend-env
+      APP_NAME: forensic_council
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      BOOTSTRAP_INVESTIGATOR_PASSWORD: ${BOOTSTRAP_INVESTIGATOR_PASSWORD}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost,http://localhost:3000,http://localhost:8000,http://127.0.0.1:3000}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_SERVICE_NAME: forensic_api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "2.0"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+    mem_limit: 4g
+    cpus: 2.0
+    # SECURITY: Run with minimal privileges, no new privileges, read-only filesystem
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+      - FOWNER
+    read_only: true
+    tmpfs:
+      - /tmp:nosuid,size=2g
+    stop_grace_period: 150s
+    volumes:
+      # Source code bind mounts — uvicorn --reload picks up changes instantly.
+      # Individual subdirectories are mounted so .venv (and /app/storage) are NOT
+      # shadowed; the container keeps the Python packages baked into the image.
+      - ../apps/api/core:/app/core:ro
+      - ../apps/api/api:/app/api:ro
+      - ../apps/api/agents:/app/agents:ro
+      - ../apps/api/tools:/app/tools:ro
+      - ../apps/api/orchestration:/app/orchestration:ro
+      - ../apps/api/reports:/app/reports:rw
+      - ../apps/api/scripts:/app/scripts:ro
+      - ../apps/api/config:/app/config:ro
+      # Runtime data volumes
+      - evidence_data:/app/storage/evidence:rw
+      - signing_keys:/app/storage/keys:rw
+      - hf_cache:/app/cache/huggingface:rw
+      - torch_cache:/app/cache/torch:rw
+      - easyocr_cache:/app/cache/easyocr:rw
+      - numba_cache:/app/cache/numba_cache:rw
+      - yolo_cache:/app/cache/ultralytics:rw
+      - calibration_models_cache:/app/cache/calibration_models:rw
+    # SECURITY: infra_net for Redis/Postgres/Qdrant; external_net for Groq/Gemini outbound;
+    # backend_net so Caddy and frontend can resolve and proxy to backend:8000
+    networks:
+      - infra_net
+      - external_net
+      - backend_net
+
+  # --------------------------------------------------------------------------
+  # Forensic Worker — consumes and processes the task queue
+  # --------------------------------------------------------------------------
+  worker:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+      target: development
+      args:
+        PRELOAD_MODELS: ${PRELOAD_MODELS:-1}
+        YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-detr-resnet-50}
+        AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
+    container_name: forensic_worker
+    restart: unless-stopped
+    command: ["worker"]
+    environment:
+      <<: *backend-env
+      APP_NAME: forensic_worker
+      RELOAD: "false"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_SERVICE_NAME: forensic_worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import os, redis; r=redis.Redis(host=os.environ.get('REDIS_HOST','redis'), port=int(os.environ.get('REDIS_PORT','6379')), password=os.environ.get('REDIS_PASSWORD'), socket_connect_timeout=3, socket_timeout=3); assert r.ping() is True\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+      - FOWNER
+    read_only: true
+    tmpfs:
+      - /tmp:nosuid,size=2g
+    volumes:
+      # Source code bind mounts — restart the worker to pick up changes instantly.
+      - ../apps/api/core:/app/core:ro
+      - ../apps/api/api:/app/api:ro
+      - ../apps/api/agents:/app/agents:ro
+      - ../apps/api/tools:/app/tools:ro
+      - ../apps/api/orchestration:/app/orchestration:ro
+      - ../apps/api/reports:/app/reports:rw
+      - ../apps/api/scripts:/app/scripts:ro
+      - ../apps/api/config:/app/config:ro
+      # Runtime data volumes
+      - evidence_data:/app/storage/evidence:rw
+      - signing_keys:/app/storage/keys:ro
+      - hf_cache:/app/cache/huggingface:rw
+      - torch_cache:/app/cache/torch:rw
+      - easyocr_cache:/app/cache/easyocr:rw
+      - numba_cache:/app/cache/numba_cache:rw
+      - yolo_cache:/app/cache/ultralytics:rw
+      - calibration_models_cache:/app/cache/calibration_models:rw
+    deploy:
+      resources:
+        limits:
+          memory: 12G
+          cpus: "4.0"
+        reservations:
+          memory: 2G
+          cpus: "1.0"
+    mem_limit: 12g
+    cpus: 4.0
+    networks:
+      - infra_net
+      - external_net
+      - backend_net
+
+  # --------------------------------------------------------------------------
+  # Reverse Proxy (Caddy) — TLS termination, security headers, rate limiting
+  # --------------------------------------------------------------------------
+  # Caddy is the same-origin entry point for both local and production runs.
+  # Local dev can also use ports 3000/8000 directly.
+  # --------------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: forensic_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - caddy_logs:/var/log/caddy
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+      - CADDY_SITE_ADDRESS=${CADDY_SITE_ADDRESS:-http://localhost}
+      # Suppress quic-go UDP buffer warning — net.core.rmem_max can't be set
+      # per-container on Docker Desktop / WSL2 without host kernel changes.
+      - QUIC_GO_DISABLE_RECEIVE_BUFFER_WARNING=1
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    healthcheck:
+      # Accept either local 200 responses or production HTTP-to-HTTPS redirects.
+      # This verifies Caddy is accepting traffic without requiring an internal
+      # TLS handshake or public DNS resolution from inside the container.
+      test: ["CMD-SHELL", "wget -S -qO- --header \"Host: ${DOMAIN:-localhost}\" http://127.0.0.1:80 2>&1 | grep -Eq 'HTTP/[0-9.]+ (200|301|302|307|308)' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    # SECURITY: Run with minimal privileges
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE  # Required to bind ports 80/443
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.25"
+        reservations:
+          memory: 32M
+          cpus: "0.1"
+    # SECURITY: Can reach frontend and backend only
+    networks:
+      - frontend_net
+      - backend_net
+
+  # --------------------------------------------------------------------------
+  # Frontend
+  # --------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      target: development
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+        INTERNAL_API_URL: "http://backend:8000"
+    container_name: forensic_ui
+    restart: unless-stopped
+    working_dir: /app/apps/web
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../apps/web:/app/apps/web:rw
+      - /app/apps/web/.next
+      - /app/apps/web/node_modules
+    environment:
+      - NODE_ENV=development
+      - NEXT_TELEMETRY_DISABLED=1
+      - RUNNING_IN_DOCKER=1
+      # Standalone Next.js server must bind to all interfaces so health-checks
+      # and external traffic can reach it from outside the container.
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
+      # NEXT_PUBLIC_API_URL: empty keeps browser requests same-origin.
+      # Dev can use either Caddy on port 80 or the frontend on port 3000.
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
+      # DEMO_PASSWORD: server-side only — used by /api/auth/demo Next.js API route.
+      # Do NOT use NEXT_PUBLIC_DEMO_PASSWORD — it bakes secrets into the client JS bundle.
+      - DEMO_PASSWORD=${DEMO_PASSWORD:-demo_dev_only_not_for_production}
+      - BOOTSTRAP_INVESTIGATOR_PASSWORD=${BOOTSTRAP_INVESTIGATOR_PASSWORD:-}
+      # INTERNAL_API_URL: used by Next.js server-side API routes (e.g. /api/auth/demo).
+      # Inside Docker, the frontend container CANNOT reach "localhost:8000" — it must
+      # use the Docker-internal service name "backend".
+      - INTERNAL_API_URL=http://backend:8000
+    command: ["npm", "run", "dev"]
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      # wget is available in node:22-alpine. Increased start-period to allow
+      # the Next.js standalone server enough time to fully boot before checks begin.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ > /dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    # SECURITY: Run with minimal privileges (already runs as 'nextjs' user in Dockerfile)
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+    # SECURITY: Frontend can only reach backend, NOT infrastructure services
+    networks:
+      - frontend_net
+      - backend_net
+
+  # --------------------------------------------------------------------------
+  # Observability — Prometheus metrics scraping
+  # --------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: forensic_prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    secrets:
+      - source: metrics_scrape_token
+        target: metrics_scrape_token
+    ports:
+      - "9090:9090"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9090/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 128M
+          cpus: "0.1"
+    # Prometheus only needs backend_net to scrape backend:8000/api/v1/metrics/raw
+    networks:
+      - backend_net
+
+volumes:
+  redis_data:
+  qdrant_data:
+  postgres_data:
+  evidence_data:
+  signing_keys:
+  reports_data:
+  hf_cache:
+  torch_cache:
+  easyocr_cache:
+  numba_cache:
+  yolo_cache:
+  calibration_models_cache:
+  caddy_data:
+  caddy_config:
+  caddy_logs:
+  prometheus_data:
+
+# ── Network Segmentation ───────────────────────────────────────────────────────
+# SECURITY: Four-network isolation model:
+# - infra_net (internal):  Redis, Postgres, Qdrant — no internet, no frontend access
+# - external_net:          Backend + Worker outbound only (Groq, Gemini API calls)
+# - backend_net:           Caddy ↔ Backend, Frontend ↔ Backend
+# - frontend_net:          Caddy ↔ Frontend only
+# Backend/Worker join infra_net + external_net + backend_net.
+# Infra services (Redis/Postgres/Qdrant) are on infra_net only — no outbound.
+networks:
+  infra_net:
+    driver: bridge
+    internal: true   # No outbound internet — infra services don't need it
+  external_net:
+    driver: bridge
+    internal: false  # Backend/Worker outbound for Groq, Gemini external APIs
+  frontend_net:
+    driver: bridge
+  backend_net:
+    driver: bridge
+
+secrets:
+  metrics_scrape_token:
+    environment: METRICS_SCRAPE_TOKEN
