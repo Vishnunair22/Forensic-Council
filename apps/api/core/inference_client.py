@@ -19,6 +19,65 @@ from core.structured_logging import get_logger
 logger = get_logger(__name__)
 
 
+class _DetrObjectDetector:
+    """Small adapter that exposes DETR through the existing YOLO-style call path."""
+
+    def __init__(self, repo: str, offline: bool = False):
+        from transformers import AutoImageProcessor, AutoModelForObjectDetection
+
+        self.repo = repo
+        self.ckpt_path = repo
+        self.processor = AutoImageProcessor.from_pretrained(repo, local_files_only=offline)
+        self.model = AutoModelForObjectDetection.from_pretrained(repo, local_files_only=offline)
+        self.model.eval()
+        self.names = {
+            int(label_id): label
+            for label_id, label in getattr(self.model.config, "id2label", {}).items()
+        }
+
+    def __call__(self, image_path: str, **kwargs):
+        import torch
+        from PIL import Image
+
+        threshold = float(kwargs.get("conf", kwargs.get("threshold", 0.20)))
+        image = Image.open(image_path).convert("RGB")
+        inputs = self.processor(images=image, return_tensors="pt")
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+        target_sizes = torch.tensor([image.size[::-1]])
+        processed = self.processor.post_process_object_detection(
+            outputs,
+            threshold=threshold,
+            target_sizes=target_sizes,
+        )[0]
+
+        boxes = []
+        for score, label, box_xyxy in zip(
+            processed["scores"],
+            processed["labels"],
+            processed["boxes"],
+            strict=False,
+        ):
+            x1, y1, x2, y2 = [float(v) for v in box_xyxy.tolist()]
+            width = max(0.0, x2 - x1)
+            height = max(0.0, y2 - y1)
+            x_c = x1 + width / 2
+            y_c = y1 + height / 2
+            boxes.append(
+                type(
+                    "DetrBox",
+                    (),
+                    {
+                        "xywh": torch.tensor([[x_c, y_c, width, height]]),
+                        "cls": torch.tensor(int(label)),
+                        "conf": torch.tensor(float(score)),
+                    },
+                )()
+            )
+
+        return [type("DetrResult", (), {"boxes": boxes})()]
+
+
 class InferenceClient:
     """
     Unified client for ML model inference.
@@ -62,18 +121,30 @@ class InferenceClient:
     # ── YOLO (Object Detection) ───────────────────────────────────────────
 
     async def get_yolo_model(self):
-        """Get or load YOLO11 model."""
+        """Get or load the configured object detector."""
         async with self._load_locks["yolo"]:
             if "yolo" not in self._models:
                 model_name = getattr(self.settings, "yolo_model_name", "detr-resnet-50")
 
-                # AGPL License Guard
-                if "yolo" in model_name.lower() and not self.settings.enable_agpl_models:
-                    raise RuntimeError(
-                        f"YOLO model '{model_name}' requires enable_agpl_models=True for use. "
-                        "This model is AGPL-licensed. For commercial use, set yolo_model_name "
-                        "to 'detr-resnet-50' (Apache-2.0 licensed) or keep the default."
+                # Commercial-safe path. If an operator configured a YOLO model
+                # without explicitly accepting AGPL mode, use Apache-licensed
+                # DETR instead of degrading Agent 3 object findings.
+                if model_name == "detr-resnet-50" or (
+                    "yolo" in model_name.lower() and not self.settings.enable_agpl_models
+                ):
+                    repo = "facebook/detr-resnet-50"
+                    if "yolo" in model_name.lower():
+                        logger.warning(
+                            "YOLO configured without AGPL mode; using DETR fallback",
+                            configured_model=model_name,
+                            fallback_model=repo,
+                        )
+                    logger.info("Loading DETR object detector", model=repo)
+                    self._models["yolo"] = _DetrObjectDetector(
+                        repo,
+                        offline=self.settings.offline_mode,
                     )
+                    return self._models["yolo"]
 
                 yolo_cache = self.settings.yolo_model_dir
                 os.makedirs(yolo_cache, exist_ok=True)

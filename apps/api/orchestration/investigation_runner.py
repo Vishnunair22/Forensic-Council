@@ -8,7 +8,6 @@ The external Redis worker has its own process entry point in ``worker.py``.
 
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime
 from uuid import UUID
 

@@ -36,7 +36,6 @@ from core.persistence import (
     close_qdrant_client,
     close_redis_client,
     get_postgres_client,
-    get_qdrant_client,
     get_redis_client,
 )
 from core.structured_logging import get_logger, request_id_ctx
@@ -854,7 +853,9 @@ async def health_check(request: Request):
 
     # ── PostgreSQL ────────────────────────────────────────────────────────────
     try:
-        from core.persistence.postgres_client import get_postgres_client as get_health_postgres_client
+        from core.persistence.postgres_client import (
+            get_postgres_client as get_health_postgres_client,
+        )
 
         pg = await get_health_postgres_client()
         if hasattr(pg, "fetch_val"):

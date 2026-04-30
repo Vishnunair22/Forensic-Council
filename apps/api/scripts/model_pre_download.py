@@ -7,7 +7,7 @@ Downloads all required ML models for the Forensic Council platform.
 
 This script is called during Docker build to bake a seed cache into the image,
 and can also be called by the Docker entrypoint on first startup as a fallback.
-It is fully idempotent — each model is skipped if its expected files already
+It is fully idempotent - each model is skipped if its expected files already
 exist in the configured cache directory.
 
 Usage:
@@ -32,7 +32,7 @@ from pathlib import Path
 
 from core.config import get_settings
 
-# ── Cache directory mapping (centrally managed via core.config)
+# Cache directory mapping (centrally managed via core.config)
 settings = get_settings()
 CACHE_DIRS = {
     "YOLO": settings.yolo_model_dir,
@@ -81,15 +81,21 @@ def setup_dirs() -> None:
         Path(path).mkdir(parents=True, exist_ok=True)
 
 
-# ── Individual model download functions ─────────────────────────────────────
+# Individual model download functions
 # Each returns True on success / already-cached, False on failure.
 
 
 def download_yolo(force: bool = False) -> bool:
     yolo_dir = CACHE_DIRS["YOLO"]
     model_name = settings.yolo_model_name
+    if "yolo" in model_name.lower() and not settings.enable_agpl_models:
+        print(
+            f"  {YELLOW}[INFO]{RESET}  {model_name} configured without ENABLE_AGPL_MODELS=true; "
+            "caching DETR fallback instead."
+        )
+        model_name = "detr-resnet-50"
 
-    # DETR / transformers fallback — used when YOLO_MODEL_NAME is a HF repo ID.
+    # DETR / transformers fallback - used when YOLO_MODEL_NAME is a HF repo ID.
     if model_name.startswith("detr") or "/" in model_name:
         try:
             from transformers import AutoImageProcessor, AutoModelForObjectDetection
@@ -107,10 +113,10 @@ def download_yolo(force: bool = False) -> bool:
     model_path = Path(yolo_dir) / model_name
     existing = [model_path] if model_path.exists() else []
     if existing and not force:
-        print(f"  {GREEN}[SKIP]{RESET}  YOLO11n — already cached ({existing[0]})")
+        print(f"  {GREEN}[SKIP]{RESET}  YOLO11n - already cached ({existing[0]})")
         return True
 
-    print(f"  {CYAN}[DOWN]{RESET}  YOLO11n weights → {yolo_dir}")
+    print(f"  {CYAN}[DOWN]{RESET}  YOLO11n weights -> {yolo_dir}")
     try:
         from ultralytics import YOLO
 
@@ -177,7 +183,7 @@ def download_easyocr(force: bool = False) -> bool:
 
 
 def download_open_clip(force: bool = False) -> bool:
-    """OpenCLIP / SigLIP — used by Agent 1 and Agent 3 for zero-shot classification and neural fingerprints."""
+    """OpenCLIP / SigLIP - used by Agent 1 and Agent 3 for zero-shot classification and neural fingerprints."""
     hf_dir = CACHE_DIRS["HF"]
     model_name = settings.siglip_model_name
 
@@ -202,11 +208,11 @@ def download_open_clip(force: bool = False) -> bool:
 
     if clip_cached and not force:
         print(
-            f"  {GREEN}[SKIP]{RESET}  OpenCLIP/SigLIP {model_name} — already cached ({clip_cached[0]})"
+            f"  {GREEN}[SKIP]{RESET}  OpenCLIP/SigLIP {model_name} - already cached ({clip_cached[0]})"
         )
         return True
 
-    print(f"  {CYAN}[DOWN]{RESET}  OpenCLIP/SigLIP {model_name} → {hf_dir}")
+    print(f"  {CYAN}[DOWN]{RESET}  OpenCLIP/SigLIP {model_name} -> {hf_dir}")
     try:
         if model_name.startswith("hf-hub:") or "/" in model_name:
             # HF Hub model ID (e.g. google/siglip-base-patch16-224): use transformers
@@ -233,7 +239,7 @@ def download_open_clip(force: bool = False) -> bool:
         )
         if not post_blobs:
             raise RuntimeError(
-                f"CLIP/SigLIP download succeeded but no large blob found in {model_dir}/blobs — possible partial download"
+                f"CLIP/SigLIP download succeeded but no large blob found in {model_dir}/blobs - possible partial download"
             )
         print(f"  {GREEN}[OK  ]{RESET}  OpenCLIP/SigLIP downloaded.")
         return True
@@ -243,16 +249,16 @@ def download_open_clip(force: bool = False) -> bool:
 
 
 def download_resnet50(force: bool = False) -> bool:
-    """ResNet-50 — used by deepfake_frequency tool for frequency-domain analysis."""
+    """ResNet-50 - used by deepfake_frequency tool for frequency-domain analysis."""
     torch_dir = CACHE_DIRS["TORCH"]
     # torchvision caches to TORCH_HOME/hub/checkpoints/
     checkpoint_dir = Path(torch_dir) / "hub" / "checkpoints"
     resnet_file = checkpoint_dir / "resnet50-11ad3fa6.pth"
     if resnet_file.exists() and not force:
-        print(f"  {GREEN}[SKIP]{RESET}  ResNet-50 — already cached ({resnet_file})")
+        print(f"  {GREEN}[SKIP]{RESET}  ResNet-50 - already cached ({resnet_file})")
         return True
 
-    print(f"  {CYAN}[DOWN]{RESET}  ResNet-50 weights → {torch_dir}")
+    print(f"  {CYAN}[DOWN]{RESET}  ResNet-50 weights -> {torch_dir}")
     try:
         import torchvision
 
@@ -269,7 +275,7 @@ def download_resnet50(force: bool = False) -> bool:
 
 
 def download_speechbrain(force: bool = False) -> bool:
-    """SpeechBrain ECAPA-TDNN — used for audio anti-spoofing."""
+    """SpeechBrain ECAPA-TDNN - used for audio anti-spoofing."""
     hf_dir = CACHE_DIRS["HF"]
     sb_dir = Path(hf_dir) / "hub" / "models--speechbrain--spkrec-ecapa-voxceleb"
     cached = (
@@ -278,10 +284,10 @@ def download_speechbrain(force: bool = False) -> bool:
         else []
     )
     if cached and not force:
-        print(f"  {GREEN}[SKIP]{RESET}  SpeechBrain ECAPA — already cached ({cached[0]})")
+        print(f"  {GREEN}[SKIP]{RESET}  SpeechBrain ECAPA - already cached ({cached[0]})")
         return True
 
-    print(f"  {CYAN}[DOWN]{RESET}  SpeechBrain ECAPA-TDNN → {hf_dir}")
+    print(f"  {CYAN}[DOWN]{RESET}  SpeechBrain ECAPA-TDNN -> {hf_dir}")
     try:
         from speechbrain.inference.speaker import EncoderClassifier
 
@@ -295,7 +301,7 @@ def download_speechbrain(force: bool = False) -> bool:
         return False
 
 
-# ── Main ─────────────────────────────────────────────────────────────────────
+# Main
 
 
 def download_audio_deepfake(force: bool = False) -> bool:
@@ -331,7 +337,7 @@ def download_audio_deepfake(force: bool = False) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Forensic Council — ML model pre-download (idempotent)"
+        description="Forensic Council - ML model pre-download (idempotent)"
     )
     parser.add_argument(
         "--force",
@@ -351,7 +357,7 @@ def main() -> None:
     args = parser.parse_args()
 
     print(f"\n{BOLD}{'=' * 55}{RESET}")
-    print(f"{BOLD}  Forensic Council — ML Model Pre-Download{RESET}")
+    print(f"{BOLD}  Forensic Council - ML Model Pre-Download{RESET}")
     print(f"{BOLD}{'=' * 55}{RESET}")
     if args.force:
         print(f"  {YELLOW}--force: re-downloading all models{RESET}")
@@ -378,7 +384,7 @@ def main() -> None:
     print(f"\n{BOLD}Downloading models (skipping any already cached):{RESET}\n")
 
     download_plan: list[tuple[str, Callable[[bool], bool]]] = [
-        ("YOLO11", download_yolo),
+        ("Object detector", download_yolo),
         ("EasyOCR", download_easyocr),
         ("OpenCLIP ViT-B-32", download_open_clip),
         ("ResNet-50", download_resnet50),
@@ -396,7 +402,7 @@ def main() -> None:
         print(f"{GREEN}{BOLD}  All {total} models ready. ({elapsed:.0f}s){RESET}")
     else:
         failed = total - passed
-        print(f"{YELLOW}{BOLD}  {failed} model(s) failed — will retry lazily on first use.{RESET}")
+        print(f"{YELLOW}{BOLD}  {failed} model(s) failed - will retry lazily on first use.{RESET}")
         print(f"  {passed}/{total} succeeded in {elapsed:.0f}s.")
         failed_names = ", ".join(name for name, ok in results if not ok)
         print(f"  Failed: {failed_names}")

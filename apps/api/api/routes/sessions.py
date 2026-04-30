@@ -19,8 +19,23 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel as _BaseModel
 
-from api.routes._authz import assert_session_access
 from api.routes import _dto as _dto_helpers
+from api.routes._authz import assert_session_access
+from api.routes._session_state import (
+    _final_reports,
+    get_active_pipeline,
+    get_active_pipeline_metadata,
+    get_session_websockets,
+    set_active_pipeline_metadata,
+)
+from api.schemas import ReportDTO, ReportStatusDTO, SessionInfo
+from core.auth import User, get_current_user
+from core.config import get_settings
+from core.structured_logging import get_logger
+
+router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
+logger = get_logger(__name__)
+
 
 _assign_severity_tier = _dto_helpers._assign_severity_tier
 
@@ -39,19 +54,6 @@ async def get_redis_client():
     from core.persistence.redis_client import get_redis_client as _get_redis_client
 
     return await _get_redis_client()
-from api.routes._session_state import (
-    _final_reports,
-    get_active_pipeline,
-    get_active_pipeline_metadata,
-    get_session_websockets,
-    set_active_pipeline_metadata,
-)
-from api.schemas import ReportDTO, ReportStatusDTO, SessionInfo
-from core.auth import User, get_current_user
-from core.structured_logging import get_logger
-
-router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
-logger = get_logger(__name__)
 
 
 @router.get("", response_model=list[SessionInfo])

@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import { Geist, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import { GlobalNavbar } from "@/components/ui/GlobalNavbar";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
@@ -44,17 +43,8 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Read CSP nonce from middleware
-  const headerList = await headers();
-  const nonce = headerList.get("x-nonce") ?? "";
-
   return (
     <html lang="en" dir="ltr" data-scroll-behavior="smooth" suppressHydrationWarning>
-      <head>
-        {process.env.NODE_ENV === "production" && (
-          <meta httpEquiv="Content-Security-Policy" content={`default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline';`} />
-        )}
-      </head>
       <body
         className={`${geist.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} font-sans text-foreground antialiased min-h-screen flex flex-col overflow-x-hidden`}
       >

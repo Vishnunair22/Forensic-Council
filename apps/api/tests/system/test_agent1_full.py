@@ -10,8 +10,6 @@ pytestmark = pytest.mark.skip(reason="Standalone ML smoke test; run manually wit
 # Add apps/api to path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from scripts.probe_initial_agent import _create_jpeg, _create_png
-
 from agents.agent1_image import Agent1Image
 from core.config import get_settings
 from core.custody_logger import CustodyLogger
@@ -20,6 +18,7 @@ from core.evidence import ArtifactType, EvidenceArtifact
 from core.inter_agent_bus import InterAgentBus
 from core.persistence.evidence_store import EvidenceStore
 from core.working_memory import get_working_memory
+from scripts.probe_initial_agent import _create_jpeg, _create_png
 
 
 async def test_agent1(sample_type: str):

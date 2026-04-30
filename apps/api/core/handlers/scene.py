@@ -192,7 +192,7 @@ class SceneHandlers(BaseToolHandler):
             target_path, tmp_media_path = await self._extension_safe_media_path(target_path)
 
         try:
-            await self.agent.update_sub_task("Initializing YOLO11 visual reasoning core...")
+            await self.agent.update_sub_task("Initializing object detection core...")
             ic = await self.get_inference()
             try:
                 await self.agent.update_sub_task("Performing scene-wide object sweep...")
@@ -231,7 +231,7 @@ class SceneHandlers(BaseToolHandler):
                     "detection_count": len(detections),
                     "classes_found": classes_found,
                     "weapon_detections": weapon_detections,
-                    "backend": model.ckpt_path if hasattr(model, "ckpt_path") else "yolo11",
+                    "backend": model.ckpt_path if hasattr(model, "ckpt_path") else "object-detector",
                     "available": True,
                     "confidence": 0.90 if detections else 0.70,
                     "court_defensible": True,
@@ -241,7 +241,7 @@ class SceneHandlers(BaseToolHandler):
 
             except Exception as exc:
                 logger.warning(
-                    "YOLO inference failed — returning degraded result",
+                    "Object detector inference failed — returning degraded result",
                     error=str(exc),
                     file=target_path,
                 )
@@ -255,7 +255,7 @@ class SceneHandlers(BaseToolHandler):
                     "confidence": 0.0,
                     "court_defensible": False,
                     "error": str(exc),
-                    "fallback_reason": f"YOLO inference failed: {exc}",
+                    "fallback_reason": f"Object detector inference failed: {exc}",
                 }
                 await self.agent._record_tool_result("object_detection", degraded)
                 return degraded

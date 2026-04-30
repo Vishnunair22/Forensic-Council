@@ -17,7 +17,7 @@ export HOME="${HOME:-/tmp}"
 
 EXPECTED_PROJECT="forensic-council"
 if [ -n "${COMPOSE_PROJECT_NAME:-}" ] && [ "$COMPOSE_PROJECT_NAME" != "$EXPECTED_PROJECT" ]; then
-    echo "  WARN: COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME — model volumes will not be shared with the default 'forensic-council' project."
+    echo "  WARN: COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME - model volumes will not be shared with the default 'forensic-council' project."
 fi
 
 echo "Starting Forensic Council entrypoint as user: $(id -u)"
@@ -119,8 +119,9 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
     HF_HUBS=$(find "$HF_DIR/hub" "$HF_DIR/transformers" -type d -name "models--*" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
     HF_BLOBS=$(find "$HF_DIR/hub" "$HF_DIR/transformers" -type d -name "blobs" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
 
-    # For YOLO - check for actual .pt weight files (not config/settings.json)
+    # For object detection, prefer Apache-licensed DETR unless AGPL YOLO is explicitly enabled.
     YOLO_WEIGHTS=$(find "$YOLO_DIR" -maxdepth 1 -type f -name "*.pt" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
+    DETR_READY=$(find "$HF_DIR/hub/models--facebook--detr-resnet-50/blobs" "$HF_DIR/transformers/models--facebook--detr-resnet-50/blobs" -type f -size +1M 2>/dev/null | wc -l | tr -d ' ' || echo 0)
     TORCH_WEIGHTS=$(find "$TORCH_DIR" -type f \( -name "*.pth" -o -name "*.pt" \) 2>/dev/null | wc -l | tr -d ' ' || echo 0)
     EASYOCR_FILES=$(find "$EASYOCR_DIR" -type f 2>/dev/null | wc -l | tr -d ' ' || echo 0)
 
@@ -129,10 +130,20 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
     ECAPA_READY=$(find "$HF_DIR/hub/models--speechbrain--spkrec-ecapa-voxceleb/blobs" -type f -size +1M 2>/dev/null | wc -l | tr -d ' ' || echo 0)
     AASIST_READY=$(find "$HF_DIR/hub/models--$AASIST_SAFE_NAME/blobs" "$HF_DIR/transformers/models--$AASIST_SAFE_NAME/blobs" -type f -size +1M 2>/dev/null | wc -l | tr -d ' ' || echo 0)
 
-    # Need exact HF model families (OpenCLIP + SpeechBrain ECAPA + audio deepfake detector), YOLO,
+    OBJECT_MODEL="${YOLO_MODEL_NAME:-detr-resnet-50}"
+    if printf '%s' "$OBJECT_MODEL" | grep -qi 'yolo' && [ "${ENABLE_AGPL_MODELS:-false}" = "true" ]; then
+        OBJECT_DETECTOR_READY="${YOLO_WEIGHTS:-0}"
+        OBJECT_DETECTOR_LABEL="YOLO weights"
+    else
+        OBJECT_DETECTOR_READY="${DETR_READY:-0}"
+        OBJECT_DETECTOR_LABEL="DETR object detector"
+    fi
+
+    # Need exact HF model families (OpenCLIP + SpeechBrain ECAPA + audio deepfake detector),
+    # an object detector (DETR by default, YOLO only when AGPL mode is explicit),
     # torchvision ResNet, and EasyOCR. Count checks alone can pass with the wrong
     # cached model, so keep both exact and aggregate checks.
-    if [ "${HF_HUBS:-0}" -lt 3 ] || [ "${HF_BLOBS:-0}" -lt 3 ] || [ "${CLIP_READY:-0}" -lt 1 ] || [ "${ECAPA_READY:-0}" -lt 1 ] || [ "${AASIST_READY:-0}" -lt 1 ] || [ "${YOLO_WEIGHTS:-0}" -lt 1 ] || [ "${TORCH_WEIGHTS:-0}" -lt 1 ] || [ "${EASYOCR_FILES:-0}" -lt 2 ]; then
+    if [ "${HF_HUBS:-0}" -lt 3 ] || [ "${HF_BLOBS:-0}" -lt 3 ] || [ "${CLIP_READY:-0}" -lt 1 ] || [ "${ECAPA_READY:-0}" -lt 1 ] || [ "${AASIST_READY:-0}" -lt 1 ] || [ "${OBJECT_DETECTOR_READY:-0}" -lt 1 ] || [ "${TORCH_WEIGHTS:-0}" -lt 1 ] || [ "${EASYOCR_FILES:-0}" -lt 2 ]; then
         echo ""
         echo "============================================================"
         echo "  ML cache incomplete - downloading models before startup"
@@ -147,7 +158,7 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
         echo "  Model download complete. Log: /tmp/model_download.log"
     else
         echo "  ML model volumes already populated - skipping download."
-        echo "  Found: $HF_HUBS model hubs, $HF_BLOBS blob dirs, OpenCLIP=$CLIP_READY, ECAPA=$ECAPA_READY, AASIST=$AASIST_READY, $YOLO_WEIGHTS YOLO weights, $TORCH_WEIGHTS Torch weights, $EASYOCR_FILES EasyOCR files"
+        echo "  Found: $HF_HUBS model hubs, $HF_BLOBS blob dirs, OpenCLIP=$CLIP_READY, ECAPA=$ECAPA_READY, AASIST=$AASIST_READY, $OBJECT_DETECTOR_LABEL=$OBJECT_DETECTOR_READY, $TORCH_WEIGHTS Torch weights, $EASYOCR_FILES EasyOCR files"
     fi
 fi
 
