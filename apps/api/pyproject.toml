@@ -1,6 +1,6 @@
 [project]
 name = "forensic_council"
-version = "1.4.0"
+version = "1.7.0"
 description = "Multi-Agent Forensic Evidence Analysis System"
 # Docker and CI run Python 3.12. The broader range is kept in sync with uv.lock.
 requires-python = ">=3.11,<3.15"

@@ -350,7 +350,6 @@ services:
       - ../apps/api/agents:/app/agents:ro
       - ../apps/api/tools:/app/tools:ro
       - ../apps/api/orchestration:/app/orchestration:ro
-      - ../apps/api/reports:/app/reports:rw
       - ../apps/api/scripts:/app/scripts:ro
       - ../apps/api/config:/app/config:ro
       # Runtime data volumes
@@ -425,7 +424,6 @@ services:
       - ../apps/api/agents:/app/agents:ro
       - ../apps/api/tools:/app/tools:ro
       - ../apps/api/orchestration:/app/orchestration:ro
-      - ../apps/api/reports:/app/reports:rw
       - ../apps/api/scripts:/app/scripts:ro
       - ../apps/api/config:/app/config:ro
       # Runtime data volumes

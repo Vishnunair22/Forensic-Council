@@ -1,4 +1,7 @@
-"""Compatibility helpers for legacy custody-chain tests."""
+"""DEPRECATED: Compatibility helpers for legacy custody-chain tests.
+
+Production code should use core.signing directly.
+"""
 
 from __future__ import annotations
 

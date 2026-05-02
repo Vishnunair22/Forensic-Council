@@ -1,7 +1,6 @@
 # Troubleshooting Guide
 
 > **Merged from:** `DEBUGGING.md`, `KNOWN_ISSUES.md`, and `ERROR_LOG.md`.
-> The historical error log is preserved in `ERROR_LOG.md` for reference.
 
 ## WebSocket Connection Failures
 

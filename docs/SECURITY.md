@@ -48,7 +48,7 @@ Access tokens expire after **60 minutes**. The `expires_in` field in the login r
 ### Token blacklisting (fail-secure)
 Logout blacklists the token via Redis (`blacklist:{token}` key with TTL = remaining JWT validity). On every authenticated request, `is_token_blacklisted()` checks Redis before decoding the JWT.
 
-**Fail-secure behaviour:** If Redis is unavailable, `is_token_blacklisted()` returns `True` â€” all requests are denied until Redis recovers. This is intentional: the alternative (granting access when blacklist is unverifiable) could allow replayed stolen tokens during an outage. See ADR 7 in `docs/DECISIONS.md`.
+**Fail-secure behaviour:** If Redis is unavailable, `is_token_blacklisted()` returns `True` â€” all requests are denied until Redis recovers. This is intentional: the alternative (granting access when blacklist is unverifiable) could allow replayed stolen tokens during an outage. See ADR 7 in `docs/adr/`.
 
 > **Session 4 audit (2026-03-16):** The `blacklist_token()` call in the logout endpoint was verified to store `blacklist:{jti}` with a TTL equal to the token's remaining validity seconds (not a fixed TTL). This ensures blacklist entries expire naturally and Redis memory does not accumulate indefinitely. The `is_token_blacklisted()` function was also confirmed to check the JTI claim, not the raw token string, making blacklist lookups O(1) and immune to token re-encoding attacks.
 

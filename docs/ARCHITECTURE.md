@@ -1,6 +1,6 @@
 # System Architecture — Forensic Council
 
-**Version:** v1.4.0
+**Version:** v1.7.0
 
 ---
 

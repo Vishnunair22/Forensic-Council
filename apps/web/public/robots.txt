@@ -1,4 +1,4 @@
-﻿# Forensic Council â€” restricted system
+﻿# Forensic Council — restricted system
 # Disallow all web crawler indexing (sensitive evidence analysis application)
 User-agent: *
 Disallow: /

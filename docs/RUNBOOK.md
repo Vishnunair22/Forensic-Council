@@ -337,8 +337,6 @@ For production deployments requiring zero-downtime, migrate to:
 - **Docker Swarm**: Use `deploy.update_config` in compose
 - **Kubernetes**: Use rolling update strategy with readiness probes
 
-See `docs/DEPLOYMENT_MIGRATION.md` for migration steps.
-
 ---
 
 ## Post-Incident
@@ -348,4 +346,4 @@ After resolving any P0 or P1 incident:
 1. Write a brief post-mortem (what happened, root cause, fix, prevention)
 2. Update this runbook if a new failure mode was discovered
 3. Add a test case to prevent regression
-4. Update `docs/ERROR_LOG.md` with a new entry if a previously unknown failure mode was encountered
+4. Update `docs/TROUBLESHOOTING.md` with a new entry if a previously unknown failure mode was encountered

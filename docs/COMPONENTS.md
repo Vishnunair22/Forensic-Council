@@ -2,9 +2,11 @@
 
 ## Overview
 
-Quick reference for all frontend components, their purposes, and usage examples.
+Quick reference for all frontend components, their purposes and usage examples.
 
-**Version:** v1.4.0
+**Version:** v1.7.0
+
+> **Note:** This file requires a major rewrite to document the actual 46 components in `apps/web/src/components/{ui,evidence,result}/`. The following sections reference non-existent components and need updating.
 
 ## Table of Contents
 

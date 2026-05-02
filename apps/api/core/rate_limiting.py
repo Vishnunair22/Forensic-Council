@@ -1,9 +1,10 @@
 """
-Lightweight Redis-backed rate limiter.
+DEPRECATED: Lightweight Redis-backed rate limiter.
 
 Kept as a small compatibility utility for infrastructure tests and older
 callers. Route-specific investigation and quota checks live in
 api.routes._rate_limiting.
+Production code should use api.routes._rate_limiting directly.
 """
 
 from __future__ import annotations

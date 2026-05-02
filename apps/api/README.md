@@ -9,13 +9,11 @@ api/              FastAPI app, schemas, and route modules
 agents/           five specialist forensic agents plus the Council Arbiter
 config/           task/tool override configuration
 core/             auth, config, custody, signing, memory, orchestration helpers
-orchestration/    investigation queue, session manager, and pipeline
-reports/          report rendering helpers
+orchestration/    investigation queue, session manager, pipeline, and worker
 scripts/          startup, migration, verification, cache, and utility scripts
 storage/          local storage roots and key placeholders
 tests/            unit, integration, security, infra, and system tests
 tools/            image, audio, video, metadata, OCR, and ML subprocess tools
-worker.py         Redis-backed investigation worker entry point
 ```
 
 ## Runtime Flow

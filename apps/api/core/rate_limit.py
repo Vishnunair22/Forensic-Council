@@ -1,8 +1,9 @@
 """
-Compatibility rate-limit helpers.
+DEPRECATED: Compatibility rate-limit helpers for legacy tests.
 
 The upload route uses ``api.routes._rate_limiting`` for enforcement. This
 module keeps the older boolean API used by security tests and utility callers.
+Production code should use api.routes._rate_limiting directly.
 """
 
 from __future__ import annotations

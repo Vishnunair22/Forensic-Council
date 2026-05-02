@@ -2,7 +2,7 @@
 
 Forensic Council is a multi-agent forensic analysis platform for digital media verification. It accepts evidence uploads, runs five specialist agents through an initial and deep analysis pipeline, and returns a cryptographically signed forensic report.
 
-[![Version](https://img.shields.io/badge/version-v1.4.0-blue.svg)](#)
+[![Version](https://img.shields.io/badge/version-v1.7.0-blue.svg)](#)
 [![Status](https://img.shields.io/badge/status-production_hardening-yellow.svg)](#)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.12-blue.svg)](#)
@@ -189,33 +189,27 @@ npm run prepare
 
 ## Common Commands
 
-From the repository root:
+Backend and frontend are in separate directories. Run backend commands from `apps/api/` and frontend commands from `apps/web/`:
 
 ```powershell
-npm run dev        # backend and frontend development servers
-npm run lint       # backend ruff + frontend eslint
-npm run test       # backend pytest + frontend jest
-npm run build:web  # frontend production build
-npm run docker:dev  # full Docker stack
-```
-
-Backend-only:
-
-```powershell
+# Backend (from apps/api/)
 cd apps/api
 uv run ruff check .
 uv run ruff format .
 uv run pyright core/ agents/ api/ tools/ orchestration/
 uv run pytest tests/ -v
-```
+uv run uvicorn api.main:app --reload --port 8000
 
-Frontend-only:
-
-```powershell
+# Frontend (from apps/web/)
 cd apps/web
+npm run dev
 npm run lint
 npm run type-check
 npm test
+npm run build
+
+# Full Docker stack
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file .env up -d
 ```
 
 ## Configuration
