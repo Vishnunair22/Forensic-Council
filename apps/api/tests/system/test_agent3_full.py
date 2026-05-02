@@ -20,7 +20,7 @@ async def test_agent3_full():
     session_id = uuid.uuid4()
 
     # Path to sample image
-    sample_path = "/app/tests/fixtures/alley_object_test.jpg"
+    sample_path = "/app/tests/fixtures/alley_object_test.png"
 
     if not os.path.exists(sample_path):
         print(f"ERROR: Sample path {sample_path} does not exist.")

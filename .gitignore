@@ -1,4 +1,4 @@
-# Secrets and environment
+# ── Secrets & Environment ────────────────────────────────────────────────────
 .env
 .env.local
 .env.production
@@ -18,7 +18,8 @@
 *_scan.txt
 tracked_files.txt
 
-# Python
+
+# ── Python ──────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.sqlite
@@ -39,7 +40,8 @@ venv/
 htmlcov/
 .overlay/coverage.xml
 
-# Node / Next.js
+
+# ── Node / Next.js ───────────────────────────────────────────────────────────
 node_modules/
 .next/
 apps/web/out/
@@ -56,53 +58,68 @@ apps/web/test-results/
 apps/web/lint_output*.txt
 *.tsbuildinfo
 .pnpm-store/
-apps/web/.swc/
 
-# Runtime storage and generated output
+
+# ── Docker build artefacts ───────────────────────────────────────────────────
 /apps/api/storage/evidence/*
 !/apps/api/storage/evidence/.gitkeep
 /apps/api/storage/keys/*
 !/apps/api/storage/keys/.gitkeep
+/apps/api/reports/
 /apps/api/reports/*.json
 /apps/api/reports/*.jsonl
+apps/web/.swc/
+
+
+# ── ML model caches (large binary files) ─────────────────────────────────────
 /apps/api/cache/
 /apps/api/storage/calibration_models/
-/apps/api/scratch/*
-!/apps/api/scratch/.gitkeep
-/apps/web/public/temp/*
-!/apps/web/public/temp/.gitkeep
-
-# ML model binaries and caches
 *.pt
 *.pth
 *.onnx
-*.safetensors
 apps/api/cache/**/*.bin
 apps/api/storage/**/*.bin
+*.safetensors
 
-# Logs
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
 *.log
 logs/
 
-# OS files
+
+# ── OS artefacts ─────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 desktop.ini
 nul
 
-# Test and temporary artifacts
+
+# ── Pytest shard / temp dirs (prevent root pollution) ───────────────────────
 pytest-cache-files-*
 tmp_*
+
+
+# ── Test fixtures ─────────────────────────────────────────────────────────────
+# Small fixture images are committed for CI reproducibility.
+# Large or generated fixtures remain excluded:
 **/tests/fixtures/*.mp4
 **/tests/fixtures/*.wav
 **/tests/fixtures/*.avi
+
+
+# ── Auditing / Test Artifacts ─────────────────────────────────────────────
 apps/web/tsc_errors.txt
 apps/api/baseline_results.txt
-test_*.ps1
-/test_*.ps1
-test_gemini_body.json
 
-# IDEs, editors, and local agent state
+
+# ── Designated Junk/Temp Dirs (Rules in AGENTS.md) ───────────────────────────
+/apps/api/scratch/*
+!/apps/api/scratch/.gitkeep
+/apps/web/public/temp/*
+!/apps/web/public/temp/.gitkeep
+
+
+# ── IDEs, Editors & Tooling ──────────────────────────────────────────────────
 .idea/
 .vscode/
 .history/
@@ -129,6 +146,9 @@ test_gemini_body.json
 CLAUDE.md
 MASTER_FIX_*.md
 .ipynb_checkpoints/
+
+
+# ── Agent & Plugin Local State ───────────────────────────────────────────────
 **/agent_state/
 **/plugin_state/
 *.agent_scratch
@@ -139,4 +159,13 @@ agent_memory.db
 *.plugin.log
 agent_interaction_*.json
 plugin_test_*.tmp
+
+
+# Added by code-review-graph
 .code-review-graph/
+
+
+# ── Test Scripts (never commit) ────────────────────────────────────────────────
+test_*.ps1
+/test_*.ps1
+test_gemini_body.json

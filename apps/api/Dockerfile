@@ -108,8 +108,8 @@ COPY api/ api/
 COPY agents/ agents/
 COPY tools/ tools/
 COPY orchestration/ orchestration/
-COPY reports/ reports/
 COPY config/ config/
+RUN mkdir -p /app/reports && chown -R 1001:1001 /app/reports
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app" \
@@ -145,8 +145,8 @@ COPY api/ api/
 COPY agents/ agents/
 COPY tools/ tools/
 COPY orchestration/ orchestration/
-COPY reports/ reports/
 COPY config/ config/
+RUN mkdir -p /app/reports && chown -R 1001:1001 /app/reports
 RUN mkdir -p /opt/forensic-model-cache/calibration_models
 COPY storage/ /tmp/__storage_seed/
 RUN cp -rn /tmp/__storage_seed/calibration_models/. \
@@ -170,7 +170,6 @@ ENV NUMBA_CACHE_DIR="/app/cache/numba_cache" \
     YOLO_MODEL_DIR="/app/cache/ultralytics" \
     TORCH_HOME="/app/cache/torch" \
     HF_HOME="/app/cache/huggingface" \
-    TRANSFORMERS_CACHE="/app/cache/huggingface/transformers" \
     EASYOCR_MODEL_DIR="/app/cache/easyocr"
 
 RUN mkdir -p \
@@ -207,7 +206,7 @@ RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
         YOLO_CONFIG_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" \
         YOLO_MODEL_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" \
         HOME="/tmp" \
-        python scripts/model_pre_download.py; \
+        python scripts/model_pre_download.py --strict; \
     else \
         echo "Skipping build-time model preload (PRELOAD_MODELS=$PRELOAD_MODELS)"; \
     fi
