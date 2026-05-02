@@ -65,7 +65,6 @@ apps/web/lint_output*.txt
 !/apps/api/storage/evidence/.gitkeep
 /apps/api/storage/keys/*
 !/apps/api/storage/keys/.gitkeep
-/apps/api/reports/
 /apps/api/reports/*.json
 /apps/api/reports/*.jsonl
 apps/web/.swc/

@@ -79,22 +79,6 @@ git status .env
 
 ---
 
-## First-Run Bootstrap (before `docker compose up`)
-
-Follow these steps on a fresh clone to ensure all directories and artifacts are present:
-
-1. `cp .env.example .env` (or use the PowerShell command in section 2a) and fill `LLM_API_KEY`, `GEMINI_API_KEY`, and secrets.
-2. `mkdir -p apps/api/reports apps/api/storage/calibration_models`
-3. Generate calibration artifacts (recommended for accurate results):
-   ```bash
-   cd apps/api
-   uv run python scripts/train_calibration.py --output storage/calibration_models/
-   ```
-4. `docker compose -f infra/docker-compose.yml build`
-5. `docker compose -f infra/docker-compose.yml up`
-
----
-
 ## 3. Developer Mode
 
 Developer mode targets the `development` Docker stage for the backend and worker (uvicorn `--reload` enabled, dev dependencies installed) and `next dev` for the frontend (Turbopack HMR). Source code is bind-mounted so every saved file is reflected instantly without rebuilding.
