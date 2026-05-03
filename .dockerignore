@@ -106,7 +106,6 @@ apps/api/storage/calibration_models/
 *.tsbuildinfo
 apps/web/coverage/
 apps/web/playwright-report/
-apps/web/apps/
 apps/web/.swc/
 apps/api/tests/fixtures/*.mp4
 apps/api/tests/fixtures/*.wav

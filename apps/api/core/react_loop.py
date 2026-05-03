@@ -2118,7 +2118,16 @@ class ReActLoopEngine:
                     "This is reported as a limitation, not as a forensic signal."
                 )
 
-        if output.get("status") == "stub_response":
+        def _is_stub(output: Any) -> bool:
+            """Unified stub detection across different response formats."""
+            if not isinstance(output, dict):
+                return False
+            return (
+                output.get("status") in ("stub", "stub_response")
+                or output.get("stub_result") is True
+            )
+
+        if _is_stub(output):
             return (
                 f"{reasoning_prefix}{tool_label}: The agent's external module returned a temporary placeholder response. "
                 f"This indicates that advanced ML features are still structurally integrating. "

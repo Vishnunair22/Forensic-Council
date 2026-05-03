@@ -5,6 +5,8 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  schedule:
+    - cron: '0 3 * * *'
 
 permissions:
   contents: read
@@ -244,9 +246,6 @@ jobs:
     name: Nightly ML tests
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule' && github.ref == 'refs/heads/main'
-    # Scheduled: runs every day at 3am UTC
-    schedule:
-      - cron: '0 3 * * *'
     services:
       postgres:
         image: postgres:17

@@ -26,7 +26,7 @@ export default function Home() {
               <span className="text-white/90">Evidence Analysis System</span>
             </h1>
 
-            <p className="text-lg md:text-xl text-white/40 max-w-3xl mx-auto font-medium leading-relaxed">
+            <p className="text-lg md:text-xl text-white/70 max-w-3xl mx-auto font-medium leading-relaxed">
               <span className="text-primary/60 font-bold uppercase tracking-[0.3em] text-[10px] block mb-4">System_Overview</span>
               Forensic Council is a Multi-Agent AI application that utilizes specialized agents to analyze digital forensic evidence and synthesize cohesive, authoritative reports.
             </p>

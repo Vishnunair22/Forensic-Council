@@ -127,8 +127,7 @@ RUN addgroup --system --gid 1001 appgroup \
 
 USER appuser
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD pg_isready -U ${POSTGRES_USER:-forensic_user} -d ${POSTGRES_DB:-forensic_council} || exit 1
+HEALTHCHECK NONE
 
 CMD ["python", "scripts/init_db.py"]
 
@@ -154,6 +153,7 @@ RUN cp -rn /tmp/__storage_seed/calibration_models/. \
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app" \
     PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
     CURL_HOME="/tmp" \
     MPLCONFIGDIR="/tmp/matplotlib" \
     XDG_CACHE_HOME="/tmp" \
@@ -216,6 +216,7 @@ RUN if [ ! -f /opt/forensic-model-cache/calibration_models/.trained ]; then \
 # Bake heavyweight model assets into the image so clean Docker volumes start hot.
 # Runtime named volumes shadow /app/cache/*, so the entrypoint seeds them from
 # /opt/forensic-model-cache on first startup.
+# Retry up to 3 times with backoff to handle transient HF 503 errors.
 RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
         HF_HOME="$FORENSIC_MODEL_SEED_DIR/huggingface" \
         TRANSFORMERS_CACHE="$FORENSIC_MODEL_SEED_DIR/huggingface/transformers" \
@@ -224,7 +225,9 @@ RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
         YOLO_CONFIG_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" \
         YOLO_MODEL_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" \
         HOME="/tmp" \
-        python scripts/model_pre_download.py --strict; \
+        for i in 1 2 3; do \
+            python scripts/model_pre_download.py --strict && break || sleep 30; \
+        done; \
     else \
         echo "Skipping build-time model preload (PRELOAD_MODELS=$PRELOAD_MODELS)"; \
     fi

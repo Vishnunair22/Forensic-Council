@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { usePathname } from "next/navigation";
 
 interface PageTransitionProps {
@@ -9,9 +9,22 @@ interface PageTransitionProps {
   mode?: "wait" | "popLayout";
 }
 
+const DEFAULT_VARIANTS = {
+  initial: { opacity: 0, scale: 0.995, y: 8 },
+  animate: { opacity: 1, scale: 1, y: 0 },
+  exit: { opacity: 0, scale: 0.995, y: -8 },
+};
+
+const DISABLED_VARIANTS = {
+  initial: { opacity: 1 },
+  animate: { opacity: 1 },
+  exit: { opacity: 1 },
+};
+
 /**
  * Standard page transition for high-fidelity forensic screens.
  * Optimized for smoothness and minimal layout jitter.
+ * Respects prefers-reduced-motion for accessibility.
  */
 export function PageTransition({
   children,
@@ -19,20 +32,26 @@ export function PageTransition({
   mode = "popLayout"
 }: PageTransitionProps) {
   const pathname = usePathname();
+  const reducedMotion = useReducedMotion();
+  const variants = reducedMotion ? DISABLED_VARIANTS : DEFAULT_VARIANTS;
+  const transition = reducedMotion
+    ? { duration: 0 }
+    : {
+        duration: 0.45,
+        ease: [0.16, 1, 0.3, 1],
+        opacity: { duration: 0.3 }
+      };
 
   return (
     <AnimatePresence mode={mode}>
       <motion.div
         key={pathname}
         className={className}
-        initial={{ opacity: 0, scale: 0.995, y: 8 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.995, y: -8 }}
-        transition={{
-          duration: 0.45,
-          ease: [0.16, 1, 0.3, 1], // Custom cubic-bezier for a "fluid but snappy" feel
-          opacity: { duration: 0.3 }
-        }}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        variants={variants}
+        transition={transition}
       >
         {children}
       </motion.div>

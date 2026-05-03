@@ -903,6 +903,13 @@ Rules:
             )
 
         self._synthesis_client = None
+
+        narrative_warnings = []
+        if not llm_enabled:
+            narrative_warnings.append("Narrative generated from templates (LLM unavailable)")
+        elif use_llm and not llm_enabled:
+            narrative_warnings.append("Narrative degraded: LLM health check failed")
+
         return {
             "verdict_sentence": v_sent,
             "key_findings": kf_list,
@@ -911,6 +918,7 @@ Rules:
             "executive_summary": exec_sum,
             "uncertainty_statement": unc_stmt,
             "llm_used": llm_enabled,
+            "narrative_warnings": narrative_warnings,
         }
 
     def _template_all(

@@ -133,6 +133,8 @@ docker compose `
   up --build -d
 ```
 
+> **Warning:** Without the `-f infra/docker-compose.prod.yml` overlay, `docker compose up` builds the `development` stage (line 258 of docker-compose.yml), which includes debug tooling and hot-reload. Always include the prod overlay for production deployments.
+
 ### 5. Verify Readiness
 Once the containers are healthy, run the production readiness check:
 ```bash
@@ -147,7 +149,6 @@ If you prefer to run services directly on your host machine:
 - Node.js >= 20.10.0
 - Python 3.12
 - uv (install: `curl -LsSf https://astral.sh/uv/install.sh | sh`)
-- Docker >= 24 with Compose v2
 
 ### Backend
 ```bash
@@ -188,6 +189,8 @@ cd apps/web
 npm install
 npm run dev
 ```
+
+> **Note:** When running the frontend on `http://localhost:3000` directly (without Caddy reverse proxy), API calls to `/api/*` are automatically proxied by the Next.js dev server to the backend at port 8000. This works via `apps/web/src/app/api/v1/[...path]/route.ts`. No `NEXT_PUBLIC_API_URL` configuration is needed for local development without Docker.
 
 ### Local Checks
 There is no root workspace package. Run backend checks from `apps/api` and frontend checks from `apps/web`. See [apps/api/README.md](apps/api/README.md) and [apps/web/README.md](apps/web/README.md) for per-package development instructions.
@@ -253,31 +256,21 @@ Another Postgres or Redis instance is running. Stop it or change ports in `.env`
 ### `GEMINI_API_KEY not set` warning
 This is normal for local development. Agents 1, 3, 5 will use local fallback analysis. Set the key in `.env` to enable Gemini vision.
 
-## Container Orchestration Migration
+### bcrypt version compatibility
+`pyproject.toml` pins `bcrypt>=3.2,<4.1`. While passlib 1.7.4 has known incompatibilities with bcrypt 4.x, the codebase includes `_bcrypt_shim.py` to handle this. If you encounter auth issues after upgrading dependencies, check the shim is loaded.
 
-For scaling beyond `docker compose`, follow these paths:
+## Beyond docker compose
 
-### Option 1: Docker Swarm
-```yaml
-services:
-  backend:
-    deploy:
-      replicas: 2
-      update_config:
-        parallelism: 1
-        delay: 10s
-        failure_action: rollback
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-```
-Deploy: `docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml up -d`
+Kubernetes and Swarm manifests are out of scope for v1.7.x. Track production K8s adoption in [docs/RUNBOOK.md#future-k8s-path].
 
-### Option 2: Kubernetes
-K8s manifests are out of scope for v1.7.0. For production deployments requiring Kubernetes, see the project backlog for planned implementation.
+For horizontal scaling with the current docker compose setup, consider:
+- Running multiple backend replicas behind Caddy (configure via `backend` service `deploy.replicas` in docker-compose.prod.yml)
+- Using Redis cluster for pub/sub across replicas
+- Externalized PostgreSQL with connection pooling
 
-Generate secrets from `.env`:
+> **Note:** The Docker Swarm configuration example in Option 1 above is provided as a reference for future implementation but is not currently maintained.
+
+Generate secrets from `.env` for future K8s migration:
 ```bash
 kubectl create secret generic forensic-secrets \
   --from-literal=POSTGRES_PASSWORD="$(grep POSTGRES_PASSWORD .env | cut -d= -f2)" \

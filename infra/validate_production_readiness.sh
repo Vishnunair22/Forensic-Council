@@ -42,6 +42,10 @@ done
 SIGN=$(grep SIGNING_KEY= .env | cut -d= -f2-); JWT=$(grep JWT_SECRET_KEY= .env | cut -d= -f2-)
 [ "$SIGN" != "$JWT" ] || { echo "FAIL: SIGNING_KEY must differ from JWT_SECRET_KEY"; exit 1; }
 [ ${#SIGN} -ge 32 ] || { echo "FAIL: SIGNING_KEY must be at least 32 characters"; exit 1; }
+
+INVESTIGATOR_PWD=$(grep BOOTSTRAP_INVESTIGATOR_PASSWORD= .env | cut -d= -f2-)
+DEMO_PWD=$(grep DEMO_PASSWORD= .env | cut -d= -f2-)
+[ "$INVESTIGATOR_PWD" = "$DEMO_PWD" ] || { echo "FAIL: BOOTSTRAP_INVESTIGATOR_PASSWORD must equal DEMO_PASSWORD"; exit 1; }
 echo "OK"
 
 # 2. Validate Docker Compose configuration

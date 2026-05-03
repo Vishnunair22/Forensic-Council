@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import json
 import os
 import sys
 import tempfile
@@ -356,7 +357,28 @@ def download_audio_deepfake(force: bool = False) -> bool:
         return False
 
 
+def _validate_lock_file() -> None:
+    """Validate models.lock.json has checksums for required models."""
+    lock_path = Path(__file__).parent.parent / "config" / "models.lock.json"
+    if not lock_path.exists():
+        raise RuntimeError(f"models.lock.json not found at {lock_path}")
+
+    lock_data = json.loads(lock_path.read_text())
+    missing = []
+    for model_id, config in lock_data.items():
+        if config.get("required") and not config.get("sha256"):
+            missing.append(model_id)
+
+    if missing:
+        raise RuntimeError(
+            f"Integrity check FAILED: required models have null sha256 checksums: {missing}\n"
+            "Run 'python scripts/model_cache_check.py --update-lock' to compute checksums."
+        )
+
+
 def main() -> None:
+    _validate_lock_file()
+
     parser = argparse.ArgumentParser(
         description="Forensic Council - ML model pre-download (idempotent)"
     )

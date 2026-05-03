@@ -237,7 +237,8 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             confidence_std_dev=c_std,
             per_agent_summary=self._get_agent_summary(per_agent_metrics, per_agent_findings),
             degradation_flags=self._get_degradation_flags(
-                narratives["llm_used"], comp_penalty, all_findings, active_metrics
+                narratives["llm_used"], comp_penalty, all_findings, active_metrics,
+                narratives.get("narrative_warnings", [])
             ),
             applicable_agent_count=len(active_results),
             skipped_agents=skipped_agents,
@@ -574,7 +575,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             }
         return summary
 
-    def _get_degradation_flags(self, llm_ok, penalty, findings, metrics) -> list[str]:
+    def _get_degradation_flags(self, llm_ok, penalty, findings, metrics, narrative_warnings: list[str] | None = None) -> list[str]:
         flags = []
         if self.config.llm_enable_post_synthesis and not llm_ok:
             flags.append("LLM synthesis bypassed")
@@ -585,6 +586,8 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             for f in findings
         ):
             flags.append("Gemini deep analysis skipped")
+        if narrative_warnings:
+            flags.extend(narrative_warnings)
         return flags
 
     def _empty_report(self, case_id, findings, metrics) -> ForensicReport:
