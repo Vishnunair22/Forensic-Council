@@ -49,14 +49,19 @@ if command -v pre-commit >/dev/null 2>&1; then
     pre-commit run --all-files || echo "  SKIP pre-commit"
 fi
 
-if command -v npm >/dev/null 2>&1; then
+if command -v npm >/dev/null 2>&1 && [ -f apps/web/package.json ]; then
     echo "  Running npm lint..."
-    npm run lint || echo "  SKIP npm lint"
+    (cd apps/web && npm run lint) || echo "  SKIP npm lint"
 fi
 
-if command -v npm >/dev/null 2>&1; then
+if command -v npm >/dev/null 2>&1 && [ -f apps/web/package.json ]; then
     echo "  Running npm test..."
-    npm run test || echo "  SKIP npm test"
+    (cd apps/web && npm run test) || echo "  SKIP npm test"
+fi
+
+if command -v uv >/dev/null 2>&1 && [ -f apps/api/pyproject.toml ]; then
+    echo "  Running backend lint..."
+    (cd apps/api && uv run ruff check .) || echo "  SKIP backend lint"
 fi
 
 echo "----------------------------------------------------"

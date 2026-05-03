@@ -22,7 +22,7 @@ def _strong_env(monkeypatch, **overrides):
         "APP_ENV": "production",
         "POSTGRES_PASSWORD": "Str0ngP@ssw0rd123!",
         "REDIS_PASSWORD": "Str0ngP@ssw0rd123!",
-        "NEXT_PUBLIC_DEMO_PASSWORD": "Str0ngP@ssw0rd123!",
+        "DEMO_PASSWORD": "Str0ngP@ssw0rd123!",
         "SIGNING_KEY": "VeryStr0ngKeyWithH!ghEntr0py_1234567890",
         "JWT_SECRET_KEY": "VeryStr0ngKeyWithH!ghEntr0py_1234567890",
         "GEMINI_API_KEY": "AIzaSyFakeKey1234567890",

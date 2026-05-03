@@ -17,6 +17,22 @@ Last updated: 2026-04-25 | Status: v1.7.0
 | pyannote | MIT | Requires HF account acceptance |
 | Gemini 2.5 Flash | API ToS | Review data retention policy |
 | Llama 3.3 70B | Meta Llama 3 | Under 700M MAU |
+| wav2vec2 deepfake (Vansh180/...) | HuggingFace Hub | Check model's license tag |
+
+---
+
+## Vansh180/deepfake-audio-wav2vec2
+
+This model (used by Agent 2 as the primary audio deepfake detector) requires license verification:
+
+```bash
+# Check the model card for license details
+huggingface-cli download Vansh180/deepfake-audio-wav2vec2 --local-dir /tmp/model-check
+# Or inspect the model card online at:
+# https://huggingface.co/Vansh180/deepfake-audio-wav2vec2
+```
+
+If the model lacks a commercial-use license, the system will fall back to heuristic MFCC analysis.
 
 ---
 

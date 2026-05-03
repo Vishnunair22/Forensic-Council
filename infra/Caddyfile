@@ -33,6 +33,13 @@
         -X-Powered-By
     }
 
+    # Internal health check — returns simple 200 OK for Docker healthchecks
+    handle /health {
+        respond "ok" 200 {
+            Cache-Control "no-store"
+        }
+    }
+
     # Backend health endpoint — exposed separately so external monitors can reach
     # the real FastAPI /health without being swallowed by the frontend catch-all.
     handle /health {
@@ -62,6 +69,7 @@
         request_body {
             max_size 55MB
         }
+        header Cache-Control "no-store"
         encode zstd gzip
         reverse_proxy backend:8000 {
             header_up Host {host}

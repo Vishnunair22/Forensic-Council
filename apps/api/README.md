@@ -72,7 +72,7 @@ uv run python scripts/run_api.py
 To start only infrastructure from the repository root:
 
 ```powershell
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.infra.yml --env-file .env up -d
+docker compose -f infra/docker-compose.yml --env-file .env up -d postgres redis qdrant
 ```
 
 ## Tests And Checks

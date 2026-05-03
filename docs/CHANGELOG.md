@@ -18,8 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Infrastructure
 - **ProcessPoolExecutor semaphore**: `app.state.process_pool_semaphore = Semaphore(max_workers × 4)` caps CPU-task queue depth; callers reject with 503 on overflow
 - **Model licensing matrix**: `docs/MODEL_LICENSING.md` added listing every ML weight, license (AGPL, research-only, Apache-2.0), and required legal actions
-- **`models.lock.json`**: `apps/api/models.lock.json` created to pin HF model revision hashes for reproducibility
-- **validate_production_readiness.sh**: Enhanced with checks for signing key length (≥32), JWT key length (≥32), CORS no-wildcard, Redis password, demo password not default, Qdrant API key (production), and `MODEL_LICENSING.md` presence
+- **`models.lock.json`**: `apps/api/config/models.lock.json` pins model revision hashes for reproducibility
+- **validate_production_readiness.sh**: validates required tools, unreplaced `.env` placeholders, and the merged production Docker Compose configuration
 
 ### ML / Free-tier
 - **AASIST → Apache-2.0**: Default `aasist_model_name` changed from `clovaai/AASIST` (research-only) to `MattyB95/AST-anti-spoofing` (Apache-2.0); AASIST remains available as opt-in

@@ -228,10 +228,11 @@ jobs:
       - name: Build frontend image
         run: >
           docker buildx build
+          -f apps/web/Dockerfile
           --build-arg NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL || 'http://localhost:8000' }}
           --build-arg INTERNAL_API_URL=http://backend:8000
           -t forensic-council-frontend:test
-          apps/web/
+          .
 
       - name: Verify images exist
         run: |

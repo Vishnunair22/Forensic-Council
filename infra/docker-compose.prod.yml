@@ -21,12 +21,15 @@ services:
     environment:
       RELOAD: "false"
       APP_ENV: production
-      DEBUG: ${DEBUG:-false}
+      DEBUG: "false"
+      USE_REDIS_WORKER: "true"
+      PYTHONDONTWRITEBYTECODE: "1"
     secrets:
       - metrics_scrape_token
     volumes: !override
       - evidence_data:/app/storage/evidence:rw
       - signing_keys:/app/storage/keys:rw
+      - backups_data:/app/storage/backups:rw
       - reports_data:/app/reports:rw
       - hf_cache:/app/cache/huggingface:rw
       - torch_cache:/app/cache/torch:rw
@@ -74,10 +77,12 @@ services:
     environment:
       RELOAD: "false"
       APP_ENV: production
-      DEBUG: ${DEBUG:-false}
+      DEBUG: "false"
+      USE_REDIS_WORKER: "true"
     volumes: !override
       - evidence_data:/app/storage/evidence:rw
       - signing_keys:/app/storage/keys:ro
+      - backups_data:/app/storage/backups:rw
       - reports_data:/app/reports:rw
       - hf_cache:/app/cache/huggingface:rw
       - torch_cache:/app/cache/torch:rw

@@ -39,6 +39,7 @@ from core.persistence import (
     get_redis_client,
 )
 from core.structured_logging import get_logger, request_id_ctx
+import core
 
 logger = get_logger(__name__)
 _mem_http_rate: dict[str, list[float]] = {}
@@ -253,9 +254,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
 
         _redis = await get_redis_client()
-        _orphan_keys = await _redis.keys(f"{SESSION_METADATA_KEY_PREFIX}*")
         _interrupted_count = 0
-        for _key in _orphan_keys:
+        async for _key in _redis.scan_iter(match=f"{SESSION_METADATA_KEY_PREFIX}*", count=100):
             try:
                 _raw = await _redis.get(_key)
                 if not _raw:
@@ -334,7 +334,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             try:
                 await monitor_task
             except asyncio.CancelledError:
-                return
+                pass
     except Exception as e:
         logger.warning("Failed to stop monitoring", error=str(e))
 
@@ -423,7 +423,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="Forensic Council API",
     description="Multi-Agent Forensic Evidence Analysis System API",
-    version="1.4.0",
+    version=core.__version__,
     docs_url="/docs" if _app_env_from_env() != "production" else None,
     redoc_url="/redoc" if _app_env_from_env() != "production" else None,
     lifespan=lifespan,
@@ -825,7 +825,7 @@ async def root(request: Request):
     settings = request.app.state.settings
     return {
         "name": "Forensic Council API",
-        "version": "1.4.0",
+        "version": core.__version__,
         "status": "running",
         "docs": "/docs" if settings.app_env != "production" else None,
     }

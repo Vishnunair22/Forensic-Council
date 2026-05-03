@@ -10,6 +10,7 @@ __pycache__/
 .ruff_cache/
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
 
 # Virtual environments
@@ -43,6 +44,8 @@ cache/
 .cache/
 .vector_cache/
 .ipynb_checkpoints/
+reports/*
+!reports/.gitkeep
 
 # Version control
 .git/

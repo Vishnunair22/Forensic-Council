@@ -34,9 +34,15 @@ coverage.xml
 node_modules/
 npm-debug.log
 yarn-error.log
+pnpm-debug.log
 apps/web/.next/
 apps/web/out/
 apps/web/.turbo/
+apps/web/node_modules/
+apps/web/coverage/
+apps/web/test-results/
+apps/web/playwright-report/
+*.tsbuildinfo
 
 # Build artifacts
 dist/
@@ -71,13 +77,19 @@ Thumbs.db
 !/apps/api/storage/evidence/.gitkeep
 /apps/api/storage/keys/*
 !/apps/api/storage/keys/.gitkeep
+/apps/api/reports/*
+!/apps/api/reports/.gitkeep
 
 # Backend tree should not enter the frontend build context (when using repo root context)
 apps/api/.venv/
+apps/api/.pytest_cache/
+apps/api/.ruff_cache/
+apps/api/.pyright/
 apps/api/cache/
 apps/api/storage/evidence/
 apps/api/storage/keys/
 apps/api/storage/calibration_models/
+!apps/api/storage/calibration_models/.gitkeep
 
 # ML Caches
 /apps/api/cache/

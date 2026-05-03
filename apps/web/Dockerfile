@@ -1,17 +1,16 @@
 # ============================================================================
-# Frontend — Multi-Stage Build (development + production)
+# Frontend - Multi-Stage Build (development + production)
 # ============================================================================
 # Targets:
-#   development  — hot-reload dev server  (used by: make dev)
-#   runner       — optimised production   (used by: make up / make prod)
+#   development  - hot-reload dev server
+#   runner       - optimized production
 #
-# Build for development:
-#   docker build --target development -t forensic-frontend:dev .
-# Build for production (default):
-#   docker build -t forensic-frontend:latest .
+# Build from repository root:
+#   docker build -f apps/web/Dockerfile --target development -t forensic-frontend:dev .
+#   docker build -f apps/web/Dockerfile -t forensic-frontend:latest .
 # ============================================================================
 
-# ── Stage 0: Base — shared dependency installation ───────────────────────────
+# Stage 0: Base - shared dependency installation
 FROM node:22-alpine AS base
 
 WORKDIR /app
@@ -42,14 +41,9 @@ FROM base AS builder
 # Copy source
 COPY apps/web/ ./
 
-# Build-time variables baked into the JS bundle
+# Build-time variable baked into the JS bundle
 ARG NEXT_PUBLIC_API_URL
-# INTERNAL_API_URL must be a build-time ARG so next.config.ts rewrites() can
-# resolve it during `next build` — it is NOT available as a runtime-only env var
-# because rewrites are serialised into routes-manifest.json at build time.
-ARG INTERNAL_API_URL=http://backend:8000
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
-ENV INTERNAL_API_URL=${INTERNAL_API_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # BuildKit cache mount preserves Next.js compiler cache between rebuilds

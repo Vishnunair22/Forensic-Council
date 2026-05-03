@@ -29,7 +29,9 @@ if [ "$(id -u)" = "0" ]; then
     for WRITABLE_DIR in \
         /app/storage/evidence \
         /app/storage/keys \
+        /app/storage/backups \
         /app/storage/calibration_models \
+        /app/storage/reports \
         /app/cache/calibration_models \
         /app/cache/huggingface \
         /app/cache/torch \
@@ -127,7 +129,7 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
 
     AASIST_SAFE_NAME=$(printf '%s' "${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}" | sed 's#/#--#g')
     CLIP_READY=$(find "$HF_DIR/hub/models--timm--vit_base_patch32_clip_224.openai/blobs" -type f -size +100M 2>/dev/null | wc -l | tr -d ' ' || echo 0)
-    ECAPA_READY=$(find "$HF_DIR/hub/models--speechbrain--spkrec-ecapa-voxceleb/blobs" -type f -size +1M 2>/dev/null | wc -l | tr -d ' ' || echo 0)
+    ECAPA_READY=$(find "$HF_DIR/hub/models--speechbrain--spkrec-ecapa-voxceleb" -type f \( -name "*.ckpt" -o -name "embedding_model.ckpt" -o -name "*.yaml" \) -size +5k 2>/dev/null | wc -l | tr -d ' ' || echo 0)
     AASIST_READY=$(find "$HF_DIR/hub/models--$AASIST_SAFE_NAME/blobs" "$HF_DIR/transformers/models--$AASIST_SAFE_NAME/blobs" -type f -size +1M 2>/dev/null | wc -l | tr -d ' ' || echo 0)
 
     OBJECT_MODEL="${YOLO_MODEL_NAME:-detr-resnet-50}"

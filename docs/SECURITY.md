@@ -127,9 +127,9 @@ The system follows the NIST Guideline for Integrating Forensic Techniques into I
 
 ---
 
-## HTML Output Security
+## Report Output Security
 
-The `reports/report_renderer.py` `render_html()` function applies `html.escape()` to all user-controlled fields (`case_id`, `executive_summary`, `uncertainty_statement`, `agent_id`, `finding_type`, `report_hash`, `cryptographic_signature`) before inserting them into HTML output. This prevents XSS if a malicious actor embeds HTML/JS in evidence metadata.
+The production report surface is JSON returned by the API and rendered by the Next.js UI. User-controlled evidence metadata is validated before pipeline entry, report DTOs are typed in `api/schemas.py`, and React escapes interpolated text by default when rendering the report components under `apps/web/src/components/result/`.
 
 ---
 

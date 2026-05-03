@@ -177,15 +177,8 @@ npm install
 npm run dev
 ```
 
-### Install Pre-Commit Hooks
-```bash
-# bash / zsh
-npm run prepare
-```
-```powershell
-# PowerShell
-npm run prepare
-```
+### Local Checks
+There is no root workspace package. Run backend checks from `apps/api` and frontend checks from `apps/web`.
 
 ## Common Commands
 

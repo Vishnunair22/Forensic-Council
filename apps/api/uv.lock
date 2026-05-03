@@ -858,7 +858,7 @@ wheels = [
 
 [[package]]
 name = "forensic-council"
-version = "1.4.0"
+version = "1.7.0"
 source = { editable = "." }
 dependencies = [
     { name = "astral" },

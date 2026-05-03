@@ -10,6 +10,8 @@ This module contains the core components of the Forensic Council system:
 - Chain-of-custody logging
 """
 
+from importlib.metadata import version as _get_version, PackageNotFoundError
+
 from core.config import Settings, get_settings
 from core.exceptions import (
     ConfigurationError,
@@ -43,3 +45,8 @@ __all__ = [
     "HITLCheckpointError",
     "InterAgentCallError",
 ]
+
+try:
+    __version__ = _get_version("forensic_council")
+except PackageNotFoundError:
+    __version__ = "0.0.0+local"

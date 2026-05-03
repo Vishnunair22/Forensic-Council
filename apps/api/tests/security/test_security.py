@@ -20,7 +20,7 @@ os.environ.setdefault("POSTGRES_USER", "test")
 os.environ.setdefault("POSTGRES_PASSWORD", "test")
 os.environ.setdefault("POSTGRES_DB", "test")
 os.environ.setdefault("REDIS_PASSWORD", "test")
-os.environ.setdefault("NEXT_PUBLIC_DEMO_PASSWORD", "test")
+os.environ.setdefault("DEMO_PASSWORD", "test")
 os.environ.setdefault("LLM_PROVIDER", "none")
 os.environ.setdefault("LLM_API_KEY", "test-key")
 os.environ.setdefault("LLM_MODEL", "test-model")
@@ -296,7 +296,7 @@ class TestInputValidation:
         from pydantic import ValidationError
 
         try:
-            from api.routes.schemas import InvestigationRequest
+            from api.schemas import InvestigationRequest
 
             with pytest.raises(ValidationError):
                 InvestigationRequest(
@@ -311,7 +311,7 @@ class TestInputValidation:
         from pydantic import ValidationError
 
         try:
-            from api.routes.schemas import InvestigationRequest
+            from api.schemas import InvestigationRequest
 
             with pytest.raises(ValidationError):
                 InvestigationRequest(

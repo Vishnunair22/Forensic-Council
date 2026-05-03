@@ -44,11 +44,14 @@ htmlcov/
 # ── Node / Next.js ───────────────────────────────────────────────────────────
 node_modules/
 .next/
+apps/web/node_modules/
+apps/web/.next/
 apps/web/out/
 apps/web/.npm
 apps/web/.cache
 .cache/
 .turbo/
+apps/web/.turbo/
 .nyc_output/
 .eslintcache
 apps/web/coverage/
@@ -58,6 +61,12 @@ apps/web/test-results/
 apps/web/lint_output*.txt
 *.tsbuildinfo
 .pnpm-store/
+.yarn/
+.yarn-cache/
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+bun.lockb
 
 
 # ── Docker build artefacts ───────────────────────────────────────────────────
@@ -65,14 +74,20 @@ apps/web/lint_output*.txt
 !/apps/api/storage/evidence/.gitkeep
 /apps/api/storage/keys/*
 !/apps/api/storage/keys/.gitkeep
-/apps/api/reports/*.json
-/apps/api/reports/*.jsonl
+/apps/api/reports/*
+!/apps/api/reports/.gitkeep
 apps/web/.swc/
 
 
 # ── ML model caches (large binary files) ─────────────────────────────────────
 /apps/api/cache/
 /apps/api/storage/calibration_models/
+!/apps/api/storage/calibration_models/
+!/apps/api/storage/calibration_models/.gitkeep
+apps/api/.venv/
+apps/api/.pytest_cache/
+apps/api/.ruff_cache/
+apps/api/.pyright/
 *.pt
 *.pth
 *.onnx

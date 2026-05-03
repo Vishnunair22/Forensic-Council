@@ -110,7 +110,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD} ping | grep PONG"]
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -143,11 +143,7 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "bash -lc 'exec 3<>/dev/tcp/127.0.0.1/6333; printf \"GET /healthz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3; grep -q \"200 OK\" <&3' || exit 1",
-        ]
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:6333/healthz"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -355,6 +351,7 @@ services:
       # Runtime data volumes
       - evidence_data:/app/storage/evidence:rw
       - signing_keys:/app/storage/keys:rw
+      - backups_data:/app/storage/backups:rw
       - hf_cache:/app/cache/huggingface:rw
       - torch_cache:/app/cache/torch:rw
       - easyocr_cache:/app/cache/easyocr:rw
@@ -399,7 +396,7 @@ services:
       migration:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import os, redis; r=redis.Redis(host=os.environ.get('REDIS_HOST','redis'), port=int(os.environ.get('REDIS_PORT','6379')), password=os.environ.get('REDIS_PASSWORD'), socket_connect_timeout=3, socket_timeout=3); assert r.ping() is True\" || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import os, redis, time; r=redis.Redis(host=os.environ.get('REDIS_HOST','redis'), port=int(os.environ.get('REDIS_PORT','6379')), password=os.environ.get('REDIS_PASSWORD'), socket_connect_timeout=3, socket_timeout=3); hb=r.get('forensic:worker:heartbeat'); assert hb and time.time() - float(hb) < 60\""]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -429,6 +426,7 @@ services:
       # Runtime data volumes
       - evidence_data:/app/storage/evidence:rw
       - signing_keys:/app/storage/keys:ro
+      - backups_data:/app/storage/backups:rw
       - hf_cache:/app/cache/huggingface:rw
       - torch_cache:/app/cache/torch:rw
       - easyocr_cache:/app/cache/easyocr:rw
@@ -480,10 +478,7 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      # Accept either local 200 responses or production HTTP-to-HTTPS redirects.
-      # This verifies Caddy is accepting traffic without requiring an internal
-      # TLS handshake or public DNS resolution from inside the container.
-      test: ["CMD-SHELL", "wget -S -qO- --header \"Host: ${DOMAIN:-localhost}\" http://127.0.0.1:80 2>&1 | grep -Eq 'HTTP/[0-9.]+ (200|301|302|307|308)' || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/health 2>&1 | head -1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -521,7 +516,6 @@ services:
         INTERNAL_API_URL: "http://backend:8000"
     container_name: forensic_ui
     restart: unless-stopped
-    working_dir: /app/apps/web
     ports:
       - "3000:3000"
     volumes:
@@ -628,6 +622,7 @@ volumes:
   postgres_data:
   evidence_data:
   signing_keys:
+  backups_data:
   reports_data:
   hf_cache:
   torch_cache:

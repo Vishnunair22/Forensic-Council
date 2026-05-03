@@ -404,8 +404,8 @@ curl -s http://localhost:8000/health | python -m json.tool
 # Frontend
 curl -sI http://localhost:3000/ | head -1
 
-# Redis (inside container)
-docker exec forensic_redis redis-cli -a "$REDIS_PASSWORD" ping
+# Redis (inside container; REDISCLI_AUTH is set by compose)
+docker exec forensic_redis redis-cli ping
 
 # PostgreSQL (inside container)
 docker exec forensic_postgres pg_isready -U forensic_user -d forensic_council

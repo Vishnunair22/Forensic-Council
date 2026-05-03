@@ -2,211 +2,89 @@
 
 ## Overview
 
-Quick reference for all frontend components, their purposes and usage examples.
+Current frontend components live under `apps/web/src/components`. This guide is intentionally structural: use the component source and tests as the API of record.
 
 **Version:** v1.7.0
 
-> **Note:** This file requires a major rewrite to document the actual 46 components in `apps/web/src/components/{ui,evidence,result}/`. The following sections reference non-existent components and need updating.
+## App Routes
 
-## Table of Contents
-
-- [Page Components](#page-components)
-- [Evidence Components](#evidence-components)
-- [UI Components](#ui-components)
-- [Lightswind Components](#lightswind-components)
-- [Dev Components](#dev-components)
-- [Import Patterns](#import-patterns)
-
----
-
-## Page Components
-
-### Landing Page
-**File:** `app/page.tsx`
-**Purpose:** Main entry point — hero, how-it-works, agent showcase, example report, file upload modals.
-
-### Evidence Page
-**File:** `app/evidence/page.tsx`
-**Purpose:** Investigation workflow orchestrator. Handles file upload, WebSocket agent stream, HITL decisions, deep analysis, and arbiter overlay.
-
-### Result Page
-**File:** `app/result/page.tsx`
-**Purpose:** Signed forensic report display — per-agent findings, confidence scores, verdict, cryptographic proof, chain of custody, export.
-
-### Session Expired Page
-**File:** `app/session-expired/page.tsx`
-**Purpose:** Session timeout recovery with re-authentication.
-
-### 404 Page
-**File:** `app/not-found.tsx`
-**Purpose:** Global not-found handler.
-
----
+| Route | File | Purpose |
+| --- | --- | --- |
+| `/` | `apps/web/src/app/page.tsx` | Landing and investigation entry point |
+| `/evidence` | `apps/web/src/app/evidence/page.tsx` | Evidence upload and live investigation workflow |
+| `/result` | `apps/web/src/app/result/page.tsx` | Latest result view |
+| `/result/[sessionId]` | `apps/web/src/app/result/[sessionId]/page.tsx` | Session-specific result view |
+| `/session-expired` | `apps/web/src/app/session-expired/page.tsx` | Expired-session recovery |
+| `/api/v1/[...path]` | `apps/web/src/app/api/v1/[...path]/route.ts` | Next.js backend proxy |
+| `/api/auth/demo` | `apps/web/src/app/api/auth/demo/route.ts` | Server-side demo login route |
 
 ## Evidence Components
 
-Located in `components/evidence/`.
+Located in `apps/web/src/components/evidence/`.
 
-### HeaderSection
-**File:** `components/evidence/HeaderSection.tsx`
-**Props:**
-```typescript
-interface HeaderSectionProps {
-  status: string;
-  showBrowse: boolean;
-  onBrowseClick: () => void;
-}
-```
-Logo nav (keyboard-accessible), Browse System button, status-aware interactions.
+| Component | Purpose |
+| --- | --- |
+| `FileUploadSection.tsx` | Upload and file validation UI |
+| `UploadModal.tsx` | Upload dialog |
+| `UploadSuccessModal.tsx` | Successful upload confirmation |
+| `AnalysisProgressOverlay.tsx` | Full workflow progress overlay |
+| `AgentProgressDisplay.tsx` | Multi-agent progress display |
+| `AgentStatusCard.tsx` | Individual agent status card |
+| `ErrorDisplay.tsx` | Evidence workflow error state |
+| `ForensicTimeline.tsx` | Investigation timeline |
+| `HITLCheckpointModal.tsx` | Human-in-the-loop decision modal |
+| `QuotaMeter.tsx` | Quota usage display |
 
-### FileUploadSection
-**File:** `components/evidence/FileUploadSection.tsx`
-**Props:**
-```typescript
-interface FileUploadSectionProps {
-  file: File | null;
-  isDragging: boolean;
-  isUploading: boolean;
-  validationError: string | null;
-  onFileSelect: (file: File) => void;
-  onFileDrop: (file: File) => void;
-  onDragEnter: () => void;
-  onDragLeave: () => void;
-  onUpload: (file: File) => void;
-  onClear: () => void;
-}
-```
-Drag-and-drop upload area with file preview for images/videos/audio. MIME validation, size check (50 MB max).
+Import these through `apps/web/src/components/evidence/index.ts` when possible.
 
-### AgentProgressDisplay
-**File:** `components/evidence/AgentProgressDisplay.tsx`
+## Result Components
 
-The main analysis view. Renders a 3×2 grid of glass agent cards with live thinking text, tool progress bars, staggered reveal animation, decision buttons (Compile Ledger / Deep Scan Protocol), skipped-agent accordion, and animated Three.js wave background.
+Located in `apps/web/src/components/result/`.
 
-**Key internals:**
-- `LiveThinkingText` — debounced text display with animated dots and trailing previous-thought
-- `humaniseThinking()` — translates raw backend task strings into user-friendly action sentences with emoji prefixes
-- Agent status determination: `waiting` → `checking` → `running` → `complete`/`unsupported`/`error`
-
-**Props:**
-```typescript
-interface AgentProgressDisplayProps {
-  agentUpdates: Record<string, { status: string; thinking: string; tools_done?: number; tools_total?: number }>;
-  completedAgents: AgentUpdate[];
-  progressText: string;
-  allAgentsDone: boolean;
-  phase: "initial" | "deep";
-  awaitingDecision: boolean;
-  pipelineStatus: string;
-  pipelineMessage?: string;
-  onAcceptAnalysis: () => void;
-  onDeepAnalysis: () => void;
-  onNewUpload: () => void;
-  onViewResults: () => void;
-  playSound?: (type: SoundType) => void;
-  isNavigating?: boolean;
-}
-```
-
-### ErrorDisplay
-**File:** `components/evidence/ErrorDisplay.tsx`
-**Props:**
-```typescript
-interface ErrorDisplayProps {
-  message: string;
-  onRetry?: () => void;
-  showRetry?: boolean;
-}
-```
-Error state with retry button.
-
-### HITLCheckpointModal
-**File:** `components/evidence/HITLCheckpointModal.tsx`
-**Props:**
-```typescript
-interface HITLCheckpointModalProps {
-  checkpoint: HITLCheckpoint | null;
-  isOpen: boolean;
-  isSubmitting: boolean;
-  onDecision: (decision: HITLDecision, note?: string) => Promise<void>;
-  onDismiss: () => void;
-}
-```
-Accessible modal for human review decisions: APPROVE, REDIRECT, OVERRIDE, TERMINATE, ESCALATE.
-
----
+| Component | Purpose |
+| --- | --- |
+| `ResultLayout.tsx` | Result page layout shell |
+| `ResultHeader.tsx` | Report identity and status header |
+| `ResultStateView.tsx` | Loading, empty, and error states |
+| `AgentAnalysisTab.tsx` | Per-agent findings tab |
+| `AgentFindingSubComponents.tsx` | Finding details and sub-sections |
+| `TimelineTab.tsx` | Analysis timeline |
+| `MetricsPanel.tsx` | Metrics and confidence display |
+| `IntelligenceBrief.tsx` | Narrative summary |
+| `HistoryPanel.tsx` | Prior session/report history |
+| `EvidenceThumbnail.tsx` | Evidence preview |
+| `DegradationBanner.tsx` | Degraded-analysis indicator |
+| `DeepModelTelemetry.tsx` | Deep-model runtime telemetry |
+| `ArcGauge.tsx` | Gauge visualization |
+| `ActionDock.tsx` | Result actions |
+| `ReportFooter.tsx` | Report footer |
 
 ## UI Components
 
-Located in `components/ui/`.
+Located in `apps/web/src/components/ui/`.
 
-### AgentIcon
-**File:** `components/ui/AgentIcon.tsx`
-Resolves per-agent Lucide icon by role string (e.g. "Image Integrity" → Shield, "Audio" → Mic2).
+| Component | Purpose |
+| --- | --- |
+| `AgentFindingCard.tsx` | Shared finding card |
+| `AgentIcon.tsx` | Agent icon resolver |
+| `AgentsSection.tsx` | Agent overview section |
+| `AnimatedNumber.tsx` | Animated numeric display |
+| `Badge.tsx` | Status badge |
+| `BrandLogo.tsx` | Product mark |
+| `dialog.tsx` | Radix dialog wrapper |
+| `ForensicErrorModal.tsx` | Error modal |
+| `ForensicProgressOverlay.tsx` | Generic progress overlay |
+| `ForensicResetOverlay.tsx` | Reset/new analysis overlay |
+| `GlassPanel.tsx` | Glass-style panel primitive |
+| `GlobalFooter.tsx` | App footer |
+| `GlobalNavbar.tsx` | App navigation |
+| `HeroAuthActions.tsx` | Hero authentication actions |
+| `HowWorksSection.tsx` | Workflow overview section |
+| `LandingBackground.tsx` | Landing visual background |
+| `LoadingOverlay.tsx` | Loading overlay |
+| `PageTransition.tsx` | Route transition wrapper |
+| `QueryProvider.tsx` | React Query provider |
+| `RouteExperience.tsx` | Route-level experience wrapper |
+| `Toaster.tsx` | Toast container |
 
-### AgentResponseText
-**File:** `components/ui/AgentResponseText.tsx`
-Expandable text display with markdown stripping and character limit truncation.
-
-### GlobalFooter
-**File:** `components/ui/GlobalFooter.tsx`
-Academic disclaimer footer rendered on all pages via layout.
-
-### HistoryDrawer
-**File:** `components/ui/HistoryDrawer.tsx`
-Sidebar drawer showing session history from localStorage. Per-item delete, clear-all, verdict badges.
-
-### PageTransition
-**File:** `components/ui/PageTransition.tsx`
-Wraps page content in smooth fade-up entrance animation. Exports `PageTransition`, `StaggerIn`, `StaggerChild`.
-
-### SurfaceCard
-**File:** `components/ui/SurfaceCard.tsx`
-Simple wrapper component applying `surface-panel` glass styling.
-
-### dialog.tsx
-**File:** `components/ui/dialog.tsx`
-Radix UI dialog primitive re-exported: `Dialog`, `DialogContent`, `DialogHeader`, `DialogFooter`, `DialogTitle`, `DialogDescription`, `DialogClose`.
-
----
-
-## Lightswind Components
-
-Located in `components/lightswind/`.
-
-### Badge
-**File:** `components/lightswind/badge.tsx`
-Status badge with variants (`default`, `secondary`, `destructive`, `outline`, `success`, `warning`, `info`), sizes, shapes, optional colored dot.
-
-### AnimatedWave
-**File:** `components/lightswind/animated-wave.tsx`
-Three.js animated wireframe wave background. Accepts speed, amplitude, opacity, wave color, mouse interaction, quality settings.
-
----
-
-## Import Patterns
-
-### Evidence Components (barrel export)
-```typescript
-import {
-  HeaderSection,
-  FileUploadSection,
-  AgentProgressDisplay,
-  ErrorDisplay,
-  HITLCheckpointModal,
-} from "@/components/evidence";
-```
-
-### UI Components (barrel export)
-```typescript
-import {
-  AgentIcon,
-  AgentResponseText,
-  GlobalFooter,
-  HistoryDrawer,
-  PageTransition,
-  SurfaceCard,
-  Dialog,
-  DialogContent,
-} from "@/components/ui";
-```
+Import shared UI through `apps/web/src/components/ui/index.ts` when exported there.

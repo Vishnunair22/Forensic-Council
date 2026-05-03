@@ -2,7 +2,7 @@
   "name": "forensic-council-frontend",
   "version": "1.7.0",
   "private": true,
-  "description": "Multi-Agent Forensic Evidence Analysis System — Frontend UI",
+  "description": "Multi-Agent Forensic Evidence Analysis System - Frontend UI",
   "license": "MIT",
   "repository": {
     "type": "git",

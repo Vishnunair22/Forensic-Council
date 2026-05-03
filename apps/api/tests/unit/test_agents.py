@@ -23,7 +23,7 @@ os.environ.setdefault("POSTGRES_USER", "test")
 os.environ.setdefault("POSTGRES_PASSWORD", "test")
 os.environ.setdefault("POSTGRES_DB", "test")
 os.environ.setdefault("REDIS_PASSWORD", "test")
-os.environ.setdefault("NEXT_PUBLIC_DEMO_PASSWORD", "test")
+os.environ.setdefault("DEMO_PASSWORD", "test")
 os.environ.setdefault("LLM_PROVIDER", "none")
 os.environ.setdefault("LLM_API_KEY", "test-key")
 os.environ.setdefault("LLM_MODEL", "test-model")
@@ -43,7 +43,7 @@ def _settings() -> Settings:
         postgres_password="test",
         postgres_db="test",
         redis_password="test",
-        next_public_demo_password="test",
+        DEMO_PASSWORD="test",
         llm_provider="none",
         llm_api_key=None,
         llm_model="test-model",

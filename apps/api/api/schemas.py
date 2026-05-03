@@ -21,12 +21,41 @@ def _validate_password_bytes(v: str) -> str:
     return v
 
 
+def _validate_safe_id(v: str) -> str:
+    """Reject path traversal, shell metacharacters, and empty identifiers."""
+    import re
+
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", v):
+        raise ValueError(
+            "must be 1-128 characters, alphanumeric with hyphens, underscores, and dots only"
+        )
+    return v
+
+
+def _validate_case_id(v: str) -> str:
+    """Case IDs must use the public CASE- prefix and safe characters."""
+    _validate_safe_id(v)
+    if not v.startswith("CASE-"):
+        raise ValueError("case_id must start with CASE-")
+    return v
+
+
 class InvestigationRequest(BaseModel):
     """Request to start an investigation."""
 
     model_config = ConfigDict(extra="forbid")
     case_id: str = Field(..., description="Case identifier")
     investigator_id: str = Field(..., description="ID of the investigator")
+
+    @field_validator("case_id")
+    @classmethod
+    def validate_case_id(cls, v: str) -> str:
+        return _validate_case_id(v)
+
+    @field_validator("investigator_id")
+    @classmethod
+    def validate_investigator_id(cls, v: str) -> str:
+        return _validate_safe_id(v)
 
 
 class InvestigationResponse(BaseModel):

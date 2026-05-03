@@ -108,7 +108,6 @@ COPY api/ api/
 COPY agents/ agents/
 COPY tools/ tools/
 COPY orchestration/ orchestration/
-COPY reports/ reports/
 COPY config/ config/
 
 ENV PATH="/app/.venv/bin:$PATH" \
@@ -145,7 +144,6 @@ COPY api/ api/
 COPY agents/ agents/
 COPY tools/ tools/
 COPY orchestration/ orchestration/
-COPY reports/ reports/
 COPY config/ config/
 RUN mkdir -p /opt/forensic-model-cache/calibration_models
 COPY storage/ /tmp/__storage_seed/
@@ -177,6 +175,7 @@ RUN mkdir -p \
     /app/storage/evidence \
     /app/storage/keys \
     /app/storage/calibration_models \
+    /app/storage/reports \
     /app/cache/huggingface \
     /app/cache/torch \
     /app/cache/numba_cache \
@@ -189,7 +188,24 @@ RUN mkdir -p \
     /opt/forensic-model-cache/calibration_models
 
 # Verify ML runtime dependencies and script registry before downloading models.
-RUN python scripts/validate_ml_tools.py
+# Skip this step for air-gapped builds (PRELOAD_MODELS=0).
+RUN if [ "${PRELOAD_MODELS:-1}" = "1" ]; then \
+        python scripts/validate_ml_tools.py ; \
+    else \
+        echo "Skipping ML tools validation (air-gapped build)" ; \
+    fi
+
+# Create identity calibration models at build time if not pre-bundled.
+# These are used when no trained models are available.
+# Each model is a JSON with A=1, B=0 (identity mapping: p_calibrated = p_raw).
+RUN if [ ! -f /opt/forensic-model-cache/calibration_models/.trained ]; then \
+        mkdir -p /opt/forensic-model-cache/calibration_models ; \
+        for agent in agent1_image agent2_audio agent3_video agent4_document agent5_deepfake; do \
+            mkdir -p "/opt/forensic-model-cache/calibration_models/$agent" ; \
+            echo "{\"model_id\":\"identity\",\"agent_id\":\"$agent\",\"method\":\"IDENTITY\",\"params\":{\"A\":1,\"B\":0},\"calibration_status\":\"IDENTITY\"}" > "/opt/forensic-model-cache/calibration_models/$agent/latest.json" ; \
+        done ; \
+        touch /opt/forensic-model-cache/calibration_models/.trained ; \
+    fi
 
 # Bake heavyweight model assets into the image so clean Docker volumes start hot.
 # Runtime named volumes shadow /app/cache/*, so the entrypoint seeds them from

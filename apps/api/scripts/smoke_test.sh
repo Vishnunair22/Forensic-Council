@@ -2,7 +2,8 @@
 # ============================================================================
 # Forensic Council - Smoke Test
 # ============================================================================
-# Run from the apps/api/ directory:
+# Run from the repository root or the apps/api/ directory:
+#   bash apps/api/scripts/smoke_test.sh
 #   bash scripts/smoke_test.sh
 #
 # Prerequisites:
@@ -37,13 +38,13 @@ fi
 
 # 2. Unit tests (no infrastructure needed)
 echo -e "\n${YELLOW}[2/7] Running unit tests...${NC}"
-cd "$PROJECT_DIR"
-uv run pytest apps/api/tests/unit/ -q --tb=short && echo -e "${GREEN}Unit tests passed${NC}" \
+cd "$BACKEND_DIR"
+uv run pytest tests/unit/ -q --tb=short && echo -e "${GREEN}Unit tests passed${NC}" \
   || echo -e "${YELLOW}Some unit tests failed - check output above${NC}"
 
 # 3. Integration tests
 echo -e "\n${YELLOW}[3/7] Running integration tests...${NC}"
-uv run pytest apps/api/tests/integration/ -q --tb=short && echo -e "${GREEN}Integration tests passed${NC}" \
+uv run pytest tests/integration/ -q --tb=short && echo -e "${GREEN}Integration tests passed${NC}" \
   || echo -e "${YELLOW}Some integration tests failed (may need running infra)${NC}"
 
 # 4. Start API server (background)
