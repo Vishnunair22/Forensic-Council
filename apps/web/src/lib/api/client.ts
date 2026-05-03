@@ -148,8 +148,15 @@ async function handleAuthError<T>(operation: () => Promise<T>, _retryCount = 0):
     if ((isAuthError || isCsrfError) && _retryCount < 2) {
       dbg.warn("Session/CSRF invalid, re-authenticating...");
       await autoLoginAsInvestigator();
-      await fetch(`${API_BASE}/api/v1/health`, { credentials: "include", cache: "no-store" });
-      return await handleAuthError(operation, _retryCount + 1);
+      const healthCheck = await fetch(`${API_BASE}/api/v1/health`, { credentials: "include", cache: "no-store" });
+      if (healthCheck.ok) {
+        return await handleAuthError(operation, _retryCount + 1);
+      }
+      // Re-auth failed - redirect to session expiry page
+      if (typeof window !== "undefined") {
+        window.location.href = "/session-expired";
+        return Promise.reject(new Error("Session expired"));
+      }
     }
     throw error;
   }

@@ -12,17 +12,9 @@ from pathlib import Path
 # Ensure project root is on the path when run directly
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Compatibility shim: bcrypt 4.x removed __about__; passlib 1.7.4 expects it.
-# Suppresses the "(trapped) error reading bcrypt version" warning at startup.
-try:
-    import bcrypt as _bcrypt
-
-    if not hasattr(_bcrypt, "__about__"):
-        import types as _types
-
-        _bcrypt.__about__ = _types.SimpleNamespace(__version__=_bcrypt.__version__)
-except ImportError:
-    pass
+# Apply bcrypt compatibility shim before any passlib usage
+from core._bcrypt_shim import ensure_bcrypt_compat
+ensure_bcrypt_compat()
 
 import uvicorn
 

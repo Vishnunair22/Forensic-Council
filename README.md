@@ -153,15 +153,27 @@ If you prefer to run services directly on your host machine:
 ```bash
 # bash / zsh
 cd apps/api
-uv sync
+uv sync --all-extras
+
+# One-time: initialize the database schema and bootstrap users
+uv run python scripts/init_db.py
+
+uv run python scripts/model_pre_download.py --strict
 uv run python scripts/run_api.py
 ```
 ```powershell
 # PowerShell
 cd apps/api
-uv sync
+uv sync --all-extras
+
+# One-time: initialize the database schema and bootstrap users
+uv run python scripts/init_db.py
+
+uv run python scripts/model_pre_download.py --strict
 uv run python scripts/run_api.py
 ```
+
+> **Note:** The `model_pre_download.py --strict` step downloads all ML models (~2-4 GB) so the first investigation doesn't block for 5-20 minutes. Skip this step for CI/local testing without model downloads.
 
 ### Frontend
 ```bash
@@ -178,7 +190,7 @@ npm run dev
 ```
 
 ### Local Checks
-There is no root workspace package. Run backend checks from `apps/api` and frontend checks from `apps/web`.
+There is no root workspace package. Run backend checks from `apps/api` and frontend checks from `apps/web`. See [apps/api/README.md](apps/api/README.md) and [apps/web/README.md](apps/web/README.md) for per-package development instructions.
 
 ## Common Commands
 
@@ -263,7 +275,7 @@ services:
 Deploy: `docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml up -d`
 
 ### Option 2: Kubernetes
-K8s manifests are tracked in [issue #N] — the repository does not include Helm charts or Kustomize overlays yet.
+K8s manifests are out of scope for v1.7.0. For production deployments requiring Kubernetes, see the project backlog for planned implementation.
 
 Generate secrets from `.env`:
 ```bash

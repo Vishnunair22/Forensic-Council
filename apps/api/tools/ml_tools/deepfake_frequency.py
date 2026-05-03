@@ -108,6 +108,19 @@ def compute_frequency_features(image_path: str) -> dict:
     - 1/f spectral deviation (diffusion models)
     - Optional PyTorch-based feature extraction (when available)
     """
+    from core.config import get_settings
+
+    settings = get_settings()
+    if not settings.enable_research_models:
+        return {
+            "deepfake_suspected": False,
+            "confidence": 0.0,
+            "verdict": "SKIPPED",
+            "available": False,
+            "degraded": True,
+            "reason": "research_model_license_gate",
+        }
+
     # Load image
     img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     if img is None:

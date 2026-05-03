@@ -406,6 +406,18 @@ def _feature_ensemble_detection(audio_path: str) -> dict[str, Any]:
 
 def detect_voice_clone(audio_path: str, **kwargs) -> dict[str, Any]:
     """Try SpeechBrain primary, fall back to feature ensemble."""
+    from core.config import get_settings
+
+    settings = get_settings()
+    if not settings.enable_research_models:
+        return {
+            "suspicious": False,
+            "confidence": 0.0,
+            "verdict": "SKIPPED",
+            "available": False,
+            "degraded": True,
+            "reason": "research_model_license_gate",
+        }
     result = _speechbrain_detection(audio_path, **kwargs)
     if result is not None:
         return result

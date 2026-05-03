@@ -518,6 +518,16 @@ docker compose \
   build --build-arg PRELOAD_MODELS=0 backend worker
 ```
 
+### Security invariant: read-only filesystem
+
+The backend and worker services use `read_only: true` with a `tmpfs: /tmp` mount. This configuration:
+
+- Blocks writes to the root filesystem and all paths except `/tmp` and mounted volumes.
+- Requires `PYTHONDONTWRITEBYTECODE=1` (set in docker-compose.yml line 88) to prevent `.pyc` writes to `/app/__pycache__/`.
+- Requires that all writable paths (model caches, evidence storage, signing keys) be mounted as volumes.
+
+**Never remove `PYTHONDONTWRITEBYTECODE=1` without also removing `read_only: true`** from the backend/worker services, or the container will fail at startup when Python attempts to write bytecode.
+
 ---
 
 ## 11. Teardown

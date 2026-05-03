@@ -8,6 +8,11 @@ sys.path.insert(
     0,
     os.environ.get("APP_DIR", os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
 )
+
+# Apply bcrypt compatibility shim before passlib
+from core._bcrypt_shim import ensure_bcrypt_compat
+ensure_bcrypt_compat()
+
 from passlib.context import CryptContext
 
 if len(sys.argv) < 2:

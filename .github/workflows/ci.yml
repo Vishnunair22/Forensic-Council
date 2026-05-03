@@ -98,7 +98,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip uv
           cd apps/api
-          uv sync --extra dev
+          uv sync --all-extras
 
       - name: Generate test secrets
         run: |
@@ -239,3 +239,73 @@ jobs:
           docker image inspect forensic-council-backend:test
           docker image inspect forensic-council-migration:test
           docker image inspect forensic-council-frontend:test
+
+  nightly-ml-tests:
+    name: Nightly ML tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+    # Scheduled: runs every day at 3am UTC
+    schedule:
+      - cron: '0 3 * * *'
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      qdrant:
+        image: qdrant/qdrant:v1.16.1
+        ports:
+          - 6333:6333
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: apps/api/.python-version
+
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('apps/api/uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip uv
+          cd apps/api
+          uv sync --all-extras
+
+      - name: Generate test secrets
+        run: |
+          echo "SIGNING_KEY=$(openssl rand -hex 32)" >> $GITHUB_ENV
+          echo "JWT_SECRET_KEY=$(openssl rand -hex 32)" >> $GITHUB_ENV
+          echo "LLM_API_KEY=ci-stub" >> $GITHUB_ENV
+          echo "GEMINI_API_KEY=ci-stub" >> $GITHUB_ENV
+
+      - name: Run ML tests
+        env:
+          APP_ENV: testing
+          DATABASE_URL: postgresql://postgres:test@localhost/test
+          REDIS_URL: redis://localhost:6379
+          QDRANT_URL: http://localhost:6333
+        run: |
+          cd apps/api
+          uv run pytest tests/ -v --tb=short -m requires_ml

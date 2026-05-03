@@ -18,8 +18,7 @@
 
     # Redirect HTTP to HTTPS for non-localhost domains.
     @http {
-        protocol http
-        not host localhost 127.0.0.1
+        expression protocol() == "http" && {host} != "localhost" && {host} != "127.0.0.1"
     }
     redir @http https://{host}{uri}
 
@@ -58,6 +57,19 @@
             header_up X-Real-IP {remote_host}
             header_up Upgrade {http.request.header.Upgrade}
             header_up Connection {http.request.header.Connection}
+            flush_interval -1
+
+            transport http {
+                response_header_timeout 0
+                dial_timeout 10s
+            }
+        }
+    }
+
+    # API: SSE Route (Long-lived streaming, no timeout, keepalive)
+    handle /api/v1/sessions/*/progress {
+        reverse_proxy backend:8000 {
+            header_up Host {host}
             flush_interval -1
 
             transport http {

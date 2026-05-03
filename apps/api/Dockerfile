@@ -101,12 +101,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # -- Stage 3: migration - lightweight DB init (no ML deps) --------------------
 FROM deps-core AS migration
 
+# Slim: only copy what init_db.py needs (scripts + core + api/schemas + config)
 COPY scripts/ scripts/
 COPY core/ core/
-COPY api/ api/
-COPY agents/ agents/
-COPY tools/ tools/
-COPY orchestration/ orchestration/
+COPY api/schemas.py api/schemas.py
 COPY config/ config/
 
 ENV PATH="/app/.venv/bin:$PATH" \
@@ -226,7 +224,7 @@ RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
         YOLO_CONFIG_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" \
         YOLO_MODEL_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" \
         HOME="/tmp" \
-        python scripts/model_pre_download.py; \
+        python scripts/model_pre_download.py --strict; \
     else \
         echo "Skipping build-time model preload (PRELOAD_MODELS=$PRELOAD_MODELS)"; \
     fi

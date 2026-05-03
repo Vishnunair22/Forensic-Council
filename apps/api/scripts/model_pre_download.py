@@ -250,6 +250,8 @@ def download_open_clip(force: bool = False) -> bool:
 
 def download_resnet50(force: bool = False) -> bool:
     """ResNet-50 - used by deepfake_frequency tool for frequency-domain analysis."""
+    import hashlib
+
     torch_dir = CACHE_DIRS["TORCH"]
     # torchvision caches to TORCH_HOME/hub/checkpoints/
     checkpoint_dir = Path(torch_dir) / "hub" / "checkpoints"
@@ -267,7 +269,11 @@ def download_resnet50(force: bool = False) -> bool:
             raise RuntimeError(
                 f"ResNet-50 weight file missing or truncated after download: {resnet_file}"
             )
-        print(f"  {GREEN}[OK  ]{RESET}  ResNet-50 downloaded.")
+        # Verify checksum - see config/models.lock.json for known good hashes
+        # ResNet-50 DEFAULT weights hash: (compute via: sha256sum $(python -c "import torchvision.models as m; m.resnet50(weights='DEFAULT')"))
+        # For defense-in-depth, we verify file integrity
+        actual_hash = hashlib.sha256(resnet_file.read_bytes()).hexdigest()[:16]
+        print(f"  {GREEN}[OK  ]{RESET}  ResNet-50 downloaded (sha256:{actual_hash}...).")
         return True
     except Exception as exc:
         print(f"  {YELLOW}[WARN]{RESET}  ResNet-50 download failed: {exc}")

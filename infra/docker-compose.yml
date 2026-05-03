@@ -97,10 +97,13 @@ services:
     restart: unless-stopped
     # Require a password on the Redis instance so it cannot be accessed
     # without credentials even if the port is accidentally exposed.
+    # Enable AOF persistence for durability: flush every second, fsync on background.
     command: >
       redis-server
       --requirepass "${REDIS_PASSWORD}"
       --loglevel warning
+      --appendonly yes
+      --appendfsync everysec
     # SECURITY: Run as non-root user, drop all capabilities
     user: redis
     security_opt:
@@ -435,6 +438,8 @@ services:
       frontend:
         condition: service_healthy
       backend:
+        condition: service_healthy
+      worker:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/lb-health 2>&1 | head -1"]

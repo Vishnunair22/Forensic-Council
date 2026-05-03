@@ -526,6 +526,12 @@ class ForensicCouncilPipeline:
 
         self._final_report = await self.arbiter.sign_report(report)
 
+        # Add calibration status to degradation flags if uncalibrated
+        if hasattr(report, "calibration_status") and report.calibration_status in ("UNCALIBRATED", "IDENTITY"):
+            self._degradation_flags.append(
+                f"Model calibration: {report.calibration_status} (scores may not be reliable for court submission)"
+            )
+
         if self._degradation_flags:
             self._final_report.degradation_flags = self._degradation_flags
 

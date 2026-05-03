@@ -575,6 +575,25 @@ class Settings(BaseSettings):
         description="Groq free-tier tokens-per-minute limit.",
     )
 
+    # Gemini API key policy acknowledgment — required before using Gemini in production.
+    # See: https://ai.google.dev/terms
+    gemini_api_key_policy_ok: bool = Field(
+        default=False,
+        description=(
+            "Acknowledge Gemini API terms of service before enabling Gemini calls. "
+            "Set to true after reading and accepting the terms at https://ai.google.dev/terms"
+        ),
+    )
+
+    @field_validator("gemini_api_key_policy_ok", mode="before")
+    @classmethod
+    def parse_gemini_policy(cls, v):
+        """Parse policy flag from string or boolean."""
+        if isinstance(v, str):
+            v = v.strip().lower()
+            return v in ("true", "1", "yes", "on")
+        return bool(v)
+
     # Separate Arbiter Gemini key — isolates Arbiter quota from the 5 analysis agents.
     arbiter_gemini_api_key: str | None = Field(
         default=None,

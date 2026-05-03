@@ -20,13 +20,28 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 echo "OK: docker compose present."
 
-# 1. Check for unreplaced placeholders in .env
+# 1. Check for unreplaced placeholders in .env and production invariants
 echo "[1/3] Checking for unreplaced placeholders in .env..."
 if grep -E "(_REPLACE_ME|__PASTE_)" .env >/dev/null; then
     grep -E "(_REPLACE_ME|__PASTE_)" .env
     echo "FAILED: Found unreplaced placeholders."
     exit 1
 fi
+echo "OK"
+
+echo "[1b/3] Validating production configuration invariants..."
+for var in APP_ENV DOMAIN CORS_ALLOWED_ORIGINS GEMINI_API_KEY_POLICY_OK; do
+  v=$(grep "^${var}=" .env | cut -d= -f2-)
+  case $var in
+    APP_ENV)  [ "$v" = "production" ] || { echo "FAIL: APP_ENV must be production"; exit 1; };;
+    DOMAIN)   [ "$v" != "localhost" ] || { echo "FAIL: DOMAIN is localhost"; exit 1; };;
+    CORS_ALLOWED_ORIGINS) echo "$v" | grep -q "localhost" && { echo "FAIL: CORS contains localhost"; exit 1; };;
+    GEMINI_API_KEY_POLICY_OK) [ "$v" = "true" ] || { echo "FAIL: Gemini policy not acknowledged"; exit 1; };;
+  esac
+done
+SIGN=$(grep SIGNING_KEY= .env | cut -d= -f2-); JWT=$(grep JWT_SECRET_KEY= .env | cut -d= -f2-)
+[ "$SIGN" != "$JWT" ] || { echo "FAIL: SIGNING_KEY must differ from JWT_SECRET_KEY"; exit 1; }
+[ ${#SIGN} -ge 32 ] || { echo "FAIL: SIGNING_KEY must be at least 32 characters"; exit 1; }
 echo "OK"
 
 # 2. Validate Docker Compose configuration

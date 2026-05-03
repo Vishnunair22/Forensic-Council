@@ -149,6 +149,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 settings.jwt_algorithm,
             )
 
+    # DEMO_PASSWORD invariant check
+    demo_password = os.getenv("DEMO_PASSWORD", "")
+    if demo_password and demo_password != settings.bootstrap_investigator_password:
+        logger.warning(
+            "DEMO_PASSWORD != BOOTSTRAP_INVESTIGATOR_PASSWORD — /api/auth/demo login will fail. "
+            "Ensure both values are identical or disable DEMO_PASSWORD for production."
+        )
+
+    # Gemini API policy acknowledgment check
+    if settings.gemini_api_key and not settings.gemini_api_key_policy_ok:
+        logger.warning(
+            "GEMINI_API_KEY is set but GEMINI_API_KEY_POLICY_OK is not true. "
+            "Gemini API calls will be disabled. Set GEMINI_API_KEY_POLICY_OK=true "
+            "after reviewing the terms at https://ai.google.dev/terms"
+        )
+
     # Startup
     await start_monitoring(app.state)
     logger.info(
