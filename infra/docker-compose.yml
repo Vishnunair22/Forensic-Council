@@ -394,6 +394,8 @@ services:
       - ../apps/api/scripts:/app/scripts:ro
       - ../apps/api/config:/app/config:ro
       # Runtime data volumes
+      # Note: Worker runs investigations but does NOT sign reports - arbiter (in backend service) signs.
+      # signing_keys is therefore mounted read-only; backend has read-write access for signing.
       - evidence_data:/app/storage/evidence:rw
       - signing_keys:/app/storage/keys:ro
       - backups_data:/app/storage/backups:rw

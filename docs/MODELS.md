@@ -2,6 +2,8 @@
 
 This document covers model pinning, licensing, and caching for the Forensic Council system.
 
+> **Note:** This document supersedes `MODEL_LICENSING.md`. All licensing information is now consolidated here.
+
 ---
 
 ## Model Pinning

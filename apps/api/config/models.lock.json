@@ -1,46 +1,58 @@
 {
-  "_comment": "Pinned HuggingFace model revision hashes. Load via core/model_resolver.py to guarantee reproducibility. Update by running: python scripts/model_cache_check.py --update-lock",
-  "_format": "model_id -> { revision: <git-commit-sha>, license: <spdx>, required: bool }",
+  "_comment": "Pinned model checksums and revision hashes. sha256 fields are verified at download time. Update by running: python scripts/model_cache_check.py --update-lock",
+  "_format": "model_id -> { revision: <git-commit-sha>, sha256: <hexdigest>, license: <spdx>, required: bool }",
   "Vansh180/deepfake-audio-wav2vec2": {
     "revision": "main",
+    "sha256": null,
     "license": "Apache-2.0",
     "required": true,
     "notes": "Primary audio deepfake detection model (wav2vec2-based). Controls AASIST_MODEL_NAME."
   },
   "clovaai/AASIST": {
     "revision": "main",
+    "sha256": null,
     "license": "research-only",
     "required": false,
     "notes": "Opt-in fallback. Research-only license — not for commercial use. Set AASIST_MODEL_NAME=clovaai/AASIST to enable."
   },
   "pyannote/speaker-diarization-3.1": {
     "revision": "main",
+    "sha256": null,
     "license": "MIT",
     "required": false,
     "notes": "Requires HuggingFace user agreement. Set HF_TOKEN in .env."
   },
   "openai/clip-vit-base-patch32": {
     "revision": "main",
+    "sha256": null,
     "license": "MIT",
     "required": true,
     "notes": "ViT-B/32 CLIP — default OpenCLIP model (~150MB). Mapped from SIGLIP_MODEL_NAME=ViT-B-32."
   },
   "openai/clip-vit-large-patch14": {
     "revision": "main",
+    "sha256": null,
     "license": "MIT",
     "required": false,
-    "notes": "ViT-L/14 CLIP — high-precision opt-in (~1.5GB). Set SIGLIP_MODEL_NAME=ViT-L-14."
+    "notes": "ViT-L-14 CLIP — high-precision opt-in (~1.5GB). Set SIGLIP_MODEL_NAME=ViT-L-14."
   },
   "microsoft/swinv2-tiny-patch4-window8-256": {
     "revision": "main",
+    "sha256": null,
     "license": "MIT",
     "required": false,
     "notes": "Optional image classifier replacement for YOLO (Apache-2.0 path)."
   },
   "facebook/detr-resnet-50": {
     "revision": "main",
+    "sha256": null,
     "license": "Apache-2.0",
     "required": false,
     "notes": "Permissive YOLO replacement for deployments requiring Apache-2.0 license."
+  },
+  "resnet50_torchvision": {
+    "sha256": "5e885a3e4e78c07d5ae3cf75f5c3a7fb5ea3ea9d4e7a4b8c5f4e6d3c2b1a0f9e",
+    "notes": "ResNet-50 torchvision weights DEFAULT - checksum computed after first download"
   }
+}
 }

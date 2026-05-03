@@ -71,7 +71,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 FROM base AS deps-core
 
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
-    uv sync --frozen --no-dev --no-install-project
+    uv sync --frozen --no-dev --no-install-project --extra observability --extra security
 
 # Purge gcc after install - runtime code does not need the compiler.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -87,7 +87,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 FROM base AS deps-full
 
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
-    uv sync --frozen --no-dev --no-install-project --extra ml
+    uv sync --frozen --no-dev --no-install-project --extra ml --extra observability --extra security
 
 # Purge gcc after install (~60 MB saving).
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -249,7 +249,7 @@ FROM app AS development
 
 # Add dev + test dependencies on top of the full ML env
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
-    uv sync --frozen --extra ml --extra dev
+    uv sync --frozen --extra ml --extra dev --extra observability --extra security
 
 ENV RELOAD=true \
     APP_ENV=development \

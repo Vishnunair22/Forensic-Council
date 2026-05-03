@@ -263,17 +263,32 @@ def download_resnet50(force: bool = False) -> bool:
     print(f"  {CYAN}[DOWN]{RESET}  ResNet-50 weights -> {torch_dir}")
     try:
         import torchvision
+        import json
+        from pathlib import Path
 
         torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.DEFAULT)
         if not (resnet_file.exists() and resnet_file.stat().st_size > 50_000_000):
             raise RuntimeError(
                 f"ResNet-50 weight file missing or truncated after download: {resnet_file}"
             )
-        # Verify checksum - see config/models.lock.json for known good hashes
-        # ResNet-50 DEFAULT weights hash: (compute via: sha256sum $(python -c "import torchvision.models as m; m.resnet50(weights='DEFAULT')"))
-        # For defense-in-depth, we verify file integrity
-        actual_hash = hashlib.sha256(resnet_file.read_bytes()).hexdigest()[:16]
-        print(f"  {GREEN}[OK  ]{RESET}  ResNet-50 downloaded (sha256:{actual_hash}...).")
+        # Verify checksum against models.lock.json if expected hash is defined
+        actual_hash = hashlib.sha256(resnet_file.read_bytes()).hexdigest()
+        lock_path = Path(__file__).parent.parent / "config" / "models.lock.json"
+        expected_hash = None
+        if lock_path.exists():
+            try:
+                lock_data = json.loads(lock_path.read_text())
+                expected_hash = lock_data.get("resnet50_torchvision", {}).get("sha256")
+            except Exception:
+                pass
+        if expected_hash:
+            if actual_hash != expected_hash:
+                raise RuntimeError(
+                    f"ResNet-50 checksum mismatch! Expected {expected_hash}, got {actual_hash}"
+                )
+            print(f"  {GREEN}[OK  ]{RESET}  ResNet-50 downloaded and verified.")
+        else:
+            print(f"  {GREEN}[OK  ]{RESET}  ResNet-50 downloaded (sha256:{actual_hash[:16]}... - no lock verification)")
         return True
     except Exception as exc:
         print(f"  {YELLOW}[WARN]{RESET}  ResNet-50 download failed: {exc}")
