@@ -141,7 +141,7 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://127.0.0.1:6333/healthz"]
+      test: ["CMD", "perl", "-MIO::Socket", "-e", "exit(IO::Socket::INET->new(PeerAddr => '127.0.0.1', PeerPort => 6333) ? 0 : 1)"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -272,7 +272,6 @@ services:
       BOOTSTRAP_INVESTIGATOR_PASSWORD: ${BOOTSTRAP_INVESTIGATOR_PASSWORD}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost,http://localhost:3000,http://localhost:8000,http://127.0.0.1:3000}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
       OTEL_SERVICE_NAME: forensic_api
     depends_on:
@@ -432,7 +431,7 @@ services:
       - caddy_logs:/var/log/caddy
     environment:
       - DOMAIN=${DOMAIN:-localhost}
-      - CADDY_SITE_ADDRESS=${CADDY_SITE_ADDRESS:-localhost}
+      - CADDY_SITE_ADDRESS=${CADDY_SITE_ADDRESS:-http://localhost}
       # Suppress quic-go UDP buffer warning — net.core.rmem_max can't be set
       # per-container on Docker Desktop / WSL2 without host kernel changes.
       - QUIC_GO_DISABLE_RECEIVE_BUFFER_WARNING=1

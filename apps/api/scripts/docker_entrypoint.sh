@@ -152,9 +152,9 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
         echo "  This fallback runs once per empty volume."
         echo "============================================================"
         if [ "$(id -u)" = "0" ]; then
-            runuser -u appuser -- python scripts/model_pre_download.py --strict > /tmp/model_download.log 2>&1
+            runuser -u appuser -- python scripts/model_pre_download.py --strict
         else
-            python scripts/model_pre_download.py --strict > /tmp/model_download.log 2>&1
+            python scripts/model_pre_download.py --strict
         fi
         echo "  Model download complete. Log: /tmp/model_download.log"
     else

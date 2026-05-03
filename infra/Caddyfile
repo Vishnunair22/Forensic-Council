@@ -1,7 +1,7 @@
 # Forensic Council - Caddy Reverse Proxy
 #
 # Development:
-#   DOMAIN=localhost
+#   CADDY_SITE_ADDRESS=http://localhost
 #
 # Production:
 #   DOMAIN=forensic.yourdomain.com
@@ -14,13 +14,7 @@
     https_port 443
 }
 
-{$CADDY_SITE_ADDRESS:localhost} {
-
-    # Redirect HTTP to HTTPS for non-localhost domains.
-    @http {
-        expression protocol() == "http" && {host} != "localhost" && {host} != "127.0.0.1"
-    }
-    redir @http https://{host}{uri}
+{$CADDY_SITE_ADDRESS:http://localhost} {
 
     # Security Headers
     header {
@@ -37,9 +31,8 @@
 
     # Caddy-only LB check — used by Docker healthcheck
     handle /lb-health {
-        respond "ok" 200 {
-            Cache-Control "no-store"
-        }
+        header Cache-Control "no-store"
+        respond "ok" 200
     }
 
     # Real backend health endpoint — exposed separately so external monitors can reach
