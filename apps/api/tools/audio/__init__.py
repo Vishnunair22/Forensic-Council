@@ -13,8 +13,8 @@ For backward compatibility, the old module still works:
 
 from __future__ import annotations
 
-from tools.audio.diarization import run_speaker_diarize as speaker_diarize
 from tools.audio.diarization import AudioSegment
+from tools.audio.diarization import run_speaker_diarize as speaker_diarize
 from tools.audio.prosody import run_prosody_analyze as prosody_analyze
 from tools.audio.spectral import run_background_noise_consistency as background_noise_consistency
 from tools.audio.splice import run_audio_splice_detect as audio_splice_detect

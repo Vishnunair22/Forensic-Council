@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
+from contextlib import suppress
 from typing import Any
 
 from fastapi import HTTPException
@@ -78,12 +79,10 @@ def _quota_for_role(user_role: str, settings: Settings | None = None) -> float:
 
 
 def _record_rate_limit_bypass() -> None:
-    try:
+    with suppress(Exception):
         from api.routes.metrics import increment_rate_limit_redis_bypasses
 
         increment_rate_limit_redis_bypasses()
-    except Exception:
-        pass
 
 
 async def check_investigation_rate_limit(user_id: str, settings: Settings | None = None) -> None:

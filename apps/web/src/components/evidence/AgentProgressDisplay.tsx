@@ -144,7 +144,6 @@ export function AgentProgressDisplay({
     if (!mimeType) return;
     setHiddenAgents(new Set());
     setExpandedCards({});
-    const supportedIds = new Set(supportedAgentIdsForMime(mimeType));
     setValidatingAgents(new Set(allValidAgents.map(a => a.id)));
     const timer = setTimeout(() => {
       setValidatingAgents(new Set());

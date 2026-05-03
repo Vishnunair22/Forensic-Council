@@ -45,7 +45,7 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
         </div>
 
         {/* The "FC" Core */}
-        <span className="relative text-white font-mono font-bold text-[10px] z-10 tracking-tight">
+        <span className="relative text-white bg-black/80 px-1 rounded-sm font-mono font-bold text-[10px] z-10 tracking-tight">
           FC
         </span>
       </motion.div>

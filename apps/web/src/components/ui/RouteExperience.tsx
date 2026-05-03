@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 function prefersReducedMotion(): boolean {
   if (typeof window === "undefined" || !("matchMedia" in window)) return true;
@@ -10,7 +10,6 @@ function prefersReducedMotion(): boolean {
 
 export function RouteExperience() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -32,7 +31,7 @@ export function RouteExperience() {
     });
 
     return () => window.cancelAnimationFrame(raf);
-  }, [pathname, searchParams]);
+  }, [pathname]);
 
   return null;
 }

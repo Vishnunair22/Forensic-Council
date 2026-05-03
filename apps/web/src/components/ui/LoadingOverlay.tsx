@@ -75,6 +75,9 @@ export function LoadingOverlay({
       >
         <div className="flex flex-col items-center">
           <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
+          <h1 className="text-2xl font-black tracking-tight text-white mb-3">
+            {title}
+          </h1>
           <p className="text-sm font-mono font-semibold tracking-wide text-primary/70 text-center" role="status" aria-live="polite">
             {liveText || "Opening live investigation stream..."}
           </p>

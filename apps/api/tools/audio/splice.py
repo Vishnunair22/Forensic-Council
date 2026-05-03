@@ -104,4 +104,4 @@ async def run_audio_splice_detect(
     except Exception as e:
         if isinstance(e, ToolUnavailableError):
             raise
-        raise ToolUnavailableError(f"Audio splice detection failed: {str(e)}")
+        raise ToolUnavailableError(f"Audio splice detection failed: {str(e)}") from e

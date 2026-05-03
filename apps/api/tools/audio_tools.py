@@ -9,7 +9,15 @@ This module is DEPRECATED. Use tools.audio instead:
 For backward compatibility, this module re-exports the new package.
 """
 
-from tools.audio import *  # noqa: F401,F403
+from tools.audio import (
+    AudioSegment,
+    anti_spoofing_detect,
+    audio_splice_detect,
+    background_noise_consistency,
+    codec_fingerprint,
+    prosody_analyze,
+    speaker_diarize,
+)
 
 
 async def av_sync_verify(*, artifact=None, **_kwargs):
@@ -29,6 +37,7 @@ async def av_sync_verify(*, artifact=None, **_kwargs):
         "verdict": "INCONCLUSIVE",
         "note": "No explicit AV sync anomaly detected by lightweight validator.",
     }
+
 
 __all__ = [
     "speaker_diarize",

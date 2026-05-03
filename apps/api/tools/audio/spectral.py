@@ -113,4 +113,4 @@ async def run_background_noise_consistency(
     except Exception as e:
         if isinstance(e, ToolUnavailableError):
             raise
-        raise ToolUnavailableError(f"Background noise consistency failed: {str(e)}")
+        raise ToolUnavailableError(f"Background noise consistency failed: {str(e)}") from e

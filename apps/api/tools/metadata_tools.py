@@ -217,7 +217,7 @@ async def steganography_scan_enhanced(**kwargs: Any) -> dict[str, Any]:
     return await steganography_scan(**kwargs)
 
 
-async def camera_profile_match(*, artifact: Any = None, file_path: str | None = None, **_: Any) -> dict[str, Any]:
+async def camera_profile_match(artifact: Any = None, file_path: str | None = None, **_: Any) -> dict[str, Any]:
     path = _artifact_path(artifact, file_path)
     if not path or not Path(path).exists():
         return {"available": False, "error": "file not found", "verdict": "INCONCLUSIVE"}
@@ -231,7 +231,7 @@ async def camera_profile_match(*, artifact: Any = None, file_path: str | None = 
     }
 
 
-async def provenance_chain_verify(*, artifact: Any = None, file_path: str | None = None, **_: Any) -> dict[str, Any]:
+async def provenance_chain_verify(artifact: Any = None, file_path: str | None = None, **_: Any) -> dict[str, Any]:
     path = _artifact_path(artifact, file_path)
     return {
         "available": bool(path and Path(path).exists()),

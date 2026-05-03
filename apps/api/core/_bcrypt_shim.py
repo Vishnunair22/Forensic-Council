@@ -11,7 +11,6 @@ Usage:
 """
 
 import types
-from typing import Any
 
 
 def ensure_bcrypt_compat() -> None:

@@ -54,9 +54,9 @@ class TestRateLimiterFailOpen:
     @pytest.mark.asyncio
     async def test_rate_limit_blocks_over_limit(self):
         """Verify rate limiter blocks when over limit."""
-        from core.rate_limiting import MAX_INVESTIGATIONS_PER_USER
-        from core.rate_limiting import check_investigation_rate_limit
         from fastapi import HTTPException
+
+        from core.rate_limiting import check_investigation_rate_limit
 
         mock_redis = AsyncMock()
         mock_redis.get.return_value = b"50"

@@ -1,4 +1,4 @@
-import type { TokenResponse } from "./api/client";
+import type { TokenResponse } from "./api/types";
 
 type PendingFileStore = {
   file: File | null;

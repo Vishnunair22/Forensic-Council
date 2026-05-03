@@ -13,12 +13,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Apply bcrypt compatibility shim before any passlib usage
-from core._bcrypt_shim import ensure_bcrypt_compat
+from core._bcrypt_shim import ensure_bcrypt_compat  # noqa: E402
+
 ensure_bcrypt_compat()
 
-import uvicorn
+import uvicorn  # noqa: E402
 
-from core.structured_logging import configure_root_logger
+from core.structured_logging import configure_root_logger  # noqa: E402
 
 if __name__ == "__main__":
     from core.config import get_settings

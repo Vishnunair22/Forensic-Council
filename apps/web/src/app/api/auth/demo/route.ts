@@ -35,17 +35,30 @@ export async function POST() {
 
   const nextResponse = NextResponse.json(data, { status: response.status });
 
-  const upstreamSetCookie = response.headers.getSetCookie();
+  const getSetCookie = response.headers?.getSetCookie?.bind(response.headers);
+  const setCookie = response.headers?.get("set-cookie");
+  const upstreamSetCookie = getSetCookie ? getSetCookie() : setCookie ? [setCookie] : [];
   for (const cookie of upstreamSetCookie) {
     nextResponse.headers.append("Set-Cookie", cookie);
   }
 
   const accessToken = typeof data.access_token === "string" ? data.access_token : "";
+  const csrfToken = typeof data.csrf_token === "string" ? data.csrf_token : "";
   const maxAge = typeof data.expires_in === "number" ? data.expires_in : 3600;
 
   if (accessToken) {
     nextResponse.cookies.set("access_token", accessToken, {
       httpOnly: true,
+      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge,
+    });
+  }
+
+  if (csrfToken) {
+    nextResponse.cookies.set("csrf_token", csrfToken, {
+      httpOnly: false,
       sameSite: "strict",
       secure: process.env.NODE_ENV === "production",
       path: "/",

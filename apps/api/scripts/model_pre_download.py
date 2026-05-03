@@ -263,8 +263,9 @@ def download_resnet50(force: bool = False) -> bool:
 
     print(f"  {CYAN}[DOWN]{RESET}  ResNet-50 weights -> {torch_dir}")
     try:
-        import torchvision
         import json
+
+        import torchvision
 
         torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.DEFAULT)
         if not (resnet_file.exists() and resnet_file.stat().st_size > 50_000_000):
@@ -276,11 +277,9 @@ def download_resnet50(force: bool = False) -> bool:
         lock_path = Path(__file__).parent.parent / "config" / "models.lock.json"
         expected_hash = None
         if lock_path.exists():
-            try:
+            with contextlib.suppress(Exception):
                 lock_data = json.loads(lock_path.read_text())
                 expected_hash = lock_data.get("resnet50_torchvision", {}).get("sha256")
-            except Exception:
-                pass
         if expected_hash:
             if actual_hash != expected_hash:
                 raise RuntimeError(

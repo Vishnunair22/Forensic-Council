@@ -33,7 +33,7 @@ function _parseReportDTO(raw: unknown): ReportDTO {
   const result = ReportDTOSchema.safeParse(raw);
   if (result.success) return result.data as unknown as ReportDTO;
 
-dbg.error(
+  dbg.error(
     "[api] Report validation failed. Falling back to passthrough.",
     result.error.message,
   );
@@ -291,9 +291,18 @@ export function createLiveSocket(sessionId: string): { ws: WebSocket; connected:
   const connected = new Promise<void>((resolve, reject) => {
     let settled = false;
 
-    const handleOpen = () => settle(resolve);
-
     const handleError = () => settle(() => reject(new Error("WebSocket connection error")));
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const payload = JSON.parse(event.data) as { type?: unknown };
+        if (payload.type === "CONNECTED" || payload.type === "AGENT_UPDATE") {
+          settle(resolve);
+        }
+      } catch {
+        // Ignore malformed bootstrap messages. The main socket consumer logs
+        // parse failures and the timeout still protects this handshake.
+      }
+    };
     const handleClose = (event: CloseEvent) => {
       if (event.code === 1000) {
         settle(resolve);
@@ -306,7 +315,7 @@ export function createLiveSocket(sessionId: string): { ws: WebSocket; connected:
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
-      ws.removeEventListener("open", handleOpen);
+      ws.removeEventListener("message", handleMessage);
       ws.removeEventListener("error", handleError);
       ws.removeEventListener("close", handleClose);
       fn();
@@ -317,7 +326,7 @@ export function createLiveSocket(sessionId: string): { ws: WebSocket; connected:
       LIVE_SOCKET_CONNECT_TIMEOUT_MS,
     );
 
-    ws.addEventListener("open", handleOpen);
+    ws.addEventListener("message", handleMessage);
     ws.addEventListener("error", handleError);
     ws.addEventListener("close", handleClose);
   });

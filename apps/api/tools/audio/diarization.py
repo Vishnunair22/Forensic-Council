@@ -7,8 +7,9 @@ Speaker segmentation using SpeechBrain ECAPA-TDNN.
 
 from __future__ import annotations
 
-import asyncio
 import os
+import warnings
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
 
@@ -38,11 +39,10 @@ def _get_speechbrain_classifier_class() -> Any:
     global _speechbrain_classifier, _speechbrain_loaded
     if not _speechbrain_loaded:
         _speechbrain_loaded = True
-        try:
+        with suppress(Exception):
             from speechbrain.pretrained import EncoderClassifier
+
             _speechbrain_classifier = EncoderClassifier
-        except Exception:
-            pass
     return _speechbrain_classifier
 
 
@@ -85,15 +85,15 @@ async def run_speaker_diarize(
         if not os.path.exists(audio_path):
             raise ToolUnavailableError(f"File not found: {audio_path}")
 
-        loop = asyncio.get_running_loop()
         info = sf.info(audio_path)
         duration = float(info.duration)
 
-        EncoderClassifier = _get_speechbrain_classifier_class()
-        if EncoderClassifier is not None:
+        encoder_classifier = _get_speechbrain_classifier_class()
+        if encoder_classifier is not None:
             try:
                 import torch
                 from sklearn.cluster import AgglomerativeClustering
+
                 from core.config import get_settings
                 settings = get_settings()
 
@@ -101,7 +101,7 @@ async def run_speaker_diarize(
                     os.environ["HF_HUB_OFFLINE"] = "1"
                     os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
-                classifier = EncoderClassifier.from_hparams(
+                classifier = encoder_classifier.from_hparams(
                     source="speechbrain/spkrec-ecapa-voxceleb",
                     run_opts={"device": "cpu"},
                 )
@@ -193,8 +193,12 @@ async def run_speaker_diarize(
                     "analysis_source": "speechbrain_ecapa_diarizer",
                     "model": "speechbrain/spkrec-ecapa-voxceleb",
                 }
-            except Exception as e:
-                pass
+            except Exception as exc:
+                warnings.warn(
+                    f"SpeechBrain diarization failed ({exc}); falling back to single speaker.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
 
         return {
             "speaker_count": 1,
@@ -207,4 +211,4 @@ async def run_speaker_diarize(
     except Exception as e:
         if isinstance(e, ToolUnavailableError):
             raise
-        raise ToolUnavailableError(f"Speaker diarization failed: {str(e)}")
+        raise ToolUnavailableError(f"Speaker diarization failed: {str(e)}") from e

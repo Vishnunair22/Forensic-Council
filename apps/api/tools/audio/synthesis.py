@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from contextlib import suppress
 from typing import Any
 
 import numpy as np
@@ -42,19 +43,21 @@ def _get_audio_deepfake_bundle(model_name: str, local_files_only: bool) -> tuple
 
 def _spoof_probability_from_logits(outputs: Any, id2label: dict) -> float:
     """Extract spoof probability from model logits."""
-    try:
+    with suppress(Exception):
         import torch
+
         logits = outputs.logits
         if isinstance(logits, torch.Tensor):
             probs = torch.softmax(logits, dim=-1)
             spoof_idx = next(
-                (i for label in id2label.values() 
-                if "spoof" in label.lower() or "fake" in label.lower()),
-                1
+                (
+                    int(idx)
+                    for idx, label in id2label.items()
+                    if "spoof" in str(label).lower() or "fake" in str(label).lower()
+                ),
+                1,
             )
             return float(probs[0][spoof_idx].item())
-    except Exception:
-        pass
     return 0.5
 
 
@@ -83,8 +86,9 @@ async def run_anti_spoofing_detect(
             raise ToolUnavailableError(f"File not found: {audio_path}")
 
         try:
-            import torch
             import librosa
+            import torch
+
             from core.config import get_settings
 
             settings = get_settings()
@@ -167,7 +171,7 @@ async def run_anti_spoofing_detect(
     except Exception as e:
         if isinstance(e, ToolUnavailableError):
             raise
-        raise ToolUnavailableError(f"Anti-spoofing detection failed: {str(e)}")
+        raise ToolUnavailableError(f"Anti-spoofing detection failed: {str(e)}") from e
 
 
 async def run_codec_fingerprint(
@@ -194,7 +198,7 @@ async def run_codec_fingerprint(
 
         loop = asyncio.get_running_loop()
         info = await loop.run_in_executor(None, lambda: sf.info(audio_path))
-        
+
         codec = getattr(info, "format", "unknown").lower()
         subtype = getattr(info, "subtype", "").lower()
 
@@ -205,7 +209,17 @@ async def run_codec_fingerprint(
             signal_np = signal_np.mean(axis=1)
 
         signal_np = np.asarray(signal_np, dtype=np.float32)
-        
+        if signal_np.size == 0:
+            return {
+                "status": "empty",
+                "codec": codec,
+                "subtype": subtype,
+                "bitrate": 0,
+                "sample_rate": int(getattr(info, "samplerate", 0)),
+                "channels": int(getattr(info, "channels", 0)),
+                "detected_artifacts": ["empty_audio_stream"],
+            }
+
         fft = np.fft.rfft(signal_np[:8192])
         spectral_floor = np.min(np.abs(fft))
         encoding_artifacts = []
@@ -228,4 +242,4 @@ async def run_codec_fingerprint(
     except Exception as e:
         if isinstance(e, ToolUnavailableError):
             raise
-        raise ToolUnavailableError(f"Codec fingerprinting failed: {str(e)}")
+        raise ToolUnavailableError(f"Codec fingerprinting failed: {str(e)}") from e

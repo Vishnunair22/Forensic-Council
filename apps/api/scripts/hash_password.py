@@ -10,10 +10,11 @@ sys.path.insert(
 )
 
 # Apply bcrypt compatibility shim before passlib
-from core._bcrypt_shim import ensure_bcrypt_compat
+from core._bcrypt_shim import ensure_bcrypt_compat  # noqa: E402
+
 ensure_bcrypt_compat()
 
-from passlib.context import CryptContext
+from passlib.context import CryptContext  # noqa: E402
 
 if len(sys.argv) < 2:
     print("Usage: python hash_password.py <password>", file=sys.stderr)

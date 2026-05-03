@@ -110,7 +110,7 @@ async def run_prosody_analyze(
                 if jump_idx < len(voiced_times):
                     frame_idx = voiced_times[jump_idx]
                     time = (
-                        float(frame_idx * 512 / sr) if used_librosa 
+                        float(frame_idx * 512 / sr) if used_librosa
                         else float(frame_idx * hop / sr)
                     )
                     anomalies.append(
@@ -155,4 +155,4 @@ async def run_prosody_analyze(
     except Exception as e:
         if isinstance(e, ToolUnavailableError):
             raise
-        raise ToolUnavailableError(f"Prosody analysis failed: {str(e)}")
+        raise ToolUnavailableError(f"Prosody analysis failed: {str(e)}") from e

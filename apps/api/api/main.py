@@ -20,6 +20,7 @@ import signal
 import sys
 import time
 import uuid
+from collections import OrderedDict
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -29,6 +30,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+import core
 from core.config import get_settings, validate_production_settings
 from core.monitoring import start_monitoring
 from core.observability import setup_observability
@@ -40,9 +42,6 @@ from core.persistence import (
     get_redis_client,
 )
 from core.structured_logging import get_logger, request_id_ctx
-import core
-
-from collections import OrderedDict
 
 logger = get_logger(__name__)
 _mem_http_rate: OrderedDict[str, list[float]] = OrderedDict()
@@ -521,8 +520,6 @@ _CSRF_EXEMPT_PATHS = {
 @app.middleware("http")
 async def csrf_middleware(request: Request, call_next):
     settings = request.app.state.settings
-    if settings.app_env == "testing":
-        return await call_next(request)
 
     """CSRF protection via the double-submit cookie pattern.
 
@@ -550,6 +547,9 @@ async def csrf_middleware(request: Request, call_next):
                 path="/",
             )
         return response
+
+    if settings.app_env == "testing":
+        return await call_next(request)
 
     # State-changing request — validate CSRF token
     cookie_token = request.cookies.get("csrf_token")
@@ -606,15 +606,21 @@ async def rate_limit_middleware(request: Request, call_next):
         raw_token = auth_header[7:] if auth_header.lower().startswith("bearer ") else auth_header
         # Use HMAC with JWT secret as salt to avoid storing token hashes in Redis
         settings = request.app.state.settings
+        jwt_secret_key = getattr(settings, "jwt_secret_key", None)
+        if not isinstance(jwt_secret_key, str):
+            jwt_secret_key = get_settings().jwt_secret_key
         identifier = "tok:" + hmac.new(
-            settings.jwt_secret_key.encode(),
+            jwt_secret_key.encode(),
             raw_token.strip().encode(),
             hashlib.sha256,
         ).hexdigest()[:32]
     elif session_cookie:
         settings = request.app.state.settings
+        jwt_secret_key = getattr(settings, "jwt_secret_key", None)
+        if not isinstance(jwt_secret_key, str):
+            jwt_secret_key = get_settings().jwt_secret_key
         identifier = "cookie:" + hmac.new(
-            settings.jwt_secret_key.encode(),
+            jwt_secret_key.encode(),
             session_cookie.encode(),
             hashlib.sha256,
         ).hexdigest()[:32]

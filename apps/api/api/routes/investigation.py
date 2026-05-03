@@ -154,9 +154,6 @@ async def start_investigation(
     _validate_safe_id(case_id, "case_id")
     _validate_safe_id(investigator_id, "investigator_id")
 
-    await check_investigation_rate_limit(current_user.user_id)
-    await check_daily_cost_quota(current_user.user_id, current_user.role.value)
-
     # Read a small chunk of bytes in-memory to detect the true MIME type before writing to disk
     head = await file.read(2048)
     await file.seek(0)
@@ -199,6 +196,9 @@ async def start_investigation(
 
     if file.size and file.size > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="File size exceeds limit.")
+
+    await check_investigation_rate_limit(current_user.user_id)
+    await check_daily_cost_quota(current_user.user_id, current_user.role.value)
 
     session_id = str(uuid4())
     incoming_dir = Path(settings.evidence_storage_path) / "incoming"

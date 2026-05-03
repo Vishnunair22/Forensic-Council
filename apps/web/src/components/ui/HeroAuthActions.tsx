@@ -92,9 +92,7 @@ export function HeroAuthActions() {
     sessionOnlyStorage.setItem("fc_show_loading", "true");
     setShowUpload(false);
     setIsNavigating(true);
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => resolve());
-    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
     router.push("/evidence", { scroll: true });
   }, [router, selectedFile, isAuthenticating, isNavigating]);
 
@@ -168,6 +166,7 @@ export function HeroAuthActions() {
       <AnimatePresence>
         {handoffVisible && (
           <LoadingOverlay
+            title="Connecting"
             liveText="Opening evidence analysis and preparing live backend stream..."
             dispatchedCount={0}
             totalAgents={5}
