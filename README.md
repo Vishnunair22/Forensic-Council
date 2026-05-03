@@ -260,7 +260,7 @@ services:
         delay: 5s
         max_attempts: 3
 ```
-Deploy: `docker stack deploy -c docker-compose.yml -c docker-compose.swarm.yml forensic`
+Deploy: `docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml up -d`
 
 ### Option 2: Kubernetes
 Generate secrets from `.env`:

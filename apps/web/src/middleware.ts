@@ -17,7 +17,8 @@ export function middleware(request: NextRequest) {
     } catch { /* ignore */ }
   }
 
-  const prodConnectSrc = `'self' ${wsOrigin} ${httpOrigin}`.trim().replace(/\s+/g, " ");
+  const sameOriginWs = "'self' wss: ws:";
+  const prodConnectSrc = `'self' ${sameOriginWs} ${wsOrigin} ${httpOrigin}`.trim().replace(/\s+/g, " ");
   const devConnectSrc = "'self' ws://localhost wss://localhost ws://localhost:3000 wss://localhost:3000 ws://localhost:8000 wss://localhost:8000 http://localhost:8000 https://localhost:8000";
   
   const connectSrc = isProd ? prodConnectSrc : devConnectSrc;

@@ -57,8 +57,12 @@ async function forward(req: NextRequest, ctx: { params: Promise<{ path: string[]
         signal: AbortSignal.timeout(30_000),
       });
       if (RETRYABLE_STATUSES.has(upstream.status)) {
-        lastError = new Error(`Backend returned ${upstream.status}`);
-        continue;
+        const isIdempotent = ["GET", "HEAD", "OPTIONS", "PUT", "DELETE"].includes(req.method);
+        if (isIdempotent) {
+          lastError = new Error(`Backend returned ${upstream.status}`);
+          continue;
+        }
+        break;
       }
       return new NextResponse(await upstreamBody(upstream), {
         status: upstream.status,
@@ -80,6 +84,16 @@ async function forward(req: NextRequest, ctx: { params: Promise<{ path: string[]
 }
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
+  const { path } = await ctx.params;
+  const apiPath = `/api/v1/${path.join("/")}`;
+
+  if (apiPath.endsWith("/live")) {
+    const wsEnv = process.env.NEXT_PUBLIC_WS_URL;
+    return new NextResponse(
+      `WebSocket not supported via Next.js proxy. ${wsEnv ? "NEXT_PUBLIC_WS_URL is set." : "Use Caddy or set NEXT_PUBLIC_WS_URL."}`,
+      { status: 426 },
+    );
+  }
   return forward(req, ctx);
 }
 

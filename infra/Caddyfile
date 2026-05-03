@@ -33,14 +33,14 @@
         -X-Powered-By
     }
 
-    # Internal health check — returns simple 200 OK for Docker healthchecks
-    handle /health {
+    # Caddy-only LB check — used by Docker healthcheck
+    handle /lb-health {
         respond "ok" 200 {
             Cache-Control "no-store"
         }
     }
 
-    # Backend health endpoint — exposed separately so external monitors can reach
+    # Real backend health endpoint — exposed separately so external monitors can reach
     # the real FastAPI /health without being swallowed by the frontend catch-all.
     handle /health {
         reverse_proxy backend:8000 {

@@ -312,14 +312,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 45s
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-          cpus: "2.0"
-        reservations:
-          memory: 512M
-          cpus: "0.5"
     mem_limit: 4g
     cpus: 2.0
     # SECURITY: Run with minimal privileges, no new privileges, read-only filesystem
@@ -396,7 +388,7 @@ services:
       migration:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import os, redis, time; r=redis.Redis(host=os.environ.get('REDIS_HOST','redis'), port=int(os.environ.get('REDIS_PORT','6379')), password=os.environ.get('REDIS_PASSWORD'), socket_connect_timeout=3, socket_timeout=3); hb=r.get('forensic:worker:heartbeat'); assert hb and time.time() - float(hb) < 60\""]
+      test: ["CMD", "python", "/app/scripts/worker_healthcheck.py"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -433,14 +425,6 @@ services:
       - numba_cache:/app/cache/numba_cache:rw
       - yolo_cache:/app/cache/ultralytics:rw
       - calibration_models_cache:/app/cache/calibration_models:rw
-    deploy:
-      resources:
-        limits:
-          memory: 12G
-          cpus: "4.0"
-        reservations:
-          memory: 2G
-          cpus: "1.0"
     mem_limit: 12g
     cpus: 4.0
     networks:
@@ -478,7 +462,7 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/health 2>&1 | head -1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/lb-health 2>&1 | head -1"]
       interval: 30s
       timeout: 10s
       retries: 3

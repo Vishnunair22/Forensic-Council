@@ -68,7 +68,7 @@ async def _is_rate_limited(ip: str) -> bool:
         # deny access rather than falling back to in-memory state.  In-memory fallback
         # is NOT safe in multi-worker deployments — brute-force requests can be spread
         # across workers to bypass it.  Only allow fallback in explicit local dev.
-        if settings.app_env == "production" or settings.redis_host != "localhost":
+        if settings.app_env == "production" or settings.app_env == "staging" or settings.redis_host != "localhost":
             logger.error(
                 "Redis unreachable for rate limiting - failing secure on auth",
                 error=str(e),

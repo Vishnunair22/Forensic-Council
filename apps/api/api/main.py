@@ -11,6 +11,7 @@ import asyncio
 import concurrent.futures
 import faulthandler
 import hashlib
+import hmac
 import json
 import os
 import secrets
@@ -43,6 +44,7 @@ import core
 
 logger = get_logger(__name__)
 _mem_http_rate: dict[str, list[float]] = {}
+_MEM_RATE_MAX_ENTRIES = 10_000
 
 
 def _app_env_from_env() -> str:
@@ -52,7 +54,7 @@ def _app_env_from_env() -> str:
 def _cors_allowed_origins_from_env() -> list[str]:
     raw = os.environ.get(
         "CORS_ALLOWED_ORIGINS",
-        "http://localhost,http://localhost:3000,http://localhost:8000,http://127.0.0.1:3000",
+        "http://localhost:3000,http://localhost:8000,http://127.0.0.1:3000",
     ).strip()
     if not raw:
         return []
@@ -69,12 +71,12 @@ _settings_import_error: Exception | None = None
 try:
     _settings_for_import = get_settings()
 except Exception as exc:
-    _settings_for_import = None
     _settings_import_error = exc
     logger.error("Settings validation failed while creating API app", error=str(exc))
 
 # Enable faulthandler for debugging hangs. On SIGUSR1, dump all thread stacks.
-# Usage: docker compose kill -s SIGUSR1 backend
+# Usage (Linux/macOS only): docker compose kill -s SIGUSR1 backend
+# On Windows, use: docker exec -it <container> python -c "import faulthandler; faulthandler.dump_traceback()"
 faulthandler.enable()
 if hasattr(signal, "SIGUSR1"):
     faulthandler.register(signal.SIGUSR1, file=sys.stderr, chain=True)
@@ -469,7 +471,7 @@ app.add_middleware(
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
     """Add security headers to every response."""
-    settings = get_settings()
+    settings = request.app.state.settings
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
@@ -498,11 +500,11 @@ _CSRF_EXEMPT_PATHS = {
 
 @app.middleware("http")
 async def csrf_middleware(request: Request, call_next):
-    settings = get_settings()
+    settings = request.app.state.settings
     if settings.app_env == "testing":
         return await call_next(request)
-    """
-    CSRF protection via the double-submit cookie pattern.
+
+    """CSRF protection via the double-submit cookie pattern.
 
     Safe methods (GET, HEAD, OPTIONS) are always allowed.
     State-changing methods (POST, PUT, DELETE, PATCH) must carry an
@@ -582,9 +584,20 @@ async def rate_limit_middleware(request: Request, call_next):
     if auth_header:
         # Strip "Bearer " prefix if present for consistent hashing
         raw_token = auth_header[7:] if auth_header.lower().startswith("bearer ") else auth_header
-        identifier = "tok:" + hashlib.sha256(raw_token.strip().encode()).hexdigest()[:32]
+        # Use HMAC with JWT secret as salt to avoid storing token hashes in Redis
+        settings = request.app.state.settings
+        identifier = "tok:" + hmac.new(
+            settings.jwt_secret_key.encode(),
+            raw_token.strip().encode(),
+            hashlib.sha256,
+        ).hexdigest()[:32]
     elif session_cookie:
-        identifier = "cookie:" + hashlib.sha256(session_cookie.encode()).hexdigest()[:32]
+        settings = request.app.state.settings
+        identifier = "cookie:" + hmac.new(
+            settings.jwt_secret_key.encode(),
+            session_cookie.encode(),
+            hashlib.sha256,
+        ).hexdigest()[:32]
     else:
         identifier = f"ip:{ip}"
 
@@ -642,6 +655,8 @@ async def rate_limit_middleware(request: Request, call_next):
                     content={"detail": "Too many requests. Please try again later."},
                     headers={"Retry-After": str(window)},
                 )
+            if len(_mem_http_rate) > _MEM_RATE_MAX_ENTRIES:
+                _mem_http_rate.clear()
 
     return await call_next(request)
 

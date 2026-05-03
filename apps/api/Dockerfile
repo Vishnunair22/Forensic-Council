@@ -101,7 +101,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # -- Stage 3: migration - lightweight DB init (no ML deps) --------------------
 FROM deps-core AS migration
 
-COPY pyproject.toml uv.lock ./
 COPY scripts/ scripts/
 COPY core/ core/
 COPY api/ api/
@@ -130,6 +129,9 @@ RUN addgroup --system --gid 1001 appgroup \
 
 USER appuser
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD pg_isready -U ${POSTGRES_USER:-forensic_user} -d ${POSTGRES_DB:-forensic_council} || exit 1
+
 CMD ["python", "scripts/init_db.py"]
 
 # -- Stage 4: app - shared source + dirs + bytecode (inherits deps-full) ------
@@ -137,7 +139,6 @@ CMD ["python", "scripts/init_db.py"]
 # It avoids duplicating COPY / mkdir / compileall / chmod across both targets.
 FROM deps-full AS app
 
-COPY pyproject.toml uv.lock ./
 COPY scripts/ scripts/
 COPY core/ core/
 COPY api/ api/
@@ -187,9 +188,16 @@ RUN mkdir -p \
     /opt/forensic-model-cache/ultralytics \
     /opt/forensic-model-cache/calibration_models
 
+# Declare build args BEFORE any RUN that consumes them.
+ARG PRELOAD_MODELS=1
+ARG YOLO_MODEL_NAME=detr-resnet-50
+ARG AASIST_MODEL_NAME=Vansh180/deepfake-audio-wav2vec2
+ENV YOLO_MODEL_NAME="${YOLO_MODEL_NAME}" \
+    AASIST_MODEL_NAME="${AASIST_MODEL_NAME}"
+
 # Verify ML runtime dependencies and script registry before downloading models.
 # Skip this step for air-gapped builds (PRELOAD_MODELS=0).
-RUN if [ "${PRELOAD_MODELS:-1}" = "1" ]; then \
+RUN if [ "${PRELOAD_MODELS}" = "1" ]; then \
         python scripts/validate_ml_tools.py ; \
     else \
         echo "Skipping ML tools validation (air-gapped build)" ; \
@@ -210,11 +218,6 @@ RUN if [ ! -f /opt/forensic-model-cache/calibration_models/.trained ]; then \
 # Bake heavyweight model assets into the image so clean Docker volumes start hot.
 # Runtime named volumes shadow /app/cache/*, so the entrypoint seeds them from
 # /opt/forensic-model-cache on first startup.
-ARG PRELOAD_MODELS=1
-ARG YOLO_MODEL_NAME=yolo11n.pt
-ARG AASIST_MODEL_NAME=Vansh180/deepfake-audio-wav2vec2
-ENV YOLO_MODEL_NAME="${YOLO_MODEL_NAME}" \
-    AASIST_MODEL_NAME="${AASIST_MODEL_NAME}"
 RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
         HF_HOME="$FORENSIC_MODEL_SEED_DIR/huggingface" \
         TRANSFORMERS_CACHE="$FORENSIC_MODEL_SEED_DIR/huggingface/transformers" \
@@ -240,6 +243,9 @@ RUN addgroup --system --gid 1001 appgroup \
 
 RUN chmod +x scripts/docker_entrypoint.sh
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=5 \
+    CMD wget -qO- http://127.0.0.1:8000/health || exit 1
+
 # -- Stage 5: development - hot-reload server ---------------------------------
 FROM app AS development
 
@@ -261,6 +267,9 @@ ENTRYPOINT ["sh", "scripts/docker_entrypoint.sh"]
 FROM app AS production
 
 EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=5 \
+    CMD wget -qO- http://127.0.0.1:8000/health || exit 1
 
 # Start as root so docker_entrypoint.sh can repair mounted volume ownership,
 # then it drops privileges to appuser before running the API or worker.

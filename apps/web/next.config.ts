@@ -35,7 +35,8 @@ const nextConfig: NextConfig = {
   // ── Compression ──────────────────────────────────────────────────────────
   // Disabled: Caddy handles compression via `encode zstd gzip` in Caddyfile.
   // Enabling both causes double-compression (wasted CPU, slightly larger output).
-  compress: false,
+  // Local dev without Caddy can enable if needed (RUNNING_IN_DOCKER=1 for Docker compose).
+  compress: process.env.RUNNING_IN_DOCKER === "1",
 
   // ── TypeScript & ESLint ───────────────────────────────────────────────
   // Strict by default. CI runs `npm run type-check` and `npm run lint`
