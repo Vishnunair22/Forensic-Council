@@ -48,6 +48,7 @@ export default function EvidenceUploadPage() {
     <main className="relative min-h-screen px-6 py-32 overflow-hidden">
       {investigation.showLoadingOverlay && (
         <LoadingOverlay
+          variant="minimal"
           liveText={investigation.uploadPhaseText || investigation.pipelineMessage || "Initializing Workspace..."}
           dispatchedCount={Object.keys(investigation.agentUpdates).length}
           totalAgents={5}
@@ -56,6 +57,7 @@ export default function EvidenceUploadPage() {
 
       {investigation.arbiterDeliberating && (
         <LoadingOverlay
+          variant="minimal"
           title="Council Deliberation"
           subtitle="Arbiter Protocol"
           liveText={investigation.arbiterLiveText || "Backend arbiter synthesizing initial agent findings..."}

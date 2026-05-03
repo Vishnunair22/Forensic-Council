@@ -49,7 +49,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: Uploa
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      exit={{ rotateX: -180, opacity: 0, transition: { duration: 0.45 } }}
       transition={{ duration: 0.18, ease: "easeOut" }}
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 backdrop-blur-xl p-4"
     >

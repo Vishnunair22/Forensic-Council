@@ -61,6 +61,7 @@ export const useSimulation = ({
 
   const wsRef = useRef<WebSocket | null>(null);
   const completedAgentsRef = useRef<AgentUpdate[]>([]);
+  const lastSessionIdRef = useRef<string | null>(null);
   /** True after POST /resume succeeds — PIPELINE_COMPLETE must not be dropped while still `awaiting_decision` from React's stale batch. */
   const expectingPipelineCompleteRef = useRef(false);
 
@@ -89,6 +90,13 @@ export const useSimulation = ({
   // Connect WebSocket manually — returns a Promise that resolves once the WS is open.
   const connectWebSocket = useCallback(
     (targetSessionId: string, isReconnect: boolean = false): Promise<void> => {
+      // Hard-clear revealQueue and completedAgents when session ID changes
+      if (lastSessionIdRef.current !== null && lastSessionIdRef.current !== targetSessionId) {
+        setRevealQueue([]);
+        completedAgentsRef.current = [];
+      }
+      lastSessionIdRef.current = targetSessionId;
+
       // Store session ID
       setSessionId(targetSessionId);
 
@@ -99,6 +107,7 @@ export const useSimulation = ({
         completedAgentsRef.current = [];
         setAgentUpdates({});
         setErrorMessage(null);
+        setRevealQueue([]);
       }
 
       return new Promise((resolve, reject) => {

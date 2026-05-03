@@ -8,6 +8,7 @@ import { ArrowRight, Loader2 } from "lucide-react";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { useSound } from "@/hooks/useSound";
 import { sessionOnlyStorage } from "@/lib/storage";
+import { autoLoginAsInvestigator } from "@/lib/api/client";
 
 import { UploadModal } from "@/components/evidence/UploadModal";
 import { UploadSuccessModal } from "@/components/evidence/UploadSuccessModal";
@@ -22,6 +23,7 @@ export function HeroAuthActions() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
   const [handoffVisible, setHandoffVisible] = useState(false);
+  const [isHandingOff, setIsHandingOff] = useState(false);
   const { playSound } = useSound();
 
   useEffect(() => {
@@ -31,6 +33,7 @@ export function HeroAuthActions() {
       setIsAuthenticating(false);
       setAuthError(null);
       setHandoffVisible(false);
+      setIsHandingOff(false);
     };
 
     const openUpload = () => {
@@ -39,6 +42,7 @@ export function HeroAuthActions() {
       setIsAuthenticating(false);
       setAuthError(null);
       setHandoffVisible(false);
+      setIsHandingOff(false);
       router.prefetch?.("/evidence");
     };
 
@@ -106,6 +110,8 @@ export function HeroAuthActions() {
             setSelectedFile(null);
             setAuthError(null);
             setHandoffVisible(false);
+            setIsHandingOff(false);
+            __pendingFileStore.authPromise = autoLoginAsInvestigator();
           }}
           aria-label={isAuthenticating ? "Initializing..." : authError ? authError : "Upload a file to begin analysis"}
           className="btn-horizon-primary group relative select-none"
@@ -133,13 +139,13 @@ export function HeroAuthActions() {
         onHome={() => { setAuthError(null); setSelectedFile(null); }}
       />
 
-      <AnimatePresence mode="sync">
-        {showUpload && !selectedFile && (
+      <AnimatePresence mode="wait">
+        {showUpload && !selectedFile && !isHandingOff && (
           <UploadModal
-            key="upload-modal" // Crucial for mode="wait" to track component lifecycle
+            key="upload-modal"
             onClose={() => setShowUpload(false)}
             onFileSelected={(f) => {
-              playSound("success-chime"); // The soft, elegant success sound
+              playSound("success-chime");
               setSelectedFile(f);
             }}
           />
@@ -148,9 +154,11 @@ export function HeroAuthActions() {
           <UploadSuccessModal
             key="success-modal"
             file={selectedFile}
-            onNewUpload={() => setSelectedFile(null)}
+            onNewUpload={() => { setSelectedFile(null); setIsHandingOff(false); }}
             onStartAnalysis={async () => {
+              setIsHandingOff(true);
               playSound("envelope-close");
+              await new Promise((r) => setTimeout(r, 220));
               await handleStartAnalysis();
             }}
           />

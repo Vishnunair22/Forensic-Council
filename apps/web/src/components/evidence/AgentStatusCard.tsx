@@ -42,6 +42,7 @@ export interface AgentStatusCardProps {
   onSkipExpire?: (agentId: string) => void;
   isExpanded?: boolean;
   onToggleExpand?: () => void;
+  onAnimationStart?: () => void;
 }
 
 const statusConfig = {
@@ -139,6 +140,7 @@ export function AgentStatusCard({
   onSkipExpire,
   isExpanded = false,
   onToggleExpand,
+  onAnimationStart,
 }: AgentStatusCardProps) {
   const fileCategory = fileMime?.startsWith("image/") ? "image"
     : fileMime?.startsWith("audio/") ? "audio"
@@ -186,6 +188,7 @@ export function AgentStatusCard({
   return (
     <motion.div
       layout
+      onAnimationStart={() => onAnimationStart?.()}
       className={clsx(
         "glass-panel relative flex flex-col overflow-hidden transition-all duration-500",
         status === "unsupported" ? "min-h-[200px]" : "min-h-[540px]",

@@ -3,8 +3,86 @@
 import { useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { X, Upload } from "lucide-react";
+import { X } from "lucide-react";
 import { ALLOWED_MIME_TYPES, MAX_UPLOAD_SIZE_BYTES } from "@/lib/constants";
+
+function EnvelopeOpen({ isDragging }: { isDragging: boolean }) {
+  return (
+    <div className="relative flex h-24 w-24 items-center justify-center">
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+        className="absolute inset-0 rounded-full border border-primary/20 border-dashed"
+      />
+      <div className="absolute inset-2 rounded-full border border-primary/10" />
+      <div className="relative w-16 h-12">
+        <svg viewBox="0 0 64 48" className="w-full h-full">
+          <defs>
+            <linearGradient id="envBody" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#1e293b" />
+              <stop offset="100%" stopColor="#0f172a" />
+            </linearGradient>
+            <linearGradient id="envFlap" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#334155" />
+              <stop offset="100%" stopColor="#1e293b" />
+            </linearGradient>
+          </defs>
+          <motion.path
+            d="M2 12 L2 42 Q2 46 6 46 L58 46 Q62 46 62 42 L62 12 Q62 8 58 8 L6 8 Q2 8 2 12Z"
+            fill="url(#envBody)"
+            stroke="#475569"
+            strokeWidth="1"
+          />
+          <motion.path
+            d="M2 12 L32 28 L62 12"
+            fill="none"
+            stroke="#475569"
+            strokeWidth="1"
+          />
+          <motion.g>
+            <motion.path
+              d="M2 8 L32 26 L62 8"
+              fill="url(#envFlap)"
+              stroke="#64748b"
+              strokeWidth="0.5"
+              initial={{ rotateX: 180, opacity: 0.9 }}
+              animate={{ rotateX: isDragging ? 0 : 0, opacity: 1 }}
+              transition={{ duration: 0.38, ease: [0.34, 1.56, 0.64, 1] }}
+              style={{ transformOrigin: "32px 26px" }}
+            />
+            <motion.rect
+              x="10"
+              y="22"
+              width="44"
+              height="18"
+              rx="1"
+              fill="#f8fafc"
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: isDragging ? 0 : 8, opacity: isDragging ? 1 : 0.6 }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
+            />
+            <motion.path
+              d="M16 28 L28 36"
+              stroke="#94a3b8"
+              strokeWidth="1.5"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: isDragging ? 1 : 0.4 }}
+              transition={{ delay: 0.15, duration: 0.2 }}
+            />
+            <motion.path
+              d="M36 28 L48 36"
+              stroke="#94a3b8"
+              strokeWidth="1.5"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: isDragging ? 1 : 0.4 }}
+              transition={{ delay: 0.2, duration: 0.2 }}
+            />
+          </motion.g>
+        </svg>
+      </div>
+    </div>
+  );
+}
 
 export interface UploadModalProps {
   onClose: () => void;
@@ -105,16 +183,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
                   : "border-white/5 hover:border-primary/40 hover:bg-white/[0.02]"
               }`}
             >
-              {/* Aperture Animation around icon */}
-              <div className="relative flex h-24 w-24 items-center justify-center">
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-                  className="absolute inset-0 rounded-full border border-primary/20 border-dashed"
-                />
-                <div className="absolute inset-2 rounded-full border border-primary/10" />
-                <Upload className={`h-10 w-10 transition-colors duration-300 ${isDragging ? "text-primary" : "text-white/30 group-hover:text-primary"}`} strokeWidth={1.5} />
-              </div>
+              <EnvelopeOpen isDragging={isDragging} />
 
               <div className="flex flex-col items-center gap-2 pointer-events-none">
                 <span className={`text-xl font-heading font-bold tracking-tight transition-colors ${isDragging ? "text-primary" : "text-white/80 group-hover:text-primary"}`}>

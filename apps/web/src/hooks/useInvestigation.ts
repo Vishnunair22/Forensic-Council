@@ -47,6 +47,7 @@ async function waitForFinalReport(
 ): Promise<boolean> {
   const deadline = Date.now() + maxMs;
   let pollInterval = ARBITER_POLL_INTERVAL_MS;
+  let consecutiveNotFound = 0;
   while (Date.now() < deadline) {
     if (signal?.aborted) return false;
     try {
@@ -60,6 +61,7 @@ async function waitForFinalReport(
         throw new Error(st.message || "Council synthesis failed.");
       }
       if (st.status === "complete") {
+        consecutiveNotFound = 0;
         try {
           const res = await withTimeout(getReport(sessionId), 30_000);
           if (res.status === "complete" && res.report) return true;
@@ -67,8 +69,18 @@ async function waitForFinalReport(
           /* in progress */
         }
       }
+      if (st.status === "not_found") {
+        consecutiveNotFound++;
+        if (consecutiveNotFound >= 5) {
+          throw new Error("Investigation session not found. The session may have expired.");
+        }
+      } else {
+        consecutiveNotFound = 0;
+      }
     } catch (e: unknown) {
       if (e instanceof Error && e.message.includes("Council synthesis"))
+        throw e;
+      if (e instanceof Error && e.message.includes("not found") || e instanceof Error && e.message.includes("session may have expired"))
         throw e;
     }
     await new Promise<void>((r) => {
@@ -117,6 +129,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const lastSessionIdRef = useRef<string | null>(null);
   const completedAgentsRef = useRef<AgentUpdate[]>([]);
   const arbiterAbortControllerRef = useRef<AbortController | null>(null);
+  const prevAwaitingDecisionRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -169,22 +182,40 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   useEffect(() => {
     if (typeof window === "undefined" || authReadyRef.current) return;
 
-    if (document.cookie.includes("access_token") || getAuthToken() !== null) {
-      authReadyRef.current = Promise.resolve();
-    } else {
-      authReadyRef.current = autoLoginAsInvestigator()
-        .then(() => {
-          storage.setItem("forensic_auth_ok", "1");
-        })
-        .catch((err: unknown) => {
-          const msg = err instanceof Error ? err.message : "Authentication failed";
-          setAuthError(msg);
-          toast.destructive({
-            title: "Authentication Error",
-            description: `Could not establish session: ${msg}. Please refresh the page.`,
+    const initAuth = async () => {
+      if (document.cookie.includes("access_token") || getAuthToken() !== null) {
+        authReadyRef.current = Promise.resolve();
+      } else if (__pendingFileStore.authPromise) {
+        authReadyRef.current = __pendingFileStore.authPromise
+          .then(() => {
+            storage.setItem("forensic_auth_ok", "1");
+            __pendingFileStore.authPromise = null;
+          })
+          .catch((err: unknown) => {
+            __pendingFileStore.authPromise = null;
+            const msg = err instanceof Error ? err.message : "Authentication failed";
+            setAuthError(msg);
+            toast.destructive({
+              title: "Authentication Error",
+              description: `Could not establish session: ${msg}. Please refresh the page.`,
+            });
           });
-        });
-    }
+      } else {
+        authReadyRef.current = autoLoginAsInvestigator()
+          .then(() => {
+            storage.setItem("forensic_auth_ok", "1");
+          })
+          .catch((err: unknown) => {
+            const msg = err instanceof Error ? err.message : "Authentication failed";
+            setAuthError(msg);
+            toast.destructive({
+              title: "Authentication Error",
+              description: `Could not establish session: ${msg}. Please refresh the page.`,
+            });
+          });
+      }
+    };
+    initAuth();
   }, []);
 
   const filePreviewUrl = useMemo(() => {
@@ -354,51 +385,49 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         })
         .finally(() => {
           investigationInFlightRef.current = false;
+          __pendingFileStore.file = null;
         });
     },
     [playSound, startSimulation, connectWebSocket, resetSimulation]
   );
 
   useEffect(() => {
+    if (autoStartFiredRef.current) return;
+
     const pending = __pendingFileStore.file;
-    if (pending && !autoStartFiredRef.current) {
+    const existingSessionId = storage.getItem("forensic_session_id");
+    const noReconnect = sessionOnlyStorage.getItem("fc_no_reconnect");
+    const isIdleOrError = status === "idle" || status === "error";
+
+    if (pending) {
       autoStartFiredRef.current = true;
-      __pendingFileStore.file = null;
       setFile(pending);
       sessionOnlyStorage.removeItem("forensic_auto_start");
       sessionOnlyStorage.setItem("fc_show_loading", "true");
       setShowLoadingOverlay(true);
       setAutoStartBlocking(false);
       triggerAnalysis(pending);
-    } else if (!pending && autoStartBlocking && (status === "idle" || status === "error") && !isUploading) {
-      // Safety guard: auto-start was requested but file is lost (e.g. refresh)
+    } else if (autoStartBlocking && isIdleOrError && !isUploading) {
+      autoStartFiredRef.current = true;
       setAutoStartBlocking(false);
       setShowLoadingOverlay(false);
       sessionOnlyStorage.removeItem("forensic_auto_start");
       sessionOnlyStorage.removeItem("fc_show_loading");
-    } else if (!pending && !autoStartFiredRef.current && status === "idle" && !isUploading && !autoStartBlocking) {
-      // Auto-reconnect to an active session when navigating directly to the evidence page
-      const noReconnect = sessionOnlyStorage.getItem("fc_no_reconnect");
-      if (noReconnect) {
-        sessionOnlyStorage.removeItem("fc_no_reconnect");
-        // Don't reconnect to old session — fresh upload requested
-      } else {
-        const existingSessionId = storage.getItem("forensic_session_id");
-        if (existingSessionId) {
-          autoStartFiredRef.current = true;
-          startSimulation();
-          connectWebSocket(existingSessionId)
-            .then(() => {
-              setAnalysisStreamReady(true);
-            })
-            .catch((wsErr: unknown) => {
-              const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
-              setWsConnectionError(wsErrMsg);
-              setShowLoadingOverlay(false);
-              resetSimulation();
-            });
-        }
-      }
+    } else if (!pending && !autoStartBlocking && isIdleOrError && !isUploading && existingSessionId && !noReconnect) {
+      autoStartFiredRef.current = true;
+      startSimulation();
+      connectWebSocket(existingSessionId)
+        .then(() => {
+          setAnalysisStreamReady(true);
+        })
+        .catch((wsErr: unknown) => {
+          const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
+          setWsConnectionError(wsErrMsg);
+          setShowLoadingOverlay(false);
+          resetSimulation();
+        });
+    } else if (noReconnect) {
+      sessionOnlyStorage.removeItem("fc_no_reconnect");
     }
   }, [triggerAnalysis, autoStartBlocking, isUploading, status, startSimulation, connectWebSocket, resetSimulation]);
 
@@ -473,6 +502,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     storage.setItem("forensic_is_deep", "true");
     storage.setItem("forensic_initial_agents", completedAgentsRef.current, true);
     analysisCompleteSoundedRef.current = false;
+    prevAwaitingDecisionRef.current = false;
     clearCompletedAgents();
     setPhase("deep");
     try {
@@ -517,6 +547,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setPhase("initial");
     setWsConnectionError(null);
     lastSessionIdRef.current = null;
+    autoStartFiredRef.current = false;
     storage.removeItem("forensic_session_id");
     storage.removeItem("forensic_investigation_ctx");
     storage.removeItem("forensic_case_id");
@@ -586,7 +617,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     ? (status === "complete" || expectedCompletedCount >= expectedAgentIds.size)
     : expectedCompletedCount >= expectedAgentIds.size;
 
-  const prevAwaitingDecisionRef = useRef(false);
   useEffect(() => {
     if (awaitingDecision && !prevAwaitingDecisionRef.current) {
       playSound("think");
@@ -622,7 +652,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     const safety = setTimeout(() => {
       setShowLoadingOverlay(false);
       sessionOnlyStorage.removeItem("fc_show_loading");
-    }, 20_000); // give backend 20s after WS-ready before forcing dismissal
+      setWsConnectionError("Analysis startup timed out. Please try again.");
+      toast.destructive({
+        title: "Connection Timeout",
+        description: "The analysis stream did not start in time. Please refresh and try again.",
+      });
+    }, 12_000);
     return () => clearTimeout(safety);
   }, [showLoadingOverlay, analysisStreamReady]);
 

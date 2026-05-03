@@ -291,27 +291,7 @@ export function createLiveSocket(sessionId: string): { ws: WebSocket; connected:
   const connected = new Promise<void>((resolve, reject) => {
     let settled = false;
 
-    const handleMessage = (event: MessageEvent) => {
-      try {
-        const payload = JSON.parse(event.data) as { type?: string; message?: string };
-        if (
-          payload.type === "CONNECTED" ||
-          payload.type === "AGENT_UPDATE" ||
-          payload.type === "PIPELINE_PAUSED" ||
-          payload.type === "AGENT_COMPLETE" ||
-          payload.type === "PIPELINE_COMPLETE" ||
-          payload.type === "REPORT_READY" ||
-          payload.type === "PIPELINE_QUARANTINED"
-        ) {
-          settle(resolve);
-        } else if (payload.type === "ERROR") {
-          const msg = payload.message || "WebSocket investigation error";
-          settle(() => reject(new Error(msg)));
-        }
-      } catch {
-        // Runtime messages are processed by useSimulation.
-      }
-    };
+    const handleOpen = () => settle(resolve);
 
     const handleError = () => settle(() => reject(new Error("WebSocket connection error")));
     const handleClose = (event: CloseEvent) => {
@@ -326,7 +306,7 @@ export function createLiveSocket(sessionId: string): { ws: WebSocket; connected:
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
-      ws.removeEventListener("message", handleMessage);
+      ws.removeEventListener("open", handleOpen);
       ws.removeEventListener("error", handleError);
       ws.removeEventListener("close", handleClose);
       fn();
@@ -337,7 +317,7 @@ export function createLiveSocket(sessionId: string): { ws: WebSocket; connected:
       LIVE_SOCKET_CONNECT_TIMEOUT_MS,
     );
 
-    ws.addEventListener("message", handleMessage);
+    ws.addEventListener("open", handleOpen);
     ws.addEventListener("error", handleError);
     ws.addEventListener("close", handleClose);
   });

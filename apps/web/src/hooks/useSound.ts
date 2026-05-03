@@ -56,14 +56,15 @@ function _tryUnlock() {
 
 // Register once — removes itself after the first gesture.
 if (typeof window !== "undefined") {
-  const _once = () => {
+  const _unlock = () => {
     _tryUnlock();
-    window.removeEventListener("pointerdown", _once, true);
+    window.removeEventListener("pointerdown", _unlock, true);
+    window.removeEventListener("click", _unlock, true);
+    window.removeEventListener("keydown", _unlock, true);
   };
-  window.addEventListener("pointerdown", _once, {
-    capture: true,
-    passive: true,
-  });
+  window.addEventListener("pointerdown", _unlock, { capture: true, passive: true });
+  window.addEventListener("click", _unlock, { capture: true, passive: true });
+  window.addEventListener("keydown", _unlock, { capture: true, passive: true });
 }
 
 /** Soft gain envelope helper — attack + exponential release */
@@ -89,8 +90,8 @@ export function useSound() {
       if (typeof window === "undefined") return;
       if (_isMuted) return;
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-      // Only proceed if user has already interacted — prevents the Chrome
-      // "AudioContext was not allowed to start" warning on programmatic calls.
+      // Try to unlock on programmatic calls (e.g., file picker callback)
+      if (!_audioUnlocked) _tryUnlock();
       if (!_audioUnlocked || !globalCtx) return;
 
       const ctx = globalCtx;

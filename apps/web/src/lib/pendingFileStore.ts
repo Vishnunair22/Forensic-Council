@@ -1,4 +1,9 @@
-type PendingFileStore = { file: File | null };
+import type { TokenResponse } from "./api/client";
+
+type PendingFileStore = {
+  file: File | null;
+  authPromise: Promise<TokenResponse> | null;
+};
 
 const globalStore = globalThis as typeof globalThis & {
   __fcPendingFileStore?: PendingFileStore;
@@ -8,6 +13,6 @@ const globalStore = globalThis as typeof globalThis & {
 // file in a browser-runtime singleton so route chunks and dev HMR instances
 // share the same handoff object during the landing -> evidence transition.
 export const __pendingFileStore: PendingFileStore =
-  globalStore.__fcPendingFileStore ?? { file: null };
+  globalStore.__fcPendingFileStore ?? { file: null, authPromise: null };
 
 globalStore.__fcPendingFileStore = __pendingFileStore;

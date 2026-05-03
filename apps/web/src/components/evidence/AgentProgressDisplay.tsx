@@ -144,17 +144,12 @@ export function AgentProgressDisplay({
     if (!mimeType) return;
     setHiddenAgents(new Set());
     setExpandedCards({});
+    const supportedIds = new Set(supportedAgentIdsForMime(mimeType));
     setValidatingAgents(new Set(allValidAgents.map(a => a.id)));
-    const timers = allValidAgents.map((agent, index) =>
-      setTimeout(() => {
-        setValidatingAgents((prev) => {
-          const next = new Set(prev);
-          next.delete(agent.id);
-          return next;
-        });
-      }, 2200 + index * 2000)
-    );
-    return () => timers.forEach((timer) => clearTimeout(timer));
+    const timer = setTimeout(() => {
+      setValidatingAgents(new Set());
+    }, 1500);
+    return () => clearTimeout(timer);
   }, [mimeType]);
 
   const handleSkipExpire = React.useCallback((agentId: string) => {
@@ -303,6 +298,7 @@ export function AgentProgressDisplay({
                   onSkipExpire={handleSkipExpire}
                   isExpanded={!!expandedCards[agent.id]}
                   onToggleExpand={() => setExpandedCards(prev => ({ ...prev, [agent.id]: !prev[agent.id] }))}
+                  onAnimationStart={() => playSoundRef.current?.("hum")}
                 />
               </motion.div>
             ))}

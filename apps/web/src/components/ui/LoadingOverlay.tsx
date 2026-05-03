@@ -10,6 +10,7 @@ export interface LoadingOverlayProps {
   totalAgents?: number;
   title?: string;
   subtitle?: string;
+  variant?: "full" | "minimal";
 }
 
 const PHASES = [
@@ -49,6 +50,7 @@ export function LoadingOverlay({
   totalAgents = 6,
   title = "Preparing Analysis",
   subtitle = "Forensic Protocol 2026",
+  variant = "full",
 }: LoadingOverlayProps) {
   const currentPhase = getPhaseIndex(liveText || "");
   const effectivePhase = dispatchedCount > 0 ? 2 : currentPhase;
@@ -56,6 +58,30 @@ export function LoadingOverlay({
     92,
     Math.max(18, Math.round(((effectivePhase + 1) / PHASES.length) * 72) + dispatchedCount * 4),
   );
+
+  if (variant === "minimal") {
+    return (
+      <motion.div
+        className="fixed inset-0 z-[10000] flex items-center justify-center px-6 selection:bg-transparent"
+        style={{
+          background: "rgba(0, 0, 0, 0.95)",
+          backdropFilter: "blur(24px)",
+          WebkitBackdropFilter: "blur(24px)",
+        }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0, transition: { duration: 0.18, ease: "easeOut" } }}
+        transition={{ duration: 0.12, ease: "easeOut" }}
+      >
+        <div className="flex flex-col items-center">
+          <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
+          <p className="text-sm font-mono font-semibold tracking-wide text-primary/70 text-center" role="status" aria-live="polite">
+            {liveText || "Opening live investigation stream..."}
+          </p>
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
