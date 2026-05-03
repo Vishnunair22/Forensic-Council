@@ -412,9 +412,11 @@ class AgentInvestigationMixin:
 
         if synthesis is None:
             synthesis = self._build_deterministic_synthesis(self._findings, phase="initial")
-            self._agent_confidence = synthesis["agent_confidence"]
-            self._agent_error_rate = synthesis["agent_error_rate"]
-            self._agent_synthesis = synthesis
+        if not synthesis or not synthesis.get("sections"):
+            synthesis = self._build_deterministic_synthesis(self._findings, phase="initial")
+        self._agent_confidence = synthesis["agent_confidence"]
+        self._agent_error_rate = synthesis["agent_error_rate"]
+        self._agent_synthesis = synthesis
 
         await self._publish_agent_context("initial", self._findings)
         self._reflection_report = await self.self_reflection_pass(self._findings)
@@ -477,9 +479,11 @@ class AgentInvestigationMixin:
         )
         if synthesis is None:
             synthesis = self._build_deterministic_synthesis(self._findings, phase="deep")
-            self._agent_confidence = synthesis["agent_confidence"]
-            self._agent_error_rate = synthesis["agent_error_rate"]
-            self._agent_synthesis = synthesis
+        if not synthesis or not synthesis.get("sections"):
+            synthesis = self._build_deterministic_synthesis(self._findings, phase="deep")
+        self._agent_confidence = synthesis["agent_confidence"]
+        self._agent_error_rate = synthesis["agent_error_rate"]
+        self._agent_synthesis = synthesis
         await self._publish_agent_context("deep", self._findings)
         self._reflection_report = await self.self_reflection_pass(self._findings)
         await deep_trace.complete({"deep_finding_count": len(deep_findings)})

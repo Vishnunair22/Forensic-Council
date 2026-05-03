@@ -101,13 +101,24 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
         await asyncio.sleep(0.1)
 
     if not metadata:
-        logger.warning(
-            "WebSocket connection rejected: Session metadata not found",
-            session_id=session_id,
-        )
-        await websocket.send_json({"type": "ERROR", "message": "Session not found"})
-        await websocket.close(code=4004)
-        return
+        # Check if pipeline exists in-memory (Redis metadata may lag after restart)
+        from orchestration.pipeline_registry import get_pipeline
+
+        pipeline = get_pipeline(session_id)
+        if pipeline is not None:
+            metadata = {"status": "running", "investigator_id": "pending"}
+            logger.info(
+                "WebSocket reconnecting: Found active pipeline in memory",
+                session_id=session_id,
+            )
+        else:
+            logger.warning(
+                "WebSocket connection rejected: Session metadata not found",
+                session_id=session_id,
+            )
+            await websocket.send_json({"type": "ERROR", "message": "Session not found"})
+            await websocket.close(code=4004)
+            return
 
     if isinstance(metadata, dict) and metadata.get("status") == "interrupted":
         logger.warning(

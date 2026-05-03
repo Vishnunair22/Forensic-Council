@@ -415,17 +415,37 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       sessionOnlyStorage.removeItem("fc_show_loading");
     } else if (!pending && !autoStartBlocking && isIdleOrError && !isUploading && existingSessionId && !noReconnect) {
       autoStartFiredRef.current = true;
-      startSimulation();
-      connectWebSocket(existingSessionId)
-        .then(() => {
-          setAnalysisStreamReady(true);
-        })
-        .catch((wsErr: unknown) => {
-          const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
-          setWsConnectionError(wsErrMsg);
-          setShowLoadingOverlay(false);
-          resetSimulation();
-        });
+      // Pre-validate session before attempting reconnection
+      (async () => {
+        try {
+          const st = await getArbiterStatus(existingSessionId);
+          if (st.status === "not_found") {
+            // Session expired — clean up and show fresh upload form
+            storage.removeItem("forensic_session_id");
+            storage.removeItem("forensic_investigation_ctx");
+            return;
+          }
+          if (st.status === "complete") {
+            // Session already done — redirect to results
+            router.push("/result", { scroll: true });
+            return;
+          }
+          // Session is active — reconnect
+          startSimulation();
+          connectWebSocket(existingSessionId)
+            .then(() => setAnalysisStreamReady(true))
+            .catch((wsErr: unknown) => {
+              const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
+              setWsConnectionError(wsErrMsg);
+              setShowLoadingOverlay(false);
+              resetSimulation();
+              // Clear stale session on terminal failure
+              storage.removeItem("forensic_session_id");
+            });
+        } catch {
+          storage.removeItem("forensic_session_id");
+        }
+      })();
     } else if (noReconnect) {
       sessionOnlyStorage.removeItem("fc_no_reconnect");
     }

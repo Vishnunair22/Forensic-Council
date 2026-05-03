@@ -246,6 +246,29 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             cross_modal_fusion=_fusion,
             compression_penalty=comp_penalty,
         )
+
+        # Ensure meaningful output in template-mode fallback
+        if not report.verdict_sentence:
+            if report.overall_verdict in ("LIKELY_AUTHENTIC", "AUTHENTIC"):
+                report.verdict_sentence = (
+                    f"Based on {report.applicable_agent_count} specialist analyses, "
+                    "no statistically significant manipulation signals were detected. "
+                    "The evidence appears authentic within the scope of available forensic tools."
+                )
+            elif report.overall_verdict in ("TAMPERED", "MANIPULATED"):
+                report.verdict_sentence = (
+                    f"Multiple forensic agents ({report.applicable_agent_count}) identified "
+                    "manipulation indicators. The evidence shows signs of post-capture modification."
+                )
+            else:
+                report.verdict_sentence = (
+                    f"The forensic council ({report.applicable_agent_count} agents) produced "
+                    "inconclusive results. Manual expert review is recommended."
+                )
+
+        if not report.executive_summary:
+            report.executive_summary = report.verdict_sentence
+
         return await self.sign_report(report)
 
     def _deduplicate_findings(self, findings: list[dict]) -> list[dict]:
