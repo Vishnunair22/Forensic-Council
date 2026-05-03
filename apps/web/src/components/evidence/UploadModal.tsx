@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { X, Upload } from "lucide-react";
-import { ALLOWED_MIME_TYPES } from "@/lib/constants";
+import { ALLOWED_MIME_TYPES, MAX_UPLOAD_SIZE_BYTES } from "@/lib/constants";
 
 export interface UploadModalProps {
   onClose: () => void;
@@ -14,6 +14,7 @@ export interface UploadModalProps {
 export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
   const [mounted, setMounted] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -36,14 +37,27 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
     setIsDragging(false);
   }, []);
 
+  const selectFile = useCallback((file: File) => {
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+      setError("File must be 50MB or smaller.");
+      return;
+    }
+    if (!ALLOWED_MIME_TYPES.has(file.type)) {
+      setError(`File type "${file.type || "unknown"}" is not supported.`);
+      return;
+    }
+    setError(null);
+    onFileSelected(file);
+  }, [onFileSelected]);
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      onFileSelected(e.dataTransfer.files[0]);
+      selectFile(e.dataTransfer.files[0]);
     }
-  }, [onFileSelected]);
+  }, [selectFile]);
 
   if (!mounted) return null;
 
@@ -122,10 +136,15 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
                 className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                 accept={Array.from(ALLOWED_MIME_TYPES).join(",")}
                 onChange={(e) => {
-                  if (e.target.files?.[0]) onFileSelected(e.target.files[0]);
+                  if (e.target.files?.[0]) selectFile(e.target.files[0]);
                 }}
               />
             </div>
+            {error && (
+              <p className="mt-4 text-sm font-semibold text-red-400" role="alert">
+                {error}
+              </p>
+            )}
           </div>
         </motion.div>
       </div>

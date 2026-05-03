@@ -574,7 +574,6 @@ volumes:
   evidence_data:
   signing_keys:
   backups_data:
-  reports_data:
   hf_cache:
   torch_cache:
   easyocr_cache:

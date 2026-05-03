@@ -31,7 +31,6 @@ if [ "$(id -u)" = "0" ]; then
         /app/storage/keys \
         /app/storage/backups \
         /app/storage/calibration_models \
-        /app/storage/reports \
         /app/cache/calibration_models \
         /app/cache/huggingface \
         /app/cache/torch \
@@ -174,29 +173,20 @@ if [ "${SKIP_CACHE_CHECK:-0}" != "1" ]; then
     fi
 fi
 
-# ------ 3. Start process (API by default, or Worker via CMD) ------------------------------------------------------------------
-# Default to scripts/run_api.py if no arguments provided
-CMD_TO_RUN="${1:-scripts/run_api.py}"
-
-if [ "$CMD_TO_RUN" = "worker" ]; then
+# ------ 3. Start process (API by default, Worker via CMD, or custom command) ---------------------------------------------------
+if [ "$#" -eq 0 ]; then
+    set -- python scripts/run_api.py
+elif [ "$1" = "worker" ]; then
     echo "  Mode: Forensic Worker - consuming tasks from Redis"
-    if [ "$(id -u)" = "0" ]; then
-        exec runuser -u appuser -- python scripts/run_worker.py
-    fi
-    exec python scripts/run_worker.py
+    set -- python scripts/run_worker.py
+elif [ "${1#*.}" = "py" ]; then
+    set -- python "$@"
 else
-    echo "  Mode: Custom Script / API - serving requests"
-    # Decide if we need to wrap $CMD_TO_RUN in python
-    case "$CMD_TO_RUN" in
-        *.py) ACTUAL_CMD="python $CMD_TO_RUN" ;;
-        *)    ACTUAL_CMD="$CMD_TO_RUN" ;;
-    esac
-
-    echo "  Executing: $ACTUAL_CMD"
-    # Use 'sh -c' to correctly word-split the command string into binary + args.
-    # Direct 'exec "$ACTUAL_CMD"' would treat the whole string as the binary name.
-    if [ "$(id -u)" = "0" ]; then
-        exec runuser -u appuser -- env HOME=/tmp sh -c "$ACTUAL_CMD"
-    fi
-    exec sh -c "$ACTUAL_CMD"
+    echo "  Mode: Custom command"
 fi
+
+echo "  Executing: $*"
+if [ "$(id -u)" = "0" ]; then
+    exec runuser -u appuser -- env HOME=/tmp "$@"
+fi
+exec "$@"

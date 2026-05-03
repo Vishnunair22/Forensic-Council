@@ -42,14 +42,19 @@ CACHE_DIRS: dict[str, str] = {
     "Calibration": settings.calibration_models_path,
 }
 
-# Minimum expected file count per cache dir to be considered "populated"
+DETR_OBJECT_DETECTOR_ACTIVE = settings.yolo_model_name == "detr-resnet-50" or (
+    "yolo" in settings.yolo_model_name.lower() and not settings.enable_agpl_models
+)
+
+# Minimum expected file count per cache dir to be considered "populated".
+# The YOLO cache is intentionally empty when the permissive DETR fallback is active.
 MIN_FILES: dict[str, int] = {
     "HuggingFace": 6,
     "PyTorch": 1,
     "EasyOCR": 2,
-    "YOLO": 1,
+    "YOLO": 0 if DETR_OBJECT_DETECTOR_ACTIVE else 1,
     "Numba": 0,  # generated at runtime, may be empty
-    "Calibration": 0,  # generated after first run
+    "Calibration": 0,  # seeded at startup if the mounted volume is empty
 }
 
 def _open_clip_cache_dir(model_name: str) -> str:
@@ -63,9 +68,7 @@ REQUIRED_HF_MODEL_DIRS = [
     "models--speechbrain--spkrec-ecapa-voxceleb",
     "models--" + settings.aasist_model_name.replace("/", "--"),
 ]
-if settings.yolo_model_name == "detr-resnet-50" or (
-    "yolo" in settings.yolo_model_name.lower() and not settings.enable_agpl_models
-):
+if DETR_OBJECT_DETECTOR_ACTIVE:
     REQUIRED_HF_MODEL_DIRS.append("models--facebook--detr-resnet-50")
 
 GREEN = "\033[0;32m"
@@ -295,7 +298,7 @@ def main() -> None:
         sys.exit(1)
 
     print(f"\n{BOLD}{'=' * 55}{RESET}")
-    print(f"{BOLD}  Starting Forensic Council API...{RESET}")
+    print(f"{BOLD}  Model cache check complete.{RESET}")
     print(f"{BOLD}{'=' * 55}{RESET}\n")
 
     # Always exit 0: empty cache is normal on first run, not an error.

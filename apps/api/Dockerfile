@@ -163,6 +163,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
 # Docker build preloads models into FORENSIC_MODEL_SEED_DIR; entrypoint copies
 # that seed into mounted runtime volumes before the API or worker starts.
 ENV NUMBA_CACHE_DIR="/app/cache/numba_cache" \
+    CALIBRATION_MODELS_PATH="/app/cache/calibration_models" \
     YOLO_CONFIG_DIR="/app/cache/ultralytics" \
     YOLO_MODEL_DIR="/app/cache/ultralytics" \
     TORCH_HOME="/app/cache/torch" \
@@ -174,7 +175,6 @@ RUN mkdir -p \
     /app/storage/evidence \
     /app/storage/keys \
     /app/storage/calibration_models \
-    /app/storage/reports \
     /app/cache/huggingface \
     /app/cache/torch \
     /app/cache/numba_cache \
@@ -208,7 +208,7 @@ RUN if [ ! -f /opt/forensic-model-cache/calibration_models/.trained ]; then \
         mkdir -p /opt/forensic-model-cache/calibration_models ; \
         for agent in agent1_image agent2_audio agent3_video agent4_document agent5_deepfake; do \
             mkdir -p "/opt/forensic-model-cache/calibration_models/$agent" ; \
-            echo "{\"model_id\":\"identity\",\"agent_id\":\"$agent\",\"method\":\"IDENTITY\",\"params\":{\"A\":1,\"B\":0},\"calibration_status\":\"IDENTITY\"}" > "/opt/forensic-model-cache/calibration_models/$agent/latest.json" ; \
+            printf '{"model_id":"identity","agent_id":"%s","method":"IDENTITY","params":{"A":1,"B":0},"calibration_status":"IDENTITY"}\n' "$agent" > "/opt/forensic-model-cache/calibration_models/$agent/latest.json" ; \
         done ; \
         touch /opt/forensic-model-cache/calibration_models/.trained ; \
     fi
@@ -218,23 +218,25 @@ RUN if [ ! -f /opt/forensic-model-cache/calibration_models/.trained ]; then \
 # /opt/forensic-model-cache on first startup.
 # Retry up to 3 times with backoff to handle transient HF 503 errors.
 RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
-        HF_HOME="$FORENSIC_MODEL_SEED_DIR/huggingface" \
-        TRANSFORMERS_CACHE="$FORENSIC_MODEL_SEED_DIR/huggingface/transformers" \
-        TORCH_HOME="$FORENSIC_MODEL_SEED_DIR/torch" \
-        EASYOCR_MODEL_DIR="$FORENSIC_MODEL_SEED_DIR/easyocr" \
-        YOLO_CONFIG_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" \
-        YOLO_MODEL_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" \
-        HOME="/tmp" \
+        export HF_HOME="$FORENSIC_MODEL_SEED_DIR/huggingface" ; \
+        export TRANSFORMERS_CACHE="$FORENSIC_MODEL_SEED_DIR/huggingface/transformers" ; \
+        export TORCH_HOME="$FORENSIC_MODEL_SEED_DIR/torch" ; \
+        export EASYOCR_MODEL_DIR="$FORENSIC_MODEL_SEED_DIR/easyocr" ; \
+        export YOLO_CONFIG_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" ; \
+        export YOLO_MODEL_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" ; \
+        export HOME="/tmp" ; \
         for i in 1 2 3; do \
-            python scripts/model_pre_download.py --strict && break || sleep 30; \
+            python scripts/model_pre_download.py --strict && exit 0; \
+            if [ "$i" -lt 3 ]; then sleep 30; fi; \
         done; \
+        exit 1; \
     else \
         echo "Skipping build-time model preload (PRELOAD_MODELS=$PRELOAD_MODELS)"; \
     fi
 
 # Pre-compile application bytecode for faster cold starts.
 # UV_COMPILE_BYTECODE=1 compiled venv packages; this handles app source code.
-RUN python -m compileall -q api/ core/ orchestration/ agents/ tools/ scripts/ || true
+RUN python -m compileall -q api/ core/ orchestration/ agents/ tools/ scripts/
 
 # Create a dedicated non-root user. All writable paths are chown'd here;
 # volume mounts in docker-compose inherit these permissions.

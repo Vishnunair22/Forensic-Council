@@ -36,8 +36,12 @@ const ResultHeader = dynamic(
   { ssr: false },
 );
 
-export function ResultLayout() {
-  const rs = useResult();
+interface ResultLayoutProps {
+  initialSessionId?: string;
+}
+
+export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
+  const rs = useResult(initialSessionId);
 
   const activeAgentIds = useMemo(() => {
     const SKIP_TYPES = new Set(["file type not applicable", "format not supported"]);

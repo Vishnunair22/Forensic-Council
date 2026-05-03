@@ -448,6 +448,8 @@ app = FastAPI(
     redoc_url="/redoc" if _app_env_from_env() != "production" else None,
     lifespan=lifespan,
 )
+if _settings_for_import is not None:
+    app.state.settings = _settings_for_import
 
 
 @app.get("/metrics", include_in_schema=False)

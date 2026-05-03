@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion, type Transition } from "framer-motion";
 import { usePathname } from "next/navigation";
 
 interface PageTransitionProps {
@@ -34,11 +34,11 @@ export function PageTransition({
   const pathname = usePathname();
   const reducedMotion = useReducedMotion();
   const variants = reducedMotion ? DISABLED_VARIANTS : DEFAULT_VARIANTS;
-  const transition = reducedMotion
+  const transition: Transition = reducedMotion
     ? { duration: 0 }
     : {
         duration: 0.45,
-        ease: [0.16, 1, 0.3, 1],
+        ease: [0.16, 1, 0.3, 1] as const,
         opacity: { duration: 0.3 }
       };
 
@@ -103,7 +103,7 @@ export function StaggerChild({
           scale: 1,
           transition: {
             duration: 0.4,
-            ease: [0.22, 1, 0.36, 1]
+            ease: [0.22, 1, 0.36, 1] as const
           },
         },
       }}

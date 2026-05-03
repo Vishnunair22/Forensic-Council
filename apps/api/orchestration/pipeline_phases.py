@@ -300,6 +300,16 @@ async def run_agents_concurrent(
                     message=message,
                     data={
                         "status": status,
+                        "thinking": message,
+                        "tool_name": "file_type_validation"
+                        if status == "validating"
+                        else None,
+                        "tools_done": 0 if status in ("validating", "running") else None,
+                        "tools_total": len(getattr(agent_inst, "task_decomposition", []) or [])
+                        if agent_inst is not None and status == "running"
+                        else 1
+                        if status == "validating"
+                        else None,
                         "findings_count": 0
                         if status == "skipped"
                         else (len(findings) if findings else 0),
@@ -362,11 +372,23 @@ async def run_agents_concurrent(
         supported = inst.supports_uploaded_file
         agent_instances.append((inst, supported))
 
+        await _broadcast_agent_status(
+            aid,
+            "validating",
+            f"{aid} file type validation in progress.",
+            agent_inst=inst,
+        )
+
+    await asyncio.sleep(1.0)
+
+    for (inst, supported), aid in zip(
+        agent_instances, registry.get_all_agent_ids(), strict=True
+    ):
         if not supported:
             await _broadcast_agent_status(
                 aid,
                 "skipped",
-                f"{aid} bypassed: file type not supported.",
+                f"{aid} skipped: file type not supported by this agent.",
                 error="Unsupported file type.",
                 agent_inst=inst,
             )
@@ -374,7 +396,7 @@ async def run_agents_concurrent(
             await _broadcast_agent_status(
                 aid,
                 "running",
-                f"Agent {aid} active. Initializing scan...",
+                f"{aid} file type validated. Starting initial analysis.",
                 agent_inst=inst,
             )
 
@@ -515,7 +537,12 @@ async def run_agents_concurrent(
             )
 
         try:
-            await _broadcast_agent_status(aid, "running", f"Running {aid} deep pass...")
+            await _broadcast_agent_status(
+                aid,
+                "running",
+                f"{aid} deep analysis in progress.",
+                agent_inst=a_inst,
+            )
             result = await _run_agent_deep_only(pipeline, a_inst, aid, a_init, a_supported)
 
             if result.error:
@@ -588,6 +615,8 @@ async def run_agents_concurrent(
     logger.info(
         "Agent execution summary", active_agents=active_agents, skipped_agents=skipped_agents
     )
+
+    await _await_deep_report_request(pipeline, session_id)
 
     for aid in registry.get_all_agent_ids():
         if pipeline.inter_agent_bus is not None:
@@ -748,6 +777,90 @@ async def _await_deep_analysis_decision(
             timeout_seconds=timeout,
         )
         return False
+    finally:
+        pipeline._awaiting_user_decision = False
+        try:
+            await redis.delete(decision_key)
+        except Exception as _e:
+            logger.debug("Decision key cleanup skipped (Redis may be unavailable)", error=str(_e))
+
+
+async def _await_deep_report_request(
+    pipeline: ForensicCouncilPipeline,
+    session_id: UUID,
+) -> None:
+    """Pause after deep analysis so the analyst controls final arbiter synthesis."""
+    from api.routes._session_state import (
+        broadcast_update,
+        get_active_pipeline_metadata,
+        set_active_pipeline_metadata,
+    )
+    from api.schemas import BriefUpdate
+    from core.persistence.redis_client import get_redis_client
+
+    decision_key = f"forensic:session:resume_decision:{session_id}"
+    redis = await get_redis_client()
+    await redis.delete(decision_key)
+
+    pipeline._awaiting_user_decision = True
+    pipeline.deep_analysis_decision_event.clear()
+    pipeline.run_deep_analysis_flag = False
+
+    existing_metadata = await get_active_pipeline_metadata(str(session_id)) or {}
+    await set_active_pipeline_metadata(
+        str(session_id),
+        {
+            **existing_metadata,
+            "status": "awaiting_deep_report",
+            "brief": "Deep analysis complete. Awaiting analyst request for arbiter synthesis.",
+            "awaiting_decision": True,
+            "deep_analysis_complete": True,
+        },
+    )
+    await broadcast_update(
+        str(session_id),
+        BriefUpdate(
+            type="PIPELINE_PAUSED",
+            session_id=str(session_id),
+            message="Deep analysis complete. Awaiting analyst request for arbiter synthesis.",
+            data={
+                "status": "awaiting_deep_report",
+                "deep_results_ready": True,
+            },
+        ),
+    )
+
+    try:
+        active_redis = pipeline._redis or await get_redis_client()
+        timeout = pipeline.config.hitl_decision_timeout or 3600
+        start_time = time.perf_counter()
+
+        while (time.perf_counter() - start_time) < timeout:
+            try:
+                raw_decision = await active_redis.get(decision_key)
+                if raw_decision:
+                    logger.info(
+                        "Final report request received via Redis",
+                        session_id=str(session_id),
+                    )
+                    return
+            except Exception as poll_err:
+                logger.debug("Final-report decision polling flicker", error=str(poll_err))
+
+            if pipeline.deep_analysis_decision_event.is_set():
+                logger.info(
+                    "Final report request received via internal event",
+                    session_id=str(session_id),
+                )
+                return
+
+            await asyncio.sleep(2.0)
+
+        logger.warning(
+            "Deep report request timed out; proceeding to arbiter synthesis",
+            session_id=str(session_id),
+            timeout_seconds=timeout,
+        )
     finally:
         pipeline._awaiting_user_decision = False
         try:

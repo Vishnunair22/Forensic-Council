@@ -42,7 +42,7 @@ def _frame_rms(y: np.ndarray, frame_size: int, hop: int) -> np.ndarray:
         frames = np.pad(y, (0, frame_size - len(y)))[None, :]
     else:
         frames = np.stack(
-            [y[start : start + frame_size] for start in range(0, len(y) - frame_size + 1, hop)
+            [y[start : start + frame_size] for start in range(0, len(y) - frame_size + 1, hop)]
         )
     return np.sqrt(np.mean(frames**2, axis=1))
 

@@ -8,6 +8,8 @@ export interface LoadingOverlayProps {
   liveText?: string;
   dispatchedCount?: number;
   totalAgents?: number;
+  title?: string;
+  subtitle?: string;
 }
 
 const PHASES = [
@@ -41,7 +43,13 @@ function getPhaseIndex(text: string): number {
   return 0;
 }
 
-export function LoadingOverlay({ liveText, dispatchedCount = 0, totalAgents = 6 }: LoadingOverlayProps) {
+export function LoadingOverlay({
+  liveText,
+  dispatchedCount = 0,
+  totalAgents = 6,
+  title = "Preparing Analysis",
+  subtitle = "Forensic Protocol 2026",
+}: LoadingOverlayProps) {
   const currentPhase = getPhaseIndex(liveText || "");
   const effectivePhase = dispatchedCount > 0 ? 2 : currentPhase;
   const progress = Math.min(
@@ -71,7 +79,7 @@ export function LoadingOverlay({ liveText, dispatchedCount = 0, totalAgents = 6 
         >
           <div className="w-1.5 h-1.5 rounded-full bg-primary" />
           <span className="text-xs font-semibold tracking-wide text-white/50">
-            Forensic Protocol 2026
+            {subtitle}
           </span>
         </motion.div>
 
@@ -83,7 +91,7 @@ export function LoadingOverlay({ liveText, dispatchedCount = 0, totalAgents = 6 
             transition={{ delay: 0.05 }}
             className="text-3xl font-black tracking-tight text-white mb-3"
           >
-            Preparing Analysis
+            {title}
           </motion.h1>
           <p className="min-h-[2.5rem] text-sm font-mono font-semibold tracking-wide text-primary/70 text-center px-4" role="status" aria-live="polite">
             {liveText || "Opening live investigation stream..."}

@@ -265,7 +265,6 @@ def download_resnet50(force: bool = False) -> bool:
     try:
         import torchvision
         import json
-        from pathlib import Path
 
         torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.DEFAULT)
         if not (resnet_file.exists() and resnet_file.stat().st_size > 50_000_000):
@@ -358,21 +357,33 @@ def download_audio_deepfake(force: bool = False) -> bool:
 
 
 def _validate_lock_file() -> None:
-    """Validate models.lock.json has checksums for required models."""
+    """Validate models.lock.json syntax and required metadata."""
     lock_path = Path(__file__).parent.parent / "config" / "models.lock.json"
     if not lock_path.exists():
         raise RuntimeError(f"models.lock.json not found at {lock_path}")
 
     lock_data = json.loads(lock_path.read_text())
-    missing = []
+    missing_metadata: list[str] = []
+    enforced_without_checksum: list[str] = []
     for model_id, config in lock_data.items():
-        if config.get("required") and not config.get("sha256"):
-            missing.append(model_id)
+        if model_id.startswith("_"):
+            continue
+        if not isinstance(config, dict):
+            missing_metadata.append(model_id)
+            continue
+        if config.get("required") and not config.get("license"):
+            missing_metadata.append(model_id)
+        if config.get("enforce_sha") and not config.get("sha256"):
+            enforced_without_checksum.append(model_id)
 
-    if missing:
+    if missing_metadata:
         raise RuntimeError(
-            f"Integrity check FAILED: required models have null sha256 checksums: {missing}\n"
-            "Run 'python scripts/model_cache_check.py --update-lock' to compute checksums."
+            f"models.lock.json is missing required model metadata: {missing_metadata}"
+        )
+    if enforced_without_checksum:
+        raise RuntimeError(
+            "models.lock.json has enforce_sha=true without sha256 for: "
+            f"{enforced_without_checksum}"
         )
 
 

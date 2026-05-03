@@ -72,6 +72,14 @@ class Settings(BaseSettings):
 
     debug: bool = Field(default=False, description="Debug mode flag")
     log_level: str = Field(default="INFO", description="Logging level")
+    bootstrap_admin_password: str = Field(
+        default="dev-admin-password",
+        description="Initial admin password for development/test bootstrap.",
+    )
+    bootstrap_investigator_password: str = Field(
+        default="dev-investigator-password",
+        description="Initial investigator password for development/test bootstrap.",
+    )
 
     @field_validator("debug", mode="before")
     @classmethod

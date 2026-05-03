@@ -158,7 +158,14 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: Uploa
                 disabled={isStarting}
                 className="btn-horizon-primary flex-1 py-4 text-xs flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isStarting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Begin Analysis"}
+                {isStarting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Opening Analysis
+                  </>
+                ) : (
+                  "Begin Analysis"
+                )}
               </button>
             </div>
           </div>

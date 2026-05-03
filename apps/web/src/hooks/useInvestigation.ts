@@ -16,7 +16,7 @@ import {
   type HITLDecision
 } from "@/lib/api";
 import { toast } from "./use-toast";
-import { AGENTS as AGENTS_DATA, ALLOWED_MIME_TYPES, INVESTIGATION_REQUEST_TIMEOUT_MS, ARBITER_POLL_INTERVAL_MS } from "@/lib/constants";
+import { AGENTS as AGENTS_DATA, ALLOWED_MIME_TYPES, INVESTIGATION_REQUEST_TIMEOUT_MS, ARBITER_POLL_INTERVAL_MS, MAX_UPLOAD_SIZE_BYTES } from "@/lib/constants";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { type SoundType } from "@/hooks/useSound";
 import { type AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
@@ -403,8 +403,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   }, [triggerAnalysis, autoStartBlocking, isUploading, status, startSimulation, connectWebSocket, resetSimulation]);
 
   const handleFile = (f: File) => {
-    if (f.size > 55 * 1024 * 1024) {
-      setValidationError("File must be under 55MB");
+    if (f.size > MAX_UPLOAD_SIZE_BYTES) {
+      setValidationError("File must be 50MB or smaller.");
       playSound("error");
       return;
     }
@@ -541,6 +541,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     const sid = storage.getItem("forensic_session_id");
     try {
       if (!sid) throw new Error("No active session");
+      await resumeInvestigation(false);
       arbiterAbortControllerRef.current = new AbortController();
       const ok = await waitForFinalReport(sid, setArbiterLiveText, 600_000, arbiterAbortControllerRef.current.signal);
       if (!ok) throw new Error("Report synthesis timed out");
@@ -554,7 +555,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       setIsNavigating(false);
       setArbiterDeliberating(false);
     }
-  }, [playSound, router, isNavigating]);
+  }, [playSound, router, isNavigating, resumeInvestigation]);
 
   const validAgentsData = AGENTS_DATA.filter((a) => a.name !== "Council Arbiter");
   const validCompletedAgents = completedAgents.filter((c: AgentUpdate) =>

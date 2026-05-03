@@ -54,6 +54,16 @@ export default function EvidenceUploadPage() {
         />
       )}
 
+      {investigation.arbiterDeliberating && (
+        <LoadingOverlay
+          title="Council Deliberation"
+          subtitle="Arbiter Protocol"
+          liveText={investigation.arbiterLiveText || "Backend arbiter synthesizing initial agent findings..."}
+          dispatchedCount={5}
+          totalAgents={5}
+        />
+      )}
+
       {showAgentProgress ? (
         <>
           <AgentProgressDisplay

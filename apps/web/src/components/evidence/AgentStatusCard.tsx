@@ -245,9 +245,9 @@ export function AgentStatusCard({
                 )}
                 <span className="text-[10px] font-mono font-bold tracking-[0.1em] truncate">
                   {status === "validating"
-                    ? "Validating forensic modules…"
+                    ? `File type validation: checking ${fileCategory} support...`
                     : status === "checking"
-                    ? (phase === "deep" ? "Re-arming for deep analysis…" : "Synchronizing with pipeline…")
+                    ? (phase === "deep" ? "Re-arming for deep analysis..." : "Synchronizing with pipeline...")
                     : `${progressDescriptor.label} ${currentToolIndex}/${liveTotal}`}
                 </span>
               </div>
@@ -336,7 +336,16 @@ export function AgentStatusCard({
                  {name} does not support {fileCategory} files.
                </p>
                <p className="text-[10px] font-mono text-white/30 uppercase tracking-widest">
-                 Agent skipped — initial analysis
+                 Agent skipped - hidden after 10s
+               </p>
+            </div>
+          ) : status === "validating" ? (
+            <div className="flex flex-col items-center justify-center h-full text-center gap-4 py-12">
+               <div className="w-12 h-12 rounded-xl bg-[var(--color-primary)]/5 border border-[var(--color-primary)]/20 flex items-center justify-center text-[var(--color-primary)] animate-pulse">
+                  <Activity className="w-6 h-6" />
+               </div>
+               <p className="max-w-xs text-xs text-white/50 font-medium leading-relaxed">
+                 File type validation in progress for {fileCategory} evidence.
                </p>
             </div>
           ) : null}

@@ -91,6 +91,8 @@ export const ALLOWED_MIME_TYPES = new Set([
   "audio/flac",
 ]);
 
+export const MAX_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024;
+
 export const HOW_IT_WORKS = [
   {
     step: "01",

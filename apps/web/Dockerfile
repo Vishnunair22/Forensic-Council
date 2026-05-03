@@ -20,7 +20,7 @@ WORKDIR /app/apps/web
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --prefer-offline --no-audit --no-fund
 
-# ── Stage 1: Development — hot-reload server ─────────────────────────────────
+# Stage 1: Development - hot-reload server
 FROM base AS development
 
 COPY apps/web/ ./
@@ -35,7 +35,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
 
 CMD ["npm", "run", "dev"]
 
-# ── Stage 2: Builder — production build ──────────────────────────────────────
+# Stage 2: Builder - production build
 FROM base AS builder
 
 # Copy source
@@ -47,11 +47,11 @@ ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # BuildKit cache mount preserves Next.js compiler cache between rebuilds
-# → near-instant recompilation when only source files change
+# Near-instant recompilation when only source files change.
 RUN --mount=type=cache,target=/app/.next/cache \
     npm run build
 
-# ── Stage 3: Runner — minimal production image ───────────────────────────────
+# Stage 3: Runner - minimal production image
 FROM node:22-alpine AS runner
 
 WORKDIR /app
@@ -63,7 +63,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 
-# Create a dedicated non-root user for security — running as root in production
+# Create a dedicated non-root user for security. Running as root in production
 # containers is a critical vulnerability that grants full container filesystem
 # access on any RCE exploit.
 RUN addgroup --system --gid 1001 nodejs \

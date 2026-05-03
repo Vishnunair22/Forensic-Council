@@ -30,7 +30,6 @@ services:
       - evidence_data:/app/storage/evidence:rw
       - signing_keys:/app/storage/keys:rw
       - backups_data:/app/storage/backups:rw
-      - reports_data:/app/reports:rw
       - hf_cache:/app/cache/huggingface:rw
       - torch_cache:/app/cache/torch:rw
       - easyocr_cache:/app/cache/easyocr:rw
@@ -83,7 +82,6 @@ services:
       - evidence_data:/app/storage/evidence:rw
       - signing_keys:/app/storage/keys:ro
       - backups_data:/app/storage/backups:rw
-      - reports_data:/app/reports:rw
       - hf_cache:/app/cache/huggingface:rw
       - torch_cache:/app/cache/torch:rw
       - easyocr_cache:/app/cache/easyocr:rw

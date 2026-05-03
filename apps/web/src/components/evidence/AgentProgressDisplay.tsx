@@ -142,8 +142,19 @@ export function AgentProgressDisplay({
 
   useEffect(() => {
     if (!mimeType) return;
-    const t = setTimeout(() => setValidatingAgents(new Set()), 1200);
-    return () => clearTimeout(t);
+    setHiddenAgents(new Set());
+    setExpandedCards({});
+    setValidatingAgents(new Set(allValidAgents.map(a => a.id)));
+    const timers = allValidAgents.map((agent, index) =>
+      setTimeout(() => {
+        setValidatingAgents((prev) => {
+          const next = new Set(prev);
+          next.delete(agent.id);
+          return next;
+        });
+      }, 2200 + index * 2000)
+    );
+    return () => timers.forEach((timer) => clearTimeout(timer));
   }, [mimeType]);
 
   const handleSkipExpire = React.useCallback((agentId: string) => {
@@ -172,9 +183,16 @@ export function AgentProgressDisplay({
   }, [hiddenAgents, phase, initialAgentIds]);
 
   const getAgentStatus = (agentId: string): AgentStatus => {
-    if (validatingAgents.has(agentId)) return "validating";
+    const liveStatus = agentUpdates[agentId]?.status;
+    if (liveStatus === "validating") return "validating";
+    if (liveStatus === "skipped") return "unsupported";
+    if (liveStatus === "error" || liveStatus === "failed") return "error";
+    if (liveStatus === "running") return "running";
     
     const isSupported = isAgentSupportedForMime(agentId, mimeType);
+    if (validatingAgents.has(agentId) && !completedAgents.some((c) => c.agent_id === agentId)) {
+      return "validating";
+    }
     if (!isSupported) return "unsupported";
 
     const completed = completedAgents.find((c) => c.agent_id === agentId);
@@ -192,7 +210,7 @@ export function AgentProgressDisplay({
 
   const containerVariants: import("framer-motion").Variants = {
     hidden: {},
-    show: { transition: { staggerChildren: 0.6, delayChildren: 0.1 } },
+    show: { transition: { staggerChildren: 2, delayChildren: 0.1 } },
   };
 
   const itemVariants: import("framer-motion").Variants = {
@@ -309,7 +327,7 @@ export function AgentProgressDisplay({
                   className="flex-1 btn-horizon-outline py-3 text-xs flex items-center justify-center gap-2"
                 >
                   {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  <span>Accept Verdict</span>
+                  <span>Accept Result</span>
                 </button>
                 <button
                   data-testid="deep-analysis-btn"
@@ -345,7 +363,7 @@ export function AgentProgressDisplay({
                   onClick={onNewUpload}
                   className="flex-1 btn-horizon-outline py-3 text-xs"
                 >
-                  New Ingestion
+                  New Analysis
                 </button>
                 <button
                   data-testid="view-report-btn"

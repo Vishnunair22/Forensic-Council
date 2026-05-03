@@ -248,6 +248,7 @@ export function useResult(initialSessionId?: string) {
     mimeType,
     agentTimeline,
     pipelineStartAt,
+    sessionId,
     mounted,
     handleNew,
     handleHome,

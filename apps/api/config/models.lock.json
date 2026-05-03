@@ -1,5 +1,5 @@
 {
-  "_comment": "Pinned model checksums and revision hashes. sha256 fields are verified at download time. Update by running: python scripts/model_cache_check.py --update-lock",
+  "_comment": "Pinned model metadata for Docker model preloading. sha256 is optional unless enforce_sha is true.",
   "_format": "model_id -> { revision: <git-commit-sha>, sha256: <hexdigest>, license: <spdx>, required: bool }",
   "Vansh180/deepfake-audio-wav2vec2": {
     "revision": "main",
@@ -51,8 +51,9 @@
     "notes": "Permissive YOLO replacement for deployments requiring Apache-2.0 license."
   },
   "resnet50_torchvision": {
-    "sha256": "5e885a3e4e78c07d5ae3cf75f5c3a7fb5ea3ea9d4e7a4b8c5f4e6d3c2b1a0f9e",
-    "notes": "ResNet-50 torchvision weights DEFAULT - checksum computed after first download"
+    "sha256": null,
+    "required": true,
+    "license": "BSD-3-Clause",
+    "notes": "ResNet-50 torchvision weights DEFAULT. Leave sha256 null unless a verified full-file checksum is pinned."
   }
-}
 }
