@@ -34,8 +34,8 @@ router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 # Per-IP attempt tracking with a sliding window.
 # Redis is used when available; falls back to an in-process dict.
 _MAX_LOGIN_ATTEMPTS = 5  # max failures before lockout
-_LOCKOUT_WINDOW_SECS = 60 if settings.app_env != "production" else 300
-_LOCKOUT_DURATION_SECS = 30 if settings.app_env != "production" else 900
+_LOCKOUT_WINDOW_SECS = 300 if settings.app_env in ("production", "staging") else 60
+_LOCKOUT_DURATION_SECS = 900 if settings.app_env in ("production", "staging") else 30
 
 # In-memory fallback: {ip: [(timestamp, count), ...]}
 _failed_attempts: dict[str, list[float]] = defaultdict(list)

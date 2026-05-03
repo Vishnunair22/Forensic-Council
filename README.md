@@ -263,6 +263,8 @@ services:
 Deploy: `docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml up -d`
 
 ### Option 2: Kubernetes
+K8s manifests are tracked in [issue #N] — the repository does not include Helm charts or Kustomize overlays yet.
+
 Generate secrets from `.env`:
 ```bash
 kubectl create secret generic forensic-secrets \

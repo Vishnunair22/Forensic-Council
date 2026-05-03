@@ -42,8 +42,10 @@ from core.persistence import (
 from core.structured_logging import get_logger, request_id_ctx
 import core
 
+from collections import OrderedDict
+
 logger = get_logger(__name__)
-_mem_http_rate: dict[str, list[float]] = {}
+_mem_http_rate: OrderedDict[str, list[float]] = OrderedDict()
 _MEM_RATE_MAX_ENTRIES = 10_000
 
 
@@ -646,17 +648,20 @@ async def rate_limit_middleware(request: Request, call_next):
         increment_rate_limit_redis_bypasses()
         if request.url.path.endswith("/auth/login"):
             now = time.time()
-            bucket = _mem_http_rate.setdefault(identifier, [])
+            if identifier in _mem_http_rate:
+                _mem_http_rate.move_to_end(identifier)
+            bucket = _mem_http_rate.get(identifier, [])
             bucket[:] = [ts for ts in bucket if now - ts < window]
             bucket.append(now)
+            _mem_http_rate[identifier] = bucket
+            while len(_mem_http_rate) > _MEM_RATE_MAX_ENTRIES:
+                _mem_http_rate.popitem(last=False)
             if len(bucket) > 10:
                 return JSONResponse(
                     status_code=429,
                     content={"detail": "Too many requests. Please try again later."},
                     headers={"Retry-After": str(window)},
                 )
-            if len(_mem_http_rate) > _MEM_RATE_MAX_ENTRIES:
-                _mem_http_rate.clear()
 
     return await call_next(request)
 

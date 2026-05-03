@@ -116,14 +116,9 @@ services:
       retries: 5
     environment:
       - REDISCLI_AUTH=${REDIS_PASSWORD}
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: "0.5"
-        reservations:
-          memory: 128M
-          cpus: "0.25"
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpus: 0.5
     networks:
       - infra_net
 
@@ -148,14 +143,9 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: "1.0"
-        reservations:
-          memory: 256M
-          cpus: "0.5"
+    mem_limit: 1g
+    mem_reservation: 256m
+    cpus: 1.0
     networks:
       - infra_net
 
@@ -195,14 +185,9 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: "1.0"
-        reservations:
-          memory: 256M
-          cpus: "0.25"
+    mem_limit: 1g
+    mem_reservation: 256m
+    cpus: 1.0
     networks:
       - infra_net
 
@@ -220,14 +205,9 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: "0.5"
-        reservations:
-          memory: 64M
-          cpus: "0.1"
+    mem_limit: 512m
+    mem_reservation: 64m
+    cpus: 0.5
     networks:
       - infra_net
 
@@ -261,14 +241,9 @@ services:
         condition: service_healthy
     networks:
       - infra_net
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: "0.5"
-        reservations:
-          memory: 64M
-          cpus: "0.1"
+    mem_limit: 256m
+    mem_reservation: 64m
+    cpus: 0.5
 
   # --------------------------------------------------------------------------
   # Backend API
@@ -474,14 +449,9 @@ services:
       - ALL
     cap_add:
       - NET_BIND_SERVICE  # Required to bind ports 80/443
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-          cpus: "0.25"
-        reservations:
-          memory: 32M
-          cpus: "0.1"
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpus: 0.25
     # SECURITY: Can reach frontend and backend only
     networks:
       - frontend_net
@@ -542,14 +512,9 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: "2.0"
-        reservations:
-          memory: 512M
-          cpus: "0.5"
+    mem_limit: 2g
+    mem_reservation: 512m
+    cpus: 2.0
     # SECURITY: Frontend can only reach backend, NOT infrastructure services
     networks:
       - frontend_net
@@ -588,14 +553,9 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: "0.5"
-        reservations:
-          memory: 128M
-          cpus: "0.1"
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpus: 0.5
     # Prometheus only needs backend_net to scrape backend:8000/api/v1/metrics/raw
     networks:
       - backend_net

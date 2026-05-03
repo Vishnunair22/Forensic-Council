@@ -12,8 +12,7 @@ authors = [
 dependencies = [
     # Core
     "redis>=5.3",                          # async support built-in via redis.asyncio (extra removed in 5.x)
-    # qdrant==1.16.2 is the last pre-1.17 release that only requires numpy>=2.3 on
-    # Python 3.14+ (not 3.13+). The Python 3.12 runtime avoids that resolver path.
+    # qdrant-client==1.16.2 (matches server qdrant/qdrant:v1.16.1 with gRPC API compatibility).
     # [async] extra removed in 1.10+ - async support (httpx) is built-in.
     "qdrant-client==1.16.2",
     "asyncpg>=0.30",

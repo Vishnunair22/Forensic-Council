@@ -37,7 +37,15 @@ except Exception as e:
 
 logger = get_logger(__name__)
 
-_PLACEHOLDER_MARKERS = ("__REPLACE_ME", "__PASTE_", "change-me", "changeme", "replace_me")
+_PLACEHOLDER_MARKERS = (
+    "__REPLACE_ME",
+    "__PASTE_",
+    "change-me",
+    "changeme",
+    "replace_me",
+    "yourdomain.com",
+    "example.com",
+)
 
 
 def _is_placeholder(value: str | None) -> bool:

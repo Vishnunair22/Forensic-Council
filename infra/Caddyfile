@@ -29,6 +29,9 @@
         X-Frame-Options "DENY"
         X-Robots-Tag "none"
         Referrer-Policy "strict-origin-when-cross-origin"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        @no_csp not header Content-Security-Policy *
+        Content-Security-Policy "default-src 'self'; frame-ancestors 'none'"
         -Server
         -X-Powered-By
     }
