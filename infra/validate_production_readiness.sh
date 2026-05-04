@@ -20,6 +20,12 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 echo "OK: docker compose present."
 
+if ! docker info >/dev/null 2>&1; then
+    echo "FAILED: Docker daemon is not reachable. Start Docker Desktop/Engine and rerun."
+    exit 1
+fi
+echo "OK: docker daemon reachable."
+
 # 1. Check for unreplaced placeholders in .env and production invariants
 echo "[1/3] Checking for unreplaced placeholders in .env..."
 if grep -E "(_REPLACE_ME|__PASTE_)" .env >/dev/null; then

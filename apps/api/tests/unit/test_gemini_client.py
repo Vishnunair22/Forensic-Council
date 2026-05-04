@@ -32,6 +32,7 @@ def _settings(**kwargs) -> Settings:
         "llm_provider": "none",
         "llm_api_key": None,
         "llm_model": "test-model",
+        "gemini_api_key": None,
         "bootstrap_admin_password": "Admin_123!",
         "bootstrap_investigator_password": "Inv_123!",
     }

@@ -37,7 +37,14 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=[".env.local", ".env", "../.env.local", "../.env"],
+        env_file=[
+            ".env.local",
+            ".env",
+            "../.env.local",
+            "../.env",
+            "../../.env.local",
+            "../../.env",
+        ],
         env_file_encoding="utf-8",
         case_sensitive=False,
         env_ignore_empty=True,  # Treat empty strings as "not set" to allow defaults

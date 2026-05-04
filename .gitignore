@@ -86,6 +86,8 @@ apps/web/.swc/
 !/apps/api/storage/calibration_models/.gitkeep
 apps/api/.venv/
 apps/api/.pytest_cache/
+apps/api/.pytest_tmp/
+apps/api/.pytest_tmp_run/
 apps/api/.ruff_cache/
 apps/api/.pyright/
 *.pt
@@ -111,6 +113,7 @@ nul
 # ── Pytest shard / temp dirs (prevent root pollution) ───────────────────────
 pytest-cache-files-*
 tmp_*
+apps/api/tmp*/
 
 
 # ── Test fixtures ─────────────────────────────────────────────────────────────

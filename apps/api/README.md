@@ -65,15 +65,21 @@ The backend supports both in-process investigation execution and external worker
 From `apps/api`:
 
 ```powershell
-uv sync --extra dev
+uv sync --all-extras --extra dev
+$env:POSTGRES_HOST="localhost"; $env:REDIS_HOST="localhost"; $env:QDRANT_HOST="localhost"; $env:USE_REDIS_WORKER="false"
+uv run python scripts/init_db.py
 uv run python scripts/run_api.py
 ```
 
 To start only infrastructure from the repository root:
 
 ```powershell
-docker compose -f infra/docker-compose.yml --env-file .env up -d postgres redis qdrant
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up -d postgres redis qdrant
 ```
+
+The dev override exposes Postgres `5432`, Redis `6379`, and Qdrant `6333/6334`
+for this direct-host workflow. Keep `USE_REDIS_WORKER=false` unless you also
+start `scripts/run_worker.py` locally.
 
 ## Tests And Checks
 
@@ -82,7 +88,7 @@ From `apps/api`:
 ```powershell
 uv run ruff check .
 uv run pyright core/ agents/ api/ tools/
-uv run pytest tests/ -v
+uv run pytest tests/ -q --tb=short --basetemp .pytest_tmp_run
 ```
 
 Focused test groups:

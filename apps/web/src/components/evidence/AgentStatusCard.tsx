@@ -55,7 +55,16 @@ const statusConfig = {
   validating:  { color: "text-[var(--color-primary)]",    label: "Validating" },
 };
 
-const ALERT_VERDICTS = new Set(["FLAGGED", "SUSPICIOUS", "LIKELY_MANIPULATED", "LIKELY_AI_GENERATED", "LIKELY_SPOOFED"]);
+const ALERT_VERDICTS = new Set([
+  "FLAGGED",
+  "SUSPICIOUS",
+  "TAMPERED",
+  "NEEDS_REVIEW",
+  "LIKELY_MANIPULATED",
+  "LIKELY_AI_GENERATED",
+  "LIKELY_SPOOFED",
+  "LIKELY_SYNTHETIC",
+]);
 
 function normalizeVerdict(verdict?: string) {
   const value = (verdict || "INCONCLUSIVE").replace(/_/g, " ");
@@ -168,6 +177,11 @@ export function AgentStatusCard({
   }, [status, agentId, onSkipExpire]);
 
   const findings = completedData?.findings_preview || [];
+  const verdictScore = completedData?.verdict_score;
+  const agentVerdict = completedData?.agent_verdict;
+  const isAgentAlert =
+    (typeof verdictScore === "number" && verdictScore > 0.6) ||
+    ALERT_VERDICTS.has(agentVerdict || "");
   const toolsRan = completedData?.tools_ran || findings.length || 0;
   const fallbackTotal = getDefaultProgressTotal(agentId);
   const liveTotal = liveUpdate?.tools_total || toolsRan || fallbackTotal;
@@ -279,7 +293,7 @@ export function AgentStatusCard({
                   <span className="text-[10px] font-mono font-bold text-white/30 uppercase tracking-widest block mb-1">Final Verdict</span>
                   <span className={clsx(
                     "text-xl font-heading font-bold tracking-tight",
-                    (completedData.verdict_score ?? 0) > 0.6 ? "text-danger" : "text-success"
+                    isAgentAlert ? "text-danger" : agentVerdict === "INCONCLUSIVE" ? "text-warning" : "text-success"
                   )}>
                     {normalizeVerdict(completedData.agent_verdict)}
                   </span>

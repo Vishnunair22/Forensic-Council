@@ -3,15 +3,10 @@ End-to-end smoke test for Forensic Council.
 Tests the full flow: auth → upload → WebSocket → arbiter → report.
 """
 import asyncio
-import json
 import os
-import struct
-import sys
 import time
-from pathlib import Path
 
 import httpx
-
 
 BASE_URL = os.environ.get("NEXT_PUBLIC_API_URL", "http://localhost:8000")
 WS_BASE = BASE_URL.replace("http://", "ws://").replace("https://", "wss://")
@@ -70,8 +65,9 @@ async def main():
         # Step 3: Upload evidence
         print("\n[3/7] Uploading test evidence...")
         try:
-            from PIL import Image
             import io
+
+            from PIL import Image
 
             img = Image.new("RGB", (100, 100), color=(128, 128, 128))
             buf = io.BytesIO()

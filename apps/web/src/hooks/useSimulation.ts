@@ -240,10 +240,25 @@ export const useSimulation = ({
                         tools_skipped,
                         tools_failed,
                         degraded,
+                        verdict_score,
                       } = update.data as Record<string, unknown>;
+                      const previewConfidenceValues = Array.isArray(findings_preview)
+                        ? findings_preview
+                            .map((item) =>
+                              item &&
+                              typeof item === "object" &&
+                              "confidence" in item &&
+                              typeof (item as { confidence?: unknown }).confidence === "number"
+                                ? (item as { confidence: number }).confidence
+                                : null,
+                            )
+                            .filter((value): value is number => typeof value === "number")
+                        : [];
                       const parsedConfidence =
                         (typeof confidence === "number" ? confidence : null) ??
-                        0.5;
+                        (previewConfidenceValues.length > 0
+                          ? previewConfidenceValues.reduce((sum, value) => sum + value, 0) / previewConfidenceValues.length
+                          : 0);
 
                       const newUpdate: AgentUpdate = {
                         agent_id: agent.id,
@@ -289,6 +304,10 @@ export const useSimulation = ({
                             ? tools_failed
                             : undefined,
                         degraded: typeof degraded === "boolean" ? degraded : undefined,
+                        verdict_score:
+                          typeof verdict_score === "number"
+                            ? verdict_score
+                            : undefined,
                         completed_at: new Date().toISOString(),
                       };
 
@@ -324,6 +343,7 @@ export const useSimulation = ({
                           findings_count: (existing.findings_count || 0) + (newUpdate.findings_count || 0),
                           // Deep-phase verdict takes precedence if present
                           agent_verdict: newUpdate.agent_verdict || existing.agent_verdict,
+                          verdict_score: newUpdate.verdict_score ?? existing.verdict_score,
                         };
                         completedAgentsRef.current[existingIndex] = mergedUpdate;
                       } else {
@@ -640,18 +660,21 @@ export const useSimulation = ({
         })
           .then((response) => {
             if (!response.ok) {
-              window.location.href = "/";
-            } else {
-              const currentSessionId = sessionId || storage.getItem(SESSION_ID_KEY);
-              if (currentSessionId) {
-                connectWebSocket(currentSessionId, true);
-              }
-              // Schedule next check
-              scheduleTokenExpiryCheck();
+              storage.removeItem(AUTH_TOKEN_EXPIRY_KEY);
+              setErrorMessage("Session refresh failed. Re-authentication will be attempted on the next API request.");
+              return;
             }
+
+            const currentSessionId = sessionId || storage.getItem(SESSION_ID_KEY);
+            if (currentSessionId) {
+              connectWebSocket(currentSessionId, true);
+            }
+            // Schedule next check
+            scheduleTokenExpiryCheck();
           })
           .catch(() => {
-            window.location.href = "/";
+            storage.removeItem(AUTH_TOKEN_EXPIRY_KEY);
+            setErrorMessage("Session refresh could not reach the backend. Keeping the current analysis view open.");
           });
       }, checkDelay);
     };

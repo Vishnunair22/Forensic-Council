@@ -1,11 +1,19 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { GlassPanel } from "@/components/ui/GlassPanel";
-import { HowWorksSection } from "@/components/ui/HowWorksSection";
-import { AgentsSection } from "@/components/ui/AgentsSection";
 import { HeroAuthActions } from "@/components/ui/HeroAuthActions";
 import { motion } from "framer-motion";
 import { Shield, Scale, Cpu } from "lucide-react";
+
+const HowWorksSection = dynamic(
+  () => import("@/components/ui/HowWorksSection").then((mod) => mod.HowWorksSection),
+  { loading: () => <div className="min-h-56" /> },
+);
+const AgentsSection = dynamic(
+  () => import("@/components/ui/AgentsSection").then((mod) => mod.AgentsSection),
+  { loading: () => <div className="min-h-56" /> },
+);
 
 export default function Home() {
   return (

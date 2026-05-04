@@ -141,53 +141,66 @@ Once the containers are healthy, run the production readiness check:
 ./infra/validate_production_readiness.sh
 ```
 
-## Local Development (No Docker)
+## Local Development (No Docker App Processes)
 
-If you prefer to run services directly on your host machine:
+If you prefer to run the API and frontend directly on your host machine, use
+Docker only for Postgres, Redis, and Qdrant.
 
 ### Prerequisites
 - Node.js >= 20.10.0
 - Python 3.12
 - uv (install: `curl -LsSf https://astral.sh/uv/install.sh | sh`)
+- Docker Desktop/Engine for the local infrastructure services
 
-### Backend
+### 1. Start Infrastructure
+```bash
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up -d postgres redis qdrant
+```
+
+The dev override exposes host ports for direct app runs: Postgres `5432`, Redis
+`6379`, Qdrant `6333/6334`. The base and production stacks keep those
+infrastructure services internal.
+
+### 2. Backend
+Run from `apps/api`. Override infrastructure hosts to `localhost` for this
+shell so you do not have to rewrite `.env`, which Docker still expects to use
+service names such as `postgres` and `redis`.
+
 ```bash
 # bash / zsh
 cd apps/api
-uv sync --all-extras
+uv sync --all-extras --extra dev
 
 # One-time: initialize the database schema and bootstrap users
-uv run python scripts/init_db.py
+POSTGRES_HOST=localhost REDIS_HOST=localhost QDRANT_HOST=localhost USE_REDIS_WORKER=false uv run python scripts/init_db.py
 
-uv run python scripts/model_pre_download.py --strict
-uv run python scripts/run_api.py
+POSTGRES_HOST=localhost REDIS_HOST=localhost QDRANT_HOST=localhost USE_REDIS_WORKER=false uv run python scripts/run_api.py
 ```
 ```powershell
 # PowerShell
 cd apps/api
-uv sync --all-extras
+uv sync --all-extras --extra dev
 
 # One-time: initialize the database schema and bootstrap users
+$env:POSTGRES_HOST="localhost"; $env:REDIS_HOST="localhost"; $env:QDRANT_HOST="localhost"; $env:USE_REDIS_WORKER="false"
 uv run python scripts/init_db.py
-
-uv run python scripts/model_pre_download.py --strict
 uv run python scripts/run_api.py
 ```
 
 > **Note:** The `model_pre_download.py --strict` step downloads all ML models (~2-4 GB) so the first investigation doesn't block for 5-20 minutes. Skip this step for CI/local testing without model downloads.
 
-### Frontend
+### 3. Frontend
 ```bash
 # bash / zsh
 cd apps/web
-npm install
+npm ci
 npm run dev
 ```
 ```powershell
 # PowerShell
 cd apps/web
-npm install
-npm run dev
+npm.cmd ci
+npm.cmd run dev
 ```
 
 > **Note:** When running the frontend on `http://localhost:3000` directly (without Caddy reverse proxy), API calls to `/api/*` are automatically proxied by the Next.js dev server to the backend at port 8000. This works via `apps/web/src/app/api/v1/[...path]/route.ts`. No `NEXT_PUBLIC_API_URL` configuration is needed for local development without Docker.
@@ -205,20 +218,23 @@ cd apps/api
 uv run ruff check .
 uv run ruff format .
 uv run pyright core/ agents/ api/ tools/ orchestration/
-uv run pytest tests/ -v
+uv run pytest tests/ -q --tb=short --basetemp .pytest_tmp_run
 uv run uvicorn api.main:app --reload --port 8000
 
 # Frontend (from apps/web/)
 cd apps/web
-npm run dev
-npm run lint
-npm run type-check
-npm test
-npm run build
+npm.cmd run dev
+npm.cmd run lint
+npm.cmd run type-check
+npm.cmd test -- --runInBand
+npm.cmd run build
 
 # Full Docker stack
 docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file .env up -d
 ```
+
+PowerShell may block `npm.ps1` on some Windows systems. Use `npm.cmd` when that
+happens.
 
 ## Configuration
 

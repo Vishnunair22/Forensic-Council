@@ -32,7 +32,7 @@ from agents.base_agent import ForensicAgent
 from agents.reflection_models import _attach_llm_reasoning_to_findings
 from core.config import Settings
 from core.evidence import ArtifactType, EvidenceArtifact
-from core.react_loop import AgentFinding, ReActStep
+from core.react_loop import AgentFinding, ReActLoopEngine, ReActStep
 
 
 def _settings() -> Settings:
@@ -88,6 +88,41 @@ def _make_agent(cls, agent_id="Agent1"):
 
 
 # ── _attach_llm_reasoning_to_findings() ──────────────────────────────────────
+
+
+class TestReactLoopConfidenceExtraction:
+    def _engine(self):
+        return ReActLoopEngine(
+            agent_id="Agent1",
+            session_id=uuid4(),
+            iteration_ceiling=3,
+            working_memory=MagicMock(),
+            custody_logger=MagicMock(),
+        )
+
+    def test_positive_anomaly_score_is_signal_confidence(self):
+        confidence, from_fallback = self._engine()._extract_confidence(
+            {"anomaly_score": 0.82, "anomaly_detected": True},
+            "frequency_domain_analysis",
+        )
+        assert confidence == pytest.approx(0.82)
+        assert from_fallback is False
+
+    def test_clean_anomaly_score_is_absence_confidence(self):
+        confidence, from_fallback = self._engine()._extract_confidence(
+            {"anomaly_score": 0.08, "anomaly_detected": False},
+            "frequency_domain_analysis",
+        )
+        assert confidence == pytest.approx(0.92)
+        assert from_fallback is False
+
+    def test_numeric_string_confidence_is_normalized(self):
+        confidence, from_fallback = self._engine()._extract_confidence(
+            {"confidence": "87.5"},
+            "object_detection",
+        )
+        assert confidence == pytest.approx(0.875)
+        assert from_fallback is False
 
 
 class TestAttachLlmReasoning:

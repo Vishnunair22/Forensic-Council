@@ -201,15 +201,12 @@ RUN if [ "${PRELOAD_MODELS}" = "1" ]; then \
         echo "Skipping ML tools validation (air-gapped build)" ; \
     fi
 
-# Create identity calibration models at build time if not pre-bundled.
-# These are used when no trained models are available.
-# Each model is a JSON with A=1, B=0 (identity mapping: p_calibrated = p_raw).
+# Create valid default calibration models at build time if not pre-bundled.
+# These are used when no trained models are available. Use the application
+# calibration writer so the JSON schema, enum values, and current agent IDs
+# stay in lockstep with core/calibration.py.
 RUN if [ ! -f /opt/forensic-model-cache/calibration_models/.trained ]; then \
-        mkdir -p /opt/forensic-model-cache/calibration_models ; \
-        for agent in agent1_image agent2_audio agent3_video agent4_document agent5_deepfake; do \
-            mkdir -p "/opt/forensic-model-cache/calibration_models/$agent" ; \
-            printf '{"model_id":"identity","agent_id":"%s","method":"IDENTITY","params":{"A":1,"B":0},"calibration_status":"IDENTITY"}\n' "$agent" > "/opt/forensic-model-cache/calibration_models/$agent/latest.json" ; \
-        done ; \
+        python -c "from core.calibration import CalibrationLayer; layer=CalibrationLayer('/opt/forensic-model-cache/calibration_models'); [layer.fit_default_model(agent) for agent in ('agent1_image','agent2_audio','agent3_object','agent4_video','agent5_metadata')]" ; \
         touch /opt/forensic-model-cache/calibration_models/.trained ; \
     fi
 

@@ -1,0 +1,21 @@
+# ============================================================================
+# Forensic Council - Docker Compose Override (Host-run development)
+# ============================================================================
+# Use this only when Postgres/Redis/Qdrant run in Docker but the API/frontend
+# run directly on the host via uv/npm. The base compose file keeps infra
+# services internal by default; this override exposes development host ports.
+# ============================================================================
+
+services:
+  postgres:
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+
+  redis:
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+
+  qdrant:
+    ports:
+      - "${QDRANT_HOST_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_HOST_PORT:-6334}:6334"

@@ -47,6 +47,14 @@ npm ci
 npm run dev
 ```
 
+On Windows PowerShell, use `npm.cmd` if script execution policy blocks
+`npm.ps1`:
+
+```powershell
+npm.cmd ci
+npm.cmd run dev
+```
+
 Run the backend separately from `apps/api`, or use the Docker stack from the repository root:
 
 ```bash
@@ -60,6 +68,15 @@ npm run lint
 npm run type-check
 npm test
 npm run build
+```
+
+PowerShell equivalents:
+
+```powershell
+npm.cmd run lint
+npm.cmd run type-check
+npm.cmd test -- --runInBand
+npm.cmd run build
 ```
 
 ## Docker

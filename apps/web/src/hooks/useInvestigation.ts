@@ -155,6 +155,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     clearCompletedAgents,
     revealQueue,
     revealPending,
+    restoreSimulationState,
   } = useSimulation({
     playSound,
     onComplete: () => {},
@@ -162,7 +163,14 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   useEffect(() => {
     completedAgentsRef.current = completedAgents;
-  }, [completedAgents]);
+    if (completedAgents.length > 0 && status !== "idle") {
+      storage.setItem(
+        phase === "deep" ? "forensic_deep_agents" : "forensic_initial_agents",
+        completedAgents,
+        true,
+      );
+    }
+  }, [completedAgents, phase, status]);
 
   useLayoutEffect(() => {
     try {
@@ -184,9 +192,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
     const initAuth = async () => {
       if (document.cookie.includes("access_token") || getAuthToken() !== null) {
-        authReadyRef.current = Promise.resolve();
+        return;
       } else if (__pendingFileStore.authPromise) {
-        authReadyRef.current = __pendingFileStore.authPromise
+        await __pendingFileStore.authPromise
           .then(() => {
             storage.setItem("forensic_auth_ok", "1");
             __pendingFileStore.authPromise = null;
@@ -201,7 +209,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
             });
           });
       } else {
-        authReadyRef.current = autoLoginAsInvestigator()
+        await autoLoginAsInvestigator()
           .then(() => {
             storage.setItem("forensic_auth_ok", "1");
           })
@@ -215,7 +223,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           });
       }
     };
-    initAuth();
+    authReadyRef.current = initAuth();
   }, []);
 
   const filePreviewUrl = useMemo(() => {
@@ -415,14 +423,29 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       sessionOnlyStorage.removeItem("fc_show_loading");
     } else if (!pending && !autoStartBlocking && isIdleOrError && !isUploading && existingSessionId && !noReconnect) {
       autoStartFiredRef.current = true;
-      // Pre-validate session before attempting reconnection
+      const savedDeepAgents = storage.getItem<AgentUpdate[]>("forensic_deep_agents", true, []);
+      const savedInitialAgents = storage.getItem<AgentUpdate[]>("forensic_initial_agents", true, []);
+      const savedAgents = (savedDeepAgents?.length ? savedDeepAgents : savedInitialAgents) ?? [];
+      const restoredPhase = savedDeepAgents?.length ? "deep" : "initial";
+
+      setPhase(restoredPhase);
+      startSimulation();
+      if (savedAgents.length > 0) {
+        restoreSimulationState(savedAgents, "awaiting_decision");
+      }
+      setAnalysisStreamReady(false);
+      setUploadPhaseText("Reconnecting to analysis stream...");
+      setShowLoadingOverlay(false);
+      sessionOnlyStorage.removeItem("fc_show_loading");
+
       (async () => {
         try {
-          const st = await getArbiterStatus(existingSessionId);
+          const st = await withTimeout(getArbiterStatus(existingSessionId), 8_000);
           if (st.status === "not_found") {
             // Session expired — clean up and show fresh upload form
             storage.removeItem("forensic_session_id");
             storage.removeItem("forensic_investigation_ctx");
+            resetSimulation();
             return;
           }
           if (st.status === "complete") {
@@ -431,25 +454,24 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
             return;
           }
           // Session is active — reconnect
-          startSimulation();
-          connectWebSocket(existingSessionId)
-            .then(() => setAnalysisStreamReady(true))
-            .catch((wsErr: unknown) => {
-              const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
-              setWsConnectionError(wsErrMsg);
-              setShowLoadingOverlay(false);
-              resetSimulation();
-              // Clear stale session on terminal failure
-              storage.removeItem("forensic_session_id");
-            });
+          // Active sessions reconnect below after status validation.
         } catch {
-          storage.removeItem("forensic_session_id");
+          // Status can lag or time out during container warmup. Keep the route
+          // mounted and let the live socket decide whether the session is usable.
         }
+
+        connectWebSocket(existingSessionId, true)
+          .then(() => setAnalysisStreamReady(true))
+          .catch((wsErr: unknown) => {
+            const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
+            setWsConnectionError(wsErrMsg);
+            setShowLoadingOverlay(false);
+          });
       })();
     } else if (noReconnect) {
       sessionOnlyStorage.removeItem("fc_no_reconnect");
     }
-  }, [triggerAnalysis, autoStartBlocking, isUploading, status, startSimulation, connectWebSocket, resetSimulation]);
+  }, [triggerAnalysis, autoStartBlocking, isUploading, status, startSimulation, connectWebSocket, resetSimulation, restoreSimulationState, router]);
 
   const handleFile = (f: File) => {
     if (f.size > MAX_UPLOAD_SIZE_BYTES) {

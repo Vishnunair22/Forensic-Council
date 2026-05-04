@@ -766,14 +766,21 @@ class ReActLoopEngine:
     def _extract_confidence(self, output: Any, tool_name: str) -> tuple[float, bool]:
         """Extract a 0-1 confidence score from tool output. Returns (confidence, from_fallback)."""
         raw_conf: float | None = None
+
+        def _as_unit_float(value: Any) -> float | None:
+            try:
+                parsed = float(value)
+            except (TypeError, ValueError):
+                return None
+            if parsed > 1.0 and parsed <= 100.0:
+                parsed = parsed / 100.0
+            return max(0.0, min(1.0, parsed))
+
         if isinstance(output, dict):
-            raw_conf = output.get("confidence")
-            if raw_conf is None:
-                raw_conf = output.get("confidence_raw")
-            if raw_conf is None:
-                raw_conf = output.get("confidence_score")
-            if raw_conf is None and "confidence" in output:
-                raw_conf = 0.50
+            for key in ("confidence", "confidence_raw", "confidence_score"):
+                raw_conf = _as_unit_float(output.get(key))
+                if raw_conf is not None:
+                    break
             if raw_conf is None:
                 for key in (
                     "anomaly_score",
@@ -782,9 +789,12 @@ class ReActLoopEngine:
                     "forgery_score",
                     "diffusion_probability",
                 ):
-                    val = output.get(key)
-                    if isinstance(val, (int, float)):
-                        raw_conf = 1.0 - max(0.0, min(1.0, float(val)))
+                    val = _as_unit_float(output.get(key))
+                    if val is not None:
+                        # These keys are often anomaly probabilities. For a
+                        # positive finding, confidence is the anomaly strength;
+                        # for a clean finding, confidence is the absence signal.
+                        raw_conf = val if self._positive_signal(output) else 1.0 - val
                         break
             if raw_conf is None:
                 for key in (
@@ -803,9 +813,9 @@ class ReActLoopEngine:
                     "top_similarity",
                     "trace_continuity",
                 ):
-                    val = output.get(key)
-                    if isinstance(val, (int, float)):
-                        raw_conf = max(0.0, min(1.0, float(val)))
+                    val = _as_unit_float(output.get(key))
+                    if val is not None:
+                        raw_conf = val
                         break
             if raw_conf is None:
                 if "detections" in output:

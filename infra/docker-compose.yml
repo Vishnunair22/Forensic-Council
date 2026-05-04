@@ -48,10 +48,11 @@ x-backend-env: &backend-env
   LLM_FALLBACK_MODELS: ${LLM_FALLBACK_MODELS:-llama-3.1-8b-instant}
   LLM_ENABLE_REACT_REASONING: ${LLM_ENABLE_REACT_REASONING:-false}
   LLM_ENABLE_POST_SYNTHESIS: ${LLM_ENABLE_POST_SYNTHESIS:-true}
-  # Docker stacks use the worker queue by default (USE_REDIS_WORKER=true).
-  # Direct `uv run` uses in-process mode (USE_REDIS_WORKER=false).
-  # Ensure the `worker` service is running when USE_REDIS_WORKER=true.
-  USE_REDIS_WORKER: ${USE_REDIS_WORKER:-true}
+  # Docker stacks use the worker queue by default (DOCKER_USE_REDIS_WORKER=true).
+  # Direct `uv run` uses USE_REDIS_WORKER=false from .env for in-process mode.
+  # Keep these separate so host-local defaults do not silently disable the
+  # Docker worker service.
+  USE_REDIS_WORKER: ${DOCKER_USE_REDIS_WORKER:-true}
   GEMINI_API_KEY: ${GEMINI_API_KEY:-}
   GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
   GEMINI_FALLBACK_MODELS: ${GEMINI_FALLBACK_MODELS:-gemini-2.5-flash-lite,gemini-2.0-flash,gemini-2.0-flash-lite}

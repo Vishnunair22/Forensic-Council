@@ -32,6 +32,67 @@ _TRAILING_ABSENCE_RE = re.compile(
 )
 
 
+def _metric_digest(metadata: dict[str, Any]) -> str:
+    """Extract a compact, high-signal metric digest from raw tool output."""
+    if not metadata:
+        return ""
+
+    labels = {
+        "anomaly_score": "anomaly score",
+        "confidence": "tool confidence",
+        "top_confidence": "top match",
+        "diffusion_probability": "AI probability",
+        "synthetic_probability": "synthetic probability",
+        "forgery_score": "forgery score",
+        "inconsistency_ratio": "inconsistency ratio",
+        "noise_consistency_score": "noise consistency",
+        "mean_flow_magnitude": "motion magnitude",
+        "high_freq_ratio": "high-frequency ratio",
+        "max_anomaly": "max ELA deviation",
+        "word_count": "OCR words",
+        "detection_count": "objects",
+        "match_count": "matches",
+        "num_matches": "matches",
+        "num_anomaly_regions": "regions",
+        "outlier_region_count": "outlier regions",
+        "bytes_scanned": "bytes scanned",
+        "total_fields_extracted": "metadata fields",
+    }
+    parts: list[str] = []
+    for key, label in labels.items():
+        value = metadata.get(key)
+        if value is None or value == "":
+            continue
+        if isinstance(value, float):
+            rendered = f"{value:.3f}" if abs(value) < 10 else f"{value:.1f}"
+        elif isinstance(value, int):
+            rendered = f"{value:,}"
+        else:
+            rendered = str(value)
+        parts.append(f"{label}: {rendered}")
+        if len(parts) >= 3:
+            break
+
+    flags = metadata.get("flags") or metadata.get("anomalies") or metadata.get("forensic_flags")
+    if isinstance(flags, list) and flags:
+        parts.append("flags: " + "; ".join(str(x) for x in flags[:2]))
+    return "; ".join(parts)
+
+
+def _verdict_score(verdict: Any) -> float | None:
+    """Map agent verdicts to frontend severity color/risk score."""
+    value = str(verdict or "").upper()
+    if value in {"TAMPERED", "LIKELY_MANIPULATED", "LIKELY_AI_GENERATED", "LIKELY_SPOOFED", "LIKELY_SYNTHETIC"}:
+        return 0.9
+    if value in {"SUSPICIOUS", "NEEDS_REVIEW"}:
+        return 0.65
+    if value in {"AUTHENTIC", "CLEAN"}:
+        return 0.05
+    if value == "INCONCLUSIVE":
+        return 0.5
+    return None
+
+
 def _humanize_initial_finding(
     *,
     agent_id: str,
@@ -103,8 +164,15 @@ def _humanize_initial_finding(
         return text.replace("Analyze Image Content: ", "").replace("Checked: ", "")
 
     if evidence_verdict == "NEGATIVE" and finding_status != "INCOMPLETE":
-        return text.replace("Checked: ", "")
+        metric_note = _metric_digest(metadata)
+        clean_text = text.replace("Checked: ", "")
+        if metric_note and metric_note.lower() not in clean_text.lower():
+            return f"{clean_text} Key metrics: {metric_note}."
+        return clean_text
 
+    metric_note = _metric_digest(metadata)
+    if metric_note and metric_note.lower() not in text.lower():
+        return f"{text} Key metrics: {metric_note}."
     return text
 
 
@@ -143,6 +211,9 @@ async def run_agents_concurrent(
             preview = []
             synthesis = (
                 getattr(agent_inst, "_agent_synthesis", None) if agent_inst is not None else None
+            )
+            agent_confidence = (
+                getattr(agent_inst, "_agent_confidence", None) if agent_inst is not None else None
             )
             def _finding_attr(finding, key: str, default: Any = None) -> Any:
                 if hasattr(finding, key):
@@ -190,7 +261,7 @@ async def run_agents_concurrent(
                         preview.append(
                             {
                                 "tool": item.get("tool") or section.get("label") or "agent_synthesis",
-                                "summary": summary[:320],
+                                "summary": summary[:560],
                                 "severity": section.get("severity") or "LOW",
                                 "verdict": str(synthesis_data.get("verdict") or "INCONCLUSIVE"),
                                 "key_signal": section.get("key_signal") or section.get("opinion") or "",
@@ -247,7 +318,7 @@ async def run_agents_concurrent(
                     preview.append(
                         {
                             "tool": tool,
-                            "summary": human_summary[:420],
+                            "summary": human_summary[:640],
                             "severity": sev,
                             "verdict": tv,
                             "key_signal": m.get("section_key_signal")
@@ -316,13 +387,16 @@ async def run_agents_concurrent(
                         "confidence": 0
                         if status == "skipped"
                         else (
-                            getattr(agent_inst, "_overall_confidence", None) if agent_inst else None
+                            agent_confidence
                         ),
                         "error": error,
                         "findings_preview": preview,
                         "agent_verdict": synthesis.get("verdict")
                         if isinstance(synthesis, dict)
                         else None,
+                        "verdict_score": _verdict_score(
+                            synthesis.get("verdict") if isinstance(synthesis, dict) else None
+                        ),
                         "summary": synthesis.get("narrative_summary")
                         if isinstance(synthesis, dict)
                         else None,
@@ -379,8 +453,6 @@ async def run_agents_concurrent(
             agent_inst=inst,
         )
 
-    await asyncio.sleep(1.0)
-
     for (inst, supported), aid in zip(
         agent_instances, registry.get_all_agent_ids(), strict=True
     ):
@@ -388,7 +460,7 @@ async def run_agents_concurrent(
             await _broadcast_agent_status(
                 aid,
                 "skipped",
-                f"{aid} skipped: file type not supported by this agent.",
+                f"{aid} skipped immediately: this agent does not support the submitted file type.",
                 error="Unsupported file type.",
                 agent_inst=inst,
             )

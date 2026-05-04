@@ -518,6 +518,22 @@ docker compose \
   build --build-arg PRELOAD_MODELS=0 backend worker
 ```
 
+### Runtime worker mode
+
+`USE_REDIS_WORKER` is for direct host runs and should usually stay `false`.
+Docker Compose sets `USE_REDIS_WORKER` inside backend and worker containers from
+`DOCKER_USE_REDIS_WORKER`, which defaults to `true`. This keeps host-local
+development ergonomic while ensuring the Docker worker service consumes queued
+investigations.
+
+### Host-run infrastructure ports
+
+The optional `infra/docker-compose.dev.yml` override exposes Postgres `5432`,
+Redis `6379`, and Qdrant `6333/6334` so you can run
+`uv run python scripts/run_api.py` outside Docker against Docker-managed
+infrastructure. The base and production stacks keep database, cache, and vector
+services internal.
+
 ### Security invariant: read-only filesystem
 
 The backend and worker services use `read_only: true` with a `tmpfs: /tmp` mount. This configuration:

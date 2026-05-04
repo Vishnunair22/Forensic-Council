@@ -7,6 +7,7 @@ This folder contains the Docker Compose, Caddy, Prometheus, and deployment helpe
 | File | Purpose |
 | --- | --- |
 | `docker-compose.yml` | Development/base stack: API, worker, frontend, Postgres, Redis, Qdrant, Caddy, Jaeger, Prometheus |
+| `docker-compose.dev.yml` | Host-run development override that exposes Postgres, Redis, and Qdrant to localhost |
 | `docker-compose.prod.yml` | Production override with optimized build targets, log rotation, and reduced direct host ports |
 | `Caddyfile` | Reverse proxy, TLS, security headers, API routing, upload limits |
 | `prometheus.yml` | Prometheus scrape configuration |
@@ -74,6 +75,8 @@ LLM_API_KEY=<provider key, or leave blank with LLM_PROVIDER=none>
 GEMINI_API_KEY=<Gemini key, optional for tool-only local runs>
 METRICS_SCRAPE_TOKEN=<strong scrape token>
 CADDY_SITE_ADDRESS=http://localhost
+USE_REDIS_WORKER=false          # direct host API mode
+DOCKER_USE_REDIS_WORKER=true    # Docker API + worker mode
 ```
 
 ### Generating secrets
@@ -136,6 +139,19 @@ docker compose \
   up --build -d
 ```
 
+Fast Dockerfile smoke build without model preloading:
+
+```bash
+PRELOAD_MODELS=0 docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.prod.yml \
+  --env-file .env \
+  build migration backend worker frontend
+```
+
+Use this for CI or Dockerfile validation. Use the default `PRELOAD_MODELS=1`
+for production image builds so clean model volumes start warm.
+
 CI and local tests use the same base compose file unless a test-specific override is added later.
 
 ## Ports
@@ -150,9 +166,18 @@ Base/development stack:
 | Jaeger | 16686 | Local tracing UI |
 | Prometheus | 9090 | Local metrics UI |
 
+Host-run development override (`-f infra/docker-compose.dev.yml`):
+
+| Service | Host Port | Notes |
+| --- | --- | --- |
+| Postgres | 5432 | Enables `uv run` API on host |
+| Redis | 6379 | Enables `uv run` API on host |
+| Qdrant | 6333, 6334 | Enables `uv run` API on host |
+
 Production override:
 
 - Backend and frontend direct host ports are removed.
+- Postgres, Redis, and Qdrant are internal unless you add the dev override.
 - Jaeger and Prometheus direct host ports are removed.
 - Public traffic should enter through Caddy on ports 80/443.
 

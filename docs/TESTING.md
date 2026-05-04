@@ -70,6 +70,9 @@ uv run pytest tests/unit -v
 # Integration & Custody Chain
 uv run pytest tests/integration -v
 
+# Full local suite, using a workspace temp directory that works on Windows
+uv run pytest tests/ -q --tb=short --basetemp .pytest_tmp_run
+
 # Full Coverage Report
 uv run pytest tests --cov=. --cov-report=html
 ```
@@ -90,15 +93,25 @@ npx playwright test
 npx playwright test --ui
 ```
 
+On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`:
+
+```powershell
+npm.cmd run lint
+npm.cmd run type-check
+npm.cmd test -- --runInBand
+npm.cmd run build
+```
+
 ### 🐋 Infrastructure & Live Connectivity
 Run from Project Root:
 
 ```bash
 # Static Infra Audit
-pytest tests/infra tests/docker -v
+docker compose -f infra/docker-compose.yml --env-file .env config --quiet
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file .env config --quiet
 
 # Live Stack Integration (Requires 'docker compose up')
-pytest tests/connectivity -v
+docker compose -f infra/docker-compose.yml --env-file .env ps
 ```
 
 ---

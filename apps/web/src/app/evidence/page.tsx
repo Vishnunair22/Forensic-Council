@@ -1,16 +1,24 @@
 "use client";
 
 import { useCallback, useRef } from "react";
+import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { Shield, CloudUpload, CheckCircle2, Cpu, Scale } from "lucide-react";
 
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
-import { AgentProgressDisplay } from "@/components/evidence/AgentProgressDisplay";
-import { HITLCheckpointModal } from "@/components/evidence/HITLCheckpointModal";
 import { useInvestigation } from "@/hooks/useInvestigation";
 import { useSound } from "@/hooks/useSound";
 import { storage } from "@/lib/storage";
+
+const AgentProgressDisplay = dynamic(
+  () => import("@/components/evidence/AgentProgressDisplay").then((mod) => mod.AgentProgressDisplay),
+  { loading: () => <div className="min-h-[60vh]" /> },
+);
+const HITLCheckpointModal = dynamic(
+  () => import("@/components/evidence/HITLCheckpointModal").then((mod) => mod.HITLCheckpointModal),
+  { ssr: false },
+);
 
 export default function EvidenceUploadPage() {
   const { playSound } = useSound();

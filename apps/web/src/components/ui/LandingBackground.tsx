@@ -1,38 +1,12 @@
 "use client";
 
 import React from "react";
-import { motion } from "framer-motion";
 
 export const LandingBackground = () => {
   return (
     <div className="bg-mesh-container">
-      {/* Dynamic Orbs */}
-      <motion.div
-        className="mesh-orb-1"
-        animate={{
-          scale: [1, 1.1, 1],
-          x: [0, 50, 0],
-          y: [0, 30, 0],
-        }}
-        transition={{
-          duration: 20,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
-      />
-      <motion.div
-        className="mesh-orb-2"
-        animate={{
-          scale: [1, 1.2, 1],
-          x: [0, -40, 0],
-          y: [0, -50, 0],
-        }}
-        transition={{
-          duration: 25,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
-      />
+      <div className="mesh-orb-1" />
+      <div className="mesh-orb-2" />
 
       {/* Subtle Noise Texture */}
       <div

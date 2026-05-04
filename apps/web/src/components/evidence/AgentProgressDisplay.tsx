@@ -39,7 +39,7 @@ export interface AgentUpdate {
  findings_count: number;
  error?: string;
  deep_analysis_pending?: boolean;
- agent_verdict?: "AUTHENTIC" | "INCONCLUSIVE" | "LIKELY_MANIPULATED" | "LIKELY_AI_GENERATED" | "LIKELY_SPOOFED" | "LIKELY_SYNTHETIC";
+ agent_verdict?: "AUTHENTIC" | "CLEAN" | "INCONCLUSIVE" | "SUSPICIOUS" | "TAMPERED" | "NEEDS_REVIEW" | "LIKELY_MANIPULATED" | "LIKELY_AI_GENERATED" | "LIKELY_SPOOFED" | "LIKELY_SYNTHETIC";
  tool_error_rate?: number;
  section_flags?: Array<{ id: string; label: string; flag: string; key_signal?: string }>;
  findings_preview?: FindingPreview[];

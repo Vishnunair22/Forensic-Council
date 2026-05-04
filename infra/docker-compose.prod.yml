@@ -11,7 +11,7 @@ services:
     build:
       target: production
       args:
-        PRELOAD_MODELS: "1"
+        PRELOAD_MODELS: ${PRELOAD_MODELS:-1}
         YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-detr-resnet-50}
         AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
     # Suppress the host-facing 8000 port — in production all traffic must flow
@@ -70,7 +70,7 @@ services:
     build:
       target: production
       args:
-        PRELOAD_MODELS: "1"
+        PRELOAD_MODELS: ${PRELOAD_MODELS:-1}
         YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-detr-resnet-50}
         AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
     environment:
@@ -106,6 +106,15 @@ services:
 
   migration:
     restart: "no"
+
+  redis:
+    ports: !reset []
+
+  postgres:
+    ports: !reset []
+
+  qdrant:
+    ports: !reset []
 
   jaeger:
     ports: !reset []

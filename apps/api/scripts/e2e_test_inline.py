@@ -2,19 +2,20 @@
 End-to-end smoke test for Forensic Council.
 """
 import asyncio
+import io
+
 import httpx
 from PIL import Image
-import io
 
 
 async def main():
-    BASE_URL = "http://localhost:8000"
+    base_url = "http://localhost:8000"
 
     print("=" * 60)
     print("FORENSIC COUNCIL — E2E SMOKE TEST")
     print("=" * 60)
 
-    async with httpx.AsyncClient(base_url=BASE_URL, timeout=120.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(base_url=base_url, timeout=120.0, follow_redirects=True) as client:
         # Step 1: Health check
         print("\n[1/7] Health check...")
         r = await client.get("/api/v1/health")

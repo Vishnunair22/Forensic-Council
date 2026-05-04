@@ -83,8 +83,11 @@ Thumbs.db
 # Backend tree should not enter the frontend build context (when using repo root context)
 apps/api/.venv/
 apps/api/.pytest_cache/
+apps/api/.pytest_tmp/
+apps/api/.pytest_tmp_run/
 apps/api/.ruff_cache/
 apps/api/.pyright/
+apps/api/tmp*/
 apps/api/cache/
 apps/api/storage/evidence/
 apps/api/storage/keys/
