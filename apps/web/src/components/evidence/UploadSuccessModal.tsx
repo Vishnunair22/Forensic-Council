@@ -13,12 +13,14 @@ export interface UploadSuccessModalProps {
 }
 
 export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: UploadSuccessModalProps) {
-  const [mounted, setMounted] = useState(false);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(() =>
+    typeof document === "undefined" ? null : document.body
+  );
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
+    setPortalTarget(document.body);
     const originalBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
@@ -40,7 +42,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: Uploa
     return () => window.removeEventListener("keydown", onEsc);
   }, [onNewUpload]);
 
-  if (!mounted) return null;
+  if (!portalTarget) return null;
 
   const isImage = file.type.startsWith("image/");
   const isVideo = file.type.startsWith("video/");
@@ -172,6 +174,6 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: Uploa
         </motion.div>
       </div>
     </motion.div>,
-    document.body
+    portalTarget
   );
 }

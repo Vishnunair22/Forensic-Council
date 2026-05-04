@@ -340,6 +340,41 @@ class TestInvestigationWorker:
         redis.hset.assert_called()
 
     @pytest.mark.asyncio
+    async def test_start_times_out_stuck_handler(self):
+        redis = _make_redis_mock()
+        sid = uuid4()
+        task = InvestigationTask(
+            session_id=sid,
+            case_id="CASE001",
+            investigator_id="inv1",
+            evidence_file_path="/tmp/file.jpg",
+        )
+        redis.client.blpop = AsyncMock(
+            side_effect=[
+                (None, str(sid)),
+                asyncio.CancelledError(),
+            ]
+        )
+        redis.hget = AsyncMock(return_value=task.to_dict())
+        redis.hset = AsyncMock()
+
+        queue = InvestigationQueue()
+        queue._redis = redis
+
+        async def stuck_handler(**kwargs):
+            await asyncio.sleep(1)
+
+        worker = InvestigationWorker(queue, worker_id=7)
+        worker._task_timeout_seconds = lambda: 0.01
+        worker.set_handler(stuck_handler)
+
+        await worker.start()
+
+        final_task = redis.hset.call_args_list[-1].args[2]
+        assert final_task["status"] == "FAILED"
+        assert "timed out" in final_task["error"]
+
+    @pytest.mark.asyncio
     async def test_start_blpop_timeout_continues_loop(self):
         """blpop returning None (timeout) should continue the loop."""
         redis = _make_redis_mock()

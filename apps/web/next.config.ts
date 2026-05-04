@@ -86,8 +86,8 @@ const nextConfig: NextConfig = {
 
     if (dev) {
       config.watchOptions = {
-        poll: 500, // Reduced from 800ms to 500ms for faster HMR
-        aggregateTimeout: 300,
+        poll: 2000, // Increased from 500ms to 2000ms for stability on Windows
+        aggregateTimeout: 1000,
       };
       // Use relative, URL-encoded paths for source maps to avoid "illegal path"
       // errors with Windows absolute paths containing spaces.

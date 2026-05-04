@@ -40,6 +40,8 @@ class Task(BaseModel):
     status: TaskStatus = TaskStatus.PENDING
     result_ref: str | None = None
     blocked_reason: str | None = None
+    priority: int = 10
+    metadata: dict[str, Any] = Field(default_factory=dict)
     sub_task_info: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -50,6 +52,8 @@ class Task(BaseModel):
             "status": self.status.value,
             "result_ref": self.result_ref,
             "blocked_reason": self.blocked_reason,
+            "priority": self.priority,
+            "metadata": self.metadata,
             "sub_task_info": self.sub_task_info,
         }
 
@@ -62,6 +66,8 @@ class Task(BaseModel):
             status=TaskStatus(data["status"]),
             result_ref=data.get("result_ref"),
             blocked_reason=data.get("blocked_reason"),
+            priority=data.get("priority", 10),
+            metadata=data.get("metadata", {}),
             sub_task_info=data.get("sub_task_info"),
         )
 
@@ -330,6 +336,65 @@ class WorkingMemory:
             agent_id=agent_id,
             task_count=len(tasks),
         )
+
+    async def create_task(
+        self,
+        session_id: UUID,
+        agent_id: str,
+        description: str,
+        priority: int = 10,
+        metadata: dict[str, Any] | None = None,
+    ) -> Task:
+        """
+        Create a new task and add it to the agent's working memory.
+
+        Args:
+            session_id: Session identifier
+            agent_id: Agent identifier
+            description: Task description
+            priority: Task priority (lower is higher priority)
+            metadata: Optional task metadata
+
+        Returns:
+            The created Task
+        """
+        key = self._get_key(session_id, agent_id)
+        task = Task(
+            task_id=uuid4(),
+            description=description,
+            priority=priority,
+            status=TaskStatus.PENDING,
+            metadata=metadata or {},
+        )
+
+        if self._redis is not None:
+            try:
+                # Use a Lua script to atomically append the task to the list
+                lua_script = """
+                local key = KEYS[1]
+                local task_json = ARGV[1]
+                local current = redis.call('GET', key)
+                if not current then return nil end
+                local state = cjson.decode(current)
+                table.insert(state.tasks, cjson.decode(task_json))
+                local new_json = cjson.encode(state)
+                redis.call('SET', key, new_json, 'EX', 86400)
+                return new_json
+                """
+                result_json = await self._redis.client.eval(lua_script, 1, key, task.model_dump_json())
+                if result_json:
+                    self._local_cache[key] = result_json
+                    logger.debug("Task created in Redis", agent_id=agent_id, task_id=str(task.task_id))
+                    return task
+            except Exception as e:
+                logger.warning("WorkingMemory.create_task: Redis eval failed, falling back", error=str(e))
+
+        # Fallback to local cache/manual update
+        state = await self.get_state(session_id, agent_id)
+        state.tasks.append(task)
+        await self.update_state(session_id, agent_id, {"tasks": [t.model_dump() for t in state.tasks]})
+
+        return task
 
     async def update_task(
         self,

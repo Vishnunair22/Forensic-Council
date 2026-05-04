@@ -275,6 +275,7 @@ services:
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
       OTEL_SERVICE_NAME: forensic_api
+      SKIP_MODEL_DOWNLOAD: "1"
     depends_on:
       postgres:
         condition: service_healthy
@@ -507,13 +508,11 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      # wget is available in node:22-alpine. Increased start-period to allow
-      # the Next.js standalone server enough time to fully boot before checks begin.
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ > /dev/null 2>&1 || exit 1"]
       interval: 30s
-      timeout: 10s
+      timeout: 60s
       retries: 5
-      start_period: 60s
+      start_period: 180s
     # SECURITY: Run with minimal privileges (already runs as 'nextjs' user in Dockerfile)
     security_opt:
       - no-new-privileges:true

@@ -92,8 +92,12 @@ export const useSimulation = ({
     (targetSessionId: string, isReconnect: boolean = false): Promise<void> => {
       // Hard-clear revealQueue and completedAgents when session ID changes
       if (lastSessionIdRef.current !== null && lastSessionIdRef.current !== targetSessionId) {
+        setCompletedAgents([]);
         setRevealQueue([]);
         completedAgentsRef.current = [];
+        setAgentUpdates({});
+        setPipelineMessage("");
+        setPipelineThinking("");
       }
       lastSessionIdRef.current = targetSessionId;
 
@@ -125,6 +129,15 @@ export const useSimulation = ({
         let isActive = true;
 
         const applyUpdate = (update: BriefUpdate) => {
+          if (update.session_id && update.session_id !== targetSessionId) {
+            dbg.warn("[WebSocket] Ignoring update for non-current session", {
+              current: targetSessionId,
+              incoming: update.session_id,
+              type: update.type,
+            });
+            return;
+          }
+
           switch (update.type) {
             case "CONNECTED":
                     // Server confirmed auth and registered socket — connection fully ready.
@@ -310,6 +323,23 @@ export const useSimulation = ({
                             : undefined,
                         completed_at: new Date().toISOString(),
                       };
+
+                      setAgentUpdates((prev) => ({
+                        ...prev,
+                        [agent.id]: {
+                          status: newUpdate.status,
+                          thinking: newUpdate.message,
+                          tools_done:
+                            typeof newUpdate.tools_ran === "number"
+                              ? newUpdate.tools_ran
+                              : prev[agent.id]?.tools_done,
+                          tools_total:
+                            typeof newUpdate.tools_ran === "number"
+                              ? newUpdate.tools_ran
+                              : prev[agent.id]?.tools_total,
+                          tool_name: prev[agent.id]?.tool_name,
+                        },
+                      }));
 
                       // Upsert: for deep-phase completions, MERGE with the
                       // initial-phase data instead of replacing it. This preserves

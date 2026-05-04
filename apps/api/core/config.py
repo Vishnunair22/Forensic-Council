@@ -58,7 +58,7 @@ class Settings(BaseSettings):
         description="Environment: development, staging, production",
     )
     offline_mode: bool = Field(
-        default=False,
+        default=True,
         description=(
             "Enable strict offline mode for ML models. "
             "When True, all ML libraries (HuggingFace, YOLO, CLIP) "

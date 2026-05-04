@@ -85,7 +85,7 @@ interface AgentProgressDisplayProps {
 
 const allValidAgents = AGENTS_DATA.filter((agent) => agent.id !== "Arbiter");
 
-type AgentStatus = "waiting" | "checking" | "running" | "complete" | "error" | "unsupported" | "validating";
+type AgentStatus = "waiting" | "queued" | "checking" | "running" | "complete" | "error" | "unsupported" | "validating";
 
 export function AgentProgressDisplay({
   agentUpdates,
@@ -176,7 +176,17 @@ export function AgentProgressDisplay({
       .filter((a) => phase === "deep" ? initialAgentIds.includes(a.id) : true);
   }, [hiddenAgents, phase, initialAgentIds]);
 
+  const isQueuePending = /queue|queued|enqueued|awaiting available forensic worker|waiting for an available forensic worker/i.test(
+    `${pipelineMessage || ""} ${progressText || ""}`
+  );
+
   const getAgentStatus = (agentId: string): AgentStatus => {
+    const completed = completedAgents.find((c) => c.agent_id === agentId);
+    if (completed) {
+      if (completed.status === "skipped") return "unsupported";
+      return (completed.status === "error" || completed.status === "failed" || completed.error) ? "error" : "complete";
+    }
+
     const liveStatus = agentUpdates[agentId]?.status;
     if (liveStatus === "validating") return "validating";
     if (liveStatus === "skipped") return "unsupported";
@@ -189,13 +199,8 @@ export function AgentProgressDisplay({
     }
     if (!isSupported) return "unsupported";
 
-    const completed = completedAgents.find((c) => c.agent_id === agentId);
-    if (completed) {
-      if (completed.status === "skipped") return "unsupported";
-      return (completed.status === "error" || completed.status === "failed" || completed.error) ? "error" : "complete";
-    }
-
     if (agentUpdates[agentId]) return "running";
+    if (isQueuePending) return "queued";
     if (pipelineStatus === "analyzing" || pipelineStatus === "initiating" || pipelineStatus === "processing") {
       return "checking";
     }
@@ -217,7 +222,10 @@ export function AgentProgressDisplay({
     },
   };
 
-  const runningCount = Object.keys(agentUpdates).filter(id => !completedAgents.some(c => c.agent_id === id)).length;
+  const runningCount = Object.entries(agentUpdates).filter(([id, update]) => {
+    if (completedAgents.some(c => c.agent_id === id)) return false;
+    return !["complete", "skipped", "error", "failed"].includes(update.status);
+  }).length;
 
   return (
     <div

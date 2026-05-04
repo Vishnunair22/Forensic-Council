@@ -99,7 +99,7 @@
             header_up Host {host}
 
             transport http {
-                response_header_timeout 300s
+                response_header_timeout 900s
                 dial_timeout 10s
             }
         }

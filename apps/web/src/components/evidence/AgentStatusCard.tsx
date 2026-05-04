@@ -24,7 +24,7 @@ export interface AgentStatusCardProps {
   agentId: string;
   name: string;
   badge: string;
-  status: "waiting" | "checking" | "running" | "complete" | "error" | "unsupported" | "validating";
+  status: "waiting" | "queued" | "checking" | "running" | "complete" | "error" | "unsupported" | "validating";
   thinking?: string;
   liveUpdate?: {
     status: string;
@@ -47,6 +47,7 @@ export interface AgentStatusCardProps {
 
 const statusConfig = {
   waiting:     { color: "text-white/20",   label: "Standby"   },
+  queued:      { color: "text-white/30",   label: "Queued"    },
   checking:    { color: "text-[var(--color-primary)]",    label: "Syncing" },
   running:     { color: "text-[var(--color-primary)]",    label: "Scanning" },
   complete:    { color: "text-[var(--color-primary)]",    label: "Verified"  },
@@ -100,9 +101,9 @@ function FindingRow({ f, i }: { f: FindingPreview; i: number }) {
         isAlert ? "bg-danger/5 border-danger/20" : "bg-white/[0.02] border-white/5"
       )}
     >
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] font-mono font-bold text-white/30">
-          {(isAlert ? "Needs_Review" : f.verdict === "NOT_APPLICABLE" ? "Skipped" : "Signal")}_{i.toString().padStart(2, "0")}
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <span className="min-w-0 truncate text-[11px] font-mono font-bold text-white/55 uppercase tracking-[0.08em]">
+          {fmtTool(f.tool)}
         </span>
         <div className="flex items-center gap-2">
           {f.degraded && (
@@ -111,24 +112,24 @@ function FindingRow({ f, i }: { f: FindingPreview; i: number }) {
             </span>
           )}
           {typeof f.confidence === "number" && (
-            <span className={clsx("text-[10px] font-mono font-bold", isAlert ? "text-danger" : "text-success")}>
+            <span className={clsx("text-[11px] font-mono font-bold", isAlert ? "text-danger" : "text-success")}>
               {Math.round(f.confidence * 100)}% confidence
             </span>
           )}
         </div>
       </div>
-      <p className="text-xs text-white/70 font-medium leading-relaxed mb-1">
-        <span className="text-white font-bold">{fmtTool(f.tool)}:</span> {visible}
+      <p className="text-sm text-white/85 font-medium leading-6 mb-1">
+        {visible}
       </p>
       {f.degraded && f.fallback_reason && (
-        <p className="text-[9px] text-amber-500/60 font-mono mt-1">
+        <p className="text-[11px] text-amber-400/80 font-mono mt-2 leading-relaxed">
           Tool fallback used: {f.fallback_reason}
         </p>
       )}
       {isLong && (
         <button
           onClick={() => setExpanded((e) => !e)}
-          className="mt-2 text-[10px] font-mono text-[var(--color-primary)] uppercase tracking-widest"
+          className="mt-3 text-[11px] font-mono text-[var(--color-primary)] uppercase tracking-widest"
         >
           {expanded ? "Show less" : "Show more"}
         </button>
@@ -207,7 +208,7 @@ export function AgentStatusCard({
         "glass-panel relative flex flex-col overflow-hidden transition-all duration-500",
         status === "unsupported" ? "min-h-[200px]" : "min-h-[540px]",
         (status === "running" || status === "validating" || status === "checking") && "border-[var(--color-primary)]/30 shadow-[0_0_30px_rgba(var(--color-primary-rgb),0.1)]",
-        status === "waiting" && "opacity-40"
+        (status === "waiting" || status === "queued") && "opacity-50"
       )}
       data-testid={`agent-card-${agentId}`}
     >
@@ -306,7 +307,7 @@ export function AgentStatusCard({
                 </div>
               </div>
               {(completedData.summary || completedData.message) && (
-                <p className="text-xs text-white/60 leading-relaxed border-t border-white/5 pt-3">
+                <p className="text-sm text-white/75 leading-6 border-t border-white/5 pt-3">
                   {completedData.summary || completedData.message}
                 </p>
               )}
@@ -343,6 +344,15 @@ export function AgentStatusCard({
                </p>
             </div>
 
+          ) : status === "queued" ? (
+            <div className="flex flex-col items-center justify-center h-full text-center gap-4 py-12">
+               <div className="w-12 h-12 rounded-xl bg-white/[0.03] border border-white/10 flex items-center justify-center text-white/35">
+                  <Activity className="w-6 h-6" />
+               </div>
+               <p className="max-w-xs text-xs text-white/45 font-medium leading-relaxed">
+                 {thinking || "Investigation is queued. Waiting for an available forensic worker..."}
+               </p>
+            </div>
           ) : status === "waiting" ? (
             <div className="flex flex-col items-center justify-center h-full text-center opacity-20 py-12">
                <span className="text-[10px] font-mono font-bold text-white tracking-[0.3em] uppercase">Awaiting_Payload</span>
@@ -350,7 +360,7 @@ export function AgentStatusCard({
           ) : status === "unsupported" ? (
             <div className="py-4 space-y-3">
                <p className="text-sm text-white/60 leading-relaxed">
-                 {name} does not support {fileCategory} files.
+                 {liveUpdate?.thinking || completedData?.message || `${name} does not support ${fileCategory} files.`}
                </p>
                <p className="text-[10px] font-mono text-white/30 uppercase tracking-widest">
                  Agent skipped - hidden after 10s

@@ -1740,7 +1740,12 @@ class ReActLoopEngine:
             await self.working_memory.update_state(
                 session_id=self.session_id,
                 agent_id=self.agent_id,
-                updates={"redirect_context": decision.redirect_context},
+                updates={
+                    "redirect_context": decision.redirect_context,
+                    "tribunal_escalation": False,
+                    "uncertainty_pause": False,
+                    "last_tool_error": None,
+                },
             )
             if self._current_checkpoint:
                 self._current_checkpoint.status = "RESUMED"
@@ -1748,6 +1753,22 @@ class ReActLoopEngine:
         if decision.decision_type == "APPROVE":
             if self._current_checkpoint:
                 self._current_checkpoint.status = "RESUMED"
+
+            # Issue 5.5: Clear sticky escalation flags in working memory when approving.
+            # Failure to clear these causes the check_hitl_triggers() logic to
+            # immediately re-pause the loop on the next iteration.
+            try:
+                await self.working_memory.update_state(
+                    session_id=self.session_id,
+                    agent_id=self.agent_id,
+                    updates={
+                        "tribunal_escalation": False,
+                        "uncertainty_pause": False,
+                        "last_tool_error": None,
+                    },
+                )
+            except Exception as e:
+                logger.warning(f"Could not clear escalation flags on APPROVE: {e}")
 
         if decision.decision_type == "ESCALATE":
             # Mark for tribunal escalation

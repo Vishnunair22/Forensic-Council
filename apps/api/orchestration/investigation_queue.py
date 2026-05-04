@@ -1,4 +1,5 @@
 import asyncio
+import os
 import time
 from collections.abc import Callable
 from enum import StrEnum
@@ -147,83 +148,137 @@ class InvestigationWorker:
         """Set the async handler that processes each task."""
         self._handler = handler
 
+    def _task_timeout_seconds(self) -> float:
+        raw = os.environ.get("WORKER_TASK_TIMEOUT_SECONDS", "660")
+        try:
+            timeout = float(raw)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid WORKER_TASK_TIMEOUT_SECONDS; using default",
+                value=raw,
+                default_seconds=660,
+            )
+            return 660.0
+        return max(30.0, timeout)
+
+    async def _write_heartbeat(self) -> None:
+        redis = await self.queue._get_redis()
+        await redis.set(
+            InvestigationQueue.WORKER_HEARTBEAT_KEY,
+            str(time.time()),
+            ex=InvestigationQueue.WORKER_HEARTBEAT_TTL,
+        )
+
+    async def _heartbeat_loop(self) -> None:
+        """Keep worker liveness fresh while long investigations are running."""
+        interval = max(1, InvestigationQueue.WORKER_HEARTBEAT_TTL // 3)
+        while self._running:
+            try:
+                await self._write_heartbeat()
+            except Exception as e:
+                logger.warning(
+                    f"Worker {self.worker_id} heartbeat refresh failed",
+                    error=str(e),
+                )
+            await asyncio.sleep(interval)
+
     async def start(self) -> None:
         """Start the worker loop."""
         self._running = True
         redis = await self.queue._get_redis()
         logger.info(f"Worker {self.worker_id} started, waiting for tasks...")
+        heartbeat_task = asyncio.create_task(self._heartbeat_loop())
 
-        while self._running:
-            try:
-                # Heartbeat: renew every loop so the API can detect a dead worker.
-                await redis.set(
-                    InvestigationQueue.WORKER_HEARTBEAT_KEY,
-                    str(time.time()),
-                    ex=InvestigationQueue.WORKER_HEARTBEAT_TTL,
-                )
-                # BLPOP blocks until a task is available (timeout 5s)
-                result = await redis.client.blpop(InvestigationQueue.QUEUE_KEY, timeout=5)
-                if not result:
-                    continue
-
-                _, session_id_str = result
-                session_id = UUID(session_id_str)
-
-                task = await self.queue.get_status(session_id)
-                if not task:
-                    logger.error(f"Worker {self.worker_id}: Task {session_id} metadata missing")
-                    continue
-
-                if self._handler is None:
-                    logger.error(f"Worker {self.worker_id}: No handler set")
-                    task.status = InvestigationStatus.FAILED
-                    task.error = "No worker handler configured"
-                    await self.queue.update_task(task)
-                    continue
-
-                task.status = InvestigationStatus.RUNNING
-                task.started_at = time.time()
-                await self.queue.update_task(task)
-
-                logger.info(
-                    f"Worker {self.worker_id} processing task",
-                    session_id=str(session_id),
-                )
-
+        try:
+            while self._running:
                 try:
-                    # Execute the investigation
-                    # The handler is expected to be ForensicCouncilPipeline.run_investigation or a wrapper
-                    result = await self._handler(
-                        evidence_file_path=task.evidence_file_path,
-                        case_id=task.case_id,
-                        investigator_id=task.investigator_id,
-                        original_filename=task.original_filename,
-                        session_id=task.session_id,
-                    )
+                    # BLPOP blocks until a task is available (timeout 5s)
+                    result = await redis.client.blpop(InvestigationQueue.QUEUE_KEY, timeout=5)
+                    if not result:
+                        continue
 
-                    task.status = InvestigationStatus.COMPLETED
-                    task.result = (
-                        result.model_dump(mode="json") if hasattr(result, "model_dump") else result
-                    )
-                    task.completed_at = time.time()
-                except Exception as e:
-                    task.status = InvestigationStatus.FAILED
-                    task.error = str(e)
-                    task.completed_at = time.time()
-                    logger.error(
-                        f"Worker {self.worker_id} task failed",
+                    _, session_id_str = result
+                    session_id = UUID(session_id_str)
+
+                    task = await self.queue.get_status(session_id)
+                    if not task:
+                        logger.error(f"Worker {self.worker_id}: Task {session_id} metadata missing")
+                        continue
+
+                    if self._handler is None:
+                        logger.error(f"Worker {self.worker_id}: No handler set")
+                        task.status = InvestigationStatus.FAILED
+                        task.error = "No worker handler configured"
+                        await self.queue.update_task(task)
+                        continue
+
+                    task.status = InvestigationStatus.RUNNING
+                    task.started_at = time.time()
+                    await self.queue.update_task(task)
+
+                    logger.info(
+                        f"Worker {self.worker_id} processing task",
                         session_id=str(session_id),
-                        error=str(e),
-                        exc_info=True,
                     )
 
-                await self.queue.update_task(task)
+                    try:
+                        # Execute the investigation
+                        # The handler is expected to be ForensicCouncilPipeline.run_investigation or a wrapper
+                        timeout_seconds = self._task_timeout_seconds()
+                        result = await asyncio.wait_for(
+                            self._handler(
+                                evidence_file_path=task.evidence_file_path,
+                                case_id=task.case_id,
+                                investigator_id=task.investigator_id,
+                                original_filename=task.original_filename,
+                                session_id=task.session_id,
+                            ),
+                            timeout=timeout_seconds,
+                        )
 
+                        task.status = InvestigationStatus.COMPLETED
+                        task.result = (
+                            result.model_dump(mode="json")
+                            if hasattr(result, "model_dump")
+                            else result
+                        )
+                        task.completed_at = time.time()
+                    except asyncio.TimeoutError:
+                        task.status = InvestigationStatus.FAILED
+                        task.error = (
+                            f"Investigation worker timed out after "
+                            f"{self._task_timeout_seconds():.0f}s"
+                        )
+                        task.completed_at = time.time()
+                        logger.error(
+                            f"Worker {self.worker_id} task timed out",
+                            session_id=str(session_id),
+                            timeout_seconds=self._task_timeout_seconds(),
+                        )
+                    except Exception as e:
+                        task.status = InvestigationStatus.FAILED
+                        task.error = str(e)
+                        task.completed_at = time.time()
+                        logger.error(
+                            f"Worker {self.worker_id} task failed",
+                            session_id=str(session_id),
+                            error=str(e),
+                            exc_info=True,
+                        )
+
+                    await self.queue.update_task(task)
+
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.error(f"Worker {self.worker_id} loop error", error=str(e))
+                    await asyncio.sleep(1)
+        finally:
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
             except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Worker {self.worker_id} loop error", error=str(e))
-                await asyncio.sleep(1)
+                pass
 
     async def stop(self) -> None:
         """Stop the worker loop."""

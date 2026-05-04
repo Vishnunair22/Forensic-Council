@@ -124,7 +124,36 @@ describe("useSimulation Hook", () => {
 
     expect(result.current.completedAgents.length).toBe(1);
     expect(result.current.completedAgents[0].agent_id).toBe("Agent1");
+    expect(result.current.agentUpdates.Agent1.status).toBe("complete");
     expect(mockOnAgentComplete).toHaveBeenCalled();
+  });
+
+  test("marks skipped agents as terminal live updates immediately", async () => {
+    const { result } = renderHook(() => useSimulation({ onAgentComplete: mockOnAgentComplete }));
+
+    await act(async () => {
+      resolveConnected();
+      await result.current.connectWebSocket("test-session");
+    });
+
+    act(() => {
+      mockWs.dispatchMessage({
+        type: "AGENT_COMPLETE",
+        agent_id: "Agent2",
+        agent_name: "Audio Forensics",
+        message: "Agent2 skipped immediately: this agent does not support the submitted file type.",
+        data: {
+          confidence: 0,
+          findings_count: 0,
+          status: "skipped",
+          error: "Unsupported file type.",
+        },
+      });
+    });
+
+    expect(result.current.agentUpdates.Agent2.status).toBe("skipped");
+    expect(result.current.agentUpdates.Agent2.thinking).toMatch(/does not support/i);
+    expect(result.current.completedAgents[0].status).toBe("skipped");
   });
 
   test("processes HITL_CHECKPOINT messages", async () => {

@@ -49,13 +49,17 @@ class AgentInvestigationMixin:
         Used for reactive task decomposition based on intermediate findings.
         """
         try:
-            from core.working_memory import TaskStatus
+            # Check if task already exists to avoid duplication loops
+            state = await self.working_memory.get_state(self.session_id, self.agent_id)
+            for existing in state.tasks:
+                if existing.description.lower() == description.lower() and existing.status in ("PENDING", "IN_PROGRESS"):
+                    logger.debug(f"Task already exists, skipping injection: {description}", agent_id=self.agent_id)
+                    return
 
             await self.working_memory.create_task(
                 session_id=self.session_id,
                 agent_id=self.agent_id,
                 description=description,
-                status=TaskStatus.PENDING,
                 priority=priority,
             )
             logger.info("Dynamic task injected", agent_id=self.agent_id, task=description)

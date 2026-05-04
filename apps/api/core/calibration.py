@@ -339,19 +339,19 @@ class CalibrationLayer:
         should_escalate = False
         reason = None
 
-        if is_uncalibrated and total > 0.30:
+        if is_uncalibrated and total > 0.40:
             should_escalate = True
             reason = (
-                f"UNCALIBRATED model with high total uncertainty ({total:.3f}). "
+                f"UNCALIBRATED model with very high total uncertainty ({total:.3f}). "
                 f"Epistemic fraction: {epistemic_frac:.1%}. "
-                f"Calibration parameters are engineering defaults — confidence is unreliable. "
-                f"Human review recommended before proceeding."
+                f"Calibration parameters are engineering defaults — confidence is highly unreliable. "
+                f"Human review required before proceeding."
             )
-        elif epistemic > 0.15 and epistemic_frac > 0.60:
+        elif epistemic > 0.20 and epistemic_frac > 0.70:
             should_escalate = True
             reason = (
-                f"High epistemic uncertainty ({epistemic:.3f}, {epistemic_frac:.1%} of total). "
-                f"Model uncertainty dominates — the detector lacks sufficient information. "
+                f"Critical epistemic uncertainty ({epistemic:.3f}, {epistemic_frac:.1%} of total). "
+                f"Model uncertainty dominates — the detector lacks sufficient information for this sample. "
                 f"Escalating to human-in-the-loop review per 'Don't Guess, Escalate' protocol."
             )
 

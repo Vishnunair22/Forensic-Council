@@ -8,7 +8,7 @@
  */
 
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FileUploadSection } from "@/components/evidence/FileUploadSection";
 import { AgentProgressDisplay } from "@/components/evidence/AgentProgressDisplay";
@@ -278,6 +278,71 @@ describe("AgentProgressDisplay", () => {
     it("shows agent name", () => {
       render(<AgentProgressDisplay {...progressDefaults} completedAgents={completed} />);
       expect(screen.getByText(/Image Forensics/i)).toBeInTheDocument();
+    });
+
+    it("lets completed data override stale running progress", () => {
+      render(
+        <AgentProgressDisplay
+          {...progressDefaults}
+          agentUpdates={{
+            Agent1: {
+              status: "running",
+              thinking: "Still scanning",
+              tools_done: 4,
+              tools_total: 4,
+            },
+          }}
+          completedAgents={[{
+            agent_id: "Agent1",
+            agent_name: "Image Forensics",
+            message: "Initial analysis complete",
+            status: "complete",
+            confidence: 0.95,
+            findings_count: 1,
+            agent_verdict: "CLEAN",
+          }]}
+        />,
+      );
+
+      expect(screen.getByText(/Final Verdict/i)).toBeInTheDocument();
+      expect(screen.queryByText(/4\/4/i)).not.toBeInTheDocument();
+    });
+
+    it("shows skipped unsupported message before the card expires", () => {
+      render(
+        <AgentProgressDisplay
+          {...progressDefaults}
+          agentUpdates={{
+            Agent2: {
+              status: "skipped",
+              thinking: "Agent2 skipped immediately: this agent does not support the submitted file type.",
+            },
+          }}
+          mimeType="image/jpeg"
+        />,
+      );
+
+      expect(screen.getByText(/does not support the submitted file type/i)).toBeInTheDocument();
+      expect(screen.getByText(/hidden after 10s/i)).toBeInTheDocument();
+    });
+
+    it("shows queued cards instead of syncing all agents while waiting for a worker", async () => {
+      render(
+        <AgentProgressDisplay
+          {...progressDefaults}
+          pipelineStatus="analyzing"
+          pipelineMessage="Investigation enqueued. Awaiting available forensic worker..."
+          progressText="Queued"
+          mimeType="image/jpeg"
+        />,
+      );
+
+      await waitFor(
+        () => expect(screen.getAllByText("QUEUED").length).toBeGreaterThan(0),
+        { timeout: 3000 },
+      );
+      expect(screen.getAllByText(/awaiting available forensic worker/i).length).toBeGreaterThan(0);
+      expect(screen.queryByText(/Synchronizing with pipeline/i)).not.toBeInTheDocument();
     });
   });
 

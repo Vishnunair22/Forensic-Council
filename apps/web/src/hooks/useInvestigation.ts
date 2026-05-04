@@ -121,6 +121,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const [phase, setPhase] = useState<"initial" | "deep">("initial");
   const [isSubmittingHITL, setIsSubmittingHITL] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
   const [wsConnectionError, setWsConnectionError] = useState<string | null>(null);
   const [arbiterDeliberating, setArbiterDeliberating] = useState(false);
   const analysisCompleteSoundedRef = useRef(false);
@@ -180,6 +181,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       }
     } catch {
       setAutoStartBlocking(false);
+    } finally {
+      setIsHydrated(true);
     }
   }, []);
 
@@ -673,8 +676,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     }
   }, [awaitingDecision, playSound]);
 
-  const hasStartedAnalysis = status !== "idle" || isUploading || validCompletedAgents.length > 0;
-  const showUploadForm = !autoStartBlocking && status === "idle" && !isUploading;
+  const hasStartedAnalysis = isHydrated && (status !== "idle" || isUploading || validCompletedAgents.length > 0);
+  const showUploadForm = isHydrated && !autoStartBlocking && status === "idle" && !isUploading;
 
   // Safety dismissal for reconnects or very fast streams that update state
   // before the connection promise settles.

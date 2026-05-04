@@ -137,7 +137,7 @@ export function HeroAuthActions() {
         onHome={() => { setAuthError(null); setSelectedFile(null); }}
       />
 
-      <AnimatePresence mode="wait">
+      <AnimatePresence>
         {showUpload && !selectedFile && !isHandingOff && (
           <UploadModal
             key="upload-modal"
