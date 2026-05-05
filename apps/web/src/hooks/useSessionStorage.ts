@@ -9,8 +9,11 @@ export function useSessionStorage<T>(
   parseJson = false
 ): [T, (val: T | ((prev: T) => T)) => void] {
   const readValue = useCallback(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (storage.getItem(key, parseJson as any, initialValue as any) as T) ?? initialValue;
+    // Explicitly handle overloads by branching on the literal boolean value
+    const val = parseJson 
+      ? storage.getItem(key, true, initialValue)
+      : storage.getItem(key, false, initialValue as unknown as string);
+    return (val as T | null) ?? initialValue;
   }, [key, initialValue, parseJson]);
 
   const [state, setState] = useState<T>(readValue);

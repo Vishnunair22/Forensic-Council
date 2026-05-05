@@ -25,7 +25,7 @@ export interface AgentStatusCardProps {
   agentId: string;
   name: string;
   badge: string;
-  status: "waiting" | "queued" | "checking" | "running" | "complete" | "error";
+  status: "waiting" | "queued" | "checking" | "running" | "complete" | "error" | "unsupported" | "validating";
   thinking?: string;
   liveUpdate?: {
     status: string;
@@ -52,6 +52,8 @@ const statusConfig = {
   running:     { color: "text-[var(--color-primary)]",    label: "Scanning" },
   complete:    { color: "text-[var(--color-primary)]",    label: "Verified"  },
   error:       { color: "text-danger",     label: "Error"     },
+  unsupported: { color: "text-white/20",   label: "Skipped"   },
+  validating:  { color: "text-[var(--color-primary)]",    label: "Verifying" },
 };
 
 const ALERT_VERDICTS = new Set([
@@ -141,10 +143,12 @@ function FindingRow({ f, i }: { f: FindingPreview; i: number }) {
 export function AgentStatusCard({
   agentId,
   name,
+  badge,
   status,
   thinking,
   liveUpdate,
   completedData,
+  isRevealed,
   fileMime,
   phase = "initial",
   isExpanded = false,

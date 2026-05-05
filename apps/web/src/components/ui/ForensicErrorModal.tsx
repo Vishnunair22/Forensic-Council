@@ -16,6 +16,7 @@ import { useSound } from "@/hooks/useSound";
 
 interface ForensicErrorModalProps {
   isVisible: boolean;
+  isTransient?: boolean;
   title?: string;
   message?: string;
   errorCode?: string;
@@ -25,6 +26,7 @@ interface ForensicErrorModalProps {
 
 export function ForensicErrorModal({
   isVisible,
+  isTransient = false,
   title = "Analysis Disrupted",
   message = "The forensic pipeline encountered a critical synchronization failure.",
   errorCode = "0xFC_PROTOCOL_ERR",

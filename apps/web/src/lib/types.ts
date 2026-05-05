@@ -7,3 +7,8 @@ export interface HistoryItem {
   thumbnail?: string;
   mime?: string;
 }
+
+export interface Finding {
+  finding_type?: string;
+  metadata?: Record<string, unknown> | null;
+}

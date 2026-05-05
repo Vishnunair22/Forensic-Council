@@ -9,7 +9,7 @@ async function responseJson(response: Response): Promise<Record<string, unknown>
 }
 
 export async function POST() {
-  const target = process.env.INTERNAL_API_URL ?? "http://localhost:8000";
+  const target = process.env.INTERNAL_API_URL ?? "http://localhost:8001";
   const password = process.env.BOOTSTRAP_INVESTIGATOR_PASSWORD ?? process.env.DEMO_PASSWORD;
   if (process.env.DEBUG_PROXY === "1") {
     console.log(`[AUTH-DEMO] target=${target}, hasPassword=${!!password}`);

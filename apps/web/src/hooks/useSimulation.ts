@@ -416,13 +416,7 @@ export const useSimulation = ({
                   playSoundRef.current?.("think");
                   break;
 
-                case "ARBITER_UPDATE":
-                if (update.data) {
-                  setArbiterStatus(update.data.status as string);
-                  setArbiterThinking(update.data.thinking as string || "");
-                }
-                break;
-              case "PIPELINE_COMPLETE":
+                case "PIPELINE_COMPLETE":
                   // Normally stay on awaiting_decision until the user chooses Accept / Deep.
                   // After resumeInvestigation(), React may still report awaiting_decision for one
                   // frame while the WS already carries PIPELINE_COMPLETE — honour the resume ref.
@@ -811,12 +805,18 @@ export const useSimulation = ({
     try { storage.removeItem(HITL_CHECKPOINT_KEY); } catch { /* ignore */ }
   }, []);
 
-  const resumeInvestigation = useCallback(
+  class SessionGoneError extends Error {
+  constructor() {
+    super("Session no longer exists");
+    this.name = "SessionGoneError";
+  }
+}
+
+const resumeInvestigation = useCallback(
     async (deep: boolean) => {
-      const targetId =
-        sessionId || storage.getItem(SESSION_ID_KEY);
+      const targetId = storage.getItem(SESSION_ID_KEY);
       if (!targetId) {
-        throw new Error("No active session — cannot resume investigation.");
+        throw new SessionGoneError();
       }
       const { ensureAuthenticated } = await import("@/lib/api");
       await ensureAuthenticated();
@@ -950,7 +950,7 @@ export const useSimulation = ({
     };
 
     processNext();
-  }, [revealQueue.length]);
+  }, [revealQueue]);
 
   // Watchdog for revealQueue
   useEffect(() => {
@@ -974,7 +974,7 @@ export const useSimulation = ({
     }, 8000);
 
     return () => clearTimeout(watchdog);
-  }, [revealQueue.length]);
+  }, [revealQueue]);
 
   const restoreSimulationState = useCallback(
     (

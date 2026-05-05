@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Hash, AlertCircle, Quote } from "lucide-react";
+import { Hash, AlertCircle, Quote, CheckCircle2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { clsx } from "clsx";
 

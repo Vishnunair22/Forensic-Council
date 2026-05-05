@@ -109,11 +109,10 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
                   <div className="absolute bottom-4 right-4 w-4 h-4 border-b border-r border-primary/40 z-20" />
 
                   {isImage && previewUrl ? (
-                    <Image
+                    <img
                       src={previewUrl}
                       alt="Preview"
-                      fill
-                      className="object-cover"
+                      className="absolute inset-0 w-full h-full object-cover"
                     />
                   ) : isVideo && previewUrl ? (
                     <video

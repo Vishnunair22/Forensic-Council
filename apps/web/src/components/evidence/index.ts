@@ -8,6 +8,13 @@
 
 export { FileUploadSection } from "./FileUploadSection";
 export { AgentProgressDisplay } from "./AgentProgressDisplay";
-export type { AgentUpdate } from "./AgentProgressDisplay";
+export type { AgentUpdate, FindingPreview } from "./AgentProgressDisplay";
+export { AgentStatusCard } from "./AgentStatusCard";
+export { AgentStatusSummary } from "./AgentStatusSummary";
+export { UploadSuccessModal } from "./UploadSuccessModal";
+export { ForensicTimeline } from "./ForensicTimeline";
+export { ArbiterCard } from "./ArbiterCard";
+export { ArbiterDeliberationOverlay } from "./ArbiterDeliberationOverlay";
 export { ErrorDisplay } from "./ErrorDisplay";
 export { HITLCheckpointModal } from "./HITLCheckpointModal";
+export { QuotaMeter } from "./QuotaMeter";

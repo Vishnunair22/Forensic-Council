@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import clsx from "clsx";
 import { type Tab, useResult } from "@/hooks/useResult";
 import { getVerdictConfig } from "@/lib/verdict";
+import type { Finding } from "@/lib/types";
 import { ForensicProgressOverlay } from "@/components/ui/ForensicProgressOverlay";
 import { ReportFooter } from "./ReportFooter";
 import { IntelligenceBrief } from "./IntelligenceBrief";
@@ -49,8 +50,8 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
     const SKIP_TYPES = new Set(["file type not applicable", "format not supported"]);
     return Object.keys(rs.report?.per_agent_findings ?? {}).filter((id) => {
       const flist = rs.report?.per_agent_findings[id] ?? [];
-      return flist.length > 0 && !flist.every((f) => {
-        const fType = String((f as any)?.finding_type || "").toLowerCase();
+      return flist.length > 0 && !flist.every((f: Finding) => {
+        const fType = String(f?.finding_type || "").toLowerCase();
         return SKIP_TYPES.has(fType);
       });
     });

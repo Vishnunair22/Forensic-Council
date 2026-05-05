@@ -10,10 +10,11 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { AGENTS as AGENTS_DATA } from "@/lib/constants";
 import { storage } from "@/lib/storage";
-import { isAgentSupportedForMime } from "@/lib/agentSupport";
+import { isAgentSupportedForMime, supportedAgentIdsForMime } from "@/lib/agentSupport";
 import { AgentStatusCard } from "./AgentStatusCard";
 import { AgentStatusSummary } from "./AgentStatusSummary";
 import { ArbiterCard } from "./ArbiterCard";
+import type { SoundType } from "@/hooks/useSound";
 
 export interface FindingPreview {
  tool: string;
@@ -85,7 +86,8 @@ interface AgentProgressDisplayProps {
   arbiterThinking?: string | null;
 }
 
-const allValidAgents = AGENTS_DATA.filter((agent) => agent.id !== "Arbiter");
+type Agent = typeof AGENTS_DATA[number];
+const allValidAgents: Agent[] = AGENTS_DATA.filter((agent) => agent.id !== "Arbiter");
 
 type AgentStatus = "waiting" | "queued" | "checking" | "running" | "complete" | "error" | "unsupported" | "validating";
 
@@ -141,16 +143,16 @@ export function AgentProgressDisplay({
     if (phase !== "deep") return [];
     const raw = storage.getItem<AgentUpdate[]>("forensic_initial_agents", true);
     if (Array.isArray(raw) && raw.length) {
-      return raw.map((a) => a.agent_id).filter((id): id is string => typeof id === "string");
+      return (raw as any[]).map((a) => a.agent_id).filter((id): id is string => typeof id === "string");
     }
     const fromMime = Array.from(supportedAgentIdsForMime(mimeType || undefined));
     if (fromMime.length) return fromMime;
     return allValidAgents.map(a => a.id);
   }, [phase, mimeType]);
 
-  const visibleAgents = useMemo(() => {
+  const visibleAgents = useMemo((): Agent[] => {
     return allValidAgents
-      .filter((a) => {
+      .filter((a): boolean => {
         if (phase === "deep") return initialAgentIds.includes(a.id);
         if (!mimeType) return true;
         return isAgentSupportedForMime(a.id, mimeType);

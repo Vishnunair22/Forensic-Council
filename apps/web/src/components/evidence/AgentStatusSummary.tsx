@@ -19,6 +19,7 @@ interface AgentStatusSummaryProps {
   skippedAgents: Array<{ id: string; name: string }>;
   agentUpdates: Record<string, { status: string }>;
   completedAgents: AgentUpdate[];
+  mimeType?: string;
 }
 
 export function AgentStatusSummary({
@@ -26,6 +27,7 @@ export function AgentStatusSummary({
   skippedAgents,
   agentUpdates,
   completedAgents,
+  mimeType,
 }: AgentStatusSummaryProps) {
   const [activeExpanded, setActiveExpanded] = useState(true);
   const [skippedExpanded, setSkippedExpanded] = useState(false);

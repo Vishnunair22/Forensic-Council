@@ -429,7 +429,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   useEffect(() => {
     if (!isHydrated || autoStartFiredRef.current) return;
     const pending = __pendingFileStore.file;
-    if (!pending) return;
+    if (!pending) {
+      sessionOnlyStorage.removeItem("forensic_auto_start");
+      setAutoStartBlocking(false);
+      return;
+    }
 
     autoStartFiredRef.current = true;
     setFile(pending);
@@ -631,6 +635,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       }
     });
     resetSimulation();
+    sessionOnlyStorage.removeItem("forensic_auto_start");
     sessionOnlyStorage.setItem("fc_open_upload_once", "1");
     sessionOnlyStorage.setItem("fc_no_reconnect", "1");
     router.push("/?upload=1");
@@ -646,7 +651,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setArbiterDeliberating(true);
     try {
       if (!sid) throw new Error("No active session");
-      await resumeInvestigation(false);
       arbiterAbortControllerRef.current = new AbortController();
       const ok = await waitForFinalReport(sid, setArbiterLiveText, 600_000, arbiterAbortControllerRef.current.signal);
       if (!ok) throw new Error("Report synthesis timed out");
@@ -660,7 +664,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       setIsNavigating(false);
       setArbiterDeliberating(false);
     }
-  }, [playSound, router, isNavigating, resumeInvestigation]);
+  }, [playSound, router, isNavigating]);
 
   const validAgentsData = AGENTS_DATA.filter((a) => a.name !== "Council Arbiter");
   const validCompletedAgents = completedAgents.filter((c: AgentUpdate) =>
@@ -686,6 +690,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     !arbiterDeliberating &&
     (status === "awaiting_decision" ||
       (phase === "initial" &&
+        mimeType !== null &&
         expectedAgentIds.size > 0 &&
         expectedCompletedCount >= expectedAgentIds.size &&
         !revealPending));

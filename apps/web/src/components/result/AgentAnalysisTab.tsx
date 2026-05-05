@@ -2,6 +2,7 @@
 
 import { AgentFindingCard } from "@/components/ui/AgentFindingCard";
 import type { ReportDTO } from "@/lib/api";
+import type { Finding } from "@/lib/types";
 import { Cpu } from "lucide-react";
 
 interface AgentAnalysisTabProps {
@@ -44,18 +45,16 @@ export function AgentAnalysisTab({
 
       // Split findings by phase
       const initialFindings = allFindings.filter(
-        (f) =>
-          ((f as any)?.metadata as Record<string, unknown>)?.analysis_phase !== "deep",
+        (f: Finding) => f?.metadata?.analysis_phase !== "deep",
       );
       const deepFindings = allFindings.filter(
-        (f) =>
-          ((f as any)?.metadata as Record<string, unknown>)?.analysis_phase === "deep",
+        (f: Finding) => f?.metadata?.analysis_phase === "deep",
       );
 
       const SKIP_TYPES = new Set(["file type not applicable", "format not supported"]);
       const firstActiveAgentId = activeAgentIds.find(id =>
         (report?.per_agent_findings?.[id] ?? []).some(
-          f => !SKIP_TYPES.has(String((f as any)?.finding_type || "").toLowerCase())
+          (f: Finding) => !SKIP_TYPES.has(String(f?.finding_type || "").toLowerCase())
         )
       ) ?? activeAgentIds[0];
 

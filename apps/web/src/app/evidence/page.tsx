@@ -2,9 +2,10 @@
 
 import { useCallback, useRef, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Shield, CloudUpload, CheckCircle2, Cpu, Scale } from "lucide-react";
 import { UploadSuccessModal } from "@/components/evidence/UploadSuccessModal";
+import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
