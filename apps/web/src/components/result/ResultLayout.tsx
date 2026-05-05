@@ -112,7 +112,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
       </nav>
 
       {/* ── Main Investigative Surface ─────────────────────────────────── */}
-      <main className="max-w-7xl mx-auto px-6 pt-12 space-y-16">
+      <div className="max-w-7xl mx-auto px-6 pt-12 space-y-16">
 
         <div
           role="tabpanel"
@@ -214,7 +214,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               </motion.div>
             )}
         </div>
-      </main>
+      </div>
 
       {/* ── Sticky Action Dock ─────────────────────────────────────────── */}
       {rs.state === "ready" && rs.activeTab === "analysis" && (

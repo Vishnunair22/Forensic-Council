@@ -609,7 +609,7 @@ async def rate_limit_middleware(request: Request, call_next):
         jwt_secret_key = getattr(settings, "jwt_secret_key", None)
         if not isinstance(jwt_secret_key, str):
             jwt_secret_key = get_settings().jwt_secret_key
-        identifier = "tok:" + hmac.new(
+        identifier = "tok:" + hmac.HMAC(
             jwt_secret_key.encode(),
             raw_token.strip().encode(),
             hashlib.sha256,
@@ -619,7 +619,7 @@ async def rate_limit_middleware(request: Request, call_next):
         jwt_secret_key = getattr(settings, "jwt_secret_key", None)
         if not isinstance(jwt_secret_key, str):
             jwt_secret_key = get_settings().jwt_secret_key
-        identifier = "cookie:" + hmac.new(
+        identifier = "cookie:" + hmac.HMAC(
             jwt_secret_key.encode(),
             session_cookie.encode(),
             hashlib.sha256,

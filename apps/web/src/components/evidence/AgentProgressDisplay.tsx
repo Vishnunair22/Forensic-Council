@@ -229,7 +229,7 @@ export function AgentProgressDisplay({
 
   return (
     <div
-      className="flex flex-col w-full max-w-[1560px] mx-auto gap-8 pb-48 pt-24"
+      className="flex flex-col w-full max-w-[1560px] mx-auto gap-8 pb-24 pt-24"
       aria-label="Agent forensic analysis progress"
     >
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-10 w-full mb-12 px-2">
@@ -319,7 +319,7 @@ export function AgentProgressDisplay({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-6"
+            className="w-full max-w-2xl mx-auto px-6 py-8"
           >
             <div className="glass-panel p-2 rounded-full shadow-[0_40px_100px_rgba(0,0,0,0.8)] border-white/10">
               <div className="bg-[#020203]/80 rounded-full p-2 flex items-center gap-3">
@@ -353,10 +353,10 @@ export function AgentProgressDisplay({
       <AnimatePresence>
         {phase === "deep" && revealQueue.length === 0 && (allAgentsDone || pipelineStatus === "complete") && !arbiterDeliberating && (
           <motion.div
-            initial={{ opacity: 0, y: 100 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 100 }}
-            className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-6"
+            exit={{ opacity: 0, y: 20 }}
+            className="w-full max-w-2xl mx-auto px-6 py-8"
           >
             <div className="glass-panel p-2 rounded-full shadow-[0_40px_100px_rgba(0,0,0,0.8)] border-white/10">
               <div className="bg-[#020203]/80 rounded-full p-2 flex items-center gap-3">

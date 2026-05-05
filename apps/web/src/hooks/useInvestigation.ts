@@ -682,11 +682,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   // Safety dismissal for reconnects or very fast streams that update state
   // before the connection promise settles.
   useEffect(() => {
-    if (
-      showLoadingOverlay &&
-      analysisStreamReady &&
-      (Object.keys(agentUpdates).length > 0 || validCompletedAgents.length > 0)
-    ) {
+    if (showLoadingOverlay && analysisStreamReady) {
       setShowLoadingOverlay(false);
       sessionOnlyStorage.removeItem("fc_show_loading");
     }

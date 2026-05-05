@@ -61,18 +61,100 @@ class SceneHandlers(BaseToolHandler):
         )
 
     async def screenshot_scene_applicability_handler(self, input_data: dict) -> dict:
-        """Fast scope note for screenshots where physical scene tools do not apply."""
-        result = {
+        """Scope confirmation + pixel-level screenshot profile for screen captures."""
+        artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        file_path = getattr(artifact, "file_path", "") or ""
+
+        result: dict = {
             "available": True,
-            "not_applicable": True,
-            "confidence": 0.0,
+            "not_applicable_for_physical_scene": True,
             "court_defensible": True,
-            "reason": (
-                "Submitted image appears to be a screen capture. Physical-scene "
-                "object detection, contraband search, scale validation, and lighting "
-                "correlation are not reliable first-pass evidence for this media type."
+            "scope_note": (
+                "Physical object detection, weapon search, scale validation, and lighting "
+                "correlation are not applied to screen captures — these tools require "
+                "real-world scene geometry. Screenshot-specific analysis is reported below."
             ),
         }
+
+        # ── Pixel-level screenshot profile ────────────────────────────────────
+        if file_path:
+            try:
+                loop = asyncio.get_running_loop()
+
+                def _profile_screenshot() -> dict:
+                    with Image.open(file_path) as img:
+                        w, h = img.size
+                        mode = img.mode
+                        arr = np.array(img.convert("RGB"), dtype=np.float32)
+
+                    mean_brightness = float(arr.mean())
+                    aspect = round(w / h, 3) if h else 0.0
+
+                    # Aspect class
+                    if aspect > 1.9:
+                        aspect_class = "ultra-wide"
+                    elif aspect > 1.65:
+                        aspect_class = "16:9 widescreen"
+                    elif aspect > 1.4:
+                        aspect_class = "3:2"
+                    elif aspect > 0.95:
+                        aspect_class = "4:3"
+                    elif aspect < 0.7:
+                        aspect_class = "portrait / mobile"
+                    else:
+                        aspect_class = "near-square"
+
+                    # Known screen resolutions
+                    _resolutions: dict[tuple[int, int], str] = {
+                        (1920, 1080): "1080p Full HD",
+                        (2560, 1440): "1440p QHD",
+                        (3840, 2160): "4K UHD",
+                        (1366, 768): "HD laptop",
+                        (1280, 800): "MacBook",
+                        (2560, 1600): "MacBook Pro Retina 16\"",
+                        (1440, 900): "MacBook Air 13\"",
+                        (2880, 1800): "MacBook Pro Retina 15\"",
+                        (1024, 768): "XGA",
+                        (1280, 1024): "SXGA",
+                        (1600, 900): "HD+",
+                        (2560, 1080): "UltraWide 1080p",
+                        (3440, 1440): "UltraWide 1440p",
+                    }
+                    resolution_name = _resolutions.get((w, h))
+
+                    # Dark-mode detection (mean brightness < 90 → dark UI)
+                    is_dark_mode = mean_brightness < 90.0
+
+                    # UI chrome detection: sample top and bottom 5% strips
+                    strip_h = max(1, h // 20)
+                    top_mean = float(arr[:strip_h].mean())
+                    bottom_mean = float(arr[max(0, h - strip_h):].mean())
+                    ui_chrome_detected = (
+                        abs(top_mean - mean_brightness) > 20.0
+                        or abs(bottom_mean - mean_brightness) > 20.0
+                    )
+
+                    return {
+                        "width": w,
+                        "height": h,
+                        "color_mode": mode,
+                        "resolution_name": resolution_name,
+                        "aspect_ratio": aspect,
+                        "aspect_class": aspect_class,
+                        "mean_brightness": round(mean_brightness, 1),
+                        "is_dark_mode": is_dark_mode,
+                        "ui_chrome_detected": ui_chrome_detected,
+                    }
+
+                profile = await loop.run_in_executor(None, _profile_screenshot)
+                result.update(profile)
+                result["confidence"] = 0.80
+            except Exception as exc:
+                logger.debug("screenshot profile analysis failed", error=str(exc))
+                result["confidence"] = 0.60
+        else:
+            result["confidence"] = 0.60
+
         await self.agent._record_tool_result("screenshot_scene_applicability", result)
         return result
 

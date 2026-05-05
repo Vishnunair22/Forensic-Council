@@ -243,7 +243,7 @@ class InvestigationWorker:
                             else result
                         )
                         task.completed_at = time.time()
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         task.status = InvestigationStatus.FAILED
                         task.error = (
                             f"Investigation worker timed out after "

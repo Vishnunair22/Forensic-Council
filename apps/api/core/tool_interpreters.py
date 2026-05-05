@@ -118,9 +118,21 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
         f"Line angle std: {o.get('angle_std_deg', 0):.1f}° across {o.get('line_count', 0)} lines."
     ),
     "scene_incongruence": lambda o: (
-        f"Scene noise coherence: {o.get('contextual_anomalies_detected', 0)} anomalous region(s) detected. "
-        f"Noise std across quadrants: {o.get('noise_variance_across_quadrants', 0):.1f} "
-        f"(mean: {o.get('mean_noise_level', 0):.1f}). " + (o.get("anomaly_description", "") or "")
+        (
+            f"Scene coherence: colour histogram correlation across {o.get('grid_cells_analyzed', 9)} grid cells = "
+            f"{o.get('average_histogram_correlation', 0):.3f} "
+            + (
+                "(LOW — colour/texture inconsistency detected across regions, possible composite or heavy UI pasting)."
+                if o.get("scene_incongruent")
+                else "(NORMAL — colour and texture are consistent across the image regions)."
+            )
+        )
+        if "average_histogram_correlation" in o
+        else (
+            f"Scene noise coherence: {o.get('contextual_anomalies_detected', 0)} anomalous region(s) detected. "
+            f"Noise std across quadrants: {o.get('noise_variance_across_quadrants', 0):.1f} "
+            f"(mean: {o.get('mean_noise_level', 0):.1f}). " + (o.get("anomaly_description", "") or "")
+        )
     ),
     "contraband_database": lambda o: (
         f"Contraband/CLIP analysis: top match = '{o.get('top_matches', [{}])[0].get('category', 'none') if o.get('top_matches') else 'none'}'. "
@@ -686,8 +698,24 @@ _TOOL_INTERPRETERS.update(
             + (str(o.get("note", ""))[:160] if o.get("note") else "")
         ),
         "screenshot_scene_applicability": lambda o: (
-            "Screen-capture scope: physical object/scene tools were skipped for this upload. "
-            + str(o.get("reason", ""))[:220]
+            (
+                f"Screenshot profile: {o.get('width')}×{o.get('height')}px"
+                + (f" ({o.get('resolution_name')})" if o.get("resolution_name") else "")
+                + f", {o.get('aspect_class', 'unknown aspect')} ratio"
+                + (
+                    f", {'dark' if o.get('is_dark_mode') else 'light'} UI theme"
+                    if "is_dark_mode" in o
+                    else ""
+                )
+                + (", UI chrome/taskbar strip detected" if o.get("ui_chrome_detected") else "")
+                + ". Physical-scene tools (object detection, weapon search, lighting analysis)"
+                  " are not applicable to screen captures and were correctly skipped."
+            )
+            if o.get("width")
+            else (
+                "Screen-capture scope confirmed: physical object/scene tools were skipped. "
+                + str(o.get("scope_note") or o.get("reason", ""))[:200]
+            )
         ),
         # Agent 4 video tools.
         "vfi_error_map": lambda o: (

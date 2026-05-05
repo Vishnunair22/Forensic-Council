@@ -205,6 +205,7 @@ async def start_investigation(
     incoming_dir.mkdir(parents=True, exist_ok=True)
     tmp_path = incoming_dir / f"{session_id}{raw_suffix}"
 
+    pipeline_started = False
     try:
         hasher = hashlib.sha256()
         total_size = 0
@@ -394,6 +395,7 @@ async def start_investigation(
                     evidence_file_path=str(tmp_path),
                     original_filename=file.filename,
                 )
+                pipeline_started = True
             except Exception as q_err:
                 await _cleanup_stale_investigation_session(
                     dedup_key=dedup_key,
@@ -419,6 +421,7 @@ async def start_investigation(
                 )
             )
             set_active_task(session_id, task)
+            pipeline_started = True
 
         increment_investigations_started()
 
@@ -448,8 +451,10 @@ async def start_investigation(
         )
 
     except HTTPException:
-        tmp_path.unlink(missing_ok=True)
+        if not pipeline_started:
+            tmp_path.unlink(missing_ok=True)
         raise
     except Exception as e:
-        tmp_path.unlink(missing_ok=True)
+        if not pipeline_started:
+            tmp_path.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail=str(e)) from e

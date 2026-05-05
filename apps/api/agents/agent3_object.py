@@ -88,7 +88,8 @@ class Agent3Object(ForensicAgent):
         # PHASE 1: INITIAL ANALYSIS (Neural Refined)
         if self._is_screen_capture:
             return [
-                "Run screenshot_scene_applicability for screen-capture object/scene scope",
+                "Run screenshot_scene_applicability for screen-capture profile and scope confirmation",
+                "Run scene_incongruence for colour and texture coherence across screenshot regions",
             ]
         return [
             "Run object_detection on full scene",

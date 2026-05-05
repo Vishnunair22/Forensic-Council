@@ -10,6 +10,7 @@ import {
   Boxes,
   Film,
   Database,
+  AlertTriangle,
   type LucideIcon,
 } from "lucide-react";
 import { clsx } from "clsx";
@@ -206,7 +207,7 @@ export function AgentStatusCard({
       onAnimationStart={() => onAnimationStart?.()}
       className={clsx(
         "glass-panel relative flex flex-col overflow-hidden transition-all duration-500",
-        status === "unsupported" ? "min-h-[200px]" : "min-h-[540px]",
+        status === "unsupported" ? "min-h-[200px] max-h-[300px]" : "min-h-[540px] max-h-[720px]",
         (status === "running" || status === "validating" || status === "checking") && "border-[var(--color-primary)]/30 shadow-[0_0_30px_rgba(var(--color-primary-rgb),0.1)]",
         (status === "waiting" || status === "queued") && "opacity-50"
       )}
@@ -227,7 +228,22 @@ export function AgentStatusCard({
             </div>
 
             <div>
-              <h3 className="text-xl font-heading font-bold text-white mb-1 tracking-tight">{name}</h3>
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="text-xl font-heading font-bold text-white tracking-tight">{name}</h3>
+                {completedData?.degraded && (
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30"
+                    title={completedData.fallback_reason || "Analysis degraded"}
+                  >
+                    <AlertTriangle className="w-3 h-3 text-amber-500" />
+                    <span className="text-[8px] font-mono font-bold text-amber-500 uppercase tracking-widest">
+                      Degraded_Mode
+                    </span>
+                  </motion.div>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <span className={clsx(
                   "px-2 py-0.5 rounded text-[9px] font-mono font-bold border",

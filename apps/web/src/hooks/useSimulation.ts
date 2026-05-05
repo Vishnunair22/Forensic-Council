@@ -355,11 +355,17 @@ export const useSimulation = ({
                           ...newUpdate,
                           // Keep initial message if deep message is generic
                           message: newUpdate.message || existing.message,
-                          // Merge findings previews: initial first, then deep
-                          findings_preview: [
-                            ...(existing.findings_preview || []),
-                            ...(newUpdate.findings_preview || []),
-                          ],
+                          // Merge findings previews with de-duplication (by tool name only).
+                          // Deep-phase findings replace initial-phase findings for the same tool.
+                          findings_preview: (() => {
+                            const existingPrev = existing.findings_preview || [];
+                            const newPrev = newUpdate.findings_preview || [];
+                            const newByTool = new Map(newPrev.map((nf) => [nf.tool, nf]));
+                            return [
+                              ...existingPrev.map((ef) => newByTool.get(ef.tool) ?? ef),
+                              ...newPrev.filter((nf) => !existingPrev.some((ef) => ef.tool === nf.tool)),
+                            ];
+                          })(),
                           // Merge section_flags: initial first, then deep (dedup by id)
                           section_flags: [
                             ...(existing.section_flags || []),
@@ -369,8 +375,12 @@ export const useSimulation = ({
                               )
                             ),
                           ],
-                          // Sum findings counts from both phases
-                          findings_count: (existing.findings_count || 0) + (newUpdate.findings_count || 0),
+                          // Sum findings counts from both phases (only if deep-phase findings are truly new)
+                          findings_count: Math.max(
+                            existing.findings_count || 0,
+                            newUpdate.findings_count || 0,
+                            (existing.findings_count || 0) + ((newUpdate.findings_preview || []).length - (existing.findings_preview || []).length)
+                          ),
                           // Deep-phase verdict takes precedence if present
                           agent_verdict: newUpdate.agent_verdict || existing.agent_verdict,
                           verdict_score: newUpdate.verdict_score ?? existing.verdict_score,

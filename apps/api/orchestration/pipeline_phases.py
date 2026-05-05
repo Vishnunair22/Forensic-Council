@@ -243,6 +243,10 @@ def _screenshot_agent_override(
                 "tampering signal. This does not authenticate the on-screen claim or source app; "
                 "it only describes the submitted screenshot artifact."
             ),
+            "finding_summary": (
+                "Screenshot artifact: initial integrity checks passed. "
+                "No image-layer forgery signals were detected."
+            ),
             "sections": [],
             "synthesis_source": "screenshot_image_override",
         }
@@ -253,9 +257,12 @@ def _screenshot_agent_override(
             "agent_error_rate": 0.0,
             "verdict": "NOT_APPLICABLE",
             "narrative_summary": (
-                "Screenshot detected. Agent3 does not infer real-world objects, weapons, "
-                "scale, or lighting from a screen capture in the initial pass; this is a "
-                "scope skip, not a failed or suspicious finding."
+                "Bypassed: Physical scene analysis is not applicable to digital screen captures."
+            ),
+            "finding_summary": (
+                "Screenshot detected. Physical-scene object detection, lighting correlation, "
+                "and geometric vanishing-point physics were bypassed as they lack real-world "
+                "depth data in digital captures."
             ),
             "sections": [],
             "synthesis_source": "screenshot_scope_override",
@@ -267,8 +274,12 @@ def _screenshot_agent_override(
             "agent_error_rate": 0.0,
             "verdict": "CLEAN",
             "narrative_summary": (
-                "Screenshot provenance is consistent with a digitally created image: hash and "
-                "container checks completed; camera/GPS EXIF absence is expected."
+                "Clean: Metadata provenance is consistent with a standard digital image export."
+            ),
+            "finding_summary": (
+                "Metadata Audit: Hash and container checks passed. The file structure confirms "
+                "a standard digital export with no hidden payloads or structural anomalies, "
+                "consistent with expected screenshot provenance."
             ),
             "sections": [],
             "synthesis_source": "screenshot_metadata_override",
@@ -279,13 +290,13 @@ def _screenshot_agent_override(
 
 def _agent1_screenshot_preview(
     findings: list[Any] | None,
-    screenshot_summary: str,
+    screenshot_finding_summary: str,
 ) -> list[dict[str, Any]]:
     """Build valid, non-duplicated Agent1 findings for screenshot artifacts."""
     preview: list[dict[str, Any]] = [
         {
             "tool": "screenshot_initial_summary",
-            "summary": screenshot_summary,
+            "summary": screenshot_finding_summary,
             "severity": "LOW",
             "verdict": "CLEAN",
             "confidence": 0.72,
@@ -321,16 +332,74 @@ def _agent1_screenshot_preview(
         if not summary:
             continue
 
-        summary_lower = summary.lower()
-        if any(
-            bad in summary_lower
-            for bad in (
-                "real photograph",
-                "genuine forensic evidence",
-                "digital fingerprint matches the original",
-                "proof of authenticity",
-            )
-        ):
+        preview.append(
+            {
+                "tool": matched,
+                "summary": summary[:640],
+                "severity": "LOW",
+                "verdict": "CLEAN",
+                "confidence": _metadata_value(finding, "confidence_raw", None),
+                "section": "Screenshot Artifact",
+            }
+        )
+    return preview
+
+
+def _agent3_screenshot_preview(
+    findings: list[Any] | None,
+    screenshot_finding_summary: str,
+) -> list[dict[str, Any]]:
+    """Build valid, non-duplicated Agent3 findings for screenshot artifacts."""
+    return [
+        {
+            "tool": "scene_scope_check",
+            "summary": screenshot_finding_summary,
+            "severity": "LOW",
+            "verdict": "NOT_APPLICABLE",
+            "confidence": 0.0,
+            "section": "Bypass Logic",
+        }
+    ]
+
+
+def _agent5_screenshot_preview(
+    findings: list[Any] | None,
+    screenshot_finding_summary: str,
+) -> list[dict[str, Any]]:
+    """Build valid, non-duplicated Agent5 findings for screenshot artifacts."""
+    preview: list[dict[str, Any]] = [
+        {
+            "tool": "metadata_provenance_audit",
+            "summary": screenshot_finding_summary,
+            "severity": "LOW",
+            "verdict": "CLEAN",
+            "confidence": 0.85,
+            "section": "Provenance",
+        }
+    ]
+    if not findings:
+        return preview
+
+    wanted_tools = ("file_hash_verify", "exif_extract", "hex_signature_scan")
+    seen: set[str] = set()
+    for finding in findings:
+        tool = _finding_tool_name(finding)
+        tool_lower = tool.lower()
+        matched = next((name for name in wanted_tools if name in tool_lower), None)
+        if matched is None or matched in seen:
+            continue
+        seen.add(matched)
+
+        metadata = _finding_metadata(finding)
+        summary = _humanize_initial_finding(
+            agent_id=AgentID.AGENT5.value,
+            tool_name=tool,
+            summary=_finding_summary_text(finding),
+            evidence_verdict=str(_metadata_value(finding, "evidence_verdict", "")).upper(),
+            finding_status=str(_metadata_value(finding, "status", "")).upper(),
+            metadata=metadata,
+        )
+        if not summary:
             continue
 
         preview.append(
@@ -340,7 +409,7 @@ def _agent1_screenshot_preview(
                 "severity": "LOW",
                 "verdict": "CLEAN",
                 "confidence": _metadata_value(finding, "confidence_raw", None),
-                "section": "Screenshot Artifact",
+                "section": "Provenance",
             }
         )
     return preview
@@ -619,33 +688,22 @@ async def run_agents_concurrent(
             screenshot_override = _screenshot_agent_override(aid, findings, agent_inst)
             if screenshot_override is not None:
                 synthesis = screenshot_override
+                f_summary = screenshot_override.get("finding_summary") or screenshot_override["narrative_summary"]
                 if aid == AgentID.AGENT1.value:
                     preview = _agent1_screenshot_preview(
                         findings,
-                        screenshot_override["narrative_summary"],
+                        f_summary,
                     )
                 elif aid == AgentID.AGENT3.value:
-                    preview = [
-                        {
-                            "tool": "screenshot_scene_applicability",
-                            "summary": screenshot_override["narrative_summary"],
-                            "severity": "INFO",
-                            "verdict": "NOT_APPLICABLE",
-                            "confidence": None,
-                            "section": "Scope",
-                        }
-                    ]
+                    preview = _agent3_screenshot_preview(
+                        findings,
+                        f_summary,
+                    )
                 elif aid == AgentID.AGENT5.value:
-                    preview = [
-                        {
-                            "tool": "screenshot_provenance_summary",
-                            "summary": screenshot_override["narrative_summary"],
-                            "severity": "LOW",
-                            "verdict": "CLEAN",
-                            "confidence": screenshot_override["agent_confidence"],
-                            "section": "Screenshot Provenance",
-                        }
-                    ]
+                    preview = _agent5_screenshot_preview(
+                        findings,
+                        f_summary,
+                    )
 
             await broadcast_update(
                 str(session_id),

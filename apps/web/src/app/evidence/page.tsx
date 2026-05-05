@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { Shield, CloudUpload, CheckCircle2, Cpu, Scale } from "lucide-react";
+import { UploadSuccessModal } from "@/components/evidence/UploadSuccessModal";
 
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
@@ -24,6 +25,7 @@ export default function EvidenceUploadPage() {
   const { playSound } = useSound();
   const investigation = useInvestigation(playSound);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -38,22 +40,26 @@ export default function EvidenceUploadPage() {
     e.preventDefault();
     investigation.setIsDragging(false);
     const dropped = e.dataTransfer.files?.[0];
-    if (dropped) investigation.handleFile(dropped);
+    if (dropped) {
+      investigation.handleFile(dropped);
+      setShowSuccessModal(true);
+    }
   }, [investigation]);
 
   const onFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
-    if (selected) investigation.handleFile(selected);
+    if (selected) {
+      investigation.handleFile(selected);
+      setShowSuccessModal(true);
+    }
   };
 
-  const startAnalysis = () => {
-    if (investigation.file) void investigation.triggerAnalysis(investigation.file);
-  };
+
 
   const showAgentProgress = investigation.hasStartedAnalysis && !investigation.showUploadForm;
 
   return (
-    <main className="relative min-h-screen px-6 py-32 overflow-hidden">
+    <div className="relative min-h-screen px-6 py-32">
       {investigation.showLoadingOverlay && (
         <LoadingOverlay
           variant="minimal"
@@ -239,27 +245,20 @@ export default function EvidenceUploadPage() {
               </div>
             )}
 
-            {investigation.file && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex justify-center"
-              >
-                <button
-                  type="button"
-                  onClick={startAnalysis}
-                  disabled={investigation.isUploading}
-                  className={`group px-10 py-4 rounded-full bg-primary text-[#020617] text-xs font-black tracking-[0.2em] uppercase shadow-[0_0_40px_rgba(var(--color-primary-rgb),0.3)] transition-all flex items-center gap-4 ${
-                    investigation.isUploading ? "opacity-50 cursor-not-allowed" : "hover:scale-105 hover:shadow-[0_0_60px_rgba(var(--color-primary-rgb),0.5)] active:scale-95"
-                  }`}
-                  data-testid="evidence-submit-btn"
-                >
-                  Commence Analysis
-                  <div className="w-5 h-5 rounded-full bg-[#020617]/10 flex items-center justify-center group-hover:translate-x-1 transition-transform">
-                    <Shield className="w-3 h-3" />
-                  </div>
-                </button>
-              </motion.div>
+            {investigation.file && showSuccessModal && !investigation.hasStartedAnalysis && (
+              <UploadSuccessModal
+                file={investigation.file}
+                onNewUpload={() => {
+                  setShowSuccessModal(false);
+                  investigation.setFile(null);
+                }}
+                onStartAnalysis={async () => {
+                  if (investigation.file) {
+                    setShowSuccessModal(false);
+                    await investigation.triggerAnalysis(investigation.file);
+                  }
+                }}
+              />
             )}
 
             <div className="grid grid-cols-3 gap-8 mt-12 opacity-20 max-w-xs mx-auto">
@@ -279,6 +278,6 @@ export default function EvidenceUploadPage() {
           </div>
         </section>
       )}
-    </main>
+    </div>
   );
 }
